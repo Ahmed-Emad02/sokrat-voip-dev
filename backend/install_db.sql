@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS `synq_agent_status` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `extension` VARCHAR(20) NOT NULL,
+  `display_name` VARCHAR(100) NOT NULL,
+  `status` VARCHAR(50) NOT NULL,
+  `last_update` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `idx_extension` (`extension`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `synq_agent_status_log` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `extension` VARCHAR(20) NOT NULL,
+  `status` VARCHAR(50) NOT NULL,
+  `start_time` TIMESTAMP NOT NULL,
+  `end_time` TIMESTAMP NULL DEFAULT NULL,
+  `duration_seconds` INT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

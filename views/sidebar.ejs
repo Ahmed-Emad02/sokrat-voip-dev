@@ -1,7 +1,7 @@
 <%
 const sidebarWords = {
-    en: { dashLink: "Dashboard", cdrLink: "CDR Analytics", empLink: "Employee Metrics", extLink: "Extension Statistics", opLink: "Live Operator", dongleLink: "GSM Dongles", liveClock: "System Clock" },
-    ar: { dashLink: "لوحة التحكم", cdrLink: "تحليلات المكالمات", empLink: "مقاييس الموظفين", extLink: "إحصائيات التحويلة", opLink: "لوحة المراقبة المباشرة", dongleLink: "شرائح GSM", liveClock: "ساعة النظام" }
+    en: { dashLink: "Dashboard", cdrLink: "CDR Analytics", empLink: "Employee Metrics", extLink: "Extension Statistics", opLink: "Live Operator", dongleLink: "GSM Dongles", agentLink: "Agent Status", liveClock: "System Clock" },
+    ar: { dashLink: "لوحة التحكم", cdrLink: "تحليلات المكالمات", empLink: "مقاييس الموظفين", extLink: "إحصائيات التحويلة", opLink: "لوحة المراقبة المباشرة", dongleLink: "شرائح GSM", agentLink: "حالة الموظفين", liveClock: "ساعة النظام" }
 };
 const sbT = sidebarWords[currentLang] || sidebarWords['en'];
 const isRtl = currentLang === 'ar';
@@ -60,6 +60,13 @@ const isRtl = currentLang === 'ar';
                <%= currentPage === '/dongles' ? 'bg-[#FF8700] text-white font-bold shadow-lg shadow-orange-500/10' : 'text-purple-300 hover:bg-purple-950/40 hover:text-white' %>">
                 <span>📶</span>
                 <span class="<%= isRtl ? 'mr-3' : 'ml-3' %>"><%= sbT.dongleLink %></span>
+            </a>
+
+            <a href="/agent-status?lang=<%= currentLang %>" 
+               class="flex items-center px-4 py-3 rounded-xl transition font-medium tracking-wide text-sm
+               <%= currentPage === '/agent-status' ? 'bg-[#FF8700] text-white font-bold shadow-lg shadow-orange-500/10' : 'text-purple-300 hover:bg-purple-950/40 hover:text-white' %>">
+                <span>🎧</span>
+                <span class="<%= isRtl ? 'mr-3' : 'ml-3' %>"><%= sbT.agentLink %></span>
             </a>
         </nav>
     </div>

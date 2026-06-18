@@ -80,8 +80,13 @@ const isRtl = currentLang === 'ar';
                                     <span class="text-base font-bold text-white block truncate" title="<%= emp.name %>"><%= emp.name %></span>
                                 </div>
                                 <div class="flex flex-col items-end space-y-1.5 shrink-0">
-                                    <span id="sipBadge-<%= emp.extension %>" class="h-3 w-3 rounded-full <%= isOnline ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-zinc-700' %>"></span>
-                                    <span id="sipLabel-<%= emp.extension %>" class="text-xs font-bold uppercase tracking-wider <%= isOnline ? 'text-emerald-400' : 'text-zinc-600' %>"><%= isOnline ? t.online : t.offline %></span>
+                                    <div class="flex items-center space-x-1.5 <%= isRtl ? 'space-x-reverse' : '' %>">
+                                        <span id="sipBadge-<%= emp.extension %>" class="h-3 w-3 rounded-full <%= isOnline ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-zinc-700' %>"></span>
+                                        <span id="sipLabel-<%= emp.extension %>" class="text-xs font-bold uppercase tracking-wider <%= isOnline ? 'text-emerald-400' : 'text-zinc-600' %>"><%= isOnline ? t.online : t.offline %></span>
+                                    </div>
+                                    <span id="agentStatusBadge-<%= emp.extension %>" class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider <%= emp.agentStatus === 'Available' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : emp.agentStatus === 'Offline' ? 'bg-slate-500/20 text-slate-400 border border-slate-500/30' : emp.agentStatus === 'On Break' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : emp.agentStatus === 'In Meeting' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : emp.agentStatus === 'Lunch' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-gray-500/20 text-gray-400 border border-gray-500/30' %>">
+                                        <%= emp.agentStatus || 'Offline' %>
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -167,6 +172,23 @@ const isRtl = currentLang === 'ar';
                             card.classList.add('opacity-60');
                         }
                     }
+                }
+            });
+
+            socket.on('agentStatus', (agentMap) => {
+                for (let ext in agentMap) {
+                    const badge = document.getElementById('agentStatusBadge-' + ext);
+                    if (!badge) continue;
+                    const st = agentMap[ext];
+                    let colors = 'bg-gray-500/20 text-gray-400 border border-gray-500/30';
+                    if (st === 'Available') colors = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                    else if (st === 'Offline') colors = 'bg-slate-500/20 text-slate-400 border border-slate-500/30';
+                    else if (st === 'On Break') colors = 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
+                    else if (st === 'In Meeting') colors = 'bg-purple-500/20 text-purple-400 border border-purple-500/30';
+                    else if (st === 'Lunch') colors = 'bg-rose-500/20 text-rose-400 border border-rose-500/30';
+                    
+                    badge.className = 'px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ' + colors;
+                    badge.textContent = st;
                 }
             });
 

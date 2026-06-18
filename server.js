@@ -31,6 +31,7 @@ const pool = mysql.createPool({
 let activeCalls = {};
 let peerStatus = {};
 let dongleStatus = [];
+let isPeerListLoaded = false;
 
 // --- CHAN_DONGLE STATUS MONITOR ---
 function parseDongleDevices(output) {
@@ -155,6 +156,7 @@ function connectAMI() {
             // Emit peerStatus once initial list queries complete
             if (event.Event === 'PeerlistComplete' || event.Event === 'EndpointListComplete') {
                 console.log('AMI: Peer list complete, peers:', Object.keys(peerStatus));
+                isPeerListLoaded = true;
                 io.emit('peerStatus', peerStatus);
             }
 
@@ -162,7 +164,14 @@ function connectAMI() {
             if (event.Event === 'PeerStatus') {
                 let name = event.Peer ? event.Peer.replace(/^(SIP|PJSIP)\//, '') : '';
                 if (name) {
-                    peerStatus[name] = event.PeerStatus === 'Registered' || event.PeerStatus === 'Reachable';
+                    let isOnline = event.PeerStatus === 'Registered' || event.PeerStatus === 'Reachable';
+                    
+                    // If they just disconnected, force their agent status to Offline
+                    if (!isOnline && peerStatus[name] && agentStatuses[name] !== 'Offline') {
+                        forceAgentOffline(name);
+                    }
+                    
+                    peerStatus[name] = isOnline;
                     io.emit('peerStatus', peerStatus);
                 }
             }
@@ -251,7 +260,63 @@ io.on('connection', (socket) => {
     socket.emit('initialState', clean);
     socket.emit('peerStatus', peerStatus);
     socket.emit('dongleStatus', dongleStatus);
+    socket.emit('agentStatus', agentStatuses);
 });
+
+// --- SYNQ AGENT STATUS MONITOR ---
+let agentStatuses = {};
+
+async function forceAgentOffline(extension) {
+    try {
+        const [rows] = await pool.query("SELECT status, last_update FROM asterisk.synq_agent_status WHERE extension = ?", [extension]);
+        if (rows.length === 0) return;
+        const current = rows[0];
+        if (current.status === 'Offline') return;
+
+        await pool.query(
+            "INSERT INTO asterisk.synq_agent_status_log (extension, status, start_time, end_time, duration_seconds) VALUES (?, ?, ?, NOW(), TIMESTAMPDIFF(SECOND, ?, NOW()))",
+            [extension, current.status, current.last_update, current.last_update]
+        );
+
+        await pool.query(
+            "UPDATE asterisk.synq_agent_status SET status = 'Offline', last_update = NOW() WHERE extension = ?",
+            [extension]
+        );
+        
+        agentStatuses[extension] = 'Offline';
+        io.emit('agentStatus', agentStatuses);
+    } catch (e) {
+        console.error("Force offline DB error:", e);
+    }
+}
+
+async function refreshAgentStatus() {
+    try {
+        const [rows] = await pool.query("SELECT extension, status FROM asterisk.synq_agent_status");
+        let changed = false;
+        let newStatuses = {};
+        for (let row of rows) {
+            let status = row.status;
+            
+            // Self-healing: if server thinks they are online in DB but Asterisk says they are disconnected
+            if (isPeerListLoaded && !peerStatus[row.extension] && status !== 'Offline') {
+                forceAgentOffline(row.extension);
+                status = 'Offline';
+            }
+            
+            newStatuses[row.extension] = status;
+            if (agentStatuses[row.extension] !== status) changed = true;
+        }
+        if (Object.keys(agentStatuses).length !== Object.keys(newStatuses).length) changed = true;
+        
+        if (changed) {
+            agentStatuses = newStatuses;
+            io.emit('agentStatus', agentStatuses);
+        }
+    } catch (e) {}
+}
+setInterval(refreshAgentStatus, 3000);
+setTimeout(refreshAgentStatus, 1000);
 
 // System Shared Middleware to fetch extension rosters and handle language toggles
 app.use(async (req, res, next) => {
@@ -285,7 +350,11 @@ app.use(async (req, res, next) => {
             }
             if (Object.keys(peerStatus).length) console.log('DB fallback found peers:', Object.keys(peerStatus));
         }
-        res.locals.roster = roster.map(emp => ({ ...emp, online: onlineMap[emp.extension] || false }));
+        res.locals.roster = roster.map(emp => ({ 
+            ...emp, 
+            online: onlineMap[emp.extension] || false,
+            agentStatus: agentStatuses[emp.extension] || 'Offline'
+        }));
         res.locals.activeCalls = activeCalls;
         res.locals.currentPage = req.path;
         res.locals.currentLang = req.query.lang === 'ar' ? 'ar' : 'en';
@@ -568,6 +637,44 @@ app.get('/dongles', (req, res) => {
         refreshDongleStatus();
         res.render('dongles', { dongles: dongleStatus, moment });
     } catch (error) { res.status(500).send("Dongle Monitor Error: " + error.message); }
+});
+
+// --- ROUTE 4.5: AGENT STATUS REPORTS VIEW ---
+app.get('/agent-status', async (req, res) => {
+    try {
+        const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+        const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+        const selectedExtension = req.query.targetExtension || 'ALL';
+        
+        let query = `
+            SELECT id, extension, status, start_time, end_time, duration_seconds 
+            FROM asterisk.synq_agent_status_log 
+            WHERE start_time BETWEEN ? AND ?
+        `;
+        let queryParams = [startDate, endDate];
+        
+        if (selectedExtension !== 'ALL') {
+            query += " AND extension = ?";
+            queryParams.push(selectedExtension);
+        }
+        query += " ORDER BY start_time DESC";
+        
+        const [logs] = await pool.query(query, queryParams);
+        
+        // Calculate totals
+        const totals = {};
+        logs.forEach(log => {
+            if (!totals[log.status]) totals[log.status] = 0;
+            totals[log.status] += (log.duration_seconds || 0);
+        });
+
+        res.render('agent-status', { 
+            logs, 
+            totals,
+            filters: { startDate, endDate, targetExtension: selectedExtension }, 
+            moment 
+        });
+    } catch (error) { res.status(500).send("Agent Status Error: " + error.message); }
 });
 
 // --- ROUTE 5: AUDIO STREAM / DOWNLOAD PIPELINE ---
