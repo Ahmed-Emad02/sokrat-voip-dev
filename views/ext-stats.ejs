@@ -50,22 +50,22 @@ const isRtl = currentLang === 'ar';
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
-        body { background-color: #1A0B2E; font-family: 'Cairo', sans-serif; }
-        .panel-surface { background-color: #2E113C; border: 1px solid #4A154B; }
-        .accent-orange { color: #FF8700; }
+        body { background-color: #05070a; font-family: 'Cairo', sans-serif; }
+        .panel-surface { background-color: #0e121a; border: 1px solid #1f2937; }
+        .accent-orange { color: #06b6d4; }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
         .ext-card { cursor: pointer; transition: all 0.2s; }
-        .ext-card:hover { border-color: #FF8700; }
-        .ext-card.active { border-color: #FF8700; background: rgba(255,135,0,0.1); }
+        .ext-card:hover { border-color: #06b6d4; }
+        .ext-card.active { border-color: #06b6d4; background: rgba(255,135,0,0.1); }
         .card-stat { transition: all 0.3s; }
         .card-stat:hover { transform: translateY(-2px); }
     </style>
 </head>
-<body class="bg-[#1A0B2E] text-slate-100 flex min-h-screen m-0 p-0">
+<body class="bg-[#05070a] text-slate-100 flex flex-col min-h-screen m-0 p-0">
     <%- include('sidebar') %>
     <div class="flex-1 p-8 flex flex-col min-h-0">
         <div class="absolute top-6 <%= isRtl ? 'left-8' : 'right-8' %> z-50">
-            <select onchange="location.href=window.location.pathname + '?lang=' + this.value" class="bg-[#2E113C] text-white border border-purple-900 rounded-xl px-4 py-2 text-sm font-bold shadow-2xl focus:outline-none focus:border-[#FF8700] cursor-pointer">
+            <select onchange="location.href=window.location.pathname + '?lang=' + this.value" class="bg-[#0e121a] text-white border border-zinc-800 rounded-xl px-4 py-2 text-sm font-bold shadow-2xl focus:outline-none focus:border-[#06b6d4] cursor-pointer">
                 <option value="en" <%= currentLang === 'en' ? 'selected' : '' %>>English 🇬🇧</option>
                 <option value="ar" <%= currentLang === 'ar' ? 'selected' : '' %>>العربية 🇪🇬</option>
             </select>
@@ -73,53 +73,53 @@ const isRtl = currentLang === 'ar';
 
         <div class="mb-6 shrink-0">
             <h2 class="text-3xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
-            <p class="text-xs text-purple-400 font-bold tracking-widest uppercase mt-1"><%= t.desc %></p>
+            <p class="text-xs text-zinc-500 font-bold tracking-widest uppercase mt-1"><%= t.desc %></p>
         </div>
 
         <form id="filterForm" class="panel-surface p-5 rounded-2xl mb-6 shrink-0 grid grid-cols-1 md:grid-cols-5 gap-4 items-end shadow-2xl">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <div>
-                <label class="block text-xs font-black uppercase text-purple-300 mb-2 tracking-wider"><%= t.startTime %></label>
-                <input type="datetime-local" id="startDate" name="startDate" class="w-full bg-[#1A0B2E] border border-purple-900 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#FF8700]">
+                <label class="block text-xs font-black uppercase text-zinc-400 mb-2 tracking-wider"><%= t.startTime %></label>
+                <input type="datetime-local" id="startDate" name="startDate" class="w-full bg-[#05070a] border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#06b6d4]">
             </div>
             <div>
-                <label class="block text-xs font-black uppercase text-purple-300 mb-2 tracking-wider"><%= t.endTime %></label>
-                <input type="datetime-local" id="endDate" name="endDate" class="w-full bg-[#1A0B2E] border border-purple-900 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#FF8700]">
+                <label class="block text-xs font-black uppercase text-zinc-400 mb-2 tracking-wider"><%= t.endTime %></label>
+                <input type="datetime-local" id="endDate" name="endDate" class="w-full bg-[#05070a] border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#06b6d4]">
             </div>
             <div>
-                <label class="block text-xs font-black uppercase text-purple-300 mb-2 tracking-wider"><%= t.direction %></label>
-                <select id="direction" name="direction" class="w-full bg-[#1A0B2E] border border-purple-900 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#FF8700]">
+                <label class="block text-xs font-black uppercase text-zinc-400 mb-2 tracking-wider"><%= t.direction %></label>
+                <select id="direction" name="direction" class="w-full bg-[#05070a] border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#06b6d4]">
                     <option value="all"><%= t.allDir %></option>
                     <option value="inbound"><%= t.inbound %></option>
                     <option value="outbound"><%= t.outbound %></option>
                 </select>
             </div>
             <div class="md:col-span-2 flex items-end gap-2">
-                <button type="submit" class="flex-1 bg-[#FF8700] hover:bg-orange-600 text-white font-black py-3 rounded-lg text-sm uppercase tracking-wider shadow-md transition cursor-pointer"><%= t.apply %></button>
+                <button type="submit" class="flex-1 bg-[#06b6d4] hover:bg-[#0891b2] text-white font-black py-3 rounded-lg text-sm uppercase tracking-wider shadow-md transition cursor-pointer"><%= t.apply %></button>
             </div>
         </form>
 
         <div class="flex gap-6 flex-1 min-h-0">
             <div class="panel-surface rounded-2xl shadow-2xl w-56 shrink-0 flex flex-col min-h-0">
-                <div class="px-4 py-3 border-b border-purple-900 bg-black/30 shrink-0">
-                    <span class="text-xs font-bold uppercase tracking-widest text-purple-400"><%= t.extList %></span>
+                <div class="px-4 py-3 border-b border-zinc-800 bg-black/30 shrink-0">
+                    <span class="text-xs font-bold uppercase tracking-widest text-zinc-500"><%= t.extList %></span>
                 </div>
                 <div id="extList" class="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
                     <% roster.forEach(emp => { %>
                         <div class="ext-card panel-surface rounded-xl px-3 py-2.5 text-sm flex items-center gap-3 <%= isRtl ? 'flex-row-reverse' : '' %>" data-ext="<%= emp.extension %>" onclick="selectExtension('<%= emp.extension %>')">
-                            <span class="text-[#FF8700] font-bold font-mono text-xs"><%= emp.extension %></span>
+                            <span class="text-[#06b6d4] font-bold font-mono text-xs"><%= emp.extension %></span>
                             <span class="text-white font-sans font-bold truncate flex-1"><%= emp.name %></span>
                             <span class="w-2 h-2 rounded-full <%= emp.online ? 'bg-emerald-400' : 'bg-zinc-700' %> shrink-0"></span>
                         </div>
                     <% }) %>
                 </div>
-                <div class="px-4 py-2 border-t border-purple-900 bg-black/30 text-center">
-                    <span class="text-[10px] font-bold text-purple-400"><%= t.footerRight %> <span class="text-[#FF8700]"><%= roster.length %></span></span>
+                <div class="px-4 py-2 border-t border-zinc-800 bg-black/30 text-center">
+                    <span class="text-[10px] font-bold text-zinc-500"><%= t.footerRight %> <span class="text-[#06b6d4]"><%= roster.length %></span></span>
                 </div>
             </div>
 
             <div id="detailPanel" class="flex-1 panel-surface rounded-2xl shadow-2xl overflow-y-auto min-h-0 p-6 flex flex-col items-center justify-center">
-                <div class="text-center text-purple-400">
+                <div class="text-center text-zinc-500">
                     <div class="text-6xl mb-4">📊</div>
                     <p class="text-lg font-bold"><%= t.selectExt %></p>
                 </div>
@@ -188,14 +188,14 @@ const isRtl = currentLang === 'ar';
             data.recentCalls = (data.recentCalls || []).slice(0, 20);
 
             let html = '<div class="w-full">';
-            html += '<div class="flex items-center justify-between mb-4"><div><h3 class="text-xl font-bold text-white"><span class="accent-orange font-mono">' + data.extension + '</span><span class="text-purple-300 font-sans"> — ' + data.name + '</span></h3></div></div>';
+            html += '<div class="flex items-center justify-between mb-4"><div><h3 class="text-xl font-bold text-white"><span class="accent-orange font-mono">' + data.extension + '</span><span class="text-zinc-400 font-sans"> — ' + data.name + '</span></h3></div></div>';
 
             html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">';
-            html += '<div class="panel-surface rounded-xl p-4 card-stat"><p class="text-[10px] font-bold uppercase text-purple-400 tracking-wider"><%= t.totalCalls %></p><p class="text-2xl font-black text-white mt-1">' + data.totalCalls + '</p></div>';
-            html += '<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-emerald-500"><p class="text-[10px] font-bold uppercase text-purple-400 tracking-wider"><%= t.answered %></p><p class="text-2xl font-black text-emerald-400 mt-1">' + data.answeredCalls + '</p></div>';
-            html += '<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-[#FF8700]"><p class="text-[10px] font-bold uppercase text-purple-400 tracking-wider"><%= t.answerRate %></p><p class="text-2xl font-black text-[#FF8700] mt-1">' + data.answerRate + '%</p></div>';
-            html += '<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-sky-400"><p class="text-[10px] font-bold uppercase text-purple-400 tracking-wider"><%= t.uniqueContacts %></p><p class="text-2xl font-black text-sky-400 mt-1">' + data.uniqueContactCount + '</p></div>';
-            html += '<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-purple-400"><p class="text-[10px] font-bold uppercase text-purple-400 tracking-wider"><%= t.avgTalk %></p><p class="text-2xl font-black text-purple-300 mt-1">' + data.avgTalkSec + '<span class="text-sm text-purple-500">s</span></p></div>';
+            html += '<div class="panel-surface rounded-xl p-4 card-stat"><p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.totalCalls %></p><p class="text-2xl font-black text-white mt-1">' + data.totalCalls + '</p></div>';
+            html += '<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-emerald-500"><p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.answered %></p><p class="text-2xl font-black text-emerald-400 mt-1">' + data.answeredCalls + '</p></div>';
+            html += '<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-[#06b6d4]"><p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.answerRate %></p><p class="text-2xl font-black text-[#06b6d4] mt-1">' + data.answerRate + '%</p></div>';
+            html += '<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-sky-400"><p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.uniqueContacts %></p><p class="text-2xl font-black text-sky-400 mt-1">' + data.uniqueContactCount + '</p></div>';
+            html += '<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-purple-400"><p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.avgTalk %></p><p class="text-2xl font-black text-zinc-400 mt-1">' + data.avgTalkSec + '<span class="text-sm text-purple-500">s</span></p></div>';
             html += '</div>';
 
             if (data.hasDirectionData) {
@@ -206,23 +206,23 @@ const isRtl = currentLang === 'ar';
             }
 
             html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">';
-            html += '<div class="panel-surface rounded-xl p-4 border border-purple-900/30"><h4 class="text-xs font-bold uppercase text-purple-300 tracking-wider mb-3"><%= t.disposition %></h4><div id="dispositionChart" class="w-full h-64"></div></div>';
-            html += '<div class="panel-surface rounded-xl p-4 border border-purple-900/30"><h4 class="text-xs font-bold uppercase text-purple-300 tracking-wider mb-3"><%= t.daily %></h4><div id="dailyChart" class="w-full h-64"></div></div>';
+            html += '<div class="panel-surface rounded-xl p-4 border border-zinc-800/30"><h4 class="text-xs font-bold uppercase text-zinc-400 tracking-wider mb-3"><%= t.disposition %></h4><div id="dispositionChart" class="w-full h-64"></div></div>';
+            html += '<div class="panel-surface rounded-xl p-4 border border-zinc-800/30"><h4 class="text-xs font-bold uppercase text-zinc-400 tracking-wider mb-3"><%= t.daily %></h4><div id="dailyChart" class="w-full h-64"></div></div>';
             html += '</div>';
 
             if (data.contacts.length) {
-                html += '<div class="panel-surface rounded-xl p-4 border border-purple-900/30 mb-6"><h4 class="text-xs font-bold uppercase text-purple-300 tracking-wider mb-3"><%= t.uniqueContacts %> (' + data.uniqueContactCount + ')</h4><div class="flex flex-wrap gap-2">';
+                html += '<div class="panel-surface rounded-xl p-4 border border-zinc-800/30 mb-6"><h4 class="text-xs font-bold uppercase text-zinc-400 tracking-wider mb-3"><%= t.uniqueContacts %> (' + data.uniqueContactCount + ')</h4><div class="flex flex-wrap gap-2">';
                 data.contacts.forEach(c => {
-                    html += '<span class="bg-[#1A0B2E] border border-purple-900 rounded-lg px-3 py-1.5 text-xs font-mono text-purple-200">' + c + '</span>';
+                    html += '<span class="bg-[#05070a] border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-purple-200">' + c + '</span>';
                 });
                 html += '</div></div>';
             }
 
             if (data.recentCalls && data.recentCalls.length) {
-                html += '<div class="panel-surface rounded-xl border border-purple-900/30 overflow-hidden"><div class="px-4 py-3 border-b border-purple-900 bg-black/20"><h4 class="text-xs font-bold uppercase text-purple-300 tracking-wider"><%= t.recentCalls %></h4></div><div class="overflow-x-auto"><table class="w-full text-start border-collapse"><thead><tr class="bg-black/40 text-purple-300 text-[10px] font-bold uppercase border-b border-purple-900"><th class="p-3 tracking-wider text-start"><%= t.src %></th><th class="p-3 tracking-wider text-start"><%= t.dst %></th><th class="p-3 tracking-wider text-start"><%= t.duration %></th><th class="p-3 tracking-wider text-start"><%= t.status %></th></tr></thead><tbody class="divide-y divide-purple-900/20 text-xs font-mono">';
+                html += '<div class="panel-surface rounded-xl border border-zinc-800/30 overflow-hidden"><div class="px-4 py-3 border-b border-zinc-800 bg-black/20"><h4 class="text-xs font-bold uppercase text-zinc-400 tracking-wider"><%= t.recentCalls %></h4></div><div class="overflow-x-auto"><table class="w-full text-start border-collapse"><thead><tr class="bg-black/40 text-zinc-400 text-[10px] font-bold uppercase border-b border-zinc-800"><th class="p-3 tracking-wider text-start"><%= t.src %></th><th class="p-3 tracking-wider text-start"><%= t.dst %></th><th class="p-3 tracking-wider text-start"><%= t.duration %></th><th class="p-3 tracking-wider text-start"><%= t.status %></th></tr></thead><tbody class="divide-y divide-zinc-800/20 text-xs font-mono">';
                 data.recentCalls.forEach(call => {
                     const answered = call.disposition === 'ANSWERED';
-                    html += '<tr class="hover:bg-purple-950/30 transition"><td class="p-3 text-white font-bold">' + call.src + '</td><td class="p-3 text-white">' + call.dst + '</td><td class="p-3 text-purple-300">' + call.billsec + 's</td><td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-black tracking-wider ' + (answered ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20') + '">' + call.disposition + '</span></td></tr>';
+                    html += '<tr class="hover:bg-zinc-900/40 transition"><td class="p-3 text-white font-bold">' + call.src + '</td><td class="p-3 text-white">' + call.dst + '</td><td class="p-3 text-zinc-400">' + call.billsec + 's</td><td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-black tracking-wider ' + (answered ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20') + '">' + call.disposition + '</span></td></tr>';
                 });
                 html += '</tbody></table></div></div>';
             }
@@ -245,7 +245,7 @@ const isRtl = currentLang === 'ar';
             dispositionChart.setOption({
                 backgroundColor: 'transparent',
                 tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-                legend: { bottom: '0%', textStyle: { color: '#c084fc', fontSize: 10 } },
+                legend: { bottom: '0%', textStyle: { color: '#94a3b8', fontSize: 10 } },
                 series: [{
                     name: 'Disposition',
                     type: 'pie',
@@ -268,7 +268,7 @@ const isRtl = currentLang === 'ar';
             dailyChart.setOption({
                 backgroundColor: 'transparent',
                 tooltip: { trigger: 'axis' },
-                legend: { bottom: '0%', textStyle: { color: '#c084fc', fontSize: 10 } },
+                legend: { bottom: '0%', textStyle: { color: '#94a3b8', fontSize: 10 } },
                 grid: { left: '8%', right: '4%', top: '8%', bottom: '18%' },
                 xAxis: {
                     type: 'category',
@@ -282,7 +282,7 @@ const isRtl = currentLang === 'ar';
                     splitLine: { lineStyle: { color: '#2E113C' } }
                 },
                 series: [
-                    { name: 'Total', type: 'bar', data: data.map(d => d.total), itemStyle: { color: '#FF8700', borderRadius: [4,4,0,0] }, barWidth: '60%' },
+                    { name: 'Total', type: 'bar', data: data.map(d => d.total), itemStyle: { color: '#06b6d4', borderRadius: [4,4,0,0] }, barWidth: '60%' },
                     { name: 'Answered', type: 'bar', data: data.map(d => d.answered), itemStyle: { color: '#10b981', borderRadius: [4,4,0,0] }, barWidth: '60%' }
                 ]
             });
