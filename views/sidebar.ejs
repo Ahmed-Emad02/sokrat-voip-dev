@@ -85,12 +85,17 @@ const isRtl = currentLang === 'ar';
                 document.body.classList.add('light-theme');
                 updateIcons(true);
             });
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                updateIcons(false);
+            });
         }
     })();
 
     function updateIcons(isLight) {
         const sun = document.getElementById('sunIcon');
         const moon = document.getElementById('moonIcon');
+        const logo = document.getElementById('brandLogo');
         if (sun && moon) {
             if (isLight) {
                 sun.classList.add('hidden');
@@ -99,6 +104,9 @@ const isRtl = currentLang === 'ar';
                 sun.classList.remove('hidden');
                 moon.classList.add('hidden');
             }
+        }
+        if (logo) {
+            logo.src = isLight ? '/logo.png' : '/logo_dark.png';
         }
     }
 
@@ -126,7 +134,7 @@ const isRtl = currentLang === 'ar';
 <div class="w-full bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] flex flex-row items-center justify-between px-8 py-4 shadow-lg shrink-0 <%= isRtl ? 'flex-row-reverse' : '' %>">
     <!-- Brand Logo and Title -->
     <div class="flex items-center space-x-3 <%= isRtl ? 'space-x-reverse' : '' %>">
-        <img src="/logo.png" alt="SPT Logo" class="w-9 h-9 object-contain rounded-lg">
+        <img id="brandLogo" src="/logo_dark.png" alt="SPT Logo" class="w-14 h-14 object-contain rounded-lg">
         <div>
             <h1 class="text-base font-black text-[var(--text-primary)] tracking-wider font-vibrant-display leading-none">
                 SPT-<span class="text-[#ff3b30]">ANALYTICS</span>
