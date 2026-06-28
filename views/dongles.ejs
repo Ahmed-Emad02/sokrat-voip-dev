@@ -34,20 +34,69 @@ const isRtl = currentLang === 'ar';
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <style>
-        body { background-color: #05070a; font-family: 'Cairo', sans-serif; }
-        .panel-surface { background-color: #0e121a; border: 1px solid #1f2937; }
-        .accent-orange { color: #06b6d4; }
+        <style>
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #161b22;
+            --bg-card: #1a1f26;
+            --bg-hover: #21262e;
+            --border-primary: #30363d;
+            --border-accent: #484f58;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-color: #58a6ff;
+            --accent-hover: #79c0ff;
+            --status-online: #3fb950;
+            --status-offline: #6e7681;
+            --status-active: #58a6ff;
+        }
+        body { 
+            background-color: var(--bg-primary); 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Cairo', sans-serif; 
+            color: var(--text-primary); 
+        }
+        /* Modern background pattern with subtle gradients */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 10% 20%, rgba(88, 166, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(57, 197, 207, 0.04) 0%, transparent 45%);
+            pointer-events: none;
+            z-index: -1;
+        }
+        .panel-surface { 
+            background-color: var(--bg-secondary); 
+            border: 1px solid var(--border-primary); 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
-        .dongle-card { transition: all 0.3s; }
-        .dongle-card:hover { transform: translateY(-2px); }
+        .card-stat { 
+            transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1), 
+                        border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), 
+                        box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); 
+        }
+        .card-stat:hover { 
+            transform: translateY(-2px); 
+            border-color: var(--border-accent); 
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); 
+        }
+        input, select, button { 
+            transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); 
+        }
     </style>
 </head>
-<body class="bg-[#05070a] text-slate-100 flex flex-col min-h-screen m-0 p-0">
+<body class="bg-[#0f1117] text-slate-100 flex flex-col min-h-screen m-0 p-0">
     <%- include('sidebar') %>
     <div class="flex-1 p-8 relative flex flex-col min-h-screen">
         <div class="absolute top-6 <%= isRtl ? 'left-8' : 'right-8' %> z-50">
-            <select onchange="location.href=window.location.pathname + '?lang=' + this.value" class="bg-[#0e121a] text-white border border-zinc-800 rounded-xl px-4 py-2 text-sm font-bold shadow-2xl focus:outline-none focus:border-[#06b6d4] cursor-pointer">
+            <select onchange="location.href=window.location.pathname + '?lang=' + this.value" class="bg-[#161b22] text-white border border-[#30363d] rounded-xl px-4 py-2 text-sm font-bold shadow-2xl focus:outline-none focus:border-[#58a6ff] cursor-pointer">
                 <option value="en" <%= currentLang === 'en' ? 'selected' : '' %>>English</option>
                 <option value="ar" <%= currentLang === 'ar' ? 'selected' : '' %>>العربية</option>
             </select>
@@ -62,7 +111,7 @@ const isRtl = currentLang === 'ar';
             <div id="dongleGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 <% if (dongles.length === 0) { %>
                     <div class="col-span-full text-center text-zinc-500 py-16">
-                        <div class="text-6xl mb-4">📡</div>
+                        <svg class="w-16 h-16 text-[#58a6ff] mx-auto mb-4 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 0 1 10 10c0 2.4-1 4.7-2.8 6.4L18 17a8 8 0 0 0-12 0l-1.2 1.4C3 16.7 2 14.4 2 12a10 10 0 0 1 10-10z"/><circle cx="12" cy="12" r="2"/><path d="M16 16a4 4 0 0 0-8 0"/></svg>
                         <p class="text-lg font-bold"><%= t.noDongles %></p>
                     </div>
                 <% } %>
@@ -72,7 +121,7 @@ const isRtl = currentLang === 'ar';
                     <div class="dongle-card panel-surface rounded-xl p-6 border-2 <%= isFree ? 'border-emerald-500/40' : 'border-red-500/40' %> shadow-lg">
                         <div class="flex justify-between items-start mb-4">
                             <div>
-                                <span class="text-2xl font-mono font-black text-[#06b6d4] tracking-wider block"><%= d.id %></span>
+                                <span class="text-2xl font-mono font-black text-[#58a6ff] tracking-wider block"><%= d.id %></span>
                                 <span class="text-xs font-bold text-zinc-500 block"><%= d.number %></span>
                             </div>
                             <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider <%= isFree ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30' %>">
@@ -112,7 +161,7 @@ const isRtl = currentLang === 'ar';
 
         <div class="panel-surface rounded-2xl px-6 py-4 bg-black/40 flex <%= isRtl ? 'flex-row-reverse' : '' %> justify-between items-center shrink-0">
             <span class="text-xs font-bold uppercase tracking-widest text-zinc-500"><%= t.footerLeft %></span>
-            <span class="text-sm font-black text-white"><%= t.footerRight %> <span class="text-[#06b6d4]"><%= dongles.length %></span></span>
+            <span class="text-sm font-black text-white"><%= t.footerRight %> <span class="text-[#58a6ff]"><%= dongles.length %></span></span>
         </div>
     </div>
     <script src="/socket.io/socket.io.js"></script>
@@ -125,7 +174,7 @@ const isRtl = currentLang === 'ar';
                 const grid = document.getElementById('dongleGrid');
                 if (!grid || !status) return;
                 if (status.length === 0) {
-                    grid.innerHTML = '<div class="col-span-full text-center text-zinc-500 py-16"><div class="text-6xl mb-4">📡</div><p class="text-lg font-bold"><%= t.noDongles %></p></div>';
+                    grid.innerHTML = '<div class="col-span-full text-center text-zinc-500 py-16"><svg class="w-16 h-16 text-[#58a6ff] mx-auto mb-4 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 0 1 10 10c0 2.4-1 4.7-2.8 6.4L18 17a8 8 0 0 0-12 0l-1.2 1.4C3 16.7 2 14.4 2 12a10 10 0 0 1 10-10z"/><circle cx="12" cy="12" r="2"/><path d="M16 16a4 4 0 0 0-8 0"/></svg><p class="text-lg font-bold"><%= t.noDongles %></p></div>';
                     return;
                 }
                 let html = '';
@@ -133,7 +182,7 @@ const isRtl = currentLang === 'ar';
                     const isFree = d.state === 'Free' || d.state === 'Started';
                     html += '<div class="dongle-card panel-surface rounded-xl p-6 border-2 ' + (isFree ? 'border-emerald-500/40' : 'border-red-500/40') + ' shadow-lg">';
                     html += '<div class="flex justify-between items-start mb-4">';
-                    html += '<div><span class="text-2xl font-mono font-black text-[#06b6d4] tracking-wider block">' + d.id + '</span>';
+                    html += '<div><span class="text-2xl font-mono font-black text-[#58a6ff] tracking-wider block">' + d.id + '</span>';
                     html += '<span class="text-xs font-bold text-zinc-500 block">' + (d.number || '') + '</span></div>';
                     html += '<span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ' + (isFree ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30') + '">' + (isFree ? '<%= t.available %>' : '<%= t.unavailable %>') + '</span>';
                     html += '</div>';

@@ -36,18 +36,69 @@ const isRtl = currentLang === 'ar';
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <style>
-        body { background-color: #05070a; font-family: 'Cairo', sans-serif; }
-        .panel-surface { background-color: #0e121a; border: 1px solid #1f2937; }
-        .accent-orange { color: #06b6d4; }
+            <style>
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #161b22;
+            --bg-card: #1a1f26;
+            --bg-hover: #21262e;
+            --border-primary: #30363d;
+            --border-accent: #484f58;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-color: #58a6ff;
+            --accent-hover: #79c0ff;
+            --status-online: #3fb950;
+            --status-offline: #6e7681;
+            --status-active: #58a6ff;
+        }
+        body { 
+            background-color: var(--bg-primary); 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Cairo', sans-serif; 
+            color: var(--text-primary); 
+        }
+        /* Modern background pattern with subtle gradients */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 10% 20%, rgba(88, 166, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(57, 197, 207, 0.04) 0%, transparent 45%);
+            pointer-events: none;
+            z-index: -1;
+        }
+        .panel-surface { 
+            background-color: var(--bg-secondary); 
+            border: 1px solid var(--border-primary); 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
+        .card-stat { 
+            transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1), 
+                        border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), 
+                        box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); 
+        }
+        .card-stat:hover { 
+            transform: translateY(-2px); 
+            border-color: var(--border-accent); 
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); 
+        }
+        input, select, button { 
+            transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); 
+        }
     </style>
 </head>
-<body class="bg-[#05070a] text-slate-100 flex flex-col min-h-screen m-0 p-0">
+<body class="bg-[#0f1117] text-slate-100 flex flex-col min-h-screen m-0 p-0">
     <%- include('sidebar') %>
     <div class="flex-1 p-8 relative flex flex-col min-h-screen">
         <div class="absolute top-6 <%= isRtl ? 'left-8' : 'right-8' %> z-50">
-            <select onchange="location.href=window.location.pathname + '?lang=' + this.value" class="bg-[#0e121a] text-white border border-zinc-800 rounded-xl px-4 py-2 text-sm font-bold shadow-2xl focus:outline-none focus:border-[#06b6d4] cursor-pointer">
+            <select onchange="location.href=window.location.pathname + '?lang=' + this.value" class="bg-[#161b22] text-white border border-[#30363d] rounded-xl px-4 py-2 text-sm font-bold shadow-2xl focus:outline-none focus:border-[#58a6ff] cursor-pointer">
                 <option value="en" <%= currentLang === 'en' ? 'selected' : '' %>>English 🇬🇧</option>
                 <option value="ar" <%= currentLang === 'ar' ? 'selected' : '' %>>العربية 🇪🇬</option>
             </select>
@@ -56,7 +107,7 @@ const isRtl = currentLang === 'ar';
             <h2 class="text-3xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             <p class="text-xs text-zinc-500 font-bold tracking-widest uppercase mt-1"><%= t.desc %></p>
         </div>
-        <div class="flex-1 min-h-0 overflow-y-auto mb-4 bg-black/20 rounded-2xl p-6 border border-zinc-800/30">
+        <div class="flex-1 min-h-0 overflow-y-auto mb-4 bg-black/20 rounded-2xl p-6 border border-[#30363d]/30">
             <div id="switchboardGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 <% roster.forEach(emp => {
                     const live = activeCalls[emp.extension];
@@ -72,11 +123,11 @@ const isRtl = currentLang === 'ar';
                 %>
                     <div id="card-<%= emp.extension %>"
                          data-start="<%= startTimeStamp %>"
-                         class="panel-surface rounded-xl p-6 flex flex-col justify-between transition-all duration-300 relative overflow-hidden shadow-md border <%= !isOnline ? 'border-zinc-800/50 opacity-60' : callState === 'incall' ? 'border-sky-500/50 bg-gradient-to-br from-[#0e121a] to-sky-950/30' : callState === 'ringing' ? 'border-[#06b6d4]/60 animate-pulse' : 'border-zinc-800/30' %>">
+                         class="panel-surface rounded-xl p-6 flex flex-col justify-between transition-all duration-300 relative overflow-hidden shadow-md border <%= !isOnline ? 'border-[#30363d]/50 opacity-60' : callState === 'incall' ? 'border-sky-500/50 bg-gradient-to-br from-[#161b22] to-blue-950/20' : callState === 'ringing' ? 'border-[#58a6ff]/60 animate-pulse' : 'border-[#30363d]/30' %>">
                         <div>
                             <div class="flex justify-between items-start">
                                 <div class="<%= isRtl ? 'text-right' : 'text-left' %>">
-                                    <span class="text-2xl font-mono font-black text-[#06b6d4] tracking-wider block"><%= emp.extension %></span>
+                                    <span class="text-2xl font-mono font-black text-[#58a6ff] tracking-wider block"><%= emp.extension %></span>
                                     <span class="text-base font-bold text-white block truncate" title="<%= emp.name %>"><%= emp.name %></span>
                                 </div>
                                 <div class="flex flex-col items-end space-y-1.5 shrink-0">
@@ -90,8 +141,8 @@ const isRtl = currentLang === 'ar';
                         </div>
                         <div class="border-t border-zinc-900 pt-3 mt-3">
                             <div class="flex items-center gap-2 flex-wrap">
-                                <span id="badge-<%= emp.extension %>" class="h-3 w-3 rounded-full shrink-0 <%= callState === 'incall' ? 'bg-sky-400 shadow-sm shadow-sky-400' : callState === 'ringing' ? 'bg-[#06b6d4] shadow-sm shadow-orange-500' : 'bg-transparent' %>"></span>
-                                <span id="status-<%= emp.extension %>" class="text-sm font-bold uppercase tracking-wide <%= callState === 'incall' ? 'text-sky-400' : callState === 'ringing' ? 'text-[#06b6d4]' : 'text-slate-600' %>">
+                                <span id="badge-<%= emp.extension %>" class="h-3 w-3 rounded-full shrink-0 <%= callState === 'incall' ? 'bg-sky-400 shadow-sm shadow-sky-400' : callState === 'ringing' ? 'bg-[#58a6ff] shadow-sm shadow-orange-500' : 'bg-transparent' %>"></span>
+                                <span id="status-<%= emp.extension %>" class="text-sm font-bold uppercase tracking-wide <%= callState === 'incall' ? 'text-sky-400' : callState === 'ringing' ? 'text-[#58a6ff]' : 'text-slate-600' %>">
                                     <%= callState === 'incall' ? t.incall : callState === 'ringing' ? t.ringing : t.noCall %>
                                 </span>
                                 <span id="timer-<%= emp.extension %>" class="text-sm font-mono font-bold text-sky-400 tracking-wider <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
@@ -100,9 +151,9 @@ const isRtl = currentLang === 'ar';
                                 <%= t.connectedWith %><span class="font-bold text-white"><%= partnerNum %></span>
                             </span>
                             <div id="spy-<%= emp.extension %>" class="flex gap-2 mt-3 <%= isRtl ? 'flex-row-reverse' : '' %> <%= callState === 'incall' ? '' : 'hidden' %>">
-                                <a href="tel:222<%= emp.extension %>" class="flex-1 text-center text-xs font-bold uppercase tracking-wider py-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-800/30 transition cursor-pointer" title="<%= t.listen %>"><%= t.listen %></a>
-                                <a href="tel:223<%= emp.extension %>" class="flex-1 text-center text-xs font-bold uppercase tracking-wider py-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-800/30 transition cursor-pointer" title="<%= t.whisper %>"><%= t.whisper %></a>
-                                <a href="tel:224<%= emp.extension %>" class="flex-1 text-center text-xs font-bold uppercase tracking-wider py-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-800/30 transition cursor-pointer" title="<%= t.barge %>"><%= t.barge %></a>
+                                <a href="tel:222<%= emp.extension %>" class="flex-1 text-center text-xs font-bold uppercase tracking-wider py-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-[#30363d]/30 transition cursor-pointer" title="<%= t.listen %>"><%= t.listen %></a>
+                                <a href="tel:223<%= emp.extension %>" class="flex-1 text-center text-xs font-bold uppercase tracking-wider py-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-[#30363d]/30 transition cursor-pointer" title="<%= t.whisper %>"><%= t.whisper %></a>
+                                <a href="tel:224<%= emp.extension %>" class="flex-1 text-center text-xs font-bold uppercase tracking-wider py-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-[#30363d]/30 transition cursor-pointer" title="<%= t.barge %>"><%= t.barge %></a>
                             </div>
                         </div>
                     </div>
@@ -111,7 +162,7 @@ const isRtl = currentLang === 'ar';
         </div>
         <div class="panel-surface rounded-2xl px-6 py-4 bg-black/40 flex <%= isRtl ? 'flex-row-reverse' : '' %> justify-between items-center shrink-0">
             <span class="text-xs font-bold uppercase tracking-widest text-zinc-500"><%= t.footerLeft %></span>
-            <span class="text-sm font-black text-white"><%= t.footerRight %> <span class="text-[#06b6d4]"><%= roster.length %></span></span>
+            <span class="text-sm font-black text-white"><%= t.footerRight %> <span class="text-[#58a6ff]"><%= roster.length %></span></span>
         </div>
     </div>
     <script src="/socket.io/socket.io.js"></script>
@@ -165,7 +216,7 @@ const isRtl = currentLang === 'ar';
                     label.className = 'text-xs font-bold uppercase tracking-wider ' + (online ? 'text-emerald-400' : 'text-zinc-600');
                     label.textContent = online ? '<%= t.online %>' : '<%= t.offline %>';
                     if (card) {
-                        if (online) card.classList.remove('opacity-60', 'border-zinc-800/50');
+                        if (online) card.classList.remove('opacity-60', 'border-[#30363d]/50');
                         else if (!card.querySelector('#badge-' + ext)?.classList.contains('bg-sky-400')) {
                             card.classList.add('opacity-60');
                         }
@@ -207,7 +258,7 @@ const isRtl = currentLang === 'ar';
                         if (!card.getAttribute('data-start')) {
                             card.setAttribute('data-start', Date.now());
                         }
-                        card.className = base + " border-sky-500/50 bg-gradient-to-br from-[#0e121a] to-sky-950/30" + (isOnline ? '' : ' opacity-60');
+                        card.className = base + " border-sky-500/50 bg-gradient-to-br from-[#161b22] to-blue-950/20" + (isOnline ? '' : ' opacity-60');
                         badge.className = "h-3 w-3 rounded-full shrink-0 bg-sky-400 shadow-sm shadow-sky-400";
                         status.className = "text-sm font-bold uppercase tracking-wide text-sky-400";
                         status.textContent = labels.incall;
@@ -218,9 +269,9 @@ const isRtl = currentLang === 'ar';
                         if (spy) spy.classList.remove('hidden');
                     } else {
                         card.removeAttribute('data-start');
-                        card.className = base + " border-[#06b6d4]/60 animate-pulse" + (isOnline ? '' : ' opacity-60');
-                        badge.className = "h-3 w-3 rounded-full shrink-0 bg-[#06b6d4] shadow-sm shadow-orange-500";
-                        status.className = "text-sm font-bold uppercase tracking-wide text-[#06b6d4]";
+                        card.className = base + " border-[#58a6ff]/60 animate-pulse" + (isOnline ? '' : ' opacity-60');
+                        badge.className = "h-3 w-3 rounded-full shrink-0 bg-[#58a6ff] shadow-sm shadow-orange-500";
+                        status.className = "text-sm font-bold uppercase tracking-wide text-[#58a6ff]";
                         status.textContent = labels.ringing;
                         partner.classList.add('hidden');
                         timer.classList.add('hidden');
@@ -228,7 +279,7 @@ const isRtl = currentLang === 'ar';
                     }
                 } else {
                     card.removeAttribute('data-start');
-                    card.className = base + " border-zinc-800/30" + (isOnline ? '' : ' border-zinc-800/50 opacity-60');
+                    card.className = base + " border-[#30363d]/30" + (isOnline ? '' : ' border-[#30363d]/50 opacity-60');
                     badge.className = "h-3 w-3 rounded-full shrink-0 bg-transparent";
                     status.className = "text-sm font-bold uppercase tracking-wide text-slate-600";
                     status.textContent = labels.idle;

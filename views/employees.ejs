@@ -28,18 +28,69 @@ const isRtl = currentLang === 'ar';
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <style>
-        body { background-color: #05070a; font-family: 'Cairo', sans-serif; }
-        .panel-surface { background-color: #0e121a; border: 1px solid #1f2937; }
-        .accent-orange { color: #06b6d4; }
+            <style>
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #161b22;
+            --bg-card: #1a1f26;
+            --bg-hover: #21262e;
+            --border-primary: #30363d;
+            --border-accent: #484f58;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-color: #58a6ff;
+            --accent-hover: #79c0ff;
+            --status-online: #3fb950;
+            --status-offline: #6e7681;
+            --status-active: #58a6ff;
+        }
+        body { 
+            background-color: var(--bg-primary); 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Cairo', sans-serif; 
+            color: var(--text-primary); 
+        }
+        /* Modern background pattern with subtle gradients */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 10% 20%, rgba(88, 166, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(57, 197, 207, 0.04) 0%, transparent 45%);
+            pointer-events: none;
+            z-index: -1;
+        }
+        .panel-surface { 
+            background-color: var(--bg-secondary); 
+            border: 1px solid var(--border-primary); 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
+        .card-stat { 
+            transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1), 
+                        border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), 
+                        box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); 
+        }
+        .card-stat:hover { 
+            transform: translateY(-2px); 
+            border-color: var(--border-accent); 
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); 
+        }
+        input, select, button { 
+            transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); 
+        }
     </style>
 </head>
-<body class="bg-[#05070a] text-slate-100 flex flex-col min-h-screen m-0 p-0">
+<body class="bg-[#0f1117] text-slate-100 flex flex-col min-h-screen m-0 p-0">
     <%- include('sidebar') %>
     <div class="flex-1 p-8 relative">
         <div class="absolute top-6 <%= isRtl ? 'left-8' : 'right-8' %> z-50">
-            <select onchange="location.href=window.location.pathname + '?lang=' + this.value" class="bg-[#0e121a] text-white border border-zinc-800 rounded-xl px-4 py-2 text-sm font-bold shadow-2xl focus:outline-none focus:border-[#06b6d4] cursor-pointer">
+            <select onchange="location.href=window.location.pathname + '?lang=' + this.value" class="bg-[#161b22] text-white border border-[#30363d] rounded-xl px-4 py-2 text-sm font-bold shadow-2xl focus:outline-none focus:border-[#58a6ff] cursor-pointer">
                 <option value="en" <%= currentLang === 'en' ? 'selected' : '' %>>English 🇬🇧</option>
                 <option value="ar" <%= currentLang === 'ar' ? 'selected' : '' %>>العربية 🇪🇬</option>
             </select>
@@ -52,25 +103,25 @@ const isRtl = currentLang === 'ar';
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <div>
                 <label class="block text-xs font-black uppercase text-zinc-400 mb-2 tracking-wider"><%= t.startTime %></label>
-                <input type="datetime-local" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[#05070a] border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#06b6d4]">
+                <input type="datetime-local" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[#0f1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#58a6ff]">
             </div>
             <div>
                 <label class="block text-xs font-black uppercase text-zinc-400 mb-2 tracking-wider"><%= t.endTime %></label>
-                <input type="datetime-local" name="endDate" value="<%= moment(filters.endDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[#05070a] border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#06b6d4]">
+                <input type="datetime-local" name="endDate" value="<%= moment(filters.endDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[#0f1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#58a6ff]">
             </div>
             <div>
-                <button type="submit" class="w-full bg-[#06b6d4] hover:bg-[#0891b2] text-white font-black py-3 rounded-lg text-sm uppercase tracking-wider shadow-md transition cursor-pointer"><%= t.btn %></button>
+                <button type="submit" class="w-full bg-[#58a6ff] hover:bg-[#388bfd] text-white font-black py-3 rounded-lg text-sm uppercase tracking-wider shadow-md transition cursor-pointer"><%= t.btn %></button>
             </div>
         </form>
         <div class="panel-surface rounded-2xl overflow-hidden shadow-2xl">
             <div class="overflow-x-auto">
                 <table class="w-full text-start border-collapse">
                     <thead>
-                        <tr class="bg-black/40 text-zinc-400 text-xs font-bold uppercase border-b border-zinc-800">
+                        <tr class="bg-black/40 text-zinc-400 text-xs font-bold uppercase border-b border-[#30363d]">
                             <th class="p-4 tracking-wider text-start"><%= t.thExt %></th>
                             <th class="p-4 tracking-wider text-start"><%= t.thName %></th>
                             <th class="p-4 tracking-wider text-start"><%= t.thInt %></th>
-                            <th class="p-4 text-[#06b6d4] tracking-wider text-start"><%= t.thIn %></th>
+                            <th class="p-4 text-[#58a6ff] tracking-wider text-start"><%= t.thIn %></th>
                             <th class="p-4 text-[#D22B71] tracking-wider text-start"><%= t.thOut %></th>
                             <th class="p-4 tracking-wider text-start"><%= t.thFoot %></th>
                         </tr>
@@ -81,7 +132,7 @@ const isRtl = currentLang === 'ar';
                         <% } %>
                         <% employeeMetrics.forEach(emp => { %>
                             <tr class="hover:bg-zinc-900/40 transition">
-                                <td class="p-4 text-[#06b6d4] font-bold"><%= emp.extension %></td>
+                                <td class="p-4 text-[#58a6ff] font-bold"><%= emp.extension %></td>
                                 <td class="p-4 text-white font-sans font-bold"><%= emp.name %></td>
                                 <td class="p-4 text-purple-200"><%= emp.totalCalls %> <%= t.calls %></td>
                                 <td class="p-4 text-emerald-400 font-bold">
@@ -98,9 +149,9 @@ const isRtl = currentLang === 'ar';
                     </tbody>
                 </table>
             </div>
-            <div class="px-6 py-4 border-t border-zinc-800 bg-black/40 flex justify-between items-center">
+            <div class="px-6 py-4 border-t border-[#30363d] bg-black/40 flex justify-between items-center">
                 <span class="text-xs font-bold uppercase tracking-widest text-zinc-500"><%= t.footerLeft %></span>
-                <span class="text-sm font-black text-white"><%= t.footerRight %> <span class="text-[#06b6d4]"><%= employeeMetrics.length %> rows</span></span>
+                <span class="text-sm font-black text-white"><%= t.footerRight %> <span class="text-[#58a6ff]"><%= employeeMetrics.length %> rows</span></span>
             </div>
         </div>
     </div>
