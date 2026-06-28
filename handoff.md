@@ -110,12 +110,13 @@ Served by the `/cdr` route (deprecated — not directly routed). Displays KPI ca
 
 ### Operator Board Call Monitoring Buttons (`views/operator.ejs`)
 - Three buttons per extension card: **Listen** (222), **Whisper** (223), **Barge** (224)
-- Buttons are `<a href="tel:...">` links — clicking triggers MicroSIP/softphone to dial the feature code
+- Buttons are `<a href="sip:...">` links — clicking triggers MicroSIP (`st-sip`) or compatible softphones to dial the feature code
 - Asterisk dialplan (`/etc/asterisk/extensions_custom.conf`) routes these to `ChanSpy()`:
-  - `222 + ext` → `ChanSpy(PJSIP/${EXTEN:3},q)` — silent listen
-  - `223 + ext` → `ChanSpy(PJSIP/${EXTEN:3},wq)` — whisper to target only
-  - `224 + ext` → `ChanSpy(PJSIP/${EXTEN:3},Bq)` — barge (both parties hear)
-- All include `Macro(user-callerid)`, `Set(CDR_SKIP=yes)`, `NoCDR()` to suppress CDR logging
+  - `Answer()` is called to establish the audio channel
+  - AstDB is queried for `/DEVICE/<extension>/dial` to determine device technology dynamically (e.g. `SIP/102`)
+  - `222 + ext` → `ChanSpy(${spyee_dial},q)` — silent listen
+  - `223 + ext` → `ChanSpy(${spyee_dial},qw)` — whisper to target only
+  - `224 + ext` → `ChanSpy(${spyee_dial},qB)` — barge (both parties hear)
 - Arabic translations: تدخل / همس / استماع
 
 ---
@@ -190,12 +191,24 @@ Served by the `/cdr` route (deprecated — not directly routed). Displays KPI ca
 - **GitHub push** — All 4 changed files pushed via API.
 
 ### Still open
-- No `npm start` script in `package.json`
 - Language preference not persisted across page loads (via cookie/localStorage)
 
 ---
 
-## 9. File Inventory
+## 9. Session 5 — June 28, 2026
+
+### Done
+- **Overhauled UI layout & colors**: Overhauled EJS templates to implement horizontal top-navbar tabs and custom OpDesk color palette (`#0f1117` page background, `#161b22` panels, `#58a6ff` brand highlights).
+- **Cleaned redundant navigation & UI elements**: Removed duplicate floating language dropdowns, sync-status blocks, and emojis (replacing with clean SVGs and CSS micro-animations).
+- **Fixed active status monitoring**: Fixed state tracking bugs in AMI client which previously caused unregistered extensions to stay permanently green.
+- **Real-Time Operators Dropdown**: Created a dropdown menu for every extension (Listen, Whisper, Barge, End Call) that is greyed-out and disabled unless the extension is actively in a call.
+- **SIP softphone integration**: Switched links from `tel:` to `sip:` protocol to launch `st-sip`/MicroSIP client natively.
+- **Hangup Channel API**: Created a `/api/hangup/:extension` backend route that locates the active bridge channel name from AMI and terminates it dynamically.
+- **Dynamic AstDB ChanSpy dialplan**: Wrote and deployed custom extensions in `/etc/asterisk/extensions_custom.conf` that dynamically query AstDB `/DEVICE/<extension>/dial` to determine device technology (SIP vs PJSIP) and execute `Answer()` first to resolve audio path silence.
+
+---
+
+## 10. File Inventory
 
 | File | Lines | Key Role |
 |---|---|---|

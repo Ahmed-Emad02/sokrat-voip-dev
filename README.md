@@ -105,10 +105,16 @@ exten => _224X.,n,Hangup()
 
 3. Reload the Asterisk dialplan configuration from your terminal:
 ```bash
-/usr/bin/asterisk.reload
-# Or directly via Asterisk CLI:
+# Directly reload via Asterisk CLI:
 asterisk -rx "dialplan reload"
 ```
+
+> [!IMPORTANT]
+> **Line Endings (UNIX LF)**: If you copy or edit `extensions_custom.conf` on a Windows machine, ensure the file is saved with **UNIX line endings (LF)** rather than Windows line endings (CRLF). Asterisk's config parser does not strip carriage returns (`\r`), which causes it to register mismatched context names (e.g. `[from-internal-custom\r]`) and return "wrong number" errors. If you face this, run the following command on your server to clean it up:
+> ```bash
+> sed -i 's/\r//' /etc/asterisk/extensions_custom.conf
+> asterisk -rx "dialplan reload"
+> ```
 
 
 ## Running as a service (auto-start)
