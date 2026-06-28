@@ -428,9 +428,10 @@ app.get('/cdr', async (req, res) => {
         const statusFilter = req.query.statusFilter || 'ALL';
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
+        const directionFilter = req.query.directionFilter || 'ALL';
 
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile
+            SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel
             FROM ${tables.cdr} c
             WHERE c.calldate BETWEEN ? AND ?
         `;
@@ -455,10 +456,17 @@ app.get('/cdr', async (req, res) => {
 
         query += " ORDER BY c.calldate DESC LIMIT 2000";
         const [rows] = await pool.query(query, queryParams);
+        let calls = rows.map(row => {
+            row.direction = isOutboundCdr(row) ? 'OUTBOUND' : 'INBOUND';
+            return row;
+        });
+        if (directionFilter !== 'ALL') {
+            calls = calls.filter(c => c.direction === directionFilter);
+        }
 
         res.render('cdr', {
-            calls: rows,
-            filters: { startDate, endDate, targetExtension: selectedExtension, statusFilter, searchSrc, searchDst },
+            calls,
+            filters: { startDate, endDate, targetExtension: selectedExtension, statusFilter, searchSrc, searchDst, directionFilter },
             moment
         });
     } catch (error) { res.status(500).send("CDR System Error: " + error.message); }
