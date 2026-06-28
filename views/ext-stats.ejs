@@ -214,7 +214,7 @@ const isRtl = currentLang === 'ar';
 
                 <div id="extList" class="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
                     <% roster.forEach(emp => { %>
-                        <div class="ext-card panel-surface rounded-xl px-3 py-2.5 text-sm flex items-center gap-3 <%= isRtl ? 'flex-row-reverse' : '' %>" data-ext="<%= emp.extension %>" onclick="selectExtension('<%= emp.extension %>')">
+                        <div class="ext-card panel-surface rounded-xl px-3 py-2.5 text-sm flex items-center gap-3 <%= !emp.online ? 'opacity-40' : '' %> <%= isRtl ? 'flex-row-reverse' : '' %>" data-ext="<%= emp.extension %>" onclick="selectExtension('<%= emp.extension %>')">
                             <span class="text-[#ff3b30] font-bold font-mono text-xs"><%= emp.extension %></span>
                             <span class="text-white font-sans font-bold truncate flex-1"><%= emp.name %></span>
                             <span class="w-2 h-2 rounded-full <%= emp.online ? 'bg-[#ff3b30]' : 'bg-zinc-700' %> shrink-0"></span>

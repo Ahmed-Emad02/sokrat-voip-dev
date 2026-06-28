@@ -25,32 +25,10 @@ const isRtl = currentLang === 'ar';
             radial-gradient(circle at 10% 20%, rgba(255, 59, 48, 0.04) 0%, transparent 40%),
             radial-gradient(circle at 90% 80%, rgba(0, 0, 0, 0.02) 0%, transparent 45%) !important;
     }
+    
+    /* Global classes mapped to theme custom properties */
     body.light-theme .text-white {
         color: #09090b !important;
-    }
-    body.light-theme .bg-[#09090b] {
-        background-color: #f4f4f5 !important;
-    }
-    body.light-theme .bg-[#0f1117] {
-        background-color: #f4f4f5 !important;
-    }
-    body.light-theme .bg-[#161b22] {
-        background-color: #ffffff !important;
-    }
-    body.light-theme .bg-[#18181b] {
-        background-color: #ffffff !important;
-    }
-    body.light-theme .border-[#27272a] {
-        border-color: #e4e4e7 !important;
-    }
-    body.light-theme .border-[#30363d] {
-        border-color: #e4e4e7 !important;
-    }
-    body.light-theme .border-[#30363d]\/30 {
-        border-color: rgba(228, 228, 231, 0.5) !important;
-    }
-    body.light-theme .border-[#27272a]\/30 {
-        border-color: rgba(228, 228, 231, 0.5) !important;
     }
     body.light-theme select, body.light-theme input {
         background-color: #ffffff !important;
@@ -69,12 +47,6 @@ const isRtl = currentLang === 'ar';
     body.light-theme .text-zinc-400 {
         color: #71717a !important;
     }
-    body.light-theme .text-[#a1a1aa] {
-        color: #71717a !important;
-    }
-    body.light-theme .text-[#f0f6fc] {
-        color: #09090b !important;
-    }
     body.light-theme .text-zinc-500 {
         color: #71717a !important;
     }
@@ -86,11 +58,6 @@ const isRtl = currentLang === 'ar';
     }
     body.light-theme .nav-item:hover {
         color: #ff3b30 !important;
-    }
-    body.light-theme .nav-item.bg-[#18181b] {
-        background-color: #e4e4e7 !important;
-        color: #ff3b30 !important;
-        border-color: #d4d4d8 !important;
     }
     body.light-theme .ext-card.active {
         background-color: #e4e4e7 !important;
@@ -143,7 +110,6 @@ const isRtl = currentLang === 'ar';
         
         // Trigger ECharts updates if any exist on the page
         if (window.pieChart) {
-            // Re-render pie chart on dashboard
             location.reload();
         }
         // If we are on stats page, trigger reload or loadOverview/loadStats
@@ -157,15 +123,15 @@ const isRtl = currentLang === 'ar';
     }
 </script>
 
-<div class="w-full bg-[#09090b] border-b border-[#27272a] flex flex-row items-center justify-between px-8 py-4 shadow-lg shrink-0 <%= isRtl ? 'flex-row-reverse' : '' %>">
+<div class="w-full bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] flex flex-row items-center justify-between px-8 py-4 shadow-lg shrink-0 <%= isRtl ? 'flex-row-reverse' : '' %>">
     <!-- Brand Logo and Title -->
     <div class="flex items-center space-x-3 <%= isRtl ? 'space-x-reverse' : '' %>">
         <img src="/logo.png" alt="SPT Logo" class="w-9 h-9 object-contain rounded-lg">
         <div>
-            <h1 class="text-base font-black text-[#ffffff] tracking-wider font-vibrant-display leading-none">
+            <h1 class="text-base font-black text-[var(--text-primary)] tracking-wider font-vibrant-display leading-none">
                 SPT-<span class="text-[#ff3b30]">ANALYTICS</span>
             </h1>
-            <span class="text-[9px] text-[#a1a1aa] uppercase tracking-widest block mt-1 font-bold">Telemetry Console</span>
+            <span class="text-[9px] text-[var(--text-secondary)] uppercase tracking-widest block mt-1 font-bold">Telemetry Console</span>
         </div>
     </div>
 
@@ -173,7 +139,7 @@ const isRtl = currentLang === 'ar';
     <nav class="flex items-center space-x-1 md:space-x-2 <%= isRtl ? 'space-x-reverse' : '' %>">
         <a href="/?lang=<%= currentLang %>" 
            class="nav-item flex items-center px-4 py-2.5 rounded-lg transition-all duration-150 text-sm font-semibold relative
-           <%= currentPage === '/' ? 'bg-[#18181b] text-[#ffffff] border border-[#27272a] shadow-sm' : 'text-[#a1a1aa] hover:bg-[#18181b]/50 hover:text-[#ffffff]' %>">
+           <%= currentPage === '/' ? 'bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] shadow-sm' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]/50 hover:text-[var(--text-primary)]' %>">
             <svg class="w-4 h-4 <%= isRtl ? 'ml-2' : 'mr-2' %>" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             <span class="hidden sm:inline"><%= sbT.dashLink %></span>
             <% if (currentPage === '/') { %>
@@ -183,7 +149,7 @@ const isRtl = currentLang === 'ar';
 
         <a href="/cdr?lang=<%= currentLang %>" 
            class="nav-item flex items-center px-4 py-2.5 rounded-lg transition-all duration-150 text-sm font-semibold relative
-           <%= currentPage === '/cdr' ? 'bg-[#18181b] text-[#ffffff] border border-[#27272a] shadow-sm' : 'text-[#a1a1aa] hover:bg-[#18181b]/50 hover:text-[#ffffff]' %>">
+           <%= currentPage === '/cdr' ? 'bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] shadow-sm' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]/50 hover:text-[var(--text-primary)]' %>">
             <svg class="w-4 h-4 <%= isRtl ? 'ml-2' : 'mr-2' %>" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             <span class="hidden sm:inline"><%= sbT.cdrLink %></span>
             <% if (currentPage === '/cdr') { %>
@@ -193,7 +159,7 @@ const isRtl = currentLang === 'ar';
 
         <a href="/ext-stats?lang=<%= currentLang %>" 
            class="nav-item flex items-center px-4 py-2.5 rounded-lg transition-all duration-150 text-sm font-semibold relative
-           <%= currentPage === '/ext-stats' ? 'bg-[#18181b] text-[#ffffff] border border-[#27272a] shadow-sm' : 'text-[#a1a1aa] hover:bg-[#18181b]/50 hover:text-[#ffffff]' %>">
+           <%= currentPage === '/ext-stats' ? 'bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] shadow-sm' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]/50 hover:text-[var(--text-primary)]' %>">
             <svg class="w-4 h-4 <%= isRtl ? 'ml-2' : 'mr-2' %>" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
             <span class="hidden sm:inline"><%= sbT.extLink %></span>
             <% if (currentPage === '/ext-stats') { %>
@@ -203,7 +169,7 @@ const isRtl = currentLang === 'ar';
 
         <a href="/operator?lang=<%= currentLang %>" 
            class="nav-item flex items-center px-4 py-2.5 rounded-lg transition-all duration-150 text-sm font-semibold relative
-           <%= currentPage === '/operator' ? 'bg-[#18181b] text-[#ffffff] border border-[#27272a] shadow-sm' : 'text-[#a1a1aa] hover:bg-[#18181b]/50 hover:text-[#ffffff]' %>">
+           <%= currentPage === '/operator' ? 'bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] shadow-sm' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]/50 hover:text-[var(--text-primary)]' %>">
             <div class="relative flex items-center justify-center <%= isRtl ? 'ml-2' : 'mr-2' %>">
                 <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-[#ff3b30] opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-2 w-2 bg-[#ff3b30]"></span>
@@ -220,25 +186,25 @@ const isRtl = currentLang === 'ar';
     <div class="flex items-center space-x-4 <%= isRtl ? 'space-x-reverse' : '' %>">
         <!-- Digital Clock -->
         <div class="text-right hidden md:block">
-            <span class="text-[9px] font-black uppercase text-[#a1a1aa] tracking-widest block"><%= sbT.liveClock %></span>
+            <span class="text-[9px] font-black uppercase text-[var(--text-secondary)] tracking-widest block"><%= sbT.liveClock %></span>
             <div id="digitalClock" class="text-sm font-mono font-bold text-[#ff3b30] tracking-widest">00:00:00</div>
         </div>
         
-        <div class="h-4 w-[2px] bg-[#27272a] hidden md:block"></div>
+        <div class="h-4 w-[2px] bg-[var(--border-primary)] hidden md:block"></div>
 
         <!-- Theme Toggle -->
-        <button id="themeToggleBtn" onclick="toggleTheme()" class="bg-[#18181b] hover:bg-[#27272a] text-[#ffffff] border border-[#27272a] rounded-lg p-1.5 flex items-center justify-center cursor-pointer transition shadow-sm h-8 w-8" title="Toggle Light/Dark Theme">
+        <button id="themeToggleBtn" onclick="toggleTheme()" class="bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border-primary)] rounded-lg p-1.5 flex items-center justify-center cursor-pointer transition shadow-sm h-8 w-8" title="Toggle Light/Dark Theme">
             <svg id="sunIcon" class="w-4 h-4 text-[#ff3b30]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"/></svg>
             <svg id="moonIcon" class="w-4 h-4 text-[#ff3b30] hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
         </button>
 
         <!-- Language Selector -->
         <div class="relative">
-            <select onchange="location.href=window.location.pathname + '?lang=' + this.value" class="appearance-none bg-[#18181b] text-[#ffffff] border border-[#27272a] rounded-lg pl-3 pr-8 py-1.5 text-xs font-bold shadow-sm focus:outline-none focus:border-[#ff3b30] cursor-pointer">
+            <select onchange="location.href=window.location.pathname + '?lang=' + this.value" class="appearance-none bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border-primary)] rounded-lg pl-3 pr-8 py-1.5 text-xs font-bold shadow-sm focus:outline-none focus:border-[#ff3b30] cursor-pointer">
                 <option value="en" <%= currentLang === 'en' ? 'selected' : '' %>>EN</option>
                 <option value="ar" <%= currentLang === 'ar' ? 'selected' : '' %>>AR</option>
             </select>
-            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[#a1a1aa]">
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary)]">
                 <svg class="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
             </div>
         </div>
