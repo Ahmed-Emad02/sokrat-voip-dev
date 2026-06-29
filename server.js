@@ -932,6 +932,65 @@ const dongleNumberMappings = {
     // Add other default/placeholder slots if needed
 };
 
+// Programmatically write the own number setting to /etc/asterisk/dongle.conf
+function updateDongleConfFile(dongleId, phoneNumber) {
+    const fs = require('fs');
+    const filePath = '/etc/asterisk/dongle.conf';
+    if (!fs.existsSync(filePath)) {
+        console.error(`GSM MONITOR: ${filePath} does not exist.`);
+        return;
+    }
+    
+    try {
+        let content = fs.readFileSync(filePath, 'utf8');
+        const sectionRegex = new RegExp(`\\[${dongleId}\\]`, 'i');
+        if (!sectionRegex.test(content)) {
+            console.log(`GSM MONITOR: Section [${dongleId}] not found in ${filePath}.`);
+            return;
+        }
+        
+        const lines = content.split(/\r?\n/);
+        let inSection = false;
+        let numberUpdated = false;
+        let targetIndex = -1;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            if (line.toLowerCase() === `[${dongleId.toLowerCase()}]`) {
+                inSection = true;
+                continue;
+            }
+            
+            if (inSection && line.startsWith('[') && line.endsWith(']')) {
+                targetIndex = i;
+                break;
+            }
+            
+            if (inSection && line.toLowerCase().startsWith('number=')) {
+                lines[i] = `number=${phoneNumber}`;
+                numberUpdated = true;
+                break;
+            }
+        }
+        
+        if (inSection && !numberUpdated && targetIndex === -1) {
+            lines.push(`number=${phoneNumber}`);
+            numberUpdated = true;
+        } else if (inSection && !numberUpdated && targetIndex !== -1) {
+            lines.splice(targetIndex, 0, `number=${phoneNumber}`);
+            numberUpdated = true;
+        }
+        
+        if (numberUpdated) {
+            fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
+            console.log(`GSM MONITOR: Successfully added number=${phoneNumber} to [${dongleId}] in ${filePath}`);
+        }
+    } catch (err) {
+        console.error(`GSM MONITOR: Failed to update ${filePath}:`, err);
+    }
+}
+
 function autoProvisionSimNumbers() {
     execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (error, stdout, stderr) => {
         if (error || !stdout) return;
@@ -943,23 +1002,30 @@ function autoProvisionSimNumbers() {
             const dongleId = d.ID;
             
             // Only auto-provision if the device is Free/Active (registered) and the number is Unknown/empty
-            if (state === 'free' && (number === 'unknown' || number === '')) {
+            if (state === 'free' && (number === 'unknown' || number === '' || !/^\+?\d+$/.test(number))) {
                 const targetNumber = dongleNumberMappings[dongleId];
                 if (targetNumber) {
                     console.log(`GSM MONITOR: Auto-provisioning SIM own number for ${dongleId} -> ${targetNumber}...`);
                     
-                    // Write to SIM own numbers storage (ON)
-                    execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CPBS="ON"`], (err1, out1) => {
-                        if (err1) return console.error(`GSM MONITOR: Failed CPBS select for ${dongleId}`, err1);
-                        
-                        execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CPBW=1,"${targetNumber}","Number"`], (err2, out2) => {
-                            if (err2) return console.error(`GSM MONITOR: Failed CPBW write for ${dongleId}`, err2);
+                    // 1. Update /etc/asterisk/dongle.conf to hardcode the number
+                    updateDongleConfFile(dongleId, targetNumber);
+                    
+                    // 2. Try to write to the SIM card memory via AT commands in national format (ton 129)
+                    const cleanNum = targetNumber.replace(/^\+/, '');
+                    
+                    execFile(ASTERISK_BIN, ['-rx', 'dongle cmd ' + dongleId + ' AT+CPBS="ON"'], (err1, out1) => {
+                        execFile(ASTERISK_BIN, ['-rx', 'dongle cmd ' + dongleId + ' AT+CPBW=1,\\"' + cleanNum + '\\",129,\\"Number\\"'], (err2, out2) => {
+                            if (err2) {
+                                console.log(`GSM MONITOR: SIM write AT command error on ${dongleId} (SIM card likely PIN2/carrier locked).`);
+                            } else {
+                                console.log(`GSM MONITOR: SIM write AT command sent to ${dongleId}.`);
+                            }
                             
-                            console.log(`GSM MONITOR: Wrote number ${targetNumber} to ${dongleId} SIM. Restarting dongle...`);
-                            
-                            // Software restart to re-read SIM card MSISDN
-                            execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], (err3, out3) => {
-                                if (err3) console.error(`GSM MONITOR: Failed soft restart for ${dongleId}`, err3);
+                            // 3. Reload config and soft restart the specific dongle
+                            execFile(ASTERISK_BIN, ['-rx', 'dongle reload now'], (errReload) => {
+                                execFile(ASTERISK_BIN, ['-rx', 'dongle restart now ' + dongleId], (errRestart) => {
+                                    console.log(`GSM MONITOR: Dongle ${dongleId} reloaded and restarted.`);
+                                });
                             });
                         });
                     });
