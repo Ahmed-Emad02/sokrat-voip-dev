@@ -836,7 +836,7 @@ app.post('/api/gsm-dongles/reload/:dongleId', (req, res) => {
     if (!/^dongle[0-9]+$/.test(dongleId)) {
         return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
     }
-    execFile(ASTERISK_BIN, ['-rx', `dongle reload ${dongleId}`], (error, stdout, stderr) => {
+    execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], (error, stdout, stderr) => {
         if (error) {
             return res.status(500).json({ success: false, error: stderr || error.message });
         }
