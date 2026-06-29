@@ -11,7 +11,7 @@ const words = {
         thRSSI: "Signal (RSSI)",
         thState: "State",
         thActions: "Actions",
-        refreshBtn: "Refresh",
+        refreshBtn: "Refresh Dongle",
         sending: "Executing...",
         sendBtn: "Send USSD Request",
         selectedDongle: "Selected Dongle: ",
@@ -361,7 +361,7 @@ const isRtl = currentLang === 'ar';
                     <div class="flex items-center gap-2">
                         <span><%= t.logToggle %></span>
                         <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="logs-toggle-switch" class="sr-only peer" checked>
+                            <input type="checkbox" id="logs-toggle-switch" class="sr-only peer">
                             <div class="w-8 h-4 bg-zinc-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#ff3b30]"></div>
                         </label>
                     </div>
@@ -375,7 +375,7 @@ const isRtl = currentLang === 'ar';
                 </div>
             </div>
             
-            <div class="log-screen p-5 text-[10px] text-zinc-500 flex flex-col gap-1.5 rounded-b-2xl" id="log-screen-console">
+            <div class="log-screen p-5 text-[10px] text-zinc-500 flex flex-col gap-1.5 rounded-b-2xl hidden" id="log-screen-console">
                 <div class="text-zinc-600">[System] Stream listener initialized. Awaiting hardware events...</div>
             </div>
         </div>
@@ -505,6 +505,11 @@ const isRtl = currentLang === 'ar';
             // Log Controls
             clearLogsBtn.addEventListener('click', () => {
                 logScreen.innerHTML = '<div class="text-zinc-600">[System] Log screen cleared. Awaiting hardware events...</div>';
+            });
+
+            // Toggle logs console container visibility
+            logsToggle.addEventListener('change', () => {
+                logScreen.classList.toggle('hidden', !logsToggle.checked);
             });
 
             // Reload single dongle action
@@ -645,11 +650,11 @@ const isRtl = currentLang === 'ar';
                                         </div>
                                     </td>
                                     <td class="py-3.5 px-4 text-center">
-                                        <button onclick="reloadDongle('${d.ID}')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1 mx-auto" title="${words.sendBtn}">
+                                        <button onclick="reloadDongle('${d.ID}')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1 mx-auto" title="${words.refreshBtn}">
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
                                             </svg>
-                                            ${words.sendBtn.substring(0, 7)}
+                                            ${words.refreshBtn}
                                         </button>
                                     </td>
                                 `;
