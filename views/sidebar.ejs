@@ -134,21 +134,39 @@ const isRtl = currentLang === 'ar';
         const settingsBtn = document.getElementById('settingsBtn');
         const settingsMenu = document.getElementById('settingsMenu');
         if (settingsBtn && settingsMenu) {
+            function positionMenu() {
+                const rect = settingsBtn.getBoundingClientRect();
+                const menuW = 224; // w-56 = 14rem = 224px
+                let left = rect.right - menuW;
+                if (left < 8) left = 8;
+                if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+                settingsMenu.style.left = left + 'px';
+                settingsMenu.style.top = (rect.bottom + 8) + 'px';
+            }
             settingsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const isOpen = !settingsMenu.classList.contains('visible');
+                if (isOpen) positionMenu();
                 settingsMenu.classList.toggle('visible', isOpen);
                 settingsMenu.classList.toggle('invisible', !isOpen);
                 settingsMenu.classList.toggle('opacity-0', !isOpen);
-                settingsMenu.classList.toggle('translate-y-1', !isOpen);
+                settingsMenu.classList.toggle('scale-95', !isOpen);
                 settingsMenu.classList.toggle('opacity-100', isOpen);
-                settingsMenu.classList.toggle('translate-y-0', isOpen);
+                settingsMenu.classList.toggle('scale-100', isOpen);
+                settingsMenu.style.pointerEvents = isOpen ? 'auto' : 'none';
             });
             document.addEventListener('click', () => {
-                settingsMenu.classList.remove('visible', 'opacity-100', 'translate-y-0');
-                settingsMenu.classList.add('invisible', 'opacity-0', 'translate-y-1');
+                settingsMenu.classList.remove('visible', 'opacity-100', 'scale-100');
+                settingsMenu.classList.add('invisible', 'opacity-0', 'scale-95');
+                settingsMenu.style.pointerEvents = 'none';
             });
             settingsMenu.addEventListener('click', (e) => e.stopPropagation());
+            window.addEventListener('scroll', () => {
+                if (settingsMenu.classList.contains('visible')) positionMenu();
+            });
+            window.addEventListener('resize', () => {
+                if (settingsMenu.classList.contains('visible')) positionMenu();
+            });
         }
     });
 </script>
@@ -229,7 +247,7 @@ const isRtl = currentLang === 'ar';
             </button>
 
             <!-- Dropdown Menu -->
-            <div id="settingsMenu" class="absolute end-0 top-full mt-2 w-56 max-w-[90vw] bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl shadow-black/40 opacity-0 invisible translate-y-1 transition-all duration-150 z-50 overflow-hidden">
+            <div id="settingsMenu" class="fixed w-56 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl shadow-black/40 opacity-0 invisible scale-95 transition-all duration-150 z-50 overflow-hidden" style="pointer-events:none">
                 <!-- Theme Toggle -->
                 <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border-primary)]">
                     <span class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider"><%= sbT.themeLabel %></span>
