@@ -961,6 +961,39 @@ function parseDevicesOutput(output) {
     return devices;
 }
 
+// Local cache to throttle USSD phone number queries to avoid spamming the carrier networks
+let lastUssdQueryTimes = {}; // IMSI -> timestamp (Date)
+
+function extractPhoneNumber(text) {
+    if (!text) return null;
+    
+    // Convert Arabic numerals to standard English digits
+    const arabicDigits = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
+    let cleanText = String(text);
+    for (let i = 0; i < 10; i++) {
+        cleanText = cleanText.replace(arabicDigits[i], String(i));
+    }
+    
+    // Strip spaces, dashes, brackets, colons, equal signs
+    cleanText = cleanText.replace(/[\s\-\(\)\:\+\=]/g, '');
+    
+    // Look for 11 digits starting with 1xxxxxxxx or 01xxxxxxxx (which are standard Egyptian Mobile structures)
+    const match = cleanText.match(/\b(?:20)?(1[0125]\d{8})\b/);
+    if (match) {
+        return '+20' + match[1];
+    }
+    
+    // Fallback: search for any sequence of 10 or 11 digits
+    const generalMatch = cleanText.match(/\b(1[0125]\d{8})\b/) || cleanText.match(/\b(01[0125]\d{8})\b/);
+    if (generalMatch) {
+        let numStr = generalMatch[1];
+        if (numStr.startsWith('0')) numStr = numStr.substring(1);
+        return '+20' + numStr;
+    }
+    
+    return null;
+}
+
 // Start background tail log monitor on the Asterisk verbose log file
 function startUssdLogMonitor() {
     console.log("GSM MONITOR: Starting tail process on /var/log/asterisk/full...");
@@ -992,6 +1025,41 @@ function startUssdLogMonitor() {
                     logTime: logTime
                 };
                 io.emit('ussdResponse', { dongleId, text, logTime });
+                
+                // --- AUTO DISCOVERY VIA USSD ---
+                const parsedNumber = extractPhoneNumber(text);
+                if (parsedNumber) {
+                    // Query Asterisk to find the IMSI for this dongleId
+                    execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (errDevs, stdoutDevs) => {
+                        if (errDevs || !stdoutDevs) return;
+                        
+                        const devices = parseDevicesOutput(stdoutDevs);
+                        const dev = devices.find(d => d.ID.toLowerCase() === dongleId.toLowerCase());
+                        if (dev && dev.IMSI && dev.IMSI !== '-') {
+                            const imsi = dev.IMSI;
+                            console.log(`GSM MONITOR: USSD Auto-discovered phone number for IMSI ${imsi} -> ${parsedNumber}`);
+                            
+                            // Save to sim_mappings.json
+                            const simMappings = readSimMappings();
+                            simMappings[imsi] = parsedNumber;
+                            saveSimMappings(simMappings);
+                            
+                            // Update /etc/asterisk/dongle.conf
+                            updateDongleConfFile(dev.ID, parsedNumber);
+                            
+                            // Try to write to the SIM card memory via AT commands in national format (ton 129)
+                            const cleanNum = parsedNumber.replace(/^\+/, '');
+                            execFile(ASTERISK_BIN, ['-rx', 'dongle cmd ' + dev.ID + ' AT+CPBS="ON"'], () => {
+                                execFile(ASTERISK_BIN, ['-rx', 'dongle cmd ' + dev.ID + ' AT+CPBW=1,\\"' + cleanNum + '\\",129,\\"Number\\"'], () => {
+                                    // Reload and restart
+                                    execFile(ASTERISK_BIN, ['-rx', 'dongle reload now'], () => {
+                                        execFile(ASTERISK_BIN, ['-rx', 'dongle restart now ' + dev.ID]);
+                                    });
+                                });
+                            });
+                        }
+                    });
+                }
             }
         }
     });
@@ -1136,6 +1204,25 @@ function autoProvisionSimNumbers() {
                                 });
                             });
                         });
+                    } else {
+                        // --- USSD Own Number Auto-Discovery Trigger ---
+                        let ussdCode = null;
+                        if (imsi.startsWith('60201')) ussdCode = '*878#';       // Vodafone Egypt
+                        else if (imsi.startsWith('60202')) ussdCode = '*119#';  // Orange Egypt
+                        else if (imsi.startsWith('60203')) ussdCode = '*947#';  // Etisalat Egypt
+                        else if (imsi.startsWith('60204') || imsi.startsWith('60205') || imsi.startsWith('60206')) ussdCode = '*688#'; // Telecom Egypt / WE
+                        
+                        if (ussdCode) {
+                            const now = Date.now();
+                            const lastQuery = lastUssdQueryTimes[imsi] || 0;
+                            if (now - lastQuery > 600000) { // 10 minutes throttle
+                                lastUssdQueryTimes[imsi] = now;
+                                console.log(`GSM MONITOR: Querying own phone number for ${dongleId} (IMSI: ${imsi}) via USSD ${ussdCode}...`);
+                                execFile(ASTERISK_BIN, ['-rx', `dongle ussd ${dongleId} ${ussdCode}`], (errU) => {
+                                    if (errU) console.error(`GSM MONITOR: Failed to trigger USSD own number discovery on ${dongleId}:`, errU);
+                                });
+                            }
+                        }
                     }
                 }
             }
