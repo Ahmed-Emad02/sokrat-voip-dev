@@ -5,7 +5,7 @@ const words = {
         startTime: "Start Time", endTime: "End Time", roster: "Extension Roster", allExt: "All Extensions",
         status: "Call Status", allDisp: "All Dispositions", direction: "Direction", allDir: "All Directions", dirIn: "Inbound", dirOut: "Outbound",
         src: "Source", dst: "Destination",
-        btn: "Apply Search Matrix Filters", thTime: "Timestamp", thSrc: "Source", thDst: "Destination",
+        btn: "Apply Search Matrix Filters", thTime: "Timestamp", thId: "UniqueID", thSrc: "Source", thDst: "Destination",
         thName: "Name", thAir: "Airtime", thState: "State", thDir: "Dir", thRec: "Recording", noData: "No matching system data blocks located.",
         play: "Play", download: "Download", noAudio: "No Audio", footerLeft: "Telemetry Stream Activity", footerRight: "Total Records Computed:"
     },
@@ -14,7 +14,7 @@ const words = {
         startTime: "وقت البدء", endTime: "وقت الانتهاء", roster: "قائمة الموظفين", allExt: "جميع التحويلات",
         status: "حالة المكالمة", allDisp: "جميع الحالات", direction: "الاتجاه", allDir: "كل الاتجاهات", dirIn: "وارد", dirOut: "صادر",
         src: "المصدر", dst: "الوجهة",
-        btn: "تطبيق فلاتر البحث", thTime: "التوقيت", thSrc: "المصدر", thDst: "الوجهة",
+        btn: "تطبيق فلاتر البحث", thTime: "التوقيت", thId: "المعرف", thSrc: "المصدر", thDst: "الوجهة",
         thName: "الاسم", thAir: "مدة المكالمة", thState: "الحالة", thDir: "اتجاه", thRec: "التسجيل", noData: "لم يتم العثور على سجلات مكالمات مطابقة.",
         play: "تشغيل", download: "تحميل", noAudio: "لا يوجد صوت", footerLeft: "نشاط تدفق البيانات", footerRight: "إجمالي السجلات المحسوبة:"
     }
@@ -162,6 +162,7 @@ const dispColors = {
                     <thead>
                         <tr class="bg-black/40 text-zinc-400 text-xs font-bold uppercase border-b border-[#27272a]">
                             <th class="p-4 tracking-wider text-start"><%= t.thTime %></th>
+                            <th class="p-4 tracking-wider text-start"><%= t.thId %></th>
                             <th class="p-4 tracking-wider text-start"><%= t.thSrc %></th>
                             <th class="p-4 tracking-wider text-start"><%= t.thDst %></th>
                             <th class="p-4 tracking-wider text-start"><%= t.thName %></th>
@@ -173,11 +174,12 @@ const dispColors = {
                     </thead>
                     <tbody class="divide-y divide-zinc-800/30 text-sm font-sans">
                         <% if(calls.length === 0) { %>
-                            <tr><td colspan="8" class="p-8 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>
+                            <tr><td colspan="9" class="p-8 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>
                         <% } %>
                         <% calls.forEach(call => { %>
                             <tr class="hover:bg-zinc-900/60 transition">
                                 <td class="p-4 text-slate-400"><%= moment(call.calldate).format('YYYY-MM-DD HH:mm:ss') %></td>
+                                <td class="p-4 text-zinc-400 text-[11px]"><%= call.uniqueid %></td>
                                 <td class="p-4 font-bold text-white"><%= call.src %></td>
                                 <td class="p-4 text-white"><%= call.dst %></td>
                                 <td class="p-4 text-zinc-300"><%= call.src_name %></td>
