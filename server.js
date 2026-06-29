@@ -912,7 +912,7 @@ function getConfiguredDongleNumbers() {
 }
 
 // Parse Asterisk 'dongle show devices' CLI output
-function parseDevicesOutput(output) {
+function parseDevicesOutput(output, keepRaw = false) {
     const lines = output.trim().split('\n');
     if (lines.length === 0) return [];
     const header = lines[0];
@@ -945,7 +945,7 @@ function parseDevicesOutput(output) {
             const imsi = String(row.IMSI || '').trim();
             
             // Overlay with configured number if CLI says Unknown or empty
-            if (cleanNum === 'unknown' || cleanNum === '' || !/^\+?\d+$/.test(cleanNum)) {
+            if (!keepRaw && (cleanNum === 'unknown' || cleanNum === '' || !/^\+?\d+$/.test(cleanNum))) {
                 if (configNumbers[dongleId]) {
                     row.Number = configNumbers[dongleId];
                 } else if (imsi && simMappings[imsi]) {
@@ -1159,18 +1159,44 @@ function autoProvisionSimNumbers() {
     execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (error, stdout, stderr) => {
         if (error || !stdout) return;
         
-        const devices = parseDevicesOutput(stdout);
+        const devices = parseDevicesOutput(stdout, true); // keepRaw=true to discover hardcoded numbers
         const simMappings = readSimMappings();
         
         devices.forEach(d => {
             const state = String(d.State || '').toLowerCase();
-            const number = String(d.Number || '').toLowerCase();
+            const rawNumber = String(d.Number || '').toLowerCase();
             const imsi = String(d.IMSI || '').trim();
             const dongleId = d.ID;
             
             // Only auto-provision if the device is Free/Active (registered) and has a valid IMSI
             if (state === 'free' && imsi && imsi !== '-') {
-                if (number === 'unknown' || number === '' || !/^\+?\d+$/.test(number)) {
+                // Scenario A: SIM has a valid own number hardcoded on the chip
+                if (rawNumber && rawNumber !== 'unknown' && /^\+?\d+$/.test(rawNumber)) {
+                    const configNumbers = getConfiguredDongleNumbers();
+                    const configuredNum = configNumbers[dongleId];
+                    
+                    let cleanNum = rawNumber;
+                    if (cleanNum.startsWith('01')) cleanNum = '+20' + cleanNum.substring(1);
+                    else if (cleanNum.startsWith('201')) cleanNum = '+' + cleanNum;
+                    else if (!cleanNum.startsWith('+')) cleanNum = '+' + cleanNum;
+                    
+                    if (configuredNum !== cleanNum) {
+                        console.log(`GSM MONITOR: Hardcoded SIM number detected from Asterisk CLI for ${dongleId} -> ${cleanNum}. Auto-saving and updating dongle.conf...`);
+                        
+                        // 1. Save to mappings registry
+                        const simMappings = readSimMappings();
+                        simMappings[imsi] = cleanNum;
+                        saveSimMappings(simMappings);
+                        
+                        // 2. Update /etc/asterisk/dongle.conf
+                        updateDongleConfFile(dongleId, cleanNum);
+                        
+                        // 3. Reload config
+                        execFile(ASTERISK_BIN, ['-rx', 'dongle reload now']);
+                    }
+                }
+                // Scenario B: SIM number is Unknown, try provisioning from registry or USSD
+                else {
                     // Check if we have a mapping for this IMSI
                     let targetNumber = simMappings[imsi];
                     
