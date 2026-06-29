@@ -189,6 +189,83 @@ http://<your-issabel-ip>:3000
 
 ---
 
+## GSM Dongles & chan_dongle Setup (Optional)
+
+To enable support for Huawei GSM modems (monitoring & sending USSD commands directly from the dashboard):
+
+### Step 1 — Install Build Dependencies & Asterisk 18 Headers
+```bash
+yum -y install git gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom
+yum -y install asterisk18-devel
+```
+
+### Step 2 — Compile and Install chan_dongle
+```bash
+cd /usr/src
+git clone https://github.com/wdoekes/asterisk-chan-dongle.git
+cd asterisk-chan-dongle
+./bootstrap
+./configure --with-astversion=18.19.0
+make
+make install
+```
+
+### Step 3 — Apply Reference dongle.conf Configuration
+Copy the pre-configured 10-slot layout (included in this repository) to Asterisk:
+```bash
+cp /opt/issabel-dashboard/dongle.conf /etc/asterisk/dongle.conf
+```
+
+### Step 4 — Configure Permissions & systemd udev Auto-Reload
+Grant Asterisk access to write lock files and read serial ports:
+```bash
+usermod -a -G lock,dialout asterisk
+chgrp asterisk /run/lock
+chmod 775 /run/lock
+```
+
+Add systemd tmpfiles override to persist `/run/lock` permissions across reboots:
+```bash
+cat > /etc/tmpfiles.d/legacy.conf << 'EOF'
+d /run/lock 0775 root asterisk -
+L /var/lock - - - - ../run/lock
+d /run/lock/subsys 0755 root root -
+r! /forcefsck
+r! /fastboot
+r! /forcequotacheck
+EOF
+```
+
+Create udev rules for automatic reload upon USB replug:
+```bash
+cat > /etc/udev/rules.d/99-huawei-dongle.rules << 'EOF'
+ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="12d1", MODE="0666", GROUP="dialout", TAG+="systemd", ENV{SYSTEMD_WANTS}="dongle-auto-reload.service"
+EOF
+```
+
+Create the auto-reload systemd service:
+```bash
+cat > /etc/systemd/system/dongle-auto-reload.service << 'EOF'
+[Unit]
+Description=Auto reload chan_dongle after Huawei USB dongle plug
+After=asterisk.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'sleep 15; chmod 666 /dev/ttyUSB* 2>/dev/null; /usr/sbin/asterisk -rx "dongle reload" 2>/dev/null; /usr/sbin/asterisk -rx "module reload chan_dongle.so" 2>/dev/null'
+EOF
+```
+
+### Step 5 — Reload Rules and Restart Asterisk
+```bash
+systemctl daemon-reload
+udevadm control --reload-rules
+udevadm trigger
+systemctl restart asterisk
+```
+
+---
+
 ## Configuration Reference
 
 All settings live in `/opt/issabel-dashboard/.env`:
