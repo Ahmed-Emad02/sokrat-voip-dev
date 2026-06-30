@@ -1256,17 +1256,26 @@ app.post('/api/gsm-dongles/save-number', (req, res) => {
 
             const cleanNum = number.replace(/^\+/, '');
             if (dongleId) {
-                execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CPBS="ON"`], () => {
-                    execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CPBW=1,"${cleanNum}",145`], () => {
-                        execFile(ASTERISK_BIN, ['-rx', 'module unload chan_dongle.so'], () => {
-                            execFile(ASTERISK_BIN, ['-rx', 'module load chan_dongle.so']);
+                let results = [];
+                execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CPBS="ON"`], (e1, o1, s1) => {
+                    results.push({ step: 'AT+CPBS', error: e1 ? (s1 || e1.message) : null, output: (o1 || '').trim() });
+                    execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CPBW=1,"${cleanNum}",145`], (e2, o2, s2) => {
+                        results.push({ step: 'AT+CPBW', error: e2 ? (s2 || e2.message) : null, output: (o2 || '').trim() });
+                        execFile(ASTERISK_BIN, ['-rx', 'module unload chan_dongle.so'], (e3, o3, s3) => {
+                            results.push({ step: 'unload', error: e3 ? (s3 || e3.message) : null, output: (o3 || '').trim() });
+                            execFile(ASTERISK_BIN, ['-rx', 'module load chan_dongle.so'], (e4, o4, s4) => {
+                                results.push({ step: 'load', error: e4 ? (s4 || e4.message) : null, output: (o4 || '').trim() });
+                                console.log(`GSM MONITOR: Save-number AT results for ${dongleId}:`, results);
+                                io.emit('dongleProvisionResult', { dongleId, results });
+                                return res.json({ success: true, message: 'SIM number saved and AT commands executed.', results });
+                            });
                         });
                     });
                 });
+            } else {
+                return res.json({ success: true, message: 'SIM mapping saved to AstDB. No dongleId provided for AT commands.' });
             }
         });
-
-        return res.json({ success: true, message: 'SIM mapping saved and AstDB registry updated.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

@@ -729,6 +729,27 @@ const isRtl = currentLang === 'ar';
                 }, 6000);
             }
 
+            function showToast(title, message, type) {
+                if (!toastContainer) return;
+                const toast = document.createElement('div');
+                const borderColor = type === 'error' ? 'border-red-900' : type === 'success' ? 'border-emerald-900' : 'border-zinc-700';
+                const titleColor = type === 'error' ? 'text-red-400' : type === 'success' ? 'text-emerald-400' : 'text-zinc-300';
+                toast.className = 'bg-zinc-950/90 border ' + borderColor + ' shadow-2xl p-4 rounded-xl flex flex-col gap-1.5 transform translate-y-5 opacity-0 transition-all duration-300 pointer-events-auto max-w-xs';
+                toast.innerHTML = '\
+                    <div class="flex items-center justify-between text-xs">\
+                        <span class="' + titleColor + ' font-bold uppercase tracking-wider">' + title + '</span>\
+                    </div>\
+                    <p class="text-xs text-zinc-400 whitespace-pre-wrap">' + message + '</p>\
+                ';
+                toast.onclick = function() { toast.remove(); };
+                toastContainer.appendChild(toast);
+                setTimeout(function() { toast.classList.remove('translate-y-5', 'opacity-0'); }, 10);
+                setTimeout(function() {
+                    toast.classList.add('translate-y-5', 'opacity-0');
+                    setTimeout(function() { toast.remove(); }, 300);
+                }, 8000);
+            }
+
             // Modal DOM elements & controllers
             const smsModal = document.getElementById('sms-modal');
             const smsModalCard = document.getElementById('sms-modal-card');
@@ -970,6 +991,8 @@ const isRtl = currentLang === 'ar';
                 const displaySpan = document.getElementById('display-num-' + dongleId);
                 if (displaySpan) displaySpan.innerHTML = '<span class="text-zinc-500 italic">Saving...</span>';
                 
+                showToast(dongleId, isRtl ? 'جاري حفظ الرقم...' : 'Saving number and sending AT commands...', 'info');
+                
                 fetch('/api/gsm-dongles/save-number', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -978,15 +1001,24 @@ const isRtl = currentLang === 'ar';
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
+                        if (data.results) {
+                            let details = data.results.map(function(r) {
+                                const status = r.error ? (isRtl ? '❌' : '❌') : (isRtl ? '✅' : '✅');
+                                return status + ' ' + r.step + (r.error ? ': ' + r.error : '');
+                            }).join('\n');
+                            showToast(dongleId + ' ' + (isRtl ? 'تم بنجاح' : 'Done'), details, 'success');
+                        } else {
+                            showToast(dongleId, isRtl ? 'تم الحفظ' : 'Number saved', 'success');
+                        }
                         refreshDevicesList();
                     } else {
-                        alert((isRtl ? 'فشل حفظ الرقم: ' : 'Failed to save number: ') + (data.error || 'Unknown error'));
+                        showToast(dongleId, (isRtl ? 'فشل: ' : 'Failed: ') + (data.error || 'Unknown error'), 'error');
                         refreshDevicesList();
                     }
                 })
                 .catch(err => {
                     console.error("Error saving SIM number:", err);
-                    alert(isRtl ? 'حدث خطأ في الاتصال بالخادم.' : 'Server connection error occurred.');
+                    showToast(dongleId, isRtl ? 'خطأ في الاتصال' : 'Connection error', 'error');
                     refreshDevicesList();
                 });
             };
@@ -1121,6 +1153,17 @@ const isRtl = currentLang === 'ar';
                         const span = btn.querySelector('span');
                         if (span) span.innerText = words.provisionBtn;
                         btn.disabled = false;
+                    }
+                    refreshDevicesList();
+                });
+
+                socket.on('dongleProvisionResult', (data) => {
+                    if (data.results) {
+                        let details = data.results.map(function(r) {
+                            const status = r.error ? '❌' : '✅';
+                            return status + ' ' + r.step + (r.error ? ': ' + r.error : '');
+                        }).join('\n');
+                        showToast(data.dongleId + ' AT Results', details, data.results.some(function(r) { return r.error; }) ? 'error' : 'success');
                     }
                     refreshDevicesList();
                 });
