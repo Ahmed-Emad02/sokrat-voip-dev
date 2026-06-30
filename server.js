@@ -1559,9 +1559,6 @@ app.post('/api/gsm-dongles/clear-sms', (req, res) => {
     }
 });
 
-// Start periodic watchdog for auto-detecting new dongles (every 30 seconds)
-setInterval(checkNewDongles, 30000);
-// Run once shortly after startup
-setTimeout(checkNewDongles, 10000);
+// Watchdog disabled — number provisioning is manual only
 
 server.listen(PORT, () => console.log(`Real-Time Enterprise Engine active on port ${PORT}`));
