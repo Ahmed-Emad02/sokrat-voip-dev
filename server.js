@@ -1015,6 +1015,28 @@ function startUssdLogMonitor() {
                 io.emit('dongleLog', line.trim());
             }
             
+            // Parse SMS received log
+            const smsPattern = /\[SMS-RECEIVE\] Dongle:\s*([^,]+),\s*Sender:\s*([^,]+),\s*Content:\s*(.*)/i;
+            const smsMatch = smsPattern.exec(line);
+            if (smsMatch) {
+                const dongleId = smsMatch[1].trim();
+                const sender = smsMatch[2].trim();
+                const content = smsMatch[3].trim();
+                const newSms = {
+                    id: Date.now() + '-' + Math.floor(Math.random() * 1000),
+                    dongleId,
+                    sender,
+                    content,
+                    timestamp: Date.now()
+                };
+                const inbox = readSmsInbox();
+                inbox.unshift(newSms);
+                if (inbox.length > 100) inbox.pop();
+                saveSmsInbox(inbox);
+                io.emit('newSms', newSms);
+                console.log(`GSM MONITOR: Saved incoming SMS on ${dongleId} from ${sender} -> ${content}`);
+            }
+            
             // Parse USSD response
             const match = responsePattern.exec(line);
             if (match) {
@@ -1293,6 +1315,46 @@ app.get('/audio/:uniqueid', async (req, res) => {
             fs.createReadStream(targetPath).pipe(res);
         }
     } catch (err) { res.status(500).send("Audio Error: " + err.message); }
+});
+
+const SMS_INBOX_FILE = path.join(__dirname, 'sms_inbox.json');
+function readSmsInbox() {
+    try {
+        if (fs.existsSync(SMS_INBOX_FILE)) {
+            return JSON.parse(fs.readFileSync(SMS_INBOX_FILE, 'utf8'));
+        }
+    } catch (e) {
+        console.error("GSM MONITOR: Failed to read sms_inbox.json:", e);
+    }
+    return [];
+}
+function saveSmsInbox(inbox) {
+    try {
+        fs.writeFileSync(SMS_INBOX_FILE, JSON.stringify(inbox, null, 2), 'utf8');
+    } catch (e) {
+        console.error("GSM MONITOR: Failed to save sms_inbox.json:", e);
+    }
+}
+
+// Endpoint to fetch SMS inbox
+app.get('/api/gsm-dongles/sms', (req, res) => {
+    try {
+        const inbox = readSmsInbox();
+        res.json({ success: true, sms: inbox });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Endpoint to clear SMS inbox
+app.post('/api/gsm-dongles/clear-sms', (req, res) => {
+    try {
+        saveSmsInbox([]);
+        io.emit('smsCleared');
+        res.json({ success: true, message: 'SMS inbox cleared.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 server.listen(PORT, () => console.log(`Real-Time Enterprise Engine active on port ${PORT}`));
