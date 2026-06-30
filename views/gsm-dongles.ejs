@@ -153,6 +153,17 @@ const isRtl = currentLang === 'ar';
             background-color: inherit;
             animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
+        
+        :root {
+            --bg-selected: rgba(255, 59, 48, 0.15); /* Sleek translucent red selection for dark theme */
+        }
+        body.light-theme {
+            --bg-selected: rgba(255, 59, 48, 0.08); /* Lighter translucent red selection for light theme */
+        }
+        .selected-row {
+            background-color: var(--bg-selected) !important;
+            border-left: 3px solid #ff3b30 !important; /* Premium red left accent bar */
+        }
     </style>
 </head>
 <body class="bg-[#09090b] text-slate-100 flex flex-col min-h-screen m-0 p-0">
@@ -513,36 +524,40 @@ const isRtl = currentLang === 'ar';
 
             // Select Row behavior to display details
             window.selectDevice = function(id) {
-                const dev = loadedDevices.find(d => d.ID === id);
-                if (!dev) return;
-                
-                // Highlight row
-                document.querySelectorAll('#dongles-table-body tr').forEach(tr => {
-                    tr.classList.remove('bg-zinc-900/60');
-                });
-                const selectedRow = document.getElementById('row-' + id);
-                if (selectedRow) selectedRow.classList.add('bg-zinc-900/60');
-                
-                // Fill metadata cards
-                elId.textContent = dev.ID || '-';
-                elNum.textContent = dev.Number || 'Unknown';
-                elProv.textContent = dev['Provider Name'] || 'NONE';
-                elImei.textContent = dev.IMEI || '-';
-                elImsi.textContent = dev.IMSI || '-';
-                elGroup.textContent = dev.Group || '0';
-                elModel.textContent = dev.Model || '-';
-                elFirm.textContent = dev.Firmware || '-';
-                elMode.textContent = dev.Mode || '-';
-                elSub.textContent = dev.Submode || '-';
+                try {
+                    const dev = loadedDevices.find(d => d.ID === id);
+                    if (!dev) return;
+                    
+                    // Highlight row
+                    document.querySelectorAll('#dongles-table-body tr').forEach(tr => {
+                        tr.classList.remove('selected-row');
+                    });
+                    const selectedRow = document.getElementById('row-' + id);
+                    if (selectedRow) selectedRow.classList.add('selected-row');
+                    
+                    // Fill metadata cards
+                    elId.textContent = dev.ID || '-';
+                    elNum.textContent = dev.Number || 'Unknown';
+                    elProv.textContent = dev['Provider Name'] || 'NONE';
+                    elImei.textContent = dev.IMEI || '-';
+                    elImsi.textContent = dev.IMSI || '-';
+                    elGroup.textContent = dev.Group || '0';
+                    elModel.textContent = dev.Model || '-';
+                    elFirm.textContent = dev.Firmware || '-';
+                    elMode.textContent = dev.Mode || '-';
+                    elSub.textContent = dev.Submode || '-';
 
-                // Update SMS Inbox state
-                selectedDongleId = id;
-                updateSmsInboxTitle();
-                filterAndRenderSms();
+                    // Update SMS Inbox state
+                    selectedDongleId = id;
+                    updateSmsInboxTitle();
+                    filterAndRenderSms();
 
-                // Sync select dropdown
-                if (ussdTarget) {
-                    ussdTarget.value = id;
+                    // Sync select dropdown
+                    if (ussdTarget) {
+                        ussdTarget.value = id;
+                    }
+                } catch (err) {
+                    console.error("Error inside selectDevice:", err);
                 }
             };
 
@@ -615,7 +630,7 @@ const isRtl = currentLang === 'ar';
                     return;
                 }
                 
-                const filtered = allSmsMessages.filter(sms => sms.dongleId.toLowerCase() === selectedDongleId.toLowerCase());
+                const filtered = allSmsMessages.filter(sms => (sms.dongleId || '').toLowerCase() === selectedDongleId.toLowerCase());
                 smsInboxContainer.innerHTML = '';
                 
                 if (filtered.length > 0) {
@@ -664,7 +679,7 @@ const isRtl = currentLang === 'ar';
             if (socket) {
                 socket.on('newSms', (sms) => {
                     allSmsMessages.unshift(sms);
-                    if (selectedDongleId && sms.dongleId.toLowerCase() === selectedDongleId.toLowerCase()) {
+                    if (selectedDongleId && (sms.dongleId || '').toLowerCase() === selectedDongleId.toLowerCase()) {
                         const placeholder = document.getElementById('sms-empty-placeholder');
                         if (placeholder && placeholder.parentNode) {
                             placeholder.parentNode.removeChild(placeholder);
