@@ -831,7 +831,18 @@ const isRtl = currentLang === 'ar';
                             const tbody = document.getElementById('dongles-table-body');
                             tbody.innerHTML = '';
                             
-                            ussdTarget.innerHTML = `<option value="" disabled selected hidden>${words.selectPlaceholder}</option>`;
+                            const currentSelected = ussdTarget.value;
+                            ussdTarget.innerHTML = '';
+                            
+                            const placeholderOpt = document.createElement('option');
+                            placeholderOpt.value = "";
+                            placeholderOpt.disabled = true;
+                            placeholderOpt.hidden = true;
+                            placeholderOpt.textContent = words.selectPlaceholder;
+                            if (!currentSelected) {
+                                placeholderOpt.selected = true;
+                            }
+                            ussdTarget.appendChild(placeholderOpt);
                             
                             if (loadedDevices.length === 0) {
                                 tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-[var(--text-muted)]">${words.noDongles}</td></tr>`;
@@ -899,8 +910,12 @@ const isRtl = currentLang === 'ar';
                                 
                                 const opt = document.createElement('option');
                                 opt.value = d.ID;
-                                if (d.State.toLowerCase() !== 'free') opt.disabled = true;
+                                const isFree = d.State.toLowerCase() === 'free';
+                                if (!isFree) opt.disabled = true;
                                 opt.textContent = `${d.ID} (${d.Number || 'Unknown'})`;
+                                if (d.ID === currentSelected) {
+                                    opt.selected = true;
+                                }
                                 ussdTarget.appendChild(opt);
                             });
                             
