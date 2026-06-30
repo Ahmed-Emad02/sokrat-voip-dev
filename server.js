@@ -1004,7 +1004,7 @@ function startUssdLogMonitor() {
     
     tail.stdout.on('data', (data) => {
         const lines = data.toString().split('\n');
-        const responsePattern = /\[([^\]]+)\] VERBOSE\[\d+\] at_response\.c:\s+\[([^\]]+)\] Got USSD type \d+ '[^']*': '(.*)'/;
+        const responsePattern = /\[([^\]]+)\] VERBOSE\[\d+\] at_response\.c:\s+\[([^\]]+)\] Got USSD type \d+ '[^']*':\s*'(.*)/;
         const dongleLogPattern = /chan_dongle|at_response|app_ussd|dongle[0-9]+/i;
         
         for (const line of lines) {
@@ -1044,7 +1044,9 @@ function startUssdLogMonitor() {
             if (match) {
                 const logTime = match[1];
                 const dongleId = match[2];
-                const text = match[3];
+                let text = match[3];
+                // Trim trailing quote if it exists
+                text = text.replace(/'\s*$/, '').trim();
                 console.log(`GSM MONITOR: Captured USSD response for ${dongleId} -> ${text}`);
                 latestUssdResponses[dongleId] = {
                     text: text,
