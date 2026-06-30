@@ -28,6 +28,8 @@ const words = {
         stateConnected: "Connected",
         stateDisconnected: "Not connected",
         reloadedSuccess: "Reload command sent successfully",
+        provisionBtn: "Auto-Provision",
+        provisionStarted: "Provisioning started...",
         terminalPlaceholder: "Terminal ready. Input a USSD code and execute a request above.",
         sendUssdError: "Error executing USSD request",
         deviceDetails: "Device Details",
@@ -66,6 +68,8 @@ const words = {
         stateConnected: "متصل",
         stateDisconnected: "غير متصل",
         reloadedSuccess: "تم إرسال أمر إعادة التحميل بنجاح",
+        provisionBtn: "تهيئة تلقائية",
+        provisionStarted: "جارٍ التهيئة...",
         terminalPlaceholder: "الشاشة جاهزة. أدخل رمز USSD وقم بتنفيذ الطلب في الأعلى.",
         sendUssdError: "فشل تنفيذ طلب USSD",
         deviceDetails: "تفاصيل الجهاز",
@@ -271,12 +275,20 @@ const isRtl = currentLang === 'ar';
                                                 </div>
                                             </td>
                                             <td class="py-3.5 px-4 text-center">
-                                                <button onclick="reloadDongle('<%= d.ID %>')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1 mx-auto" title="<%= t.refreshBtn %>">
+                                                <div class="flex items-center justify-center gap-1.5">
+                                                <button onclick="reloadDongle('<%= d.ID %>')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1" title="<%= t.refreshBtn %>">
                                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                         <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
                                                     </svg>
                                                     <%= t.refreshBtn %>
                                                 </button>
+                                                <button id="provBtn-<%= d.ID %>" onclick="provisionDongle('<%= d.ID %>')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1" title="<%= t.provisionBtn %>">
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                                                    </svg>
+                                                    <span><%= t.provisionBtn %></span>
+                                                </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     <% }) %>
@@ -1000,6 +1012,47 @@ const isRtl = currentLang === 'ar';
                     .finally(() => { if (btn) btn.disabled = false; });
             };
 
+            // Auto-provision dongle number
+            window.provisionDongle = function(id) {
+                const btn = document.getElementById('provBtn-' + id);
+                const span = btn ? btn.querySelector('span') : null;
+                const origText = span ? span.innerText : words.provisionBtn;
+                if (span) span.innerText = words.provisionStarted;
+                if (btn) btn.disabled = true;
+
+                fetch('/api/gsm-dongles/provision', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dongleId: id })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.number) {
+                            if (isRtl) {
+                                alert('تم العثور على الرقم: ' + data.number);
+                            } else {
+                                alert('Number found: ' + data.number);
+                            }
+                            refreshDevicesList();
+                        } else {
+                            if (isRtl) {
+                                alert('لم يتم العثور على رقم. تمت محاولة جميع رموز USSD.');
+                            } else {
+                                alert('No number found. All USSD codes attempted.');
+                            }
+                        }
+                    } else {
+                        alert((isRtl ? 'خطأ: ' : 'Error: ') + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(err => alert('Network error: ' + err.message))
+                .finally(() => {
+                    if (span) span.innerText = origText;
+                    if (btn) btn.disabled = false;
+                });
+            };
+
             // Send USSD request action
             ussdForm.addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -1060,6 +1113,16 @@ const isRtl = currentLang === 'ar';
                     if (ussdTarget.value.toLowerCase() === data.dongleId.toLowerCase()) {
                         appendUssdResponse(data.logTime, data.text, true);
                     }
+                });
+
+                socket.on('dongleNumberUpdated', (data) => {
+                    const btn = document.getElementById('provBtn-' + data.dongleId);
+                    if (btn) {
+                        const span = btn.querySelector('span');
+                        if (span) span.innerText = words.provisionBtn;
+                        btn.disabled = false;
+                    }
+                    refreshDevicesList();
                 });
             }
 
@@ -1141,12 +1204,20 @@ const isRtl = currentLang === 'ar';
                                         </div>
                                     </td>
                                     <td class="py-3.5 px-4 text-center">
-                                        <button onclick="reloadDongle('${d.ID}')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1 mx-auto" title="${words.refreshBtn}">
+                                        <div class="flex items-center justify-center gap-1.5">
+                                        <button onclick="reloadDongle('${d.ID}')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1" title="${words.refreshBtn}">
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
                                             </svg>
                                             ${words.refreshBtn}
                                         </button>
+                                        <button id="provBtn-${d.ID}" onclick="provisionDongle('${d.ID}')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1" title="${words.provisionBtn}">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                                            </svg>
+                                            <span>${words.provisionBtn}</span>
+                                        </button>
+                                        </div>
                                     </td>
                                 `;
                                 tbody.appendChild(tr);

@@ -1115,20 +1115,105 @@ function startUssdLogMonitor() {
 const { spawn } = require('child_process');
 startUssdLogMonitor();
 
-// Self-healing SIM number auto-provisioning mapping list
-const dongleNumberMappings = {
-    'dongle0': '+201027826232',
-    // Add other default/placeholder slots if needed
-};
+// Egyptian operator USSD codes to retrieve MSISDN (phone number)
+const EGYPTIAN_USSD_CODES = ['*888#', '*947#', '*110#'];
 
-// Programmatically write the own number setting to /etc/asterisk/dongle.conf (No-op in AstDB hot-plug model)
-function updateDongleConfFile(dongleId, phoneNumber) {
-    console.log(`GSM MONITOR: Hot-swap model active. Skipping update to dongle.conf for ${dongleId} -> ${phoneNumber}`);
+// Track which dongles are currently being provisioned to avoid duplicates
+let provisioningInProgress = {};
+
+// Auto-provision a single dongle by trying Egyptian USSD codes
+function provisionDongle(dongleId, imsi, callback) {
+    let codeIndex = 0;
+    const USSD_TIMEOUT = 25000;
+
+    function tryNextCode() {
+        if (codeIndex >= EGYPTIAN_USSD_CODES.length) {
+            console.log(`AUTO-PROVISION: ${dongleId} - all USSD codes exhausted, no number found.`);
+            return callback(null);
+        }
+
+        const code = EGYPTIAN_USSD_CODES[codeIndex++];
+        delete latestUssdResponses[dongleId];
+
+        console.log(`AUTO-PROVISION: ${dongleId} - sending USSD ${code}...`);
+        execFile(ASTERISK_BIN, ['-rx', `dongle ussd ${dongleId} ${code}`], (err) => {
+            if (err) return tryNextCode();
+
+            const startTime = Date.now();
+            function pollResponse() {
+                const resp = latestUssdResponses[dongleId];
+                if (resp) {
+                    delete latestUssdResponses[dongleId];
+                    const number = extractPhoneNumber(resp.text);
+                    if (number) {
+                        console.log(`AUTO-PROVISION: ${dongleId} - extracted number ${number} via ${code}`);
+                        return finalizeProvision(dongleId, imsi, number, callback);
+                    }
+                    console.log(`AUTO-PROVISION: ${dongleId} - USSD response had no valid number, trying next code...`);
+                }
+                if (Date.now() - startTime >= USSD_TIMEOUT) {
+                    return tryNextCode();
+                }
+                setTimeout(pollResponse, 500);
+            }
+            setTimeout(pollResponse, 3000);
+        });
+    }
+
+    function finalizeProvision(dongleId, imsi, number, callback) {
+        const cleanNum = number.replace(/^\+/, '');
+        const steps = [
+            `dongle cmd ${dongleId} AT+CPBS="ON"`,
+            `dongle cmd ${dongleId} AT+CPBW=1,"${cleanNum}",145`,
+            'module unload chan_dongle.so',
+            'module load chan_dongle.so'
+        ];
+
+        function runStep(idx) {
+            if (idx >= steps.length) {
+                execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imsi} ${number}`], () => {
+                    const simMappings = readSimMappings();
+                    simMappings[imsi] = number;
+                    saveSimMappings(simMappings);
+                    io.emit('dongleNumberUpdated', { dongleId, number });
+                    console.log(`AUTO-PROVISION: ${dongleId} (IMSI:${imsi}) -> ${number}`);
+                    callback(number);
+                });
+                return;
+            }
+            execFile(ASTERISK_BIN, ['-rx', steps[idx]], () => {
+                setTimeout(() => runStep(idx + 1), 500);
+            });
+        }
+        runStep(0);
+    }
+
+    tryNextCode();
 }
 
-// Auto-provisioning disabled at user request. All number assignments are now strictly manual.
-function autoProvisionSimNumbers() {
-    // Disabled
+// Periodic watchdog that detects new dongles without numbers and auto-provisions them
+function checkNewDongles() {
+    getAstDbNumbers((astDbMappings) => {
+        execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (err, stdout) => {
+            if (err || !stdout) return;
+            const devices = parseDevicesOutput(stdout, false, astDbMappings);
+            const simMappings = readSimMappings();
+
+            devices.forEach(dev => {
+                if (!dev.IMSI || dev.IMSI === '-' || dev.IMSI === '') return;
+                if (provisioningInProgress[dev.ID]) return;
+
+                const existingNumber = simMappings[dev.IMSI] || astDbMappings[dev.IMSI] || dev.Number;
+                if (existingNumber && existingNumber !== 'Unknown' && existingNumber !== '-') return;
+
+                provisioningInProgress[dev.ID] = true;
+                console.log(`AUTO-PROVISION: New dongle detected ${dev.ID} (IMSI:${dev.IMSI}) - starting auto-provision...`);
+                provisionDongle(dev.ID, dev.IMSI, (number) => {
+                    delete provisioningInProgress[dev.ID];
+                });
+            });
+        });
+    });
 }
 
 // Endpoint to manually set/save a SIM's phone number mapping
@@ -1138,14 +1223,13 @@ app.post('/api/gsm-dongles/save-number', (req, res) => {
         if (!imsi || !number) {
             return res.status(400).json({ success: false, error: 'IMSI and phone number are required.' });
         }
-        
+
         const simMappings = readSimMappings();
         simMappings[imsi] = number;
         saveSimMappings(simMappings);
-        
+
         console.log(`GSM MONITOR: Manual save number for IMSI: ${imsi} -> ${number}`);
-        
-        // Query Asterisk to find the IMEI for this dongleId/IMSI
+
         execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (errDevs, stdoutDevs) => {
             let imei = null;
             if (!errDevs && stdoutDevs) {
@@ -1155,26 +1239,52 @@ app.post('/api/gsm-dongles/save-number', (req, res) => {
                     imei = dev.IMEI;
                 }
             }
-            
-            // Save to AstDB (both IMEI and IMSI)
+
             if (imei) {
                 execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imei} ${number}`]);
             }
             execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imsi} ${number}`]);
-            
-            // Try to write to the SIM card memory via AT commands in national format (ton 129)
+
             const cleanNum = number.replace(/^\+/, '');
             if (dongleId) {
-                execFile(ASTERISK_BIN, ['-rx', 'dongle cmd ' + dongleId + ' AT+CPBS="ON"'], () => {
-                    execFile(ASTERISK_BIN, ['-rx', 'dongle cmd ' + dongleId + ' AT+CPBW=1,\\"' + cleanNum + '\\",129,\\"Number\\"']);
+                execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CPBS="ON"`], () => {
+                    execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CPBW=1,"${cleanNum}",145`], () => {
+                        execFile(ASTERISK_BIN, ['-rx', 'module unload chan_dongle.so'], () => {
+                            execFile(ASTERISK_BIN, ['-rx', 'module load chan_dongle.so']);
+                        });
+                    });
                 });
             }
         });
-        
+
         return res.json({ success: true, message: 'SIM mapping saved and AstDB registry updated.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
+});
+
+// API endpoint to manually trigger auto-provision for a specific dongle
+app.post('/api/gsm-dongles/provision', (req, res) => {
+    const { dongleId } = req.body;
+    if (!dongleId || !/^dongle[0-9]+$/.test(dongleId)) {
+        return res.status(400).json({ success: false, error: 'Valid dongle ID required.' });
+    }
+    if (provisioningInProgress[dongleId]) {
+        return res.json({ success: false, error: 'Provisioning already in progress for this dongle.' });
+    }
+    execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (err, stdout) => {
+        if (err || !stdout) return res.status(500).json({ success: false, error: 'Cannot query Asterisk.' });
+        const devices = parseDevicesOutput(stdout);
+        const dev = devices.find(d => d.ID === dongleId);
+        if (!dev || !dev.IMSI || dev.IMSI === '-') {
+            return res.json({ success: false, error: 'Dongle has no IMSI (SIM not registered).' });
+        }
+        provisioningInProgress[dongleId] = true;
+        provisionDongle(dongleId, dev.IMSI, (number) => {
+            delete provisioningInProgress[dongleId];
+        });
+        res.json({ success: true, message: `Provisioning started for ${dongleId}.` });
+    });
 });
 
 // Page View route
@@ -1403,5 +1513,10 @@ app.post('/api/gsm-dongles/clear-sms', (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// Start periodic watchdog for auto-detecting new dongles (every 30 seconds)
+setInterval(checkNewDongles, 30000);
+// Run once shortly after startup
+setTimeout(checkNewDongles, 10000);
 
 server.listen(PORT, () => console.log(`Real-Time Enterprise Engine active on port ${PORT}`));
