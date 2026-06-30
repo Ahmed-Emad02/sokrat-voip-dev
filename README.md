@@ -61,7 +61,15 @@ RECORDING_ROOT=/var/spool/asterisk/monitor
 EOF
 ```
 
-### Step 5 — Configure Asterisk AMI
+### Step 5 — Initialize Database Tables
+
+Create the agent status tracking tables:
+
+```bash
+mysql -u root -p$(grep mysqlrootpwd /etc/issabel.conf | cut -d= -f2- | xargs) asterisk < /opt/issabel-dashboard/backend/install_db.sql
+```
+
+### Step 6 — Configure Asterisk AMI
 
 Check if an AMI user already exists:
 
@@ -69,7 +77,14 @@ Check if an AMI user already exists:
 cat /etc/asterisk/manager.conf
 ```
 
-If you need to add one, append this block:
+If you see an `[admin]` section, ensure it has a `permit` line for localhost:
+
+```bash
+# Add permit line if missing (replaces any existing deny line)
+sed -i '/^\[admin\]/,/^\[/ s/deny=.*/permit=127.0.0.1\/255.255.255.0/' /etc/asterisk/manager.conf
+```
+
+If the `[admin]` section does not exist at all, append it:
 
 ```bash
 cat >> /etc/asterisk/manager.conf << 'EOF'
@@ -89,7 +104,9 @@ Reload the AMI configuration:
 asterisk -rx "manager reload"
 ```
 
-### Step 6 — Add ChanSpy Dialplan (Listen / Whisper / Barge)
+### Step 7 — Add Required Dialplan Contexts
+
+#### ChanSpy Dialplan (Listen / Whisper / Barge)
 
 This enables the operator panel's call monitoring actions (codes `222`, `223`, `224`):
 
@@ -132,6 +149,38 @@ DIALPLAN
 
 > **Important:** If `[from-internal-custom]` already exists in the file, do NOT add a duplicate header. Paste only the `exten =>` lines inside the existing context block.
 
+#### GSM Dongle Context (SMS / USSD / Caller ID)
+
+This handles incoming SMS logging, USSD responses, and sets the correct caller ID on dongle calls:
+
+```bash
+cat >> /etc/asterisk/extensions_custom.conf << 'DIALPLAN'
+
+[from-dongle-custom]
+exten => sms,1,NoOp(--- Incoming SMS on ${DONGLENAME} ---)
+same => n,Verbose(1, [SMS-RECEIVE] Dongle: ${DONGLENAME}, Sender: ${CALLERID(num)}, Content: ${SMS})
+same => n,Hangup()
+
+exten => ussd,1,NoOp(--- Incoming USSD on ${DONGLENAME} ---)
+same => n,NoOp(USSD Session Type: ${USSD_TYPE})
+same => n,NoOp(USSD Content: ${USSD})
+same => n,Hangup()
+
+exten => s,1,NoOp(--- Incoming call from Dongle ---)
+same => n,Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})})
+same => n,NoOp(This call arrived on SIM number: ${MY_SIM_NUMBER})
+same => n,Set(CALLERID(dnid)=${MY_SIM_NUMBER})
+same => n,Goto(from-trunk,${MY_SIM_NUMBER},1)
+
+[macro-dialout-trunk-predial-hook]
+exten => s,1,NoOp(--- Outbound call via Dongle ---)
+same => n,Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})})
+same => n,Set(CALLERID(all)=${MY_SIM_NUMBER})
+same => n,MacroExit()
+
+DIALPLAN
+```
+
 Reload the dialplan:
 
 ```bash
@@ -142,9 +191,10 @@ Verify it loaded:
 
 ```bash
 asterisk -rx "dialplan show from-internal-custom" | head -20
+asterisk -rx "dialplan show from-dongle-custom" | head -10
 ```
 
-### Step 7 — Create systemd Service
+### Step 8 — Create systemd Service
 
 ```bash
 cat > /etc/systemd/system/issabel-dashboard.service << 'EOF'
@@ -160,6 +210,8 @@ Restart=always
 RestartSec=5
 User=root
 Environment=NODE_ENV=production
+Environment=LANG=en_US.UTF-8
+Environment=LC_ALL=en_US.UTF-8
 
 [Install]
 WantedBy=multi-user.target
@@ -173,12 +225,26 @@ systemctl daemon-reload
 systemctl enable --now issabel-dashboard
 ```
 
-### Step 8 — Verify
+### Step 9 — Verify
 
 Check the service is running:
 
 ```bash
 systemctl status issabel-dashboard
+```
+
+Tail the live logs to confirm everything initialized:
+
+```bash
+journalctl -u issabel-dashboard -n 30 --no-pager -l
+```
+
+You should see lines like:
+```
+GSM MONITOR: Starting tail process on /var/log/asterisk/full...
+Real-Time Enterprise Engine active on port 3000
+AMI: Connection opened, login sent
+AMI: Login detected
 ```
 
 Open in your browser:
@@ -212,11 +278,34 @@ make install
 
 ### Step 3 — Apply Reference dongle.conf Configuration
 Copy the pre-configured 10-slot layout (included in this repository) to Asterisk:
+
 ```bash
 cp /opt/issabel-dashboard/dongle.conf /etc/asterisk/dongle.conf
 ```
 
-### Step 4 — Configure Permissions & systemd udev Auto-Reload
+This configures **10 dongles** (`dongle0`–`dongle9`) with the following ttyUSB mapping:
+
+| Dongle | Audio | Data  | Dongle | Audio | Data  |
+|--------|-------|-------|--------|-------|-------|
+| dongle0 | ttyUSB1 | ttyUSB2 | dongle5 | ttyUSB16 | ttyUSB17 |
+| dongle1 | ttyUSB4 | ttyUSB5 | dongle6 | ttyUSB19 | ttyUSB20 |
+| dongle2 | ttyUSB7 | ttyUSB8 | dongle7 | ttyUSB22 | ttyUSB23 |
+| dongle3 | ttyUSB10 | ttyUSB11 | dongle8 | ttyUSB25 | ttyUSB26 |
+| dongle4 | ttyUSB13 | ttyUSB14 | dongle9 | ttyUSB28 | ttyUSB29 |
+
+> **USB port numbering rules:** Each dongle uses 3 ttyUSB ports (audio, data, and one unused). With 10 dongles you need 30 consecutive ttyUSB ports starting at ttyUSB1. If your physical USB hub maps differently, update `dongle.conf` accordingly.
+
+### Step 4 — Ensure Dongle Dialplan Context Exists
+
+The dongle context (`[from-dongle-custom]`) must be present in `/etc/asterisk/extensions_custom.conf`. This was already added in **Step 7** of the main installation above. Verify it loaded:
+
+```bash
+asterisk -rx "dialplan show from-dongle-custom" | head -10
+```
+
+If the context is missing, re-run the dialplan commands from Step 7.
+
+### Step 5 — Configure Permissions & systemd udev Auto-Reload
 Grant Asterisk access to write lock files and read serial ports:
 ```bash
 usermod -a -G lock,dialout asterisk
@@ -256,12 +345,33 @@ ExecStart=/bin/bash -c 'sleep 15; chmod 666 /dev/ttyUSB* 2>/dev/null; /usr/sbin/
 EOF
 ```
 
-### Step 5 — Reload Rules and Restart Asterisk
+### Step 6 — Reload Rules and Restart Asterisk
 ```bash
 systemctl daemon-reload
 udevadm control --reload-rules
 udevadm trigger
 systemctl restart asterisk
+```
+
+### Step 7 — Initialize Dongle Number Mappings
+
+After dongles are detected and registered, create the IMSI-to-phone-number mapping file:
+
+```bash
+echo '{}' > /opt/issabel-dashboard/sim_mappings.json
+chmod 644 /opt/issabel-dashboard/sim_mappings.json
+```
+
+Then use the **GSM Dongles** page in the dashboard to manually enter each SIM's phone number (11 digits, e.g. `01515280371`). The dashboard will save the mapping and attempt to write it to the SIM via AT commands.
+
+Alternatively, use the provisioning script to auto-detect numbers via USSD:
+
+```bash
+# Auto-provision all dongles
+bash /opt/issabel-dashboard/scripts/auto-number-dongle.sh --all
+
+# Or target a specific dongle
+bash /opt/issabel-dashboard/scripts/auto-number-dongle.sh --dongle dongle2
 ```
 
 ---
@@ -294,6 +404,7 @@ All settings live in `/opt/issabel-dashboard/.env`:
 | `/cdr` | CDR logs with filters and custom audio player |
 | `/ext-stats` | Extension statistics with overview grid and per-extension charts |
 | `/operator` | Live operator switchboard with Listen/Whisper/Barge actions |
+| `/gsm-dongles` | GSM dongle monitor, SIM number management, and USSD console |
 
 Append `?lang=ar` or `?lang=en` to any route for language switching.
 
@@ -304,11 +415,19 @@ Append `?lang=ar` or `?lang=en` to any route for language switching.
 ```
 issabel-dashboard/
 ├── server.js              # Express app, MySQL queries, AMI handler, Socket.io, all routes
+├── dongle.conf            # Sample 10-dongle chan_dongle configuration
+├── package.json
+├── backend/
+│   ├── install_db.sql     # Agent status tracking tables
+│   └── synq_status.php    # Agent status PHP endpoint for SynQ
+├── scripts/
+│   └── auto-number-dongle.sh  # Auto-provision SIM numbers via USSD
 ├── views/
 │   ├── sidebar.ejs        # Shared top navigation bar, theme toggle, clock
 │   ├── dashboard.ejs      # Executive KPI dashboard
 │   ├── cdr.ejs            # CDR logs with custom audio player
 │   ├── ext-stats.ejs      # Extension statistics with charts
+│   ├── gsm-dongles.ejs    # GSM dongle monitor & USSD console
 │   └── operator.ejs       # Live operator switchboard
 ├── public/
 │   ├── logo.png           # Light mode logo
@@ -316,14 +435,13 @@ issabel-dashboard/
 │   └── favicon.png        # Browser tab icon
 ├── .env                   # Credentials (gitignored)
 ├── .gitignore
-├── package.json
 └── README.md
 ```
 
 ## Tech Stack
 
 - **Backend:** Node.js 22, Express 4, Socket.io 4, mysql2
-- **Frontend:** EJS, Tailwind CSS v4 (CDN), ECharts 5, Cairo font
+- **Frontend:** EJS, Tailwind CSS v4 (CDN), ECharts 5, Roboto / IBM Plex Sans Arabic fonts
 - **Real-time:** Asterisk AMI (raw TCP), Socket.io WebSocket
 - **Database:** MySQL (Issabel CDR — `asteriskcdrdb`)
 
