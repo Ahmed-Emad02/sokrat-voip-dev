@@ -1136,7 +1136,11 @@ const { spawn } = require('child_process');
 startUssdLogMonitor();
 
 function normalizeMsisdn(raw) {
-    return raw.replace(/[^0-9]/g, '');
+    let num = raw.replace(/[^0-9+]/g, '');
+    if (num.startsWith('+')) return num;
+    if (num.startsWith('00')) return '+' + num.slice(2);
+    if (num.startsWith('01')) return '+20' + num.slice(1);
+    return '+' + num;
 }
 
 function sendAtAndWait(dongleId, atCmd, timeoutMs, callback) {
@@ -1191,7 +1195,7 @@ app.post('/api/gsm-dongles/save-number', (req, res) => {
 
             sendAtAndWait(dongleId, 'AT+CPBS="ON"', 10000, (r1) => {
                 results.push({ step: 'AT+CPBS', error: r1.error, output: r1.output || '' });
-                sendAtAndWait(dongleId, `AT+CPBW=1,"${cleanNum}",129`, 10000, (r2) => {
+                sendAtAndWait(dongleId, `AT+CPBW=1,"${cleanNum}",145`, 10000, (r2) => {
                     results.push({ step: 'AT+CPBW', error: r2.error, output: r2.output || '' });
                     execFile(ASTERISK_BIN, ['-rx', 'module unload chan_dongle.so'], (e3) => {
                         results.push({ step: 'unload', error: e3 ? e3.message : null, output: '' });
