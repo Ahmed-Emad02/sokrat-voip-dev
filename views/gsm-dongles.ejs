@@ -988,8 +988,13 @@ const isRtl = currentLang === 'ar';
                 const newNum = prompt(promptMsg, currentVal);
                 if (newNum === null) return;
                 
-                const trimmed = newNum.trim();
+                const trimmed = newNum.trim().replace(/\s+/g, '');
                 if (!trimmed) return;
+
+                if (!/^\+?\d{7,15}$/.test(trimmed)) {
+                    showToast(dongleId, isRtl ? 'رقم غير صالح. أدخل رقمًا مكونًا من 7 إلى 15 رقمًا مع + اختياري في البداية.' : 'Invalid number. Enter 7-15 digits, optional leading +.', 'error');
+                    return;
+                }
                 
                 const displaySpan = document.getElementById('display-num-' + dongleId);
                 if (displaySpan) displaySpan.innerHTML = '<span class="text-zinc-500 italic">Saving...</span>';
