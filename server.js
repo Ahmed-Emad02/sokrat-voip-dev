@@ -851,6 +851,8 @@ app.get('/operator', (req, res) => {
 
 // --- GSM DONGLES MONITOR & USSD ROUTING ENGINE ---
 let latestUssdResponses = {}; // dongle_id -> { text, timestamp, logTime }
+let latestAtResponses = {};  // dongle_id -> { text, timestamp }
+const atResponsePattern = /\[([^\]]+)\] VERBOSE\[\d+\] at_response\.c:\s+\[([^\]]+)\] Got Response for user's command:'(.*)/s;
 
 // Persistent IMSI-to-Phone number mapping database on disk
 const MAPPINGS_FILE = '/opt/issabel-dashboard/sim_mappings.json';
@@ -1066,6 +1068,17 @@ function startUssdLogMonitor() {
             };
             io.emit('ussdResponse', { dongleId, text, logTime });
         }
+
+        const atMatch = atResponsePattern.exec(statement);
+        if (atMatch) {
+            const dongleId = atMatch[2].trim();
+            let text = atMatch[3].trim();
+            text = text.replace(/'$/, '').trim();
+            latestAtResponses[dongleId] = {
+                text: text,
+                timestamp: Date.now()
+            };
+        }
     }
 
     function flushLogBuffer() {
@@ -1115,50 +1128,48 @@ function startUssdLogMonitor() {
 const { spawn } = require('child_process');
 startUssdLogMonitor();
 
-// Egyptian operator USSD codes to retrieve MSISDN (phone number)
-const EGYPTIAN_USSD_CODES = ['*888#', '*947#', '*110#'];
-
 // Track which dongles are currently being provisioned to avoid duplicates
 let provisioningInProgress = {};
 
-// Auto-provision a single dongle by trying Egyptian USSD codes
-function provisionDongle(dongleId, imsi, callback) {
-    let codeIndex = 0;
-    const USSD_TIMEOUT = 25000;
+function extractCnumNumber(text) {
+    const match = text.match(/\+CNUM:\s*"[^"]*","([^"]+)"/);
+    return match ? match[1] : null;
+}
 
-    function tryNextCode() {
-        if (codeIndex >= EGYPTIAN_USSD_CODES.length) {
-            console.log(`AUTO-PROVISION: ${dongleId} - all USSD codes exhausted, no number found.`);
+// Auto-provision a single dongle by reading the MSISDN via AT+CNUM command
+function provisionDongle(dongleId, imsi, callback) {
+    const AT_TIMEOUT = 15000;
+
+    delete latestAtResponses[dongleId];
+
+    console.log(`AUTO-PROVISION: ${dongleId} - sending AT+CNUM...`);
+    execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CNUM`], (err) => {
+        if (err) {
+            console.log(`AUTO-PROVISION: ${dongleId} - AT+CNUM command failed: ${err.message}`);
             return callback(null);
         }
 
-        const code = EGYPTIAN_USSD_CODES[codeIndex++];
-        delete latestUssdResponses[dongleId];
-
-        console.log(`AUTO-PROVISION: ${dongleId} - sending USSD ${code}...`);
-        execFile(ASTERISK_BIN, ['-rx', `dongle ussd ${dongleId} ${code}`], (err) => {
-            if (err) return tryNextCode();
-
-            const startTime = Date.now();
-            function pollResponse() {
-                const resp = latestUssdResponses[dongleId];
-                if (resp) {
-                    delete latestUssdResponses[dongleId];
-                    const number = extractPhoneNumber(resp.text);
-                    if (number) {
-                        console.log(`AUTO-PROVISION: ${dongleId} - extracted number ${number} via ${code}`);
-                        return finalizeProvision(dongleId, imsi, number, callback);
-                    }
-                    console.log(`AUTO-PROVISION: ${dongleId} - USSD response had no valid number, trying next code...`);
+        const startTime = Date.now();
+        function pollResponse() {
+            const resp = latestAtResponses[dongleId];
+            if (resp) {
+                delete latestAtResponses[dongleId];
+                const number = extractCnumNumber(resp.text);
+                if (number) {
+                    console.log(`AUTO-PROVISION: ${dongleId} - extracted number ${number} via AT+CNUM`);
+                    return finalizeProvision(dongleId, imsi, number, callback);
                 }
-                if (Date.now() - startTime >= USSD_TIMEOUT) {
-                    return tryNextCode();
-                }
-                setTimeout(pollResponse, 500);
+                console.log(`AUTO-PROVISION: ${dongleId} - AT+CNUM response had no valid number: "${resp.text}"`);
+                return callback(null);
             }
-            setTimeout(pollResponse, 3000);
-        });
-    }
+            if (Date.now() - startTime >= AT_TIMEOUT) {
+                console.log(`AUTO-PROVISION: ${dongleId} - AT+CNUM timed out`);
+                return callback(null);
+            }
+            setTimeout(pollResponse, 500);
+        }
+        setTimeout(pollResponse, 2000);
+    });
 
     function finalizeProvision(dongleId, imsi, number, callback) {
         const cleanNum = number.replace(/^\+/, '');
@@ -1187,8 +1198,6 @@ function provisionDongle(dongleId, imsi, callback) {
         }
         runStep(0);
     }
-
-    tryNextCode();
 }
 
 // Periodic watchdog that detects new dongles without numbers and auto-provisions them
