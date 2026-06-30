@@ -1132,103 +1132,6 @@ function startUssdLogMonitor() {
 const { spawn } = require('child_process');
 startUssdLogMonitor();
 
-// Track which dongles are currently being provisioned to avoid duplicates
-let provisioningInProgress = {};
-
-function extractCnumNumber(text) {
-    const match = text.match(/\+CNUM:\s*"[^"]*","([^"]+)"/);
-    return match ? match[1] : null;
-}
-
-// Auto-provision a single dongle by reading the MSISDN via AT+CNUM command
-function provisionDongle(dongleId, imsi, callback) {
-    const AT_TIMEOUT = 15000;
-
-    delete latestAtResponses[dongleId];
-
-    console.log(`AUTO-PROVISION: ${dongleId} - sending AT+CNUM...`);
-    execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CNUM`], (err) => {
-        if (err) {
-            console.log(`AUTO-PROVISION: ${dongleId} - AT+CNUM command failed: ${err.message}`);
-            return callback(null);
-        }
-
-        const startTime = Date.now();
-        function pollResponse() {
-            const resp = latestAtResponses[dongleId];
-            if (resp) {
-                delete latestAtResponses[dongleId];
-                const number = extractCnumNumber(resp.text);
-                if (number) {
-                    console.log(`AUTO-PROVISION: ${dongleId} - extracted number ${number} via AT+CNUM`);
-                    return finalizeProvision(dongleId, imsi, number, callback);
-                }
-                console.log(`AUTO-PROVISION: ${dongleId} - AT+CNUM response had no valid number: "${resp.text}"`);
-                return callback(null);
-            }
-            if (Date.now() - startTime >= AT_TIMEOUT) {
-                console.log(`AUTO-PROVISION: ${dongleId} - AT+CNUM timed out`);
-                return callback(null);
-            }
-            setTimeout(pollResponse, 500);
-        }
-        setTimeout(pollResponse, 2000);
-    });
-
-    function finalizeProvision(dongleId, imsi, number, callback) {
-        const cleanNum = number.replace(/^\+/, '');
-        const steps = [
-            `dongle cmd ${dongleId} AT+CPBS="ON"`,
-            `dongle cmd ${dongleId} AT+CPBW=1,"${cleanNum}",129`,
-            'module unload chan_dongle.so',
-            'module load chan_dongle.so'
-        ];
-
-        function runStep(idx) {
-            if (idx >= steps.length) {
-                execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imsi} ${number}`], () => {
-                    const simMappings = readSimMappings();
-                    simMappings[imsi] = number;
-                    saveSimMappings(simMappings);
-                    io.emit('dongleNumberUpdated', { dongleId, number });
-                    console.log(`AUTO-PROVISION: ${dongleId} (IMSI:${imsi}) -> ${number}`);
-                    callback(number);
-                });
-                return;
-            }
-            execFile(ASTERISK_BIN, ['-rx', steps[idx]], () => {
-                setTimeout(() => runStep(idx + 1), 500);
-            });
-        }
-        runStep(0);
-    }
-}
-
-// Periodic watchdog that detects new dongles without numbers and auto-provisions them
-function checkNewDongles() {
-    getAstDbNumbers((astDbMappings) => {
-        execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (err, stdout) => {
-            if (err || !stdout) return;
-            const devices = parseDevicesOutput(stdout, false, astDbMappings);
-            const simMappings = readSimMappings();
-
-            devices.forEach(dev => {
-                if (!dev.IMSI || dev.IMSI === '-' || dev.IMSI === '') return;
-                if (provisioningInProgress[dev.ID]) return;
-
-                const existingNumber = simMappings[dev.IMSI] || astDbMappings[dev.IMSI] || dev.Number;
-                if (existingNumber && existingNumber !== 'Unknown' && existingNumber !== '-') return;
-
-                provisioningInProgress[dev.ID] = true;
-                console.log(`AUTO-PROVISION: New dongle detected ${dev.ID} (IMSI:${dev.IMSI}) - starting auto-provision...`);
-                provisionDongle(dev.ID, dev.IMSI, (number) => {
-                    delete provisioningInProgress[dev.ID];
-                });
-            });
-        });
-    });
-}
-
 function normalizeMsisdn(raw) {
     return raw.replace(/[^0-9]/g, '');
 }
@@ -1304,28 +1207,62 @@ app.post('/api/gsm-dongles/save-number', (req, res) => {
     }
 });
 
-// API endpoint to manually trigger auto-provision for a specific dongle
-app.post('/api/gsm-dongles/provision', (req, res) => {
+// API endpoint to reset USB port for a dongle (unplug/replug simulation)
+app.post('/api/gsm-dongles/reset-usb-port', (req, res) => {
     const { dongleId } = req.body;
     if (!dongleId || !/^dongle[0-9]+$/.test(dongleId)) {
         return res.status(400).json({ success: false, error: 'Valid dongle ID required.' });
     }
-    if (provisioningInProgress[dongleId]) {
-        return res.json({ success: false, error: 'Provisioning already in progress for this dongle.' });
-    }
-    execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (err, stdout) => {
-        if (err || !stdout) return res.status(500).json({ success: false, error: 'Cannot query Asterisk.' });
-        const devices = parseDevicesOutput(stdout);
-        const dev = devices.find(d => d.ID === dongleId);
-        if (!dev || !dev.IMSI || dev.IMSI === '-') {
-            return res.json({ success: false, error: 'Dongle has no IMSI (SIM not registered).' });
+
+    try {
+        const conf = fs.readFileSync('/etc/asterisk/dongle.conf', 'utf8');
+        const sectionMatch = conf.match(new RegExp(`\\[${dongleId}\\][^\\[]*`));
+        if (!sectionMatch) {
+            return res.json({ success: false, error: `Dongle section [${dongleId}] not found in dongle.conf.` });
         }
-        provisioningInProgress[dongleId] = true;
-        provisionDongle(dongleId, dev.IMSI, (number) => {
-            delete provisioningInProgress[dongleId];
+        const dataMatch = sectionMatch[0].match(/data\s*=\s*\/dev\/(ttyUSB\d+)/);
+        if (!dataMatch) {
+            return res.json({ success: false, error: `No data port found for ${dongleId} in dongle.conf.` });
+        }
+        const ttyDev = dataMatch[1];
+
+        execFile('udevadm', ['info', '-q', 'path', '-n', `/dev/${ttyDev}`], (err, stdout) => {
+            if (err || !stdout.trim()) {
+                return res.json({ success: false, error: `Cannot find USB device for /dev/${ttyDev}. Dongle may not be connected.` });
+            }
+            const usbMatch = stdout.match(/\/usb\d+\/([0-9]+-[0-9]+)\//);
+            if (!usbMatch) {
+                return res.json({ success: false, error: `Cannot parse USB bus ID from udev path: ${stdout.trim()}` });
+            }
+            const usbId = usbMatch[1];
+            const authorizedPath = `/sys/bus/usb/devices/${usbId}/authorized`;
+
+            if (!fs.existsSync(authorizedPath)) {
+                return res.json({ success: false, error: `USB device authorized control file not found at ${authorizedPath}.` });
+            }
+
+            try {
+                fs.writeFileSync(authorizedPath, '0\n');
+                const results = [{ step: 'deauthorize', error: null, output: `Deauthorized USB device ${usbId}` }];
+
+                setTimeout(() => {
+                    try {
+                        fs.writeFileSync(authorizedPath, '1\n');
+                        results.push({ step: 'reauthorize', error: null, output: `Reauthorized USB device ${usbId}` });
+                        io.emit('dongleProvisionResult', { dongleId, results });
+                        return res.json({ success: true, message: `USB port reset complete for ${dongleId} (${ttyDev} → ${usbId}).`, results });
+                    } catch (e) {
+                        results.push({ step: 'reauthorize', error: e.message, output: '' });
+                        return res.json({ success: false, error: `Reauthorize failed: ${e.message}`, results });
+                    }
+                }, 2000);
+            } catch (e) {
+                return res.json({ success: false, error: `Deauthorize failed: ${e.message}` });
+            }
         });
-        res.json({ success: true, message: `Provisioning started for ${dongleId}.` });
-    });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // Page View route

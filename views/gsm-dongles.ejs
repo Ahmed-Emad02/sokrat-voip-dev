@@ -28,8 +28,8 @@ const words = {
         stateConnected: "Connected",
         stateDisconnected: "Not connected",
         reloadedSuccess: "Reload command sent successfully",
-        provisionBtn: "Auto-Provision",
-        provisionStarted: "Provisioning started...",
+        resetUsbBtn: "Reset USB Port",
+        resetUsbStarted: "Resetting USB port...",
         terminalPlaceholder: "Terminal ready. Input a USSD code and execute a request above.",
         sendUssdError: "Error executing USSD request",
         deviceDetails: "Device Details",
@@ -68,8 +68,8 @@ const words = {
         stateConnected: "متصل",
         stateDisconnected: "غير متصل",
         reloadedSuccess: "تم إرسال أمر إعادة التحميل بنجاح",
-        provisionBtn: "تهيئة تلقائية",
-        provisionStarted: "جارٍ التهيئة...",
+        resetUsbBtn: "إعادة تعيين منفذ USB",
+        resetUsbStarted: "جارٍ إعادة تعيين منفذ USB...",
         terminalPlaceholder: "الشاشة جاهزة. أدخل رمز USSD وقم بتنفيذ الطلب في الأعلى.",
         sendUssdError: "فشل تنفيذ طلب USSD",
         deviceDetails: "تفاصيل الجهاز",
@@ -284,11 +284,11 @@ const isRtl = currentLang === 'ar';
                                                     </svg>
                                                     <%= t.refreshBtn %>
                                                 </button>
-                                                <button id="provBtn-<%= d.ID %>" onclick="provisionDongle('<%= d.ID %>')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1" title="<%= t.provisionBtn %>">
+                                                <button id="resetBtn-<%= d.ID %>" onclick="resetUsbPort('<%= d.ID %>')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1" title="<%= t.resetUsbBtn %>">
                                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                        <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                                                        <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>
                                                     </svg>
-                                                    <span><%= t.provisionBtn %></span>
+                                                    <span><%= t.resetUsbBtn %></span>
                                                 </button>
                                                 </div>
                                             </td>
@@ -542,8 +542,8 @@ const isRtl = currentLang === 'ar';
                 sendBtn: "<%= t.sendBtn %>",
                 running: "<%= t.running %>",
                 refreshBtn: "<%= t.refreshBtn %>",
-                provisionBtn: "<%= t.provisionBtn %>",
-                provisionStarted: "<%= t.provisionStarted %>",
+                resetUsbBtn: "<%= t.resetUsbBtn %>",
+                resetUsbStarted: "<%= t.resetUsbStarted %>",
                 noDongles: "<%= t.noDongles %>"
             };
 
@@ -1051,15 +1051,15 @@ const isRtl = currentLang === 'ar';
                     .finally(() => { if (btn) btn.disabled = false; });
             };
 
-            // Auto-provision dongle number
-            window.provisionDongle = function(id) {
-                const btn = document.getElementById('provBtn-' + id);
+            // Reset USB port (unplug/replug simulation) for a dongle
+            window.resetUsbPort = function(id) {
+                const btn = document.getElementById('resetBtn-' + id);
                 const span = btn ? btn.querySelector('span') : null;
-                const origText = span ? span.innerText : words.provisionBtn;
-                if (span) span.innerText = words.provisionStarted;
+                const origText = span ? span.innerText : words.resetUsbBtn;
+                if (span) span.innerText = words.resetUsbStarted;
                 if (btn) btn.disabled = true;
 
-                fetch('/api/gsm-dongles/provision', {
+                fetch('/api/gsm-dongles/reset-usb-port', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ dongleId: id })
@@ -1067,25 +1067,19 @@ const isRtl = currentLang === 'ar';
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        if (data.number) {
-                            if (isRtl) {
-                                alert('تم العثور على الرقم: ' + data.number);
-                            } else {
-                                alert('Number found: ' + data.number);
-                            }
-                            refreshDevicesList();
-                        } else {
-                            if (isRtl) {
-                                alert('لم يتم العثور على رقم. تمت محاولة جميع رموز USSD.');
-                            } else {
-                                alert('No number found. All USSD codes attempted.');
-                            }
+                        if (data.results) {
+                            let details = data.results.map(function(r) {
+                                const status = r.error ? '❌' : '✅';
+                                return status + ' ' + r.step + (r.error ? ': ' + r.error : '');
+                            }).join('\n');
+                            showToast(id + ' USB Reset', details, data.results.some(function(r) { return r.error; }) ? 'error' : 'success');
                         }
+                        refreshDevicesList();
                     } else {
-                        alert((isRtl ? 'خطأ: ' : 'Error: ') + (data.error || 'Unknown error'));
+                        showToast(id + ' Error', data.error || 'Unknown error', 'error');
                     }
                 })
-                .catch(err => alert('Network error: ' + err.message))
+                .catch(err => showToast(id + ' Error', 'Network error: ' + err.message, 'error'))
                 .finally(() => {
                     if (span) span.innerText = origText;
                     if (btn) btn.disabled = false;
@@ -1155,10 +1149,10 @@ const isRtl = currentLang === 'ar';
                 });
 
                 socket.on('dongleNumberUpdated', (data) => {
-                    const btn = document.getElementById('provBtn-' + data.dongleId);
+                    const btn = document.getElementById('resetBtn-' + data.dongleId);
                     if (btn) {
                         const span = btn.querySelector('span');
-                        if (span) span.innerText = words.provisionBtn;
+                        if (span) span.innerText = words.resetUsbBtn;
                         btn.disabled = false;
                     }
                     refreshDevicesList();
@@ -1261,11 +1255,11 @@ const isRtl = currentLang === 'ar';
                                             </svg>
                                             ${words.refreshBtn}
                                         </button>
-                                        <button id="provBtn-${d.ID}" onclick="provisionDongle('${d.ID}')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1" title="${words.provisionBtn}">
+                                        <button id="resetBtn-${d.ID}" onclick="resetUsbPort('${d.ID}')" class="bg-zinc-900 hover:bg-zinc-800 text-[var(--text-secondary)] hover:text-white border border-zinc-800 rounded-md px-2.5 py-1 text-xs cursor-pointer transition flex items-center gap-1" title="${words.resetUsbBtn}">
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                                                <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>
                                             </svg>
-                                            <span>${words.provisionBtn}</span>
+                                            <span>${words.resetUsbBtn}</span>
                                         </button>
                                         </div>
                                     </td>
