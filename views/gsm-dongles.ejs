@@ -642,7 +642,9 @@ const isRtl = currentLang === 'ar';
                 allSmsMessages.unshift(sms);
                 if (selectedDongleId && sms.dongleId.toLowerCase() === selectedDongleId.toLowerCase()) {
                     const placeholder = document.getElementById('sms-empty-placeholder');
-                    if (placeholder) placeholder.remove();
+                    if (placeholder && placeholder.parentNode) {
+                        placeholder.parentNode.removeChild(placeholder);
+                    }
                     smsInboxContainer.insertBefore(renderSmsCard(sms), smsInboxContainer.firstChild);
                 }
             });
@@ -802,8 +804,9 @@ const isRtl = currentLang === 'ar';
                 btnSpinner.classList.remove('hidden');
                 ussdSubmitBtn.disabled = true;
                 
-                if (terminalPlaceholder) {
-                    terminalPlaceholder.remove();
+                const placeholderEl = document.getElementById('terminal-placeholder');
+                if (placeholderEl && placeholderEl.parentNode) {
+                    placeholderEl.parentNode.removeChild(placeholderEl);
                 }
                 
                 const cmdLine = document.createElement('div');
