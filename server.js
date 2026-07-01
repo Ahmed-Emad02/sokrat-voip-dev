@@ -200,7 +200,10 @@ app.use(async (req, res, next) => {
     res.locals.allowedTabs = req.session.userPermissions;
     if (!tab) return next();
     if (req.session.userPermissions.includes(tab)) return next();
-    res.redirect('/');
+    // Denied — redirect to the first tab they *can* access, or /login
+    const tabToRoute = { dashboard: '/', cdr: '/cdr', 'ext-stats': '/ext-stats', operator: '/operator', 'gsm-dongles': '/gsm-dongles', users: '/users', 'agent-status': '/agent-status' };
+    const firstAllowed = req.session.userPermissions.find(p => tabToRoute[p]);
+    res.redirect(firstAllowed ? tabToRoute[firstAllowed] : '/login');
 });
 
 app.use((req, res, next) => {
