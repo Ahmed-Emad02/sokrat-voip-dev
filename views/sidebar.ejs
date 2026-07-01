@@ -332,15 +332,28 @@ function can(tab) { return allowed.includes(tab); }
 <!-- Toast Notification -->
 <div id="toastContainer" class="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none" style="min-width:280px;max-width:420px"></div>
 
+<div id="flashData" data-success="<%= typeof success !== 'undefined' ? success : '' %>" data-error="<%= typeof error !== 'undefined' ? error : '' %>" style="display:none"></div>
+
+<style>
+.success-msg, .error-msg { display: none !important; }
+</style>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var toastContainer = document.getElementById('toastContainer');
     if (!toastContainer) return;
 
+    var flash = document.getElementById('flashData');
+    var msg = flash ? (flash.dataset.success || flash.dataset.error) : '';
+    var type = flash && flash.dataset.error ? 'error' : 'success';
+    if (!msg) return;
+
     function showToast(msg, type) {
         var el = document.createElement('div');
-        el.className = 'pointer-events-auto px-5 py-3 rounded-xl text-sm font-semibold shadow-2xl shadow-black/40 translate-x-0 opacity-0 transition-all duration-300';
+        el.className = 'pointer-events-auto px-5 py-3 rounded-xl text-sm font-semibold shadow-2xl shadow-black/40';
         el.style.transform = 'translateX(120%)';
+        el.style.opacity = '0';
+        el.style.transition = 'all 0.3s';
         if (type === 'error') {
             el.style.backgroundColor = 'rgba(255,59,48,0.15)';
             el.style.border = '1px solid rgba(255,59,48,0.35)';
@@ -353,13 +366,11 @@ document.addEventListener('DOMContentLoaded', function() {
         el.textContent = msg;
         toastContainer.appendChild(el);
 
-        // Slide in
         requestAnimationFrame(function() {
             el.style.transform = 'translateX(0)';
             el.style.opacity = '1';
         });
 
-        // Auto-dismiss after 5s
         setTimeout(function() {
             el.style.transform = 'translateX(120%)';
             el.style.opacity = '0';
@@ -367,16 +378,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
     }
 
-    // Read existing flash messages from the page
-    var existing = document.querySelectorAll('.success-msg, .error-msg');
-    for (var i = 0; i < existing.length; i++) {
-        var el = existing[i];
-        var txt = el.textContent || el.innerText;
-        if (txt.trim()) {
-            showToast(txt.trim(), el.classList.contains('error-msg') ? 'error' : 'success');
-        }
-        el.style.display = 'none';
-    }
-})();
+    showToast(msg, type);
 });
 </script>
