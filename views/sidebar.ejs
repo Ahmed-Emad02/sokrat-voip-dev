@@ -190,7 +190,6 @@ function can(tab) { return allowed.includes(tab); }
             <h1 class="text-base font-black text-[var(--text-primary)] tracking-wider font-vibrant-display leading-none">
                 SPT-<span class="text-[#ff3b30]">ANALYTICS</span>
             </h1>
-            <span class="text-[9px] text-[var(--text-secondary)] uppercase tracking-widest block mt-1 font-bold">Telemetry Console</span>
         </div>
     </div>
 
@@ -283,6 +282,9 @@ function can(tab) { return allowed.includes(tab); }
         </div>
         
         <div class="h-4 w-[2px] bg-[var(--border-primary)] hidden md:block"></div>
+
+        <!-- Current User -->
+        <span class="text-xs font-semibold text-[var(--text-secondary)] hidden md:block"><%= typeof currentUser !== 'undefined' ? currentUser : '' %></span>
 
         <!-- Settings Dropdown -->
         <div class="relative" id="settingsDropdown">

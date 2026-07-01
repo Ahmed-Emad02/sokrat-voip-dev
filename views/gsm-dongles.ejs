@@ -2,7 +2,6 @@
 const words = {
     en: {
         title: "GSM Dongles", subtitle: "Console",
-        desc: "Asterisk 18 GSM Cellular Trunks Monitor & USSD Panel",
         thID: "Dongle ID",
         thProvider: "Provider Name",
         thNumber: "SIM Number",
@@ -44,7 +43,6 @@ const words = {
     },
     ar: {
         title: "شرائح الاتصال", subtitle: "GSM",
-        desc: "مراقبة شرائح الهاتف الخلوي ولوحة إرسال طلبات USSD المباشرة لأستيركس 18",
         thID: "رمز الشريحة",
         thProvider: "شبكة الاتصال",
         thNumber: "رقم الهاتف",
@@ -185,7 +183,6 @@ const isRtl = currentLang === 'ar';
         <div class="mb-6 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h2 class="text-3xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
-                <p class="text-xs text-[var(--text-secondary)] tracking-wide mt-1"><%= t.desc %></p>
             </div>
             
             <div class="flex items-center gap-3">
