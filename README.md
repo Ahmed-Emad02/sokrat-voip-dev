@@ -298,17 +298,13 @@ echo '{}' > /opt/issabel-dashboard/sim_mappings.json
 chmod 644 /opt/issabel-dashboard/sim_mappings.json
 ```
 
-The dongle ttyUSB mapping used (`dongle0`–`dongle9`):
+A single dongle is configured by default:
 
-| Dongle | Audio | Data  | Dongle | Audio | Data  |
-|--------|-------|-------|--------|-------|-------|
-| dongle0 | ttyUSB1 | ttyUSB2 | dongle5 | ttyUSB16 | ttyUSB17 |
-| dongle1 | ttyUSB4 | ttyUSB5 | dongle6 | ttyUSB19 | ttyUSB20 |
-| dongle2 | ttyUSB7 | ttyUSB8 | dongle7 | ttyUSB22 | ttyUSB23 |
-| dongle3 | ttyUSB10 | ttyUSB11 | dongle8 | ttyUSB25 | ttyUSB26 |
-| dongle4 | ttyUSB13 | ttyUSB14 | dongle9 | ttyUSB28 | ttyUSB29 |
+| Dongle | Audio | Data |
+|--------|-------|------|
+| dongle0 | ttyUSB1 | ttyUSB2 |
 
-> **USB port numbering rules:** Each dongle uses 3 ttyUSB ports (audio, data, and one unused). With 10 dongles you need 30 consecutive ttyUSB ports starting at ttyUSB1. If your physical USB hub maps differently, update `dongle.conf` accordingly.
+To add more dongles, copy a `[dongleN]` block and update the ttyUSB ports accordingly. Each dongle uses 2 ttyUSB ports (audio + data).
 
 Then use the **GSM Dongles** page in the dashboard to manually enter each SIM's phone number. The dashboard will save the mapping to `sim_mappings.json` and attempt to write it to the SIM via AT commands.
 

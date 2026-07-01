@@ -230,7 +230,7 @@ fi
 # 9c — Apply dongle.conf
 echo "  [9c] Applying dongle.conf..."
 cp "$INSTALL_DIR/dongle.conf" /etc/asterisk/dongle.conf
-echo "  dongle.conf copied (10 dongles configured)"
+echo "  dongle.conf copied (1 dongle configured)"
 
 # 8c2 — Ensure /var/log/asterisk/full captures VERBOSE messages (required for SMS/USSD parsing)
 echo "  [9c2] Enabling verbose logging in Asterisk logger.conf..."
