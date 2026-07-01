@@ -7,6 +7,9 @@ const net = require('net');
 const http = require('http');
 const { Server } = require('socket.io');
 const { execFile } = require('child_process');
+const session = require('express-session');
+const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
 
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
@@ -14,6 +17,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
+const SESSION_SECRET = process.env.SESSION_SECRET || 'spt-analytics-secret-change-me';
 
 function safeIdentifier(name, value) {
     if (!/^[A-Za-z0-9_]+$/.test(value)) {
@@ -47,6 +51,64 @@ app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// --- SESSION CONFIGURATION ---
+app.use(session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 }
+}));
+
+// --- DATABASE INIT & AUTO-PROVISION ---
+async function initAuthDb() {
+    const conn = await mysql.createConnection({
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'admin',
+        password: process.env.DB_PASS || 'admin',
+        database: ASTERISK_DB
+    });
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS dashboard_users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(100) NOT NULL UNIQUE,
+            email VARCHAR(255) DEFAULT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            reset_token VARCHAR(255) DEFAULT NULL,
+            reset_expires DATETIME DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    const [rows] = await conn.execute('SELECT COUNT(*) AS cnt FROM dashboard_users');
+    if (rows[0].cnt === 0) {
+        const hash = await bcrypt.hash('admin', 10);
+        await conn.execute('INSERT INTO dashboard_users (username, password_hash) VALUES (?, ?)', ['admin', hash]);
+        console.log('AUTH: Default admin user provisioned (admin / admin)');
+    } else {
+        console.log('AUTH: Dashboard users table ready, existing users found');
+    }
+    await conn.end();
+}
+initAuthDb().catch(err => console.error('AUTH DB init error:', err));
+
+// --- AUTH MIDDLEWARE ---
+function requireAuth(req, res, next) {
+    if (req.session && req.session.userId) {
+        res.locals.currentUser = req.session.username;
+        return next();
+    }
+    const loginUrl = '/login' + (req.originalUrl !== '/' ? '?redirect=' + encodeURIComponent(req.originalUrl) : '');
+    res.redirect(loginUrl);
+}
+
+// --- PROTECT ALL OPERATIONAL ROUTES ---
+app.use((req, res, next) => {
+    const publicPaths = ['/login', '/logout', '/forgot-password', '/reset-password'];
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/')) {
+        return next();
+    }
+    requireAuth(req, res, next);
+});
 
 app.use((req, res, next) => {
     if (req.path.startsWith('/api/') || req.path === '/gsm-dongles') {
@@ -375,6 +437,226 @@ app.use(async (req, res, next) => {
         res.locals.currentLang = req.query.lang === 'ar' ? 'ar' : 'en';
         next();
     } catch (err) { next(err); }
+});
+
+// --- AUTH ROUTES ---
+
+// GET /login - render login page
+app.get('/login', (req, res) => {
+    if (req.session.userId) return res.redirect(req.query.redirect || '/');
+    res.render('login', { redirect: req.query.redirect || '/', error: null, currentLang: req.query.lang || 'en' });
+});
+
+// POST /login - authenticate user
+app.post('/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) {
+            return res.render('login', { redirect: req.body.redirect || '/', error: 'Username and password are required', currentLang: req.query.lang || 'en' });
+        }
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        const [rows] = await conn.execute('SELECT * FROM dashboard_users WHERE username = ?', [username]);
+        await conn.end();
+        if (rows.length === 0) {
+            return res.render('login', { redirect: req.body.redirect || '/', error: 'Invalid credentials', currentLang: req.query.lang || 'en' });
+        }
+        const user = rows[0];
+        const match = await bcrypt.compare(password, user.password_hash);
+        if (!match) {
+            return res.render('login', { redirect: req.body.redirect || '/', error: 'Invalid credentials', currentLang: req.query.lang || 'en' });
+        }
+        req.session.userId = user.id;
+        req.session.username = user.username;
+        res.redirect(req.body.redirect || '/');
+    } catch (err) {
+        res.render('login', { redirect: req.body.redirect || '/', error: 'Login error: ' + err.message, currentLang: req.query.lang || 'en' });
+    }
+});
+
+// GET /logout - destroy session
+app.get('/logout', (req, res) => {
+    req.session.destroy(() => {
+        res.redirect('/login');
+    });
+});
+
+// GET /users - user management page
+app.get('/users', async (req, res) => {
+    try {
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        const [rows] = await conn.execute('SELECT id, username, email, created_at FROM dashboard_users ORDER BY id ASC');
+        await conn.end();
+        res.render('users', { users: rows, success: req.query.success || null, error: null, currentLang: res.locals.currentLang || 'en' });
+    } catch (err) {
+        res.status(500).send('Users error: ' + err.message);
+    }
+});
+
+// POST /users/add - add new user
+app.post('/users/add', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        if (!username || !password || password.length < 3) {
+            return res.redirect('/users?error=Username and password (min 3 chars) required');
+        }
+        const hash = await bcrypt.hash(password, 10);
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        await conn.execute('INSERT INTO dashboard_users (username, password_hash) VALUES (?, ?)', [username, hash]);
+        await conn.end();
+        res.redirect('/users?success=User added');
+    } catch (err) {
+        res.redirect('/users?error=' + encodeURIComponent(err.message));
+    }
+});
+
+// POST /users/delete - delete user
+app.post('/users/delete', async (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id) return res.redirect('/users?error=User ID required');
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        // Prevent deleting yourself
+        const [rows] = await conn.execute('SELECT username FROM dashboard_users WHERE id = ?', [id]);
+        if (rows.length && rows[0].username === req.session.username) {
+            await conn.end();
+            return res.redirect('/users?error=Cannot delete your own account');
+        }
+        await conn.execute('DELETE FROM dashboard_users WHERE id = ?', [id]);
+        await conn.end();
+        res.redirect('/users?success=User deleted');
+    } catch (err) {
+        res.redirect('/users?error=' + encodeURIComponent(err.message));
+    }
+});
+
+// POST /users/change-password - change password
+app.post('/users/change-password', async (req, res) => {
+    try {
+        const { id, new_password } = req.body;
+        if (!id || !new_password || new_password.length < 3) {
+            return res.redirect('/users?error=Password must be at least 3 characters');
+        }
+        const hash = await bcrypt.hash(new_password, 10);
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        await conn.execute('UPDATE dashboard_users SET password_hash = ? WHERE id = ?', [hash, id]);
+        await conn.end();
+        res.redirect('/users?success=Password changed');
+    } catch (err) {
+        res.redirect('/users?error=' + encodeURIComponent(err.message));
+    }
+});
+
+// POST /forgot-password - generate reset token and send email
+app.post('/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ success: false, error: 'Email is required' });
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        const [rows] = await conn.execute('SELECT * FROM dashboard_users WHERE email = ?', [email]);
+        if (rows.length === 0) {
+            await conn.end();
+            return res.json({ success: true, message: 'If that email is registered, a reset link has been sent.' });
+        }
+        const crypto = require('crypto');
+        const token = crypto.randomBytes(32).toString('hex');
+        const expires = new Date(Date.now() + 3600000);
+        await conn.execute('UPDATE dashboard_users SET reset_token = ?, reset_expires = ? WHERE email = ?', [token, expires, email]);
+        await conn.end();
+
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST || 'localhost',
+            port: parseInt(process.env.SMTP_PORT || '25'),
+            secure: false,
+            tls: { rejectUnauthorized: false }
+        });
+        const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${token}`;
+        await transporter.sendMail({
+            from: process.env.SMTP_FROM || 'noreply@spt-analytics.local',
+            to: email,
+            subject: 'Password Reset - SPT Analytics',
+            text: `Reset your password here: ${resetUrl}\n\nThis link expires in 1 hour.`
+        });
+        res.json({ success: true, message: 'If that email is registered, a reset link has been sent.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET /reset-password - show reset form
+app.get('/reset-password', async (req, res) => {
+    const { token } = req.query;
+    if (!token) return res.send('Missing reset token');
+    try {
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        const [rows] = await conn.execute('SELECT id FROM dashboard_users WHERE reset_token = ? AND reset_expires > NOW()', [token]);
+        await conn.end();
+        if (rows.length === 0) return res.send('Invalid or expired reset token');
+        res.render('reset-password', { token, error: null, currentLang: req.query.lang || 'en' });
+    } catch (err) {
+        res.status(500).send('Error: ' + err.message);
+    }
+});
+
+// POST /reset-password - execute password reset
+app.post('/reset-password', async (req, res) => {
+    try {
+        const { token, password } = req.body;
+        if (!token || !password || password.length < 3) {
+            return res.render('reset-password', { token, error: 'Password must be at least 3 characters', currentLang: req.query.lang || 'en' });
+        }
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        const [rows] = await conn.execute('SELECT id FROM dashboard_users WHERE reset_token = ? AND reset_expires > NOW()', [token]);
+        if (rows.length === 0) {
+            await conn.end();
+            return res.render('reset-password', { token, error: 'Invalid or expired reset token', currentLang: req.query.lang || 'en' });
+        }
+        const hash = await bcrypt.hash(password, 10);
+        await conn.execute('UPDATE dashboard_users SET password_hash = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?', [hash, rows[0].id]);
+        await conn.end();
+        res.redirect('/login?reset=success');
+    } catch (err) {
+        res.status(500).send('Error: ' + err.message);
+    }
 });
 
 // --- ROUTE 1: LANDING DASHBOARD ---

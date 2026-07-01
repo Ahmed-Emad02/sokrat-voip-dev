@@ -73,6 +73,10 @@ AMI_PORT=5038
 AMI_USER=admin
 AMI_PASS=admin
 RECORDING_ROOT=/var/spool/asterisk/monitor
+SESSION_SECRET=$(openssl rand -hex 32)
+SMTP_HOST=localhost
+SMTP_PORT=25
+SMTP_FROM=noreply@spt-analytics.local
 EOF
     echo "  .env created"
 fi

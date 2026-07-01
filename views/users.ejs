@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="<%= currentLang === 'ar' ? 'ar' : 'en' %>" dir="<%= currentLang === 'ar' ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPT-ANALYTICS - Users</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Roboto:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        :root {
+            --bg-primary: #09090b;
+            --bg-secondary: #121212;
+            --bg-card: #18181b;
+            --bg-hover: #27272a;
+            --border-primary: #27272a;
+            --border-accent: #3f3f46;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --accent-color: #ff3b30;
+            --accent-hover: #ff453a;
+        }
+        body {
+            background-color: var(--bg-primary);
+            font-family: 'Roboto', 'IBM Plex Sans Arabic', sans-serif;
+            color: var(--text-primary);
+            min-height: 100vh;
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(255, 59, 48, 0.06) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(255, 255, 255, 0.01) 0%, transparent 45%);
+        }
+        .panel-surface {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        input {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            color: var(--text-primary);
+            border-radius: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            width: 100%;
+            outline: none;
+            transition: border-color 0.15s;
+            font-size: 0.875rem;
+        }
+        input:focus {
+            border-color: var(--accent-color);
+        }
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: #fff;
+            border: none;
+            border-radius: 0.75rem;
+            padding: 0.5rem 1rem;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+        .btn-primary:hover {
+            background-color: var(--accent-hover);
+        }
+        .btn-ghost {
+            background-color: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 0.75rem;
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-ghost:hover {
+            background-color: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .success-msg {
+            background-color: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #4ade80;
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+        }
+        .error-msg {
+            background-color: rgba(255, 59, 48, 0.1);
+            border: 1px solid rgba(255, 59, 48, 0.3);
+            color: #ff6b6b;
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="max-w-4xl mx-auto px-6 py-10">
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <a href="/" class="text-xs text-[var(--text-secondary)] hover:text-white transition flex items-center gap-1.5 mb-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                    Back to Dashboard
+                </a>
+                <h1 class="text-2xl font-black tracking-wider">
+                    <span class="text-[#ff3b30]">&bull;</span> User Management
+                </h1>
+                <p class="text-sm text-[var(--text-secondary)] mt-1">Manage dashboard login accounts</p>
+            </div>
+            <a href="/logout" class="btn-ghost text-xs flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Sign Out
+            </a>
+        </div>
+
+        <% if (typeof success !== 'undefined' && success) { %>
+            <div class="success-msg mb-6"><%= success %></div>
+        <% } %>
+        <% if (typeof error !== 'undefined' && error) { %>
+            <div class="error-msg mb-6"><%= error %></div>
+        <% } %>
+
+        <!-- Add User -->
+        <div class="panel-surface p-6 mb-6">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Add User</h2>
+            <form method="POST" action="/users/add" class="flex flex-wrap items-end gap-3">
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Username</label>
+                    <input type="text" name="username" placeholder="newuser" required>
+                </div>
+                <div class="flex-1 min-w-[180px]">
+                    <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Password</label>
+                    <input type="password" name="password" placeholder="••••••" required>
+                </div>
+                <button type="submit" class="btn-primary">Add User</button>
+            </form>
+        </div>
+
+        <!-- User List -->
+        <div class="panel-surface overflow-hidden">
+            <div class="p-6 pb-0">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Existing Users</h2>
+            </div>
+            <table class="w-full text-sm text-left">
+                <thead>
+                    <tr class="border-b border-[var(--border-primary)] text-[var(--text-muted)] text-xs uppercase tracking-wider font-semibold">
+                        <th class="py-3 px-6">ID</th>
+                        <th class="py-3 px-6">Username</th>
+                        <th class="py-3 px-6">Email</th>
+                        <th class="py-3 px-6">Created</th>
+                        <th class="py-3 px-6 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (users && users.length > 0) { %>
+                        <% users.forEach(u => { %>
+                            <tr class="border-b border-[var(--border-primary)]/50 hover:bg-[var(--bg-hover)]/20 transition-colors">
+                                <td class="py-3.5 px-6 font-mono text-[var(--text-secondary)] text-xs"><%= u.id %></td>
+                                <td class="py-3.5 px-6 font-medium"><%= u.username %></td>
+                                <td class="py-3.5 px-6 text-[var(--text-secondary)] text-sm"><%= u.email || '-' %></td>
+                                <td class="py-3.5 px-6 text-[var(--text-muted)] text-xs"><%= u.created_at ? new Date(u.created_at).toLocaleDateString() : '-' %></td>
+                                <td class="py-3.5 px-6 text-right">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <button onclick="showChangePw(<%= u.id %>)" class="btn-ghost text-[10px] px-2 py-1">Change PW</button>
+                                        <form method="POST" action="/users/delete" class="inline" onsubmit="return confirm('Delete user <%= u.username %>?')">
+                                            <input type="hidden" name="id" value="<%= u.id %>">
+                                            <button type="submit" class="btn-ghost text-[10px] px-2 py-1 text-red-400 hover:text-red-300 hover:border-red-500/50">Delete</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    <% } else { %>
+                        <tr><td colspan="5" class="py-8 text-center text-[var(--text-muted)] text-sm">No users found</td></tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="pwModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="panel-surface p-6 w-full max-w-sm mx-4">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Change Password</h3>
+            <form method="POST" action="/users/change-password">
+                <input type="hidden" name="id" id="pwUserId">
+                <div class="mb-4">
+                    <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">New Password</label>
+                    <input type="password" name="new_password" placeholder="••••••" required>
+                </div>
+                <div class="flex gap-2 justify-end">
+                    <button type="button" onclick="closePwModal()" class="btn-ghost text-xs">Cancel</button>
+                    <button type="submit" class="btn-primary text-xs">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function showChangePw(id) {
+            document.getElementById('pwUserId').value = id;
+            document.getElementById('pwModal').classList.remove('hidden');
+        }
+        function closePwModal() {
+            document.getElementById('pwModal').classList.add('hidden');
+        }
+        document.getElementById('pwModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closePwModal();
+        });
+    </script>
+</body>
+</html>
