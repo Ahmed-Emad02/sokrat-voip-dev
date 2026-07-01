@@ -63,7 +63,7 @@ This command automatically reads your MySQL root password from Issabel's config 
 ```bash
 MYSQL_PWD=$(grep mysqlrootpwd /etc/issabel.conf | cut -d= -f2- | xargs)
 cat > /opt/issabel-dashboard/.env << EOF
-PORT=3000
+PORT=8080
 DB_HOST=localhost
 DB_USER=root
 DB_PASS=${MYSQL_PWD}
@@ -312,7 +312,40 @@ The dongle ttyUSB mapping used (`dongle0`–`dongle9`):
 
 Then use the **GSM Dongles** page in the dashboard to manually enter each SIM's phone number. The dashboard will save the mapping to `sim_mappings.json` and attempt to write it to the SIM via AT commands.
 
-### Step 10 — Create systemd Service
+### Step 10 — Configure Apache Reverse Proxy
+
+Set up Apache to serve the dashboard on ports 80 (HTTP) and 443 (HTTPS with SSL), while keeping Issabel's web UI on port 3000:
+
+```bash
+# Install mod_ssl (should already be present on Issabel)
+yum install -y mod_ssl
+
+# Change Apache from port 80 to 3000 (Issabel)
+sed -i 's/^Listen 80$/Listen 3000/' /etc/httpd/conf/httpd.conf
+
+# Remove HTTPS redirect from Issabel vhost
+sed -i '/RewriteEngine On/,/RewriteRule/d' /etc/httpd/conf.d/issabel.conf
+
+# Create dashboard reverse proxy on port 80
+cat > /etc/httpd/conf.d/dashboard.conf << 'EOF'
+<VirtualHost *:80>
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:8080/
+    ProxyPassReverse / http://127.0.0.1:8080/
+</VirtualHost>
+EOF
+
+# Add reverse proxy to existing SSL vhost (port 443)
+sed -i '/^SSLEngine on$/a\    ProxyPreserveHost On' /etc/httpd/conf.d/ssl.conf
+sed -i '/^SSLEngine on$/a\    ProxyPassReverse \/ http:\/\/127.0.0.1:8080\/' /etc/httpd/conf.d/ssl.conf
+sed -i '/^SSLEngine on$/a\    ProxyPass \/ http:\/\/127.0.0.1:8080\/' /etc/httpd/conf.d/ssl.conf
+
+# Restart Apache
+httpd -t
+systemctl restart httpd
+```
+
+### Step 11 — Create systemd Service
 
 ```bash
 cat > /etc/systemd/system/issabel-dashboard.service << 'EOF'
@@ -343,7 +376,7 @@ systemctl daemon-reload
 systemctl enable --now issabel-dashboard
 ```
 
-### Step 11 — Verify
+### Step 12 — Verify
 
 Check the service is running:
 
@@ -360,7 +393,7 @@ journalctl -u issabel-dashboard -n 30 --no-pager -l
 You should see lines like:
 ```
 GSM MONITOR: Starting tail process on /var/log/asterisk/full...
-Real-Time Enterprise Engine active on port 3000
+Real-Time Enterprise Engine active on port 8080
 AMI: Connection opened, login sent
 AMI: Login detected
 ```
@@ -368,7 +401,9 @@ AMI: Login detected
 Open in your browser:
 
 ```
-http://<your-issabel-ip>:3000
+http://<your-issabel-ip>       -> Custom Dashboard
+https://<your-issabel-ip>      -> Custom Dashboard (SSL)
+http://<your-issabel-ip>:3000  -> Issabel Web Interface
 ```
 
 ## Configuration Reference

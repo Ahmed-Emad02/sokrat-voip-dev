@@ -18,7 +18,7 @@ echo "============================================"
 # ──────────────────────────────────────────────
 # Step 1 — System Packages + Disable Fail2Ban
 # ──────────────────────────────────────────────
-echo "[1/11] Installing system packages..."
+echo "[1/12] Installing system packages..."
 yum install -y nano net-tools btop
 systemctl disable --now fail2ban
 echo "  fail2ban disabled"
@@ -26,7 +26,7 @@ echo "  fail2ban disabled"
 # ──────────────────────────────────────────────
 # Step 2 — Install Node.js 22
 # ──────────────────────────────────────────────
-echo "[2/11] Installing Node.js 22..."
+echo "[2/12] Installing Node.js 22..."
 if ! command -v node &>/dev/null; then
     curl -fsSL "$NODE_SETUP_URL" | bash -
     yum install -y nodejs
@@ -37,7 +37,7 @@ fi
 # ──────────────────────────────────────────────
 # Step 3 — Clone the Repository
 # ──────────────────────────────────────────────
-echo "[3/11] Cloning repository..."
+echo "[3/12] Cloning repository..."
 yum install -y git net-tools
 if [ -d "$INSTALL_DIR" ]; then
     echo "  Directory $INSTALL_DIR exists, pulling latest..."
@@ -51,18 +51,18 @@ fi
 # ──────────────────────────────────────────────
 # Step 4 — Install Dependencies
 # ──────────────────────────────────────────────
-echo "[4/11] Installing npm dependencies..."
+echo "[4/12] Installing npm dependencies..."
 npm install
 
 # ──────────────────────────────────────────────
 # Step 5 — Create the Environment File
 # ──────────────────────────────────────────────
-echo "[5/11] Creating .env file..."
+echo "[5/12] Creating .env file..."
 if [ -f "$INSTALL_DIR/.env" ]; then
     echo "  .env already exists, skipping"
 else
     cat > "$INSTALL_DIR/.env" << EOF
-PORT=3000
+PORT=8080
 DB_HOST=localhost
 DB_USER=root
 DB_PASS=${MYSQL_ROOT_PWD}
@@ -80,14 +80,14 @@ fi
 # ──────────────────────────────────────────────
 # Step 6 — Initialize Database Tables
 # ──────────────────────────────────────────────
-echo "[6/11] Initializing database tables..."
+echo "[6/12] Initializing database tables..."
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk < "$INSTALL_DIR/backend/install_db.sql"
 echo "  synq_agent_status / synq_agent_status_log tables ensured"
 
 # ──────────────────────────────────────────────
 # Step 7 — Configure Asterisk AMI
 # ──────────────────────────────────────────────
-echo "[7/11] Configuring Asterisk AMI..."
+echo "[7/12] Configuring Asterisk AMI..."
 if grep -q '^\[admin\]' /etc/asterisk/manager.conf; then
     sed -i '/^\[admin\]/,/^\[/ s/deny=.*/permit=127.0.0.1\/255.255.255.0/' /etc/asterisk/manager.conf
     echo "  [admin] section updated with permit line"
@@ -109,7 +109,7 @@ echo "  AMI reloaded"
 # ──────────────────────────────────────────────
 # Step 8 — Add Required Dialplan Contexts
 # ──────────────────────────────────────────────
-echo "[8/11] Adding dialplan contexts..."
+echo "[8/12] Adding dialplan contexts..."
 DIALPLAN_FILE=/etc/asterisk/extensions_custom.conf
 
 # Ensure file exists
@@ -202,7 +202,7 @@ echo "  Dialplan reloaded"
 # Step 9 — GSM Dongle Setup
 # ──────────────────────────────────────────────
 echo ""
-echo "[9/11] Setting up GSM dongles & chan_dongle..."
+echo "[9/12] Setting up GSM dongles & chan_dongle..."
 
 # 9a — Install Build Dependencies
 echo "  [9a] Installing build dependencies..."
@@ -294,9 +294,48 @@ else
 fi
 
 # ──────────────────────────────────────────────
-# Step 10 — Create systemd Service
+# Step 10 — Configure Apache Reverse Proxy
 # ──────────────────────────────────────────────
-echo "[10/11] Creating systemd service..."
+echo "[10/12] Configuring Apache reverse proxy..."
+yum install -y mod_ssl 2>/dev/null || true
+
+# Change Apache Listen from 80 to 3000 (Issabel on internal port)
+sed -i 's/^Listen 80$/Listen 3000/' /etc/httpd/conf/httpd.conf
+echo "  Apache port changed: 80 -> 3000"
+
+# Remove HTTPS redirect from Issabel vhost (would break proxy)
+sed -i '/RewriteEngine On/,/RewriteRule/d' /etc/httpd/conf.d/issabel.conf 2>/dev/null || true
+echo "  Issabel HTTPS redirect removed"
+
+# Create dashboard reverse proxy vhost for port 80
+cat > /etc/httpd/conf.d/dashboard.conf << 'DASHBOARD'
+<VirtualHost *:80>
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:8080/
+    ProxyPassReverse / http://127.0.0.1:8080/
+</VirtualHost>
+DASHBOARD
+echo "  dashboard.conf created (port 80 -> :8080)"
+
+# Add ProxyPass to SSL vhost (port 443 -> :8080)
+if ! grep -q 'ProxyPass.*8080' /etc/httpd/conf.d/ssl.conf; then
+    sed -i '/^SSLEngine on$/a\    ProxyPreserveHost On' /etc/httpd/conf.d/ssl.conf
+    sed -i '/^SSLEngine on$/a\    ProxyPassReverse \/ http:\/\/127.0.0.1:8080\/' /etc/httpd/conf.d/ssl.conf
+    sed -i '/^SSLEngine on$/a\    ProxyPass \/ http:\/\/127.0.0.1:8080\/' /etc/httpd/conf.d/ssl.conf
+    echo "  SSL vhost proxied (port 443 -> :8080)"
+else
+    echo "  SSL vhost already proxied"
+fi
+
+# Restart Apache
+httpd -t 2>&1 | grep -v 'Could not reliably' | grep -v 'AH00558' || true
+systemctl restart httpd
+echo "  Apache restarted"
+
+# ──────────────────────────────────────────────
+# Step 11 — Create systemd Service
+# ──────────────────────────────────────────────
+echo "[11/12] Creating systemd service..."
 cat > /etc/systemd/system/issabel-dashboard.service << 'UNIT'
 [Unit]
 Description=SPT-ANALYTICS Dashboard
@@ -322,10 +361,10 @@ systemctl enable --now issabel-dashboard
 echo "  Service enabled and started"
 
 # ──────────────────────────────────────────────
-# Step 11 — Verify
+# Step 12 — Verify
 # ──────────────────────────────────────────────
 echo ""
-echo "[11/11] Verifying installation..."
+echo "[12/12] Verifying installation..."
 sleep 2
 systemctl status issabel-dashboard --no-pager -l | head -12
 echo ""
@@ -334,5 +373,8 @@ journalctl -u issabel-dashboard -n 10 --no-pager -l
 echo ""
 echo "============================================"
 echo " Installation complete!"
-echo " Open http://<your-issabel-ip>:3000"
+echo ""
+echo "  http://<your-issabel-ip>     -> Custom Dashboard"
+echo "  https://<your-issabel-ip>    -> Custom Dashboard (SSL)"
+echo "  http://<your-issabel-ip>:3000 -> Issabel Web Interface"
 echo "============================================"
