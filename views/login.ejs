@@ -135,14 +135,18 @@
     </div>
 
     <script>
+        var uiLabels = {
+            sending: '<%= currentLang === "ar" ? "جاري الإرسال..." : "Sending..." %>',
+            send: '<%= currentLang === "ar" ? "إرسال" : "Send" %>'
+        };
         function showForgot() {
             document.getElementById('forgotForm').classList.toggle('hidden');
         }
-        async function sendReset() {
+        async function sendReset(evt) {
             const email = document.getElementById('forgotEmail').value;
-            const btn = event.target;
+            const btn = evt.target;
             btn.disabled = true;
-            btn.textContent = '<%= currentLang === \'ar\' ? \'جاري الإرسال...\' : \'Sending...\' %>';
+            btn.textContent = uiLabels.sending;
             try {
                 const resp = await fetch('/forgot-password', {
                     method: 'POST',
@@ -160,7 +164,7 @@
                 msg.textContent = 'Error sending request';
             }
             btn.disabled = false;
-            btn.textContent = '<%= currentLang === \'ar\' ? \'إرسال\' : \'Send\' %>';
+            btn.textContent = uiLabels.send;
         }
     </script>
 </body>
