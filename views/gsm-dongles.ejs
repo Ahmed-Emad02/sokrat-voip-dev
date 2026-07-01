@@ -235,10 +235,10 @@ const isRtl = currentLang === 'ar';
                                         const isNotInitializing = st.includes('not initializing');
                                         const isNotRegistered = st.includes('not registered');
                                         const isFree = st === 'free';
-                                        const isNotConnected = st === 'not connected' || st === 'not_connected';
+                                        const isNotConnected = st.includes('not connect') || st === 'not_connected';
                                         const isError = isGsmNotResponding || isNotRegistered;
-                                        const stateClass = isFree ? 'text-green-500 font-bold' : isError ? 'text-[#ff3b30] font-bold' : isNotInitializing ? 'text-amber-500 font-bold' : isNotConnected ? 'text-zinc-600' : 'text-amber-500';
-                                        const badgeClass = isFree ? 'bg-green-500' : isError ? 'bg-[#ff3b30]' : isNotInitializing ? 'bg-amber-500' : isNotConnected ? 'bg-zinc-800' : 'bg-amber-500';
+                                        const stateClass = isFree ? 'text-green-500 font-bold' : isError ? 'text-[#ff3b30] font-bold' : isNotInitializing ? 'text-amber-500 font-bold' : isNotConnected ? 'text-zinc-500' : 'text-amber-500';
+                                        const badgeClass = isFree ? 'bg-green-500' : isError ? 'bg-[#ff3b30]' : isNotInitializing ? 'bg-amber-500' : isNotConnected ? 'bg-zinc-600' : 'bg-amber-500';
                                         let stateLabel = d.State;
                                     %>
                                         <tr class="border-b border-[var(--border-primary)]/50 hover:bg-[var(--bg-hover)]/20 transition-colors" id="row-<%= d.ID %>">
@@ -1225,10 +1225,10 @@ const isRtl = currentLang === 'ar';
                                 const isNotInitializing = st.includes('not initializing');
                                 const isNotRegistered = st.includes('not registered');
                                 const isFree = st === 'free';
-                                const isNotConnected = st === 'not connected' || st === 'not_connected';
+                                const isNotConnected = st.includes('not connect') || st === 'not_connected';
                                 const isError = isGsmNotResponding || isNotRegistered;
-                                const stateClass = isFree ? 'text-green-500 font-bold' : isError ? 'text-[#ff3b30] font-bold' : isNotInitializing ? 'text-amber-500 font-bold' : isNotConnected ? 'text-zinc-600' : 'text-amber-500';
-                                const badgeClass = isFree ? 'bg-green-500' : isError ? 'bg-[#ff3b30]' : isNotInitializing ? 'bg-amber-500' : isNotConnected ? 'bg-zinc-800' : 'bg-amber-500';
+                                const stateClass = isFree ? 'text-green-500 font-bold' : isError ? 'text-[#ff3b30] font-bold' : isNotInitializing ? 'text-amber-500 font-bold' : isNotConnected ? 'text-zinc-500' : 'text-amber-500';
+                                const badgeClass = isFree ? 'bg-green-500' : isError ? 'bg-[#ff3b30]' : isNotInitializing ? 'bg-amber-500' : isNotConnected ? 'bg-zinc-600' : 'bg-amber-500';
                                 let stateWords = d.State;
                                 
                                 const tr = document.createElement('tr');
