@@ -244,7 +244,7 @@ const isRtl = currentLang === 'ar';
                                         <tr class="border-b border-[var(--border-primary)]/50 hover:bg-[var(--bg-hover)]/20 transition-colors" id="row-<%= d.ID %>">
                                             <td class="py-3.5 px-4 font-mono font-black text-white"><%= d.ID %></td>
                                             <td class="py-3.5 px-4 text-[var(--text-primary)] font-medium"><%= d['Provider Name'] || 'NONE' %></td>
-                                            <td class="py-3.5 px-4 font-mono text-[var(--text-primary)] tracking-[0.08em]">
+                                            <td class="py-3.5 px-4 text-[var(--text-primary)] tracking-[0.08em] font-medium">
                                                 <div class="flex items-center gap-2">
                                                     <span id="display-num-<%= d.ID %>"><%= d.Number || 'Unknown' %></span>
                                                     <div class="flex items-center gap-1">
@@ -259,7 +259,7 @@ const isRtl = currentLang === 'ar';
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td class="py-3.5 px-4 font-mono text-xs text-[var(--text-primary)] tracking-[0.12em] font-medium">
+                                            <td class="py-3.5 px-4 text-xs text-[var(--text-primary)] tracking-[0.12em] font-semibold">
                                                 <div class="flex items-center gap-1.5">
                                                     <span><%= d.IMEI || '-' %></span>
                                                     <% if (d.IMEI && d.IMEI !== '-') { %>
@@ -1238,7 +1238,7 @@ const isRtl = currentLang === 'ar';
                                 tr.innerHTML = `
                                     <td class="py-3.5 px-4 font-mono font-black text-white">${d.ID}</td>
                                     <td class="py-3.5 px-4 text-[var(--text-primary)] font-medium">${d['Provider Name'] || 'NONE'}</td>
-                                    <td class="py-3.5 px-4 font-mono text-[var(--text-primary)] tracking-[0.08em]">
+                                    <td class="py-3.5 px-4 text-[var(--text-primary)] tracking-[0.08em] font-medium">
                                         <div class="flex items-center gap-2">
                                             <span id="display-num-${d.ID}">${d.Number || 'Unknown'}</span>
                                             <div class="flex items-center gap-1">
@@ -1249,7 +1249,7 @@ const isRtl = currentLang === 'ar';
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="py-3.5 px-4 font-mono text-xs text-[var(--text-primary)] tracking-[0.12em] font-medium">
+                                    <td class="py-3.5 px-4 text-xs text-[var(--text-primary)] tracking-[0.12em] font-semibold">
                                         <div class="flex items-center gap-1.5">
                                             <span>${d.IMEI || '-'}</span>
                                             ${(d.IMEI && d.IMEI !== '-') ? `<button onclick="copyToClipboard('${d.IMEI}', this)" class="text-[var(--text-muted)] hover:text-white hover:bg-zinc-800 p-1 rounded transition cursor-pointer" title="${isRtl ? 'نسخ IMEI' : 'Copy IMEI'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>` : ''}
