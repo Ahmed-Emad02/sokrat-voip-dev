@@ -5,7 +5,21 @@ CREATE TABLE IF NOT EXISTS `dashboard_users` (
   `password_hash` VARCHAR(255) NOT NULL,
   `reset_token` VARCHAR(255) DEFAULT NULL,
   `reset_expires` DATETIME DEFAULT NULL,
+  `group_id` INT DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `dashboard_groups` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(100) NOT NULL UNIQUE,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `dashboard_group_permissions` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `group_id` INT NOT NULL,
+  `tab` VARCHAR(50) NOT NULL,
+  UNIQUE KEY `idx_group_tab` (`group_id`, `tab`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `synq_agent_status` (

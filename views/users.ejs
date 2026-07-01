@@ -114,6 +114,10 @@
                 </h1>
                 <p class="text-sm text-[var(--text-secondary)] mt-1">Manage dashboard login accounts</p>
             </div>
+            <a href="/groups" class="btn-ghost text-xs flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Manage Groups
+            </a>
             <a href="/logout" class="btn-ghost text-xs flex items-center gap-1.5">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                 Sign Out
@@ -131,7 +135,7 @@
         <div class="panel-surface p-6 mb-6">
             <h2 class="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Add User</h2>
             <form method="POST" action="/users/add" class="flex flex-wrap items-end gap-3">
-                <div class="flex-1 min-w-[200px]">
+                <div class="flex-1 min-w-[180px]">
                     <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Username</label>
                     <input type="text" name="username" placeholder="newuser" required>
                 </div>
@@ -139,9 +143,20 @@
                     <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Email (for password reset)</label>
                     <input type="email" name="email" placeholder="user@example.com" required>
                 </div>
-                <div class="flex-1 min-w-[180px]">
+                <div class="flex-1 min-w-[160px]">
                     <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Password</label>
                     <input type="password" name="password" placeholder="••••••" required>
+                </div>
+                <div class="flex-1 min-w-[160px]">
+                    <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Group</label>
+                    <select name="group_id" required class="bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-primary)] rounded-xl px-3 py-2.5 text-sm w-full outline-none focus:border-[var(--accent-color)] transition">
+                        <option value="" disabled selected>Select group</option>
+                        <% if (typeof groups !== 'undefined' && groups) { %>
+                            <% groups.forEach(g => { %>
+                                <option value="<%= g.id %>"><%= g.name %></option>
+                            <% }); %>
+                        <% } %>
+                    </select>
                 </div>
                 <button type="submit" class="btn-primary">Add User</button>
             </form>
@@ -157,6 +172,7 @@
                     <tr class="border-b border-[var(--border-primary)] text-[var(--text-muted)] text-xs uppercase tracking-wider font-semibold">
                         <th class="py-3 px-6">ID</th>
                         <th class="py-3 px-6">Username</th>
+                        <th class="py-3 px-6">Group</th>
                         <th class="py-3 px-6">Email</th>
                         <th class="py-3 px-6">Created</th>
                         <th class="py-3 px-6 text-right">Actions</th>
@@ -168,6 +184,7 @@
                             <tr class="border-b border-[var(--border-primary)]/50 hover:bg-[var(--bg-hover)]/20 transition-colors">
                                 <td class="py-3.5 px-6 font-mono text-[var(--text-secondary)] text-xs"><%= u.id %></td>
                                 <td class="py-3.5 px-6 font-medium"><%= u.username %></td>
+                                <td class="py-3.5 px-6 text-[var(--text-secondary)] text-sm"><%= u.group_name || '<span class="text-[var(--text-muted)]">—</span>' %></td>
                                 <td class="py-3.5 px-6 text-[var(--text-secondary)] text-sm"><%= u.email || '-' %></td>
                                 <td class="py-3.5 px-6 text-[var(--text-muted)] text-xs"><%= u.created_at ? new Date(u.created_at).toLocaleDateString() : '-' %></td>
                                 <td class="py-3.5 px-6 text-right">
@@ -182,7 +199,7 @@
                             </tr>
                         <% }); %>
                     <% } else { %>
-                        <tr><td colspan="5" class="py-8 text-center text-[var(--text-muted)] text-sm">No users found</td></tr>
+                        <tr><td colspan="6" class="py-8 text-center text-[var(--text-muted)] text-sm">No users found</td></tr>
                     <% } %>
                 </tbody>
             </table>

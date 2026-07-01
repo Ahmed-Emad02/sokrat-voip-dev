@@ -61,6 +61,8 @@ app.use(session({
 }));
 
 // --- DATABASE INIT & AUTO-PROVISION ---
+const ALL_TABS = ['dashboard', 'cdr', 'ext-stats', 'operator', 'gsm-dongles', 'users', 'agent-status'];
+
 async function initAuthDb() {
     const conn = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
@@ -76,20 +78,85 @@ async function initAuthDb() {
             password_hash VARCHAR(255) NOT NULL,
             reset_token VARCHAR(255) DEFAULT NULL,
             reset_expires DATETIME DEFAULT NULL,
+            group_id INT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    // Add group_id column if it doesn't exist (for existing installs)
+    try { await conn.execute('ALTER TABLE dashboard_users ADD COLUMN group_id INT DEFAULT NULL'); } catch (_) {}
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS dashboard_groups (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS dashboard_group_permissions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            group_id INT NOT NULL,
+            tab VARCHAR(50) NOT NULL,
+            UNIQUE KEY idx_group_tab (group_id, tab)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    // Ensure "super admins" group exists
+    const [existingGroups] = await conn.execute('SELECT id FROM dashboard_groups WHERE name = ?', ['super admins']);
+    let superAdminGroupId;
+    if (existingGroups.length === 0) {
+        const [r] = await conn.execute('INSERT INTO dashboard_groups (name) VALUES (?)', ['super admins']);
+        superAdminGroupId = r.insertId;
+        for (const tab of ALL_TABS) {
+            await conn.execute('INSERT INTO dashboard_group_permissions (group_id, tab) VALUES (?, ?)', [superAdminGroupId, tab]);
+        }
+        console.log('AUTH: Created "super admins" group with all permissions');
+    } else {
+        superAdminGroupId = existingGroups[0].id;
+    }
+
+    // Auto-provision default admin user
     const [rows] = await conn.execute('SELECT COUNT(*) AS cnt FROM dashboard_users');
     if (rows[0].cnt === 0) {
         const hash = await bcrypt.hash('admin', 10);
-        await conn.execute('INSERT INTO dashboard_users (username, password_hash) VALUES (?, ?)', ['admin', hash]);
-        console.log('AUTH: Default admin user provisioned (admin / admin)');
+        await conn.execute('INSERT INTO dashboard_users (username, password_hash, group_id) VALUES (?, ?, ?)', ['admin', hash, superAdminGroupId]);
+        console.log('AUTH: Default admin user provisioned (admin / admin) in super admins group');
     } else {
         console.log('AUTH: Dashboard users table ready, existing users found');
     }
     await conn.end();
 }
 initAuthDb().catch(err => console.error('AUTH DB init error:', err));
+
+// --- SESSION HELPERS ---
+function isSuperAdmin(req) {
+    return req.session && req.session.userGroup === 'super admins';
+}
+
+async function getUserPermissions(userId) {
+    const conn = await mysql.createConnection({
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'admin',
+        password: process.env.DB_PASS || 'admin',
+        database: ASTERISK_DB
+    });
+    const [rows] = await conn.execute(`
+        SELECT p.tab FROM dashboard_group_permissions p
+        JOIN dashboard_users u ON u.group_id = p.group_id
+        WHERE u.id = ?
+    `, [userId]);
+    await conn.end();
+    return rows.map(r => r.tab);
+}
+
+const TAB_ROUTE_MAP = {
+    '/': 'dashboard',
+    '/cdr': 'cdr',
+    '/ext-stats': 'ext-stats',
+    '/operator': 'operator',
+    '/gsm-dongles': 'gsm-dongles',
+    '/users': 'users',
+    '/agent-status': 'agent-status'
+};
 
 // --- AUTH MIDDLEWARE ---
 function requireAuth(req, res, next) {
@@ -108,6 +175,26 @@ app.use((req, res, next) => {
         return next();
     }
     requireAuth(req, res, next);
+});
+
+// --- TAB PERMISSION MIDDLEWARE ---
+app.use(async (req, res, next) => {
+    const tab = TAB_ROUTE_MAP[req.path];
+    if (isSuperAdmin(req)) {
+        res.locals.allowedTabs = ALL_TABS;
+        return next();
+    }
+    if (!req.session.userPermissions) {
+        try {
+            req.session.userPermissions = await getUserPermissions(req.session.userId);
+        } catch (_) {
+            req.session.userPermissions = [];
+        }
+    }
+    res.locals.allowedTabs = req.session.userPermissions;
+    if (!tab) return next();
+    if (req.session.userPermissions.includes(tab)) return next();
+    res.redirect('/');
 });
 
 app.use((req, res, next) => {
@@ -460,7 +547,12 @@ app.post('/login', async (req, res) => {
             password: process.env.DB_PASS || 'admin',
             database: ASTERISK_DB
         });
-        const [rows] = await conn.execute('SELECT * FROM dashboard_users WHERE username = ?', [username]);
+        const [rows] = await conn.execute(`
+            SELECT u.*, g.name AS group_name
+            FROM dashboard_users u
+            LEFT JOIN dashboard_groups g ON g.id = u.group_id
+            WHERE u.username = ?
+        `, [username]);
         await conn.end();
         if (rows.length === 0) {
             return res.render('login', { redirect: req.body.redirect || '/', error: 'Invalid credentials', currentLang: req.query.lang || 'en' });
@@ -472,6 +564,7 @@ app.post('/login', async (req, res) => {
         }
         req.session.userId = user.id;
         req.session.username = user.username;
+        req.session.userGroup = user.group_name || null;
         res.redirect(req.body.redirect || '/');
     } catch (err) {
         res.render('login', { redirect: req.body.redirect || '/', error: 'Login error: ' + err.message, currentLang: req.query.lang || 'en' });
@@ -494,9 +587,15 @@ app.get('/users', async (req, res) => {
             password: process.env.DB_PASS || 'admin',
             database: ASTERISK_DB
         });
-        const [rows] = await conn.execute('SELECT id, username, email, created_at FROM dashboard_users ORDER BY id ASC');
+        const [userRows] = await conn.execute(`
+            SELECT u.id, u.username, u.email, u.group_id, u.created_at, g.name AS group_name
+            FROM dashboard_users u
+            LEFT JOIN dashboard_groups g ON g.id = u.group_id
+            ORDER BY u.id ASC
+        `);
+        const [groups] = await conn.execute('SELECT id, name FROM dashboard_groups ORDER BY name ASC');
         await conn.end();
-        res.render('users', { users: rows, success: req.query.success || null, error: null, currentLang: res.locals.currentLang || 'en' });
+        res.render('users', { users: userRows, groups, success: req.query.success || null, error: req.query.error || null, currentLang: res.locals.currentLang || 'en' });
     } catch (err) {
         res.status(500).send('Users error: ' + err.message);
     }
@@ -505,12 +604,15 @@ app.get('/users', async (req, res) => {
 // POST /users/add - add new user
 app.post('/users/add', async (req, res) => {
     try {
-        const { username, password, email } = req.body;
+        const { username, password, email, group_id } = req.body;
         if (!username || !password || password.length < 3) {
             return res.redirect('/users?error=Username and password (min 3 chars) required');
         }
         if (!email || !email.includes('@')) {
             return res.redirect('/users?error=A valid email is required (for password reset)');
+        }
+        if (!group_id) {
+            return res.redirect('/users?error=A group must be selected');
         }
         const hash = await bcrypt.hash(password, 10);
         const conn = await mysql.createConnection({
@@ -519,7 +621,7 @@ app.post('/users/add', async (req, res) => {
             password: process.env.DB_PASS || 'admin',
             database: ASTERISK_DB
         });
-        await conn.execute('INSERT INTO dashboard_users (username, email, password_hash) VALUES (?, ?, ?)', [username, email, hash]);
+        await conn.execute('INSERT INTO dashboard_users (username, email, password_hash, group_id) VALUES (?, ?, ?, ?)', [username, email, hash, group_id]);
         await conn.end();
         res.redirect('/users?success=User added');
     } catch (err) {
@@ -659,6 +761,107 @@ app.post('/reset-password', async (req, res) => {
         res.redirect('/login?reset=success');
     } catch (err) {
         res.status(500).send('Error: ' + err.message);
+    }
+});
+
+// --- GROUP MANAGEMENT ROUTES ---
+
+// GET /groups - manage groups and permissions
+app.get('/groups', async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) return res.redirect('/');
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        const [groupRows] = await conn.execute('SELECT id, name, created_at FROM dashboard_groups ORDER BY name ASC');
+        const groups = [];
+        for (const g of groupRows) {
+            const [perms] = await conn.execute('SELECT tab FROM dashboard_group_permissions WHERE group_id = ?', [g.id]);
+            groups.push({ ...g, permissions: perms.map(p => p.tab) });
+        }
+        await conn.end();
+        res.render('groups', { groups, allTabs: ALL_TABS, success: req.query.success || null, error: req.query.error || null, currentLang: res.locals.currentLang || 'en' });
+    } catch (err) {
+        res.status(500).send('Groups error: ' + err.message);
+    }
+});
+
+// POST /groups/add - create a new group
+app.post('/groups/add', async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) return res.redirect('/');
+        const { name } = req.body;
+        if (!name || name.trim().length < 2) return res.redirect('/groups?error=Group name must be at least 2 characters');
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        await conn.execute('INSERT INTO dashboard_groups (name) VALUES (?)', [name.trim()]);
+        await conn.end();
+        res.redirect('/groups?success=Group created');
+    } catch (err) {
+        res.redirect('/groups?error=' + encodeURIComponent(err.message));
+    }
+});
+
+// POST /groups/delete - delete a group
+app.post('/groups/delete', async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) return res.redirect('/');
+        const { id } = req.body;
+        if (!id) return res.redirect('/groups?error=Group ID required');
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        // Prevent deleting super admins group
+        const [grp] = await conn.execute('SELECT name FROM dashboard_groups WHERE id = ?', [id]);
+        if (grp.length && grp[0].name === 'super admins') {
+            await conn.end();
+            return res.redirect('/groups?error=Cannot delete the super admins group');
+        }
+        await conn.execute('DELETE FROM dashboard_group_permissions WHERE group_id = ?', [id]);
+        await conn.execute('UPDATE dashboard_users SET group_id = NULL WHERE group_id = ?', [id]);
+        await conn.execute('DELETE FROM dashboard_groups WHERE id = ?', [id]);
+        await conn.end();
+        res.redirect('/groups?success=Group deleted');
+    } catch (err) {
+        res.redirect('/groups?error=' + encodeURIComponent(err.message));
+    }
+});
+
+// POST /groups/permissions - update group permissions
+app.post('/groups/permissions', async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) return res.redirect('/');
+        const { group_id, tabs } = req.body;
+        if (!group_id) return res.redirect('/groups?error=Group ID required');
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        // Clear existing permissions
+        await conn.execute('DELETE FROM dashboard_group_permissions WHERE group_id = ?', [group_id]);
+        // Insert new ones
+        const selectedTabs = Array.isArray(tabs) ? tabs : (tabs ? [tabs] : []);
+        for (const tab of selectedTabs) {
+            if (ALL_TABS.includes(tab)) {
+                await conn.execute('INSERT INTO dashboard_group_permissions (group_id, tab) VALUES (?, ?)', [group_id, tab]);
+            }
+        }
+        await conn.end();
+        res.redirect('/groups?success=Permissions updated');
+    } catch (err) {
+        res.redirect('/groups?error=' + encodeURIComponent(err.message));
     }
 });
 
