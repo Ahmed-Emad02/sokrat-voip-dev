@@ -10,30 +10,7 @@ const isSuper = typeof isSuperAdmin !== 'undefined' && isSuperAdmin;
 function can(tab) { return allowed.includes(tab); }
 %>
 
-<!-- Prevent Flash of Unstyled Content (FOUC) when switching tabs -->
-<style>
-    html {
-        opacity: 0;
-    }
-</style>
-<script>
-    (function() {
-        var revealed = false;
-        function reveal() {
-            if (revealed) return;
-            revealed = true;
-            document.documentElement.style.transition = 'opacity 0.12s ease-in-out';
-            document.documentElement.style.opacity = '1';
-        }
-        if (document.readyState === 'interactive' || document.readyState === 'complete') {
-            reveal();
-        } else {
-            document.addEventListener('DOMContentLoaded', reveal);
-            window.addEventListener('load', reveal);
-            setTimeout(reveal, 150); // Safety net: reveal after 150ms max
-        }
-    })();
-</script>
+
 
 <!-- Light Theme Override Styles -->
 <style>
