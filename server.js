@@ -17,6 +17,32 @@ const crypto = require('crypto');
 
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'spt-analytics-encryption-key-32c'; // Must be 32 bytes
+const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest();
+
+function encrypt(text) {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+}
+
+function decrypt(text) {
+    try {
+        const parts = text.split(':');
+        const iv = Buffer.from(parts.shift(), 'hex');
+        const encryptedText = Buffer.from(parts.join(':'), 'hex');
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } catch (err) {
+        console.error('Decryption failed:', err.message);
+        return null;
+    }
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -94,6 +120,13 @@ async function initAuthDb() {
     `);
     // Add group_id column if it doesn't exist (for existing installs)
     try { await conn.execute('ALTER TABLE dashboard_users ADD COLUMN group_id INT DEFAULT NULL'); } catch (_) {}
+    try { await conn.execute('ALTER TABLE dashboard_users ADD COLUMN reset_token_expires DATETIME DEFAULT NULL'); } catch (_) {}
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS dashboard_settings (
+            setting_key VARCHAR(100) PRIMARY KEY,
+            setting_value TEXT DEFAULT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dashboard_groups (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -730,41 +763,154 @@ app.post('/users/change-password', async (req, res) => {
     }
 });
 
-// POST /forgot-password - generate reset token and send email
-app.post('/forgot-password', async (req, res) => {
+// --- SMTP SETTINGS ROUTES (Super Admin Only) ---
+app.get('/api/settings/smtp', async (req, res) => {
     try {
-        const { username, email } = req.body;
-        if (!username || !email) return res.status(400).json({ success: false, error: 'Username and email are required' });
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
         const conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'admin',
             password: process.env.DB_PASS || 'admin',
             database: ASTERISK_DB
         });
+        const [rows] = await conn.execute('SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key IN (?, ?)', ['smtp_email', 'smtp_password']);
+        await conn.end();
+
+        let email = '';
+        let hasPassword = false;
+        rows.forEach(r => {
+            if (r.setting_key === 'smtp_email') email = r.setting_value;
+            if (r.setting_key === 'smtp_password' && r.setting_value) hasPassword = true;
+        });
+        res.json({ success: true, email, hasPassword });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/settings/smtp', async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        const { email, password } = req.body;
+        if (!email) {
+            return res.status(400).json({ success: false, error: 'Email is required' });
+        }
+
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+
+        // Upsert smtp_email
+        await conn.execute(
+            'INSERT INTO dashboard_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+            ['smtp_email', email, email]
+        );
+
+        if (password) {
+            const encryptedPassword = encrypt(password);
+            await conn.execute(
+                'INSERT INTO dashboard_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+                ['smtp_password', encryptedPassword, encryptedPassword]
+            );
+        } else {
+            // Check if password exists
+            const [rows] = await conn.execute('SELECT setting_value FROM dashboard_settings WHERE setting_key = ?', ['smtp_password']);
+            if (rows.length === 0 || !rows[0].setting_value) {
+                await conn.end();
+                return res.status(400).json({ success: false, error: 'Password is required' });
+            }
+        }
+
+        await conn.end();
+        res.json({ success: true, message: 'SMTP settings updated successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/auth/forgot-password and POST /forgot-password
+const forgotPasswordHandler = async (req, res) => {
+    try {
+        const { username, email } = req.body;
+        if (!username || !email) return res.status(400).json({ success: false, error: 'Username and email are required' });
+        
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        
         const [rows] = await conn.execute('SELECT * FROM dashboard_users WHERE username = ? AND email = ?', [username, email]);
         if (rows.length === 0) {
             await conn.end();
-            return res.json({ success: true, message: 'If that email is registered, a reset link has been sent.' });
+            return res.status(400).json({ success: false, error: 'Invalid username or email combination' });
         }
-        const crypto = require('crypto');
+        
+        // Get SMTP settings
+        const [settingsRows] = await conn.execute('SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key IN (?, ?)', ['smtp_email', 'smtp_password']);
+        let smtpEmail = '';
+        let smtpEncryptedPassword = '';
+        settingsRows.forEach(r => {
+            if (r.setting_key === 'smtp_email') smtpEmail = r.setting_value;
+            if (r.setting_key === 'smtp_password') smtpEncryptedPassword = r.setting_value;
+        });
+        
+        if (!smtpEmail || !smtpEncryptedPassword) {
+            await conn.end();
+            return res.status(500).json({ success: false, error: 'Password reset email system is not configured. Please contact Super Admin.' });
+        }
+        
+        const smtpPassword = decrypt(smtpEncryptedPassword);
+        if (!smtpPassword) {
+            await conn.end();
+            return res.status(500).json({ success: false, error: 'Failed to decrypt SMTP credentials' });
+        }
+        
         const token = crypto.randomBytes(32).toString('hex');
-        const expires = new Date(Date.now() + 3600000);
-        await conn.execute('UPDATE dashboard_users SET reset_token = ?, reset_expires = ? WHERE username = ? AND email = ?', [token, expires, username, email]);
+        const expires = new Date(Date.now() + 3600000); // 1 hour
+        
+        await conn.execute(
+            'UPDATE dashboard_users SET reset_token = ?, reset_token_expires = ?, reset_expires = ? WHERE username = ? AND email = ?',
+            [token, expires, expires, username, email]
+        );
         await conn.end();
 
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST || 'localhost',
-            port: parseInt(process.env.SMTP_PORT || '25'),
-            secure: process.env.SMTP_PORT === '465' ? true : false,
-            auth: process.env.SMTP_USER ? {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS
-            } : undefined,
-            tls: { rejectUnauthorized: false }
-        });
+        // Nodemailer Setup
+        let transporterConfig;
+        if (smtpEmail.endsWith('@gmail.com')) {
+            transporterConfig = {
+                service: 'gmail',
+                auth: {
+                    user: smtpEmail,
+                    pass: smtpPassword
+                }
+            };
+        } else {
+            transporterConfig = {
+                host: process.env.SMTP_HOST || 'smtp.gmail.com',
+                port: parseInt(process.env.SMTP_PORT || '587'),
+                secure: process.env.SMTP_SECURE === 'true',
+                auth: {
+                    user: smtpEmail,
+                    pass: smtpPassword
+                },
+                tls: { rejectUnauthorized: false }
+            };
+        }
+        
+        const transporter = nodemailer.createTransport(transporterConfig);
         const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${token}`;
+        
         await transporter.sendMail({
-            from: process.env.SMTP_FROM || 'noreply@spt-analytics.local',
+            from: smtpEmail,
             to: email,
             subject: 'Password Reset - SPT Analytics',
             text: [
@@ -781,11 +927,15 @@ app.post('/forgot-password', async (req, res) => {
                 'SPT Analytics'
             ].join('\n')
         });
+        
         res.json({ success: true, message: 'If that email is registered, a reset link has been sent.' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
-});
+};
+
+app.post('/api/auth/forgot-password', forgotPasswordHandler);
+app.post('/forgot-password', forgotPasswordHandler);
 
 // GET /reset-password - show reset form
 app.get('/reset-password', async (req, res) => {
@@ -798,7 +948,10 @@ app.get('/reset-password', async (req, res) => {
             password: process.env.DB_PASS || 'admin',
             database: ASTERISK_DB
         });
-        const [rows] = await conn.execute('SELECT id FROM dashboard_users WHERE reset_token = ? AND reset_expires > NOW()', [token]);
+        const [rows] = await conn.execute(
+            'SELECT id FROM dashboard_users WHERE reset_token = ? AND (reset_token_expires > NOW() OR reset_expires > NOW())',
+            [token]
+        );
         await conn.end();
         if (rows.length === 0) return res.send('Invalid or expired reset token');
         res.render('reset-password', { token, error: null, currentLang: req.query.lang || 'en' });
@@ -807,7 +960,40 @@ app.get('/reset-password', async (req, res) => {
     }
 });
 
-// POST /reset-password - execute password reset
+// POST /api/auth/reset-password - execute password reset via JSON
+app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+        const { token, password } = req.body;
+        if (!token || !password || password.length < 3) {
+            return res.status(400).json({ success: false, error: 'Password must be at least 3 characters' });
+        }
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        const [rows] = await conn.execute(
+            'SELECT id FROM dashboard_users WHERE reset_token = ? AND (reset_token_expires > NOW() OR reset_expires > NOW())',
+            [token]
+        );
+        if (rows.length === 0) {
+            await conn.end();
+            return res.status(400).json({ success: false, error: 'Invalid or expired reset token' });
+        }
+        const hash = await bcrypt.hash(password, 10);
+        await conn.execute(
+            'UPDATE dashboard_users SET password_hash = ?, reset_token = NULL, reset_expires = NULL, reset_token_expires = NULL WHERE id = ?',
+            [hash, rows[0].id]
+        );
+        await conn.end();
+        res.json({ success: true, message: 'Password reset successful' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /reset-password - execute password reset via HTML form (backward compatibility)
 app.post('/reset-password', async (req, res) => {
     try {
         const { token, password } = req.body;
@@ -820,13 +1006,19 @@ app.post('/reset-password', async (req, res) => {
             password: process.env.DB_PASS || 'admin',
             database: ASTERISK_DB
         });
-        const [rows] = await conn.execute('SELECT id FROM dashboard_users WHERE reset_token = ? AND reset_expires > NOW()', [token]);
+        const [rows] = await conn.execute(
+            'SELECT id FROM dashboard_users WHERE reset_token = ? AND (reset_token_expires > NOW() OR reset_expires > NOW())',
+            [token]
+        );
         if (rows.length === 0) {
             await conn.end();
             return res.render('reset-password', { token, error: 'Invalid or expired reset token', currentLang: req.query.lang || 'en' });
         }
         const hash = await bcrypt.hash(password, 10);
-        await conn.execute('UPDATE dashboard_users SET password_hash = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?', [hash, rows[0].id]);
+        await conn.execute(
+            'UPDATE dashboard_users SET password_hash = ?, reset_token = NULL, reset_expires = NULL, reset_token_expires = NULL WHERE id = ?',
+            [hash, rows[0].id]
+        );
         await conn.end();
         res.redirect('/login?reset=success');
     } catch (err) {

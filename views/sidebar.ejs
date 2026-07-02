@@ -334,6 +334,18 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                         Add a Recording
                     </button>
                 </div>
+                <% if (isSuper) { %>
+                <!-- Set up password reset email -->
+                <div class="px-4 py-3 border-t border-[var(--border-primary)]">
+                    <span class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Password Reset Email</span>
+                    <form id="smtpSettingsForm" onsubmit="saveSmtpSettings(event)" class="flex flex-col gap-2">
+                        <input type="email" id="smtpEmail" placeholder="smtp@example.com" class="text-xs p-2 rounded bg-[var(--bg-card)] border border-[var(--border-primary)] w-full text-[var(--text-primary)]" required>
+                        <input type="password" id="smtpPassword" placeholder="App Password" class="text-xs p-2 rounded bg-[var(--bg-card)] border border-[var(--border-primary)] w-full text-[var(--text-primary)]" required>
+                        <button type="submit" class="bg-[#ff3b30] hover:bg-[#ff453a] text-white text-[10px] font-black py-1.5 px-3 rounded-lg uppercase tracking-wider transition cursor-pointer w-full text-center">Save Settings</button>
+                    </form>
+                    <div id="smtpStatusMsg" class="text-[10px] mt-1.5 hidden text-center"></div>
+                </div>
+                <% } %>
                 <div class="border-t border-[var(--border-primary)] px-4 py-2">
                     <a href="/logout" class="flex items-center gap-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[#ff3b30] transition py-1.5">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -547,6 +559,64 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
     }
 
+    window.showToast = showToast;
     showToast(msg, type);
 });
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    const isSuper = <%= isSuper %>;
+    if (isSuper) {
+        try {
+            const resp = await fetch('/api/settings/smtp');
+            const data = await resp.json();
+            if (data.success && data.email) {
+                document.getElementById('smtpEmail').value = data.email;
+                if (data.hasPassword) {
+                    document.getElementById('smtpPassword').placeholder = '•••••••••••••••• (Saved)';
+                    document.getElementById('smtpPassword').required = false;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load SMTP settings:', e);
+        }
+    }
+});
+
+async function saveSmtpSettings(event) {
+    event.preventDefault();
+    const email = document.getElementById('smtpEmail').value;
+    const password = document.getElementById('smtpPassword').value;
+    const msgEl = document.getElementById('smtpStatusMsg');
+    
+    msgEl.classList.remove('hidden');
+    msgEl.className = 'text-[10px] mt-1.5 text-zinc-400 text-center';
+    msgEl.textContent = 'Saving...';
+    
+    try {
+        const resp = await fetch('/api/settings/smtp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            msgEl.className = 'text-[10px] mt-1.5 text-green-400 text-center';
+            msgEl.textContent = 'Saved successfully!';
+            document.getElementById('smtpPassword').value = '';
+            document.getElementById('smtpPassword').placeholder = '•••••••••••••••• (Saved)';
+            document.getElementById('smtpPassword').required = false;
+            if (typeof window.showToast === 'function') {
+                window.showToast('SMTP settings saved', 'success');
+            }
+        } else {
+            msgEl.className = 'text-[10px] mt-1.5 text-red-400 text-center';
+            msgEl.textContent = data.error || 'Failed to save settings.';
+        }
+    } catch (e) {
+        msgEl.className = 'text-[10px] mt-1.5 text-red-400 text-center';
+        msgEl.textContent = 'Error saving settings.';
+    }
+}
 </script>
