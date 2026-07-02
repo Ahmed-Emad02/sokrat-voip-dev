@@ -304,18 +304,22 @@ const dispColors = {
             }
         }
 
-        // Sync perPage from localStorage if different
+        // Sync perPage from localStorage if different (clamped to prevent infinite reload loops)
         (function() {
             const savedPerPage = localStorage.getItem('cdrPerPage');
-            const currentPerPage = '<%= pagination.perPage %>';
-            if (savedPerPage && savedPerPage !== currentPerPage) {
-                const perPageEl = document.querySelector('input[name="perPage"]');
-                const pageEl = document.querySelector('input[name="page"]');
-                const formEl = document.querySelector('form');
-                if (perPageEl && pageEl && formEl) {
-                    perPageEl.value = savedPerPage;
-                    pageEl.value = 1;
-                    formEl.submit();
+            if (savedPerPage) {
+                const parsed = Math.min(200, Math.max(10, parseInt(savedPerPage) || 10));
+                const currentPerPage = parseInt('<%= pagination.perPage %>') || 10;
+                if (parsed !== currentPerPage) {
+                    localStorage.setItem('cdrPerPage', parsed); // Save clamped value back
+                    const perPageEl = document.querySelector('input[name="perPage"]');
+                    const pageEl = document.querySelector('input[name="page"]');
+                    const formEl = document.querySelector('form');
+                    if (perPageEl && pageEl && formEl) {
+                        perPageEl.value = parsed;
+                        pageEl.value = 1;
+                        formEl.submit();
+                    }
                 }
             }
         })();
