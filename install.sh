@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPT-ANALYTICS — Automated installer for Issabel 5 / Asterisk 18
+# Issabel Dashboard — Automated installer for Issabel 5 / Asterisk 18
 # Run as root on a fresh Issabel 5 installation.
 # Usage: bash install.sh
 
@@ -11,7 +11,7 @@ NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf | cut -d= -f2- | xargs)
 
 echo "============================================"
-echo " SPT-ANALYTICS Installer"
+echo " Issabel Dashboard Installer"
 echo " Target: Issabel 5 / Asterisk 18"
 echo "============================================"
 
@@ -90,7 +90,7 @@ SESSION_SECRET=$(openssl rand -hex 32)
 ENCRYPTION_KEY=$(openssl rand -hex 32)
 SMTP_HOST=localhost
 SMTP_PORT=25
-SMTP_FROM=noreply@spt-analytics.local
+SMTP_FROM=noreply@issabel-dashboard.local
 EOF
     echo "  .env created"
 fi
@@ -411,7 +411,7 @@ echo "  Apache restarted"
 echo "[11/12] Creating systemd service..."
 cat > /etc/systemd/system/issabel-dashboard.service << 'UNIT'
 [Unit]
-Description=SPT-ANALYTICS Dashboard
+Description=Issabel Dashboard
 After=network.target mysqld.service asterisk.service
 
 [Service]

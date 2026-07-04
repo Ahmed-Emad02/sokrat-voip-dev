@@ -1,4 +1,4 @@
-# SPT-ANALYTICS
+# Issabel Dashboard
 
 Real-time PBX analytics dashboard for **Issabel 5 / Asterisk 18** with CDR logs, extension performance metrics, a live operator switchboard, call recording playback, user authentication with role-based tab permissions, GSM dongle monitoring with SMS/USSD support, and custom recording upload.
 
@@ -95,7 +95,7 @@ RECORDING_ROOT=/var/spool/asterisk/monitor
 SESSION_SECRET=$(openssl rand -hex 32)
 SMTP_HOST=localhost
 SMTP_PORT=25
-SMTP_FROM=noreply@spt-analytics.local
+SMTP_FROM=noreply@issabel-dashboard.local
 EOF
 ```
 
@@ -377,7 +377,7 @@ systemctl restart httpd
 ```bash
 cat > /etc/systemd/system/issabel-dashboard.service << 'EOF'
 [Unit]
-Description=SPT-ANALYTICS Dashboard
+Description=Issabel Dashboard Dashboard
 After=network.target mysqld.service asterisk.service
 
 [Service]
@@ -453,7 +453,7 @@ All settings live in `/opt/issabel-dashboard/.env`:
 | `SESSION_SECRET` | — | Random hex string for session encryption (auto-generated) |
 | `SMTP_HOST` | `localhost` | SMTP server for password reset emails |
 | `SMTP_PORT` | `25` | SMTP server port |
-| `SMTP_FROM` | `noreply@spt-analytics.local` | From address for password reset emails |
+| `SMTP_FROM` | `noreply@issabel-dashboard.local` | From address for password reset emails |
 | `SMTP_USER` | — | SMTP username (leave blank if no auth required) |
 | `SMTP_PASS` | — | SMTP password |
 

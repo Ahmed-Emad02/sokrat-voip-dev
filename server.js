@@ -17,7 +17,7 @@ const crypto = require('crypto');
 
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'spt-analytics-encryption-key-32c'; // Must be 32 bytes
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'issabel-dashboard-encryption-key-32c'; // Must be 32 bytes
 const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest();
 
 function encrypt(text) {
@@ -48,7 +48,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 ffmpeg.setFfmpegPath('/usr/local/bin/ffmpeg');
 const PORT = process.env.PORT || 3000;
-const SESSION_SECRET = process.env.SESSION_SECRET || 'spt-analytics-secret-change-me';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'issabel-dashboard-secret-change-me';
 
 const ROOT_USER = 'root';
 const ROOT_PASS = 'Admin@123';
@@ -224,7 +224,7 @@ function requireAuth(req, res, next) {
 app.use((req, res, next) => {
     const publicPaths = [
         '/login', '/logout', '/forgot-password', '/reset-password',
-        '/api/auth/forgot-password', '/api/auth/reset-password'
+        '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info'
     ];
     if (publicPaths.includes(req.path) || req.path.startsWith('/public/')) {
         return next();
@@ -1103,6 +1103,12 @@ app.post('/groups/permissions', async (req, res) => {
             password: process.env.DB_PASS || 'admin',
             database: ASTERISK_DB
         });
+        // Prevent modifying super admins permissions
+        const [groupRow] = await conn.execute('SELECT name FROM dashboard_groups WHERE id = ?', [group_id]);
+        if (groupRow && groupRow.length > 0 && groupRow[0].name === 'super admins') {
+            await conn.end();
+            return res.redirect('/users?error=Super admins permissions cannot be modified');
+        }
         // Clear existing permissions
         await conn.execute('DELETE FROM dashboard_group_permissions WHERE group_id = ?', [group_id]);
         // Insert new ones
@@ -2546,6 +2552,80 @@ app.post('/api/settings/recordings/upload', (req, res) => {
             res.status(500).json({ success: false, error: 'Conversion or upload failed: ' + (convErr.message || convErr) });
         }
     });
+});
+
+// --- NETWORK INFO ROUTE ---
+app.get('/api/network-info', async (req, res) => {
+    try {
+        const { execFile } = require('child_process');
+        let interfaces = {};
+        let gateway = '';
+        let errors = [];
+
+        const run = (cmd, args) => new Promise((resolve, reject) => {
+            execFile(cmd, args, (err, stdout) => {
+                if (err) reject(err);
+                else resolve(stdout);
+            });
+        });
+
+        try {
+            const [ip4Out, ip6Out, linkOut, routeOut] = await Promise.all([
+                run('ip', ['-o', '-4', 'a']),
+                run('ip', ['-o', '-6', 'a']),
+                run('ip', ['link']),
+                run('ip', ['route', 'show', 'default'])
+            ]);
+
+            // Parse IPv4
+            for (const line of ip4Out.trim().split('\n')) {
+                const m = line.match(/^\d+:\s+(\S+)\s+inet\s+(\S+)/);
+                if (m) {
+                    const name = m[1].replace(/@.*$/, '');
+                    if (!interfaces[name]) interfaces[name] = { name, ip4: '', ip6: '', mac: '', state: 'unknown' };
+                    interfaces[name].ip4 = m[2].replace(/\/\d+$/, '');
+                }
+            }
+
+            // Parse IPv6 (exclude fe80::/10 link-local)
+            for (const line of ip6Out.trim().split('\n')) {
+                const m = line.match(/^\d+:\s+(\S+)\s+inet6\s+(\S+)/);
+                if (m) {
+                    const name = m[1].replace(/@.*$/, '');
+                    const addr = m[2].replace(/\/\d+$/, '');
+                    if (addr.startsWith('fe80')) continue;
+                    if (!interfaces[name]) interfaces[name] = { name, ip4: '', ip6: '', mac: '', state: 'unknown' };
+                    interfaces[name].ip6 = addr;
+                }
+            }
+
+            // Parse link info (MAC + state)
+            let currentIface = '';
+            for (const line of linkOut.split('\n')) {
+                const ifaceMatch = line.match(/^\d+:\s+(\S+):\s+<.*>\s+.*state\s+(\S+)/);
+                if (ifaceMatch) {
+                    currentIface = ifaceMatch[1].replace(/@.*$/, '');
+                    if (!interfaces[currentIface]) interfaces[currentIface] = { name: currentIface, ip4: '', ip6: '', mac: '', state: 'unknown' };
+                    interfaces[currentIface].state = ifaceMatch[2].toLowerCase();
+                }
+                const macMatch = line.match(/link\/(\S+)\s+([0-9a-fA-F:]{17})/);
+                if (macMatch && currentIface) {
+                    interfaces[currentIface].mac = macMatch[2];
+                }
+            }
+
+            // Parse default gateway
+            const gwMatch = routeOut.match(/^default\s+via\s+(\S+)/m);
+            if (gwMatch) gateway = gwMatch[1];
+
+        } catch (e) {
+            errors.push(e.message);
+        }
+
+        res.json({ success: true, interfaces: Object.values(interfaces), gateway, errors: errors.length ? errors : undefined });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 

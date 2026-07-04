@@ -1,7 +1,7 @@
 {
-  "name": "spt-analytics",
+  "name": "issabel-dashboard",
   "version": "1.0.0",
-  "description": "",
+  "description": "Real-time PBX analytics dashboard for Issabel 5 / Asterisk 18 with GSM dongle monitoring, CDR logs, agent switchboard, user management, and recording upload",
   "main": "index.js",
   "scripts": {
     "start": "node server.js",

@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="<%= currentLang === 'ar' ? 'ar' : 'en' %>" dir="<%= currentLang === 'ar' ? 'rtl' : 'ltr' %>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SPT-ANALYTICS - Users</title>
+    <title>Issabel Dashboard - Users</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -144,7 +144,7 @@
                 </div>
                 <div class="flex-1 min-w-[160px]">
                     <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Password</label>
-                    <input type="password" name="password" placeholder="••••••" required>
+                    <input type="password" name="password" placeholder="ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó" required>
                 </div>
                 <div class="flex-1 min-w-[160px]">
                     <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Group</label>
@@ -183,7 +183,7 @@
                             <tr class="border-b border-[var(--border-primary)]/50 hover:bg-[var(--bg-hover)]/20 transition-colors">
                                 <td class="py-3.5 px-6 font-mono text-[var(--text-secondary)] text-xs"><%= u.id %></td>
                                 <td class="py-3.5 px-6 font-medium"><%= u.username %></td>
-                                <td class="py-3.5 px-6 text-[var(--text-secondary)] text-sm"><%= u.group_name || '<span class="text-[var(--text-muted)]">—</span>' %></td>
+                                <td class="py-3.5 px-6 text-[var(--text-secondary)] text-sm"><%= u.group_name || '<span class="text-[var(--text-muted)]">ΓÇö</span>' %></td>
                                 <td class="py-3.5 px-6 text-[var(--text-secondary)] text-sm"><%= u.email || '-' %></td>
                                 <td class="py-3.5 px-6 text-[var(--text-muted)] text-xs"><%= u.created_at ? new Date(u.created_at).toLocaleDateString() : '-' %></td>
                                 <td class="py-3.5 px-6 text-right">
@@ -234,23 +234,37 @@
                             </form>
                         <% } %>
                     </div>
-                    <form method="POST" action="/groups/permissions">
-                        <input type="hidden" name="group_id" value="<%= g.id %>">
-                        <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">Tab Access</p>
-                        <div class="flex flex-wrap gap-4">
+                    <% if (g.name === 'super admins') { %>
+                        <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">Tab Access <span class="text-[var(--text-muted)] font-normal normal-case">(locked &mdash; full access)</span></p>
+                        <div class="flex flex-wrap gap-4 opacity-50">
                             <% var visibleTabs = (typeof allTabs !== 'undefined' ? allTabs : []).filter(function(t) { return t !== 'dashboard' && t !== 'users'; }); %>
                             <% visibleTabs.forEach(function(tab) { %>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" name="tabs" value="<%= tab %>" class="tab-checkbox" <%= (g.permissions || []).includes(tab) ? 'checked' : '' %>>
+                                <label class="flex items-center gap-2 cursor-default">
+                                    <input type="checkbox" name="tabs" value="<%= tab %>" class="tab-checkbox" <%= (g.permissions || []).includes(tab) ? 'checked' : '' %> disabled>
                                     <span class="text-sm capitalize"><%= tab.replace(/-/g, ' ') %></span>
                                 </label>
                             <% }); %>
                             <span class="text-xs text-[var(--text-muted)] self-center ml-2">Dashboard (all users) &bull; Users (super admins only)</span>
                         </div>
-                        <div class="mt-4">
-                            <button type="submit" class="btn-primary text-[10px]">Save Permissions</button>
-                        </div>
-                    </form>
+                    <% } else { %>
+                        <form method="POST" action="/groups/permissions">
+                            <input type="hidden" name="group_id" value="<%= g.id %>">
+                            <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">Tab Access</p>
+                            <div class="flex flex-wrap gap-4">
+                                <% var visibleTabs = (typeof allTabs !== 'undefined' ? allTabs : []).filter(function(t) { return t !== 'dashboard' && t !== 'users'; }); %>
+                                <% visibleTabs.forEach(function(tab) { %>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" name="tabs" value="<%= tab %>" class="tab-checkbox" <%= (g.permissions || []).includes(tab) ? 'checked' : '' %>>
+                                        <span class="text-sm capitalize"><%= tab.replace(/-/g, ' ') %></span>
+                                    </label>
+                                <% }); %>
+                                <span class="text-xs text-[var(--text-muted)] self-center ml-2">Dashboard (all users) &bull; Users (super admins only)</span>
+                            </div>
+                            <div class="mt-4">
+                                <button type="submit" class="btn-primary text-[10px]">Save Permissions</button>
+                            </div>
+                        </form>
+                    <% } %>
                 </div>
             <% }); %>
         <% } %>
@@ -265,7 +279,7 @@
                 <input type="hidden" name="id" id="pwUserId">
                 <div class="mb-4">
                     <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">New Password</label>
-                    <input type="password" name="new_password" placeholder="••••••" required>
+                    <input type="password" name="new_password" placeholder="ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó" required>
                 </div>
                 <div class="flex gap-2 justify-end">
                     <button type="button" onclick="closePwModal()" class="btn-ghost text-xs">Cancel</button>

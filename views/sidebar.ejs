@@ -1,7 +1,7 @@
-<%
+﻿<%
 const sidebarWords = {
     en: { dashLink: "Dashboard", cdrLink: "CDR Analytics", empLink: "Employee Metrics", extLink: "Extension Statistics", opLink: "Live Operator", dongleLink: "GSM Dongles", contactsLink: "Address Book", usersLink: "Users", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page" },
-    ar: { dashLink: "لوحة التحكم", cdrLink: "تحليلات المكالمات", empLink: "مقاييس الموظفين", extLink: "إحصائيات التحويلة", opLink: "لوحة المراقبة المباشرة", dongleLink: "شرائح GSM", contactsLink: "دفتر العناوين", usersLink: "المستخدمين", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف" }
+    ar: { dashLink: "┘ä┘ê╪¡╪⌐ ╪º┘ä╪¬╪¡┘â┘à", cdrLink: "╪¬╪¡┘ä┘è┘ä╪º╪¬ ╪º┘ä┘à┘â╪º┘ä┘à╪º╪¬", empLink: "┘à┘é╪º┘è┘è╪│ ╪º┘ä┘à┘ê╪╕┘ü┘è┘å", extLink: "╪Ñ╪¡╪╡╪º╪ª┘è╪º╪¬ ╪º┘ä╪¬╪¡┘ê┘è┘ä╪⌐", opLink: "┘ä┘ê╪¡╪⌐ ╪º┘ä┘à╪▒╪º┘é╪¿╪⌐ ╪º┘ä┘à╪¿╪º╪┤╪▒╪⌐", dongleLink: "╪┤╪▒╪º╪ª╪¡ GSM", contactsLink: "╪»┘ü╪¬╪▒ ╪º┘ä╪╣┘å╪º┘ê┘è┘å", usersLink: "╪º┘ä┘à╪│╪¬╪«╪»┘à┘è┘å", liveClock: "╪│╪º╪╣╪⌐ ╪º┘ä┘å╪╕╪º┘à", themeLabel: "╪º┘ä┘à╪╕┘ç╪▒", langLabel: "╪º┘ä┘ä╪║╪⌐", settingsTitle: "╪º┘ä╪Ñ╪╣╪»╪º╪»╪º╪¬", rowsLabel: "╪╣╪»╪» ╪º┘ä╪╡┘ü┘ê┘ü" }
 };
 const sbT = sidebarWords[currentLang] || sidebarWords['en'];
 const isRtl = currentLang === 'ar';
@@ -338,10 +338,10 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 <div class="app-topbar w-full bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] flex flex-row items-center justify-between px-8 py-4 shadow-lg shrink-0 sticky top-0 z-50 <%= isRtl ? 'flex-row-reverse' : '' %>">
     <!-- Brand Logo and Title -->
     <div class="app-brand flex items-center space-x-3 <%= isRtl ? 'space-x-reverse' : '' %>">
-        <img id="brandLogo" src="/logo_dark.png" alt="SPT Logo" class="w-14 h-14 object-contain rounded-lg">
+        <img id="brandLogo" src="/logo_dark.png" alt="Issabel Dashboard" class="w-14 h-14 object-contain rounded-lg">
         <div>
             <h1 class="text-base font-black text-[var(--text-primary)] tracking-wider font-vibrant-display leading-none">
-                SPT-<span class="text-[#ff3b30]">ANALYTICS</span>
+                Issabel <span class="text-[#ff3b30]">Dashboard</span>
             </h1>
         </div>
     </div>
@@ -499,6 +499,12 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     </button>
                 </div>
                 <% } %>
+                <div class="px-4 py-2 border-t border-[var(--border-primary)]">
+                    <button onclick="openNetworkModal()" class="flex items-center gap-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[#ff3b30] transition py-1.5 w-full text-left">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M9 9h6v6H9z"/><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/></svg>
+                        Show Network Info
+                    </button>
+                </div>
                 <div class="border-t border-[var(--border-primary)] px-4 py-2">
                     <a href="/logout" class="flex items-center gap-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[#ff3b30] transition py-1.5">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -577,6 +583,27 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 <button type="submit" class="px-4 py-2 rounded-lg text-xs font-bold text-white bg-[#ff3b30] hover:bg-[#e0352b] transition cursor-pointer">Save Settings</button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Network Info Modal -->
+<div id="networkModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 invisible transition-all duration-200" style="pointer-events:none">
+    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl shadow-2xl shadow-black/50 w-full max-w-lg mx-4 overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-primary)]">
+            <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]">Network Interfaces</h3>
+            <button onclick="closeNetworkModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="p-5" id="networkInfoContent">
+            <div class="text-center text-[var(--text-muted)] text-xs py-8">
+                <svg class="animate-spin inline-block w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>
+                Loading network info...
+            </div>
+        </div>
+        <div class="flex justify-end px-5 py-4 border-t border-[var(--border-primary)]">
+            <button onclick="closeNetworkModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] transition cursor-pointer">Close</button>
+        </div>
     </div>
 </div>
 
@@ -747,6 +774,32 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <script>
+
+function copyAddr(btn) {
+    var span = btn.parentElement.querySelector('span.font-mono');
+    if (!span) return;
+    var text = span.textContent.trim();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(function(){});
+    }
+    var range = document.createRange();
+    range.selectNodeContents(span);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    var orig = btn.innerHTML;
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
+    setTimeout(function() { btn.innerHTML = orig; }, 1500);
+}
+
+function addrRow(label, value) {
+    var copySvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    return '<div class="flex items-center gap-2 text-xs text-[var(--text-muted)] pl-5 py-1">' +
+        '<span class="text-[11px] uppercase tracking-wider font-bold text-[var(--text-muted)]">' + label + ':</span>' +
+        '<span class="text-sm font-mono text-[var(--text-secondary)] tracking-tight">' + value + '</span>' +
+        '<button onclick="copyAddr(this)" class="ml-auto p-0.5 rounded hover:bg-[var(--bg-hover)] transition cursor-pointer opacity-40 hover:opacity-100" title="Copy ' + label + '">' + copySvg + '</button></div>';
+}
+
 function openSmtpModal() {
     document.getElementById('settingsMenu').classList.remove('visible', 'opacity-100', 'scale-100');
     document.getElementById('settingsMenu').classList.add('invisible', 'opacity-0', 'scale-95');
@@ -819,5 +872,61 @@ async function saveSmtpSettings(event) {
         msgEl.textContent = 'Error saving settings.';
     }
 }
+
+function openNetworkModal() {
+    document.getElementById('networkModal').classList.remove('opacity-0', 'invisible');
+    document.getElementById('networkModal').style.pointerEvents = 'auto';
+    document.getElementById('settingsMenu').classList.remove('visible', 'opacity-100', 'scale-100');
+    document.getElementById('settingsMenu').classList.add('invisible', 'opacity-0', 'scale-95');
+    document.getElementById('settingsMenu').style.pointerEvents = 'none';
+    loadNetworkInfo();
+}
+
+function closeNetworkModal() {
+    document.getElementById('networkModal').classList.add('opacity-0', 'invisible');
+    document.getElementById('networkModal').style.pointerEvents = 'none';
+}
+
+async function loadNetworkInfo() {
+    var container = document.getElementById('networkInfoContent');
+    try {
+        var resp = await fetch('/api/network-info');
+        var data = await resp.json();
+        if (!data.success) throw new Error(data.error);
+        if (!data.interfaces || data.interfaces.length === 0) {
+            container.innerHTML = '<div class="text-center text-[var(--text-muted)] text-sm py-8">No network interfaces found</div>';
+            return;
+        }
+        var html = '';
+        if (data.gateway) {
+            html += '<div class="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)]">';
+            html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>';
+            html += '<span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Gateway:</span>';
+            html += '<span class="text-sm font-mono text-[var(--text-primary)] tracking-tight">' + data.gateway + '</span>';
+            html += '<button onclick="copyAddr(this)" class="ml-auto p-0.5 rounded hover:bg-[var(--bg-hover)] transition cursor-pointer opacity-40 hover:opacity-100" title="Copy gateway"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>';
+        }
+        html += '<div class="space-y-2.5">';
+        for (var i = 0; i < data.interfaces.length; i++) {
+            var iface = data.interfaces[i];
+            html += '<div class="px-3 py-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)]">';
+            html += '<div class="flex items-center justify-between mb-2">';
+            html += '<div class="flex items-center gap-2.5">';
+            html += '<span class="w-2.5 h-2.5 rounded-full ' + (iface.state === 'up' ? 'bg-green-400' : 'bg-red-400') + '"></span>';
+            html += '<span class="text-sm font-bold text-[var(--text-primary)] font-mono">' + iface.name + '</span>';
+            html += '<span class="text-[11px] ' + (iface.state === 'up' ? 'text-green-400' : 'text-red-400') + ' uppercase font-bold">' + iface.state + '</span>';
+            html += '</div></div>';
+            if (iface.mac) html += addrRow('MAC', iface.mac);
+            if (iface.ip4) html += addrRow('IPv4', iface.ip4);
+            if (iface.ip6) html += addrRow('IPv6', iface.ip6);
+            html += '</div>';
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = '<div class="text-center text-red-400 text-sm py-8">Failed to load network info: ' + e.message + '</div>';
+    }
+}
 </script>
+
+
 

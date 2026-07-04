@@ -2,7 +2,7 @@
 const words = {
     en: {
         title: "Extension", subtitle: "Statistics",
-        desc: "Comprehensive per-extension analytics and consolidated employee metrics",
+        desc: "Per-extension analytics and consolidated employee metrics",
         startTime: "Start Time", endTime: "End Time",
         direction: "Direction", allDir: "All", inbound: "Inbound", outbound: "Outbound",
         apply: "Apply Filters",
@@ -16,7 +16,7 @@ const words = {
         src: "Source", dst: "Destination", duration: "Duration", status: "Status",
         footerLeft: "Extension Analytics Engine", footerRight: "Monitored Extensions:",
         extList: "Extensions",
-        overview: "Console Overview",
+        overview: "Overview",
         employee: "Employee",
         inboundDuration: "Inbound Dur.",
         outboundDuration: "Outbound Dur.",
@@ -24,7 +24,7 @@ const words = {
         online: "Online",
         offline: "Offline",
         agentStatus: "Agent Status",
-        interactiveTable: "Consolidated Employee Metrics (Click any row to inspect deep dive telemetry)"
+        interactiveTable: "Click a row to inspect an extension."
     },
     ar: {
         title: "التحويلة", subtitle: "الإحصائيات",
@@ -61,7 +61,7 @@ const isRtl = currentLang === 'ar';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SPT-ANALYTICS - Extension Statistics</title>
+    <title>Issabel Dashboard - Extension Statistics</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -113,14 +113,14 @@ const isRtl = currentLang === 'ar';
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
         
         .card-stat { 
-            transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), 
+            transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
                         border-color 150ms ease, 
                         box-shadow 200ms ease; 
         }
         .card-stat:hover { 
-            transform: translateY(-4px); 
+            transform: translateY(-1px);
             border-color: var(--border-accent); 
-            box-shadow: 0 12px 30px rgba(255, 59, 48, 0.15); 
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22);
         }
         .ext-card {
             transition: all 150ms ease;
@@ -132,8 +132,8 @@ const isRtl = currentLang === 'ar';
         }
         .ext-card.active {
             background-color: #27272a;
-            border-left: 4px solid var(--accent-color);
-            box-shadow: inset 2px 0 8px rgba(0,0,0,0.5);
+            border-color: var(--accent-color);
+            box-shadow: inset 0 0 0 1px rgba(255, 59, 48, 0.18);
         }
         input, select, button { 
             transition: all 150ms ease; 
@@ -473,19 +473,19 @@ const isRtl = currentLang === 'ar';
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.totalCalls %></p>
                 <p class="text-2xl font-black text-white mt-1">${data.totalCalls}</p>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-[#ffffff] border-y border-r border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/30">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.answered %></p>
                 <p class="text-2xl font-black text-white mt-1">${data.answeredCalls}</p>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-[#ff3b30] border-y border-r border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/30">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.answerRate %></p>
                 <p class="text-2xl font-black text-[#ff3b30] mt-1">${data.answerRate}%</p>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-zinc-500 border-y border-r border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/30">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.uniqueContacts %></p>
                 <p class="text-2xl font-black text-zinc-300 mt-1">${data.uniqueContactCount}</p>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border-l-4 border-l-zinc-700 border-y border-r border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/30">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.avgTalk %></p>
                 <p class="text-2xl font-black text-zinc-400 mt-1">${data.avgTalkSec}<span class="text-xs text-[#ff3b30] ml-0.5">s</span></p>
             </div>`;
@@ -656,10 +656,10 @@ const isRtl = currentLang === 'ar';
                         name: d.name,
                         itemStyle: { color: colorGradients[d.name] || defaultGradient }
                     })),
-                    // Vibrant elastic opening animation
+                    // Short chart reveal keeps data readable without delaying the task.
                     animationType: 'expansion',
-                    animationEasing: 'elasticOut',
-                    animationDuration: 1800
+                    animationEasing: 'cubicOut',
+                    animationDuration: 650
                 }]
             });
             window.addEventListener('resize', () => dispositionChart && dispositionChart.resize());

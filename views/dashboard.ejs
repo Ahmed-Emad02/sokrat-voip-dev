@@ -2,9 +2,9 @@
 const words = {
     en: {
         title: "Executive", subtitle: "Dashboard",
-        desc: "Real-time Aggregate Call Center Performance Overview",
+        desc: "Real-time call center performance overview",
         startTime: "Start Time", endTime: "End Time",
-        btn: "Refresh Dashboard Metrics",
+        btn: "Refresh Metrics",
         totalCalls: "Total Calls", answeredCalls: "Answered",
         inbound: "Inbound", outbound: "Outbound",
         answerRate: "Answer Rate", airMinutes: "air minutes",
@@ -12,12 +12,12 @@ const words = {
         ext: "Extension", name: "Employee Name",
         interactions: "Interactions", talkTime: "Talk Time",
         uniqueContacts: "Unique Contacts",
-        recentCalls: "Recent Call Activity",
+        recentCalls: "Recent Calls",
         thTime: "Timestamp", thSrc: "Source", thDst: "Destination",
         thAir: "Airtime", thState: "State",
-        noData: "No records found in this timeframe.",
-        footerLeft: "Aggregate Telemetry Engine",
-        footerRight: "Active Records:"
+        noData: "No records found for this time range.",
+        footerLeft: "Call activity",
+        footerRight: "Visible records:"
     },
     ar: {
         title: "لوحة", subtitle: "التحكم الرئيسية",
@@ -53,7 +53,7 @@ const dispColors = {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SPT-ANALYTICS - Dashboard</title>
+    <title>Issabel Dashboard - Dashboard</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -154,21 +154,21 @@ const dispColors = {
                 <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.totalCalls %></p>
                 <p class="text-3xl font-black text-white mt-1"><%= stats.totalCalls %></p>
             </div>
-            <div class="panel-surface rounded-xl p-5 card-stat border-l-4 border-l-[#ffffff]">
+            <div class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30">
                 <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.answeredCalls %></p>
                 <p class="text-3xl font-black text-white mt-1"><%= stats.answeredCalls %></p>
             </div>
-            <div class="panel-surface rounded-xl p-5 card-stat border-l-4 border-l-[#ff3b30]">
+            <div class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30">
                 <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.inbound %></p>
                 <p class="text-3xl font-black text-white mt-1"><%= stats.inboundCount %></p>
                 <p class="text-xs font-bold text-[#ff3b30] mt-1"><%= stats.inboundMin %> <%= t.min %> <%= t.airMinutes %></p>
             </div>
-            <div class="panel-surface rounded-xl p-5 card-stat border-l-4 border-l-zinc-500">
+            <div class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30">
                 <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.outbound %></p>
                 <p class="text-3xl font-black text-white mt-1"><%= stats.outboundCount %></p>
                 <p class="text-xs font-bold text-zinc-400 mt-1"><%= stats.outboundMin %> <%= t.min %> <%= t.airMinutes %></p>
             </div>
-            <div class="panel-surface rounded-xl p-5 card-stat border-l-4 border-l-zinc-700">
+            <div class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30">
                 <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.answerRate %></p>
                 <p class="text-3xl font-black text-zinc-400 mt-1"><%= stats.totalCalls ? Math.round((stats.answeredCalls / stats.totalCalls) * 100) : 0 %>%</p>
             </div>
@@ -310,10 +310,11 @@ const dispColors = {
                         { value: <%= stats.inboundCount %>, name: '<%= t.inbound %>', itemStyle: { color: inboundGradient } },
                         { value: <%= stats.outboundCount %>, name: '<%= t.outbound %>', itemStyle: { color: outboundGradient } }
                     ],
-                    animationEasing: 'elasticOut',
-                    animationDuration: 1800
+                    animationEasing: 'cubicOut',
+                    animationDuration: 650
                 }]
             });
+            window.pieChart = pieChart;
             window.addEventListener('resize', () => pieChart.resize());
         });
     </script>
