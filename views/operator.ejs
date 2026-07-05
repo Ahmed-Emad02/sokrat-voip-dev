@@ -288,17 +288,17 @@ const isRtl = currentLang === 'ar';
                 %>
                     <div id="card-<%= emp.extension %>"
                          data-start="<%= startTimeStamp %>"
-                         class="panel-surface rounded-lg p-2.5 flex flex-col justify-between min-h-[195px] transition-all duration-300 relative overflow-hidden shadow-sm border <%= stateClass %>">
+                         class="panel-surface rounded-lg p-2.5 flex flex-col justify-between min-h-[175px] transition-all duration-300 relative overflow-hidden shadow-sm border <%= stateClass %>">
                         <div>
                             <div class="flex justify-between items-start">
                                 <div class="<%= isRtl ? 'text-right' : 'text-left' %>">
-                                    <span class="text-sm font-mono font-black text-[var(--accent-color)] tracking-wider block leading-tight"><%= emp.extension %></span>
-                                    <span class="text-[11px] font-bold text-white block truncate leading-tight" title="<%= emp.name %>"><%= emp.name %></span>
+                                    <span class="text-base font-mono font-black text-[var(--accent-color)] tracking-wider block leading-tight"><%= emp.extension %></span>
+                                    <span class="text-xs font-bold text-white block truncate leading-tight" title="<%= emp.name %>"><%= emp.name %></span>
                                 </div>
                                 <div class="flex flex-col items-end shrink-0">
                                     <div class="flex items-center space-x-1.5 <%= isRtl ? 'space-x-reverse' : '' %>">
                                         <span id="sipBadge-<%= emp.extension %>" class="h-2 w-2 rounded-full bg-zinc-800 transition-all duration-300"></span>
-                                        <span id="sipLabel-<%= emp.extension %>" class="text-[10px] font-bold uppercase tracking-wider text-zinc-500 transition-all duration-300 leading-tight"><%= isOnline ? t.online : t.offline %></span>
+                                        <span id="sipLabel-<%= emp.extension %>" class="text-xs font-bold uppercase tracking-wider text-zinc-500 transition-all duration-300 leading-tight"><%= isOnline ? t.online : t.offline %></span>
                                     </div>
                                 </div>
                             </div>
@@ -307,12 +307,12 @@ const isRtl = currentLang === 'ar';
                             <div class="flex items-center justify-between gap-1">
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <span id="badge-<%= emp.extension %>" class="h-2 w-2 rounded-full shrink-0 bg-transparent transition-all duration-300"></span>
-                                    <span id="status-<%= emp.extension %>" class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 transition-all duration-300 leading-tight">
+                                    <span id="status-<%= emp.extension %>" class="text-xs font-bold uppercase tracking-wide text-zinc-500 transition-all duration-300 leading-tight">
                                         <%= callState === 'incall' ? t.incall : callState === 'ringing' ? t.ringing : t.noCall %>
                                     </span>
-                                    <span id="timer-<%= emp.extension %>" class="text-[10px] font-mono font-bold text-[var(--accent-color)] tracking-wider leading-tight <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
+                                    <span id="timer-<%= emp.extension %>" class="text-xs font-mono font-bold text-[var(--accent-color)] tracking-wider leading-tight <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
                                 </div>
-                                <span id="partner-<%= emp.extension %>" class="text-[10px] font-mono font-bold truncate max-w-[80px] leading-tight <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
+                                <span id="partner-<%= emp.extension %>" class="text-xs font-mono font-bold truncate max-w-[80px] leading-tight <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
                                     <%= partnerNum %>
                                 </span>
                             </div>
@@ -320,7 +320,7 @@ const isRtl = currentLang === 'ar';
                                 <select id="actionSelect-<%= emp.extension %>" 
                                         onchange="handleSelectAction('<%= emp.extension %>', this.value); this.value='';"
                                         <%= (callState === 'incall' || callState === 'ringing') ? '' : 'disabled' %>
-                                        class="action-select w-full bg-[#18181b] text-[10px] font-semibold rounded pl-2 pr-6 py-0.5 border leading-tight border-[#27272a] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 text-slate-300">
+                                        class="action-select w-full bg-[#18181b] text-xs font-semibold rounded pl-2 pr-6 py-0.5 border leading-tight border-[#27272a] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 text-slate-300">
                                     <option value="" disabled selected hidden><%= isRtl ? 'إجراءات المكالمة' : 'Call Actions' %></option>
                                     <option value="listen"><%= isRtl ? 'استماع (Listen)' : 'Listen' %></option>
                                     <option value="whisper"><%= isRtl ? 'همس (Whisper)' : 'Whisper' %></option>
