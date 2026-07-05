@@ -884,11 +884,33 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     <!-- Rows per Page -->
                     <div class="px-4 py-3 border-b border-[var(--border-primary)]">
                         <span class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2"><%= sbT.rowsLabel %></span>
-                        <div class="flex gap-2">
-                            <% [10, 25, 50, 100].forEach(n => { %>
-                                <button onclick="localStorage.setItem('cdrPerPage','<%= n %>'); if(window.location.pathname==='/cdr'){window.location.search=window.location.search.replace(/perPage=\d+/,'')+'&perPage=<%= n %>&page=1'}else{this.classList.add('bg-[var(--accent-color)]','text-white','shadow-sm')}" class="flex-1 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer bg-[var(--bg-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"><%= n %></button>
-                            <% }) %>
+                        <div class="flex items-center gap-3">
+                            <input type="range" id="rowsPerPageSlider" min="1" max="200" value="25" class="flex-1 accent-red-600 cursor-pointer">
+                            <span id="rowsPerPageValue" class="text-xs font-black text-[var(--text-primary)] w-8 text-center">25</span>
                         </div>
+                        <script>
+                            (function() {
+                                const slider = document.getElementById('rowsPerPageSlider');
+                                const valSpan = document.getElementById('rowsPerPageValue');
+                                if (slider) {
+                                    const saved = localStorage.getItem('cdrPerPage');
+                                    if (saved) { slider.value = saved; valSpan.textContent = saved; }
+                                    slider.addEventListener('input', function() {
+                                        valSpan.textContent = this.value;
+                                    });
+                                    slider.addEventListener('change', function() {
+                                        const val = this.value;
+                                        localStorage.setItem('cdrPerPage', val);
+                                        if (window.location.pathname === '/cdr') {
+                                            const url = new URL(window.location);
+                                            url.searchParams.set('perPage', val);
+                                            url.searchParams.set('page', '1');
+                                            window.location = url.toString();
+                                        }
+                                    });
+                                }
+                            })();
+                        </script>
                     </div>
                     <div class="px-4 py-2">
                         <button id="addRecordingBtn" onclick="openRecordingModal()" class="flex items-center gap-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--accent-color)] transition py-1.5 w-full text-start">

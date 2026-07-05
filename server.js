@@ -1212,7 +1212,7 @@ app.get('/cdr', async (req, res) => {
         const searchDst = req.query.searchDst || '';
         const directionFilter = req.query.directionFilter || 'ALL';
         const page = Math.max(1, parseInt(req.query.page) || 1);
-        const perPage = Math.min(200, Math.max(10, parseInt(req.query.perPage) || 10));
+        const perPage = Math.min(200, Math.max(1, parseInt(req.query.perPage) || 25));
         const offset = (page - 1) * perPage;
 
         const directionCase = `
