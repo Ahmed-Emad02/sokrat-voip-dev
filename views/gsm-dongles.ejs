@@ -499,7 +499,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         </table>
                     </div>
                 </div>
-            </div>
+
 
             <!-- Lower Console Grid -->
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
@@ -631,10 +631,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 </div>
                 </div>
             </div>
-        </div>
 
         <!-- Collapsible logs console (Bottom) -->
-        <div class="panel-surface rounded-2xl flex flex-col shrink-0">
+        <div class="panel-surface rounded-2xl flex flex-col shrink-0 mt-6">
             <div class="px-6 py-4 flex flex-row items-center justify-between bg-black/40 border-b border-[var(--border-primary)] rounded-t-2xl <%= isRtl ? 'flex-row-reverse' : '' %>">
                 <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                     <div class="relative flex items-center justify-center">
