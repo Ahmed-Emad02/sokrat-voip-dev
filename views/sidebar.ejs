@@ -370,16 +370,12 @@ function can(tab) { return allowed.includes(tab); }
     html.light-theme {
         color-scheme: light;
     }
-    /* Set flex direction of body to row to align sidebar and page content horizontally */
+    /* Set flex direction of body dynamically using templates classes */
     body {
         display: flex !important;
-        flex-direction: row !important;
         min-height: 100vh !important;
         overflow-x: hidden !important;
         min-width: 0;
-    }
-    [dir="rtl"] body {
-        flex-direction: row-reverse !important;
     }
     
     @media (min-width: 768px) {
@@ -390,15 +386,6 @@ function can(tab) { return allowed.includes(tab); }
         body > .flex-1 {
             height: 100vh !important;
             overflow-y: auto !important;
-        }
-    }
-    
-    @media (max-width: 767px) {
-        body {
-            flex-direction: column !important;
-        }
-        [dir="rtl"] body {
-            flex-direction: column !important;
         }
     }
 
