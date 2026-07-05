@@ -104,6 +104,63 @@ const isRtl = currentLang === 'ar';
         input, select, button { 
             transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); 
         }
+        
+        /* Custom online card overrides requested by the user */
+        .card-online {
+            background-color: var(--accent-color) !important;
+            color: #ffffff !important;
+            border-color: rgba(255, 255, 255, 0.25) !important;
+        }
+        .card-online .text-2xl.font-mono {
+            color: #ffffff !important;
+        }
+        .card-online .text-base.font-bold {
+            color: #ffffff !important;
+        }
+        /* Status badge and label */
+        .card-online [id^="sipBadge-"] {
+            background-color: #ffffff !important;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.8) !important;
+        }
+        .card-online [id^="sipLabel-"] {
+            color: rgba(255, 255, 255, 0.9) !important;
+        }
+        /* Call state badge and status */
+        .card-online [id^="badge-"]:not(.bg-transparent) {
+            background-color: #ffffff !important;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.8) !important;
+        }
+        .card-online [id^="status-"] {
+            color: #ffffff !important;
+        }
+        /* If idle, make status text readable white (instead of zinc-500) */
+        .card-online [id^="status-"].text-zinc-500 {
+            color: rgba(255, 255, 255, 0.7) !important;
+        }
+        /* Timer and partner info */
+        .card-online [id^="timer-"] {
+            color: #ffffff !important;
+        }
+        .card-online [id^="partner-"] {
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+        .card-online [id^="partner-"] span {
+            color: #ffffff !important;
+        }
+        /* Call actions selector */
+        .card-online .action-select {
+            background-color: rgba(255, 255, 255, 0.15) !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+            color: #ffffff !important;
+        }
+        .card-online .action-select option {
+            background-color: var(--bg-secondary) !important;
+            color: var(--text-primary) !important;
+        }
+        /* Border divider line */
+        .card-online .border-t {
+            border-color: rgba(255, 255, 255, 0.2) !important;
+        }
     </style>
 </head>
 <body class="flex flex-col min-h-screen m-0 p-0">
@@ -129,7 +186,7 @@ const isRtl = currentLang === 'ar';
                 %>
                     <div id="card-<%= emp.extension %>"
                          data-start="<%= startTimeStamp %>"
-                         class="panel-surface rounded-xl p-6 flex flex-col justify-between transition-all duration-300 relative overflow-hidden shadow-md border <%= !isOnline ? 'border-[#27272a]/30 opacity-60 bg-black/5' : callState === 'incall' ? 'border-[var(--accent-color)]/50 bg-[#18181b]' : callState === 'ringing' ? 'border-[var(--accent-color)]/60 animate-pulse' : 'border-[#27272a]/30' %>">
+                         class="panel-surface rounded-xl p-6 flex flex-col justify-between transition-all duration-300 relative overflow-hidden shadow-md border <%= !isOnline ? 'border-[#27272a]/30 opacity-60 bg-black/5' : callState === 'incall' ? 'border-[var(--accent-color)]/50 bg-[#18181b]' : callState === 'ringing' ? 'border-[var(--accent-color)]/60 animate-pulse' : 'border-[#27272a]/30' %> <%= isOnline ? 'card-online' : '' %>">
                         <div>
                             <div class="flex justify-between items-start">
                                 <div class="<%= isRtl ? 'text-right' : 'text-left' %>">
@@ -231,8 +288,12 @@ const isRtl = currentLang === 'ar';
                     if (card) {
                         if (online) {
                             card.classList.remove('opacity-60', 'bg-black/5');
-                        } else if (!card.querySelector('#badge-' + ext)?.classList.contains('bg-[var(--accent-color)]')) {
-                            card.classList.add('opacity-60', 'bg-black/5');
+                            card.classList.add('card-online');
+                        } else {
+                            card.classList.remove('card-online');
+                            if (!card.querySelector('#badge-' + ext)?.classList.contains('bg-[var(--accent-color)]')) {
+                                card.classList.add('opacity-60', 'bg-black/5');
+                            }
                         }
                     }
                 }
@@ -259,7 +320,7 @@ const isRtl = currentLang === 'ar';
                         if (!card.getAttribute('data-start')) {
                             card.setAttribute('data-start', Date.now());
                         }
-                        card.className = base + " border-[var(--accent-color)]/50 bg-[#18181b]" + (isOnline ? '' : ' opacity-60 bg-black/5');
+                        card.className = base + " border-[var(--accent-color)]/50 bg-[#18181b]" + (isOnline ? ' card-online' : ' opacity-60 bg-black/5');
                         badge.className = "h-3 w-3 rounded-full shrink-0 bg-[var(--accent-color)] shadow-sm shadow-[var(--accent-color)]/50";
                         status.className = "text-sm font-bold uppercase tracking-wide text-[var(--accent-color)]";
                         status.textContent = labels.incall;
@@ -269,7 +330,7 @@ const isRtl = currentLang === 'ar';
                         timer.classList.remove('hidden');
                     } else {
                         card.removeAttribute('data-start');
-                        card.className = base + " border-[var(--accent-color)]/60 animate-pulse" + (isOnline ? '' : ' opacity-60 bg-black/5');
+                        card.className = base + " border-[var(--accent-color)]/60 animate-pulse" + (isOnline ? ' card-online' : ' opacity-60 bg-black/5');
                         badge.className = "h-3 w-3 rounded-full shrink-0 bg-[var(--accent-color)] shadow-sm shadow-[var(--accent-color)]/50";
                         status.className = "text-sm font-bold uppercase tracking-wide text-[var(--accent-color)]";
                         status.textContent = labels.ringing;
@@ -279,7 +340,7 @@ const isRtl = currentLang === 'ar';
                 } else {
                     if (selectEl) selectEl.setAttribute('disabled', 'true');
                     card.removeAttribute('data-start');
-                    card.className = base + " border-[#27272a]/30" + (isOnline ? '' : ' opacity-60 bg-black/5');
+                    card.className = base + " border-[#27272a]/30" + (isOnline ? ' card-online' : ' opacity-60 bg-black/5');
                     badge.className = "h-3 w-3 rounded-full shrink-0 bg-transparent";
                     status.className = "text-sm font-bold uppercase tracking-wide text-zinc-500";
                     status.textContent = labels.idle;
