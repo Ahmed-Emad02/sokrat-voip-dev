@@ -856,15 +856,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <a href="/gsm-dongles?lang=<%= currentLang %>" 
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
                <%= currentPage === '/gsm-dongles' ? 'bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] shadow-sm' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
-                <svg class="w-4 h-4 me-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="10" cy="7" r="1"></circle>
-                    <circle cx="4" cy="20" r="1"></circle>
-                    <path d="M4.7 19.3 19 5"></path>
-                    <path d="m21 3-3 1 2 2Z"></path>
-                    <path d="M9.26 7.68 5 12l2 5"></path>
-                    <path d="m10 14 5 2 3.5-3.5"></path>
-                    <path d="m18 12 1-1 1 1-1 1Z"></path>
-                </svg>
+                <img src="/gsm_dongle_icon.jpg" alt="" class="w-4.5 h-4.5 me-3 object-cover rounded-md <%= currentPage === '/gsm-dongles' ? 'opacity-100' : 'opacity-70 hover:opacity-100 transition-opacity' %>">
                 <span><%= sbT.dongleLink %></span>
                 <% if (currentPage === '/gsm-dongles') { %>
                     <div class="absolute top-2.5 bottom-2.5 w-[3px] bg-[var(--accent-color)] rounded-r <%= isRtl ? 'right-0 left-auto rounded-l rounded-r-none' : 'left-0' %>"></div>
