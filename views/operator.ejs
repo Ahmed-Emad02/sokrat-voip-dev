@@ -292,8 +292,8 @@ const isRtl = currentLang === 'ar';
                         <div>
                             <div class="flex justify-between items-start">
                                 <div class="<%= isRtl ? 'text-right' : 'text-left' %>">
-                                    <span class="text-base font-mono font-black text-[var(--accent-color)] tracking-wider block leading-tight"><%= emp.extension %></span>
-                                    <span class="text-xs font-bold text-white block truncate leading-tight" title="<%= emp.name %>"><%= emp.name %></span>
+                                    <span class="text-base font-bold text-white block truncate leading-tight" title="<%= emp.name %>"><%= emp.name %></span>
+                                    <span class="text-xs font-mono font-black text-[var(--accent-color)] tracking-wider block leading-tight"><%= emp.extension %></span>
                                 </div>
                                 <div class="flex flex-col items-end shrink-0">
                                     <div class="flex items-center space-x-1.5 <%= isRtl ? 'space-x-reverse' : '' %>">
