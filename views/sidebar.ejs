@@ -1,7 +1,13 @@
 <%
 const sidebarWords = {
-    en: { dashLink: "Dashboard", cdrLink: "CDR Analytics", empLink: "Employee Metrics", extLink: "Agent Stats", opLink: "Live Panel", dongleLink: "GSM Dongles", contactsLink: "Address Book", usersLink: "Users", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Setup Password Reset Email", netInfo: "Show Network Info", logoutLabel: "Sign Out" },
-    ar: { dashLink: "لوحة التحكم", cdrLink: "تحليلات المكالمات", empLink: "مقاييس الموظفين", extLink: "إحصائيات الوكلاء", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", contactsLink: "دفتر العناوين", usersLink: "المستخدمين", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعداد البريد لإعادة تعيين كلمة المرور", netInfo: "معلومات الشبكة", logoutLabel: "تسجيل الخروج" },
+    en: { 
+        dashLink: "Dashboard", cdrLink: "CDR Analytics", empLink: "Employee Metrics", extLink: "Agent Stats", opLink: "Live Panel", dongleLink: "GSM Dongles", contactsLink: "Address Book", usersLink: "Users", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Setup Password Reset Email", netInfo: "Show Network Info", logoutLabel: "Sign Out",
+        recTitle: "Add a Recording", recName: "Recording Name", recPlaceholder: "e.g. welcome_greeting", recFile: "Audio File", recNote: "Accepted: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (max 50MB)", recUploadStatus: "Uploading...", recCancel: "Cancel", recUpload: "Upload", recComplete: "Complete!", recFailed: "Failed", recSelectFileErr: "Please select a file", recNameErr: "Please enter a recording name"
+    },
+    ar: { 
+        dashLink: "لوحة التحكم", cdrLink: "تحليلات المكالمات", empLink: "مقاييس الموظفين", extLink: "إحصائيات الوكلاء", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", contactsLink: "دفتر العناوين", usersLink: "المستخدمين", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعداد البريد لإعادة تعيين كلمة المرور", netInfo: "معلومات الشبكة", logoutLabel: "تسجيل الخروج",
+        recTitle: "إضافة تسجيل صوتي", recName: "اسم التسجيل", recPlaceholder: "مثال: welcome_greeting", recFile: "ملف الصوت", recNote: "المرفقات المقبولة: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (الحد الأقصى 50 ميجابايت)", recUploadStatus: "جاري الرفع...", recCancel: "إلغاء", recUpload: "رفع", recComplete: "اكتمل الرفع!", recFailed: "فشل الرفع", recSelectFileErr: "يرجى اختيار ملف", recNameErr: "يرجى إدخال اسم التسجيل"
+    },
 };
 const sbT = sidebarWords[currentLang] || sidebarWords['en'];
 const isRtl = currentLang === 'ar';
@@ -960,27 +966,27 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 <div id="recordingModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 invisible transition-all duration-200" style="pointer-events:none">
     <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl shadow-2xl shadow-black/50 w-full max-w-md mx-4 overflow-hidden">
         <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-primary)]">
-            <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]">Add a Recording</h3>
+            <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]"><%= sbT.recTitle %></h3>
             <button onclick="closeRecordingModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
         <form id="recordingForm" onsubmit="return submitRecording(event)" class="p-5 space-y-4">
             <div>
-                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Recording Name</label>
-                <input type="text" id="recordingName" name="name" required placeholder="e.g. welcome_greeting" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">
+                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= sbT.recName %></label>
+                <input type="text" id="recordingName" name="name" required placeholder="<%= sbT.recPlaceholder %>" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">
             </div>
             <div>
-                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Audio File</label>
+                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= sbT.recFile %></label>
                 <div class="relative">
-                    <input type="file" id="recordingFile" name="file" accept="audio/*,.mpeg,.mpg" required class="w-full text-xs text-[var(--text-secondary)] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-[var(--border-primary)] file:bg-[var(--bg-card)] file:text-xs file:font-bold file:text-[var(--text-primary)] hover:file:bg-[var(--bg-hover)] file:cursor-pointer file:transition cursor-pointer">
+                    <input type="file" id="recordingFile" name="file" accept="audio/*,.mpeg,.mpg" required class="w-full text-xs text-[var(--text-secondary)] file:mr-3 rtl:file:mr-0 rtl:file:ml-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-[var(--border-primary)] file:bg-[var(--bg-card)] file:text-xs file:font-bold file:text-[var(--text-primary)] hover:file:bg-[var(--bg-hover)] file:cursor-pointer file:transition cursor-pointer">
                 </div>
-                <p class="text-[10px] text-[var(--text-muted)] mt-1">Accepted: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (max 50MB)</p>
+                <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= sbT.recNote %></p>
             </div>
             <!-- Progress Bar -->
             <div id="uploadProgressWrap" class="hidden space-y-1">
                 <div class="flex justify-between text-[10px] font-semibold text-[var(--text-muted)]">
-                    <span id="uploadStatus">Uploading...</span>
+                    <span id="uploadStatus"><%= sbT.recUploadStatus %></span>
                     <span id="uploadPercent">0%</span>
                 </div>
                 <div class="w-full h-1.5 bg-[var(--bg-card)] rounded-full overflow-hidden">
@@ -988,9 +994,9 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 </div>
             </div>
             <div class="flex justify-end gap-2 pt-2">
-                <button type="button" onclick="closeRecordingModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] transition cursor-pointer">Cancel</button>
+                <button type="button" onclick="closeRecordingModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] transition cursor-pointer"><%= sbT.recCancel %></button>
                 <button type="submit" id="recordingSubmitBtn" class="px-4 py-2 rounded-lg text-xs font-bold text-white bg-[var(--accent-color)] hover:bg-[#e0352b] transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                    Upload
+                    <%= sbT.recUpload %>
                 </button>
             </div>
         </form>
@@ -1103,6 +1109,15 @@ function showToast(msg, type) {
     }, 5000);
 }
 
+const recWords = {
+    uploading: "<%= sbT.recUploadStatus %>",
+    complete: "<%= sbT.recComplete %>",
+    failed: "<%= sbT.recFailed %>",
+    selectFileErr: "<%= sbT.recSelectFileErr %>",
+    nameErr: "<%= sbT.recNameErr %>",
+    uploadBtn: "<%= sbT.recUpload %>"
+};
+
 async function submitRecording(event) {
     event.preventDefault();
     var fileInput = document.getElementById('recordingFile');
@@ -1113,11 +1128,11 @@ async function submitRecording(event) {
     var progressPercent = document.getElementById('uploadPercent');
     var uploadStatus = document.getElementById('uploadStatus');
 
-    if (!fileInput.files.length) { showToast('Please select a file', 'error'); return; }
-    if (!nameInput.value.trim()) { showToast('Please enter a recording name', 'error'); return; }
+    if (!fileInput.files.length) { showToast(recWords.selectFileErr, 'error'); return; }
+    if (!nameInput.value.trim()) { showToast(recWords.nameErr, 'error'); return; }
 
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Uploading...';
+    submitBtn.textContent = recWords.uploading;
     progressWrap.classList.remove('hidden');
 
     var formData = new FormData();
@@ -1139,7 +1154,7 @@ async function submitRecording(event) {
                     resolve(JSON.parse(xhr.responseText));
                 } else {
                     try { reject(JSON.parse(xhr.responseText)); }
-                    catch(e) { reject({ error: 'Upload failed (HTTP ' + xhr.status + ')' }); }
+                    catch(e) { reject({ error: recWords.failed + ' (HTTP ' + xhr.status + ')' }); }
                 }
             });
             xhr.addEventListener('error', function() { reject({ error: 'Network error' }); });
@@ -1148,19 +1163,19 @@ async function submitRecording(event) {
         });
 
         progressBar.style.width = '100%';
-        uploadStatus.textContent = 'Complete!';
+        uploadStatus.textContent = recWords.complete;
         if (result.success) {
             showToast(result.message, 'success');
             setTimeout(closeRecordingModal, 1000);
         } else {
-            showToast(result.error || 'Upload failed', 'error');
+            showToast(result.error || recWords.failed, 'error');
         }
     } catch (err) {
-        showToast(err.error || 'Upload failed', 'error');
-        uploadStatus.textContent = 'Failed';
+        showToast(err.error || recWords.failed, 'error');
+        uploadStatus.textContent = recWords.failed;
     } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Upload';
+        submitBtn.textContent = recWords.uploadBtn;
         setTimeout(function() {
             progressWrap.classList.add('hidden');
             progressBar.style.width = '0%';
