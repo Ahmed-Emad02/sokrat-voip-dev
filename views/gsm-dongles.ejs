@@ -457,7 +457,20 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                             </td>
                                             <td class="py-3.5 px-4">
                                                 <div class="flex items-center gap-2">
-                                                    <span class="font-mono text-xs"><%= d.RSSI || '0' %></span>
+                                                     <span class="font-mono text-xs">
+                                                         <%= d.RSSI || '0' %>
+                                                         <% 
+                                                            const rssiVal = parseInt(d.RSSI) || 0;
+                                                            const pct = Math.round((rssiVal / 31) * 100);
+                                                            let pctColor = '#10b981'; // Green
+                                                            if (rssiVal < 9) {
+                                                                pctColor = '#ef4444'; // Red
+                                                            } else if (rssiVal < 23) {
+                                                                pctColor = '#f59e0b'; // Orange/Yellow
+                                                            }
+                                                         %>
+                                                         <span style="color: <%= pctColor %>" class="font-bold ml-1 rtl:mr-1 rtl:ml-0">(<%= pct %>%)</span>
+                                                     </span>
                                                      <svg width="54" height="28" viewBox="0 0 54 28" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                          <% 
                                                             const rv = parseInt(d.RSSI) || 0; 
@@ -937,7 +950,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             activeColor = '#10b981'; // Green
                         }
                         
-                        document.getElementById('diag-signal-text').textContent = `${rssi} / 31 (${levelText})`;
+                        const pct = Math.round((rssi / 31) * 100);
+                        document.getElementById('diag-signal-text').innerHTML = `${rssi} / 31 <span style="color: ${activeColor}" class="font-bold">(${pct}%)</span> - ${levelText}`;
                         
                         let barsHtml = '';
                         const th = [1, 5, 9, 13, 18, 23, 28];
@@ -1648,7 +1662,20 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     </td>
                                     <td class="py-3.5 px-4">
                                         <div class="flex items-center gap-2">
-                                            <span class="font-mono text-xs">${d.RSSI || '0'}</span>
+                                             <span class="font-mono text-xs">
+                                                 ${d.RSSI || '0'}
+                                                 ${function(){
+                                                     var rssiVal = parseInt(d.RSSI) || 0;
+                                                     var pct = Math.round((rssiVal / 31) * 100);
+                                                     var pctColor = '#10b981'; // Green
+                                                     if (rssiVal < 9) {
+                                                         pctColor = '#ef4444'; // Red
+                                                     } else if (rssiVal < 23) {
+                                                         pctColor = '#f59e0b'; // Orange/Yellow
+                                                     }
+                                                     return '<span style="color: ' + pctColor + '" class="font-bold ml-1 rtl:mr-1 rtl:ml-0">(' + pct + '%)</span>';
+                                                 }()}
+                                             </span>
                                             <svg width="54" height="28" viewBox="0 0 54 28" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 ${function(){var rv=parseInt(d.RSSI)||0;var activeColor='#10b981';if(rv<9){activeColor='#ef4444'}else if(rv<23){activeColor='#f59e0b'}var bars='';var th=[1,5,9,13,18,23,28];var hh=[4,8,12,16,20,24,28];for(var i=0;i<7;i++){var x=i*8;var h=hh[i];var y=28-h;var f=rv>=th[i]?activeColor:'var(--border-primary)';bars+='<rect x="'+x+'" y="'+y+'" width="6" height="'+h+'" rx="1" fill="' + f + '"/>'}return bars}()}
                                             </svg>
