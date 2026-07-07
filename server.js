@@ -603,7 +603,36 @@ async function refreshAgentStatus() {
 setInterval(refreshAgentStatus, 3000);
 setTimeout(refreshAgentStatus, 1000);
 
-// Auto-heal check removed to prevent active call interruptions
+// Smart Dongle Auto-Heal (runs every 5s, checks each dongle independently by matching active channels to driver state)
+function checkDongleHealth() {
+    execFile(ASTERISK_BIN, ['-rx', 'core show channels'], (err1, channelsStdout) => {
+        if (err1 || !channelsStdout) return;
+        
+        getDevicesOutputCached((err2, devicesStdout) => {
+            if (err2 || !devicesStdout) return;
+            
+            const devices = parseDevicesOutput(devicesStdout, true);
+            for (const dev of devices) {
+                const dongleId = dev.ID; // e.g. "dongle0"
+                const state = dev.State ? dev.State.toLowerCase() : '';
+                
+                if (state.includes('dialing') || state.includes('active')) {
+                    // Check if there is an active Asterisk channel for this specific dongle
+                    // The channel name pattern is typically "Dongle/dongle0-xxxx"
+                    const channelPattern = new RegExp('Dongle/' + dongleId + '-', 'i');
+                    const hasActiveChannel = channelPattern.test(channelsStdout);
+                    
+                    if (!hasActiveChannel) {
+                        console.log(`AUTO-HEAL: ${dongleId} stuck in state "${dev.State}" with no active Asterisk channel. Restarting...`);
+                        execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`]);
+                    }
+                }
+            }
+        });
+    });
+}
+setInterval(checkDongleHealth, 5000);
+setTimeout(checkDongleHealth, 3000);
 
 
 
