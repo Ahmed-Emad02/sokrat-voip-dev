@@ -603,7 +603,9 @@ async function refreshAgentStatus() {
 setInterval(refreshAgentStatus, 3000);
 setTimeout(refreshAgentStatus, 1000);
 
-// Smart Dongle Auto-Heal (runs every 5s, checks each dongle independently by matching active channels to driver state)
+// Smart Dongle Auto-Heal (runs every 5s, checks stuck call channels and stuck Not Initialized states)
+let notInitializedStartTimes = {};
+
 function checkDongleHealth() {
     execFile(ASTERISK_BIN, ['-rx', 'core show channels'], (err1, channelsStdout) => {
         if (err1 || !channelsStdout) return;
@@ -612,10 +614,30 @@ function checkDongleHealth() {
             if (err2 || !devicesStdout) return;
             
             const devices = parseDevicesOutput(devicesStdout, true);
+            const now = Date.now();
+            
             for (const dev of devices) {
                 const dongleId = dev.ID; // e.g. "dongle0"
                 const state = dev.State ? dev.State.toLowerCase() : '';
                 
+                // 1. Check for stuck Not Initialized state (threshold: 10s to allow normal boot cycles)
+                if (state.includes('not initia')) {
+                    if (!notInitializedStartTimes[dongleId]) {
+                        notInitializedStartTimes[dongleId] = now;
+                    } else {
+                        const elapsed = now - notInitializedStartTimes[dongleId];
+                        if (elapsed >= 10000) { 
+                            console.log(`AUTO-HEAL: ${dongleId} stuck in Not Initialized state for ${Math.round(elapsed/1000)}s. Restarting...`);
+                            delete notInitializedStartTimes[dongleId];
+                            execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`]);
+                        }
+                    }
+                } else {
+                    // Clear the entry once the device moves to a healthy state (e.g. Free, Dialing, SMS)
+                    delete notInitializedStartTimes[dongleId];
+                }
+                
+                // 2. Check for stuck Dialing/Active calls
                 if (state.includes('dialing') || state.includes('active')) {
                     // Check if there is an active Asterisk channel for this specific dongle
                     // The channel name pattern is typically "Dongle/dongle0-xxxx"
