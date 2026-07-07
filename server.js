@@ -1791,6 +1791,10 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
             }
         }
         if (row.ID && row.ID.startsWith("dongle")) {
+            // Fallback for transpositions where the firmware reports IMEI in the IMSI field
+            if ((!row.IMEI || row.IMEI === '-' || row.IMEI === 'Unknown') && row.IMSI && (row.IMSI.startsWith('86') || row.IMSI.startsWith('35'))) {
+                row.IMEI = row.IMSI;
+            }
             const mapped = astDbMappings[row.IMSI] || astDbMappings[row.IMEI] || null;
             if (mapped && (!row.Number || row.Number === 'Unknown' || row.Number === '-')) {
                 row.Number = mapped;
