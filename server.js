@@ -602,6 +602,54 @@ async function refreshAgentStatus() {
 }
 setInterval(refreshAgentStatus, 3000);
 setTimeout(refreshAgentStatus, 1000);
+// -- Dongle Stuck-Channel Auto-Heal --
+// chan_dongle sometimes leaves an orphaned channel in Dialing state after a
+// failed call (eg. SIM not registered). Auto-reloads chan_dongle if a
+// device is stuck in non-Free state for more than 2 minutes.
+const DONGLE_STUCK_TIMEOUT = 120000;
+let dongleStuckTimer = {};
+let dongleLastStuckWarn = {};
+
+function checkDongleHealth() {
+    execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (err, stdout) => {
+        if (err || !stdout) return;
+        const lines = stdout.trim().split('\n');
+        if (lines.length < 2) return;
+        const stateIdx = lines[0].indexOf('State');
+        if (stateIdx === -1) return;
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line.trim() || line.startsWith('-----') || line.includes('ID')) continue;
+            const state = line.substring(stateIdx, stateIdx + 15).trim().toLowerCase();
+            const idMatch = line.match(/dongle\d+/);
+            const id = idMatch ? idMatch[0] : 'unknown';
+            if (state !== 'free' && state !== '' && !state.startsWith('not')) {
+                if (!dongleStuckTimer[id]) {
+                    dongleStuckTimer[id] = Date.now();
+                } else if (Date.now() - dongleStuckTimer[id] > DONGLE_STUCK_TIMEOUT) {
+                    if (!dongleLastStuckWarn[id] || Date.now() - dongleLastStuckWarn[id] > 60000) {
+                        dongleLastStuckWarn[id] = Date.now();
+                        console.log('AUTO-HEAL: ' + id + ' stuck on ' + state + ' for >2min, reloading chan_dongle...');
+                        execFile(ASTERISK_BIN, ['-rx', 'module unload chan_dongle.so'], () => {
+                            setTimeout(() => {
+                                execFile(ASTERISK_BIN, ['-rx', 'module load chan_dongle.so'], () => {
+                                    console.log('AUTO-HEAL: chan_dongle reloaded for ' + id);
+                                });
+                            }, 1000);
+                        });
+                        delete dongleStuckTimer[id];
+                    }
+                }
+            } else {
+                delete dongleStuckTimer[id];
+                delete dongleLastStuckWarn[id];
+            }
+        }
+    });
+}
+setInterval(checkDongleHealth, 15000);
+setTimeout(checkDongleHealth, 5000);
+
 
 // System Shared Middleware to fetch extension rosters and handle language toggles
 app.use(async (req, res, next) => {
@@ -1723,28 +1771,8 @@ function getConfiguredDongleNumbers() {
 
 // Enrich device state with precise value from 'dongle show device state'
 function enrichPreciseState(devices, callback) {
-    if (!devices || devices.length === 0) return callback(devices);
-    let pending = devices.length;
-    for (const d of devices) {
-        execFile(ASTERISK_BIN, ['-rx', `dongle show device state ${d.ID}`], (err, stdout) => {
-            if (!err && stdout) {
-                const stateMatch = stdout.match(/State\s+:\s+(.+)/);
-                // chan_dongle reports "Current device state" as the internal
-                // state machine. "start" = idle. If it says start but the
-                // reported State says otherwise, the reported State is stale.
-                const cdsMatch = stdout.match(/Current device state\s+:\s+(.+)/);
-                if (stateMatch) {
-                    const cds = cdsMatch ? cdsMatch[1].trim().toLowerCase() : '';
-                    if (cds === 'start') {
-                        d.State = 'Free';
-                    } else {
-                        d.State = stateMatch[1].trim();
-                    }
-                }
-            }
-            if (--pending === 0) callback(devices);
-        });
-    }
+    // Pass-through — mirror raw dongle show devices output exactly
+    callback(devices);
 }
 
 // Parse Asterisk 'dongle show devices' CLI output
