@@ -616,8 +616,8 @@ function checkDongleHealth() {
         }
     });
 }
-setInterval(checkDongleHealth, 1000);
-setTimeout(checkDongleHealth, 1000);
+setInterval(checkDongleHealth, 10000);
+setTimeout(checkDongleHealth, 5000);
 
 
 
@@ -1745,6 +1745,26 @@ function enrichPreciseState(devices, callback) {
     callback(devices);
 }
 
+// Caching layer for 'dongle show devices' to prevent CLI command storms
+let cachedDevicesOutput = null;
+let lastDevicesOutputFetch = 0;
+const DEVICES_CACHE_TTL = 3000; // Cache for 3 seconds
+
+function getDevicesOutputCached(callback) {
+    const now = Date.now();
+    if (cachedDevicesOutput && (now - lastDevicesOutputFetch) < DEVICES_CACHE_TTL) {
+        return callback(null, cachedDevicesOutput);
+    }
+    execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (error, stdout, stderr) => {
+        if (error) {
+            return callback(error || new Error(stderr), null);
+        }
+        cachedDevicesOutput = stdout;
+        lastDevicesOutputFetch = now;
+        callback(null, stdout);
+    });
+}
+
 // Parse Asterisk 'dongle show devices' CLI output
 function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
     const lines = output.trim().split('\n');
@@ -2077,7 +2097,7 @@ app.post('/api/gsm-dongles/reset-usb-port', (req, res) => {
 app.get('/gsm-dongles', (req, res) => {
     try {
         getAstDbNumbers(astDbMappings => {
-            execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (error, stdout, stderr) => {
+            getDevicesOutputCached((error, stdout) => {
                 let devices = [];
                 if (!error && stdout) {
                     devices = parseDevicesOutput(stdout, false, astDbMappings);
@@ -2098,9 +2118,9 @@ app.get('/gsm-dongles', (req, res) => {
 // API Endpoint to fetch latest device status
 app.get('/api/gsm-dongles', (req, res) => {
     getAstDbNumbers(astDbMappings => {
-        execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (error, stdout, stderr) => {
+        getDevicesOutputCached((error, stdout) => {
             if (error) {
-                return res.status(500).json({ success: false, error: stderr || error.message });
+                return res.status(500).json({ success: false, error: error.message });
             }
             const devices = parseDevicesOutput(stdout, false, astDbMappings);
             enrichPreciseState(devices, enriched => {
