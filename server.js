@@ -1726,18 +1726,19 @@ function enrichPreciseState(devices, callback) {
     if (!devices || devices.length === 0) return callback(devices);
     let pending = devices.length;
     for (const d of devices) {
-        const originalState = d.State;
         execFile(ASTERISK_BIN, ['-rx', `dongle show device state ${d.ID}`], (err, stdout) => {
             if (!err && stdout) {
-                const m = stdout.match(/State\s+:\s+(.+)/);
-                if (m) {
-                    const precise = m[1].trim();
-                    const origFree = originalState.toLowerCase() === 'free';
-                    const preciseActive = ['dialing', 'ringing', 'active', 'held'].includes(precise.toLowerCase());
-                    if (origFree && preciseActive) {
-                        // table says Free but precise says active - trust the table
+                const stateMatch = stdout.match(/State\s+:\s+(.+)/);
+                // chan_dongle reports "Current device state" as the internal
+                // state machine. "start" = idle. If it says start but the
+                // reported State says otherwise, the reported State is stale.
+                const cdsMatch = stdout.match(/Current device state\s+:\s+(.+)/);
+                if (stateMatch) {
+                    const cds = cdsMatch ? cdsMatch[1].trim().toLowerCase() : '';
+                    if (cds === 'start') {
+                        d.State = 'Free';
                     } else {
-                        d.State = precise;
+                        d.State = stateMatch[1].trim();
                     }
                 }
             }
