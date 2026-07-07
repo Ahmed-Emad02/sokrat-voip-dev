@@ -2080,13 +2080,19 @@ app.post('/api/gsm-dongles/reset-usb-port', (req, res) => {
                     try {
                         fs.writeFileSync(authorizedPath, '1\n');
                         results.push({ step: 'reauthorize', error: null, output: `Reauthorized USB device ${usbId}` });
-                        io.emit('dongleProvisionResult', { dongleId, results });
-                        return res.json({ success: true, message: `USB port reset complete for ${dongleId} (${ttyDev} → ${usbId}).`, results });
-                    } catch (e) {
-                        results.push({ step: 'reauthorize', error: e.message, output: '' });
-                        return res.json({ success: false, error: `Reauthorize failed: ${e.message}`, results });
-                    }
-                }, 2000);
+                                                io.emit('dongleProvisionResult', { dongleId, results });
+                        // Wait for kernel to re-detect, then force a dongle restart
+                        setTimeout(() => {
+                            execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], (err2) => {
+                                if (err2) {
+                                    results.push({ step: 'dongle_restart', error: err2.message, output: '' });
+                                } else {
+                                    results.push({ step: 'dongle_restart', error: null, output: `dongle restart now ${dongleId} issued` });
+                                }
+                                io.emit('dongleProvisionResult', { dongleId, results });
+                                return res.json({ success: true, message: `USB port reset complete for ${dongleId} (${ttyDev} -> ${usbId}).`, results });
+                            });
+                        }, 3000);
             } catch (e) {
                 return res.json({ success: false, error: `Deauthorize failed: ${e.message}` });
             }
