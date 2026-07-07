@@ -2034,68 +2034,36 @@ app.post('/api/gsm-dongles/reset-usb-port', (req, res) => {
         return res.status(400).json({ success: false, error: 'Valid dongle ID required.' });
     }
 
-    try {
-        const conf = fs.readFileSync('/etc/asterisk/dongle.conf', 'utf8');
-        const sectionMatch = conf.match(new RegExp(`\\[${dongleId}\\][^\\[]*`));
-        if (!sectionMatch) {
-            return res.json({ success: false, error: `Dongle section [${dongleId}] not found in dongle.conf.` });
-        }
-        const dataMatch = sectionMatch[0].match(/data\s*=\s*\/dev\/(ttyUSB\d+)/);
-        if (!dataMatch) {
-            return res.json({ success: false, error: `No data port found for ${dongleId} in dongle.conf.` });
-        }
-        const ttyDev = dataMatch[1];
-
-        execFile('udevadm', ['info', '-q', 'path', '-n', `/dev/${ttyDev}`], (err, stdout) => {
-            if (err || !stdout.trim()) {
-                return res.json({ success: false, error: `Cannot find USB device for /dev/${ttyDev}. Dongle may not be connected.` });
-            }
-            
-            // Traverse upwards from udev path to find the closest valid USB device ID in sysfs
-            let usbId = null;
-            const pathParts = stdout.trim().split('/');
-            for (let k = pathParts.length - 1; k >= 0; k--) {
-                const part = pathParts[k];
-                if (part && fs.existsSync(`/sys/bus/usb/devices/${part}`)) {
-                    usbId = part;
-                    break;
-                }
-            }
-
-            if (!usbId) {
-                return res.json({ success: false, error: `Cannot find USB bus ID under sysfs from path: ${stdout.trim()}` });
-            }
-
-            const authorizedPath = `/sys/bus/usb/devices/${usbId}/authorized`;
-
-            if (!fs.existsSync(authorizedPath)) {
-                return res.json({ success: false, error: `USB device authorized control file not found at ${authorizedPath}.` });
-            }
-
-            try {
-                fs.writeFileSync(authorizedPath, '0\n');
-                const results = [{ step: 'deauthorize', error: null, output: `Deauthorized USB device ${usbId}` }];
-
-                setTimeout(() => {
-                    try {
-                        fs.writeFileSync(authorizedPath, '1\n');
-                        results.push({ step: 'reauthorize', error: null, output: `Reauthorized USB device ${usbId}` });
-                        io.emit('dongleProvisionResult', { dongleId, results });
-                        return res.json({ success: true, message: 'USB port reset complete for ' + dongleId + ' (' + ttyDev + ' -> ' + usbId + ').', results });
-                    } catch (e) {
-                        results.push({ step: 'reauthorize', error: e.message, output: '' });
-                        return res.json({ success: false, error: `Reauthorize failed: ${e.message}`, results });
-                    }
-                }, 2000);
-            } catch (e) {
-                return res.json({ success: false, error: `Deauthorize failed: ${e.message}` });
-            }
+    const results = [];
+    const runAsterisk = (cmd) => new Promise((resolve, reject) => {
+        execFile(ASTERISK_BIN, ['-rx', cmd], (err) => {
+            if (err) return reject(err.message);
+            results.push({ step: cmd, error: null, output: cmd + ' ok' });
+            resolve();
         });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
+    });
+    const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
+    runAsterisk('module unload chan_dongle.so')
+        .then(() => delay(1000))
+        .then(() => runAsterisk('module load chan_dongle.so'))
+        .then(() => delay(8000))
+        .then(() => {
+            execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (err, stdout) => {
+                const found = stdout && stdout.includes(dongleId) && !stdout.includes('Not connec');
+                io.emit('dongleProvisionResult', { dongleId, results });
+                if (found) {
+                    res.json({ success: true, message: dongleId + ' reset successfully.', results });
+                } else {
+                    res.json({ success: false, error: dongleId + ' did not reconnect after module reload.', results });
+                }
+            });
+        })
+        .catch(error => {
+            io.emit('dongleProvisionResult', { dongleId, results });
+            res.json({ success: false, error: 'Module reload failed: ' + error, results });
+        });
+});
 // Page View route
 app.get('/gsm-dongles', (req, res) => {
     try {
