@@ -602,53 +602,23 @@ async function refreshAgentStatus() {
 }
 setInterval(refreshAgentStatus, 3000);
 setTimeout(refreshAgentStatus, 1000);
-// -- Dongle Stuck-Channel Auto-Heal --
-// chan_dongle sometimes leaves an orphaned channel in Dialing state after a
-// failed call (eg. SIM not registered). Auto-reloads chan_dongle if a
-// device is stuck in non-Free state for more than 2 minutes.
-const DONGLE_STUCK_TIMEOUT = 120000;
-let dongleStuckTimer = {};
-let dongleLastStuckWarn = {};
 
+// -- Instant Dongle Auto-Heal (1s check, instant restart) --
 function checkDongleHealth() {
-    execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (err, stdout) => {
+    execFile(ASTERISK_BIN, ['-rx', 'dongle show device state dongle0'], (err, stdout) => {
         if (err || !stdout) return;
-        const lines = stdout.trim().split('\n');
-        if (lines.length < 2) return;
-        const stateIdx = lines[0].indexOf('State');
-        if (stateIdx === -1) return;
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i];
-            if (!line.trim() || line.startsWith('-----') || line.includes('ID')) continue;
-            const state = line.substring(stateIdx, stateIdx + 15).trim().toLowerCase();
-            const idMatch = line.match(/dongle\d+/);
-            const id = idMatch ? idMatch[0] : 'unknown';
-            if (state !== 'free' && state !== '' && !state.startsWith('not')) {
-                if (!dongleStuckTimer[id]) {
-                    dongleStuckTimer[id] = Date.now();
-                } else if (Date.now() - dongleStuckTimer[id] > DONGLE_STUCK_TIMEOUT) {
-                    if (!dongleLastStuckWarn[id] || Date.now() - dongleLastStuckWarn[id] > 60000) {
-                        dongleLastStuckWarn[id] = Date.now();
-                        console.log('AUTO-HEAL: ' + id + ' stuck on ' + state + ' for >2min, reloading chan_dongle...');
-                        execFile(ASTERISK_BIN, ['-rx', 'module unload chan_dongle.so'], () => {
-                            setTimeout(() => {
-                                execFile(ASTERISK_BIN, ['-rx', 'module load chan_dongle.so'], () => {
-                                    console.log('AUTO-HEAL: chan_dongle reloaded for ' + id);
-                                });
-                            }, 1000);
-                        });
-                        delete dongleStuckTimer[id];
-                    }
-                }
-            } else {
-                delete dongleStuckTimer[id];
-                delete dongleLastStuckWarn[id];
-            }
+        const dialing = parseInt((stdout.match(/Dialing\s+:\s+(\d+)/) || [])[1] || '0', 10);
+        const active = parseInt((stdout.match(/Active\s+:\s+(\d+)/) || [])[1] || '0', 10);
+        const cds = (stdout.match(/Current device state\s+:\s+(.+)/) || [])[1] || '';
+        if ((dialing + active) > 0 && cds.trim().toLowerCase() === 'start') {
+            console.log('AUTO-HEAL: dongle0 stuck (dialing=' + dialing + ' active=' + active + '), restarting immediately...');
+            execFile(ASTERISK_BIN, ['-rx', 'dongle restart now dongle0']);
         }
     });
 }
-setInterval(checkDongleHealth, 15000);
-setTimeout(checkDongleHealth, 5000);
+setInterval(checkDongleHealth, 1000);
+setTimeout(checkDongleHealth, 1000);
+
 
 
 // System Shared Middleware to fetch extension rosters and handle language toggles
