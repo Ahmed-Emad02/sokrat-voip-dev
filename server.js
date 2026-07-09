@@ -2666,7 +2666,14 @@ app.post('/api/contacts/csv-import', csvUpload.single('file'), async (req, res) 
         const values = [];
         for (let line of lines) {
             if (!line.trim()) continue;
-            const cells = line.split(',').map(c => c.replace(/^["']|["']$/g, '').trim());
+            const cells = line.split(',').map(c => {
+                let cleaned = c.trim();
+                if (cleaned.startsWith('="') && cleaned.endsWith('"')) {
+                    cleaned = cleaned.substring(2, cleaned.length - 1);
+                }
+                cleaned = cleaned.replace(/^["']|["']$/g, '');
+                return cleaned.trim();
+            });
             if (cells.length < 3) continue;
             
             const first = cells[0];
