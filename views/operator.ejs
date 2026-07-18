@@ -324,7 +324,7 @@ const isRtl = currentLang === 'ar';
                                     </span>
                                     <span id="timer-<%= emp.extension %>" class="text-lg font-mono font-bold text-[var(--accent-color)] tracking-wider <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
                                 </div>
-                                <span id="partner-<%= emp.extension %>" class="text-lg font-mono font-bold truncate max-w-[80px] <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
+                                <span id="partner-<%= emp.extension %>" title="<%= partnerNum %>" class="text-lg font-mono font-bold truncate max-w-[180px] <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
                                     <%= partnerNum %>
                                 </span>
                             </div>
@@ -450,6 +450,7 @@ const isRtl = currentLang === 'ar';
                 if (callData) {
                     if (selectEl) selectEl.removeAttribute('disabled');
                     partner.textContent = callData.partner || '';
+                    partner.setAttribute('title', callData.partner || '');
                     partner.classList.remove('hidden');
 
                     if (callData.state === 'In Call') {
