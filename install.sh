@@ -342,10 +342,21 @@ r! /forcequotacheck
 TMPFILES
 echo "  tmpfiles.d configured"
 
+# Deploy auto-restart script for USB hotplug
+echo "  [9d2] Deploying auto-restart-dongle.sh..."
+chmod +x "$INSTALL_DIR/scripts/auto-restart-dongle.sh"
+echo "  auto-restart-dongle.sh ready"
+
+# Install udev rule: auto-restart dongle on ttyUSB hotplug
 cat > /etc/udev/rules.d/99-huawei-dongle.rules << 'UDEV'
 ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="12d1", MODE="0666", GROUP="dialout", TAG+="systemd", ENV{SYSTEMD_WANTS}="dongle-auto-reload.service"
 UDEV
-echo "  udev rules created"
+echo "  99-huawei-dongle.rules created (permissions)"
+
+# Install targeted dongle auto-restart udev rule
+cp "$INSTALL_DIR/rules/99-dongle-auto-restart.rules" /etc/udev/rules.d/99-dongle-auto-restart.rules
+chmod 644 /etc/udev/rules.d/99-dongle-auto-restart.rules
+echo "  99-dongle-auto-restart.rules installed"
 
 cat > /etc/systemd/system/dongle-auto-reload.service << 'DASRV'
 [Unit]

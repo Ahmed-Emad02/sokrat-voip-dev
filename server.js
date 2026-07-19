@@ -2372,6 +2372,12 @@ app.post('/api/gsm-dongles/redetect', async (req, res) => {
     }
 });
 
+// Internal endpoint for auto-restart script to emit USB update event
+app.post('/api/gsm-dongles/emit-usb-update', (req, res) => {
+    io.emit('usbDevicesUpdated');
+    res.json({ ok: true });
+});
+
 // API Endpoint to list /dev/ttyUSB* devices with dongle mapping
 app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, (req, res) => {
     const { execSync } = require('child_process');
