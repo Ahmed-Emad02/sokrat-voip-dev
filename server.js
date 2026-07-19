@@ -2295,6 +2295,7 @@ app.post('/api/gsm-dongles/reset-usb-port', (req, res) => {
             execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (err, stdout) => {
                 const found = stdout && stdout.includes(dongleId) && !stdout.includes('Not connec');
                 io.emit('dongleProvisionResult', { dongleId, results });
+                io.emit('usbDevicesUpdated');
                 if (found) {
                     res.json({ success: true, message: dongleId + ' reset successfully.', results });
                 } else {
@@ -2304,6 +2305,7 @@ app.post('/api/gsm-dongles/reset-usb-port', (req, res) => {
         })
         .catch(error => {
             io.emit('dongleProvisionResult', { dongleId, results });
+            io.emit('usbDevicesUpdated');
             res.json({ success: false, error: 'Module reload failed: ' + error, results });
         });
 });
@@ -2354,6 +2356,7 @@ app.post('/api/gsm-dongles/reload/:dongleId', (req, res) => {
         if (error) {
             return res.status(500).json({ success: false, error: stderr || error.message });
         }
+        io.emit('usbDevicesUpdated');
         res.json({ success: true, output: stdout.trim() });
     });
 });
@@ -2362,6 +2365,7 @@ app.post('/api/gsm-dongles/reload/:dongleId', (req, res) => {
 app.post('/api/gsm-dongles/redetect', async (req, res) => {
     try {
         await detectDonglesAndSetTrunkCID();
+        io.emit('usbDevicesUpdated');
         res.json({ success: true, message: 'Dongle SIM numbers re-detected and trunk caller IDs updated' });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });

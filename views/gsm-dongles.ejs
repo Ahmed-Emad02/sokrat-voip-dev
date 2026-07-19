@@ -387,13 +387,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <table class="hardware-table w-full text-sm text-center">
                             <thead>
                                 <tr class="border-b border-[var(--border-primary)] text-[var(--text-muted)] text-xs uppercase tracking-wider font-semibold">
-                                    <th class="py-3 px-4"><%= t.thID %></th>
-                                    <th class="py-3 px-4"><%= t.thProvider %></th>
-                                    <th class="py-3 px-4"><%= t.thNumber %></th>
-                                    <th class="py-3 px-4"><%= t.thIMEI %></th>
-                                    <th class="py-3 px-4"><%= t.thState %></th>
-                                    <th class="py-3 px-4"><%= t.thRSSI %></th>
-                                    <th class="py-3 px-4 text-center"><%= t.thActions %></th>
+                                    <th class="py-3.5 px-5"><%= t.thID %></th>
+                                    <th class="py-3.5 px-5"><%= t.thProvider %></th>
+                                    <th class="py-3.5 px-5"><%= t.thNumber %></th>
+                                    <th class="py-3.5 px-5"><%= t.thIMEI %></th>
+                                    <th class="py-3.5 px-5"><%= t.thState %></th>
+                                    <th class="py-3.5 px-5"><%= t.thRSSI %></th>
+                                    <th class="py-3.5 px-5 text-center"><%= t.thActions %></th>
                                 </tr>
                             </thead>
                             <tbody id="dongles-table-body">
@@ -528,38 +528,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         </table>
                     </div>
                 </div>
-
-            <!-- USB Serial Devices Grid -->
-            <div class="w-full">
-                <div class="panel-surface rounded-2xl p-5">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wider">
-                            <svg class="text-[var(--accent-color)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
-                                <path d="M9 22v-4h6v4"></path>
-                                <path d="M8 6h.01"></path>
-                                <path d="M16 6h.01"></path>
-                                <path d="M12 6h.01"></path>
-                                <path d="M12 10h.01"></path>
-                                <path d="M12 14h.01"></path>
-                                <path d="M16 10h.01"></path>
-                                <path d="M16 14h.01"></path>
-                                <path d="M8 10h.01"></path>
-                                <path d="M8 14h.01"></path>
-                            </svg>
-                            <%= t.usbDevices %>
-                        </h3>
-                        <button onclick="refreshUsbDevices()" class="text-xs bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] rounded px-2.5 py-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer flex items-center gap-1.5">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-                            <%= t.refreshBtn %>
-                        </button>
-                    </div>
-                    <p class="text-[11px] text-[var(--text-muted)] mb-4"><%= t.usbDesc %></p>
-                    <div id="usb-devices-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                        <div class="text-[var(--text-muted)] text-xs italic col-span-full py-4 text-center">...</div>
-                    </div>
-                </div>
-            </div>
 
 
             <!-- Lower Console Grid -->
@@ -742,6 +710,36 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 </div>
                 </div>
             </div>
+
+        <!-- USB Serial Devices Grid -->
+        <div class="panel-surface rounded-2xl p-6 flex flex-col gap-5 shrink-0 mt-6">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wider">
+                    <svg class="text-[var(--accent-color)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                        <path d="M9 22v-4h6v4"></path>
+                        <path d="M8 6h.01"></path>
+                        <path d="M16 6h.01"></path>
+                        <path d="M12 6h.01"></path>
+                        <path d="M12 10h.01"></path>
+                        <path d="M12 14h.01"></path>
+                        <path d="M16 10h.01"></path>
+                        <path d="M16 14h.01"></path>
+                        <path d="M8 10h.01"></path>
+                        <path d="M8 14h.01"></path>
+                    </svg>
+                    <%= t.usbDevices %>
+                </h3>
+                <button onclick="refreshUsbDevices()" class="text-xs bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] rounded px-2.5 py-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer flex items-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                    <%= t.refreshBtn %>
+                </button>
+            </div>
+            <p class="text-[11px] text-[var(--text-muted)]"><%= t.usbDesc %></p>
+            <div id="usb-devices-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div class="text-[var(--text-muted)] text-xs italic col-span-full py-4 text-center">...</div>
+            </div>
+        </div>
 
         <!-- Collapsible logs console (Bottom) -->
         <div class="panel-surface rounded-2xl flex flex-col shrink-0 mt-6">
@@ -1661,6 +1659,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         showToast(data.dongleId + ' AT Results', details, data.results.some(function(r) { return r.error; }) ? 'error' : 'success');
                     }
                     refreshDevicesList();
+                });
+
+                socket.on('usbDevicesUpdated', () => {
+                    refreshUsbDevices();
                 });
             }
 
