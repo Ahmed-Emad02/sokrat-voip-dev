@@ -350,6 +350,13 @@ const isRtl = currentLang === 'ar';
             renderOverview();
         }
 
+        function fmtDur(s) {
+            s = parseInt(s) || 0;
+            const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const sec = s % 60;
+            return h > 0 ? h + ':' + String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0')
+                         : m + ':' + String(sec).padStart(2,'0');
+        }
+
         function renderOverview() {
             const panel = document.getElementById('detailPanel');
             const lang = '<%= currentLang %>';
@@ -593,7 +600,7 @@ const isRtl = currentLang === 'ar';
                         <tr class="hover:bg-zinc-900/30 transition">
                             <td class="p-3 text-white font-bold">${call.src}</td>
                             <td class="p-3 text-white">${call.dst}</td>
-                            <td class="p-3 text-zinc-400">${call.billsec}s</td>
+                            <td class="p-3 text-zinc-400">${fmtDur(call.billsec)}</td>
                             <td class="p-3">
                                 <span class="px-2 py-0.5 rounded text-[10px] font-black tracking-wider ${dispMap[call.disposition] || 'bg-zinc-800 text-zinc-400 border border-zinc-700/50'}">
                                     ${call.disposition}

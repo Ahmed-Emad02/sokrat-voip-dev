@@ -104,7 +104,7 @@ app.use(session({
 }));
 
 // --- DATABASE INIT & AUTO-PROVISION ---
-const ALL_TABS = ['dashboard', 'cdr', 'ext-stats', 'operator', 'gsm-dongles', 'users'];
+const ALL_TABS = ['dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'users'];
 
 async function initAuthDb() {
     const conn = await mysql.createConnection({
@@ -209,6 +209,7 @@ async function getUserPermissions(userId) {
 const TAB_ROUTE_MAP = {
     '/': 'dashboard',
     '/cdr': 'cdr',
+    '/voicemails': 'voicemails',
     '/ext-stats': 'ext-stats',
     '/operator': 'operator',
     '/gsm-dongles': 'gsm-dongles',
@@ -269,7 +270,7 @@ app.use(async (req, res, next) => {
     res.locals.allowedTabs = req.session.userPermissions;
     if (req.session.userPermissions.includes(tab)) return next();
     // Denied — redirect to the first tab they *can* access, or /login
-    const tabToRoute = { dashboard: '/', cdr: '/cdr', 'ext-stats': '/ext-stats', operator: '/operator', 'gsm-dongles': '/gsm-dongles', users: '/users' };
+    const tabToRoute = { dashboard: '/', cdr: '/cdr', voicemails: '/voicemails', 'ext-stats': '/ext-stats', operator: '/operator', 'gsm-dongles': '/gsm-dongles', users: '/users' };
     const firstAllowed = req.session.userPermissions.find(p => tabToRoute[p]);
     res.redirect(firstAllowed ? tabToRoute[firstAllowed] : '/login');
 });
@@ -1568,6 +1569,137 @@ app.get('/cdr/export', async (req, res) => {
     } catch (error) {
         res.status(500).send("CDR Export Error: " + error.message);
     }
+});
+
+// --- VOICEMAIL ---
+const VM_ROOT = '/var/spool/asterisk/voicemail/default';
+
+function parseVmTxt(filePath) {
+    try {
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const meta = {};
+        for (const line of raw.split('\n')) {
+            const idx = line.indexOf('=');
+            if (idx > 0) meta[line.substring(0, idx).trim()] = line.substring(idx + 1).trim();
+        }
+        return meta;
+    } catch { return null; }
+}
+
+function scanVoicemails() {
+    const messages = [];
+    if (!fs.existsSync(VM_ROOT)) return messages;
+    const extDirs = fs.readdirSync(VM_ROOT, { withFileTypes: true }).filter(d => d.isDirectory());
+    for (const ext of extDirs) {
+        const inbox = path.join(VM_ROOT, ext.name, 'INBOX');
+        if (!fs.existsSync(inbox)) continue;
+        const files = fs.readdirSync(inbox).filter(f => f.endsWith('.txt'));
+        for (const txt of files) {
+            const meta = parseVmTxt(path.join(inbox, txt));
+            if (!meta) continue;
+            const wavFile = txt.replace(/\.txt$/, '.wav');
+            const wavPath = path.join(inbox, wavFile);
+            const exists = fs.existsSync(wavPath);
+            const origtime = meta.origtime ? parseInt(meta.origtime) * 1000 : 0;
+            messages.push({
+                mailbox: ext.name,
+                callerid: (meta.callerid || '').replace(/"/g, ''),
+                origdate: meta.origdate || '',
+                origtime,
+                duration: parseInt(meta.duration) || 0,
+                context: meta.context || '',
+                extension: meta.extension || '',
+                wavFile: exists ? wavFile : null,
+                txtFile: txt,
+                read: meta.message === 'read'
+            });
+        }
+    }
+    messages.sort((a, b) => b.origtime - a.origtime);
+    return messages;
+}
+
+app.get('/voicemails', (req, res) => {
+    const allMsgs = scanVoicemails();
+    const searchCallerid = req.query.searchCallerid || '';
+    const searchMailbox = req.query.searchMailbox || '';
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const perPage = Math.min(200, Math.max(1, parseInt(req.query.perPage) || 25));
+
+    let filtered = allMsgs;
+    if (searchCallerid) filtered = filtered.filter(m => m.callerid.toLowerCase().includes(searchCallerid.toLowerCase()));
+    if (searchMailbox) filtered = filtered.filter(m => m.mailbox === searchMailbox);
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / perPage) || 1;
+    const paged = filtered.slice((page - 1) * perPage, page * perPage);
+
+    const mailboxes = [...new Set(allMsgs.map(m => m.mailbox))].sort();
+
+    res.render('voicemails', {
+        messages: paged, mailboxes, moment,
+        filters: { searchCallerid, searchMailbox, page, perPage },
+        pagination: { total, totalPages, page, perPage }
+    });
+});
+
+app.get('/api/voicemails', (req, res) => {
+    const allMsgs = scanVoicemails();
+    const searchCallerid = req.query.searchCallerid || '';
+    const searchMailbox = req.query.searchMailbox || '';
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const perPage = Math.min(200, Math.max(1, parseInt(req.query.perPage) || 25));
+
+    let filtered = allMsgs;
+    if (searchCallerid) filtered = filtered.filter(m => m.callerid.toLowerCase().includes(searchCallerid.toLowerCase()));
+    if (searchMailbox) filtered = filtered.filter(m => m.mailbox === searchMailbox);
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / perPage) || 1;
+    const paged = filtered.slice((page - 1) * perPage, page * perPage);
+    const mailboxes = [...new Set(allMsgs.map(m => m.mailbox))].sort();
+
+    res.json({ messages: paged, mailboxes, pagination: { total, totalPages, page, perPage } });
+});
+
+app.get('/vm-audio/:mailbox/:file', (req, res) => {
+    const filePath = path.join(VM_ROOT, req.params.mailbox, 'INBOX', req.params.file);
+    if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
+    const stat = fs.statSync(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes = { '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
+    const contentType = mimeTypes[ext] || 'audio/wav';
+    const isDownload = req.query.download === '1';
+    const range = req.headers.range;
+    if (range && !isDownload) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+        res.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${stat.size}`, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': contentType });
+        fs.createReadStream(filePath, { start, end }).pipe(res);
+    } else {
+        res.writeHead(200, { 'Content-Length': stat.size, 'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Content-Disposition': `${isDownload ? 'attachment' : 'inline'}; filename="${req.params.file}"` });
+        fs.createReadStream(filePath).pipe(res);
+    }
+});
+
+app.get('/vm-export', (req, res) => {
+    const allMsgs = scanVoicemails();
+    const searchCallerid = req.query.searchCallerid || '';
+    const searchMailbox = req.query.searchMailbox || '';
+    let filtered = allMsgs;
+    if (searchCallerid) filtered = filtered.filter(m => m.callerid.toLowerCase().includes(searchCallerid.toLowerCase()));
+    if (searchMailbox) filtered = filtered.filter(m => m.mailbox === searchMailbox);
+
+    const csvHeaders = ["Mailbox", "Caller ID", "Date", "Duration (Sec)", "Extension", "File"];
+    let csv = "\ufeff" + csvHeaders.map(h => `"${h}"`).join(",") + "\n";
+    for (const m of filtered) {
+        csv += [`"${m.mailbox}"`, `"${m.callerid}"`, `"${m.origdate}"`, m.duration, `"${m.extension}"`, `"${m.wavFile || ''}"`].join(",") + "\n";
+    }
+    const filename = `voicemails_${moment().format('YYYYMMDD_HHmmss')}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
 });
 
 // --- API: GENERAL EXTENSIONS OVERVIEW ---
