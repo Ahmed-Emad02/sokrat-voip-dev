@@ -347,27 +347,22 @@ echo "  [9d2] Deploying auto-restart-dongle.sh..."
 chmod +x "$INSTALL_DIR/scripts/auto-restart-dongle.sh"
 echo "  auto-restart-dongle.sh ready"
 
-# Install udev rule: auto-restart dongle on ttyUSB hotplug
+# Install udev rule: permissions for Huawei dongles only (no service trigger)
 cat > /etc/udev/rules.d/99-huawei-dongle.rules << 'UDEV'
-ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="12d1", MODE="0666", GROUP="dialout", TAG+="systemd", ENV{SYSTEMD_WANTS}="dongle-auto-reload.service"
+ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="12d1", MODE="0666", GROUP="dialout"
 UDEV
-echo "  99-huawei-dongle.rules created (permissions)"
+echo "  99-huawei-dongle.rules created (permissions only)"
 
 # Install targeted dongle auto-restart udev rule
 cp "$INSTALL_DIR/rules/99-dongle-auto-restart.rules" /etc/udev/rules.d/99-dongle-auto-restart.rules
 chmod 644 /etc/udev/rules.d/99-dongle-auto-restart.rules
 echo "  99-dongle-auto-restart.rules installed"
 
-cat > /etc/systemd/system/dongle-auto-reload.service << 'DASRV'
-[Unit]
-Description=Auto reload chan_dongle after Huawei USB dongle plug
-After=asterisk.service
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash -c 'sleep 15; chmod 666 /dev/ttyUSB* 2>/dev/null; /usr/sbin/asterisk -rx "dongle reload" 2>/dev/null; /usr/sbin/asterisk -rx "module reload chan_dongle.so" 2>/dev/null'
-DASRV
-echo "  dongle-auto-reload.service created"
+# Remove old dongle-auto-reload.service if it exists (replaced by auto-restart-dongle.sh)
+systemctl stop dongle-auto-reload.service 2>/dev/null || true
+systemctl disable dongle-auto-reload.service 2>/dev/null || true
+rm -f /etc/systemd/system/dongle-auto-reload.service
+echo "  Old dongle-auto-reload.service removed"
 
 # 9e — Reload and restart
 echo "  [9e] Reloading rules and restarting Asterisk..."
