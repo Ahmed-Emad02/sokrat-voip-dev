@@ -1,9 +1,9 @@
 <%
-const currentLang = typeof currentLang !== 'undefined' ? currentLang : 'en';
-const isRtl = typeof isRtl !== 'undefined' ? isRtl : (currentLang === 'ar');
+var activeLang = (typeof currentLang !== 'undefined' && currentLang) ? currentLang : 'en';
+var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
 %>
 <!DOCTYPE html>
-<html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<html lang="<%= activeLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
