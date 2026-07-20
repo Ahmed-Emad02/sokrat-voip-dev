@@ -227,6 +227,9 @@ function requireAuth(req, res, next) {
         res.locals.currentUser = req.session.username;
         return next();
     }
+    if (req.path.startsWith('/api/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
+        return res.status(401).json({ success: false, error: 'Unauthorized. Please log in.' });
+    }
     const loginUrl = '/login' + (req.originalUrl !== '/' ? '?redirect=' + encodeURIComponent(req.originalUrl) : '');
     res.redirect(loginUrl);
 }

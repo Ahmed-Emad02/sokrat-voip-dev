@@ -2114,11 +2114,16 @@ function isTabAllowed(tabName) {
         function populateVmGreetingSelect() {
             const selectEl = document.getElementById('vmGreetingSelect');
             if (!selectEl) return;
+            const currentVal = selectEl.value;
             selectEl.innerHTML = '<option value="">-- Choose Recording --</option>';
             loadedRecordingsList.forEach(rec => {
+                if (rec.displayname === '__invalid') return;
                 const opt = document.createElement('option');
                 opt.value = rec.id;
-                opt.textContent = rec.displayname;
+                opt.textContent = `${rec.displayname} (${rec.filename})`;
+                if (currentVal && String(rec.id) === String(currentVal)) {
+                    opt.selected = true;
+                }
                 selectEl.appendChild(opt);
             });
         }
