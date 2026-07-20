@@ -2899,6 +2899,15 @@ const VM_SOUNDS_DIR = '/var/lib/asterisk/sounds/en';
 const VM_BACKUP_DIR = path.join(VM_SOUNDS_DIR, 'backups');
 const VM_MAILBOX_ROOT = '/var/spool/asterisk/voicemail/default';
 
+const VM_AUDIO_EXTS = ['.gsm', '.wav', '.wav49', '.sln', '.slin', '.ulaw', '.alaw', '.g722', '.sln16', '.slin16'];
+
+function removeVmFile(dir, name) {
+    VM_AUDIO_EXTS.forEach(ext => {
+        const p = path.join(dir, name + ext);
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+    });
+}
+
 function ensureVmBackups() {
     if (!fs.existsSync(VM_BACKUP_DIR)) fs.mkdirSync(VM_BACKUP_DIR, { recursive: true });
     ['unavailable', 'vm-leavemsg'].forEach(name => {
@@ -2909,17 +2918,12 @@ function ensureVmBackups() {
 }
 
 function writeVmSound(name, wavPath) {
-    // Remove .gsm so Asterisk falls through to .wav
-    const gsmFile = path.join(VM_SOUNDS_DIR, name + '.gsm');
-    if (fs.existsSync(gsmFile)) fs.unlinkSync(gsmFile);
+    removeVmFile(VM_SOUNDS_DIR, name);
     fs.copyFileSync(wavPath, path.join(VM_SOUNDS_DIR, name + '.wav'));
 }
 
 function removeVmSound(name) {
-    ['gsm', 'wav'].forEach(ext => {
-        const p = path.join(VM_SOUNDS_DIR, name + '.' + ext);
-        if (fs.existsSync(p)) fs.unlinkSync(p);
-    });
+    removeVmFile(VM_SOUNDS_DIR, name);
 }
 
 function getVoicemailMailboxes() {
@@ -2985,10 +2989,7 @@ app.post('/api/voicemail-greeting/upload', (req, res) => {
             if (mode === 'universal') {
                 if (fs.existsSync(VM_MAILBOX_ROOT)) {
                     fs.readdirSync(VM_MAILBOX_ROOT, { withFileTypes: true }).filter(d => d.isDirectory()).forEach(ext => {
-                        ['unavail.gsm', 'unavail.wav'].forEach(f => {
-                            const p = path.join(VM_MAILBOX_ROOT, ext.name, f);
-                            if (fs.existsSync(p)) fs.unlinkSync(p);
-                        });
+                        removeVmFile(path.join(VM_MAILBOX_ROOT, ext.name), 'unavail');
                     });
                 }
                 writeVmSound('unavailable', wavPath);
@@ -3003,10 +3004,7 @@ app.post('/api/voicemail-greeting/upload', (req, res) => {
                 for (const ext of exts) {
                     const dir = path.join(VM_MAILBOX_ROOT, ext);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-                    ['unavail.gsm', 'unavail.wav'].forEach(f => {
-                        const p = path.join(dir, f);
-                        if (fs.existsSync(p)) fs.unlinkSync(p);
-                    });
+                    removeVmFile(dir, 'unavail');
                     fs.copyFileSync(wavPath, path.join(dir, 'unavail.wav'));
                 }
                 greetingConfig = { mode: 'extension', extensions: exts };
@@ -3040,10 +3038,7 @@ app.post('/api/voicemail-greeting/reset', (req, res) => {
         if (fs.existsSync(origLeaveMsg)) fs.copyFileSync(origLeaveMsg, path.join(VM_SOUNDS_DIR, 'vm-leavemsg.gsm'));
         if (fs.existsSync(VM_MAILBOX_ROOT)) {
             fs.readdirSync(VM_MAILBOX_ROOT, { withFileTypes: true }).filter(d => d.isDirectory()).forEach(ext => {
-                ['unavail.gsm', 'unavail.wav'].forEach(f => {
-                    const p = path.join(VM_MAILBOX_ROOT, ext.name, f);
-                    if (fs.existsSync(p)) fs.unlinkSync(p);
-                });
+                removeVmFile(path.join(VM_MAILBOX_ROOT, ext.name), 'unavail');
             });
         }
         greetingConfig = { mode: 'none', extensions: [] };
