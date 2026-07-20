@@ -106,7 +106,7 @@ app.use(session({
 // --- DATABASE INIT & AUTO-PROVISION ---
 const ALL_TABS = [
     'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'contacts', 'users', 'config',
-    'config-extensions', 'config-ringgroups', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound'
+    'config-extensions', 'config-ringgroups', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail'
 ];
 
 async function initAuthDb() {
@@ -310,6 +310,8 @@ app.use('/api/config', (req, res, next) => {
         subTab = 'inbound';
     } else if (req.path.startsWith('/routes/outbound')) {
         subTab = 'outbound';
+    } else if (req.path.startsWith('/voicemail')) {
+        subTab = 'voicemail';
     } else if (req.path === '/reload') {
         const perms = req.session.userPermissions || [];
         const hasAnyConfig = perms.includes('config') || perms.some(p => p.startsWith('config-'));
@@ -3541,6 +3543,145 @@ app.delete('/api/config/routes/outbound/:route_id', async (req, res) => {
         await pool.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE route_id = ?', [routeId]);
 
         res.json({ success: true, message: 'Outbound Route deleted successfully.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// --- VOICEMAIL CONFIGURATION APIs ---
+
+// GET /api/config/voicemail/extensions - List extensions with voicemail enabled
+app.get('/api/config/voicemail/extensions', async (req, res) => {
+    try {
+        const [users] = await pool.query(`
+            SELECT extension, name FROM \`asterisk\`.\`users\`
+            WHERE voicemail = 'default' OR voicemail = 'enabled'
+            ORDER BY CAST(extension AS UNSIGNED) ASC
+        `);
+        
+        const list = users.map(u => {
+            const ext = u.extension;
+            const gsmPath = `/var/spool/asterisk/voicemail/default/${ext}/unavail.gsm`;
+            const hasCustom = fs.existsSync(gsmPath);
+            return {
+                extension: ext,
+                name: u.name,
+                hasCustomGreeting: hasCustom
+            };
+        });
+        
+        res.json({ success: true, extensions: list });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/voicemail/greeting - Apply greeting from system recording to extensions
+app.post('/api/config/voicemail/greeting', async (req, res) => {
+    try {
+        const { recordingId, extensions, allEnabled } = req.body;
+        if (!recordingId) {
+            return res.status(400).json({ success: false, error: 'Recording is required.' });
+        }
+        
+        // Get recording path
+        const [recRow] = await pool.query('SELECT filename FROM `asterisk`.`recordings` WHERE id = ?', [recordingId]);
+        if (!recRow.length || !recRow[0].filename) {
+            return res.status(404).json({ success: false, error: 'Recording not found.' });
+        }
+        
+        const relFile = recRow[0].filename;
+        const wavSrcPath = path.join('/var/lib/asterisk/sounds', relFile + '.wav');
+        if (!fs.existsSync(wavSrcPath)) {
+            return res.status(404).json({ success: false, error: 'Recording WAV file missing on disk.' });
+        }
+        
+        // Convert WAV to GSM in /tmp
+        const tempGsmPath = `/tmp/vm_temp_${Date.now()}.gsm`;
+        await new Promise((resolve, reject) => {
+            const cmd = `/usr/bin/sox "${wavSrcPath}" -r 8000 -c 1 "${tempGsmPath}"`;
+            exec(cmd, (error, stdout, stderr) => {
+                if (error) return reject(error);
+                resolve();
+            });
+        });
+        
+        // Get list of extensions
+        let targetExtensions = [];
+        if (allEnabled) {
+            const [users] = await pool.query(`
+                SELECT extension FROM \`asterisk\`.\`users\`
+                WHERE voicemail = 'default' OR voicemail = 'enabled'
+            `);
+            targetExtensions = users.map(u => u.extension);
+        } else {
+            targetExtensions = Array.isArray(extensions) ? extensions : [];
+        }
+        
+        if (targetExtensions.length === 0) {
+            if (fs.existsSync(tempGsmPath)) fs.unlinkSync(tempGsmPath);
+            return res.status(400).json({ success: false, error: 'No extensions selected.' });
+        }
+        
+        // Copy greetings to target directories
+        for (const ext of targetExtensions) {
+            const mailboxDir = `/var/spool/asterisk/voicemail/default/${ext}`;
+            
+            // Create mailbox dir if not exists
+            if (!fs.existsSync(mailboxDir)) {
+                fs.mkdirSync(mailboxDir, { recursive: true });
+                exec(`chown -R asterisk:asterisk "${mailboxDir}"`);
+            }
+            
+            // Delete existing files of other formats to avoid conflicts
+            removeVmFile(mailboxDir, 'busy');
+            removeVmFile(mailboxDir, 'unavail');
+            
+            const gsmDestBusy = `${mailboxDir}/busy.gsm`;
+            const gsmDestUnavail = `${mailboxDir}/unavail.gsm`;
+            const wavDestBusy = `${mailboxDir}/busy.wav`;
+            const wavDestUnavail = `${mailboxDir}/unavail.wav`;
+            
+            // Copy GSM greeting
+            fs.copyFileSync(tempGsmPath, gsmDestBusy);
+            fs.copyFileSync(tempGsmPath, gsmDestUnavail);
+            
+            // Copy WAV greeting
+            fs.copyFileSync(wavSrcPath, wavDestBusy);
+            fs.copyFileSync(wavSrcPath, wavDestUnavail);
+            
+            // Set permissions
+            exec(`chown asterisk:asterisk "${gsmDestBusy}" "${gsmDestUnavail}" "${wavDestBusy}" "${wavDestUnavail}"`);
+        }
+        
+        // Clean up temp GSM
+        if (fs.existsSync(tempGsmPath)) fs.unlinkSync(tempGsmPath);
+        
+        // Reload Asterisk voicemail module so it sees the greeting updates
+        exec(`${ASTERISK_BIN} -rx "voicemail reload"`);
+        
+        res.json({ success: true, message: `Voicemail greeting applied to ${targetExtensions.length} extension(s) successfully.` });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/voicemail/reset - Reset custom voicemail greeting
+app.post('/api/config/voicemail/reset', async (req, res) => {
+    try {
+        const { extensions } = req.body;
+        const targetExtensions = Array.isArray(extensions) ? extensions : [];
+        
+        for (const ext of targetExtensions) {
+            const mailboxDir = `/var/spool/asterisk/voicemail/default/${ext}`;
+            removeVmFile(mailboxDir, 'busy');
+            removeVmFile(mailboxDir, 'unavail');
+        }
+        
+        // Reload Asterisk voicemail module
+        exec(`${ASTERISK_BIN} -rx "voicemail reload"`);
+        
+        res.json({ success: true, message: `Voicemail greetings reset to default for ${targetExtensions.length} extension(s).` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

@@ -209,6 +209,11 @@ function isTabAllowed(tabName) {
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                 <span><%= isRtl ? 'المسارات الصادرة (Outbound Routes)' : 'Outbound Routes' %></span>
             </button>
+            <% if (isTabAllowed('voicemail')) { %>
+            <button onclick="switchTab('voicemail')" id="tab-btn-voicemail" class="config-tab-btn config-tab-inactive flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 19v-8.93a2 2 0 01.89-1.664l8-5.333a2 2 0 012.22 0l8 5.333A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-5.625-3.75" /></svg>
+                <span><%= isRtl ? 'رسائل البريد الصوتي (Voicemail Greetings)' : 'Voicemail Greetings' %></span>
+            </button>
             <% } %>
         </div>
 
@@ -457,6 +462,60 @@ function isTabAllowed(tabName) {
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+        <% } %>
+
+        <!-- TAB 7: VOICEMAIL GREETINGS -->
+        <% if (isTabAllowed('voicemail')) { %>
+        <div id="section-voicemail" class="tab-section hidden">
+            <div class="config-card p-6">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'رسائل البريد الصوتي (Voicemail Greetings)' : 'Voicemail Greetings' %></h2>
+                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'تخصيص رسالة ترحيب البريد الصوتي للتحويلات' : 'Configure custom voicemail greetings (.gsm) for extensions' %></p>
+                    </div>
+                </div>
+
+                <form onsubmit="saveVoicemailGreeting(event)" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Left card: Select Greeting -->
+                        <div class="border border-[var(--border-primary)] rounded-xl p-5 bg-[var(--bg-card)]/20 space-y-4">
+                            <h3 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">1. Choose Greeting Recording</h3>
+                            <div>
+                                <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">System Recording *</label>
+                                <select id="vmGreetingSelect" class="config-input w-full" required>
+                                    <option value="">-- Choose Recording --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Right card: Apply to Mailboxes -->
+                        <div class="border border-[var(--border-primary)] rounded-xl p-5 bg-[var(--bg-card)]/20 space-y-4">
+                            <h3 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">2. Select Mailboxes</h3>
+                            
+                            <div class="flex items-center gap-4">
+                                <label class="flex items-center gap-2 cursor-pointer text-xs font-bold text-[var(--text-secondary)]">
+                                    <input type="checkbox" id="vmAllMailboxes" onchange="toggleVmAllMailboxes()" class="tab-checkbox">
+                                    <span>Select All (voicemail-enabled)</span>
+                                </label>
+                            </div>
+
+                            <div class="border border-[var(--border-primary)] rounded-lg p-3 bg-[var(--bg-secondary)] max-h-48 overflow-y-auto space-y-2" id="vmMailboxChecklist">
+                                <!-- Prepopulated checklist of voicemail enabled extensions -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
+                        <button type="button" onclick="resetVoicemailGreetings()" class="px-4 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded border border-red-500/30 transition cursor-pointer">
+                            Reset to Default
+                        </button>
+                        <button type="submit" class="config-btn-primary px-5 py-2.5 text-xs flex items-center gap-2">
+                            <span>Save Voicemail Greeting</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
         <% } %>
@@ -796,6 +855,7 @@ function isTabAllowed(tabName) {
             if (tabId === 'trunks') fetchTrunks();
             if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchInboundRoutes(); }
             if (tabId === 'outbound') fetchOutboundRoutes();
+            if (tabId === 'voicemail') { fetchRecordings(); fetchVoicemailExtensions(); }
         }
 
         function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -1102,6 +1162,7 @@ function isTabAllowed(tabName) {
                     if (!data.success || !data.recordings) return;
                     loadedRecordingsList = data.recordings;
                     populateAnnouncementsDropdown();
+                    populateVmGreetingSelect();
                     if (!tbody) return;
                     tbody.innerHTML = '';
                     if (data.recordings.length === 0) {
@@ -1958,7 +2019,7 @@ function isTabAllowed(tabName) {
 
         // Initialize on load
         document.addEventListener('DOMContentLoaded', () => {
-            const tabButtons = ['extensions', 'ringgroups', 'recordings', 'trunks', 'inbound', 'outbound'];
+            const tabButtons = ['extensions', 'ringgroups', 'recordings', 'trunks', 'inbound', 'outbound', 'voicemail'];
             let defaultTab = null;
             for (const t of tabButtons) {
                 if (document.getElementById('tab-btn-' + t)) {
@@ -1973,6 +2034,7 @@ function isTabAllowed(tabName) {
             if (document.getElementById('tab-btn-extensions')) fetchExtensions();
             if (document.getElementById('tab-btn-recordings')) fetchRecordings();
             if (document.getElementById('tab-btn-trunks')) fetchTrunks();
+            if (document.getElementById('tab-btn-voicemail')) fetchVoicemailExtensions();
 
             // Dongle popup handlers
             const dialInput = document.getElementById('trunkDialString');
@@ -1990,6 +2052,117 @@ function isTabAllowed(tabName) {
                 });
             }
         });
+
+        // --- 7. VOICEMAIL CONFIGURATION ---
+        let vmExtensionsList = [];
+
+        function fetchVoicemailExtensions() {
+            const checklist = document.getElementById('vmMailboxChecklist');
+            if (!checklist) return;
+            
+            checklist.innerHTML = '<span class="text-xs text-[var(--text-muted)] italic">Loading mailboxes...</span>';
+            
+            fetch('/api/config/voicemail/extensions')
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success || !data.extensions) return;
+                    vmExtensionsList = data.extensions;
+                    checklist.innerHTML = '';
+                    
+                    if (data.extensions.length === 0) {
+                        checklist.innerHTML = '<span class="text-xs text-[var(--text-muted)] italic">No voicemail-enabled extensions found.</span>';
+                        return;
+                    }
+                    
+                    data.extensions.forEach(ext => {
+                        const label = document.createElement('label');
+                        label.className = 'flex items-center justify-between p-2 hover:bg-[var(--bg-hover)]/40 rounded cursor-pointer text-xs';
+                        label.innerHTML = `
+                            <span class="flex items-center gap-2 font-mono">
+                                <input type="checkbox" name="vm_mailbox" value="${ext.extension}" class="tab-checkbox vm-ext-chk">
+                                <span class="font-bold text-[var(--text-primary)]">${ext.extension}</span>
+                                <span class="text-[var(--text-muted)]">- ${ext.name}</span>
+                            </span>
+                            ${ext.hasCustomGreeting ? '<span class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.5 rounded">Custom Greeting</span>' : '<span class="text-[10px] text-[var(--text-muted)] bg-[var(--bg-card)] border border-[var(--border-primary)] px-1 py-0.5 rounded">Default Greeting</span>'}
+                        `;
+                        checklist.appendChild(label);
+                    });
+                })
+                .catch(err => {
+                    checklist.innerHTML = `<span class="text-xs text-red-400">Error: ${err.message}</span>`;
+                });
+        }
+
+        function toggleVmAllMailboxes() {
+            const allChecked = document.getElementById('vmAllMailboxes').checked;
+            const checkboxes = document.querySelectorAll('.vm-ext-chk');
+            checkboxes.forEach(chk => chk.checked = allChecked);
+        }
+
+        function populateVmGreetingSelect() {
+            const selectEl = document.getElementById('vmGreetingSelect');
+            if (!selectEl) return;
+            selectEl.innerHTML = '<option value="">-- Choose Recording --</option>';
+            loadedRecordingsList.forEach(rec => {
+                const opt = document.createElement('option');
+                opt.value = rec.id;
+                opt.textContent = rec.displayname;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        function saveVoicemailGreeting(e) {
+            e.preventDefault();
+            const recordingId = document.getElementById('vmGreetingSelect').value;
+            const checkboxes = document.querySelectorAll('.vm-ext-chk:checked');
+            const allEnabled = document.getElementById('vmAllMailboxes').checked;
+            
+            const extensions = Array.from(checkboxes).map(chk => chk.value);
+            
+            if (!allEnabled && extensions.length === 0) {
+                showToast(isRtl ? 'يرجى اختيار تحويلة واحدة على الأقل.' : 'Please select at least one extension mailbox.', 'error');
+                return;
+            }
+
+            fetch('/api/config/voicemail/greeting', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recordingId, extensions, allEnabled })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    fetchVoicemailExtensions();
+                } else showToast(data.error, 'error');
+            });
+        }
+
+        function resetVoicemailGreetings() {
+            const checkboxes = document.querySelectorAll('.vm-ext-chk:checked');
+            const allEnabled = document.getElementById('vmAllMailboxes').checked;
+            const extensions = Array.from(checkboxes).map(chk => chk.value);
+            
+            if (!allEnabled && extensions.length === 0) {
+                showToast(isRtl ? 'يرجى اختيار تحويلة واحدة على الأقل للإرجاع للوضع الافتراضي.' : 'Please select at least one mailbox to reset.', 'error');
+                return;
+            }
+            
+            if (!confirm(`Reset selected mailbox greetings to Asterisk default?`)) return;
+
+            fetch('/api/config/voicemail/reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ extensions })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    fetchVoicemailExtensions();
+                } else showToast(data.error, 'error');
+            });
+        }
     </script>
 </body>
 </html>
