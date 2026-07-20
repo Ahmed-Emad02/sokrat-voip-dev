@@ -2923,7 +2923,7 @@ function writeSilentWav(path) {
 
 function ensureVmBackups() {
     if (!fs.existsSync(VM_BACKUP_DIR)) fs.mkdirSync(VM_BACKUP_DIR, { recursive: true });
-    ['unavailable', 'vm-leavemsg'].forEach(name => {
+    ['unavailable', 'vm-leavemsg', 'vm-intro'].forEach(name => {
         const bak = path.join(VM_BACKUP_DIR, name + '.gsm.orig');
         const src = path.join(VM_SOUNDS_DIR, name + '.gsm');
         if (!fs.existsSync(bak) && fs.existsSync(src)) fs.copyFileSync(src, bak);
@@ -3008,14 +3008,18 @@ app.post('/api/voicemail-greeting/upload', (req, res) => {
                 writeVmSound('unavailable', wavPath);
                 removeVmSound('vm-leavemsg');
                 writeSilentWav(path.join(VM_SOUNDS_DIR, 'vm-leavemsg.wav'));
+                removeVmSound('vm-intro');
+                writeSilentWav(path.join(VM_SOUNDS_DIR, 'vm-intro.wav'));
                 greetingConfig = { mode: 'universal', extensions: [] };
                 fs.writeFileSync(VM_GREETING_CONFIG_PATH, JSON.stringify(greetingConfig, null, 2));
                 require('child_process').exec('/usr/sbin/asterisk -rx "module reload sounds"', () => {});
                 res.json({ success: true, message: 'Universal greeting uploaded successfully.' });
             } else {
-                // Per-extension: save to mailbox unavail, remove system vm-leavemsg so only custom plays
+                // Per-extension: save to mailbox unavail, silence system prompts
                 removeVmSound('vm-leavemsg');
                 writeSilentWav(path.join(VM_SOUNDS_DIR, 'vm-leavemsg.wav'));
+                removeVmSound('vm-intro');
+                writeSilentWav(path.join(VM_SOUNDS_DIR, 'vm-intro.wav'));
                 for (const ext of exts) {
                     const dir = path.join(VM_MAILBOX_ROOT, ext);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -3047,10 +3051,13 @@ app.post('/api/voicemail-greeting/reset', (req, res) => {
         ensureVmBackups();
         const origUnavail = path.join(VM_BACKUP_DIR, 'unavailable.gsm.orig');
         const origLeaveMsg = path.join(VM_BACKUP_DIR, 'vm-leavemsg.gsm.orig');
+        const origIntro = path.join(VM_BACKUP_DIR, 'vm-intro.gsm.orig');
         removeVmSound('unavailable');
         removeVmSound('vm-leavemsg');
+        removeVmSound('vm-intro');
         if (fs.existsSync(origUnavail)) fs.copyFileSync(origUnavail, path.join(VM_SOUNDS_DIR, 'unavailable.gsm'));
         if (fs.existsSync(origLeaveMsg)) fs.copyFileSync(origLeaveMsg, path.join(VM_SOUNDS_DIR, 'vm-leavemsg.gsm'));
+        if (fs.existsSync(origIntro)) fs.copyFileSync(origIntro, path.join(VM_SOUNDS_DIR, 'vm-intro.gsm'));
         if (fs.existsSync(VM_MAILBOX_ROOT)) {
             fs.readdirSync(VM_MAILBOX_ROOT, { withFileTypes: true }).filter(d => d.isDirectory()).forEach(ext => {
                 removeVmFile(path.join(VM_MAILBOX_ROOT, ext.name), 'unavail');
