@@ -1254,7 +1254,6 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
                 .then(data => {
                     if (!data.success || !data.trunks) return;
                     loadedTrunksList = data.trunks;
-                    updateOutboundTrunkSelect();
                     if (!tbody) return;
                     tbody.innerHTML = '';
                     if (data.trunks.length === 0) {
