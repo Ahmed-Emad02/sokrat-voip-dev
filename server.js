@@ -2992,7 +2992,7 @@ app.get('/api/config/ringgroups', async (req, res) => {
 // POST /api/config/ringgroups - Create Ring Group
 app.post('/api/config/ringgroups', async (req, res) => {
     try {
-        const { grpnum, description, grplist, strategy, grptime, annmsg_id } = req.body;
+        const { grpnum, description, grplist, strategy, grptime, annmsg_id, postdest } = req.body;
         if (!grpnum || !/^\d+$/.test(grpnum)) {
             return res.status(400).json({ success: false, error: 'Valid numeric Ring Group number is required.' });
         }
@@ -3011,7 +3011,7 @@ app.post('/api/config/ringgroups', async (req, res) => {
         const ringStrategy = strategy || 'ringall';
         const ringTime = parseInt(grptime, 10) || 20;
         const annMsgId = parseInt(annmsg_id, 10) || 0;
-        const postDest = `ext-group,${num},1`;
+        const postDest = (postdest && postdest.trim()) ? postdest.trim() : `ext-group,${num},1`;
 
         const [existing] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
         if (existing.length > 0) {
@@ -3035,19 +3035,20 @@ app.post('/api/config/ringgroups', async (req, res) => {
 app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
     try {
         const num = String(req.params.grpnum).trim();
-        const { description, grplist, strategy, grptime, annmsg_id } = req.body;
+        const { description, grplist, strategy, grptime, annmsg_id, postdest } = req.body;
 
         const desc = String(description || '').trim();
         const extListFormatted = String(grplist || '').replace(/[\r\n, ]+/g, '-').replace(/^-+|-+$/g, '');
         const ringStrategy = strategy || 'ringall';
         const ringTime = parseInt(grptime, 10) || 20;
         const annMsgId = parseInt(annmsg_id, 10) || 0;
+        const postDest = (postdest && postdest.trim()) ? postdest.trim() : `ext-group,${num},1`;
 
         await pool.query(`
             UPDATE \`asterisk\`.\`ringgroups\`
-            SET description = ?, grplist = ?, strategy = ?, grptime = ?, annmsg_id = ?, cwignore = 'CHECKED', recording = 'always'
+            SET description = ?, grplist = ?, strategy = ?, grptime = ?, annmsg_id = ?, cwignore = 'CHECKED', recording = 'always', postdest = ?
             WHERE grpnum = ?
-        `, [desc, extListFormatted, ringStrategy, ringTime, annMsgId, num]);
+        `, [desc, extListFormatted, ringStrategy, ringTime, annMsgId, postDest, num]);
 
         res.json({ success: true, message: `Ring Group ${num} updated successfully.` });
     } catch (error) {

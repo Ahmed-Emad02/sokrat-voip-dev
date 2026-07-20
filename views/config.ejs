@@ -256,11 +256,12 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
                                 <th class="py-3 px-4"><%= isRtl ? 'قائمة التحويلات' : 'Extension List' %></th>
                                 <th class="py-3 px-4"><%= isRtl ? 'تخطي المشغول' : 'Skip Busy' %></th>
                                 <th class="py-3 px-4"><%= isRtl ? 'التسجيل' : 'Recording' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'الوجهة عند عدم الرد' : 'Destination if no answer' %></th>
                                 <th class="py-3 px-4 text-center"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
                             </tr>
                         </thead>
                         <tbody id="ringgroups-table-body" class="divide-y divide-[var(--border-primary)] text-sm font-medium text-[var(--text-primary)]">
-                            <tr><td colspan="8" class="py-8 text-center text-[var(--text-muted)]">Loading ring groups...</td></tr>
+                            <tr><td colspan="9" class="py-8 text-center text-[var(--text-muted)]">Loading ring groups...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -543,6 +544,13 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'زمن الرنين (ثواني)' : 'Ring Time (Seconds)' %></label>
                         <input type="number" id="rgTime" value="20" class="config-input w-full">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'الوجهة عند عدم الرد (Destination if no answer) *' : 'Destination if no answer *' %></label>
+                        <input type="text" id="rgPostDest" required placeholder="e.g. ext-group,600,1" class="config-input w-full font-mono">
+                        <p class="text-[11px] text-[var(--text-muted)] mt-1">
+                            <%= isRtl ? 'الافتراضي هو نفس رقم المجموعة: ext-group,[Group#],1' : 'Defaults to the ring group itself: ext-group,[Group#],1' %>
+                        </p>
                     </div>
                     <!-- System Defaults Information Banner -->
                     <div class="p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl text-xs space-y-1">
@@ -907,13 +915,14 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
 
         function fetchRingGroups() {
             const tbody = document.getElementById('ringgroups-table-body');
+            if (!tbody) return;
             fetch('/api/config/ringgroups')
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success || !data.ringgroups) return;
                     tbody.innerHTML = '';
                     if (data.ringgroups.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-[var(--text-muted)]">No ring groups found.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="9" class="py-6 text-center text-[var(--text-muted)]">No ring groups found.</td></tr>';
                         return;
                     }
                     data.ringgroups.forEach(rg => {
@@ -930,9 +939,10 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
                             <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">${rg.grplist}</td>
                             <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">Yes</span></td>
                             <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded bg-purple-500/15 text-purple-400 border border-purple-500/20">Always</span></td>
+                            <td class="py-3 px-4 font-mono text-xs text-blue-400 font-bold">${rg.postdest || '-'}</td>
                             <td class="py-3 px-4 text-center">
                                 <div class="flex items-center justify-center gap-2">
-                                    <button onclick="editRingGroup('${rg.grpnum}', \`${(rg.description || '').replace(/`/g, '\\`')}\`, '${rg.strategy}', '${rg.grptime}', '${rg.grplist}', '${rg.annmsg_id || 0}')" class="px-2.5 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30">Edit</button>
+                                    <button onclick="editRingGroup('${rg.grpnum}', \`${(rg.description || '').replace(/`/g, '\\`')}\`, '${rg.strategy}', '${rg.grptime}', '${rg.grplist}', '${rg.annmsg_id || 0}', '${rg.postdest || ''}')" class="px-2.5 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30">Edit</button>
                                     <button onclick="deleteRingGroup('${rg.grpnum}')" class="px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded border border-red-500/30">Delete</button>
                                 </div>
                             </td>
@@ -948,12 +958,13 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             document.getElementById('rgEditMode').value = "false";
             document.getElementById('rgNum').disabled = false;
             document.getElementById('ringGroupForm').reset();
+            document.getElementById('rgPostDest').value = '';
             populateAnnouncementsDropdown();
             renderQuickPickPills();
             openModal('ringGroupModal');
         }
 
-        function editRingGroup(grpnum, description, strategy, grptime, grplist, annmsg_id) {
+        function editRingGroup(grpnum, description, strategy, grptime, grplist, annmsg_id, postdest) {
             document.getElementById('rgModalTitle').textContent = (isRtl ? 'تعديل المجموعة ' : 'Edit Ring Group ') + grpnum;
             document.getElementById('rgEditMode').value = "true";
             document.getElementById('rgNum').value = grpnum;
@@ -964,6 +975,7 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             document.getElementById('rgList').value = grplist || '';
             populateAnnouncementsDropdown();
             document.getElementById('rgAnnMsg').value = annmsg_id || 0;
+            document.getElementById('rgPostDest').value = postdest || `ext-group,${grpnum},1`;
             renderQuickPickPills();
             openModal('ringGroupModal');
         }
@@ -1373,6 +1385,15 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             fetchExtensions();
             fetchRecordings();
             fetchTrunks();
+
+            // Auto-populate ring group destination if no answer dynamically
+            document.getElementById('rgNum').addEventListener('input', (e) => {
+                const isEdit = document.getElementById('rgEditMode').value === "true";
+                if (!isEdit) {
+                    const val = e.target.value.trim();
+                    document.getElementById('rgPostDest').value = val ? `ext-group,${val},1` : '';
+                }
+            });
         });
     </script>
 </body>
