@@ -2909,7 +2909,7 @@ function removeVmFile(dir, name) {
 }
 
 function writeSilentWav(path) {
-    const sr = 8000, bits = 16, channels = 1, samples = sr; // 1 second silence
+    const sr = 8000, bits = 16, channels = 1, samples = sr;
     const dataSize = samples * channels * (bits / 8);
     const buf = Buffer.alloc(44 + dataSize);
     buf.write('RIFF', 0); buf.writeUInt32LE(36 + dataSize, 4); buf.write('WAVE', 8);
@@ -2920,6 +2920,8 @@ function writeSilentWav(path) {
     buf.write('data', 36); buf.writeUInt32LE(dataSize, 40);
     fs.writeFileSync(path, buf);
 }
+
+function ensureVmBackups() {
     if (!fs.existsSync(VM_BACKUP_DIR)) fs.mkdirSync(VM_BACKUP_DIR, { recursive: true });
     ['unavailable', 'vm-leavemsg'].forEach(name => {
         const bak = path.join(VM_BACKUP_DIR, name + '.gsm.orig');
