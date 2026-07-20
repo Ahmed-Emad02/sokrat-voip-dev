@@ -2901,12 +2901,25 @@ const VM_MAILBOX_ROOT = '/var/spool/asterisk/voicemail/default';
 
 function ensureVmBackups() {
     if (!fs.existsSync(VM_BACKUP_DIR)) fs.mkdirSync(VM_BACKUP_DIR, { recursive: true });
-    const bak1 = path.join(VM_BACKUP_DIR, 'unavailable.gsm.orig');
-    const bak2 = path.join(VM_BACKUP_DIR, 'vm-leavemsg.gsm.orig');
-    const src1 = path.join(VM_SOUNDS_DIR, 'unavailable.gsm');
-    const src2 = path.join(VM_SOUNDS_DIR, 'vm-leavemsg.gsm');
-    if (!fs.existsSync(bak1) && fs.existsSync(src1)) fs.copyFileSync(src1, bak1);
-    if (!fs.existsSync(bak2) && fs.existsSync(src2)) fs.copyFileSync(src2, bak2);
+    ['unavailable', 'vm-leavemsg'].forEach(name => {
+        const bak = path.join(VM_BACKUP_DIR, name + '.gsm.orig');
+        const src = path.join(VM_SOUNDS_DIR, name + '.gsm');
+        if (!fs.existsSync(bak) && fs.existsSync(src)) fs.copyFileSync(src, bak);
+    });
+}
+
+function writeVmSound(name, wavPath) {
+    // Remove .gsm so Asterisk falls through to .wav
+    const gsmFile = path.join(VM_SOUNDS_DIR, name + '.gsm');
+    if (fs.existsSync(gsmFile)) fs.unlinkSync(gsmFile);
+    fs.copyFileSync(wavPath, path.join(VM_SOUNDS_DIR, name + '.wav'));
+}
+
+function removeVmSound(name) {
+    ['gsm', 'wav'].forEach(ext => {
+        const p = path.join(VM_SOUNDS_DIR, name + '.' + ext);
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+    });
 }
 
 function getVoicemailMailboxes() {
@@ -2933,28 +2946,14 @@ function getVoicemailMailboxes() {
 
 function convertToGsm(inputPath, outputPath) {
     return new Promise((resolve, reject) => {
-        const wavPath = path.join(path.dirname(inputPath), 'gsm-temp-' + path.basename(inputPath).replace(/\.[^.]+$/, '') + '.wav');
         ffmpeg(inputPath)
             .audioCodec('pcm_s16le')
             .audioFrequency(8000)
             .audioChannels(1)
             .format('wav')
-            .on('end', () => {
-                const { execSync } = require('child_process');
-                try {
-                    execSync(`/usr/sbin/asterisk -rx "file convert ${wavPath} ${outputPath}"`, { timeout: 30000 });
-                    if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
-                    resolve(outputPath);
-                } catch (e) {
-                    if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
-                    reject(new Error('Asterisk GSM conversion failed: ' + e.message));
-                }
-            })
-            .on('error', (err) => {
-                if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
-                reject(err);
-            })
-            .save(wavPath);
+            .on('end', () => resolve(outputPath))
+            .on('error', (err) => reject(err))
+            .save(outputPath);
     });
 }
 
@@ -2978,43 +2977,51 @@ app.post('/api/voicemail-greeting/upload', (req, res) => {
             if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
             return res.status(400).json({ success: false, error: 'At least one extension required.' });
         }
-        const gsmPath = path.join(UPLOAD_TMP, 'vm-greeting-' + Date.now() + '.gsm');
+        const wavPath = path.join(UPLOAD_TMP, 'vm-greeting-' + Date.now() + '.wav');
         try {
-            await convertToGsm(req.file.path, gsmPath);
+            await convertToGsm(req.file.path, wavPath);
             fs.unlinkSync(req.file.path);
             ensureVmBackups();
             if (mode === 'universal') {
                 if (fs.existsSync(VM_MAILBOX_ROOT)) {
                     fs.readdirSync(VM_MAILBOX_ROOT, { withFileTypes: true }).filter(d => d.isDirectory()).forEach(ext => {
-                        const p = path.join(VM_MAILBOX_ROOT, ext.name, 'unavail.gsm');
-                        if (fs.existsSync(p)) fs.unlinkSync(p);
+                        ['unavail.gsm', 'unavail.wav'].forEach(f => {
+                            const p = path.join(VM_MAILBOX_ROOT, ext.name, f);
+                            if (fs.existsSync(p)) fs.unlinkSync(p);
+                        });
                     });
                 }
-                fs.copyFileSync(gsmPath, path.join(VM_SOUNDS_DIR, 'unavailable.gsm'));
-                fs.copyFileSync(gsmPath, path.join(VM_SOUNDS_DIR, 'vm-leavemsg.gsm'));
+                writeVmSound('unavailable', wavPath);
+                writeVmSound('vm-leavemsg', wavPath);
                 greetingConfig = { mode: 'universal', extensions: [] };
                 fs.writeFileSync(VM_GREETING_CONFIG_PATH, JSON.stringify(greetingConfig, null, 2));
                 require('child_process').exec('/usr/sbin/asterisk -rx "module reload sounds"', () => {});
                 res.json({ success: true, message: 'Universal greeting uploaded successfully.' });
             } else {
                 const origUnavail = path.join(VM_BACKUP_DIR, 'unavailable.gsm.orig');
-                const origLeaveMsg = path.join(VM_BACKUP_DIR, 'vm-leavemsg.gsm.orig');
-                if (fs.existsSync(origUnavail)) fs.copyFileSync(origUnavail, path.join(VM_SOUNDS_DIR, 'unavailable.gsm'));
-                fs.copyFileSync(gsmPath, path.join(VM_SOUNDS_DIR, 'vm-leavemsg.gsm'));
+                removeVmSound('vm-leavemsg');
+                fs.copyFileSync(wavPath, path.join(VM_SOUNDS_DIR, 'vm-leavemsg.wav'));
+                if (fs.existsSync(origUnavail)) {
+                    fs.copyFileSync(origUnavail, path.join(VM_SOUNDS_DIR, 'unavailable.gsm'));
+                }
                 for (const ext of exts) {
                     const dir = path.join(VM_MAILBOX_ROOT, ext);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-                    fs.copyFileSync(gsmPath, path.join(dir, 'unavail.gsm'));
+                    ['unavail.gsm', 'unavail.wav'].forEach(f => {
+                        const p = path.join(dir, f);
+                        if (fs.existsSync(p)) fs.unlinkSync(p);
+                    });
+                    fs.copyFileSync(wavPath, path.join(dir, 'unavail.wav'));
                 }
                 greetingConfig = { mode: 'extension', extensions: exts };
                 fs.writeFileSync(VM_GREETING_CONFIG_PATH, JSON.stringify(greetingConfig, null, 2));
                 require('child_process').exec('/usr/sbin/asterisk -rx "module reload sounds"', () => {});
                 res.json({ success: true, message: 'Greeting for ' + exts.length + ' extension(s) uploaded successfully.' });
             }
-            if (fs.existsSync(gsmPath)) fs.unlinkSync(gsmPath);
+            if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
         } catch (convErr) {
             if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-            if (fs.existsSync(gsmPath)) fs.unlinkSync(gsmPath);
+            if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
             console.error('VM greeting upload failed:', convErr);
             res.status(500).json({ success: false, error: 'Conversion failed: ' + (convErr.message || convErr) });
         }
@@ -3031,12 +3038,16 @@ app.post('/api/voicemail-greeting/reset', (req, res) => {
         ensureVmBackups();
         const origUnavail = path.join(VM_BACKUP_DIR, 'unavailable.gsm.orig');
         const origLeaveMsg = path.join(VM_BACKUP_DIR, 'vm-leavemsg.gsm.orig');
+        removeVmSound('unavailable');
+        removeVmSound('vm-leavemsg');
         if (fs.existsSync(origUnavail)) fs.copyFileSync(origUnavail, path.join(VM_SOUNDS_DIR, 'unavailable.gsm'));
         if (fs.existsSync(origLeaveMsg)) fs.copyFileSync(origLeaveMsg, path.join(VM_SOUNDS_DIR, 'vm-leavemsg.gsm'));
         if (fs.existsSync(VM_MAILBOX_ROOT)) {
             fs.readdirSync(VM_MAILBOX_ROOT, { withFileTypes: true }).filter(d => d.isDirectory()).forEach(ext => {
-                const p = path.join(VM_MAILBOX_ROOT, ext.name, 'unavail.gsm');
-                if (fs.existsSync(p)) fs.unlinkSync(p);
+                ['unavail.gsm', 'unavail.wav'].forEach(f => {
+                    const p = path.join(VM_MAILBOX_ROOT, ext.name, f);
+                    if (fs.existsSync(p)) fs.unlinkSync(p);
+                });
             });
         }
         greetingConfig = { mode: 'none', extensions: [] };
