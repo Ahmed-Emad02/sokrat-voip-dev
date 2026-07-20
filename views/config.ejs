@@ -1559,20 +1559,40 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             }
             modalPatternsList.forEach((pat, idx) => {
                 const div = document.createElement('div');
-                div.className = 'flex items-center justify-between bg-[var(--bg-secondary)] border border-[var(--border-primary)] px-3 py-1.5 rounded-lg text-xs font-mono';
+                div.className = 'flex items-center justify-between bg-[var(--bg-secondary)] border border-[var(--border-primary)] px-3 py-2 rounded-lg text-xs';
+                
+                let htmlParts = [];
+                if (pat.prepend) htmlParts.push(`<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.5 rounded font-mono font-bold">prepend: ${pat.prepend}</span>`);
+                if (pat.prefix) htmlParts.push(`<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1 py-0.5 rounded font-mono font-bold">prefix: ${pat.prefix}</span>`);
+                htmlParts.push(`<span class="bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] px-1.5 py-0.5 rounded font-mono font-extrabold text-blue-300">pattern: ${pat.pattern}</span>`);
+                if (pat.cid) htmlParts.push(`<span class="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1 py-0.5 rounded font-mono font-bold">CID: ${pat.cid}</span>`);
+                
                 div.innerHTML = `
-                    <div class="flex items-center gap-2">
-                        ${pat.prepend ? `<span class="text-[var(--text-muted)]">(${pat.prepend})</span>` : ''}
-                        ${pat.prefix ? `<span class="text-[var(--text-muted)]">${pat.prefix} |</span>` : ''}
-                        <span class="font-bold text-[var(--text-primary)]">${pat.pattern}</span>
-                        ${pat.cid ? `<span class="text-blue-400">/ ${pat.cid}</span>` : ''}
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        ${htmlParts.join(' ')}
                     </div>
-                    <button type="button" onclick="removeDialPatternFromModalList(${idx})" class="text-red-400 hover:text-red-500 cursor-pointer">
-                        ✕
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="editDialPatternInModalList(${idx})" class="text-blue-400 hover:text-blue-500 font-semibold text-[11px] cursor-pointer">
+                            Edit
+                        </button>
+                        <button type="button" onclick="removeDialPatternFromModalList(${idx})" class="text-red-400 hover:text-red-500 cursor-pointer font-bold text-xs ml-1">
+                            ✕
+                        </button>
+                    </div>
                 `;
                 listEl.appendChild(div);
             });
+        }
+
+        function editDialPatternInModalList(idx) {
+            const pat = modalPatternsList[idx];
+            document.getElementById('patPrepend').value = pat.prepend || '';
+            document.getElementById('patPrefix').value = pat.prefix || '';
+            document.getElementById('patPattern').value = pat.pattern || '';
+            document.getElementById('patCid').value = pat.cid || '';
+            
+            modalPatternsList.splice(idx, 1);
+            renderModalPatterns();
         }
 
         function addDialPatternToModalList() {
@@ -1668,12 +1688,13 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
                         tr.className = 'hover:bg-[var(--bg-hover)] transition-colors';
                         
                         const patHtml = r.patterns.map(p => {
-                            let text = '';
-                            if (p.prepend) text += `(${p.prepend})`;
-                            if (p.prefix) text += `${p.prefix}|`;
-                            text += p.pattern;
-                            if (p.cid) text += `/${p.cid}`;
-                            return `<div class="font-mono text-xs bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border-primary)]/40 w-fit inline-block mr-1 mb-1">${text}</div>`;
+                            let textParts = [];
+                            if (p.prepend) textParts.push(`<span class="text-emerald-400 font-bold font-mono" title="Prepend">(${p.prepend})</span>`);
+                            if (p.prefix) textParts.push(`<span class="text-blue-400 font-bold font-mono" title="Prefix">${p.prefix} |</span>`);
+                            textParts.push(`<span class="text-[var(--text-primary)] font-extrabold font-mono" title="Match Pattern">${p.pattern}</span>`);
+                            if (p.cid) textParts.push(`<span class="text-purple-400 font-mono" title="Caller ID">/ ${p.cid}</span>`);
+                            
+                            return `<div class="font-mono text-xs bg-[var(--bg-secondary)] px-2.5 py-1 rounded border border-[var(--border-primary)]/80 inline-flex items-center gap-1 mr-1.5 mb-1.5">${textParts.join('')}</div>`;
                         }).join(' ') || '<span class="text-[var(--text-muted)]">-</span>';
                         
                         const trunkHtml = r.trunks.map(t => {
