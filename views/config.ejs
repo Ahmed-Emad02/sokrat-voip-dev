@@ -693,7 +693,7 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
                             </div>
                         </div>
                         <button type="button" onclick="addDialPatternToModalList()" class="mt-2 text-xs text-blue-400 font-semibold hover:underline flex items-center gap-1">
-                            <span>+ Add Pattern</span>
+                            <span id="addPatternBtn">+ Add Pattern</span>
                         </button>
                     </div>
                     
@@ -732,6 +732,7 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
         let loadedRingGroupsList = [];
         let modalPatternsList = [];
         let modalTrunksSequence = [];
+        let editingPatternIndex = -1;
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
@@ -1559,7 +1560,11 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             }
             modalPatternsList.forEach((pat, idx) => {
                 const div = document.createElement('div');
-                div.className = 'flex items-center justify-between bg-[var(--bg-secondary)] border border-[var(--border-primary)] px-3 py-2 rounded-lg text-xs';
+                if (idx === editingPatternIndex) {
+                    div.className = 'flex items-center justify-between bg-blue-500/5 border border-blue-500/50 px-3 py-2 rounded-lg text-xs ring-1 ring-blue-500/60';
+                } else {
+                    div.className = 'flex items-center justify-between bg-[var(--bg-secondary)] border border-[var(--border-primary)] px-3 py-2 rounded-lg text-xs';
+                }
                 
                 let htmlParts = [];
                 if (pat.prepend) htmlParts.push(`<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.5 rounded font-mono font-bold">prepend: ${pat.prepend}</span>`);
@@ -1570,6 +1575,7 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
                 div.innerHTML = `
                     <div class="flex items-center gap-1.5 flex-wrap">
                         ${htmlParts.join(' ')}
+                        ${idx === editingPatternIndex ? '<span class="text-[10px] text-blue-400 font-bold italic animate-pulse">(Editing...)</span>' : ''}
                     </div>
                     <div class="flex items-center gap-2">
                         <button type="button" onclick="editDialPatternInModalList(${idx})" class="text-blue-400 hover:text-blue-500 font-semibold text-[11px] cursor-pointer">
@@ -1585,14 +1591,17 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
         }
 
         function editDialPatternInModalList(idx) {
+            editingPatternIndex = idx;
             const pat = modalPatternsList[idx];
             document.getElementById('patPrepend').value = pat.prepend || '';
             document.getElementById('patPrefix').value = pat.prefix || '';
             document.getElementById('patPattern').value = pat.pattern || '';
             document.getElementById('patCid').value = pat.cid || '';
             
-            modalPatternsList.splice(idx, 1);
             renderModalPatterns();
+            
+            const btn = document.getElementById('addPatternBtn');
+            if (btn) btn.textContent = isRtl ? 'تحديث النمط' : 'Update Pattern';
         }
 
         function addDialPatternToModalList() {
@@ -1606,7 +1615,15 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             const prefix = document.getElementById('patPrefix').value.trim();
             const cid = document.getElementById('patCid').value.trim();
             
-            modalPatternsList.push({ prepend, prefix, pattern, cid });
+            if (editingPatternIndex > -1) {
+                modalPatternsList[editingPatternIndex] = { prepend, prefix, pattern, cid };
+                editingPatternIndex = -1;
+                const btn = document.getElementById('addPatternBtn');
+                if (btn) btn.textContent = isRtl ? '+ إضافة نمط' : '+ Add Pattern';
+            } else {
+                modalPatternsList.push({ prepend, prefix, pattern, cid });
+            }
+            
             renderModalPatterns();
             
             patternInput.value = '';
@@ -1617,6 +1634,17 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
 
         function removeDialPatternFromModalList(idx) {
             modalPatternsList.splice(idx, 1);
+            if (editingPatternIndex === idx) {
+                editingPatternIndex = -1;
+                const btn = document.getElementById('addPatternBtn');
+                if (btn) btn.textContent = isRtl ? '+ إضافة نمط' : '+ Add Pattern';
+                document.getElementById('patPattern').value = '';
+                document.getElementById('patPrepend').value = '';
+                document.getElementById('patPrefix').value = '';
+                document.getElementById('patCid').value = '';
+            } else if (editingPatternIndex > idx) {
+                editingPatternIndex--;
+            }
             renderModalPatterns();
         }
 
@@ -1728,6 +1756,10 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             document.getElementById('outboundForm').reset();
             modalPatternsList = [];
             modalTrunksSequence = [];
+            editingPatternIndex = -1;
+            
+            const btn = document.getElementById('addPatternBtn');
+            if (btn) btn.textContent = isRtl ? '+ إضافة نمط' : '+ Add Pattern';
             
             const sel = document.getElementById('sequenceTrunkSelect');
             if (sel) {
@@ -1749,6 +1781,10 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
             document.getElementById('outboundModalTitle').textContent = (isRtl ? 'تعديل المسار الصادر ' : 'Edit Outbound Route ') + name;
             document.getElementById('outboundEditId').value = routeId;
             document.getElementById('outName').value = name || '';
+            editingPatternIndex = -1;
+            
+            const btn = document.getElementById('addPatternBtn');
+            if (btn) btn.textContent = isRtl ? '+ إضافة نمط' : '+ Add Pattern';
 
             try {
                 modalPatternsList = JSON.parse(patternsJson) || [];
