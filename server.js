@@ -2933,13 +2933,28 @@ function getVoicemailMailboxes() {
 
 function convertToGsm(inputPath, outputPath) {
     return new Promise((resolve, reject) => {
+        const wavPath = path.join(path.dirname(inputPath), 'gsm-temp-' + path.basename(inputPath).replace(/\.[^.]+$/, '') + '.wav');
         ffmpeg(inputPath)
-            .audioCodec('gsm')
+            .audioCodec('pcm_s16le')
             .audioFrequency(8000)
             .audioChannels(1)
-            .on('end', () => resolve(outputPath))
-            .on('error', (err) => reject(err))
-            .save(outputPath);
+            .format('wav')
+            .on('end', () => {
+                const { execSync } = require('child_process');
+                try {
+                    execSync(`/usr/sbin/asterisk -rx "file convert ${wavPath} ${outputPath}"`, { timeout: 30000 });
+                    if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
+                    resolve(outputPath);
+                } catch (e) {
+                    if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
+                    reject(new Error('Asterisk GSM conversion failed: ' + e.message));
+                }
+            })
+            .on('error', (err) => {
+                if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
+                reject(err);
+            })
+            .save(wavPath);
     });
 }
 
