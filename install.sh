@@ -313,9 +313,9 @@ fi
 # 9c — Configure and apply dongle.conf
 echo "  [9c] Configuring and applying dongle.conf..."
 NUM_DONGLES=4
-if [ -t 0 ]; then
+if [ -c /dev/tty ]; then
     while true; do
-        read -rp "Enter the number of GSM dongles to activate on this server (1-25) [default: 4]: " user_val
+        read -rp "Enter the number of GSM dongles to activate on this server (1-25) [default: 4]: " user_val < /dev/tty
         if [ -z "$user_val" ]; then
             NUM_DONGLES=4
             break
@@ -323,7 +323,7 @@ if [ -t 0 ]; then
             NUM_DONGLES=$user_val
             break
         else
-            echo "Invalid input. Please enter a number between 1 and 25."
+            echo "Invalid input. Please enter a number between 1 and 25." > /dev/tty
         fi
     done
 fi
