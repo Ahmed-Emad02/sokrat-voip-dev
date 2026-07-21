@@ -170,6 +170,13 @@ async function initAuthDb() {
         superAdminGroupId = existingGroups[0].id;
     }
 
+    // Ensure super admins group has all permissions (including newly added tabs on upgrades)
+    for (const tab of ALL_TABS) {
+        try {
+            await conn.execute('INSERT IGNORE INTO dashboard_group_permissions (group_id, tab) VALUES (?, ?)', [superAdminGroupId, tab]);
+        } catch (_) {}
+    }
+
     // Auto-provision default admin user
     rootHash = await bcrypt.hash(ROOT_PASS, 10);
     const [rows] = await conn.execute('SELECT COUNT(*) AS cnt FROM dashboard_users');
