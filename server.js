@@ -108,7 +108,8 @@ app.use(session({
 // --- DATABASE INIT & AUTO-PROVISION ---
 const ALL_TABS = [
     'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'contacts', 'users', 'config',
-    'config-extensions', 'config-ringgroups', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram'
+    'config-extensions', 'config-ringgroups', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram',
+    'config-timegroups', 'config-timeconditions'
 ];
 
 async function initAuthDb() {
@@ -326,6 +327,10 @@ app.use('/api/config', (req, res, next) => {
         subTab = 'voicemail';
     } else if (req.path.startsWith('/diagram')) {
         subTab = 'diagram';
+    } else if (req.path.startsWith('/timegroups')) {
+        subTab = 'timegroups';
+    } else if (req.path.startsWith('/timeconditions')) {
+        subTab = 'timeconditions';
     } else if (req.path === '/reload') {
         const perms = req.session.userPermissions || [];
         const hasAnyConfig = perms.includes('config') || perms.some(p => p.startsWith('config-'));
@@ -3809,6 +3814,183 @@ app.get('/api/config/diagram', async (req, res) => {
             outbound,
             trunks
         });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// --- TIME GROUPS API ---
+
+// GET /api/config/timegroups - Retrieve all time groups and their details
+app.get('/api/config/timegroups', async (req, res) => {
+    try {
+        const [groups] = await pool.query('SELECT id, description FROM `asterisk`.`timegroups_groups` ORDER BY id ASC');
+        const [details] = await pool.query('SELECT id, timegroupid, time, name FROM `asterisk`.`timegroups_details` ORDER BY id ASC');
+        
+        const groupsWithDetails = groups.map(g => {
+            const rules = details.filter(d => d.timegroupid === g.id).map(d => {
+                const parts = d.time.split('|');
+                return {
+                    id: d.id,
+                    time: parts[0] || '',
+                    weekday: parts[1] || '',
+                    monthday: parts[2] || '',
+                    month: parts[3] || '',
+                    name: d.name || ''
+                };
+            });
+            return {
+                id: g.id,
+                description: g.description,
+                rules
+            };
+        });
+        res.json({ success: true, timegroups: groupsWithDetails });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/timegroups - Create a new time group
+app.post('/api/config/timegroups', async (req, res) => {
+    try {
+        const { description, rules } = req.body;
+        if (!description || !description.trim()) {
+            return res.status(400).json({ success: false, error: 'Description is required' });
+        }
+        
+        const [r] = await pool.query('INSERT INTO `asterisk`.`timegroups_groups` (description) VALUES (?)', [description.trim()]);
+        const groupid = r.insertId;
+        
+        if (rules && Array.isArray(rules)) {
+            for (const rule of rules) {
+                const timeStr = `${rule.time || ''}|${rule.weekday || ''}|${rule.monthday || ''}|${rule.month || ''}`;
+                await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, '']);
+            }
+        }
+        res.json({ success: true, message: 'Time Group created successfully', id: groupid });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// PUT /api/config/timegroups/:id - Update an existing time group
+app.put('/api/config/timegroups/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { description, rules } = req.body;
+        if (!description || !description.trim()) {
+            return res.status(400).json({ success: false, error: 'Description is required' });
+        }
+        
+        await pool.query('UPDATE `asterisk`.`timegroups_groups` SET description = ? WHERE id = ?', [description.trim(), id]);
+        await pool.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [id]);
+        
+        if (rules && Array.isArray(rules)) {
+            for (const rule of rules) {
+                const timeStr = `${rule.time || ''}|${rule.weekday || ''}|${rule.monthday || ''}|${rule.month || ''}`;
+                await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [id, timeStr, '']);
+            }
+        }
+        res.json({ success: true, message: 'Time Group updated successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// DELETE /api/config/timegroups/:id - Delete a time group
+app.delete('/api/config/timegroups/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const [check] = await pool.query('SELECT COUNT(*) AS count FROM `asterisk`.`timeconditions` WHERE `time` = ?', [id]);
+        if (check[0].count > 0) {
+            return res.status(400).json({ success: false, error: 'Cannot delete. This Time Group is currently used in one or more Time Conditions.' });
+        }
+        
+        await pool.query('DELETE FROM `asterisk`.`timegroups_groups` WHERE id = ?', [id]);
+        await pool.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [id]);
+        res.json({ success: true, message: 'Time Group deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+// --- TIME CONDITIONS API ---
+
+// GET /api/config/timeconditions - Retrieve all time conditions
+app.get('/api/config/timeconditions', async (req, res) => {
+    try {
+        const [conditions] = await pool.query(`
+            SELECT tc.timeconditions_id, tc.displayname, tc.time AS timegroup_id, tg.description AS timegroup_name, tc.truegoto, tc.falsegoto
+            FROM \`asterisk\`.\`timeconditions\` tc
+            LEFT JOIN \`asterisk\`.\`timegroups_groups\` tg ON tg.id = tc.time
+            ORDER BY tc.timeconditions_id ASC
+        `);
+        res.json({ success: true, timeconditions: conditions });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/timeconditions - Create a new time condition
+app.post('/api/config/timeconditions', async (req, res) => {
+    try {
+        const { displayname, timegroup_id, truegoto, falsegoto } = req.body;
+        if (!displayname || !displayname.trim()) {
+            return res.status(400).json({ success: false, error: 'Display Name is required' });
+        }
+        if (!timegroup_id) {
+            return res.status(400).json({ success: false, error: 'Time Group is required' });
+        }
+        if (!truegoto || !falsegoto) {
+            return res.status(400).json({ success: false, error: 'True and False destinations are required' });
+        }
+        
+        const [r] = await pool.query(`
+            INSERT INTO \`asterisk\`.\`timeconditions\` (displayname, \`time\`, truegoto, falsegoto, deptname, generate_hint, priority)
+            VALUES (?, ?, ?, ?, '', 0, NULL)
+        `, [displayname.trim(), timegroup_id, truegoto, falsegoto]);
+        
+        res.json({ success: true, message: 'Time Condition created successfully', id: r.insertId });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// PUT /api/config/timeconditions/:id - Update an existing time condition
+app.put('/api/config/timeconditions/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { displayname, timegroup_id, truegoto, falsegoto } = req.body;
+        if (!displayname || !displayname.trim()) {
+            return res.status(400).json({ success: false, error: 'Display Name is required' });
+        }
+        if (!timegroup_id) {
+            return res.status(400).json({ success: false, error: 'Time Group is required' });
+        }
+        if (!truegoto || !falsegoto) {
+            return res.status(400).json({ success: false, error: 'True and False destinations are required' });
+        }
+        
+        await pool.query(`
+            UPDATE \`asterisk\`.\`timeconditions\`
+            SET displayname = ?, \`time\` = ?, truegoto = ?, falsegoto = ?
+            WHERE timeconditions_id = ?
+        `, [displayname.trim(), timegroup_id, truegoto, falsegoto, id]);
+        
+        res.json({ success: true, message: 'Time Condition updated successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// DELETE /api/config/timeconditions/:id - Delete a time condition
+app.delete('/api/config/timeconditions/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        await pool.query('DELETE FROM `asterisk`.`timeconditions` WHERE timeconditions_id = ?', [id]);
+        res.json({ success: true, message: 'Time Condition deleted successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

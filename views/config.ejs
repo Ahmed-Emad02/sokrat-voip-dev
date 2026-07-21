@@ -216,6 +216,22 @@ function isTabAllowed(tabName) {
                 <span><%= isRtl ? 'رسائل البريد الصوتي (Voicemail Greetings)' : 'Voicemail Greetings' %></span>
             </button>
             <% } %>
+            <% if (isTabAllowed('timegroups')) { %>
+            <button onclick="switchTab('timegroups')" id="tab-btn-timegroups" class="config-tab-btn config-tab-inactive flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-dasharray="" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span><%= isRtl ? 'مجموعات الوقت (Time Groups)' : 'Time Groups' %></span>
+            </button>
+            <% } %>
+            <% if (isTabAllowed('timeconditions')) { %>
+            <button onclick="switchTab('timeconditions')" id="tab-btn-timeconditions" class="config-tab-btn config-tab-inactive flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-dasharray="" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></span>
+            </button>
+            <% } %>
             <% if (isTabAllowed('diagram')) { %>
             <button onclick="switchTab('diagram')" id="tab-btn-diagram" class="config-tab-btn config-tab-inactive flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -659,6 +675,76 @@ function isTabAllowed(tabName) {
         </div>
         <% } %>
 
+        <!-- TAB 9: TIME GROUPS -->
+        <% if (isTabAllowed('timegroups')) { %>
+        <div id="section-timegroups" class="tab-section hidden">
+            <div class="config-card p-6">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'مجموعات الوقت (Time Groups)' : 'Time Groups' %></h2>
+                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'تعريف الفترات الزمنية لتحديد شروط تحويل المكالمات' : 'Define time intervals used to route calls based on schedule' %></p>
+                    </div>
+                    <button onclick="openTimeGroupModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                        <span><%= isRtl ? 'إضافة مجموعة وقت' : 'Add Time Group' %></span>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                                <th class="py-3 px-4 w-20"><%= isRtl ? 'الرقم' : 'ID' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'الوصف' : 'Description' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'القواعد المحددة' : 'Configured Time Rules' %></th>
+                                <th class="py-3 px-4 text-center w-40"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="timegroups-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <% } %>
+
+        <!-- TAB 10: TIME CONDITIONS -->
+        <% if (isTabAllowed('timeconditions')) { %>
+        <div id="section-timeconditions" class="tab-section hidden">
+            <div class="config-card p-6">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></h2>
+                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'تحويل المكالمات لوجهات مختلفة بناءً على وقت الاتصال الحالي ومجموعة الوقت المحددة' : 'Route calls to different destinations based on time match/no-match' %></p>
+                    </div>
+                    <button onclick="openTimeConditionModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                        <span><%= isRtl ? 'إضافة شرط وقت' : 'Add Time Condition' %></span>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                                <th class="py-3 px-4 w-20"><%= isRtl ? 'الرقم' : 'ID' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'الاسم الظاهر' : 'Display Name' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'مجموعة الوقت' : 'Time Group' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'الوجهة عند المطابقة (True)' : 'Destination if Matched' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'الوجهة عند عدم المطابقة (False)' : 'Destination if Not Matched' %></th>
+                                <th class="py-3 px-4 text-center w-40"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="timeconditions-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <% } %>
+
     </div>
 
     <!-- MODAL 1: EXTENSION FORM -->
@@ -948,6 +1034,137 @@ function isTabAllowed(tabName) {
                 </div>
             </form>
         </div>
+    <!-- MODAL 8: TIME GROUP FORM -->
+    <div id="timeGroupModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-xl w-full p-6 text-[var(--text-primary)]">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border-primary)]">
+                <h3 id="timeGroupModalTitle" class="text-base font-extrabold text-[var(--text-primary)]">Add Time Group</h3>
+                <button onclick="closeModal('timeGroupModal')" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">✕</button>
+            </div>
+            <form id="timeGroupForm" onsubmit="saveTimeGroup(event)">
+                <input type="hidden" id="tgEditMode" value="false">
+                <input type="hidden" id="tgId" value="">
+                
+                <div class="flex flex-col gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">Group Description *</label>
+                        <input type="text" id="tgDescription" required placeholder="e.g. Working Hours" class="config-input w-full">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-primary)] uppercase mb-1">Configured Time Rules</label>
+                        <p class="text-[10px] text-[var(--text-muted)] mb-2">Calls will route according to these rules. If multiple rules are defined, the condition matches if ANY rule matches.</p>
+                        
+                        <div id="timeGroupRulesListContainer" class="space-y-4 max-h-[320px] overflow-y-auto pr-1 mb-3">
+                            <!-- Populated dynamically -->
+                        </div>
+                        
+                        <button type="button" onclick="addTimeGroupRuleToModal()" class="w-full py-2 border border-dashed border-[var(--border-primary)] hover:border-blue-500/50 rounded-xl text-xs font-bold text-blue-400 bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer transition flex items-center justify-center gap-1.5">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Time Interval Rule
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('timeGroupModal')" class="config-btn-secondary px-4 py-2 text-xs">Cancel</button>
+                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs">Save Time Group</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 9: TIME CONDITION FORM -->
+    <div id="timeConditionModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-xl w-full p-6 text-[var(--text-primary)]">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border-primary)]">
+                <h3 id="timeConditionModalTitle" class="text-base font-extrabold text-[var(--text-primary)]">Add Time Condition</h3>
+                <button onclick="closeModal('timeConditionModal')" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">✕</button>
+            </div>
+            <form id="timeConditionForm" onsubmit="saveTimeCondition(event)">
+                <input type="hidden" id="tcEditMode" value="false">
+                <input type="hidden" id="tcId" value="">
+                
+                <div class="flex flex-col gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">Display Name *</label>
+                        <input type="text" id="tcDisplayName" required placeholder="e.g. Office Hours Route" class="config-input w-full">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">Time Group *</label>
+                        <select id="tcTimeGroup" required class="config-input w-full">
+                            <option value="">-- Choose Time Group --</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Destination if MATCH (True) -->
+                    <div class="border border-[var(--border-primary)]/50 rounded-xl p-4 bg-[var(--bg-card)]/10">
+                        <label class="block text-xs font-black text-emerald-400 uppercase mb-2">Destination if matched (True / Open) *</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1">Destination Type</label>
+                                <select id="tcTrueType" onchange="onTcDestTypeChange('true')" class="config-input w-full" required>
+                                    <option value="">-- choose type --</option>
+                                    <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
+                                    <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
+                                    <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail Box' %></option>
+                                    <option value="timeconditions"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></option>
+                                    <option value="terminate"><%= isRtl ? 'إنهاء المكالمة (Terminate Call)' : 'Terminate Call' %></option>
+                                    <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1">Target</label>
+                                <div id="tcTrueTargetContainer">
+                                    <select id="tcTrueTargetSelect" onchange="updateTcDestValue('true')" class="config-input w-full hidden">
+                                        <option value="">-- choose target --</option>
+                                    </select>
+                                    <input type="text" id="tcTrueTargetInput" oninput="updateTcDestValue('true')" placeholder="e.g. custom-context,s,1" class="config-input w-full font-mono hidden">
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="tcTrueGoto" required>
+                    </div>
+
+                    <!-- Destination if NO MATCH (False) -->
+                    <div class="border border-[var(--border-primary)]/50 rounded-xl p-4 bg-[var(--bg-card)]/10">
+                        <label class="block text-xs font-black text-rose-400 uppercase mb-2">Destination if NOT matched (False / Closed) *</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1">Destination Type</label>
+                                <select id="tcFalseType" onchange="onTcDestTypeChange('false')" class="config-input w-full" required>
+                                    <option value="">-- choose type --</option>
+                                    <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
+                                    <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
+                                    <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail Box' %></option>
+                                    <option value="timeconditions"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></option>
+                                    <option value="terminate"><%= isRtl ? 'إنهاء المكالمة (Terminate Call)' : 'Terminate Call' %></option>
+                                    <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1">Target</label>
+                                <div id="tcFalseTargetContainer">
+                                    <select id="tcFalseTargetSelect" onchange="updateTcDestValue('false')" class="config-input w-full hidden">
+                                        <option value="">-- choose target --</option>
+                                    </select>
+                                    <input type="text" id="tcFalseTargetInput" oninput="updateTcDestValue('false')" placeholder="e.g. custom-context,s,1" class="config-input w-full font-mono hidden">
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="tcFalseGoto" required>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('timeConditionModal')" class="config-btn-secondary px-4 py-2 text-xs">Cancel</button>
+                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs">Save Time Condition</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <!-- CLIENT SCRIPT -->
@@ -996,6 +1213,8 @@ function isTabAllowed(tabName) {
             if (tabId === 'outbound') fetchOutboundRoutes();
             if (tabId === 'voicemail') { fetchRecordings(); fetchVoicemailExtensions(); }
             if (tabId === 'diagram') fetchDiagramData();
+            if (tabId === 'timegroups') fetchTimeGroups();
+            if (tabId === 'timeconditions') { fetchExtensions(); fetchRingGroups(); fetchTimeGroups(); fetchTimeConditions(); }
         }
 
         function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -2975,6 +3194,643 @@ function isTabAllowed(tabName) {
             updateTransform();
             document.getElementById('diagramSearch').value = '';
             resetHighlight();
+        }
+
+        // =========================================================================
+        // --- TIME GROUPS & TIME CONDITIONS MODULES ---
+        // =========================================================================
+
+        let loadedTimeGroupsList = [];
+        let loadedTimeConditionsList = [];
+
+        // --- TIME GROUPS CLIENT LOGIC ---
+
+        function fetchTimeGroups() {
+            fetch('/api/config/timegroups')
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success || !data.timegroups) return;
+                    loadedTimeGroupsList = data.timegroups;
+                    
+                    // Populate time conditions modal select
+                    const select = document.getElementById('tcTimeGroup');
+                    if (select) {
+                        select.innerHTML = '<option value="">-- Choose Time Group --</option>';
+                        data.timegroups.forEach(tg => {
+                            const opt = document.createElement('option');
+                            opt.value = tg.id;
+                            opt.textContent = `${tg.description} (ID: ${tg.id})`;
+                            select.appendChild(opt);
+                        });
+                    }
+
+                    const tbody = document.getElementById('timegroups-table-body');
+                    if (!tbody) return;
+                    tbody.innerHTML = '';
+                    if (data.timegroups.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-[var(--text-muted)]">No time groups found.</td></tr>';
+                        return;
+                    }
+
+                    data.timegroups.forEach(tg => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'hover:bg-[var(--bg-hover)] transition-colors border-b border-[var(--border-primary)]/40 text-xs';
+                        
+                        let rulesHTML = '';
+                        if (tg.rules && tg.rules.length > 0) {
+                            tg.rules.forEach(rule => {
+                                const timeStr = rule.time || '*';
+                                const weekdayStr = rule.weekday || '*';
+                                const monthdayStr = rule.monthday || '*';
+                                const monthStr = rule.month || '*';
+                                rulesHTML += `
+                                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700 font-mono my-0.5 mr-1">
+                                        <svg class="w-3 h-3 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        ${timeStr} | ${weekdayStr} | ${monthdayStr} | ${monthStr}
+                                    </span>
+                                `;
+                            });
+                        } else {
+                            rulesHTML = '<span class="text-zinc-500 italic">No rules defined (matches always)</span>';
+                        }
+
+                        tr.innerHTML = `
+                            <td class="py-3 px-4 font-mono font-bold text-[var(--text-primary)]">${tg.id}</td>
+                            <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${tg.description}</td>
+                            <td class="py-3 px-4">${rulesHTML}</td>
+                            <td class="py-3 px-4 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    <button onclick="editTimeGroup(${tg.id})" class="px-2.5 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30 transition cursor-pointer">Edit</button>
+                                    <button onclick="deleteTimeGroup(${tg.id})" class="px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded border border-red-500/30 transition cursor-pointer">Delete</button>
+                                </div>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                });
+        }
+
+        function openTimeGroupModal() {
+            document.getElementById('tgEditMode').value = 'false';
+            document.getElementById('tgId').value = '';
+            document.getElementById('tgDescription').value = '';
+            document.getElementById('timeGroupRulesListContainer').innerHTML = '';
+            document.getElementById('timeGroupModalTitle').textContent = isRtl ? 'إضافة مجموعة وقت جديدة' : 'Add Time Group';
+            addTimeGroupRuleToModal(); // start with one blank rule
+            openModal('timeGroupModal');
+        }
+
+        function addTimeGroupRuleToModal(data = null) {
+            const container = document.getElementById('timeGroupRulesListContainer');
+            if (!container) return;
+
+            const card = document.createElement('div');
+            card.className = 'rule-card p-4 border border-[var(--border-primary)] rounded-xl bg-[var(--bg-card)]/40 relative flex flex-col gap-3.5';
+            
+            // Build weekday selector options
+            const weekdays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+            const weekdayLabels = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+            
+            let weekdayButtons = '';
+            weekdays.forEach(day => {
+                let isActive = false;
+                if (data && data.weekday) {
+                    const wParts = data.weekday.split(',');
+                    // check if ranges mon-fri, etc.
+                    if (data.weekday.includes('-')) {
+                        // resolve simple range
+                        const [start, end] = data.weekday.split('-');
+                        const startIdx = weekdays.indexOf(start);
+                        const endIdx = weekdays.indexOf(end);
+                        const currIdx = weekdays.indexOf(day);
+                        if (startIdx !== -1 && endIdx !== -1 && currIdx >= startIdx && currIdx <= endIdx) {
+                            isActive = true;
+                        }
+                    } else if (wParts.includes(day)) {
+                        isActive = true;
+                    }
+                }
+                const activeClasses = isActive ? 'bg-blue-600 text-white' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]';
+                weekdayButtons += `
+                    <button type="button" data-val="${day}" class="weekday-pill px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[var(--border-primary)] ${activeClasses} hover:text-white cursor-pointer transition">
+                        ${weekdayLabels[day]}
+                    </button>
+                `;
+            });
+
+            // Build month selector options
+            const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+            const monthLabels = { jan: 'Jan', feb: 'Feb', mar: 'Mar', apr: 'Apr', may: 'May', jun: 'Jun', jul: 'Jul', aug: 'Aug', sep: 'Sep', oct: 'Oct', nov: 'Nov', dec: 'Dec' };
+            
+            let monthButtons = '';
+            months.forEach(m => {
+                let isActive = false;
+                if (data && data.month) {
+                    const mParts = data.month.split(',');
+                    if (data.month.includes('-')) {
+                        const [start, end] = data.month.split('-');
+                        const startIdx = months.indexOf(start);
+                        const endIdx = months.indexOf(end);
+                        const currIdx = months.indexOf(m);
+                        if (startIdx !== -1 && endIdx !== -1 && currIdx >= startIdx && currIdx <= endIdx) {
+                            isActive = true;
+                        }
+                    } else if (mParts.includes(m)) {
+                        isActive = true;
+                    }
+                }
+                const activeClasses = isActive ? 'bg-blue-600 text-white' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]';
+                monthButtons += `
+                    <button type="button" data-val="${m}" class="month-pill px-2 py-1 text-[9px] font-bold rounded-lg border border-[var(--border-primary)] ${activeClasses} hover:text-white cursor-pointer transition">
+                        ${monthLabels[m]}
+                    </button>
+                `;
+            });
+
+            // Parse time range
+            let startTime = '';
+            let endTime = '';
+            if (data && data.time && data.time !== '*') {
+                const parts = data.time.split('-');
+                startTime = parts[0] || '';
+                endTime = parts[1] || '';
+            }
+
+            // Monthdays range parse
+            let startMonthday = '';
+            let endMonthday = '';
+            if (data && data.monthday && data.monthday !== '*') {
+                const parts = data.monthday.split('-');
+                startMonthday = parts[0] || '';
+                endMonthday = parts[1] || '';
+            }
+
+            // Options 1-31 helper
+            let dayOptions = '<option value="">Any</option>';
+            for (let d = 1; d <= 31; d++) {
+                dayOptions += `<option value="${d}">${d}</option>`;
+            }
+
+            card.innerHTML = `
+                <button type="button" onclick="removeTimeGroupRuleFromModal(this)" class="absolute top-3 right-3 text-red-400 hover:text-red-600 text-xs font-bold cursor-pointer transition">Remove</button>
+                <div class="text-xs font-bold text-white mb-1 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    Time Rule Window
+                </div>
+                
+                <!-- Time range controls -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1">Start Time</label>
+                        <input type="time" value="${startTime}" class="rule-start-time config-input w-full py-1 text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1">End Time</label>
+                        <input type="time" value="${endTime}" class="rule-end-time config-input w-full py-1 text-xs">
+                    </div>
+                </div>
+                
+                <!-- Weekdays multi-select buttons -->
+                <div>
+                    <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1">Days of Week (cont. or specific)</label>
+                    <div class="flex flex-wrap gap-1 mb-1.5">
+                        ${weekdayButtons}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="setWeekdayPreset(this, 'all')" class="text-[9px] text-blue-400 font-bold hover:underline cursor-pointer">All Week</button>
+                        <span class="text-zinc-600 text-[9px]">•</span>
+                        <button type="button" onclick="setWeekdayPreset(this, 'workdays')" class="text-[9px] text-blue-400 font-bold hover:underline cursor-pointer">Mon-Fri</button>
+                        <span class="text-zinc-600 text-[9px]">•</span>
+                        <button type="button" onclick="setWeekdayPreset(this, 'weekend')" class="text-[9px] text-blue-400 font-bold hover:underline cursor-pointer">Sat-Sun</button>
+                    </div>
+                </div>
+                
+                <!-- Days of Month range select -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1">Start Day of Month</label>
+                        <select class="rule-start-monthday config-input w-full py-1 text-xs">
+                            ${dayOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1">End Day of Month</label>
+                        <select class="rule-end-monthday config-input w-full py-1 text-xs">
+                            ${dayOptions}
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Months multi-select pills -->
+                <div>
+                    <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1">Months</label>
+                    <div class="flex flex-wrap gap-1 mb-1.5">
+                        ${monthButtons}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="setMonthPreset(this, 'all')" class="text-[9px] text-blue-400 font-bold hover:underline cursor-pointer">All Year</button>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(card);
+            
+            // Set values on newly created selects
+            const startSelect = card.querySelector('.rule-start-monthday');
+            const endSelect = card.querySelector('.rule-end-monthday');
+            if (startMonthday) startSelect.value = startMonthday;
+            if (endMonthday) endSelect.value = endMonthday;
+        }
+
+        function removeTimeGroupRuleFromModal(btn) {
+            const card = btn.closest('.rule-card');
+            if (card) card.remove();
+        }
+
+        function setWeekdayPreset(btn, preset) {
+            const card = btn.closest('.rule-card');
+            const pills = card.querySelectorAll('.weekday-pill');
+            const workdays = ['mon', 'tue', 'wed', 'thu', 'fri'];
+            const weekend = ['sat', 'sun'];
+            
+            pills.forEach(pill => {
+                const val = pill.getAttribute('data-val');
+                let active = false;
+                if (preset === 'all') active = true;
+                else if (preset === 'workdays' && workdays.includes(val)) active = true;
+                else if (preset === 'weekend' && weekend.includes(val)) active = true;
+                
+                if (active) {
+                    pill.className = 'weekday-pill px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[var(--border-primary)] bg-blue-600 text-white hover:text-white cursor-pointer transition';
+                } else {
+                    pill.className = 'weekday-pill px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-white cursor-pointer transition';
+                }
+            });
+        }
+
+        function setMonthPreset(btn, preset) {
+            const card = btn.closest('.rule-card');
+            const pills = card.querySelectorAll('.month-pill');
+            pills.forEach(pill => {
+                if (preset === 'all') {
+                    pill.className = 'month-pill px-2 py-1 text-[9px] font-bold rounded-lg border border-[var(--border-primary)] bg-blue-600 text-white hover:text-white cursor-pointer transition';
+                }
+            });
+        }
+
+        // Global delegate listener to toggle pills on click
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('weekday-pill') || e.target.classList.contains('month-pill')) {
+                e.target.classList.toggle('bg-blue-600');
+                e.target.classList.toggle('text-white');
+                e.target.classList.toggle('bg-[var(--bg-secondary)]');
+                e.target.classList.toggle('text-[var(--text-secondary)]');
+            }
+        });
+
+        function editTimeGroup(id) {
+            const tg = loadedTimeGroupsList.find(g => g.id === id);
+            if (!tg) return;
+            
+            document.getElementById('tgEditMode').value = 'true';
+            document.getElementById('tgId').value = tg.id;
+            document.getElementById('tgDescription').value = tg.description;
+            
+            const container = document.getElementById('timeGroupRulesListContainer');
+            container.innerHTML = '';
+            
+            if (tg.rules && tg.rules.length > 0) {
+                tg.rules.forEach(rule => {
+                    addTimeGroupRuleToModal(rule);
+                });
+            } else {
+                addTimeGroupRuleToModal();
+            }
+            
+            document.getElementById('timeGroupModalTitle').textContent = (isRtl ? 'تعديل مجموعة الوقت: ' : 'Edit Time Group: ') + tg.description;
+            openModal('timeGroupModal');
+        }
+
+        function saveTimeGroup(e) {
+            e.preventDefault();
+            const editMode = document.getElementById('tgEditMode').value === 'true';
+            const id = document.getElementById('tgId').value;
+            const description = document.getElementById('tgDescription').value.trim();
+            
+            const rules = [];
+            const ruleCards = document.querySelectorAll('#timeGroupRulesListContainer .rule-card');
+            
+            ruleCards.forEach(card => {
+                const startTime = card.querySelector('.rule-start-time').value;
+                const endTime = card.querySelector('.rule-end-time').value;
+                
+                let timeVal = '';
+                if (startTime && endTime) {
+                    timeVal = `${startTime}-${endTime}`;
+                }
+                
+                const activeWeekdays = [];
+                card.querySelectorAll('.weekday-pill.bg-blue-600').forEach(p => {
+                    activeWeekdays.push(p.getAttribute('data-val'));
+                });
+                
+                const startMonthday = card.querySelector('.rule-start-monthday').value;
+                const endMonthday = card.querySelector('.rule-end-monthday').value;
+                let monthdayVal = '';
+                if (startMonthday && endMonthday) {
+                    monthdayVal = `${startMonthday}-${endMonthday}`;
+                } else if (startMonthday) {
+                    monthdayVal = startMonthday;
+                }
+                
+                const activeMonths = [];
+                card.querySelectorAll('.month-pill.bg-blue-600').forEach(p => {
+                    activeMonths.push(p.getAttribute('data-val'));
+                });
+                
+                rules.push({
+                    time: timeVal,
+                    weekday: activeWeekdays.join(','),
+                    monthday: monthdayVal,
+                    month: activeMonths.join(',')
+                });
+            });
+            
+            const method = editMode ? 'PUT' : 'POST';
+            const url = editMode ? `/api/config/timegroups/${id}` : '/api/config/timegroups';
+            
+            fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ description, rules })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    closeModal('timeGroupModal');
+                    showToast(editMode ? 'Time Group updated successfully.' : 'Time Group added successfully.', 'success');
+                    fetchTimeGroups();
+                } else {
+                    showToast(data.error || 'Failed to save Time Group.', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Failed to connect to server.', 'error');
+            });
+        }
+
+        function deleteTimeGroup(id) {
+            if (!confirm(isRtl ? 'هل أنت متأكد من حذف مجموعة الوقت هذه؟' : 'Are you sure you want to delete this Time Group?')) return;
+            fetch(`/api/config/timegroups/${id}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('Time Group deleted successfully.', 'success');
+                        fetchTimeGroups();
+                    } else {
+                        showToast(data.error || 'Failed to delete Time Group.', 'error');
+                    }
+                });
+        }
+
+
+        // --- TIME CONDITIONS CLIENT LOGIC ---
+
+        function fetchTimeConditions() {
+            fetch('/api/config/timeconditions')
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success || !data.timeconditions) return;
+                    loadedTimeConditionsList = data.timeconditions;
+                    
+                    const tbody = document.getElementById('timeconditions-table-body');
+                    if (!tbody) return;
+                    tbody.innerHTML = '';
+                    if (data.timeconditions.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-[var(--text-muted)]">No time conditions found.</td></tr>';
+                        return;
+                    }
+
+                    data.timeconditions.forEach(tc => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'hover:bg-[var(--bg-hover)] transition-colors border-b border-[var(--border-primary)]/40 text-xs';
+                        
+                        tr.innerHTML = `
+                            <td class="py-3 px-4 font-mono font-bold text-[var(--text-primary)]">${tc.timeconditions_id}</td>
+                            <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${tc.displayname}</td>
+                            <td class="py-3 px-4 font-semibold text-blue-400">${tc.timegroup_name || 'None (ID: ' + tc.timegroup_id + ')'}</td>
+                            <td class="py-3 px-4 font-mono text-xs text-emerald-400 font-bold">${formatDestination(tc.truegoto)}</td>
+                            <td class="py-3 px-4 font-mono text-xs text-rose-400 font-bold">${formatDestination(tc.falsegoto)}</td>
+                            <td class="py-3 px-4 text-center">
+                                <div class="flex items-center justify-center gap-2">
+                                    <button onclick="editTimeCondition(${tc.timeconditions_id})" class="px-2.5 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30 transition cursor-pointer">Edit</button>
+                                    <button onclick="deleteTimeCondition(${tc.timeconditions_id})" class="px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded border border-red-500/30 transition cursor-pointer">Delete</button>
+                                </div>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                });
+        }
+
+        function openTimeConditionModal() {
+            document.getElementById('tcEditMode').value = 'false';
+            document.getElementById('tcId').value = '';
+            document.getElementById('tcDisplayName').value = '';
+            document.getElementById('tcTimeGroup').value = '';
+            
+            document.getElementById('tcTrueType').value = '';
+            onTcDestTypeChange('true');
+            document.getElementById('tcTrueGoto').value = '';
+
+            document.getElementById('tcFalseType').value = '';
+            onTcDestTypeChange('false');
+            document.getElementById('tcFalseGoto').value = '';
+
+            document.getElementById('timeConditionModalTitle').textContent = isRtl ? 'إضافة شرط وقت جديد' : 'Add Time Condition';
+            openModal('timeConditionModal');
+        }
+
+        function onTcDestTypeChange(prefix) {
+            const type = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}Type`).value;
+            const select = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}TargetSelect`);
+            const input = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}TargetInput`);
+
+            select.innerHTML = '<option value="">-- choose target --</option>';
+            select.classList.add('hidden');
+            input.classList.add('hidden');
+            select.required = false;
+            input.required = false;
+
+            if (type === 'extensions') {
+                select.classList.remove('hidden');
+                select.required = true;
+                loadedExtensionsList.forEach(ext => {
+                    const opt = document.createElement('option');
+                    opt.value = ext.extension;
+                    opt.textContent = `${ext.name} (Ext: ${ext.extension})`;
+                    select.appendChild(opt);
+                });
+            } else if (type === 'ringgroups') {
+                select.classList.remove('hidden');
+                select.required = true;
+                loadedRingGroupsList.forEach(rg => {
+                    const opt = document.createElement('option');
+                    opt.value = rg.grpnum;
+                    opt.textContent = `${rg.description} (Group: ${rg.grpnum})`;
+                    select.appendChild(opt);
+                });
+            } else if (type === 'voicemail') {
+                select.classList.remove('hidden');
+                select.required = true;
+                loadedExtensionsList.forEach(ext => {
+                    if (ext.voicemail !== 'novm') {
+                        const opt = document.createElement('option');
+                        opt.value = ext.extension;
+                        opt.textContent = `${ext.name} (Voicemail: ${ext.extension})`;
+                        select.appendChild(opt);
+                    }
+                });
+            } else if (type === 'timeconditions') {
+                select.classList.remove('hidden');
+                select.required = true;
+                const currTcId = document.getElementById('tcId').value;
+                loadedTimeConditionsList.forEach(tc => {
+                    if (tc.timeconditions_id != currTcId) {
+                        const opt = document.createElement('option');
+                        opt.value = tc.timeconditions_id;
+                        opt.textContent = `${tc.displayname} (ID: ${tc.timeconditions_id})`;
+                        select.appendChild(opt);
+                    }
+                });
+            } else if (type === 'terminate') {
+                select.classList.remove('hidden');
+                select.required = true;
+                
+                const terminateTargets = [
+                    { value: 'hangup', label: 'Hangup Call' },
+                    { value: 'congestion', label: 'Play Congestion Tone' },
+                    { value: 'busy', label: 'Play Busy Tone' }
+                ];
+                terminateTargets.forEach(tgt => {
+                    const opt = document.createElement('option');
+                    opt.value = tgt.value;
+                    opt.textContent = tgt.label;
+                    select.appendChild(opt);
+                });
+            } else if (type === 'custom') {
+                input.classList.remove('hidden');
+                input.required = true;
+            }
+            
+            updateTcDestValue(prefix);
+        }
+
+        function updateTcDestValue(prefix) {
+            const type = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}Type`).value;
+            const select = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}TargetSelect`);
+            const input = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}TargetInput`);
+            const hidden = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}Goto`);
+
+            let val = '';
+            if (type === 'extensions' && select.value) {
+                val = `from-did-direct,${select.value},1`;
+            } else if (type === 'ringgroups' && select.value) {
+                val = `ext-group,${select.value},1`;
+            } else if (type === 'voicemail' && select.value) {
+                val = `ext-local,vmu${select.value},1`;
+            } else if (type === 'timeconditions' && select.value) {
+                val = `timeconditions,${select.value},1`;
+            } else if (type === 'terminate' && select.value) {
+                val = `app-blackhole,${select.value},1`;
+            } else if (type === 'custom' && input.value.trim()) {
+                val = input.value.trim();
+            }
+            hidden.value = val;
+        }
+
+        function editTimeCondition(id) {
+            const tc = loadedTimeConditionsList.find(c => c.timeconditions_id === id);
+            if (!tc) return;
+            
+            document.getElementById('tcEditMode').value = 'true';
+            document.getElementById('tcId').value = tc.timeconditions_id;
+            document.getElementById('tcDisplayName').value = tc.displayname;
+            document.getElementById('tcTimeGroup').value = tc.timegroup_id;
+            
+            const parsedTrue = parseTcDestination(tc.truegoto);
+            document.getElementById('tcTrueType').value = parsedTrue.type;
+            onTcDestTypeChange('true');
+            if (parsedTrue.type === 'custom') {
+                document.getElementById('tcTrueTargetInput').value = parsedTrue.target;
+            } else {
+                document.getElementById('tcTrueTargetSelect').value = parsedTrue.target;
+            }
+            document.getElementById('tcTrueGoto').value = tc.truegoto || '';
+
+            const parsedFalse = parseTcDestination(tc.falsegoto);
+            document.getElementById('tcFalseType').value = parsedFalse.type;
+            onTcDestTypeChange('false');
+            if (parsedFalse.type === 'custom') {
+                document.getElementById('tcFalseTargetInput').value = parsedFalse.target;
+            } else {
+                document.getElementById('tcFalseTargetSelect').value = parsedFalse.target;
+            }
+            document.getElementById('tcFalseGoto').value = tc.falsegoto || '';
+
+            document.getElementById('timeConditionModalTitle').textContent = (isRtl ? 'تعديل شرط الوقت: ' : 'Edit Time Condition: ') + tc.displayname;
+            openModal('timeConditionModal');
+        }
+
+        function saveTimeCondition(e) {
+            e.preventDefault();
+            const editMode = document.getElementById('tcEditMode').value === 'true';
+            const id = document.getElementById('tcId').value;
+            const displayname = document.getElementById('tcDisplayName').value.trim();
+            const timegroup_id = document.getElementById('tcTimeGroup').value;
+            const truegoto = document.getElementById('tcTrueGoto').value;
+            const falsegoto = document.getElementById('tcFalseGoto').value;
+
+            if (!truegoto || !falsegoto) {
+                showToast('Please select valid destinations for both matched and unmatched conditions.', 'error');
+                return;
+            }
+
+            const method = editMode ? 'PUT' : 'POST';
+            const url = editMode ? `/api/config/timeconditions/${id}` : '/api/config/timeconditions';
+
+            fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ displayname, timegroup_id, truegoto, falsegoto })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    closeModal('timeConditionModal');
+                    showToast(editMode ? 'Time Condition updated successfully.' : 'Time Condition added successfully.', 'success');
+                    fetchTimeConditions();
+                } else {
+                    showToast(data.error || 'Failed to save Time Condition.', 'error');
+                }
+            })
+            .catch(err => {
+                showToast('Failed to connect to server.', 'error');
+            });
+        }
+
+        function deleteTimeCondition(id) {
+            if (!confirm(isRtl ? 'هل أنت متأكد من حذف شرط الوقت هذا؟' : 'Are you sure you want to delete this Time Condition?')) return;
+            fetch(`/api/config/timeconditions/${id}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('Time Condition deleted successfully.', 'success');
+                        fetchTimeConditions();
+                    } else {
+                        showToast(data.error || 'Failed to delete Time Condition.', 'error');
+                    }
+                });
         }
     </script>
 </body>
