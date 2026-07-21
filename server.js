@@ -108,7 +108,7 @@ app.use(session({
 // --- DATABASE INIT & AUTO-PROVISION ---
 const ALL_TABS = [
     'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'contacts', 'users', 'config',
-    'config-extensions', 'config-ringgroups', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail'
+    'config-extensions', 'config-ringgroups', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram'
 ];
 
 async function initAuthDb() {
@@ -317,6 +317,8 @@ app.use('/api/config', (req, res, next) => {
         subTab = 'outbound';
     } else if (req.path.startsWith('/voicemail')) {
         subTab = 'voicemail';
+    } else if (req.path.startsWith('/diagram')) {
+        subTab = 'diagram';
     } else if (req.path === '/reload') {
         const perms = req.session.userPermissions || [];
         const hasAnyConfig = perms.includes('config') || perms.some(p => p.startsWith('config-'));
@@ -3716,6 +3718,88 @@ app.post('/api/config/voicemail/reset', async (req, res) => {
         exec(`${ASTERISK_BIN} -rx "module reload sounds"`, () => {});
         
         res.json({ success: true, message: `Voicemail greetings reset to default for ${targetExtensions.length} extension(s).` });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET /api/config/diagram - Fetch diagram configuration data
+app.get('/api/config/diagram', async (req, res) => {
+    try {
+        // Query Extensions
+        const [extensions] = await pool.query(`
+            SELECT extension, name FROM \`asterisk\`.\`users\`
+            ORDER BY CAST(extension AS UNSIGNED) ASC
+        `);
+
+        // Query Ring Groups
+        const [ringgroups] = await pool.query(`
+            SELECT grpnum, strategy, grptime, grplist, description FROM \`asterisk\`.\`ringgroups\`
+            ORDER BY CAST(grpnum AS UNSIGNED) ASC
+        `);
+
+        // Query Trunks
+        const [trunks] = await pool.query(`
+            SELECT trunkid, name, tech, disabled FROM \`asterisk\`.\`trunks\`
+            ORDER BY trunkid ASC
+        `);
+
+        // Query Inbound Routes
+        const [inbound] = await pool.query(`
+            SELECT extension AS did, destination, description FROM \`asterisk\`.\`incoming\`
+            ORDER BY description ASC
+        `);
+
+        // Query Outbound Routes
+        const [outboundRows] = await pool.query(`
+            SELECT route_id, name FROM \`asterisk\`.\`outbound_routes\`
+            ORDER BY route_id ASC
+        `);
+
+        // Query Outbound Route Patterns
+        const [patternsRows] = await pool.query(`
+            SELECT route_id, match_pattern_pass, match_cid FROM \`asterisk\`.\`outbound_route_patterns\`
+        `);
+
+        // Query Outbound Route Trunks
+        const [trunksRows] = await pool.query(`
+            SELECT rt.route_id, rt.trunk_id, t.name AS trunk_name
+            FROM \`asterisk\`.\`outbound_route_trunks\` rt
+            LEFT JOIN \`asterisk\`.\`trunks\` t ON t.trunkid = rt.trunk_id
+            ORDER BY rt.seq ASC
+        `);
+
+        // Group Outbound Route patterns and trunks
+        const outbound = outboundRows.map(r => {
+            const route_id = r.route_id;
+            const patterns = patternsRows
+                .filter(p => p.route_id === route_id)
+                .map(p => ({
+                    pattern: p.match_pattern_pass || '',
+                    cid: p.match_cid || ''
+                }));
+            const trunks = trunksRows
+                .filter(t => t.route_id === route_id)
+                .map(t => ({
+                    trunk_id: t.trunk_id,
+                    trunk_name: t.trunk_name || `Trunk #${t.trunk_id}`
+                }));
+            return {
+                route_id,
+                name: r.name,
+                patterns,
+                trunks
+            };
+        });
+
+        res.json({
+            success: true,
+            inbound,
+            ringgroups,
+            extensions,
+            outbound,
+            trunks
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

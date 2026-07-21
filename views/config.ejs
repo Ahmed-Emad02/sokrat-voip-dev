@@ -216,6 +216,14 @@ function isTabAllowed(tabName) {
                 <span><%= isRtl ? 'رسائل البريد الصوتي (Voicemail Greetings)' : 'Voicemail Greetings' %></span>
             </button>
             <% } %>
+            <% if (isTabAllowed('diagram')) { %>
+            <button onclick="switchTab('diagram')" id="tab-btn-diagram" class="config-tab-btn config-tab-inactive flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <span><%= isRtl ? 'مخطط الإعدادات (Config Diagram)' : 'Config Diagram' %></span>
+            </button>
+            <% } %>
         </div>
 
         <!-- TAB 1: EXTENSIONS MANAGEMENT -->
@@ -517,6 +525,66 @@ function isTabAllowed(tabName) {
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+        <% } %>
+        
+        <!-- TAB 8: CONFIG DIAGRAM -->
+        <% if (isTabAllowed('diagram')) { %>
+        <div id="section-diagram" class="tab-section hidden">
+            <div class="config-card p-6 flex flex-col h-[750px] relative">
+                <!-- Header of Diagram tab -->
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'مخطط الإعدادات (Config Diagram)' : 'Config Diagram' %></h2>
+                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'عرض مرئي تفاعلي للعلاقات بين المسارات، مجموعات الاتصال، التحويلات، وخطوط الربط' : 'Interactive visual diagram of the connections between inbound routes, ring groups, extensions, outbound routes, and trunks' %></p>
+                    </div>
+                    <!-- Toolbar controls -->
+                    <div class="flex items-center gap-2">
+                        <!-- Search input -->
+                        <div class="relative">
+                            <input type="text" id="diagramSearch" oninput="filterDiagramNodes()" placeholder="<%= isRtl ? 'ابحث عن عنصر...' : 'Search node...' %>" class="config-input pl-8 pr-3 py-1.5 text-xs w-48 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg">
+                            <svg class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                        <button onclick="zoomDiagram(1.2)" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:bg-[var(--bg-hover)] text-xs font-bold rounded-lg cursor-pointer transition">
+                            ＋
+                        </button>
+                        <button onclick="zoomDiagram(0.8)" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:bg-[var(--bg-hover)] text-xs font-bold rounded-lg cursor-pointer transition">
+                            －
+                        </button>
+                        <button onclick="resetDiagramZoom()" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:bg-[var(--bg-hover)] text-xs font-semibold rounded-lg cursor-pointer transition">
+                            <%= isRtl ? 'إعادة ضبط' : 'Reset' %>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Canvas Wrapper -->
+                <div class="flex-1 relative border border-[var(--border-primary)] rounded-xl overflow-hidden bg-[#09090b]">
+                    <svg id="diagramSvg" class="w-full h-full cursor-grab active:cursor-grabbing select-none">
+                        <!-- Grid pattern definition -->
+                        <defs>
+                            <pattern id="grid-pattern" width="30" height="30" patternUnits="userSpaceOnUse">
+                                <circle cx="2" cy="2" r="1.5" fill="#222" />
+                            </pattern>
+                            <!-- Drop shadow filter for highlights -->
+                            <filter id="glow-filter" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="4" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                        </defs>
+                        <!-- Grid rect -->
+                        <rect width="100%" height="100%" fill="url(#grid-pattern)" />
+                        <!-- Zoom and pan group -->
+                        <g id="diagramViewport" transform="translate(0,0) scale(1)">
+                            <!-- Connections / Wires -->
+                            <g id="diagramConnections"></g>
+                            <!-- Nodes / Cards -->
+                            <g id="diagramNodes"></g>
+                        </g>
+                    </svg>
+                </div>
             </div>
         </div>
         <% } %>
@@ -857,6 +925,7 @@ function isTabAllowed(tabName) {
             if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchInboundRoutes(); }
             if (tabId === 'outbound') fetchOutboundRoutes();
             if (tabId === 'voicemail') { fetchRecordings(); fetchVoicemailExtensions(); }
+            if (tabId === 'diagram') fetchDiagramData();
         }
 
         function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -2165,8 +2234,6 @@ function isTabAllowed(tabName) {
                 return;
             }
             
-            if (!confirm(`Reset selected mailbox greetings to Asterisk default?`)) return;
-
             fetch('/api/config/voicemail/reset', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2179,6 +2246,545 @@ function isTabAllowed(tabName) {
                     fetchVoicemailExtensions();
                 } else showToast(data.error, 'error');
             });
+        }
+
+        // --- 8. CONFIG DIAGRAM ENGINE ---
+        let diagramRawData = null;
+        let diagramNodesList = [];
+        let diagramLinks = [];
+        
+        let zoomScale = 1.0;
+        let panX = 0;
+        let panY = 0;
+        let isDragging = false;
+        let startX, startY;
+        let isPanZoomInitialized = false;
+
+        function fetchDiagramData() {
+            const svgNodes = document.getElementById('diagramNodes');
+            const svgWires = document.getElementById('diagramConnections');
+            if (!svgNodes || !svgWires) return;
+
+            svgNodes.innerHTML = `<foreignObject x="400" y="300" width="400" height="100">
+                <div class="text-center text-[var(--text-muted)] italic text-sm">
+                    ${isRtl ? 'جاري تحميل مخطط الإعدادات...' : 'Loading config diagram...'}
+                </div>
+            </foreignObject>`;
+            svgWires.innerHTML = '';
+
+            fetch('/api/config/diagram')
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) {
+                        showToast(data.error || 'Failed to fetch diagram data', 'error');
+                        return;
+                    }
+                    diagramRawData = data;
+                    renderDiagram();
+                    if (!isPanZoomInitialized) {
+                        initPanZoom();
+                        isPanZoomInitialized = true;
+                    }
+                })
+                .catch(err => {
+                    showToast(err.message, 'error');
+                });
+        }
+
+        function renderDiagram() {
+            const svgNodes = document.getElementById('diagramNodes');
+            const svgWires = document.getElementById('diagramConnections');
+            if (!svgNodes || !svgWires || !diagramRawData) return;
+
+            svgNodes.innerHTML = '';
+            svgWires.innerHTML = '';
+
+            const colSpacing = 360;
+            const cardWidth = 260;
+            const cardHeight = 85;
+            const ySpacing = 125;
+
+            const inbound = diagramRawData.inbound || [];
+            const ringgroups = diagramRawData.ringgroups || [];
+            const extensions = diagramRawData.extensions || [];
+            const outbound = diagramRawData.outbound || [];
+            const trunks = diagramRawData.trunks || [];
+
+            const columns = [inbound, ringgroups, extensions, outbound, trunks];
+            const maxCount = Math.max(...columns.map(c => c.length), 1);
+            const viewHeight = Math.max(maxCount * ySpacing + 100, 650);
+
+            diagramNodesList = [];
+            
+            // 1. Inbound Nodes
+            inbound.forEach((route, i) => {
+                const startY = (viewHeight - (inbound.length * ySpacing)) / 2 + 30;
+                diagramNodesList.push({
+                    id: 'inbound-' + route.did,
+                    x: 50,
+                    y: startY + i * ySpacing,
+                    type: 'inbound',
+                    title: route.did ? `DID: ${route.did}` : (isRtl ? 'أي رقم وارد' : 'Any DID'),
+                    subtitle: route.description || (isRtl ? 'مسار وارد' : 'Inbound Route'),
+                    desc: route.destination,
+                    data: route
+                });
+            });
+
+            // 2. Ring Groups Nodes
+            ringgroups.forEach((rg, i) => {
+                const startY = (viewHeight - (ringgroups.length * ySpacing)) / 2 + 30;
+                diagramNodesList.push({
+                    id: 'ringgroup-' + rg.grpnum,
+                    x: 50 + colSpacing,
+                    y: startY + i * ySpacing,
+                    type: 'ringgroup',
+                    title: `${isRtl ? 'مجموعة:' : 'Group:'} ${rg.grpnum}`,
+                    subtitle: rg.description || (isRtl ? 'مجموعة اتصال' : 'Ring Group'),
+                    desc: `${isRtl ? 'الاستراتيجية:' : 'Strategy:'} ${rg.strategy}`,
+                    data: rg
+                });
+            });
+
+            // 3. Extensions Nodes
+            extensions.forEach((ext, i) => {
+                const startY = (viewHeight - (extensions.length * ySpacing)) / 2 + 30;
+                diagramNodesList.push({
+                    id: 'extension-' + ext.extension,
+                    x: 50 + colSpacing * 2,
+                    y: startY + i * ySpacing,
+                    type: 'extension',
+                    title: `${isRtl ? 'تحويلة:' : 'Ext:'} ${ext.extension}`,
+                    subtitle: ext.name || (isRtl ? 'تحويلة SIP' : 'SIP Extension'),
+                    desc: ext.voicemail === 'novm' ? (isRtl ? 'البريد مغلق' : 'Voicemail Off') : (isRtl ? 'البريد مفعل' : 'Voicemail On'),
+                    data: ext
+                });
+            });
+
+            // 4. Outbound Routes Nodes
+            outbound.forEach((route, i) => {
+                const startY = (viewHeight - (outbound.length * ySpacing)) / 2 + 30;
+                const patternStr = route.patterns.map(p => p.pattern).filter(Boolean).slice(0, 2).join(', ');
+                diagramNodesList.push({
+                    id: 'outbound-' + route.route_id,
+                    x: 50 + colSpacing * 3,
+                    y: startY + i * ySpacing,
+                    type: 'outbound',
+                    title: route.name,
+                    subtitle: isRtl ? 'مسار صادر' : 'Outbound Route',
+                    desc: patternStr ? `${isRtl ? 'أنماط:' : 'Patterns:'} ${patternStr}` : (isRtl ? 'بلا أنماط' : 'No patterns'),
+                    data: route
+                });
+            });
+
+            // 5. Trunks Nodes
+            trunks.forEach((tk, i) => {
+                const startY = (viewHeight - (trunks.length * ySpacing)) / 2 + 30;
+                diagramNodesList.push({
+                    id: 'trunk-' + tk.trunkid,
+                    x: 50 + colSpacing * 4,
+                    y: startY + i * ySpacing,
+                    type: 'trunk',
+                    title: tk.name,
+                    subtitle: `${tk.tech ? tk.tech.toUpperCase() : 'SIP'} Trunk`,
+                    desc: tk.disabled ? (isRtl ? 'معطل' : 'Disabled') : (isRtl ? 'نشط' : 'Active'),
+                    data: tk
+                });
+            });
+
+            diagramLinks = [];
+
+            // Link 1: Inbound -> Ring Groups or Extensions
+            inbound.forEach((route, idx) => {
+                const dest = route.destination || '';
+                let targetId = null;
+                let wireType = 'inbound-dest';
+                if (dest.startsWith('ext-group,')) {
+                    targetId = 'ringgroup-' + dest.split(',')[1];
+                } else if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
+                    targetId = 'extension-' + dest.split(',')[1];
+                }
+                if (targetId) {
+                    diagramLinks.push({
+                        id: `link-inbound-${idx}`,
+                        source: 'inbound-' + route.did,
+                        target: targetId,
+                        type: wireType
+                    });
+                }
+            });
+
+            // Link 2: Ring Group -> Extensions
+            ringgroups.forEach(rg => {
+                const members = rg.grplist ? rg.grplist.split('-') : [];
+                members.forEach(ext => {
+                    const extExists = extensions.some(e => String(e.extension) === String(ext));
+                    if (extExists) {
+                        diagramLinks.push({
+                            id: `link-rg-${rg.grpnum}-${ext}`,
+                            source: 'ringgroup-' + rg.grpnum,
+                            target: 'extension-' + ext,
+                            type: 'rg-member'
+                        });
+                    }
+                });
+            });
+
+            // Link 3: Extension -> Outbound Routes
+            extensions.forEach(ext => {
+                outbound.forEach(route => {
+                    const hasRestrictedCid = route.patterns.some(p => String(p.cid) === String(ext.extension));
+                    const hasGlobalRoute = route.patterns.some(p => !p.cid || p.cid === '');
+                    if (hasRestrictedCid) {
+                        diagramLinks.push({
+                            id: `link-ext-outbound-${ext.extension}-${route.route_id}`,
+                            source: 'extension-' + ext.extension,
+                            target: 'outbound-' + route.route_id,
+                            type: 'ext-route-restricted'
+                        });
+                    } else if (hasGlobalRoute) {
+                        diagramLinks.push({
+                            id: `link-ext-outbound-global-${ext.extension}-${route.route_id}`,
+                            source: 'extension-' + ext.extension,
+                            target: 'outbound-' + route.route_id,
+                            type: 'ext-route-global'
+                        });
+                    }
+                });
+            });
+
+            // Link 4: Outbound Route -> Trunks
+            outbound.forEach(route => {
+                route.trunks.forEach(tk => {
+                    const trunkExists = trunks.some(t => t.trunkid === tk.trunk_id);
+                    if (trunkExists) {
+                        diagramLinks.push({
+                            id: `link-outbound-trunk-${route.route_id}-${tk.trunk_id}`,
+                            source: 'outbound-' + route.route_id,
+                            target: 'trunk-' + tk.trunk_id,
+                            type: 'route-trunk'
+                        });
+                    }
+                });
+            });
+
+            // Render Wires
+            diagramLinks.forEach(link => {
+                const sourceNode = diagramNodesList.find(n => n.id === link.source);
+                const targetNode = diagramNodesList.find(n => n.id === link.target);
+                if (!sourceNode || !targetNode) return;
+
+                const x1 = sourceNode.x + cardWidth;
+                const y1 = sourceNode.y + cardHeight / 2;
+                const x2 = targetNode.x;
+                const y2 = targetNode.y + cardHeight / 2;
+
+                const dx = Math.abs(x2 - x1) * 0.45;
+                const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+
+                let strokeColor = '#3f3f46';
+                if (link.type === 'inbound-dest') strokeColor = '#10b981';
+                else if (link.type === 'rg-member') strokeColor = '#a855f7';
+                else if (link.type === 'ext-route-restricted') strokeColor = '#f97316';
+                else if (link.type === 'ext-route-global') strokeColor = '#27272a';
+                else if (link.type === 'route-trunk') strokeColor = '#06b6d4';
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('id', link.id);
+                path.setAttribute('class', 'diagram-wire transition-all duration-200');
+                path.setAttribute('d', d);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', strokeColor);
+                path.setAttribute('stroke-width', link.type === 'ext-route-global' ? '1.5px' : '2px');
+                path.setAttribute('stroke-linecap', 'round');
+                path.setAttribute('data-type', link.type);
+                path.style.opacity = link.type === 'ext-route-global' ? '0.2' : '0.5';
+                
+                svgWires.appendChild(path);
+            });
+
+            // Render Nodes
+            diagramNodesList.forEach(node => {
+                let accentColorClass = 'border-emerald-500/20 hover:border-emerald-500';
+                let iconBgClass = 'bg-emerald-500/10 text-emerald-400';
+                let svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>`;
+
+                if (node.type === 'ringgroup') {
+                    accentColorClass = 'border-purple-500/20 hover:border-purple-500';
+                    iconBgClass = 'bg-purple-500/10 text-purple-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>`;
+                } else if (node.type === 'extension') {
+                    accentColorClass = 'border-red-500/20 hover:border-red-500';
+                    iconBgClass = 'bg-red-500/10 text-red-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>`;
+                } else if (node.type === 'outbound') {
+                    accentColorClass = 'border-orange-500/20 hover:border-orange-500';
+                    iconBgClass = 'bg-orange-500/10 text-orange-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>`;
+                } else if (node.type === 'trunk') {
+                    accentColorClass = 'border-cyan-500/20 hover:border-cyan-500';
+                    iconBgClass = 'bg-cyan-500/10 text-cyan-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>`;
+                }
+
+                let statusBadge = '';
+                if (node.type === 'trunk' && node.data.disabled === 1) {
+                    statusBadge = `<span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-red-950/40 text-red-400 border border-red-500/10 ml-auto">${isRtl ? 'معطل' : 'Disabled'}</span>`;
+                }
+
+                const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+                fo.setAttribute('x', node.x);
+                fo.setAttribute('y', node.y);
+                fo.setAttribute('width', cardWidth);
+                fo.setAttribute('height', cardHeight);
+                fo.setAttribute('class', 'overflow-visible');
+
+                fo.innerHTML = `
+                    <div data-node-id="${node.id}" 
+                         onmouseenter="highlightNode('${node.id}')" 
+                         onmouseleave="resetHighlight()" 
+                         class="diagram-card w-[260px] h-[85px] bg-[#111115]/90 backdrop-blur-md border ${accentColorClass} rounded-xl p-3 flex flex-col justify-between hover:shadow-[0_0_20px_rgba(239,68,68,0.08)] transition duration-200 cursor-pointer relative select-none">
+                        
+                        <div class="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#1c1c24] bg-[#27272a]"></div>
+                        <div class="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#1c1c24] bg-[#27272a]"></div>
+
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">
+                                ${svgIcon}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-black text-white truncate">${node.title}</span>
+                                    ${statusBadge}
+                                </div>
+                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                            </div>
+                        </div>
+                        <div class="text-[9px] text-[var(--text-muted)] truncate font-mono bg-[#18181f] px-2 py-1 rounded border border-white/5 mt-1.5 flex items-center justify-between">
+                            <span class="truncate">${node.desc || ''}</span>
+                        </div>
+                    </div>
+                `;
+
+                svgNodes.appendChild(fo);
+            });
+        }
+
+        function highlightNode(nodeId) {
+            const connections = document.querySelectorAll('.diagram-wire');
+            const cards = document.querySelectorAll('.diagram-card');
+            
+            const connectedNodeIds = new Set([nodeId]);
+            const activeWireIds = new Set();
+            
+            diagramLinks.forEach(link => {
+                if (link.source === nodeId) {
+                    connectedNodeIds.add(link.target);
+                    activeWireIds.add(link.id);
+                    if (link.target.startsWith('ringgroup-')) {
+                        const rgNum = link.target.split('-')[1];
+                        diagramLinks.forEach(l2 => {
+                            if (l2.source === 'ringgroup-' + rgNum) {
+                                connectedNodeIds.add(l2.target);
+                                activeWireIds.add(l2.id);
+                            }
+                        });
+                    }
+                }
+                if (link.target === nodeId) {
+                    connectedNodeIds.add(link.source);
+                    activeWireIds.add(link.id);
+                }
+            });
+            
+            connections.forEach(wire => {
+                const id = wire.getAttribute('id');
+                if (activeWireIds.has(id)) {
+                    wire.style.opacity = '1';
+                    wire.style.strokeWidth = '3.5px';
+                    wire.style.filter = 'url(#glow-filter)';
+                    wire.style.stroke = '#ef4444';
+                } else {
+                    wire.style.opacity = '0.05';
+                }
+            });
+            
+            cards.forEach(card => {
+                const id = card.getAttribute('data-node-id');
+                if (connectedNodeIds.has(id)) {
+                    card.style.opacity = '1';
+                    card.style.borderColor = '#ef4444';
+                    card.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.25)';
+                } else {
+                    card.style.opacity = '0.2';
+                }
+            });
+        }
+
+        function resetHighlight() {
+            const connections = document.querySelectorAll('.diagram-wire');
+            const cards = document.querySelectorAll('.diagram-card');
+            
+            connections.forEach(wire => {
+                wire.style.strokeWidth = '2px';
+                wire.style.filter = 'none';
+                
+                const type = wire.getAttribute('data-type');
+                if (type === 'inbound-dest') {
+                    wire.style.stroke = '#10b981';
+                    wire.style.opacity = '0.5';
+                } else if (type === 'rg-member') {
+                    wire.style.stroke = '#a855f7';
+                    wire.style.opacity = '0.5';
+                } else if (type === 'ext-route-restricted') {
+                    wire.style.stroke = '#f97316';
+                    wire.style.opacity = '0.5';
+                } else if (type === 'ext-route-global') {
+                    wire.style.stroke = '#27272a';
+                    wire.style.strokeWidth = '1.5px';
+                    wire.style.opacity = '0.2';
+                } else if (type === 'route-trunk') {
+                    wire.style.stroke = '#06b6d4';
+                    wire.style.opacity = '0.5';
+                }
+            });
+            
+            cards.forEach(card => {
+                card.style.opacity = '1';
+                card.style.borderColor = '';
+                card.style.boxShadow = '';
+            });
+        }
+
+        function filterDiagramNodes() {
+            const query = document.getElementById('diagramSearch').value.toLowerCase().trim();
+            const cards = document.querySelectorAll('.diagram-card');
+            const connections = document.querySelectorAll('.diagram-wire');
+
+            if (!query) {
+                resetHighlight();
+                return;
+            }
+
+            const matchedNodeIds = new Set();
+            diagramNodesList.forEach(node => {
+                if (node.title.toLowerCase().includes(query) || 
+                    node.subtitle.toLowerCase().includes(query) || 
+                    (node.desc && node.desc.toLowerCase().includes(query))) {
+                    matchedNodeIds.add(node.id);
+                }
+            });
+
+            const activeWireIds = new Set();
+            diagramLinks.forEach(link => {
+                if (matchedNodeIds.has(link.source) || matchedNodeIds.has(link.target)) {
+                    activeWireIds.add(link.id);
+                    matchedNodeIds.add(link.source);
+                    matchedNodeIds.add(link.target);
+                }
+            });
+
+            cards.forEach(card => {
+                const id = card.getAttribute('data-node-id');
+                if (matchedNodeIds.has(id)) {
+                    card.style.opacity = '1';
+                    card.style.borderColor = '#ef4444';
+                    card.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.2)';
+                } else {
+                    card.style.opacity = '0.15';
+                }
+            });
+
+            connections.forEach(wire => {
+                const id = wire.getAttribute('id');
+                if (activeWireIds.has(id)) {
+                    wire.style.opacity = '1';
+                    wire.style.strokeWidth = '3px';
+                    wire.style.stroke = '#ef4444';
+                } else {
+                    wire.style.opacity = '0.04';
+                }
+            });
+        }
+
+        function initPanZoom() {
+            const svg = document.getElementById('diagramSvg');
+            if (!svg) return;
+
+            svg.addEventListener('mousedown', (e) => {
+                if (e.target.closest('foreignObject') || e.target.closest('button') || e.target.closest('input')) return;
+                isDragging = true;
+                svg.style.cursor = 'grabbing';
+                startX = e.clientX - panX;
+                startY = e.clientY - panY;
+            });
+
+            svg.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                panX = e.clientX - startX;
+                panY = e.clientY - startY;
+                updateTransform();
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    svg.style.cursor = 'grab';
+                }
+            });
+
+            svg.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomFactor = 1.08;
+                const oldScale = zoomScale;
+                if (e.deltaY < 0) {
+                    zoomScale *= zoomFactor;
+                } else {
+                    zoomScale /= zoomFactor;
+                }
+                zoomScale = Math.min(Math.max(zoomScale, 0.15), 3.0);
+                
+                const rect = svg.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                panX = mouseX - (mouseX - panX) * (zoomScale / oldScale);
+                panY = mouseY - (mouseY - panY) * (zoomScale / oldScale);
+                
+                updateTransform();
+            });
+            svg.style.cursor = 'grab';
+        }
+
+        function updateTransform() {
+            const viewport = document.getElementById('diagramViewport');
+            if (viewport) {
+                viewport.setAttribute('transform', `translate(${panX}, ${panY}) scale(${zoomScale})`);
+            }
+        }
+
+        function zoomDiagram(factor) {
+            const svg = document.getElementById('diagramSvg');
+            if (!svg) return;
+            const rect = svg.getBoundingClientRect();
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            const oldScale = zoomScale;
+            
+            zoomScale *= factor;
+            zoomScale = Math.min(Math.max(zoomScale, 0.15), 3.0);
+            
+            panX = centerX - (centerX - panX) * (zoomScale / oldScale);
+            panY = centerY - (centerY - panY) * (zoomScale / oldScale);
+            updateTransform();
+        }
+
+        function resetDiagramZoom() {
+            zoomScale = 1.0;
+            panX = 0;
+            panY = 0;
+            updateTransform();
+            document.getElementById('diagramSearch').value = '';
+            resetHighlight();
         }
     </script>
 </body>
