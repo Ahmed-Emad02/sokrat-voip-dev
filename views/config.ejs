@@ -557,37 +557,37 @@ function isTabAllowed(tabName) {
                 .light-theme .diagram-card span.text-white {
                     color: #0f172a !important; /* Slate-900 */
                 }
-                .light-theme .diagram-card .text-gray-400 {
-                    color: #475569 !important; /* Slate-600 */
+                .light-theme .diagram-card .text-gray-400,
+                .light-theme .diagram-card div.text-\[10px\] {
+                    color: #334155 !important; /* Slate-700 (Subtitle) */
                 }
                 
                 /* Details box overrides in Light Theme */
-                .light-theme .diagram-card .bg-\[\#16161c\] {
+                .light-theme .diagram-card div.font-mono {
                     background-color: #f1f5f9 !important; /* Slate-100 */
-                    border-color: #cbd5e1 !important; /* Slate-200 */
+                    border-color: #cbd5e1 !important; /* Slate-300 */
+                    color: #475569 !important; /* Slate-600 */
                 }
-                .light-theme .diagram-card .bg-\[\#16161c\] span.text-white {
-                    color: #0f172a !important;
+                .light-theme .diagram-card div.font-mono span {
+                    color: #475569 !important; /* Label text (e.g. :Context, :CID) */
                 }
-                .light-theme .diagram-card .bg-\[\#16161c\] span.text-gray-300 {
-                    color: #475569 !important;
+                .light-theme .diagram-card div.font-mono span.text-white {
+                    color: #0f172a !important; /* Value text (e.g. from-internal) */
                 }
-                
-                /* Color adjustment for specific types */
-                .light-theme .diagram-card .text-emerald-400 {
-                    color: #047857 !important; /* Emerald-700 */
+                .light-theme .diagram-card div.font-mono span.text-emerald-400 {
+                    color: #047857 !important;
                 }
-                .light-theme .diagram-card .text-purple-400 {
-                    color: #6d28d9 !important; /* Purple-700 */
+                .light-theme .diagram-card div.font-mono span.text-purple-400 {
+                    color: #6d28d9 !important;
                 }
-                .light-theme .diagram-card .text-red-400 {
-                    color: #b91c1c !important; /* Red-700 */
+                .light-theme .diagram-card div.font-mono span.text-red-400 {
+                    color: #b91c1c !important;
                 }
-                .light-theme .diagram-card .text-cyan-400 {
-                    color: #0e7490 !important; /* Cyan-700 */
+                .light-theme .diagram-card div.font-mono span.text-cyan-400 {
+                    color: #0e7490 !important;
                 }
-                .light-theme .diagram-card .text-orange-400 {
-                    color: #c2410c !important; /* Orange-700 */
+                .light-theme .diagram-card div.font-mono span.text-orange-400 {
+                    color: #c2410c !important;
                 }
                 
                 /* Port circle style */
