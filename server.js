@@ -426,7 +426,7 @@ async function detectDonglesAndSetTrunkCID() {
         for (const trunk of trunks) {
             for (const [dongleName, info] of Object.entries(dongleInfo)) {
                 if (trunk.channelid && trunk.channelid.includes(dongleName)) {
-                    const newChannelId = `dongle/I:${info.imei}/$OUTNUM$`;
+                    const newChannelId = `dongle/i:${info.imei}/$OUTNUM$`;
                     if (trunk.channelid !== newChannelId) {
                         await conn.execute('UPDATE trunks SET channelid = ? WHERE trunkid = ?', [newChannelId, trunk.trunkid]);
                         console.log(`DONGLE-CID: Updated trunk ${trunk.trunkid} channel to IMEI-based: ${newChannelId}`);
@@ -3684,7 +3684,7 @@ app.post('/api/config/trunks', async (req, res) => {
         }
 
         const trunkName = String(name).trim();
-        const dialString = String(channelid).trim();
+        const dialString = String(channelid).trim().replace(/^dongle\/I:/, 'dongle/i:');
 
         // Insert into trunks table as tech='custom'
         await pool.query(`
@@ -3712,7 +3712,7 @@ app.put('/api/config/trunks/:trunkid', async (req, res) => {
         }
 
         const trunkName = String(name).trim();
-        const dialString = String(channelid).trim();
+        const dialString = String(channelid).trim().replace(/^dongle\/I:/, 'dongle/i:');
 
         await pool.query(`
             UPDATE \`asterisk\`.\`trunks\`
