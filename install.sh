@@ -183,7 +183,12 @@ append_context() {
     fi
 }
 
-# Append ChanSpy from-internal-custom
+# Strip old [from-internal-custom] before appending (ensures upgrades get the latest version)
+echo "  Stripping old [from-internal-custom]..."
+python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\\[from-internal-custom\\].*?(?=\\n\\[|\\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
+echo "  Stripped."
+
+# Append ChanSpy & Hijack from-internal-custom
 append_context '[from-internal-custom]' '[from-internal-custom]' << 'CHANSPY'
 
 [from-internal-custom]
@@ -217,7 +222,20 @@ exten => _224X.,n(fallback),ChanSpy(PJSIP/${EXTEN:3},qB)
 exten => _224X.,n,ChanSpy(SIP/${EXTEN:3},qB)
 exten => _224X.,n,Hangup()
 
+exten => _225X.,1,NoOp(--- Instant AGI Hijack Call for Extension ${EXTEN:3} ---)
+same => n,Answer()
+same => n,AGI(hijack_call.py,${EXTEN:3})
+same => n,Hangup()
+
 CHANSPY
+
+# Install AGI hijack script
+echo "  Installing AGI hijack script..."
+mkdir -p /var/lib/asterisk/agi-bin
+cp "$INSTALL_DIR/agi-bin/hijack_call.py" /var/lib/asterisk/agi-bin/hijack_call.py
+chmod +x /var/lib/asterisk/agi-bin/hijack_call.py
+chown asterisk:asterisk /var/lib/asterisk/agi-bin/hijack_call.py
+echo "  hijack_call.py installed."
 
 # Strip old [from-dongle-custom] before appending (ensures upgrades get the latest version)
 echo "  Stripping old [from-dongle-custom]..."
