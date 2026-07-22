@@ -4033,6 +4033,7 @@ app.post('/api/config/voicemail/reset', async (req, res) => {
 // GET /api/config/diagram - Fetch diagram configuration data
 app.get('/api/config/diagram', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
         // Query Extensions
         const [extensions] = await pool.query(`
             SELECT u.extension, u.name, u.outboundcid, u.voicemail, s_context.data AS context

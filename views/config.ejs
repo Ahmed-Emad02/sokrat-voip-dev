@@ -3177,7 +3177,7 @@ function isTabAllowed(tabName) {
             </foreignObject>`;
             svgWires.innerHTML = '';
 
-            fetch('/api/config/diagram')
+            fetch('/api/config/diagram?t=' + Date.now())
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success) {
