@@ -3457,7 +3457,7 @@ function isTabAllowed(tabName) {
             // Link 5: Outbound Route -> Trunks
             outbound.forEach(route => {
                 route.trunks.forEach(tk => {
-                    const trunkExists = trunks.some(t => t.trunkid === tk.trunk_id);
+                    const trunkExists = trunks.some(t => String(t.trunkid) === String(tk.trunk_id));
                     if (trunkExists) {
                         diagramLinks.push({
                             id: `link-outbound-trunk-${route.route_id}-${tk.trunk_id}`,
@@ -3750,32 +3750,48 @@ function isTabAllowed(tabName) {
             const connectedNodeIds = new Set([nodeId]);
             const activeWireIds = new Set();
             
-            // Full multi-hop graph traversal (both upstream and downstream)
-            let queue = [nodeId];
-            let visited = new Set([nodeId]);
-
-            while (queue.length > 0) {
-                const current = queue.shift();
+            // 1. Forward Traversal (Downstream)
+            let fwdQueue = [nodeId];
+            let fwdVisited = new Set([nodeId]);
+            while (fwdQueue.length > 0) {
+                const current = fwdQueue.shift();
                 diagramLinks.forEach(link => {
                     if (link.source === current) {
                         activeWireIds.add(link.id);
-                        if (!visited.has(link.target)) {
-                            visited.add(link.target);
+                        if (!fwdVisited.has(link.target)) {
+                            fwdVisited.add(link.target);
                             connectedNodeIds.add(link.target);
-                            queue.push(link.target);
-                        }
-                    }
-                    if (link.target === current) {
-                        activeWireIds.add(link.id);
-                        if (!visited.has(link.source)) {
-                            visited.add(link.source);
-                            connectedNodeIds.add(link.source);
-                            queue.push(link.source);
+                            fwdQueue.push(link.target);
                         }
                     }
                 });
             }
-            
+
+            // 2. Backward Traversal (Upstream)
+            let bwdQueue = [nodeId];
+            let bwdVisited = new Set([nodeId]);
+            while (bwdQueue.length > 0) {
+                const current = bwdQueue.shift();
+                diagramLinks.forEach(link => {
+                    if (link.target === current) {
+                        activeWireIds.add(link.id);
+                        if (!bwdVisited.has(link.source)) {
+                            bwdVisited.add(link.source);
+                            connectedNodeIds.add(link.source);
+                            bwdQueue.push(link.source);
+                        }
+                    }
+                });
+            }
+
+            // 3. Connect intermediate wire links between all discovered connected nodes
+            diagramLinks.forEach(link => {
+                if (connectedNodeIds.has(link.source) && connectedNodeIds.has(link.target)) {
+                    activeWireIds.add(link.id);
+                }
+            });
+
+            // 4. Update Wires SVG styling
             connections.forEach(wire => {
                 const id = wire.getAttribute('id');
                 if (activeWireIds.has(id)) {
@@ -3789,11 +3805,12 @@ function isTabAllowed(tabName) {
                 }
             });
             
+            // 5. Update Cards HTML styling
             cards.forEach(card => {
                 const id = card.getAttribute('data-node-id');
                 if (connectedNodeIds.has(id)) {
                     card.style.opacity = '1';
-                    card.style.boxShadow = '0 0 20px rgba(255, 255, 255, 0.25)';
+                    card.style.boxShadow = '0 0 20px rgba(255, 255, 255, 0.3)';
                 } else {
                     card.style.opacity = '0.15';
                 }
