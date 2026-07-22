@@ -507,7 +507,8 @@ function connectAMI() {
 
             // Parse SIPpeers peer list entries
             if (event.Event === 'PeerEntry') {
-                let name = event.ObjectName || '';
+                let rawName = event.ObjectName || '';
+                let name = rawName ? rawName.split('/')[0] : '';
                 let status = event.Status || '';
                 if (name) {
                     peerStatus[name] = status.toUpperCase().startsWith('OK');
@@ -522,7 +523,8 @@ function connectAMI() {
 
             // Parse PJSIPShowEndpoints endpoint entries
             if (event.Event === 'EndpointList') {
-                let name = event.ObjectName || '';
+                let rawName = event.ObjectName || '';
+                let name = rawName ? rawName.split('/')[0] : '';
                 if (name) {
                     let state = String(event.DeviceState || '').toLowerCase();
                     if (state === 'unavailable' || state === 'invalid' || state === 'unknown' || state === '5' || state === '4') {
@@ -559,7 +561,8 @@ function connectAMI() {
 
             // Real-time peer registration changes
             if (event.Event === 'PeerStatus') {
-                let name = event.Peer ? event.Peer.replace(/^(SIP|PJSIP)\//, '') : '';
+                let rawPeer = event.Peer ? event.Peer.replace(/^(SIP|PJSIP)\//, '') : '';
+                let name = rawPeer ? rawPeer.split('/')[0] : '';
                 if (name) {
                     let isOnline = event.PeerStatus === 'Registered' || event.PeerStatus === 'Reachable';
                     
