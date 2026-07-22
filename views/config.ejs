@@ -3434,8 +3434,9 @@ function isTabAllowed(tabName) {
             // Link 4: Extension -> Outbound Routes
             extensions.forEach(ext => {
                 outbound.forEach(route => {
-                    const hasRestrictedCid = route.patterns.some(p => String(p.cid) === String(ext.extension));
-                    const hasGlobalRoute = route.patterns.some(p => !p.cid || p.cid === '');
+                    const patterns = Array.isArray(route.patterns) ? route.patterns : [];
+                    const hasRestrictedCid = patterns.some(p => String(p.cid) === String(ext.extension));
+                    const hasGlobalRoute = patterns.some(p => !p.cid || p.cid === '');
                     if (hasRestrictedCid) {
                         diagramLinks.push({
                             id: `link-ext-outbound-${ext.extension}-${route.route_id}`,
@@ -3456,13 +3457,16 @@ function isTabAllowed(tabName) {
 
             // Link 5: Outbound Route -> Trunks
             outbound.forEach(route => {
-                route.trunks.forEach(tk => {
-                    const trunkExists = trunks.some(t => String(t.trunkid) === String(tk.trunk_id));
-                    if (trunkExists) {
+                const routeTrunks = Array.isArray(route.trunks) ? route.trunks : [];
+                routeTrunks.forEach(tk => {
+                    const tkId = tk.trunk_id || tk.trunkid;
+                    const matchedTrunk = trunks.find(t => String(t.trunkid) === String(tkId));
+                    const targetTrunkId = matchedTrunk ? matchedTrunk.trunkid : tkId;
+                    if (targetTrunkId !== undefined && targetTrunkId !== null) {
                         diagramLinks.push({
-                            id: `link-outbound-trunk-${route.route_id}-${tk.trunk_id}`,
+                            id: `link-outbound-trunk-${route.route_id}-${targetTrunkId}`,
                             source: 'outbound-' + route.route_id,
-                            target: 'trunk-' + tk.trunk_id,
+                            target: 'trunk-' + targetTrunkId,
                             type: 'route-trunk'
                         });
                     }
