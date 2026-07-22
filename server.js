@@ -3692,18 +3692,18 @@ app.post('/api/config/routes/inbound', async (req, res) => {
         const cid = ''; // Default cidnum to empty string
         const dest = String(destination).trim();
 
-        // Check if route with this DID (extension) and CID already exists
+        // Check if route with exact same DID (extension) and Description already exists
         const [existing] = await pool.query(
-            'SELECT extension FROM `asterisk`.`incoming` WHERE extension = ? AND (cidnum = "" OR cidnum IS NULL)',
-            [ext]
+            'SELECT extension FROM `asterisk`.`incoming` WHERE extension = ? AND description = ?',
+            [ext, desc]
         );
 
         if (existing.length > 0) {
             await pool.query(`
                 UPDATE \`asterisk\`.\`incoming\`
-                SET description = ?, destination = ?, mohclass = 'default'
-                WHERE extension = ? AND (cidnum = '' OR cidnum IS NULL)
-            `, [desc, dest, ext]);
+                SET destination = ?, mohclass = 'default'
+                WHERE extension = ? AND description = ?
+            `, [dest, ext, desc]);
         } else {
             await pool.query(`
                 INSERT INTO \`asterisk\`.\`incoming\`
@@ -3739,10 +3739,8 @@ app.put('/api/config/routes/inbound', async (req, res) => {
         await pool.query(`
             UPDATE \`asterisk\`.\`incoming\`
             SET description = ?, extension = ?, destination = ?
-            WHERE (extension = ? OR (extension IS NULL AND ? = ''))
-              AND (cidnum = '' OR cidnum IS NULL)
-              AND (description = ? OR ? = '')
-        `, [desc, ext, dest, origExt, origExt, origDesc, origDesc]);
+            WHERE extension = ? AND description = ?
+        `, [desc, ext, dest, origExt, origDesc]);
 
         reloadPbxConfig();
         res.json({ success: true, message: `Inbound Route '${desc}' updated successfully.` });
@@ -3760,10 +3758,8 @@ app.delete('/api/config/routes/inbound', async (req, res) => {
 
         await pool.query(`
             DELETE FROM \`asterisk\`.\`incoming\`
-            WHERE (extension = ? OR (extension IS NULL AND ? = ''))
-              AND (cidnum = '' OR cidnum IS NULL)
-              AND (description = ? OR ? = '')
-        `, [ext, ext, desc, desc]);
+            WHERE extension = ? AND description = ?
+        `, [ext, desc]);
 
         reloadPbxConfig();
         res.json({ success: true, message: 'Inbound Route deleted successfully.' });
