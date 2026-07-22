@@ -4090,13 +4090,13 @@ app.get('/api/config/diagram', async (req, res) => {
         const outbound = outboundRows.map(r => {
             const route_id = r.route_id;
             const patterns = patternsRows
-                .filter(p => p.route_id === route_id)
+                .filter(p => String(p.route_id) === String(route_id))
                 .map(p => ({
                     pattern: p.match_pattern_pass || '',
                     cid: p.match_cid || ''
                 }));
             const trunks = trunksRows
-                .filter(t => t.route_id === route_id)
+                .filter(t => String(t.route_id) === String(route_id))
                 .map(t => ({
                     trunk_id: t.trunk_id,
                     trunk_name: t.trunk_name || `Trunk #${t.trunk_id}`
