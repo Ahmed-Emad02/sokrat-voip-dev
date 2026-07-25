@@ -3153,6 +3153,7 @@ function isTabAllowed(tabName) {
                     inputEl.value = '';
                 }
             }
+            updateInboundDestinationValue();
         }
 
         function onInboundDestTypeChange() {
@@ -3167,6 +3168,7 @@ function isTabAllowed(tabName) {
             const actualInput = document.getElementById('inDestination');
             
             if (['extensions', 'ringgroups', 'queues', 'ivr'].includes(destType)) {
+                actualInput.value = selectEl.value;
             } else if (destType === 'custom') {
                 actualInput.value = inputEl.value.trim();
             } else {
