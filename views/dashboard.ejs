@@ -173,7 +173,7 @@ const isRtl = currentLang === 'ar';
                 <input type="datetime-local" name="endDate" value="<%= moment(filters.endDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent-color)]">
             </div>
             <div>
-                <button type="submit" class="w-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white font-black py-2 rounded-lg text-sm uppercase tracking-wider shadow-md transition cursor-pointer h-[38px] flex items-center justify-center"><%= t.btn %></button>
+                <button type="submit" class="btn-primary w-full h-[38px] flex items-center justify-center text-xs uppercase tracking-wider"><%= t.btn %></button>
             </div>
         </form>
 
@@ -555,7 +555,7 @@ const isRtl = currentLang === 'ar';
                         <input type="text" id="contactPhone" required placeholder="e.g. 010..." class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
                 </div>
-                <button type="submit" class="w-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white font-black py-2.5 rounded-lg text-xs uppercase tracking-wider shadow-md transition mt-6 cursor-pointer">
+                <button type="submit" class="btn-primary w-full py-2.5 text-xs uppercase tracking-wider mt-6">
                     <%= isRtl ? 'حفظ جهة الاتصال' : 'Save Contact' %>
                 </button>
             </form>
@@ -571,7 +571,7 @@ const isRtl = currentLang === 'ar';
                         </p>
                     </div>
                 </div>
-                <button type="submit" class="w-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white font-black py-2.5 rounded-lg text-xs uppercase tracking-wider shadow-md transition mt-6 cursor-pointer">
+                <button type="submit" class="btn-primary w-full py-2.5 text-xs uppercase tracking-wider mt-6">
                     <%= isRtl ? 'استيراد جهات الاتصال' : 'Import Contacts' %>
                 </button>
             </form>

@@ -104,7 +104,7 @@ const isRtl = currentLang === 'ar';
                     </svg>
                     <span><%= isRtl ? 'استيراد CSV' : 'Import CSV' %></span>
                 </button>
-                <button onclick="openAddContactModal()" class="bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <button onclick="openAddContactModal()" class="btn-primary px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md flex items-center gap-1.5 cursor-pointer">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                     </svg>
@@ -199,7 +199,7 @@ const isRtl = currentLang === 'ar';
                         <input type="text" id="editContactPhone" required class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
                 </div>
-                <button type="submit" class="w-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white font-black py-2.5 rounded-lg text-xs uppercase tracking-wider shadow-md transition mt-6 cursor-pointer">
+                <button type="submit" class="btn-primary w-full py-2.5 text-xs uppercase tracking-wider mt-6">
                     <%= t.saveChanges %>
                 </button>
             </form>
@@ -234,7 +234,7 @@ const isRtl = currentLang === 'ar';
                         <input type="text" id="contactPhone" required placeholder="e.g. 010..." class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
                 </div>
-                <button type="submit" class="w-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white font-black py-2.5 rounded-lg text-xs uppercase tracking-wider shadow-md transition mt-6 cursor-pointer">
+                <button type="submit" class="btn-primary w-full py-2.5 text-xs uppercase tracking-wider mt-6">
                     <%= isRtl ? 'حفظ جهة الاتصال' : 'Save Contact' %>
                 </button>
             </form>
@@ -275,7 +275,7 @@ const isRtl = currentLang === 'ar';
                         <input type="file" id="csvFileSelect" accept=".csv" required class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)] file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-white hover:file:bg-zinc-700 file:cursor-pointer">
                     </div>
                 </div>
-                <button type="submit" class="w-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white font-black py-2.5 rounded-lg text-xs uppercase tracking-wider shadow-md transition mt-6 cursor-pointer">
+                <button type="submit" class="btn-primary w-full py-2.5 text-xs uppercase tracking-wider mt-6">
                     <%= isRtl ? 'بدء استيراد جهات الاتصال' : 'Import Contacts' %>
                 </button>
             </form>
