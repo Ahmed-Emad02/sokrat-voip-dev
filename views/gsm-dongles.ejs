@@ -245,19 +245,23 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             transform: translateY(0);
         }
         .dongle-action-button:disabled {
-            opacity: 0.55;
+            opacity: 0.72;
             cursor: not-allowed;
             transform: none;
         }
         .hardware-table .dongle-action-primary {
-            background-color: var(--accent-color) !important;
-            border-color: var(--accent-color) !important;
+            background-color: var(--selection-bg) !important;
+            border-color: var(--selection-bg) !important;
             color: #ffffff !important;
         }
         .hardware-table .dongle-action-primary:hover {
             background-color: var(--accent-hover) !important;
             border-color: var(--accent-hover) !important;
             box-shadow: 0 8px 18px rgba(185, 28, 28, 0.24);
+        }
+        .light-theme .hardware-table .dongle-action-primary,
+        .light-theme .hardware-table .dongle-action-primary * {
+            color: #ffffff !important;
         }
         .hardware-table .dongle-action-secondary {
             background-color: var(--accent-soft) !important;
@@ -470,11 +474,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                                          <% 
                                                             const rssiVal = parseInt(d.RSSI) || 0;
                                                             const pct = Math.round((rssiVal / 31) * 100);
-                                                            let pctColor = '#10b981'; // Green
+                                                            let pctColor = 'var(--status-success-text)'; // Green
                                                             if (rssiVal < 9) {
-                                                                pctColor = '#ef4444'; // Red
+                                                                pctColor = 'var(--status-error-text)'; // Red
                                                             } else if (rssiVal < 23) {
-                                                                pctColor = '#f59e0b'; // Orange/Yellow
+                                                                pctColor = 'var(--status-warning-text)'; // Orange/Yellow
                                                             }
                                                          %>
                                                          <span style="color: <%= pctColor %>" class="font-bold"><%= pct %>%</span>
@@ -1758,11 +1762,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                                  ${function(){
                                                      var rssiVal = parseInt(d.RSSI) || 0;
                                                      var pct = Math.round((rssiVal / 31) * 100);
-                                                     var pctColor = '#10b981'; // Green
-                                                     if (rssiVal < 9) {
-                                                         pctColor = '#ef4444'; // Red
-                                                     } else if (rssiVal < 23) {
-                                                         pctColor = '#f59e0b'; // Orange/Yellow
+                                                    var pctColor = 'var(--status-success-text)'; // Green
+                                                    if (rssiVal < 9) {
+                                                        pctColor = 'var(--status-error-text)'; // Red
+                                                    } else if (rssiVal < 23) {
+                                                        pctColor = 'var(--status-warning-text)'; // Orange/Yellow
                                                      }
                                                      return '<span style="color: ' + pctColor + '" class="font-bold">' + pct + '%</span>';
                                                  }()}

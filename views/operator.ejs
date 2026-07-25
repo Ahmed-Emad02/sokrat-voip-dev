@@ -109,7 +109,7 @@ const isRtl = currentLang === 'ar';
         
         /* State: Offline */
         #switchboardGrid .panel-surface.state-offline {
-            opacity: 0.5;
+            opacity: 1;
             background-color: var(--bg-card) !important;
             border-color: var(--border-primary) !important;
         }
@@ -164,6 +164,14 @@ const isRtl = currentLang === 'ar';
         .light-theme #switchboardGrid .panel-surface.state-incall .text-white {
             color: #111827 !important;
         }
+        #switchboardGrid .panel-surface.state-idle .extension-number,
+        #switchboardGrid .panel-surface.state-ringing .extension-number,
+        #switchboardGrid .panel-surface.state-incall .extension-number {
+            color: #7f1d1d !important;
+        }
+        .light-theme #switchboardGrid .ip-tooltip {
+            color: #e5e7eb !important;
+        }
         #switchboardGrid .panel-surface.state-idle .border-t,
         #switchboardGrid .panel-surface.state-ringing .border-t,
         #switchboardGrid .panel-surface.state-incall .border-t,
@@ -199,7 +207,7 @@ const isRtl = currentLang === 'ar';
         .light-theme #switchboardGrid .panel-surface.state-idle [id^="sipLabel-"],
         .light-theme #switchboardGrid .panel-surface.state-idle [id^="status-"],
         .light-theme #switchboardGrid .panel-surface.state-idle [id^="partner-"] {
-            color: #166534 !important;
+            color: #052e16 !important;
             font-weight: 800 !important;
         }
 
@@ -305,7 +313,7 @@ const isRtl = currentLang === 'ar';
                             <div class="flex justify-between items-start">
                                 <div class="<%= isRtl ? 'text-right' : 'text-left' %>">
                                     <span class="text-2xl font-bold text-white block truncate" title="<%= emp.name %>"><%= emp.name %></span>
-                                    <span class="text-lg font-mono font-black text-[var(--accent-color)] tracking-wider block"><%= emp.extension %></span>
+                                    <span class="extension-number text-lg font-mono font-black text-[var(--accent-color)] tracking-wider block"><%= emp.extension %></span>
                                 </div>
                                 <div class="flex flex-col items-end shrink-0">
                                     <div class="flex items-center gap-2">

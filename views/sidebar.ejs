@@ -108,13 +108,17 @@ function can(tab) { return allowed.includes(tab); }
         --border-accent: rgba(255, 255, 255, 0.16); /* Brighter glass border */
         --text-primary: #f4f4f5; /* High contrast Zinc 50 */
         --text-secondary: #a1a1aa; /* Muted silver text */
-        --text-muted: #71717a; /* Secondary text */
+        --text-muted: #85858f; /* Accessible muted text on OLED surfaces */
         --accent-color: #ef4444; /* Electric Crimson Red */
         --accent-hover: #dc2626; /* Crimson Red Hover */
         --bg-selected: rgba(239, 68, 68, 0.12);
         --status-online: #10b981; /* Emerald Green for online */
-        --status-offline: #71717a; /* Muted Grey for offline */
+        --status-offline: #85858f; /* Accessible muted grey for offline */
         --status-active: #ef4444; /* Crimson Red for active */
+        --status-success-text: #34d399;
+        --status-warning-text: #fbbf24;
+        --status-error-text: #f87171;
+        --selection-bg: #991b1b;
     }
     .light-theme {
         --bg-primary: #f9fafb !important; /* Tailwind bg-gray-50 */
@@ -125,13 +129,17 @@ function can(tab) { return allowed.includes(tab); }
         --border-accent: #d1d5db !important; /* Tailwind border-gray-300 */
         --text-primary: #111827 !important; /* Tailwind text-gray-900 */
         --text-secondary: #4b5563 !important; /* Tailwind text-gray-600 */
-        --text-muted: #6b7280 !important; /* Tailwind text-gray-500 */
+        --text-muted: #6b7280 !important; /* Tailwind gray-500 */
         --accent-color: #dc2626 !important; /* Tailwind red-600 */
         --accent-hover: #b91c1c !important; /* Tailwind red-700 */
         --bg-selected: rgba(220, 38, 38, 0.08) !important;
-        --status-online: #10b981 !important; /* Tailwind emerald-500 */
+        --status-online: #047857 !important; /* Accessible emerald text */
         --status-offline: #6b7280 !important; /* Tailwind gray-500 */
-        --status-active: #dc2626 !important;
+        --status-active: #b91c1c !important;
+        --status-success-text: #047857 !important;
+        --status-warning-text: #92400e !important;
+        --status-error-text: #b91c1c !important;
+        --selection-bg: #991b1b !important;
     }
     body {
         background-color: var(--bg-primary) !important;
@@ -271,27 +279,23 @@ function can(tab) { return allowed.includes(tab); }
     .light-theme th { color: #1a202c !important; }
     .light-theme label { color: #1a202c !important; }
 
-    /* Buttons, badges, and accent backgrounds should always keep white text, even in light theme */
-    .light-theme button,
-    .light-theme button *,
-    .light-theme [type="submit"],
-    .light-theme [type="submit"] *,
-    .light-theme .text-white.bg-\[var\(--accent-color\)\],
-    .light-theme .text-white.bg-\[var\(--accent-hover\)\],
-    .light-theme button.text-white,
-    .light-theme .text-white.btn,
-    .light-theme .text-white.btn-primary,
-    .light-theme [class*="bg-red"] .text-white,
-    .light-theme .bg-\[var\(--accent-color\)\] .text-white,
-    .light-theme .bg-\[var\(--accent-hover\)\] .text-white,
-    .light-theme .btn,
-    .light-theme .btn *,
-    .light-theme .bg-[var(--accent-color)],
-    .light-theme .bg-[var(--accent-color)] *,
-    .light-theme .bg-[var(--accent-hover)],
-    .light-theme .bg-[var(--accent-hover)] *,
+    /* Only genuinely dark primary/accent controls retain white text in light mode. */
     .light-theme .btn-primary,
-    .light-theme .btn-primary * {
+    .light-theme .btn-primary *,
+    .light-theme .config-btn-primary,
+    .light-theme .config-btn-primary *,
+    .light-theme button.bg-\[var\(--accent-color\)\],
+    .light-theme button.bg-\[var\(--accent-color\)\] *,
+    .light-theme button.bg-\[var\(--accent-hover\)\],
+    .light-theme button.bg-\[var\(--accent-hover\)\] *,
+    .light-theme .bg-red-600,
+    .light-theme .bg-red-600 *,
+    .light-theme .bg-red-700,
+    .light-theme .bg-red-700 *,
+    .light-theme .bg-rose-600,
+    .light-theme .bg-rose-600 *,
+    .light-theme .bg-rose-700,
+    .light-theme .bg-rose-700 * {
         color: #ffffff !important;
     }
 
@@ -379,6 +383,124 @@ function can(tab) { return allowed.includes(tab); }
         background: rgba(255, 255, 255, 0.09) !important;
         border-color: rgba(255, 255, 255, 0.18) !important;
         color: #ffffff !important;
+    }
+
+    /* Shared surfaces must follow the active theme, not hard-coded dark colors. */
+    .light-theme .panel-surface,
+    .light-theme .config-card {
+        background: #ffffff !important;
+        border-color: #dfe3e8 !important;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+    .light-theme .panel-surface:hover,
+    .light-theme .config-card:hover {
+        border-color: #cbd5e1 !important;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12) !important;
+    }
+    .light-theme .card-stat {
+        background: #ffffff !important;
+        border-color: #dfe3e8 !important;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08) !important;
+    }
+    .light-theme .card-stat:hover {
+        border-color: rgba(185, 28, 28, 0.35) !important;
+        box-shadow: 0 2px 8px rgba(127, 29, 29, 0.12) !important;
+    }
+    .light-theme .config-btn-secondary,
+    .light-theme .btn-ghost {
+        background: #ffffff !important;
+        border-color: #d1d5db !important;
+        color: #374151 !important;
+    }
+    .light-theme .config-btn-secondary *,
+    .light-theme .btn-ghost * {
+        color: inherit !important;
+    }
+    .light-theme .config-btn-secondary:hover,
+    .light-theme .btn-ghost:hover {
+        background: #f3f4f6 !important;
+        border-color: #9ca3af !important;
+        color: #111827 !important;
+    }
+
+    /* Semantic utility colors with WCAG-AA contrast on light surfaces. */
+    .light-theme .text-green-400,
+    .light-theme .text-green-500,
+    .light-theme .text-emerald-400,
+    .light-theme .text-emerald-500 { color: #047857 !important; }
+    .light-theme .text-amber-400,
+    .light-theme .text-amber-500,
+    .light-theme .text-yellow-400,
+    .light-theme .text-yellow-500 { color: #92400e !important; }
+    .light-theme .text-red-400,
+    .light-theme .text-red-500,
+    .light-theme .text-rose-400,
+    .light-theme .text-rose-500 { color: #b91c1c !important; }
+    .light-theme .text-blue-400,
+    .light-theme .text-blue-500 { color: #1d4ed8 !important; }
+    .light-theme .text-purple-400,
+    .light-theme .text-purple-500 { color: #6d28d9 !important; }
+    .light-theme .text-cyan-400,
+    .light-theme .text-cyan-500 { color: #0e7490 !important; }
+    .light-theme .text-orange-400,
+    .light-theme .text-orange-500 { color: #9a3412 !important; }
+
+    input::placeholder,
+    textarea::placeholder {
+        color: var(--text-muted) !important;
+        opacity: 1 !important;
+    }
+
+    /* Custom select popup follows the same tokens as native controls. */
+    .custom-select-trigger {
+        background: var(--bg-card) !important;
+        border-color: var(--border-primary) !important;
+        color: var(--text-primary) !important;
+    }
+    .custom-select-trigger:disabled {
+        opacity: 0.65 !important;
+    }
+    .custom-select-menu {
+        background: var(--bg-secondary) !important;
+        border-color: var(--border-accent) !important;
+        color: var(--text-primary) !important;
+    }
+    .custom-select-option {
+        color: var(--text-secondary) !important;
+    }
+    .custom-select-option:hover {
+        background: var(--bg-hover) !important;
+        color: var(--text-primary) !important;
+    }
+    .custom-select-option.is-selected {
+        background: var(--selection-bg) !important;
+        color: #ffffff !important;
+    }
+
+    /* Terminal panes intentionally stay dark in both themes. */
+    .light-theme .terminal-screen,
+    .light-theme .log-screen {
+        color: #e5e7eb !important;
+    }
+    .light-theme .terminal-screen .text-zinc-400,
+    .light-theme .terminal-screen .text-zinc-500,
+    .light-theme .log-screen .text-zinc-400,
+    .light-theme .log-screen .text-zinc-500 {
+        color: #a1a1aa !important;
+    }
+    .light-theme .terminal-screen .text-emerald-400,
+    .light-theme .terminal-screen .text-green-400,
+    .light-theme .log-screen .text-emerald-400,
+    .light-theme .log-screen .text-green-400 {
+        color: #34d399 !important;
+    }
+    .light-theme .terminal-screen .text-red-400,
+    .light-theme .terminal-screen .text-rose-400,
+    .light-theme .log-screen .text-red-400,
+    .light-theme .log-screen .text-rose-400 {
+        color: #f87171 !important;
     }
     .ext-card, button, input, select, textarea {
         border-radius: 0.5rem !important;
@@ -1863,7 +1985,7 @@ function enhanceSelectElements() {
         trigger.type = 'button';
         trigger.setAttribute('aria-haspopup', 'listbox');
         trigger.setAttribute('aria-expanded', 'false');
-        trigger.className = 'custom-select-trigger w-full bg-[#0c0c0e] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-primary)] flex items-center justify-between cursor-pointer select-none transition hover:border-[var(--border-accent)]';
+        trigger.className = 'custom-select-trigger w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-primary)] flex items-center justify-between cursor-pointer select-none transition hover:border-[var(--border-accent)]';
         
         const labelSpan = document.createElement('span');
         labelSpan.className = 'truncate';
@@ -1878,7 +2000,7 @@ function enhanceSelectElements() {
         wrapper.appendChild(trigger);
         
         const menu = document.createElement('div');
-        menu.className = 'custom-select-menu absolute left-0 right-0 top-full mt-1.5 bg-[#0d0d12] border border-[var(--border-primary)] rounded-xl shadow-2xl z-[99999] max-h-60 overflow-y-auto hidden no-scrollbar backdrop-blur-xl p-1 space-y-0.5';
+        menu.className = 'custom-select-menu absolute left-0 right-0 top-full mt-1.5 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-lg z-[99999] max-h-60 overflow-y-auto hidden no-scrollbar p-1 space-y-0.5';
         
         function buildOptions() {
             menu.innerHTML = '';
@@ -1886,7 +2008,9 @@ function enhanceSelectElements() {
                 if (opt.disabled && opt.hidden) return;
                 const item = document.createElement('div');
                 const isSelected = select.selectedIndex === idx;
-                item.className = `custom-select-option px-3 py-2 text-xs font-mono rounded-lg cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-[#991b1b] text-white font-bold' : 'text-zinc-300 hover:bg-white/10 hover:text-white'}`;
+                item.className = `custom-select-option px-3 py-2 text-xs font-mono rounded-lg cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'is-selected font-bold' : ''}`;
+                item.setAttribute('role', 'option');
+                item.setAttribute('aria-selected', String(isSelected));
                 item.textContent = opt.textContent;
                 item.addEventListener('click', (e) => {
                     e.stopPropagation();
