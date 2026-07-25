@@ -6,9 +6,9 @@
 |---|---|---|---|
 | **Dev** | `C:\Users\0xSiTe\Desktop\sokrat-voip-dev` | `Ahmed-Emad02/sokrat-voip-dev.git` | `/opt/sokrat-voip` |
 | **Stable** | `C:\Users\0xSiTe\Desktop\sokrat-voip-stable` | `Ahmed-Emad02/sokrat-voip-stable.git` | `/opt/sokrat-voip` |
-| **Server** | `192.168.100.118` | — | `/opt/sokrat-voip` |
+| **Primary Server** | `192.168.100.200` | — | `/opt/issabel-dashboard` |
 
-**Important:** Dev and Stable repos are synced (same files). The server is deployed from dev files via scp + `systemctl restart sokrat-voip`.
+**Deployment policy:** `192.168.100.200` is the only active server. `100.91.135.84` is retired and MUST NOT be accessed, updated, or used for verification. Deploy from the dev repository and restart `issabel-dashboard.service`.
 
 ---
 
@@ -34,22 +34,22 @@
 - Wires: Inbound→TC (yellow), TC True→Dest (green), TC False→Dest (red)
 - Backend API `/api/config/diagram` returns `timeconditions` with details
 
-### 4. Server Migration
+### 4. Deployment Runtime
 - Apache reverse proxy unchanged (port 80/443 → 8080)
-- Old service removed: `issabel-dashboard.service`
-- New service: `sokrat-voip.service`
+- Application directory: `/opt/issabel-dashboard`
+- Systemd service: `issabel-dashboard.service`
+- Sole deployment target: `192.168.100.200`
 
 ---
 
 ## How to Deploy Changes
 
 ```bash
-# Sync dev file to server
-scp server.js root@192.168.100.118:/opt/sokrat-voip/
-scp views/config.ejs root@192.168.100.118:/opt/sokrat-voip/views/
-scp views/sidebar.ejs root@192.168.100.118:/opt/sokrat-voip/views/
-# Restart
-ssh root@192.168.100.118 "systemctl restart sokrat-voip"
+ssh root@192.168.100.200 "cd /opt/issabel-dashboard \
+  && git fetch origin \
+  && git reset --hard origin/main \
+  && systemctl restart issabel-dashboard \
+  && systemctl is-active issabel-dashboard"
 ```
 
 ## How to Sync Dev → Stable
