@@ -130,9 +130,9 @@ function can(tab) { return allowed.includes(tab); }
         --text-primary: #111827 !important; /* Tailwind text-gray-900 */
         --text-secondary: #4b5563 !important; /* Tailwind text-gray-600 */
         --text-muted: #6b7280 !important; /* Tailwind gray-500 */
-        --accent-color: #dc2626 !important; /* Tailwind red-600 */
-        --accent-hover: #b91c1c !important; /* Tailwind red-700 */
-        --bg-selected: rgba(220, 38, 38, 0.08) !important;
+        --accent-color: #b91c1c !important; /* Accessible deep red */
+        --accent-hover: #991b1b !important; /* Strong red hover */
+        --bg-selected: rgba(185, 28, 28, 0.1) !important;
         --status-online: #047857 !important; /* Accessible emerald text */
         --status-offline: #6b7280 !important; /* Tailwind gray-500 */
         --status-active: #b91c1c !important;
@@ -225,8 +225,8 @@ function can(tab) { return allowed.includes(tab); }
         bottom: 0px !important;
     }
     
-    .light-theme .text-white:not(button):not([type="submit"]):not(.btn):not(.btn-primary):not(button *):not([class*="bg-red"] *):not([class*="bg-\[var\(--accent-color\)\]"] *) {
-        color: #000000 !important;
+    .light-theme .text-white {
+        color: #111827 !important;
     }
     .light-theme select, .light-theme input {
         background-color: #ffffff !important;
@@ -363,13 +363,19 @@ function can(tab) { return allowed.includes(tab); }
         transform: translateY(1px) scale(0.98) !important;
         box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6) !important;
     }
-    .nav-item.bg-\[var\(--accent-color\)\] {
-        background: linear-gradient(90deg, rgba(185, 28, 28, 0.9) 0%, rgba(127, 29, 29, 0.7) 100%) !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    .nav-item.bg-\[var\(--accent-color\)\],
+    .light-theme .nav-item.bg-\[var\(--accent-color\)\] {
+        background: linear-gradient(90deg, #b91c1c 0%, #7f1d1d 100%) !important;
+        border: 1px solid #991b1b !important;
         border-left: 4px solid #ef4444 !important;
-        box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 4px 16px rgba(185, 28, 28, 0.4) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 5px 16px rgba(127, 29, 29, 0.3) !important;
         color: #ffffff !important;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) !important;
+    }
+    .nav-item.bg-\[var\(--accent-color\)\] *,
+    .light-theme .nav-item.bg-\[var\(--accent-color\)\] * {
+        color: #ffffff !important;
+        stroke: currentColor;
     }
     .config-btn-secondary, .btn-ghost {
         background: rgba(255, 255, 255, 0.04) !important;
@@ -443,7 +449,9 @@ function can(tab) { return allowed.includes(tab); }
     .light-theme .text-purple-400,
     .light-theme .text-purple-500 { color: #6d28d9 !important; }
     .light-theme .text-cyan-400,
-    .light-theme .text-cyan-500 { color: #0e7490 !important; }
+    .light-theme .text-cyan-500,
+    .light-theme .text-teal-400,
+    .light-theme .text-teal-500 { color: #0e7490 !important; }
     .light-theme .text-orange-400,
     .light-theme .text-orange-500 { color: #9a3412 !important; }
 

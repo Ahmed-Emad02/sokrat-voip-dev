@@ -531,7 +531,7 @@ const isRtl = currentLang === 'ar';
             
             <!-- Selection Tabs: Manual / CSV -->
             <div class="flex border-b border-[var(--border-primary)] mb-5">
-                <button onclick="switchContactTab('manual')" id="tabBtnManual" class="flex-1 pb-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 border-[var(--accent-color)] text-white transition-all duration-150 cursor-pointer">
+                <button onclick="switchContactTab('manual')" id="tabBtnManual" class="flex-1 pb-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 border-[var(--accent-color)] text-[var(--accent-color)] transition-all duration-150 cursor-pointer">
                     <%= isRtl ? 'إضافة يدوية' : 'Manual Entry' %>
                 </button>
                 <button onclick="switchContactTab('csv')" id="tabBtnCsv" class="flex-1 pb-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300 transition-all duration-150 cursor-pointer">
@@ -616,12 +616,12 @@ const isRtl = currentLang === 'ar';
             msgEl.classList.add('hidden');
 
             if (tab === 'manual') {
-                btnManual.className = "flex-1 pb-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 border-[var(--accent-color)] text-white transition-all duration-150 cursor-pointer";
+                btnManual.className = "flex-1 pb-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 border-[var(--accent-color)] text-[var(--accent-color)] transition-all duration-150 cursor-pointer";
                 btnCsv.className = "flex-1 pb-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300 transition-all duration-150 cursor-pointer";
                 formManual.classList.remove('hidden');
                 formCsv.classList.add('hidden');
             } else {
-                btnCsv.className = "flex-1 pb-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 border-[var(--accent-color)] text-white transition-all duration-150 cursor-pointer";
+                btnCsv.className = "flex-1 pb-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 border-[var(--accent-color)] text-[var(--accent-color)] transition-all duration-150 cursor-pointer";
                 btnManual.className = "flex-1 pb-2.5 text-[10px] font-black uppercase tracking-wider border-b-2 border-transparent text-zinc-500 hover:text-zinc-300 transition-all duration-150 cursor-pointer";
                 formCsv.classList.remove('hidden');
                 formManual.classList.add('hidden');
