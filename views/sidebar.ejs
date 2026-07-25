@@ -1859,8 +1859,11 @@ function enhanceSelectElements() {
         
         select.style.display = 'none';
         
-        const trigger = document.createElement('div');
-        trigger.className = 'custom-select-trigger bg-[#0c0c0e] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-primary)] flex items-center justify-between cursor-pointer select-none transition hover:border-[var(--border-accent)]';
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.setAttribute('aria-haspopup', 'listbox');
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.className = 'custom-select-trigger w-full bg-[#0c0c0e] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-primary)] flex items-center justify-between cursor-pointer select-none transition hover:border-[var(--border-accent)]';
         
         const labelSpan = document.createElement('span');
         labelSpan.className = 'truncate';
@@ -1889,8 +1892,9 @@ function enhanceSelectElements() {
                     e.stopPropagation();
                     select.selectedIndex = idx;
                     select.dispatchEvent(new Event('change', { bubbles: true }));
-                    labelSpan.textContent = opt.textContent;
+                    syncState();
                     menu.classList.add('hidden');
+                    trigger.setAttribute('aria-expanded', 'false');
                     trigger.classList.remove('border-[var(--accent-color)]');
                     buildOptions();
                 });
@@ -1901,14 +1905,41 @@ function enhanceSelectElements() {
         
         wrapper.appendChild(menu);
         
+        function syncState() {
+            const isDisabled = select.disabled || select.hasAttribute('disabled');
+            trigger.disabled = isDisabled;
+            trigger.setAttribute('aria-disabled', String(isDisabled));
+            if (isDisabled) {
+                trigger.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+                trigger.setAttribute('aria-expanded', 'false');
+                menu.classList.add('hidden');
+            } else {
+                trigger.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+            }
+            const selectedOpt = select.options[select.selectedIndex] || select.options[0];
+            if (selectedOpt) labelSpan.textContent = selectedOpt.textContent;
+        }
+
+        try {
+            const observer = new MutationObserver(syncState);
+            observer.observe(select, { attributes: true, attributeFilter: ['disabled'] });
+        } catch(_) {}
+        syncState();
+
         trigger.addEventListener('click', (e) => {
             e.stopPropagation();
+            syncState();
+            if (select.disabled || select.hasAttribute('disabled')) return;
             document.querySelectorAll('.custom-select-menu').forEach(m => {
                 if (m !== menu) m.classList.add('hidden');
+            });
+            document.querySelectorAll('.custom-select-trigger').forEach(t => {
+                if (t !== trigger) t.setAttribute('aria-expanded', 'false');
             });
             buildOptions();
             const isHidden = menu.classList.contains('hidden');
             menu.classList.toggle('hidden', !isHidden);
+            trigger.setAttribute('aria-expanded', String(isHidden));
             trigger.classList.toggle('border-[var(--accent-color)]', isHidden);
         });
     });
@@ -1919,6 +1950,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 document.addEventListener('click', function() {
     document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.add('hidden'));
+    document.querySelectorAll('.custom-select-trigger').forEach(t => t.setAttribute('aria-expanded', 'false'));
 });
 </script>
 
