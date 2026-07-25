@@ -53,9 +53,13 @@ function can(tab) { return allowed.includes(tab); }
 %>
 
 <!-- Prevent theme/JIT flickering loading screen overlay -->
-<div id="theme-loading-overlay" style="position: fixed; inset: 0; background-color: #050507; z-index: 999999; display: flex; flex-col; items-center justify-center pointer-events: none; overflow: hidden;">
-    <div class="flex flex-col items-center justify-center gap-4">
-        <img id="loadingLogo" src="/logo_light_text.png" alt="Issabel Dashboard" style="width: 14rem; height: 14rem; object-fit: contain; opacity: 0;">
+<div id="theme-loading-overlay" class="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-[#050507] transition-all duration-300 pointer-events-none overflow-hidden">
+    <div class="flex flex-col items-center justify-center gap-3">
+        <img id="loadingLogo" src="/logo_light_text.png" alt="Sokrat VOIP" class="w-44 h-44 object-contain transition-all duration-300">
+        <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
+            <span class="text-xs font-mono font-bold tracking-widest text-zinc-400 uppercase">Sokrat VOIP Loading...</span>
+        </div>
     </div>
 </div>
 <script>
@@ -72,54 +76,19 @@ function can(tab) { return allowed.includes(tab); }
             if (overlay) overlay.style.backgroundColor = '#050507';
         }
     })();
-    
-    // Animate loading screen logo entrance on DOM ready
-    document.addEventListener('DOMContentLoaded', function() {
-        const logo = document.getElementById('loadingLogo');
-        if (logo && typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            anime({
-                targets: logo,
-                scale: [0.85, 1.05, 1],
-                opacity: [0, 1],
-                duration: 500,
-                easing: 'easeOutElastic(1, .8)'
-            });
-        } else if (logo) {
-            logo.style.opacity = '1';
-        }
-    });
 
-    // Hide & animate out loading screen overlay when all resources are ready
+    function dismissLoadingOverlay() {
+        const overlay = document.getElementById('theme-loading-overlay');
+        if (!overlay) return;
+        overlay.style.opacity = '0';
+        overlay.style.transform = 'translateY(-100%)';
+        setTimeout(() => { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
+    }
+
     window.addEventListener('load', function() {
-        setTimeout(function() {
-            const overlay = document.getElementById('theme-loading-overlay');
-            const logo = document.getElementById('loadingLogo');
-            if (overlay && typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                anime.timeline({
-                    complete: function() {
-                        if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
-                    }
-                })
-                .add({
-                    targets: logo,
-                    scale: [1, 0.88],
-                    opacity: [1, 0],
-                    duration: 220,
-                    easing: 'easeInQuad'
-                })
-                .add({
-                    targets: overlay,
-                    translateY: ['0%', '-100%'],
-                    opacity: [1, 0.95],
-                    duration: 400,
-                    easing: 'easeInOutCubic'
-                }, '-=80');
-            } else if (overlay) {
-                overlay.style.opacity = '0';
-                setTimeout(() => { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 150);
-            }
-        }, 150);
+        setTimeout(dismissLoadingOverlay, 100);
     });
+    setTimeout(dismissLoadingOverlay, 600); // Fail-safe auto close
 </script>
 
 <!-- Google Fonts Import for Plus Jakarta Sans & Cairo -->
