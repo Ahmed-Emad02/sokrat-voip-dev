@@ -156,6 +156,17 @@ async function initAuthDb() {
             UNIQUE KEY idx_group_tab (group_id, tab)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS gsm_dongles (
+            dongle_name VARCHAR(50) NOT NULL PRIMARY KEY,
+            imsi VARCHAR(30) DEFAULT NULL,
+            imei VARCHAR(30) DEFAULT NULL,
+            phone_number VARCHAR(30) DEFAULT NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_imsi (imsi),
+            KEY idx_imei (imei)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
 
     // Ensure "super admins" group exists
     const [existingGroups] = await conn.execute('SELECT id FROM dashboard_groups WHERE name = ?', ['super admins']);
@@ -204,6 +215,35 @@ function isSuperAdmin(req) {
 }
 
 async function getUserPermissions(userId) {
+
+// Synchronize all MariaDB gsm_dongles mappings to Asterisk AstDB (sim_map, dongle_map, DONGLE_NUMBERS)
+async function syncAstDbDongleMappings() {
+    try {
+        const [rows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` WHERE phone_number IS NOT NULL AND phone_number != ""');
+        for (const row of rows) {
+            const num = String(row.phone_number || '').trim();
+            if (!num) continue;
+            const imsi = String(row.imsi || '').trim();
+            const dongleName = String(row.dongle_name || '').trim();
+            const imei = String(row.imei || '').trim();
+
+            if (imsi) {
+                execFile(ASTERISK_BIN, ['-rx', `database put sim_map ${imsi} ${num}`]);
+            }
+            if (dongleName) {
+                execFile(ASTERISK_BIN, ['-rx', `database put dongle_map ${dongleName} ${num}`]);
+            }
+            if (imei) {
+                execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imei} ${num}`]);
+            }
+        }
+        if (rows.length > 0) {
+            console.log(`ASTDB-SYNC: Synchronized ${rows.length} GSM mappings to AstDB (sim_map, dongle_map, DONGLE_NUMBERS)`);
+        }
+    } catch (e) {
+        console.error('ASTDB-SYNC: Error syncing GSM mappings:', e.message);
+    }
+}
     const conn = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
         user: process.env.DB_USER || 'admin',
@@ -402,9 +442,10 @@ async function detectDonglesAndSetTrunkCID() {
             if (parts.length < 10) continue;
             const name = parts[0];
             const imei = parts[9] || '';
+            const imsi = parts[10] || '';
             const number = parts[parts.length - 1] || '';
-            if (imei && imei !== 'Unknown' && /^\d{15}$/.test(imei)) {
-                dongleInfo[name] = { imei, number: (number && number !== 'Unknown' && number.startsWith('+')) ? number : null };
+            if (imei && imei !== 'Unknown') {
+                dongleInfo[name] = { imei, imsi: (imsi && imsi !== 'Unknown' && imsi !== '-') ? imsi : '', number: (number && number !== 'Unknown' && number.startsWith('+')) ? number : null };
             }
         }
 
@@ -422,6 +463,25 @@ async function detectDonglesAndSetTrunkCID() {
             database: ASTERISK_DB
         });
 
+        for (const [dongleName, info] of Object.entries(dongleInfo)) {
+            if (info.imsi || info.imei || dongleName) {
+                try {
+                    await conn.execute(`
+                        INSERT INTO gsm_dongles (dongle_name, imsi, imei, phone_number)
+                        VALUES (?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE
+                            imsi = COALESCE(NULLIF(VALUES(imsi), ''), imsi),
+                            imei = COALESCE(NULLIF(VALUES(imei), ''), imei),
+                            phone_number = CASE WHEN VALUES(phone_number) != '' AND VALUES(phone_number) IS NOT NULL THEN VALUES(phone_number) ELSE phone_number END
+                    `, [dongleName, info.imsi || '', info.imei || '', info.number || '']);
+                } catch (_) {}
+            }
+            if (info.number) {
+                if (info.imsi) execFileAsync(ASTERISK_BIN, ['-rx', `database put sim_map ${info.imsi} ${info.number}`]);
+                if (dongleName) execFileAsync(ASTERISK_BIN, ['-rx', `database put dongle_map ${dongleName} ${info.number}`]);
+                if (info.imei) execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${info.imei} ${info.number}`]);
+            }
+        }
         const [trunks] = await conn.execute('SELECT trunkid, channelid FROM trunks WHERE tech = ?', ['custom']);
         for (const trunk of trunks) {
             for (const [dongleName, info] of Object.entries(dongleInfo)) {
@@ -2238,7 +2298,7 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
             if ((!row.IMEI || row.IMEI === '-' || row.IMEI === 'Unknown') && row.IMSI && (row.IMSI.startsWith('86') || row.IMSI.startsWith('35'))) {
                 row.IMEI = row.IMSI;
             }
-            const mapped = astDbMappings[row.IMSI] || astDbMappings[row.IMEI] || null;
+            const mapped = astDbMappings[row.IMSI] || astDbMappings[row.ID] || astDbMappings[row.IMEI] || null;
             if (mapped && (!row.Number || row.Number === 'Unknown' || row.Number === '-')) {
                 row.Number = mapped;
             }
@@ -2281,24 +2341,40 @@ function extractPhoneNumber(text) {
     return null;
 }
 
-// Read the hot-plug number mappings from Asterisk AstDB (DONGLE_NUMBERS family)
+// Read the hot-plug number mappings from Asterisk AstDB (sim_map, dongle_map, DONGLE_NUMBERS families) & MariaDB
 function getAstDbNumbers(callback) {
-    execFile(ASTERISK_BIN, ['-rx', 'database show DONGLE_NUMBERS'], (error, stdout) => {
-        const mappings = {};
-        if (error || !stdout) {
-            return callback(mappings);
-        }
+    const mappings = {};
+    function parseAstDbOutput(stdout, family) {
+        if (!stdout) return;
         const lines = stdout.split('\n');
         lines.forEach(line => {
-            // Match pattern: /DONGLE_NUMBERS/<key>                   : <number>
-            const match = /\/DONGLE_NUMBERS\/([a-zA-Z0-9_]+)\s*:\s*(\+?\d+)/.exec(line);
+            const regex = new RegExp(`\\/${family}\\/([a-zA-Z0-9_]+)\\s*:\\s*(\\+?\\d+)`);
+            const match = regex.exec(line);
             if (match) {
-                const key = match[1];
-                const number = match[2];
-                mappings[key] = number;
+                mappings[match[1]] = match[2];
             }
         });
-        callback(mappings);
+    }
+
+    execFile(ASTERISK_BIN, ['-rx', 'database show sim_map'], (err1, out1) => {
+        parseAstDbOutput(out1, 'sim_map');
+        execFile(ASTERISK_BIN, ['-rx', 'database show dongle_map'], (err2, out2) => {
+            parseAstDbOutput(out2, 'dongle_map');
+            execFile(ASTERISK_BIN, ['-rx', 'database show DONGLE_NUMBERS'], (err3, out3) => {
+                parseAstDbOutput(out3, 'DONGLE_NUMBERS');
+                
+                pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` WHERE phone_number IS NOT NULL AND phone_number != ""')
+                    .then(([rows]) => {
+                        rows.forEach(r => {
+                            if (r.imsi && !mappings[r.imsi]) mappings[r.imsi] = r.phone_number;
+                            if (r.dongle_name && !mappings[r.dongle_name]) mappings[r.dongle_name] = r.phone_number;
+                            if (r.imei && !mappings[r.imei]) mappings[r.imei] = r.phone_number;
+                        });
+                        callback(mappings);
+                    })
+                    .catch(() => callback(mappings));
+            });
+        });
     });
 }
 
@@ -2453,35 +2529,58 @@ function sendAtAndWait(dongleId, atCmd, timeoutMs, callback) {
 }
 
 // Endpoint to manually set/save a SIM's phone number mapping
-app.post('/api/gsm-dongles/save-number', (req, res) => {
+// Endpoint to manually set/save a SIM's phone number mapping
+app.post('/api/gsm-dongles/save-number', async (req, res) => {
     try {
         const { imsi, number, dongleId } = req.body;
-        if (!imsi || !number) {
-            return res.status(400).json({ success: false, error: 'IMSI and phone number are required.' });
+        if ((!imsi && !dongleId) || !number) {
+            return res.status(400).json({ success: false, error: 'IMSI or Dongle ID and phone number are required.' });
         }
 
+        const normNumber = String(number).trim();
+        const dId = String(dongleId || '').trim();
+        const dImsi = String(imsi || '').trim();
+
         const simMappings = readSimMappings();
-        simMappings[imsi] = number;
+        if (dImsi) simMappings[dImsi] = normNumber;
         saveSimMappings(simMappings);
 
-        const normalized = normalizeMsisdn(number);
-        console.log(`GSM MONITOR: Manual save number for IMSI: ${imsi} -> ${number} (normalized: ${normalized})`);
-
-        execFile(ASTERISK_BIN, ['-rx', 'dongle show devices'], (errDevs, stdoutDevs) => {
-            let imei = null;
-            if (!errDevs && stdoutDevs) {
-                const devices = parseDevicesOutput(stdoutDevs, true);
-                const dev = devices.find(d => d.ID.toLowerCase() === dongleId.toLowerCase() || d.IMSI === imsi);
-                if (dev && dev.IMEI && dev.IMEI !== '-') imei = dev.IMEI;
+        let imei = null;
+        let foundImsi = dImsi;
+        try {
+            const devicesOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
+            if (devicesOutput) {
+                const devices = parseDevicesOutput(devicesOutput, true);
+                const dev = devices.find(d => (dId && d.ID.toLowerCase() === dId.toLowerCase()) || (dImsi && d.IMSI === dImsi));
+                if (dev) {
+                    if (dev.IMEI && dev.IMEI !== '-') imei = dev.IMEI;
+                    if (dev.IMSI && dev.IMSI !== '-') foundImsi = dev.IMSI;
+                }
             }
-            if (imei) execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imei} ${number}`]);
-            execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imsi} ${number}`]);
+        } catch (_) {}
 
-            io.emit('dongleNumberUpdated', { dongleId, number });
-            return res.json({ success: true, message: 'SIM number saved to dashboard and AstDB.' });
-        });
+        // 1. Save to MariaDB asterisk.gsm_dongles
+        if (dId || foundImsi) {
+            await pool.query(`
+                INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, imsi, imei, phone_number)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    imsi = COALESCE(NULLIF(VALUES(imsi), ''), imsi),
+                    imei = COALESCE(NULLIF(VALUES(imei), ''), imei),
+                    phone_number = VALUES(phone_number)
+            `, [dId || 'unknown', foundImsi || '', imei || '', normNumber]);
+        }
+
+        // 2. Write to AstDB immediately (sim_map, dongle_map, DONGLE_NUMBERS)
+        if (foundImsi) execFile(ASTERISK_BIN, ['-rx', `database put sim_map ${foundImsi} ${normNumber}`]);
+        if (dId) execFile(ASTERISK_BIN, ['-rx', `database put dongle_map ${dId} ${normNumber}`]);
+        if (imei) execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imei} ${normNumber}`]);
+        if (foundImsi) execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${foundImsi} ${normNumber}`]);
+
+        io.emit('dongleNumberUpdated', { dongleId: dId, imsi: foundImsi, number: normNumber });
+        return res.json({ success: true, message: 'SIM number saved to database and AstDB.' });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({ success: false, error: error.message });
     }
 });
 
