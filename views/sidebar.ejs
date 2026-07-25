@@ -486,6 +486,12 @@ function can(tab) { return allowed.includes(tab); }
         background: var(--selection-bg) !important;
         color: #ffffff !important;
     }
+    .panel-surface.custom-select-open,
+    .config-card.custom-select-open {
+        overflow: visible !important;
+        position: relative !important;
+        z-index: 100 !important;
+    }
 
     /* Terminal panes intentionally stay dark in both themes. */
     .light-theme .terminal-screen,
@@ -2009,6 +2015,7 @@ function enhanceSelectElements() {
         
         const menu = document.createElement('div');
         menu.className = 'custom-select-menu absolute left-0 right-0 top-full mt-1.5 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-lg z-[99999] max-h-60 overflow-y-auto hidden no-scrollbar p-1 space-y-0.5';
+        const overflowHost = wrapper.closest('.panel-surface, .config-card');
         
         function buildOptions() {
             menu.innerHTML = '';
@@ -2026,6 +2033,7 @@ function enhanceSelectElements() {
                     select.dispatchEvent(new Event('change', { bubbles: true }));
                     syncState();
                     menu.classList.add('hidden');
+                    if (overflowHost) overflowHost.classList.remove('custom-select-open');
                     trigger.setAttribute('aria-expanded', 'false');
                     trigger.classList.remove('border-[var(--accent-color)]');
                     buildOptions();
@@ -2045,6 +2053,7 @@ function enhanceSelectElements() {
                 trigger.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
                 trigger.setAttribute('aria-expanded', 'false');
                 menu.classList.add('hidden');
+                if (overflowHost) overflowHost.classList.remove('custom-select-open');
             } else {
                 trigger.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
             }
@@ -2062,6 +2071,7 @@ function enhanceSelectElements() {
             e.stopPropagation();
             syncState();
             if (select.disabled || select.hasAttribute('disabled')) return;
+            document.querySelectorAll('.custom-select-open').forEach(host => host.classList.remove('custom-select-open'));
             document.querySelectorAll('.custom-select-menu').forEach(m => {
                 if (m !== menu) m.classList.add('hidden');
             });
@@ -2073,6 +2083,7 @@ function enhanceSelectElements() {
             menu.classList.toggle('hidden', !isHidden);
             trigger.setAttribute('aria-expanded', String(isHidden));
             trigger.classList.toggle('border-[var(--accent-color)]', isHidden);
+            if (overflowHost) overflowHost.classList.toggle('custom-select-open', isHidden);
         });
     });
 }
@@ -2083,6 +2094,7 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('click', function() {
     document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.add('hidden'));
     document.querySelectorAll('.custom-select-trigger').forEach(t => t.setAttribute('aria-expanded', 'false'));
+    document.querySelectorAll('.custom-select-open').forEach(host => host.classList.remove('custom-select-open'));
 });
 </script>
 
