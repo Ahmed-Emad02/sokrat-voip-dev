@@ -383,6 +383,56 @@ function can(tab) { return allowed.includes(tab); }
     .ext-card, button, input, select, textarea {
         border-radius: 0.5rem !important;
     }
+    /* Global Select Dropdown & Option Theme Styling */
+    select {
+        color-scheme: dark !important;
+        background-color: #0c0c0e !important;
+        color: #f4f4f5 !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 0.5rem !important;
+        font-family: 'JetBrains Mono', 'Plus Jakarta Sans', monospace !important;
+        font-size: 13px !important;
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+        outline: none !important;
+    }
+    select:focus {
+        border-color: #ef4444 !important;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25) !important;
+    }
+    select option {
+        background-color: #0d0d12 !important;
+        color: #f4f4f5 !important;
+        padding: 10px 14px !important;
+        font-family: 'JetBrains Mono', 'Plus Jakarta Sans', monospace !important;
+        font-size: 13px !important;
+    }
+    select option:hover,
+    select option:focus,
+    select option:active,
+    select option:checked {
+        background-color: #991b1b !important;
+        color: #ffffff !important;
+        background: linear-gradient(0deg, #991b1b 0%, #991b1b 100%) !important;
+    }
+    .light-theme select {
+        color-scheme: light !important;
+        background-color: #ffffff !important;
+        color: #111827 !important;
+        border-color: #cbd5e1 !important;
+    }
+    .light-theme select option {
+        background-color: #ffffff !important;
+        color: #111827 !important;
+    }
+    .light-theme select option:hover,
+    .light-theme select option:focus,
+    .light-theme select option:active,
+    .light-theme select option:checked {
+        background-color: #dc2626 !important;
+        color: #ffffff !important;
+        background: linear-gradient(0deg, #dc2626 0%, #dc2626 100%) !important;
+    }
     /* Calendar Picker Indicator Styling - Visible and themed */
     input[type="datetime-local"]::-webkit-calendar-picker-indicator {
         filter: brightness(0) invert(1) brightness(0.85) !important; /* Silver/white in dark mode */
