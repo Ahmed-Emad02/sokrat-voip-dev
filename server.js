@@ -867,7 +867,12 @@ app.use(async (req, res, next) => {
         }));
         res.locals.activeCalls = activeCalls;
         res.locals.currentPage = req.path;
-        res.locals.currentLang = req.query.lang === 'ar' ? 'ar' : 'en';
+        if (req.query.lang === 'ar' || req.query.lang === 'en') {
+            req.session.lang = req.query.lang;
+        }
+        const currentLang = req.session.lang || 'en';
+        res.locals.currentLang = currentLang;
+        res.locals.isRtl = currentLang === 'ar';
         reloadGreetingConfig();
         res.locals.greetingMode = greetingConfig.mode || 'none';
         res.locals.greetingExtensions = greetingConfig.extensions || [];
@@ -1326,7 +1331,9 @@ app.post('/groups/add', async (req, res) => {
     try {
         if (!isSuperAdmin(req)) return res.redirect('/');
         const { name } = req.body;
-        if (!name || name.trim().length < 2) return res.redirect('/users?error=Group name must be at least 2 characters');
+        const lang = req.body.lang || req.session.lang || 'en';
+        const langQuery = lang === 'ar' ? '&lang=ar' : '';
+        if (!name || name.trim().length < 2) return res.redirect('/users?error=Group name must be at least 2 characters' + langQuery);
         const conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'admin',
@@ -1335,9 +1342,10 @@ app.post('/groups/add', async (req, res) => {
         });
         await conn.execute('INSERT INTO dashboard_groups (name) VALUES (?)', [name.trim()]);
         await conn.end();
-        res.redirect('/users?success=Group created');
+        res.redirect('/users?success=Group created' + langQuery);
     } catch (err) {
-        res.redirect('/users?error=' + encodeURIComponent(err.message));
+        const langQuery = (req.body.lang || req.session.lang) === 'ar' ? '&lang=ar' : '';
+        res.redirect('/users?error=' + encodeURIComponent(err.message) + langQuery);
     }
 });
 
@@ -1345,8 +1353,11 @@ app.post('/groups/add', async (req, res) => {
 app.post('/groups/delete', async (req, res) => {
     try {
         if (!isSuperAdmin(req)) return res.redirect('/');
-        const { id } = req.body;
-        if (!id) return res.redirect('/users?error=Group ID required');
+        const { id, lang } = req.body;
+        const currentLanguage = lang || req.session.lang || 'en';
+        const langQuery = currentLanguage === 'ar' ? '&lang=ar' : '';
+
+        if (!id) return res.redirect('/users?error=Group ID required' + langQuery);
         const conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'admin',
@@ -1357,15 +1368,16 @@ app.post('/groups/delete', async (req, res) => {
         const [grp] = await conn.execute('SELECT name FROM dashboard_groups WHERE id = ?', [id]);
         if (grp.length && grp[0].name === 'super admins') {
             await conn.end();
-            return res.redirect('/users?error=Cannot delete the super admins group');
+            return res.redirect('/users?error=Cannot delete the super admins group' + langQuery);
         }
         await conn.execute('DELETE FROM dashboard_group_permissions WHERE group_id = ?', [id]);
         await conn.execute('UPDATE dashboard_users SET group_id = NULL WHERE group_id = ?', [id]);
         await conn.execute('DELETE FROM dashboard_groups WHERE id = ?', [id]);
         await conn.end();
-        res.redirect('/users?success=Group deleted');
+        res.redirect('/users?success=Group deleted' + langQuery);
     } catch (err) {
-        res.redirect('/users?error=' + encodeURIComponent(err.message));
+        const langQuery = (req.body.lang || req.session.lang) === 'ar' ? '&lang=ar' : '';
+        res.redirect('/users?error=' + encodeURIComponent(err.message) + langQuery);
     }
 });
 
@@ -1373,19 +1385,21 @@ app.post('/groups/delete', async (req, res) => {
 app.post('/groups/permissions', async (req, res) => {
     try {
         if (!isSuperAdmin(req)) return res.redirect('/');
-        const { group_id, tabs } = req.body;
-        if (!group_id) return res.redirect('/users?error=Group ID required');
+        const { group_id, tabs, lang } = req.body;
+        const currentLanguage = lang || req.session.lang || 'en';
+        const langQuery = currentLanguage === 'ar' ? '&lang=ar' : '';
+
+        if (!group_id) return res.redirect('/users?error=Group ID required' + langQuery);
         const conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'admin',
             password: process.env.DB_PASS || 'admin',
             database: ASTERISK_DB
         });
-        // Prevent modifying super admins permissions
-        const [groupRow] = await conn.execute('SELECT name FROM dashboard_groups WHERE id = ?', [group_id]);
-        if (groupRow && groupRow.length > 0 && groupRow[0].name === 'super admins') {
+        const [grp] = await conn.execute('SELECT name FROM dashboard_groups WHERE id = ?', [group_id]);
+        if (grp.length && grp[0].name === 'super admins') {
             await conn.end();
-            return res.redirect('/users?error=Super admins permissions cannot be modified');
+            return res.redirect('/users?error=Super admins permissions cannot be modified' + langQuery);
         }
         // Clear existing permissions
         await conn.execute('DELETE FROM dashboard_group_permissions WHERE group_id = ?', [group_id]);
@@ -1397,9 +1411,10 @@ app.post('/groups/permissions', async (req, res) => {
             }
         }
         await conn.end();
-        res.redirect('/users?success=Permissions updated');
+        res.redirect('/users?success=Permissions updated' + langQuery);
     } catch (err) {
-        res.redirect('/users?error=' + encodeURIComponent(err.message));
+        const langQuery = (req.body.lang || req.session.lang) === 'ar' ? '&lang=ar' : '';
+        res.redirect('/users?error=' + encodeURIComponent(err.message) + langQuery);
     }
 });
 
@@ -2935,7 +2950,7 @@ app.get('/contacts', requireAuth, async (req, res) => {
     try {
         const stdout = await runSqliteQuery("SELECT id, name, last_name, telefono FROM contact ORDER BY name ASC, last_name ASC;");
         const contacts = parseSqliteRows(stdout);
-        const currentLang = req.query.lang || 'en';
+        const currentLang = res.locals.currentLang || 'en';
         res.render('contacts', {
             contacts,
             currentPage: '/contacts',
@@ -3023,7 +3038,7 @@ app.post('/api/contacts/delete', async (req, res) => {
 
 // GET /config - render Configuration Management page
 app.get('/config', requireAuth, (req, res) => {
-    const currentLang = req.query.lang || 'en';
+    const currentLang = res.locals.currentLang || 'en';
     res.render('config', {
         moment,
         currentPage: '/config',

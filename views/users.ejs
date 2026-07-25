@@ -223,7 +223,7 @@
         <div class="panel-surface p-6 mb-6 mt-6">
             <h2 class="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Add Group</h2>
             <form method="POST" action="/groups/add" class="flex flex-wrap items-end gap-3">
-                <div class="flex-1 min-w-[250px]">
+                <input type="hidden" name="lang" value="<%= currentLang %>">
                     <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Group Name</label>
                     <input type="text" name="name" placeholder="e.g. Support Team" required>
                 </div>
@@ -241,6 +241,7 @@
                         </div>
                         <% if (g.name !== 'super admins') { %>
                             <form method="POST" action="/groups/delete" onsubmit="return confirm('Delete group <%= g.name %>? Users in this group will become ungrouped.')">
+                                <input type="hidden" name="lang" value="<%= currentLang %>">
                                 <input type="hidden" name="id" value="<%= g.id %>">
                                 <button type="submit" class="btn-ghost text-[10px] px-2 py-1 text-red-400 hover:text-red-300 hover:border-red-500/50">Delete</button>
                             </form>
@@ -260,6 +261,7 @@
                         </div>
                     <% } else { %>
                         <form method="POST" action="/groups/permissions">
+                            <input type="hidden" name="lang" value="<%= currentLang %>">
                             <input type="hidden" name="group_id" value="<%= g.id %>">
                             <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">Tab Access</p>
                             <div class="flex flex-wrap gap-4">
