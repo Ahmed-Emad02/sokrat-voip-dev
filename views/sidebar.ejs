@@ -207,15 +207,16 @@ function can(tab) { return allowed.includes(tab); }
 
     /* Header tabs sizing and weight upgrades */
     .nav-item {
-        padding: 0.85rem 1.6rem !important; /* Larger horizontal/vertical padding */
-        font-size: 16px !important; /* Larger font size */
+        padding: 0.75rem 0.9rem !important;
+        font-size: 15px !important;
         font-weight: 800 !important; /* Bold/Extra bold text */
         letter-spacing: 0.03em !important;
     }
     
     .nav-item svg {
-        width: 1.15rem !important; /* Scale up tab icons */
-        height: 1.15rem !important;
+        width: 1.05rem !important;
+        height: 1.05rem !important;
+        margin-inline-end: 0.65rem !important;
     }
     
     /* Make the active border line under tabs thicker and prominent */
@@ -1121,12 +1122,12 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 </script>
 
 <!-- Vertical Sidebar -->
-<aside id="appSidebar" class="app-sidebar fixed md:sticky top-0 bottom-0 z-50 w-[260px] h-screen bg-[var(--bg-secondary)] flex flex-col justify-between p-6 shrink-0 transition-transform duration-300 transform md:translate-x-0 <%= isRtl ? 'right-0 translate-x-full border-l border-[var(--border-primary)] md:border-l md:border-r-0' : 'left-0 -translate-x-full border-r border-[var(--border-primary)] md:border-r md:border-l-0' %>">
-    <div class="flex flex-col gap-6 overflow-y-auto no-scrollbar flex-1">
+<aside id="appSidebar" class="app-sidebar fixed md:sticky top-0 bottom-0 z-50 w-[260px] md:w-[224px] h-screen bg-[var(--bg-secondary)] flex flex-col justify-between p-5 md:p-4 shrink-0 transition-transform duration-300 transform md:translate-x-0 <%= isRtl ? 'right-0 translate-x-full border-l border-[var(--border-primary)] md:border-l md:border-r-0' : 'left-0 -translate-x-full border-r border-[var(--border-primary)] md:border-r md:border-l-0' %>">
+    <div class="flex flex-col gap-4 overflow-y-auto no-scrollbar flex-1">
         <!-- Brand Header inside Sidebar -->
-        <div class="relative flex flex-col items-center justify-center py-4 border-b border-[var(--border-primary)] pb-5">
+        <div class="relative flex flex-col items-center justify-center py-2.5 border-b border-[var(--border-primary)] pb-4">
             <div class="flex flex-col items-center gap-2.5">
-                <img id="brandLogo" src="/logo_light_text.png" alt="Sokrat VOIP" class="w-36 h-36 object-contain rounded-xl shadow-lg">
+                <img id="brandLogo" src="/logo_light_text.png" alt="Sokrat VOIP" class="w-28 h-28 object-contain rounded-xl shadow-lg">
                 <script>
                     (function() {
                         const theme = localStorage.getItem('theme') || 'dark';
