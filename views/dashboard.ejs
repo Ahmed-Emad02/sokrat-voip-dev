@@ -142,9 +142,18 @@ const isRtl = currentLang === 'ar';
     <div class="flex-1 p-8 relative flex flex-col min-h-screen">
 
         <div class="mb-6 shrink-0 flex justify-between items-center <%= isRtl ? 'flex-row-reverse' : '' %>">
-            <h2 class="text-3xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
+            <div>
+                <h2 class="text-3xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span class="text-xs text-[var(--text-muted)] font-mono uppercase tracking-wider"><%= isRtl ? 'نظام المقسم المباشر نشط' : 'Live Telephony Core Active' %></span>
+                </div>
+            </div>
             <% if (isSuperAdmin) { %>
-            <button onclick="openAddContactModal()" class="bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition flex items-center gap-1.5 cursor-pointer">
+            <button onclick="openAddContactModal()" class="config-btn-primary px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition flex items-center gap-1.5 cursor-pointer">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
