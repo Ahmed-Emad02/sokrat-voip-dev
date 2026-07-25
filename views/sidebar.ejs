@@ -53,8 +53,10 @@ function can(tab) { return allowed.includes(tab); }
 %>
 
 <!-- Prevent theme/JIT flickering loading screen overlay -->
-<div id="theme-loading-overlay" style="position: fixed; inset: 0; background-color: #050507; z-index: 999999; display: flex; align-items: center; justify-content: center; transition: opacity 0.15s ease-out; pointer-events: none;">
-    <img id="loadingLogo" src="/logo_light_text.png" alt="Issabel Dashboard" style="width: 16rem; height: 16rem; object-fit: contain;">
+<div id="theme-loading-overlay" style="position: fixed; inset: 0; background-color: #050507; z-index: 999999; display: flex; flex-col; items-center justify-center pointer-events: none; overflow: hidden;">
+    <div class="flex flex-col items-center justify-center gap-4">
+        <img id="loadingLogo" src="/logo_light_text.png" alt="Issabel Dashboard" style="width: 14rem; height: 14rem; object-fit: contain; opacity: 0;">
+    </div>
 </div>
 <script>
     (function() {
@@ -71,17 +73,52 @@ function can(tab) { return allowed.includes(tab); }
         }
     })();
     
-    // Hide the loading overlay when all resources are ready
+    // Animate loading screen logo entrance on DOM ready
+    document.addEventListener('DOMContentLoaded', function() {
+        const logo = document.getElementById('loadingLogo');
+        if (logo && typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            anime({
+                targets: logo,
+                scale: [0.85, 1.05, 1],
+                opacity: [0, 1],
+                duration: 500,
+                easing: 'easeOutElastic(1, .8)'
+            });
+        } else if (logo) {
+            logo.style.opacity = '1';
+        }
+    });
+
+    // Hide & animate out loading screen overlay when all resources are ready
     window.addEventListener('load', function() {
         setTimeout(function() {
             const overlay = document.getElementById('theme-loading-overlay');
-            if (overlay) {
+            const logo = document.getElementById('loadingLogo');
+            if (overlay && typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                anime.timeline({
+                    complete: function() {
+                        if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                    }
+                })
+                .add({
+                    targets: logo,
+                    scale: [1, 0.88],
+                    opacity: [1, 0],
+                    duration: 220,
+                    easing: 'easeInQuad'
+                })
+                .add({
+                    targets: overlay,
+                    translateY: ['0%', '-100%'],
+                    opacity: [1, 0.95],
+                    duration: 400,
+                    easing: 'easeInOutCubic'
+                }, '-=80');
+            } else if (overlay) {
                 overlay.style.opacity = '0';
-                setTimeout(() => {
-                    overlay.remove();
-                }, 150);
+                setTimeout(() => { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 150);
             }
-        }, 200);
+        }, 150);
     });
 </script>
 
@@ -90,7 +127,7 @@ function can(tab) { return allowed.includes(tab); }
 <!-- Flatpickr Datepicker -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
 <!-- Global Theme Override Styles -->
 <style>
     :root {
@@ -687,12 +724,52 @@ function can(tab) { return allowed.includes(tab); }
         }
     }
 
-    function toggleTheme() {
+    function toggleTheme(e) {
         const isLight = document.body.classList.toggle('light-theme');
         document.documentElement.classList.toggle('light-theme', isLight);
         localStorage.setItem('theme', isLight ? 'light' : 'dark');
         updateThemeUI(isLight);
         
+        // Anime.js ripple & spring animation on theme toggle
+        if (typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            const thumb = document.getElementById('themeThumb');
+            if (thumb) {
+                anime({
+                    targets: thumb,
+                    scale: [0.75, 1.15, 1],
+                    rotate: isLight ? [0, 180] : [180, 0],
+                    duration: 350,
+                    easing: 'easeOutElastic(1, .7)'
+                });
+            }
+
+            const ripple = document.createElement('div');
+            ripple.className = 'fixed rounded-full pointer-events-none z-[999998]';
+            const btn = document.getElementById('themeToggleBtn') || document.body;
+            const rect = btn.getBoundingClientRect();
+            const radius = Math.hypot(Math.max(rect.left, window.innerWidth - rect.left), Math.max(rect.top, window.innerHeight - rect.top));
+            
+            ripple.style.left = (rect.left + rect.width / 2 - radius) + 'px';
+            ripple.style.top = (rect.top + rect.height / 2 - radius) + 'px';
+            ripple.style.width = (radius * 2) + 'px';
+            ripple.style.height = (radius * 2) + 'px';
+            ripple.style.backgroundColor = isLight ? 'rgba(249, 250, 251, 0.85)' : 'rgba(5, 5, 7, 0.85)';
+            ripple.style.backdropFilter = 'blur(12px)';
+            ripple.style.transform = 'scale(0)';
+            document.body.appendChild(ripple);
+
+            anime({
+                targets: ripple,
+                scale: [0, 1],
+                opacity: [0.8, 0],
+                duration: 450,
+                easing: 'easeOutQuint',
+                complete: function() {
+                    if (ripple && ripple.parentNode) ripple.parentNode.removeChild(ripple);
+                }
+            });
+        }
+
         if (window.pieChart) {
             location.reload();
         }

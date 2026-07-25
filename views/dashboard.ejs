@@ -271,6 +271,16 @@ const isRtl = currentLang === 'ar';
         document.addEventListener('DOMContentLoaded', () => {
             const clockEl = document.getElementById('digitalClock');
             if (clockEl) { setInterval(() => { clockEl.textContent = new Date().toTimeString().split(' ')[0]; }, 1000); }
+            if (typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                anime({
+                    targets: '.card-stat',
+                    opacity: [0, 1],
+                    translateY: [15, 0],
+                    delay: anime.stagger(50),
+                    duration: 450,
+                    easing: 'easeOutCubic'
+                });
+            }
 
             const isLight = document.body.classList.contains('light-theme');
             const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#dc2626';

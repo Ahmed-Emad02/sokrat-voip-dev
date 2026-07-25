@@ -4414,6 +4414,25 @@ function isTabAllowed(tabName) {
 
                 svgNodes.appendChild(fo);
             });
+
+            // Anime.js SVG wire stroke & node entrance animation
+            if (typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                anime({
+                    targets: '.diagram-wire',
+                    strokeDashoffset: [anime.setDashoffset, 0],
+                    easing: 'easeInOutCubic',
+                    duration: 850,
+                    delay: anime.stagger(20)
+                });
+                anime({
+                    targets: '.diagram-card',
+                    opacity: [0, 1],
+                    scale: [0.94, 1],
+                    easing: 'easeOutCubic',
+                    duration: 400,
+                    delay: anime.stagger(25)
+                });
+            }
         }
 
         function highlightNode(nodeId) {

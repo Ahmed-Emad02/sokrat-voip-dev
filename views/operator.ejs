@@ -506,6 +506,15 @@ const isRtl = currentLang === 'ar';
 
             window.handleSelectAction = function(extension, action) {
                 if (!action) return;
+                const card = document.querySelector(`[data-ext="${extension}"]`) || document.querySelector(`[data-extension="${extension}"]`);
+                if (card && typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    anime({
+                        targets: card,
+                        scale: [0.96, 1.02, 1],
+                        duration: 350,
+                        easing: 'easeOutElastic(1, .7)'
+                    });
+                }
 
                 if (action === 'listen') {
                     launchSipUrl('sip:222' + extension);
