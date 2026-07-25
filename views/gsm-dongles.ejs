@@ -144,8 +144,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             --text-primary: #18181b !important;
             --text-secondary: #3f3f46 !important;
             --text-muted: #71717a !important; /* Compliant muted text (contrast 4.68:1) */
-            --accent-color: #dc2626 !important; /* Rich ruby red for light mode */
-            --accent-hover: #b91c1c !important;
+            --accent-color: #b91c1c !important; /* Accessible deep red for light mode */
+            --accent-hover: #991b1b !important;
             --accent-soft: rgba(254, 226, 226, 0.72) !important;
             --accent-border: rgba(220, 38, 38, 0.36) !important;
             --bg-selected: rgba(220, 38, 38, 0.22) !important;
@@ -326,8 +326,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
     <%- include('sidebar') %>
     <style>
         .hardware-table button.dongle-action-primary {
-            background-color: var(--accent-color) !important;
-            border-color: var(--accent-color) !important;
+            background-color: var(--selection-bg) !important;
+            border-color: var(--selection-bg) !important;
             color: #ffffff !important;
         }
         .hardware-table button.dongle-action-primary:hover {
