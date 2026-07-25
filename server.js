@@ -3689,11 +3689,15 @@ app.post('/api/config/trunks', async (req, res) => {
         const trunkName = String(name).trim();
         const dialString = String(channelid).trim().replace(/^dongle\/I:/, 'dongle/i:');
 
+        // Calculate next trunkid (primary key is not auto-increment)
+        const [maxRow] = await pool.query('SELECT COALESCE(MAX(trunkid), 0) + 1 AS nextId FROM `asterisk`.`trunks`');
+        const nextTrunkId = maxRow[0].nextId;
+
         // Insert into trunks table as tech='custom'
         await pool.query(`
-            INSERT INTO \`asterisk\`.\`trunks\` (name, tech, outcid, keepcid, maxchans, failscript, dialoutprefix, channelid, disabled, \`continue\`)
-            VALUES (?, 'custom', '', 'off', '', '', '', ?, 'off', 'off')
-        `, [trunkName, dialString]);
+            INSERT INTO \`asterisk\`.\`trunks\` (trunkid, name, tech, outcid, keepcid, maxchans, failscript, dialoutprefix, channelid, disabled, \`continue\`)
+            VALUES (?, ?, 'custom', '', 'off', '', '', '', ?, 'off', 'off')
+        `, [nextTrunkId, trunkName, dialString]);
 
         reloadPbxConfig();
         res.json({ success: true, message: `Custom Trunk '${trunkName}' created successfully.` });
@@ -3748,8 +3752,24 @@ app.delete('/api/config/trunks/:trunkid', async (req, res) => {
     }
 });
 
-// --- 4. INBOUND & OUTBOUND ROUTES MANAGEMENT APIs ---
+// Helper to normalize Egyptian DID numbers (+2010... / 2010... / 10... -> 010...)
+function normalizeDidNumber(raw) {
+    if (!raw) return '';
+    let ext = String(raw).trim();
+    ext = ext.replace(/[\s\-\(\)]/g, '');
+    if (ext.startsWith('+20')) {
+        ext = '0' + ext.slice(3);
+    } else if (ext.startsWith('0020')) {
+        ext = '0' + ext.slice(4);
+    } else if (ext.startsWith('20') && ext.length === 12) {
+        ext = '0' + ext.slice(2);
+    } else if (ext.length === 10 && ext.startsWith('1')) {
+        ext = '0' + ext;
+    }
+    return ext;
+}
 
+// --- 4. INBOUND & OUTBOUND ROUTES MANAGEMENT APIs ---
 // GET /api/config/routes/inbound - List Inbound Routes
 app.get('/api/config/routes/inbound', async (req, res) => {
     try {
@@ -3776,7 +3796,7 @@ app.post('/api/config/routes/inbound', async (req, res) => {
         }
 
         const desc = String(description).trim();
-        const ext = String(extension || '').trim();
+        const ext = normalizeDidNumber(extension);
         const cid = ''; // Default cidnum to empty string
         const dest = String(destination).trim();
 
@@ -3819,19 +3839,19 @@ app.put('/api/config/routes/inbound', async (req, res) => {
         }
 
         const desc = String(description).trim();
-        const ext = String(extension || '').trim();
+        const ext = normalizeDidNumber(extension);
         const dest = String(destination).trim();
-        const origExt = String(originalExtension || '').trim();
+        const origExt = normalizeDidNumber(originalExtension);
+        const rawOrigExt = String(originalExtension || '').trim();
         const origDesc = String(originalDescription || '').trim();
         const origDest = String(originalDestination || '').trim();
 
         await pool.query(`
             UPDATE \`asterisk\`.\`incoming\`
             SET description = ?, extension = ?, destination = ?
-            WHERE (extension = ? OR (extension IS NULL AND ? = ''))
+            WHERE (extension = ? OR extension = ? OR (extension IS NULL AND ? = ''))
               AND (description = ? OR (description IS NULL AND ? = ''))
-              AND (destination = ? OR (destination IS NULL AND ? = ''))
-        `, [desc, ext, dest, origExt, origExt, origDesc, origDesc, origDest, origDest]);
+        `, [desc, ext, dest, origExt, rawOrigExt, origExt, origDesc, origDesc]);
 
         reloadPbxConfig();
         res.json({ success: true, message: `Inbound Route '${desc}' updated successfully.` });
@@ -3844,19 +3864,192 @@ app.put('/api/config/routes/inbound', async (req, res) => {
 app.delete('/api/config/routes/inbound', async (req, res) => {
     try {
         const { extension, description, destination } = req.body;
-        const ext = String(extension || '').trim();
+        const rawExt = String(extension || '').trim();
+        const normExt = normalizeDidNumber(rawExt);
         const desc = String(description || '').trim();
         const dest = String(destination || '').trim();
 
         await pool.query(`
             DELETE FROM \`asterisk\`.\`incoming\`
-            WHERE (extension = ? OR (extension IS NULL AND ? = ''))
+            WHERE (extension = ? OR extension = ? OR (extension IS NULL AND ? = ''))
               AND (description = ? OR (description IS NULL AND ? = ''))
-              AND (destination = ? OR (destination IS NULL AND ? = ''))
-        `, [ext, ext, desc, desc, dest, dest]);
+        `, [rawExt, normExt, rawExt, desc, desc]);
 
         reloadPbxConfig();
         res.json({ success: true, message: 'Inbound Route deleted successfully.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// --- 5. IVR MANAGEMENT APIs ---
+
+// GET /api/config/ivrs - List all IVR menus
+app.get('/api/config/ivrs', async (req, res) => {
+    try {
+        const [ivrs] = await pool.query('SELECT * FROM `asterisk`.`ivr_details` ORDER BY id ASC');
+        const [entries] = await pool.query('SELECT * FROM `asterisk`.`ivr_entries` ORDER BY ivr_id ASC, selection ASC');
+        
+        const entriesByIvr = {};
+        for (const entry of entries) {
+            if (!entriesByIvr[entry.ivr_id]) entriesByIvr[entry.ivr_id] = [];
+            entriesByIvr[entry.ivr_id].push(entry);
+        }
+
+        const result = ivrs.map(i => ({
+            ...i,
+            entries: entriesByIvr[i.id] || []
+        }));
+
+        res.json({ success: true, ivrs: result });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET /api/config/ivrs/:id - Get single IVR menu
+app.get('/api/config/ivrs/:id', async (req, res) => {
+    try {
+        const ivrId = parseInt(req.params.id, 10);
+        const [ivrs] = await pool.query('SELECT * FROM `asterisk`.`ivr_details` WHERE id = ?', [ivrId]);
+        if (!ivrs.length) return res.status(404).json({ success: false, error: 'IVR not found' });
+
+        const [entries] = await pool.query('SELECT * FROM `asterisk`.`ivr_entries` WHERE ivr_id = ? ORDER BY selection ASC', [ivrId]);
+        res.json({ success: true, ivr: { ...ivrs[0], entries } });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/ivrs - Create IVR Menu
+app.post('/api/config/ivrs', async (req, res) => {
+    try {
+        const {
+            name, description, announcement, directdial,
+            timeout_time, timeout_loops, timeout_retry_recording, timeout_destination,
+            invalid_loops, invalid_retry_recording, invalid_destination,
+            entries
+        } = req.body;
+
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, error: 'IVR Name is required.' });
+        }
+
+        const ivrName = String(name).trim();
+        const ivrDesc = description ? String(description).trim() : '';
+        const announceId = announcement ? parseInt(announcement, 10) : 0;
+        const dirDial = directdial || 'disabled';
+
+        const timeoutSec = timeout_time ? parseInt(timeout_time, 10) : 10;
+        const timeoutRetry = timeout_loops ? String(timeout_loops) : '3';
+        const timeoutRec = timeout_retry_recording || 'default';
+        const timeoutDest = timeout_destination || 'app-blackhole,hangup,1';
+
+        const invalidRetry = invalid_loops ? String(invalid_loops) : '3';
+        const invalidRec = invalid_retry_recording || 'default';
+        const invalidDest = invalid_destination || 'app-blackhole,hangup,1';
+
+        const [insertRes] = await pool.query(`
+            INSERT INTO \`asterisk\`.\`ivr_details\`
+            (name, description, announcement, directdial, timeout_time, timeout_loops, timeout_retry_recording, timeout_destination, invalid_loops, invalid_retry_recording, invalid_destination, timeout_enabled)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1')
+        `, [
+            ivrName, ivrDesc, announceId, dirDial,
+            timeoutSec, timeoutRetry, timeoutRec, timeoutDest,
+            invalidRetry, invalidRec, invalidDest
+        ]);
+
+        const newIvrId = insertRes.insertId;
+
+        // Insert IVR entries (digit options)
+        if (Array.isArray(entries) && entries.length) {
+            for (const entry of entries) {
+                if (entry.selection && entry.dest) {
+                    await pool.query(`
+                        INSERT INTO \`asterisk\`.\`ivr_entries\` (ivr_id, selection, dest, ivr_ret)
+                        VALUES (?, ?, ?, 0)
+                    `, [newIvrId, String(entry.selection).trim(), String(entry.dest).trim()]);
+                }
+            }
+        }
+
+        reloadPbxConfig();
+        res.json({ success: true, id: newIvrId, message: `IVR '${ivrName}' created successfully.` });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// PUT /api/config/ivrs/:id - Modify IVR Menu
+app.put('/api/config/ivrs/:id', async (req, res) => {
+    try {
+        const ivrId = parseInt(req.params.id, 10);
+        const {
+            name, description, announcement, directdial,
+            timeout_time, timeout_loops, timeout_retry_recording, timeout_destination,
+            invalid_loops, invalid_retry_recording, invalid_destination,
+            entries
+        } = req.body;
+
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, error: 'IVR Name is required.' });
+        }
+
+        const ivrName = String(name).trim();
+        const ivrDesc = description ? String(description).trim() : '';
+        const announceId = announcement ? parseInt(announcement, 10) : 0;
+        const dirDial = directdial || 'disabled';
+
+        const timeoutSec = timeout_time ? parseInt(timeout_time, 10) : 10;
+        const timeoutRetry = timeout_loops ? String(timeout_loops) : '3';
+        const timeoutRec = timeout_retry_recording || 'default';
+        const timeoutDest = timeout_destination || 'app-blackhole,hangup,1';
+
+        const invalidRetry = invalid_loops ? String(invalid_loops) : '3';
+        const invalidRec = invalid_retry_recording || 'default';
+        const invalidDest = invalid_destination || 'app-blackhole,hangup,1';
+
+        await pool.query(`
+            UPDATE \`asterisk\`.\`ivr_details\`
+            SET name = ?, description = ?, announcement = ?, directdial = ?,
+                timeout_time = ?, timeout_loops = ?, timeout_retry_recording = ?, timeout_destination = ?,
+                invalid_loops = ?, invalid_retry_recording = ?, invalid_destination = ?
+            WHERE id = ?
+        `, [
+            ivrName, ivrDesc, announceId, dirDial,
+            timeoutSec, timeoutRetry, timeoutRec, timeoutDest,
+            invalidRetry, invalidRec, invalidDest,
+            ivrId
+        ]);
+
+        // Re-insert IVR entries
+        await pool.query('DELETE FROM `asterisk`.`ivr_entries` WHERE ivr_id = ?', [ivrId]);
+        if (Array.isArray(entries) && entries.length) {
+            for (const entry of entries) {
+                if (entry.selection && entry.dest) {
+                    await pool.query(`
+                        INSERT INTO \`asterisk\`.\`ivr_entries\` (ivr_id, selection, dest, ivr_ret)
+                        VALUES (?, ?, ?, 0)
+                    `, [ivrId, String(entry.selection).trim(), String(entry.dest).trim()]);
+                }
+            }
+        }
+
+        reloadPbxConfig();
+        res.json({ success: true, message: `IVR '${ivrName}' updated successfully.` });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// DELETE /api/config/ivrs/:id - Delete IVR Menu
+app.delete('/api/config/ivrs/:id', async (req, res) => {
+    try {
+        const ivrId = parseInt(req.params.id, 10);
+        await pool.query('DELETE FROM `asterisk`.`ivr_details` WHERE id = ?', [ivrId]);
+        await pool.query('DELETE FROM `asterisk`.`ivr_entries` WHERE ivr_id = ?', [ivrId]);
+        reloadPbxConfig();
+        res.json({ success: true, message: `IVR #${ivrId} deleted successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -3952,11 +4145,14 @@ app.post('/api/config/routes/outbound', async (req, res) => {
             `, [routeId, parseInt(trunks[i], 10), i]);
         }
 
-        // 4. Insert sequence
+        // 4. Insert sequence position (next available seq)
+        const [seqRow] = await pool.query('SELECT COALESCE(MAX(seq), -1) + 1 AS nextSeq FROM `asterisk`.`outbound_route_sequence`');
+        const nextSeq = seqRow[0].nextSeq;
+
         await pool.query(`
             INSERT INTO \`asterisk\`.\`outbound_route_sequence\` (route_id, seq)
-            VALUES (?, 0)
-        `, [routeId]);
+            VALUES (?, ?)
+        `, [routeId, nextSeq]);
 
         reloadPbxConfig();
         res.json({ success: true, message: `Outbound Route '${routeName}' created successfully.` });
@@ -4206,6 +4402,13 @@ app.get('/api/config/diagram', async (req, res) => {
             ORDER BY tc.timeconditions_id ASC
         `);
 
+        // Query IVR Menus
+        const [ivrs] = await pool.query(`
+            SELECT id, name, description, announcement, directdial, timeout_destination, invalid_destination
+            FROM \`asterisk\`.\`ivr_details\`
+            ORDER BY id ASC
+        `);
+
         // Query Outbound Routes
         const [outboundRows] = await pool.query(`
             SELECT route_id, name FROM \`asterisk\`.\`outbound_routes\`
@@ -4280,6 +4483,7 @@ app.get('/api/config/diagram', async (req, res) => {
             timeconditions,
             ringgroups,
             queues,
+            ivrs,
             extensions,
             outbound,
             trunks
