@@ -1844,4 +1844,82 @@ window.addEventListener('keydown', function(e) {
 </script>
 
 
+<script>
+// Custom Theme-Matched Select Enhancer (replaces OS blue highlight picker)
+function enhanceSelectElements() {
+    document.querySelectorAll('select:not(.enhanced-select):not(.no-enhance)').forEach(select => {
+        select.classList.add('enhanced-select');
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'custom-select-wrapper relative inline-block w-full';
+        if (select.parentNode) {
+            select.parentNode.insertBefore(wrapper, select);
+            wrapper.appendChild(select);
+        }
+        
+        select.style.display = 'none';
+        
+        const trigger = document.createElement('div');
+        trigger.className = 'custom-select-trigger bg-[#0c0c0e] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-primary)] flex items-center justify-between cursor-pointer select-none transition hover:border-[var(--border-accent)]';
+        
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'truncate';
+        const selectedOpt = select.options[select.selectedIndex] || select.options[0];
+        labelSpan.textContent = selectedOpt ? selectedOpt.textContent : '';
+        
+        const arrowSvg = document.createElement('div');
+        arrowSvg.innerHTML = `<svg class="w-3.5 h-3.5 text-zinc-400 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>`;
+        
+        trigger.appendChild(labelSpan);
+        trigger.appendChild(arrowSvg.firstChild);
+        wrapper.appendChild(trigger);
+        
+        const menu = document.createElement('div');
+        menu.className = 'custom-select-menu absolute left-0 right-0 top-full mt-1.5 bg-[#0d0d12] border border-[var(--border-primary)] rounded-xl shadow-2xl z-[99999] max-h-60 overflow-y-auto hidden no-scrollbar backdrop-blur-xl p-1 space-y-0.5';
+        
+        function buildOptions() {
+            menu.innerHTML = '';
+            Array.from(select.options).forEach((opt, idx) => {
+                if (opt.disabled && opt.hidden) return;
+                const item = document.createElement('div');
+                const isSelected = select.selectedIndex === idx;
+                item.className = `custom-select-option px-3 py-2 text-xs font-mono rounded-lg cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-[#991b1b] text-white font-bold' : 'text-zinc-300 hover:bg-white/10 hover:text-white'}`;
+                item.textContent = opt.textContent;
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    select.selectedIndex = idx;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    labelSpan.textContent = opt.textContent;
+                    menu.classList.add('hidden');
+                    trigger.classList.remove('border-[var(--accent-color)]');
+                    buildOptions();
+                });
+                menu.appendChild(item);
+            });
+        }
+        buildOptions();
+        
+        wrapper.appendChild(menu);
+        
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.custom-select-menu').forEach(m => {
+                if (m !== menu) m.classList.add('hidden');
+            });
+            buildOptions();
+            const isHidden = menu.classList.contains('hidden');
+            menu.classList.toggle('hidden', !isHidden);
+            trigger.classList.toggle('border-[var(--accent-color)]', isHidden);
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(enhanceSelectElements, 150);
+});
+document.addEventListener('click', function() {
+    document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.add('hidden'));
+});
+</script>
+
 
