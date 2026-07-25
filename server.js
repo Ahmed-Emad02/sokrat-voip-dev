@@ -3333,7 +3333,7 @@ app.post('/api/config/ringgroups', async (req, res) => {
         const ringStrategy = strategy || 'ringall';
         const ringTime = parseInt(grptime, 10) || 20;
         const annMsgId = parseInt(annmsg_id, 10) || 0;
-        const postDest = (postdest && postdest.trim()) ? postdest.trim() : 'app-blackhole,hangup,1';
+        const postDest = (postdest && postdest.trim()) ? postdest.trim() : `ext-group,${num},1`;
 
         const [existing] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
         if (existing.length > 0) {
@@ -3365,7 +3365,7 @@ app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
         const ringStrategy = strategy || 'ringall';
         const ringTime = parseInt(grptime, 10) || 20;
         const annMsgId = parseInt(annmsg_id, 10) || 0;
-        const postDest = (postdest && postdest.trim()) ? postdest.trim() : 'app-blackhole,hangup,1';
+        const postDest = (postdest && postdest.trim()) ? postdest.trim() : `ext-group,${num},1`;
 
         await pool.query(`
             UPDATE \`asterisk\`.\`ringgroups\`
