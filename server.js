@@ -5652,8 +5652,11 @@ async function claimNextLeadAtomic(campaignId) {
 }
 
 async function runDialerPacerCycle() {
-    if (!isDialerLeader) return;
-
+    if (!isDialerLeader) {
+        console.log('PACER skip - not leader');
+        return;
+    }
+    console.log('PACER heartbeat ' + new Date().toISOString());
     try {
         const [campaigns] = await pool.query("SELECT * FROM `asterisk`.`dialer_campaigns` WHERE status = 'running'");
         if (campaigns.length === 0) return;
