@@ -167,7 +167,7 @@ async function initAuthDb() {
             KEY idx_imei (imei)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-
+    // Create employee_extras + employee_groups in ASTERISK_DB
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS employee_extras (
             extension VARCHAR(50) NOT NULL PRIMARY KEY,
@@ -185,6 +185,28 @@ async function initAuthDb() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    // Also create in CDR_DB so pool queries (default DB = CDR_DB) can access them without prefix
+    try {
+        await conn.execute(`
+            CREATE TABLE IF NOT EXISTS \`${CDR_DB}\`.\`employee_extras\` (
+                extension VARCHAR(50) NOT NULL PRIMARY KEY,
+                photo VARCHAR(255) DEFAULT NULL,
+                title VARCHAR(255) DEFAULT NULL,
+                emp_group VARCHAR(100) DEFAULT NULL,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+        await conn.execute(`
+            CREATE TABLE IF NOT EXISTS \`${CDR_DB}\`.\`employee_groups\` (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL UNIQUE,
+                description TEXT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+    } catch (e) {
+        console.log('WARN: Could not create employee tables in CDR_DB (' + CDR_DB + '): ' + e.message);
+    }
 
     // Ensure "super admins" group exists
     const [existingGroups] = await conn.execute('SELECT id FROM dashboard_groups WHERE name = ?', ['super admins']);
@@ -844,10 +866,10 @@ setInterval(autoHealDongles, 3000);
 
 
 
-// System Shared Middleware to fetch extension rosters and handle language toggles
 app.use(async (req, res, next) => {
+// System Shared Middleware to fetch extension rosters and handle language toggles
     try {
-        const [roster] = await pool.query(`SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group FROM ${tables.users} u LEFT JOIN employee_extras ee ON u.extension = ee.extension ORDER BY u.extension ASC`);
+        const [roster] = await pool.query(`SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group FROM ${tables.users} u LEFT JOIN \`${ASTERISK_DB}\`.\`employee_extras\` ee ON u.extension = ee.extension ORDER BY u.extension ASC`);
         let onlineMap = {};
         for (let e of roster) {
             let online = peerStatus[e.extension] || false;
