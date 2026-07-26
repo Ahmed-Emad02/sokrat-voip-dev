@@ -313,6 +313,45 @@ same => n,MacroExit()
 
 MACRO
 
+
+# Strip old auto-dialer contexts before appending
+echo "  Stripping old auto-dialer contexts..."
+python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\\[from-autodialer-.*?\\]\s*\\n.*?(?=\\n\\[|\\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
+echo "  Stripped."
+
+append_context '[from-autodialer-amd]' '[from-autodialer-amd]' << 'AUTODIALER'
+
+[from-autodialer-amd]
+exten => s,1,NoOp(=== Predictive Auto-Dialer AMD & Handoff: ${LEAD_PHONE} (Attempt: ${ATTEMPT_UUID}) ===)
+ exten => s,n,Set(CDR(accountcode)=autodialer_predictive)
+ exten => s,n,UserEvent(AutoDialerEvent,Status: LeadAnswered,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID},Phone: ${LEAD_PHONE})
+ exten => s,n,ExecIf($["${AMD_ENABLE}" = "1"]?AMD(2500,1500,800,4000,100,50,4,256))
+ exten => s,n,ExecIf($["${AMD_ENABLE}" = "1"]?GotoIf($["${AMDSTATUS}" = "HUMAN"]?human:machine))
+ 
+ exten => s,n(human),NoOp(Auto-Dialer: Human Answered - Handing to Queue ${TARGET_QUEUE})
+ exten => s,n,UserEvent(AutoDialerEvent,Status: AmdPassed,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID},Phone: ${LEAD_PHONE})
+ exten => s,n,Queue(${TARGET_QUEUE},t,,,${MAX_QUEUE_WAIT})
+ exten => s,n,GotoIf($["${QUEUESTATUS}" = "TIMEOUT"]?overflow)
+ exten => s,n,Hangup()
+
+ exten => s,n(overflow),NoOp(Auto-Dialer: Queue Wait Exceeded - Triggering Fallback)
+ exten => s,n,UserEvent(AutoDialerEvent,Status: Abandoned,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID})
+ exten => s,n,Goto(${FALLBACK_DEST})
+
+ exten => s,n(machine),NoOp(Auto-Dialer: Machine Detected - ${AMDSTATUS})
+ exten => s,n,UserEvent(AutoDialerEvent,Status: Machine,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID})
+ exten => s,n,Hangup()
+
+[from-autodialer-progressive]
+exten => s,1,NoOp(=== Progressive Auto-Dialer: Agent Answered - Dialing Lead ${LEAD_PHONE} (Attempt: ${ATTEMPT_UUID}) ===)
+ exten => s,n,Set(CDR(accountcode)=autodialer_progressive)
+ exten => s,n,UserEvent(AutoDialerEvent,Status: AgentAnswered,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID},Agent: ${TARGET_AGENT})
+ exten => s,n,Set(CALLERID(num)=${ORIGINATION_CALLER_ID})
+ exten => s,n,Set(CALLERID(name)=${ORIGINATION_CALLER_ID})
+ exten => s,n,Dial(Local/${LEAD_PHONE}@${OUTBOUND_CONTEXT}/n,30,tT)
+ exten => s,n,UserEvent(AutoDialerEvent,Status: ProgressiveCompleted,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID})
+ exten => s,n,Hangup()
+AUTODIALER
 asterisk -rx "dialplan reload" 2>/dev/null || true
 echo "  Dialplan reloaded"
 

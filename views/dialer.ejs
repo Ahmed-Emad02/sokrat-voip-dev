@@ -1,0 +1,309 @@
+<%
+const words = {
+    en: {
+        title: "Auto-Dialer Center", subtitle: "Campaigns & Pacing",
+        desc: "Real-time outbound campaign management, pacing engine, and DNC registry",
+        createCampaign: "Create Campaign", campaignName: "Campaign Name",
+        mode: "Dialer Mode", progressive: "Progressive (Power 1:1)", predictive: "Predictive (Paced)",
+        outboundRoute: "Outbound Route", originationCallerId: "Origination Caller ID / Extension",
+        queueName: "ACD Queue Name", maxDials: "Max Concurrent Dials",
+        pacingRatio: "Pacing Ratio", wrapupTime: "Wrap-Up Time (sec)", maxWait: "Max Queue Wait (sec)",
+        amdToggle: "Answering Machine Detection (AMD)", saveCampaign: "Save Campaign",
+        cancel: "Cancel", importLeads: "Import Leads CSV", chooseFile: "Choose CSV File",
+        upload: "Upload Leads", campaigns: "Active Campaigns", leads: "Lead Inventory",
+        attempts: "Attempt Logs", dnc: "Do Not Call (DNC) List", addDnc: "Add to DNC",
+        phoneNumber: "Phone Number", reason: "Reason", actions: "Actions",
+        status: "Status", total: "Total", pending: "Pending", connected: "Connected",
+        dialing: "Dialing", failed: "Failed/Machine", start: "Start", pause: "Pause", stop: "Stop"
+    },
+    ar: {
+        title: "مركز الاتصال الآلي", subtitle: "الحملات ومحرك الاتصال",
+        desc: "إدارة حملات الاتصال الخارجي والمحرك الآلي وسجل عدم الاتصال",
+        createCampaign: "إنشاء حملة", campaignName: "اسم الحملة",
+        mode: "نوع المتصل", progressive: "تصاعدي (Power 1:1)", predictive: "تنبؤي (Paced)",
+        outboundRoute: "مسار الاتصال الخارجي", originationCallerId: "معرف/تحويلة البدء",
+        queueName: "اسم طابور الانتظار", maxDials: "الحد الأقصى للمكالمات المتزامنة",
+        pacingRatio: "معدل السرعة (Pacing Ratio)", wrapupTime: "وقت إنهاء المكالمة (ثواني)", maxWait: "أقصى انتظار بالطابور (ثواني)",
+        amdToggle: "كشف أجهزة الرد الآلي (AMD)", saveCampaign: "حفظ الحملة",
+        cancel: "إلغاء", importLeads: "استيراد ملف الأرقام CSV", chooseFile: "اختر ملف CSV",
+        upload: "رفع الأرقام", campaigns: "الحملات النشطة", leads: "قائمة الأرقام",
+        attempts: "سجل المحاولات", dnc: "سجل حظر الاتصال (DNC)", addDnc: "إضافة للحظر",
+        phoneNumber: "رقم الهاتف", reason: "السبب", actions: "الإجراءات",
+        status: "الحالة", total: "الإجمالي", pending: "قيد الانتظار", connected: "متصل",
+        dialing: "جاري الاتصال", failed: "فشل/آلي", start: "بدء", pause: "إيقاف مؤقت", stop: "إيقاف"
+    }
+};
+const currentLang = typeof lang !== 'undefined' ? lang : 'en';
+const t = words[currentLang] || words.en;
+const isRtl = currentLang === 'ar';
+%>
+<!DOCTYPE html>
+<html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP — <%= t.title %></title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen flex flex-col md:flex-row m-0 p-0 font-sans">
+    <%- include('sidebar', { activeTab: 'dialer', isRtl, currentLang }) %>
+
+    <div class="flex-1 p-6 md:p-8 overflow-y-auto">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h1>
+                <p class="text-xs text-[var(--text-muted)] mt-1"><%= t.desc %></p>
+            </div>
+            <button type="button" onclick="openCreateCampaignModal()" class="config-btn-primary px-4 py-2 text-xs cursor-pointer flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                <span><%= t.createCampaign %></span>
+            </button>
+        </div>
+
+        <!-- CAMPAIGNS GRID -->
+        <div id="campaignsContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+            <div class="col-span-full text-center py-8 text-[var(--text-muted)] text-sm font-semibold">Loading campaigns...</div>
+        </div>
+
+        <!-- DNC LIST & DISPOSITIONS -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= t.dnc %></h3>
+                    <button type="button" onclick="openAddDncModal()" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.addDnc %></button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="border-b border-[var(--border-primary)] text-[var(--text-muted)] uppercase">
+                                <th class="py-2 px-3"><%= t.phoneNumber %></th>
+                                <th class="py-2 px-3"><%= t.reason %></th>
+                                <th class="py-2 px-3 text-right"><%= t.actions %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="dncTableBody" class="divide-y divide-[var(--border-primary)]">
+                            <tr><td colspan="3" class="py-4 text-center text-[var(--text-muted)]">Loading DNC registry...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 shadow-xl">
+                <h3 class="text-sm font-extrabold text-[var(--text-primary)] mb-4"><%= t.attempts %></h3>
+                <div id="attemptsContainer" class="space-y-2 max-h-64 overflow-y-auto">
+                    <div class="text-center text-[var(--text-muted)] text-xs py-4">No active attempt logs yet.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 1: CREATE CAMPAIGN -->
+    <div id="createCampaignModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-lg w-full p-6 text-[var(--text-primary)]">
+            <h3 class="text-base font-extrabold mb-4"><%= t.createCampaign %></h3>
+            <form onsubmit="saveCampaign(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.campaignName %></label>
+                    <input type="text" id="campName" required maxlength="100" class="config-input w-full">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.mode %></label>
+                        <select id="campMode" class="config-input w-full">
+                            <option value="progressive"><%= t.progressive %></option>
+                            <option value="predictive"><%= t.predictive %></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.outboundRoute %></label>
+                        <select id="campOutboundRoute" class="config-input w-full">
+                            <option value="">— Default (from-internal) —</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.originationCallerId %></label>
+                        <input type="text" id="campOriginationCid" value="101" class="config-input w-full">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.queueName %></label>
+                        <input type="text" id="campQueueName" value="autodialer-queue" class="config-input w-full">
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.maxDials %></label>
+                        <input type="number" id="campMaxDials" value="5" min="1" max="50" class="config-input w-full">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.wrapupTime %></label>
+                        <input type="number" id="campWrapupSec" value="15" min="0" max="300" class="config-input w-full">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.maxWait %></label>
+                        <input type="number" id="campMaxWait" value="5" min="1" max="60" class="config-input w-full">
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 pt-2">
+                    <input type="checkbox" id="campAmd" checked class="w-4 h-4 rounded">
+                    <label for="campAmd" class="text-xs font-bold"><%= t.amdToggle %></label>
+                </div>
+                <div class="flex justify-end gap-2 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('createCampaignModal')" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.cancel %></button>
+                    <button type="submit" class="config-btn-primary px-4 py-1.5 text-xs"><%= t.saveCampaign %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: IMPORT LEADS CSV -->
+    <div id="importLeadsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-md w-full p-6 text-[var(--text-primary)]">
+            <h3 class="text-base font-extrabold mb-2"><%= t.importLeads %></h3>
+            <form onsubmit="uploadLeadsCsv(event)" class="space-y-4">
+                <input type="hidden" id="importCampaignId">
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-2"><%= t.chooseFile %></label>
+                    <input type="file" id="leadsCsvFile" accept=".csv" required class="config-input w-full text-xs">
+                </div>
+                <div class="flex justify-end gap-2 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('importLeadsModal')" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.cancel %></button>
+                    <button type="submit" class="config-btn-primary px-4 py-1.5 text-xs"><%= t.upload %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        async function loadCampaigns() {
+            const res = await fetch('/api/dialer/campaigns');
+            const data = await res.json();
+            const container = document.getElementById('campaignsContainer');
+            container.innerHTML = '';
+
+            if (!data.campaigns || data.campaigns.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center py-8 text-[var(--text-muted)] text-sm font-semibold">No campaigns found. Create your first campaign.</div>';
+                return;
+            }
+
+            data.campaigns.forEach(c => {
+                const s = c.stats || {};
+                const card = document.createElement('div');
+                card.className = 'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 shadow-xl flex flex-col justify-between';
+                card.innerHTML = `
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-base font-extrabold text-[var(--text-primary)]">${c.name}</h4>
+                            <span class="px-2 py-0.5 text-[10px] font-extrabold rounded uppercase ${c.status === 'running' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-500/20 text-slate-400'}">${c.status}</span>
+                        </div>
+                        <p class="text-xs text-[var(--text-muted)] mb-3">Mode: <strong>${c.mode}</strong> | Queue: <strong>${c.queue_name}</strong></p>
+                        <div class="grid grid-cols-4 gap-2 mb-4 text-center">
+                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">Total</span><span class="text-sm font-black">${s.total_leads || 0}</span></div>
+                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">Pending</span><span class="text-sm font-black text-amber-400">${s.pending_leads || 0}</span></div>
+                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">Connected</span><span class="text-sm font-black text-emerald-400">${s.connected_leads || 0}</span></div>
+                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">Dialing</span><span class="text-sm font-black text-blue-400">${s.dialing_leads || 0}</span></div>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-2 pt-3 border-t border-[var(--border-primary)]">
+                        <button onclick="controlCampaign(${c.id}, 'start')" class="px-2.5 py-1 text-xs font-bold bg-emerald-600 text-white rounded cursor-pointer">Start</button>
+                        <button onclick="controlCampaign(${c.id}, 'pause')" class="px-2.5 py-1 text-xs font-bold bg-amber-600 text-white rounded cursor-pointer">Pause</button>
+                        <button onclick="controlCampaign(${c.id}, 'stop')" class="px-2.5 py-1 text-xs font-bold bg-rose-600 text-white rounded cursor-pointer">Stop</button>
+                        <button onclick="openImportModal(${c.id})" class="px-2.5 py-1 text-xs font-bold bg-blue-600 text-white rounded cursor-pointer ml-auto">Import CSV</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function loadOutboundRoutes() {
+            const res = await fetch('/api/config/routes/outbound');
+            const data = await res.json();
+            const select = document.getElementById('campOutboundRoute');
+            if (data.routes) {
+                data.routes.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.route_id;
+                    opt.textContent = `${r.name} (#${r.route_id})`;
+                    select.appendChild(opt);
+                });
+            }
+        }
+
+        async function loadDnc() {
+            const res = await fetch('/api/dialer/dnc');
+            const data = await res.json();
+            const tbody = document.getElementById('dncTableBody');
+            tbody.innerHTML = '';
+            if (!data.dnc || data.dnc.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-[var(--text-muted)]">No DNC entries found.</td></tr>';
+                return;
+            }
+            data.dnc.forEach(d => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="py-2 px-3 font-mono font-bold">${d.phone_number}</td>
+                    <td class="py-2 px-3 text-[var(--text-muted)]">${d.reason || '-'}</td>
+                    <td class="py-2 px-3 text-right"><button onclick="removeDnc('${d.phone_number}')" class="text-rose-400 hover:text-rose-300 font-bold">Remove</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openCreateCampaignModal() { openModal('createCampaignModal'); }
+        function openImportModal(id) { document.getElementById('importCampaignId').value = id; openModal('importLeadsModal'); }
+
+        async function saveCampaign(e) {
+            e.preventDefault();
+            const body = {
+                name: document.getElementById('campName').value,
+                mode: document.getElementById('campMode').value,
+                outbound_route_id: document.getElementById('campOutboundRoute').value,
+                origination_caller_id: document.getElementById('campOriginationCid').value,
+                queue_name: document.getElementById('campQueueName').value,
+                max_concurrent_dials: document.getElementById('campMaxDials').value,
+                wrapup_time_sec: document.getElementById('campWrapupSec').value,
+                max_queue_wait_sec: document.getElementById('campMaxWait').value,
+                amd_enabled: document.getElementById('campAmd').checked
+            };
+            const res = await fetch('/api/dialer/campaigns', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (data.success) { closeModal('createCampaignModal'); loadCampaigns(); } else { alert(data.error); }
+        }
+
+        async function controlCampaign(id, action) {
+            const res = await fetch(`/api/dialer/campaigns/${id}/control`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action }) });
+            const data = await res.json();
+            if (data.success) loadCampaigns(); else alert(data.error);
+        }
+
+        async function uploadLeadsCsv(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('campaign_id', document.getElementById('importCampaignId').value);
+            formData.append('file', document.getElementById('leadsCsvFile').files[0]);
+            const res = await fetch('/api/dialer/leads/import', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.success) { closeModal('importLeadsModal'); alert(data.message); loadCampaigns(); } else { alert(data.error); }
+        }
+
+        async function removeDnc(phone) {
+            if (!confirm('Remove number from DNC?')) return;
+            const res = await fetch(`/api/dialer/dnc/${encodeURIComponent(phone)}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) loadDnc(); else alert(data.error);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCampaigns();
+            loadOutboundRoutes();
+            loadDnc();
+        });
+    </script>
+</body>
+</html>
