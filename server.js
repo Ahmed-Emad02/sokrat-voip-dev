@@ -79,7 +79,9 @@ const tables = {
     sip: tableName(ASTERISK_DB, 'sip'),
     sipfriends: tableName(ASTERISK_DB, 'sipfriends'),
     sippeers: tableName(ASTERISK_DB, 'sippeers'),
-    psEndpoints: tableName(ASTERISK_DB, 'ps_endpoints')
+    psEndpoints: tableName(ASTERISK_DB, 'ps_endpoints'),
+    employeeExtras: tableName(ASTERISK_DB, 'employee_extras'),
+    employeeGroups: tableName(ASTERISK_DB, 'employee_groups')
 };
 
 function isInternalChannel(channel) {
@@ -167,9 +169,8 @@ async function initAuthDb() {
             KEY idx_imei (imei)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    // Create employee_extras + employee_groups in ASTERISK_DB
     await conn.execute(`
-        CREATE TABLE IF NOT EXISTS employee_extras (
+        CREATE TABLE IF NOT EXISTS ${tables.employeeExtras} (
             extension VARCHAR(50) NOT NULL PRIMARY KEY,
             photo VARCHAR(255) DEFAULT NULL,
             title VARCHAR(255) DEFAULT NULL,
@@ -178,34 +179,33 @@ async function initAuthDb() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     await conn.execute(`
-        CREATE TABLE IF NOT EXISTS employee_groups (
+        CREATE TABLE IF NOT EXISTS ${tables.employeeGroups} (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL UNIQUE,
             description TEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    // Also create in CDR_DB so pool queries (default DB = CDR_DB) can access them without prefix
-    try {
-        await conn.execute(`
-            CREATE TABLE IF NOT EXISTS \`${CDR_DB}\`.\`employee_extras\` (
-                extension VARCHAR(50) NOT NULL PRIMARY KEY,
-                photo VARCHAR(255) DEFAULT NULL,
-                title VARCHAR(255) DEFAULT NULL,
-                emp_group VARCHAR(100) DEFAULT NULL,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        `);
-        await conn.execute(`
-            CREATE TABLE IF NOT EXISTS \`${CDR_DB}\`.\`employee_groups\` (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(100) NOT NULL UNIQUE,
-                description TEXT DEFAULT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        `);
-    } catch (e) {
-        console.log('WARN: Could not create employee tables in CDR_DB (' + CDR_DB + '): ' + e.message);
+
+    // Migrate metadata written by the short-lived dual-database implementation.
+    // INSERT IGNORE makes ASTERISK_DB canonical without overwriting newer canonical rows.
+    if (CDR_DB !== ASTERISK_DB) {
+        try {
+            await conn.execute(`
+                INSERT IGNORE INTO ${tables.employeeGroups} (name, description, created_at)
+                SELECT name, description, created_at
+                FROM ${tableName(CDR_DB, 'employee_groups')}
+            `);
+            await conn.execute(`
+                INSERT IGNORE INTO ${tables.employeeExtras} (extension, photo, title, emp_group, updated_at)
+                SELECT extension, photo, title, emp_group, updated_at
+                FROM ${tableName(CDR_DB, 'employee_extras')}
+            `);
+        } catch (error) {
+            if (error.code !== 'ER_NO_SUCH_TABLE') {
+                console.warn('Employee metadata migration warning:', error.message);
+            }
+        }
     }
 
     // Ensure "super admins" group exists
@@ -869,7 +869,12 @@ setInterval(autoHealDongles, 3000);
 app.use(async (req, res, next) => {
 // System Shared Middleware to fetch extension rosters and handle language toggles
     try {
-        const [roster] = await pool.query(`SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group FROM ${tables.users} u LEFT JOIN \`${ASTERISK_DB}\`.\`employee_extras\` ee ON u.extension = ee.extension ORDER BY u.extension ASC`);
+        const [roster] = await pool.query(`
+            SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group
+            FROM ${tables.users} u
+            LEFT JOIN ${tables.employeeExtras} ee ON u.extension = ee.extension
+            ORDER BY CAST(u.extension AS UNSIGNED) ASC
+        `);
         let onlineMap = {};
         for (let e of roster) {
             let online = peerStatus[e.extension] || false;
@@ -3474,11 +3479,13 @@ app.get('/api/config/extensions', async (req, res) => {
     try {
         const [extensions] = await pool.query(`
             SELECT u.extension, u.name, u.outboundcid, u.recording, u.voicemail,
-                   s_secret.data AS secret, s_context.data AS context, s_nat.data AS nat
-            FROM \`asterisk\`.\`users\` u
-            LEFT JOIN \`asterisk\`.\`sip\` s_secret ON s_secret.id = u.extension AND s_secret.keyword = 'secret'
-            LEFT JOIN \`asterisk\`.\`sip\` s_context ON s_context.id = u.extension AND s_context.keyword = 'context'
-            LEFT JOIN \`asterisk\`.\`sip\` s_nat ON s_nat.id = u.extension AND s_nat.keyword = 'nat'
+                   s_secret.data AS secret, s_context.data AS context, s_nat.data AS nat,
+                   ee.photo, ee.title, ee.emp_group
+            FROM ${tables.users} u
+            LEFT JOIN ${tables.sip} s_secret ON s_secret.id = u.extension AND s_secret.keyword = 'secret'
+            LEFT JOIN ${tables.sip} s_context ON s_context.id = u.extension AND s_context.keyword = 'context'
+            LEFT JOIN ${tables.sip} s_nat ON s_nat.id = u.extension AND s_nat.keyword = 'nat'
+            LEFT JOIN ${tables.employeeExtras} ee ON ee.extension = u.extension
             ORDER BY CAST(u.extension AS UNSIGNED) ASC
         `);
         res.json({ success: true, extensions });
@@ -3606,11 +3613,19 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
 // DELETE /api/config/extensions/:extension - Delete Extension
 app.delete('/api/config/extensions/:extension', async (req, res) => {
     try {
-        const extNum = String(req.params.extension).trim();
-        await pool.query('DELETE FROM `asterisk`.`users` WHERE extension = ?', [extNum]);
+        const extNum = String(req.params.extension || '').trim();
+        if (!/^\d+$/.test(extNum)) {
+            return res.status(400).json({ success: false, error: 'Valid numeric extension is required' });
+        }
+        const [employeeRows] = await pool.query(
+            `SELECT photo FROM ${tables.employeeExtras} WHERE extension = ?`,
+            [extNum]
+        );
+        await pool.query(`DELETE FROM ${tables.users} WHERE extension = ?`, [extNum]);
         await pool.query('DELETE FROM `asterisk`.`devices` WHERE id = ?', [extNum]);
-        await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ?', [extNum]);
-
+        await pool.query(`DELETE FROM ${tables.sip} WHERE id = ?`, [extNum]);
+        await pool.query(`DELETE FROM ${tables.employeeExtras} WHERE extension = ?`, [extNum]);
+        if (employeeRows[0]?.photo) removeEmployeePhoto(employeeRows[0].photo);
         // Clean up astdb AMPUSER, DEVICE & voicemail.conf
         exec(`${ASTERISK_BIN} -rx 'database deltree AMPUSER ${extNum}'`, (err) => {
             if (err) console.error(`AstDB AMPUSER deltree error for ${extNum}:`, err.message);
@@ -3630,64 +3645,189 @@ app.delete('/api/config/extensions/:extension', async (req, res) => {
 // --- EMPLOYEE GROUPS CRUD ---
 app.get('/api/employee/groups', requireAuth, async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM employee_groups ORDER BY name ASC');
+        const [rows] = await pool.query(
+            `SELECT id, name, description, created_at FROM ${tables.employeeGroups} ORDER BY name ASC`
+        );
         res.json({ success: true, groups: rows });
-    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 app.post('/api/employee/groups', requireAuth, async (req, res) => {
     try {
-        const { name, description } = req.body;
-        if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Group name is required' });
-        const [r] = await pool.query('INSERT INTO employee_groups (name, description) VALUES (?, ?)', [name.trim(), description || '']);
-        res.json({ success: true, id: r.insertId });
+        const name = String(req.body.name || '').trim();
+        const description = String(req.body.description || '').trim();
+        if (!name) return res.status(400).json({ success: false, error: 'Group name is required' });
+        if (name.length > 100) return res.status(400).json({ success: false, error: 'Group name must be 100 characters or fewer' });
+        const [result] = await pool.query(
+            `INSERT INTO ${tables.employeeGroups} (name, description) VALUES (?, ?)`,
+            [name, description || null]
+        );
+        res.json({ success: true, id: result.insertId, group: { id: result.insertId, name, description } });
     } catch (error) {
-        if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ success: false, error: 'Group name already exists' });
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, error: 'Group name already exists' });
+        }
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 app.put('/api/employee/groups/:id', requireAuth, async (req, res) => {
+    const connection = await pool.getConnection();
     try {
-        const { name, description } = req.body;
-        if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Group name is required' });
-        await pool.query('UPDATE employee_groups SET name = ?, description = ? WHERE id = ?', [name.trim(), description || '', req.params.id]);
-        res.json({ success: true });
+        const id = Number.parseInt(req.params.id, 10);
+        const name = String(req.body.name || '').trim();
+        const description = String(req.body.description || '').trim();
+        if (!Number.isInteger(id) || id < 1) {
+            return res.status(400).json({ success: false, error: 'Valid group ID is required' });
+        }
+        if (!name) return res.status(400).json({ success: false, error: 'Group name is required' });
+        if (name.length > 100) return res.status(400).json({ success: false, error: 'Group name must be 100 characters or fewer' });
+
+        await connection.beginTransaction();
+        const [rows] = await connection.query(
+            `SELECT name FROM ${tables.employeeGroups} WHERE id = ? FOR UPDATE`,
+            [id]
+        );
+        if (!rows.length) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, error: 'Employee group not found' });
+        }
+        const previousName = rows[0].name;
+        await connection.query(
+            `UPDATE ${tables.employeeGroups} SET name = ?, description = ? WHERE id = ?`,
+            [name, description || null, id]
+        );
+        if (previousName !== name) {
+            await connection.query(
+                `UPDATE ${tables.employeeExtras} SET emp_group = ? WHERE emp_group = ?`,
+                [name, previousName]
+            );
+        }
+        await connection.commit();
+        res.json({ success: true, group: { id, name, description } });
     } catch (error) {
-        if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ success: false, error: 'Group name already exists' });
+        await connection.rollback();
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, error: 'Group name already exists' });
+        }
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        connection.release();
     }
 });
 
 app.delete('/api/employee/groups/:id', requireAuth, async (req, res) => {
+    const connection = await pool.getConnection();
     try {
-        const [group] = await pool.query('SELECT name FROM employee_groups WHERE id = ?', [req.params.id]);
-        if (group.length) {
-            await pool.query('UPDATE employee_extras SET emp_group = NULL WHERE emp_group = ?', [group[0].name]);
+        const id = Number.parseInt(req.params.id, 10);
+        if (!Number.isInteger(id) || id < 1) {
+            return res.status(400).json({ success: false, error: 'Valid group ID is required' });
         }
-        await pool.query('DELETE FROM employee_groups WHERE id = ?', [req.params.id]);
+
+        await connection.beginTransaction();
+        const [rows] = await connection.query(
+            `SELECT name FROM ${tables.employeeGroups} WHERE id = ? FOR UPDATE`,
+            [id]
+        );
+        if (!rows.length) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, error: 'Employee group not found' });
+        }
+        await connection.query(
+            `UPDATE ${tables.employeeExtras} SET emp_group = NULL WHERE emp_group = ?`,
+            [rows[0].name]
+        );
+        await connection.query(`DELETE FROM ${tables.employeeGroups} WHERE id = ?`, [id]);
+        await connection.commit();
         res.json({ success: true });
-    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+    } catch (error) {
+        await connection.rollback();
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        connection.release();
+    }
 });
 
 // --- EMPLOYEE EXTRAS CRUD ---
 app.get('/api/employee/extras/:extension', requireAuth, async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT photo, title, emp_group FROM employee_extras WHERE extension = ?', [req.params.extension]);
-        res.json({ success: true, extras: rows.length ? rows[0] : null });
-    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+        const extension = String(req.params.extension || '').trim();
+        if (!/^\d+$/.test(extension)) {
+            return res.status(400).json({ success: false, error: 'Valid numeric extension is required' });
+        }
+        const [rows] = await pool.query(
+            `SELECT photo, title, emp_group FROM ${tables.employeeExtras} WHERE extension = ?`,
+            [extension]
+        );
+        res.json({ success: true, extras: rows[0] || null });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 app.put('/api/employee/extras/:extension', requireAuth, async (req, res) => {
     try {
-        const { photo, title, emp_group } = req.body;
-        await pool.query(`
-            INSERT INTO employee_extras (extension, photo, title, emp_group)
-            VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE photo = VALUES(photo), title = VALUES(title), emp_group = VALUES(emp_group)
-        `, [req.params.extension, photo || null, title || null, emp_group || null]);
-        res.json({ success: true });
-    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+        const extension = String(req.params.extension || '').trim();
+        const title = String(req.body.title || '').trim();
+        const empGroup = String(req.body.emp_group || '').trim();
+        const photo = req.body.photo ? String(req.body.photo).trim() : null;
+
+        if (!/^\d+$/.test(extension)) {
+            return res.status(400).json({ success: false, error: 'Valid numeric extension is required' });
+        }
+        if (title.length > 255) {
+            return res.status(400).json({ success: false, error: 'Employee title must be 255 characters or fewer' });
+        }
+        if (photo && !/^\/photos\/emp_[A-Za-z0-9_.-]+$/.test(photo)) {
+            return res.status(400).json({ success: false, error: 'Invalid employee photo URL' });
+        }
+
+        const [extensions] = await pool.query(
+            `SELECT extension FROM ${tables.users} WHERE extension = ?`,
+            [extension]
+        );
+        if (!extensions.length) {
+            return res.status(404).json({ success: false, error: 'Extension not found' });
+        }
+        if (empGroup) {
+            const [groups] = await pool.query(
+                `SELECT id FROM ${tables.employeeGroups} WHERE name = ?`,
+                [empGroup]
+            );
+            if (!groups.length) {
+                return res.status(400).json({ success: false, error: 'Employee group does not exist' });
+            }
+        }
+
+        const [currentRows] = await pool.query(
+            `SELECT photo FROM ${tables.employeeExtras} WHERE extension = ?`,
+            [extension]
+        );
+        const previousPhoto = currentRows[0]?.photo || null;
+
+        if (!photo && !title && !empGroup) {
+            await pool.query(`DELETE FROM ${tables.employeeExtras} WHERE extension = ?`, [extension]);
+        } else {
+            await pool.query(`
+                INSERT INTO ${tables.employeeExtras} (extension, photo, title, emp_group)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    photo = VALUES(photo),
+                    title = VALUES(title),
+                    emp_group = VALUES(emp_group)
+            `, [extension, photo, title || null, empGroup || null]);
+        }
+
+        if (previousPhoto && previousPhoto !== photo) removeEmployeePhoto(previousPhoto);
+        res.json({
+            success: true,
+            extras: { photo, title: title || null, emp_group: empGroup || null }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // --- 2. RING GROUPS MANAGEMENT APIs ---
@@ -5270,31 +5410,55 @@ const upload = multer({
 const PHOTOS_DIR = path.join(__dirname, 'public', 'photos');
 if (!fs.existsSync(PHOTOS_DIR)) fs.mkdirSync(PHOTOS_DIR, { recursive: true });
 
+const EMPLOYEE_PHOTO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']);
+const EMPLOYEE_PHOTO_MIME_TYPES = new Set([
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/bmp'
+]);
+
+function removeEmployeePhoto(photoUrl) {
+    if (!photoUrl || !photoUrl.startsWith('/photos/')) return;
+    const filename = path.basename(photoUrl);
+    if (filename !== photoUrl.slice('/photos/'.length)) return;
+    const photoPath = path.join(PHOTOS_DIR, filename);
+    try {
+        if (fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
+    } catch (error) {
+        console.warn('Could not remove employee photo:', error.message);
+    }
+}
+
 const photoStorage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, PHOTOS_DIR),
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
-        cb(null, `emp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}${ext}`);
+        cb(null, `emp_${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`);
     }
 });
 const photoUpload = multer({
     storage: photoStorage,
     limits: { fileSize: 50 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
-        const allowed = ['.jpg','.jpeg','.png','.gif','.webp','.bmp'];
-        if (allowed.includes(path.extname(file.originalname).toLowerCase())) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only image files (jpg, jpeg, png, gif, webp, bmp) allowed'), false);
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (EMPLOYEE_PHOTO_EXTENSIONS.has(ext) && EMPLOYEE_PHOTO_MIME_TYPES.has(file.mimetype)) {
+            return cb(null, true);
         }
+        cb(new Error('Only JPG, PNG, GIF, WebP, and BMP images are allowed'));
     }
 });
 
-// POST /api/employee/photo - Upload employee photo
 app.post('/api/employee/photo', requireAuth, (req, res) => {
     photoUpload.single('photo')(req, res, function(err) {
-        if (err) return res.status(400).json({ success: false, error: err.message });
-        if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+        if (err) {
+            const message = err.code === 'LIMIT_FILE_SIZE'
+                ? 'Employee photo must be 50 MB or smaller'
+                : err.message;
+            return res.status(400).json({ success: false, error: message });
+        }
+        if (!req.file) return res.status(400).json({ success: false, error: 'No photo uploaded' });
         res.json({ success: true, url: '/photos/' + req.file.filename });
     });
 });
