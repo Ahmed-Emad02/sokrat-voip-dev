@@ -5631,8 +5631,21 @@ async function runDialerPacerCycle() {
 
             let freeDonglesCount = maxCap;
             if (camp.outbound_route_id) {
-                const [rTrunks] = await pool.query('SELECT COUNT(*) AS cnt FROM `asterisk`.`outbound_route_trunks` WHERE route_id = ?', [camp.outbound_route_id]);
-                if (rTrunks[0]?.cnt > 0) freeDonglesCount = Math.min(rTrunks[0].cnt * 2, maxCap);
+                const [rTrunks] = await pool.query('SELECT trunk_id FROM `asterisk`.`outbound_route_trunks` WHERE route_id = ? ORDER BY seq ASC', [camp.outbound_route_id]);
+                let totalFreeTrunkChannels = 0;
+                for (const tRow of rTrunks) {
+                    const trunkId = tRow.trunk_id;
+                    const [activeOnTrunk] = await pool.query(`
+                        SELECT COUNT(*) AS cnt
+                        FROM \`asterisk\`.\`dialer_call_attempts\`
+                        WHERE active_flag = 1 AND (dongle_id = ? OR campaign_id = ?)
+                    `, [`trunk_${trunkId}`, campId]);
+
+                    const inUse = activeOnTrunk[0]?.cnt || 0;
+                    const maxTrunkChans = 1; // 1 channel max per GSM dongle
+                    totalFreeTrunkChannels += Math.max(0, maxTrunkChans - inUse);
+                }
+                freeDonglesCount = Math.min(totalFreeTrunkChannels, maxCap);
             }
 
             let incrementalLaunches = 0;
