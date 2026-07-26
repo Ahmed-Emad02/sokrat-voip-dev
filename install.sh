@@ -5,28 +5,31 @@
 
 set -euo pipefail
 
-INSTALL_DIR=/opt/sokrat-voip
+INSTALL_DIR=/opt/issabel-dashboard
+SERVICE_NAME=issabel-dashboard
+LEGACY_INSTALL_DIR=/opt/sokrat-voip
+LEGACY_SERVICE_NAME=sokrat-voip
 REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voip-dev.git
 NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf | cut -d= -f2- | xargs)
 
 echo "============================================"
-echo " Issabel Dashboard Installer v1.1.0"
+echo " Issabel Dashboard Installer v1.2.0"
 echo " Target: Issabel 5 / Asterisk 18"
 echo "============================================"
 
 # ──────────────────────────────────────────────
 # Step 1 — System Packages + Disable Fail2Ban
 # ──────────────────────────────────────────────
-echo "[1/12] Installing system packages..."
-yum install -y nano net-tools btop sox
+echo "[1/13] Installing system packages..."
+yum install -y nano net-tools btop sox sqlite
 systemctl disable --now fail2ban
 echo "  fail2ban disabled"
 
 # ──────────────────────────────────────────────
 # Step 2 — Install Node.js 22
 # ──────────────────────────────────────────────
-echo "[2/12] Installing Node.js 22..."
+echo "[2/13] Installing Node.js 22..."
 if ! command -v node &>/dev/null; then
     curl -fsSL "$NODE_SETUP_URL" | bash -
     yum install -y nodejs
@@ -35,15 +38,28 @@ else
 fi
 
 # ──────────────────────────────────────────────
-# Step 3 — Clone the Repository
+# Step 3 — Synchronize the Repository
 # ──────────────────────────────────────────────
-echo "[3/12] Cloning repository..."
-systemctl stop sokrat-voip 2>/dev/null || true
+echo "[3/13] Synchronizing repository..."
+systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+systemctl stop "$LEGACY_SERVICE_NAME" 2>/dev/null || true
 yum install -y git net-tools
-if [ -d "$INSTALL_DIR" ]; then
-    echo "  Directory $INSTALL_DIR exists, pulling latest..."
+
+if [ ! -d "$INSTALL_DIR" ] && [ -d "$LEGACY_INSTALL_DIR" ]; then
+    echo "  Migrating $LEGACY_INSTALL_DIR to $INSTALL_DIR..."
+    mv "$LEGACY_INSTALL_DIR" "$INSTALL_DIR"
+fi
+
+if [ -d "$INSTALL_DIR/.git" ]; then
+    echo "  Repository exists, synchronizing with origin/main..."
     cd "$INSTALL_DIR"
-    git pull origin main
+    git remote set-url origin "$REPO_URL"
+    git fetch origin main
+    git reset --hard origin/main
+elif [ -d "$INSTALL_DIR" ]; then
+    echo "  ERROR: $INSTALL_DIR exists but is not a Git repository."
+    echo "  Move or remove it, then run the installer again."
+    exit 1
 else
     git clone "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
@@ -52,8 +68,8 @@ fi
 # ──────────────────────────────────────────────
 # Step 4 — Install Dependencies
 # ──────────────────────────────────────────────
-echo "[4/12] Installing npm dependencies..."
-npm install
+echo "[4/13] Installing npm dependencies..."
+npm ci --omit=dev
 
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
 if ! command -v ffmpeg &>/dev/null; then
@@ -71,7 +87,7 @@ fi
 # ──────────────────────────────────────────────
 # Step 5 — Create the Environment File
 # ──────────────────────────────────────────────
-echo "[5/12] Creating .env file..."
+echo "[5/13] Creating .env file..."
 if [ -f "$INSTALL_DIR/.env" ]; then
     echo "  .env already exists, skipping"
 else
@@ -99,14 +115,15 @@ fi
 # ──────────────────────────────────────────────
 # Step 6 — Initialize Database Tables
 # ──────────────────────────────────────────────
-echo "[6/12] Initializing database tables..."
+echo "[6/13] Initializing database tables and runtime directories..."
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk < "$INSTALL_DIR/backend/install_db.sql"
-echo "  Database tables ensured"
+install -d -m 0755 "$INSTALL_DIR/public/photos"
+echo "  Database tables and employee photo directory ensured"
 
 # ──────────────────────────────────────────────
 # Step 7 — Configure Asterisk AMI
 # ──────────────────────────────────────────────
-echo "[7/12] Configuring Asterisk AMI..."
+echo "[7/13] Configuring Asterisk AMI..."
 if grep -q '^\[admin\]' /etc/asterisk/manager.conf; then
     sed -i '/^\[admin\]/,/^\[/ s/deny=.*/permit=127.0.0.1\/255.255.255.0/' /etc/asterisk/manager.conf
     echo "  [admin] section updated with permit line"
@@ -165,7 +182,7 @@ echo "  address_book.db initialized with schema and permissions set"
 # ──────────────────────────────────────────────
 # Step 8 — Add Required Dialplan Contexts
 # ──────────────────────────────────────────────
-echo "[8/12] Adding dialplan contexts..."
+echo "[8/13] Adding dialplan contexts..."
 DIALPLAN_FILE=/etc/asterisk/extensions_custom.conf
 
 # Ensure file exists
@@ -303,7 +320,7 @@ echo "  Dialplan reloaded"
 # Step 9 — GSM Dongle Setup
 # ──────────────────────────────────────────────
 echo ""
-echo "[9/12] Setting up GSM dongles & chan_dongle..."
+echo "[9/13] Setting up GSM dongles & chan_dongle..."
 
 # 9a — Install Build Dependencies
 echo "  [9a] Installing build dependencies..."
@@ -436,7 +453,7 @@ fi
 # ──────────────────────────────────────────────
 # Step 10 — Configure Apache Reverse Proxy
 # ──────────────────────────────────────────────
-echo "[10/12] Configuring Apache reverse proxy..."
+echo "[10/13] Configuring Apache reverse proxy..."
 yum install -y mod_ssl 2>/dev/null || true
 
 # Restore Listen 80 in httpd.conf if it was replaced, and ensure Listen 3000 is present
@@ -488,30 +505,34 @@ echo "  Apache restarted"
 # ──────────────────────────────────────────────
 # Step 11 — Create systemd Service
 # ──────────────────────────────────────────────
-echo "[11/12] Creating systemd service..."
-cat > /etc/systemd/system/sokrat-voip.service << 'UNIT'
+echo "[11/13] Creating systemd service..."
+cat > "/etc/systemd/system/${SERVICE_NAME}.service" << UNIT
 [Unit]
-Description=Issabel Dashboard
-After=network.target mysqld.service asterisk.service
+Description=Sokrat VoIP Dashboard
+Wants=network-online.target
+After=network-online.target mariadb.service asterisk.service
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/sokrat-voip
-ExecStart=/usr/bin/node server.js
+WorkingDirectory=${INSTALL_DIR}
+ExecStart=/usr/bin/node ${INSTALL_DIR}/server.js
 Restart=always
 RestartSec=5
 User=root
 Environment=NODE_ENV=production
 Environment=LANG=en_US.UTF-8
 Environment=LC_ALL=en_US.UTF-8
+EnvironmentFile=-${INSTALL_DIR}/.env
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 
+systemctl disable "$LEGACY_SERVICE_NAME" 2>/dev/null || true
+rm -f "/etc/systemd/system/${LEGACY_SERVICE_NAME}.service"
 systemctl daemon-reload
-systemctl enable --now sokrat-voip
-echo "  Service enabled and started"
+systemctl enable --now "$SERVICE_NAME"
+echo "  ${SERVICE_NAME}.service enabled and started"
 
 # ──────────────────────────────────────────────
 # Step 12 — Set timezone to Africa/Cairo
@@ -527,10 +548,10 @@ echo "  Current timezone: $(timedatectl 2>/dev/null | grep 'Time zone' || echo '
 echo ""
 echo "[13/13] Verifying installation..."
 sleep 2
-systemctl status sokrat-voip --no-pager -l | head -12
+systemctl status "$SERVICE_NAME" --no-pager -l | head -12
 echo ""
 echo "--- Last 10 log lines ---"
-journalctl -u sokrat-voip -n 10 --no-pager -l
+journalctl -u "$SERVICE_NAME" -n 10 --no-pager -l
 echo ""
 echo "============================================"
 echo " Installation complete!"

@@ -4,7 +4,7 @@
 
 | Repo | Local Path | GitHub | Install Dir |
 |---|---|---|---|
-| **Dev** | `C:\Users\0xSiTe\Desktop\sokrat-voip-dev` | `Ahmed-Emad02/sokrat-voip-dev.git` | `/opt/sokrat-voip` |
+| **Dev** | `C:\Users\0xSiTe\Desktop\sokrat-voip-dev` | `Ahmed-Emad02/sokrat-voip-dev.git` | `/opt/issabel-dashboard` |
 | **Stable** | `C:\Users\0xSiTe\Desktop\sokrat-voip-stable` | `Ahmed-Emad02/sokrat-voip-stable.git` | `/opt/sokrat-voip` |
 | **Primary Server** | `192.168.100.200` | — | `/opt/issabel-dashboard` |
 
@@ -23,9 +23,10 @@
 - **Auth:** Super admin only (same as SMTP settings)
 
 ### 2. Install Script (`install.sh`)
-- `INSTALL_DIR=/opt/sokrat-voip`
-- `REPO_URL` points to appropriate GitHub repo (dev or stable)
-- Systemd service: `sokrat-voip.service` (WorkingDirectory: `/opt/sokrat-voip`)
+- `INSTALL_DIR=/opt/issabel-dashboard`
+- `REPO_URL` points to the dev repository
+- Systemd service: `issabel-dashboard.service` (WorkingDirectory: `/opt/issabel-dashboard`)
+- **Step 6:** Ensures dashboard, GSM, employee metadata tables, and `public/photos`
 - **Step 12:** Sets timezone to `Africa/Cairo` via `timedatectl`
 
 ### 3. Config Diagram — Time Conditions
