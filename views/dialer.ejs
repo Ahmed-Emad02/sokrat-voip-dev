@@ -6,7 +6,7 @@ const words = {
         createCampaign: "Create Campaign", campaignName: "Campaign Name",
         mode: "Dialer Mode", progressive: "Progressive (Power 1:1)", predictive: "Predictive (Paced)",
         outboundRoute: "Outbound Route", originationCallerId: "Origination Caller ID / Extension",
-        queueName: "ACD Queue Name", maxDials: "Max Concurrent Dials",
+        queueName: "ACD Queue", maxDials: "Max Concurrent Dials",
         pacingRatio: "Pacing Ratio", wrapupTime: "Wrap-Up Time (sec)", maxWait: "Max Queue Wait (sec)",
         amdToggle: "Answering Machine Detection (AMD)", saveCampaign: "Save Campaign",
         cancel: "Cancel", importLeads: "Import Leads CSV", chooseFile: "Choose CSV File",
@@ -14,7 +14,10 @@ const words = {
         attempts: "Attempt Logs", dnc: "Do Not Call (DNC) List", addDnc: "Add to DNC",
         phoneNumber: "Phone Number", reason: "Reason", actions: "Actions",
         status: "Status", total: "Total", pending: "Pending", connected: "Connected",
-        dialing: "Dialing", failed: "Failed/Machine", start: "Start", pause: "Pause", stop: "Stop"
+        dialing: "Dialing", failed: "Failed/Machine", start: "Start", pause: "Pause", stop: "Stop",
+        downloadTemplate: "Download CSV Template", templateNote: "Columns: phone_number, first_name, last_name, company",
+        selectQueue: "— Select ACD Queue —", selectQueueHint: "Queue must exist on PBX",
+        predictiveQueueRequired: "Queue is required for Predictive mode"
     },
     ar: {
         title: "مركز الاتصال الآلي", subtitle: "الحملات ومحرك الاتصال",
@@ -22,7 +25,7 @@ const words = {
         createCampaign: "إنشاء حملة", campaignName: "اسم الحملة",
         mode: "نوع المتصل", progressive: "تصاعدي (Power 1:1)", predictive: "تنبؤي (Paced)",
         outboundRoute: "مسار الاتصال الخارجي", originationCallerId: "معرف/تحويلة البدء",
-        queueName: "اسم طابور الانتظار", maxDials: "الحد الأقصى للمكالمات المتزامنة",
+        queueName: "طابور الاتصال (ACD)", maxDials: "الحد الأقصى للمكالمات المتزامنة",
         pacingRatio: "معدل السرعة (Pacing Ratio)", wrapupTime: "وقت إنهاء المكالمة (ثواني)", maxWait: "أقصى انتظار بالطابور (ثواني)",
         amdToggle: "كشف أجهزة الرد الآلي (AMD)", saveCampaign: "حفظ الحملة",
         cancel: "إلغاء", importLeads: "استيراد ملف الأرقام CSV", chooseFile: "اختر ملف CSV",
@@ -30,13 +33,12 @@ const words = {
         attempts: "سجل المحاولات", dnc: "سجل حظر الاتصال (DNC)", addDnc: "إضافة للحظر",
         phoneNumber: "رقم الهاتف", reason: "السبب", actions: "الإجراءات",
         status: "الحالة", total: "الإجمالي", pending: "قيد الانتظار", connected: "متصل",
-        dialing: "جاري الاتصال", failed: "فشل/آلي", start: "بدء", pause: "إيقاف مؤقت", stop: "إيقاف"
+        dialing: "جاري الاتصال", failed: "فشل/آلي", start: "بدء", pause: "إيقاف مؤقت", stop: "إيقاف",
+        downloadTemplate: "تحميل نموذج CSV", templateNote: "الأعمدة: phone_number, first_name, last_name, company",
+        selectQueue: "— اختر طابور الاتصال —", selectQueueHint: "يجب أن يكون الطابور موجوداً على التبادل",
+        predictiveQueueRequired: "الطابور مطلوب للوضع التنبؤي"
     }
 };
-const currentLang = typeof lang !== 'undefined' ? lang : 'en';
-const t = words[currentLang] || words.en;
-const isRtl = currentLang === 'ar';
-%>
 <!DOCTYPE html>
 <html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
 <head>
@@ -125,11 +127,12 @@ const isRtl = currentLang === 'ar';
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.originationCallerId %></label>
-                        <input type="text" id="campOriginationCid" value="101" class="config-input w-full">
-                    </div>
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.queueName %></label>
-                        <input type="text" id="campQueueName" value="autodialer-queue" class="config-input w-full">
+                        <select id="campQueueName" class="config-input w-full">
+                            <option value=""><%= t.selectQueue %></option>
+                        </select>
+                        <p class="text-[10px] text-[var(--text-muted)] mt-0.5"><%= t.selectQueueHint %></p>
                     </div>
                 </div>
                 <div class="grid grid-cols-3 gap-3">
@@ -165,14 +168,10 @@ const isRtl = currentLang === 'ar';
             <form onsubmit="uploadLeadsCsv(event)" class="space-y-4">
                 <input type="hidden" id="importCampaignId">
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-2"><%= t.chooseFile %></label>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.chooseFile %></label>
                     <input type="file" id="leadsCsvFile" accept=".csv" required class="config-input w-full text-xs">
+                    <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= t.templateNote %> <a href="/api/dialer/leads/template" class="text-amber-400 underline hover:text-amber-300"><%= t.downloadTemplate %></a></p>
                 </div>
-                <div class="flex justify-end gap-2 pt-4 border-t border-[var(--border-primary)]">
-                    <button type="button" onclick="closeModal('importLeadsModal')" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.cancel %></button>
-                    <button type="submit" class="config-btn-primary px-4 py-1.5 text-xs"><%= t.upload %></button>
-                </div>
-            </form>
         </div>
     </div>
 
@@ -298,10 +297,24 @@ const isRtl = currentLang === 'ar';
             const data = await res.json();
             if (data.success) loadDnc(); else alert(data.error);
         }
+        async function loadQueues() {
+            const res = await fetch('/api/config/queues');
+            const data = await res.json();
+            const select = document.getElementById('campQueueName');
+            if (data.queues) {
+                data.queues.forEach(q => {
+                    const opt = document.createElement('option');
+                    opt.value = q.extension;
+                    opt.textContent = `${q.extension} ${q.descr ? '— ' + q.descr : ''}`;
+                    select.appendChild(opt);
+                });
+            }
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             loadCampaigns();
             loadOutboundRoutes();
+            loadQueues();
             loadDnc();
         });
     </script>

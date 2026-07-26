@@ -349,6 +349,20 @@ async function initAuthDb() {
         }
         console.log('AUTH: Dashboard users table ready, existing users found');
     }
+
+    // Auto-provision default ACD queue 300 (autodialer-queue) if no queues exist
+    try {
+        const [qCount] = await conn.execute('SELECT COUNT(*) AS cnt FROM `asterisk`.`queues_config`');
+        if (qCount[0].cnt === 0) {
+            await conn.execute('INSERT INTO `asterisk`.`queues_config` (extension, descr, grppre, strategy, servicelevel, joinempty, leavewhenempty, ringinuse, timeout, retry, wrapuptime, maxlen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                '300', 'autodialer-queue', '', 'ringall', '30', 'yes', 'no', 'yes', '15', '5', '0', '0'
+            ]);
+            await conn.execute('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', [300, 'member', 'Local/101@default/n', 0]);
+            console.log('QUEUE: Auto-provisioned default ACD queue 300 (autodialer-queue) with member Local/101@default');
+        }
+    } catch (qErr) {
+        console.error('QUEUE auto-provision error:', qErr.message);
+    }
     await conn.end();
     await syncAllExtensionsAstdb();
     await acquireDialerLeaderLock();
@@ -583,17 +597,19 @@ function parseTrunkIdentifier(channelId, name) {
 // Fetch live Asterisk channel names via CLI
 async function getLiveAsteriskChannelNames() {
     try {
-        const stdout = await execPromise(`${ASTERISK_BIN} -rx "core show channels"`);
-        const lines = stdout.split('\n');
+        const { stdout } = await execPromise(`${ASTERISK_BIN} -rx "core show channels concise"`);
+        if (!stdout) return [];
         const channels = [];
-        for (const line of lines) {
-            const m = line.match(/^(\S+)\s+\S+/);
-            if (m && (m[1].includes('/') || m[1].includes('Local'))) {
-                channels.push(m[1].trim());
+        for (const line of stdout.split('\n')) {
+            const m = line.match(/^([^!]+)/);
+            if (m) {
+                const ch = m[1].trim();
+                if (ch.includes('/') && !ch.startsWith('!')) channels.push(ch);
             }
         }
         return channels;
-    } catch {
+    } catch (err) {
+        console.error('getLiveAsteriskChannelNames error:', err.message);
         return [];
     }
 }
@@ -4957,6 +4973,16 @@ app.get('/api/config/routes/outbound', async (req, res) => {
     }
 });
 
+// GET /api/config/queues - List PBX ACD Queues
+app.get('/api/config/queues', async (req, res) => {
+    try {
+        const [queues] = await pool.query('SELECT extension, descr FROM `asterisk`.`queues_config` ORDER BY CAST(extension AS UNSIGNED) ASC');
+        res.json({ success: true, queues });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // POST /api/config/routes/outbound - Create Outbound Route
 app.post('/api/config/routes/outbound', async (req, res) => {
     try {
@@ -5981,6 +6007,17 @@ app.post('/api/dialer/campaigns', async (req, res) => {
             }
         }
 
+        const qName = queue_name ? sanitizeAmiValue(queue_name).trim() : '';
+        if ((mode || 'progressive') === 'predictive') {
+            if (!qName) {
+                return res.status(400).json({ success: false, error: 'Queue Name is required for Predictive mode.' });
+            }
+            const [qCheck] = await pool.query('SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?', [qName]);
+            if (qCheck.length === 0) {
+                return res.status(400).json({ success: false, error: `Queue '${qName}' does not exist on PBX. Create it in PBX Config -> Queues first.` });
+            }
+        }
+
         const [r] = await pool.query(`
             INSERT INTO \`asterisk\`.\`dialer_campaigns\`
             (name, mode, outbound_route_id, origination_caller_id, queue_name, pacing_ratio, max_concurrent_dials, wrapup_time_sec, max_queue_wait_sec, amd_enabled)
@@ -5990,7 +6027,7 @@ app.post('/api/dialer/campaigns', async (req, res) => {
             mode || 'progressive',
             outbound_route_id ? parseInt(outbound_route_id, 10) : null,
             cidNum,
-            queue_name ? sanitizeAmiValue(queue_name) : 'autodialer-queue',
+            qName || 'autodialer-queue',
             parseFloat(pacing_ratio) || 1.0,
             parseInt(max_concurrent_dials, 10) || 5,
             parseInt(wrapup_time_sec, 10) || 15,
@@ -6011,6 +6048,21 @@ app.post('/api/dialer/campaigns/:id/control', async (req, res) => {
         if (!['start', 'pause', 'stop'].includes(action)) {
             return res.status(400).json({ success: false, error: 'Invalid action' });
         }
+
+        if (action === 'start') {
+            const [camp] = await pool.query('SELECT mode, queue_name FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [id]);
+            if (camp.length > 0 && camp[0].mode === 'predictive') {
+                const qName = (camp[0].queue_name || '').trim();
+                if (!qName) {
+                    return res.status(400).json({ success: false, error: 'ACD Queue not configured. Set a Queue Name in campaign settings for Predictive mode.' });
+                }
+                const [qCheck] = await pool.query('SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?', [qName]);
+                if (qCheck.length === 0) {
+                    return res.status(400).json({ success: false, error: `ACD Queue '${qName}' does not exist on PBX. Create it in PBX Config -> Queues first.` });
+                }
+            }
+        }
+
         const status = action === 'start' ? 'running' : (action === 'pause' ? 'paused' : 'completed');
         await pool.query('UPDATE `asterisk`.`dialer_campaigns` SET status = ? WHERE id = ?', [status, id]);
         res.json({ success: true, message: `Campaign status updated to ${status}` });
@@ -6166,6 +6218,18 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
+});
+
+// GET /api/dialer/leads/template - Download CSV Template for Lead Import
+app.get('/api/dialer/leads/template', (req, res) => {
+    const csvHeaders = ['phone_number', 'first_name', 'last_name', 'company'];
+    const sampleRow = ['01001111111', 'Ahmed', 'Ali', 'Acme Corp'];
+    let csvContent = '\ufeff';
+    csvContent += csvHeaders.join(',') + '\n';
+    csvContent += sampleRow.join(',') + '\n';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="leads_template.csv"');
+    res.send(csvContent);
 });
 
 
