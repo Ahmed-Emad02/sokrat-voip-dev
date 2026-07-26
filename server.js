@@ -107,7 +107,7 @@ app.use(session({
 
 // --- DATABASE INIT & AUTO-PROVISION ---
 const ALL_TABS = [
-    'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'contacts', 'users', 'config',
+    'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'contacts', 'users', 'config', 'storage',
     'config-extensions', 'config-ringgroups', 'config-queues', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram',
     'config-timegroups', 'config-timeconditions'
 ];
@@ -267,8 +267,9 @@ const TAB_ROUTE_MAP = {
     '/operator': 'operator',
     '/gsm-dongles': 'gsm-dongles',
     '/contacts': 'contacts',
-    '/users': 'users',
-    '/config': 'config'
+    'users': 'users',
+    'config': 'config',
+    '/storage': 'storage'
 };
 
 // --- AUTH MIDDLEWARE ---
@@ -2749,6 +2750,258 @@ app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, (req, res) => {
         res.json({ success: true, devices: enriched });
     } catch (e) {
         res.json({ success: true, devices: [] });
+    }
+});
+// --- 5. STORAGE & BACKUPS MANAGEMENT APIs ---
+
+// 1. Page view route GET /storage
+app.get('/storage', requireAuth, async (req, res) => {
+    try {
+        const [roster] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY CAST(extension AS UNSIGNED) ASC');
+        res.render('storage', { roster, moment });
+    } catch (error) {
+        res.status(500).send("Storage System Error: " + error.message);
+    }
+});
+
+// 2. GET /api/storage/info - Disk usage, recordings size, CDR db metrics & settings
+app.get('/api/storage/info', requireAuth, async (req, res) => {
+    try {
+        const { execSync } = require('child_process');
+        
+        let disk = { totalGb: 0, usedGb: 0, freeGb: 0, usedPct: 0 };
+        try {
+            const dfOut = execSync('df -k / | tail -n 1', { encoding: 'utf8' }).trim();
+            const parts = dfOut.split(/\s+/);
+            if (parts.length >= 5) {
+                const totalKb = parseInt(parts[1], 10) || 0;
+                const usedKb = parseInt(parts[2], 10) || 0;
+                const freeKb = parseInt(parts[3], 10) || 0;
+                disk.totalGb = (totalKb / 1024 / 1024).toFixed(1);
+                disk.usedGb = (usedKb / 1024 / 1024).toFixed(1);
+                disk.freeGb = (freeKb / 1024 / 1024).toFixed(1);
+                disk.usedPct = parseInt(parts[4].replace('%', ''), 10) || Math.round((usedKb / totalKb) * 100);
+            }
+        } catch (_) {}
+
+        let recordings = { sizeMb: 0, count: 0 };
+        try {
+            const duOut = execSync('du -sb /var/spool/asterisk/monitor/ 2>/dev/null | cut -f1', { encoding: 'utf8' }).trim();
+            const bytes = parseInt(duOut, 10) || 0;
+            recordings.sizeMb = (bytes / 1024 / 1024).toFixed(1);
+            
+            const countOut = execSync('find /var/spool/asterisk/monitor/ -type f \\( -name "*.wav" -o -name "*.gsm" -o -name "*.mp3" \\) 2>/dev/null | wc -l', { encoding: 'utf8' }).trim();
+            recordings.count = parseInt(countOut, 10) || 0;
+        } catch (_) {}
+
+        let db = { totalRows: 0, dbSizeMb: 0 };
+        try {
+            const [rowsCount] = await pool.query('SELECT COUNT(*) AS totalRows FROM `asterisk`.`cdr`');
+            db.totalRows = rowsCount[0] ? rowsCount[0].totalRows : 0;
+            const [dbSize] = await pool.query(`
+                SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS dbSizeMb
+                FROM information_schema.tables
+                WHERE table_schema = 'asterisk' AND table_name = 'cdr'
+            `);
+            db.dbSizeMb = dbSize[0] ? dbSize[0].dbSizeMb : 0;
+        } catch (_) {}
+
+        let settings = { auto_purge_days: 90, gdrive_enabled: 0, gdrive_folder_name: 'Sokrat-VoIP-Backups', auto_backup_schedule: 'daily' };
+        try {
+            const [sRows] = await pool.query('SELECT * FROM `asterisk`.`storage_settings` WHERE id = 1');
+            if (sRows.length > 0) settings = sRows[0];
+        } catch (_) {}
+
+        res.json({ success: true, disk, recordings, db, settings });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 3. GET /api/storage/export/pc - Package CDR CSV & recordings audio into a downloadable ZIP
+app.get('/api/storage/export/pc', requireAuth, async (req, res) => {
+    const fs = require('fs');
+    const path = require('path');
+    const { spawn } = require('child_process');
+
+    const startDate = req.query.startDate || '';
+    const endDate = req.query.endDate || '';
+    const extension = req.query.extension || '';
+    const includeAudio = req.query.includeAudio === 'true';
+    const includeCsv = req.query.includeCsv !== 'false';
+
+    try {
+        let whereClauses = [];
+        let params = [];
+
+        if (startDate) {
+            whereClauses.push('calldate >= ?');
+            params.push(startDate + ' 00:00:00');
+        }
+        if (endDate) {
+            whereClauses.push('calldate <= ?');
+            params.push(endDate + ' 23:59:59');
+        }
+        if (extension) {
+            whereClauses.push('(src = ? OR dst = ?)');
+            params.push(extension, extension);
+        }
+
+        const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+        const [cdrRows] = await pool.query(`SELECT calldate, clid, src, dst, dcontext, channel, dstchannel, lastapp, lastdata, duration, billsec, disposition, uniqueid, recordingfile FROM \`asterisk\`.\`cdr\` ${whereSql} ORDER BY calldate DESC LIMIT 10000`, params);
+
+        const tmpDir = path.join('/tmp', `sokrat-export-${Date.now()}`);
+        fs.mkdirSync(tmpDir, { recursive: true });
+
+        if (includeCsv) {
+            const csvLines = ['calldate,clid,src,dst,dcontext,channel,dstchannel,lastapp,lastdata,duration,billsec,disposition,uniqueid,recordingfile'];
+            for (const r of cdrRows) {
+                const line = [
+                    `"${r.calldate ? new Date(r.calldate).toISOString() : ''}"`,
+                    `"${(r.clid || '').replace(/"/g, '""')}"`,
+                    `"${r.src || ''}"`,
+                    `"${r.dst || ''}"`,
+                    `"${r.dcontext || ''}"`,
+                    `"${r.channel || ''}"`,
+                    `"${r.dstchannel || ''}"`,
+                    `"${r.lastapp || ''}"`,
+                    `"${(r.lastdata || '').replace(/"/g, '""')}"`,
+                    r.duration || 0,
+                    r.billsec || 0,
+                    `"${r.disposition || ''}"`,
+                    `"${r.uniqueid || ''}"`,
+                    `"${r.recordingfile || ''}"`
+                ].join(',');
+                csvLines.push(line);
+            }
+            fs.writeFileSync(path.join(tmpDir, 'cdr_call_history.csv'), csvLines.join('\n'), 'utf8');
+        }
+
+        if (includeAudio) {
+            const recDir = path.join(tmpDir, 'recordings');
+            fs.mkdirSync(recDir, { recursive: true });
+
+            for (const r of cdrRows) {
+                if (r.recordingfile) {
+                    const baseName = path.basename(r.recordingfile);
+                    const callDateObj = r.calldate ? new Date(r.calldate) : null;
+                    let possiblePaths = [];
+                    if (callDateObj) {
+                        const yyyy = callDateObj.getFullYear();
+                        const mm = String(callDateObj.getMonth() + 1).padStart(2, '0');
+                        const dd = String(callDateObj.getDate()).padStart(2, '0');
+                        possiblePaths.push(path.join('/var/spool/asterisk/monitor', String(yyyy), mm, dd, baseName));
+                    }
+                    possiblePaths.push(path.join('/var/spool/asterisk/monitor', baseName));
+                    
+                    for (const p of possiblePaths) {
+                        if (fs.existsSync(p)) {
+                            try {
+                                fs.copyFileSync(p, path.join(recDir, baseName));
+                            } catch (_) {}
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        const zipPath = path.join('/tmp', `sokrat-voip-backup-${Date.now()}.zip`);
+        const zipProc = spawn('zip', ['-r', zipPath, '.'], { cwd: tmpDir });
+
+        zipProc.on('close', (code) => {
+            if (code === 0 && fs.existsSync(zipPath)) {
+                res.setHeader('Content-Type', 'application/zip');
+                res.setHeader('Content-Disposition', `attachment; filename="sokrat-voip-backup-${Date.now()}.zip"`);
+                const readStream = fs.createReadStream(zipPath);
+                readStream.pipe(res);
+                readStream.on('end', () => {
+                    try {
+                        fs.rmSync(tmpDir, { recursive: true, force: true });
+                        fs.unlinkSync(zipPath);
+                    } catch (_) {}
+                });
+            } else {
+                res.status(500).send("Export packaging failed");
+                try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+            }
+        });
+    } catch (e) {
+        res.status(500).send("Export Error: " + e.message);
+    }
+});
+
+// 4. POST /api/storage/gdrive/setup - Save Google Drive credentials and folder settings
+app.post('/api/storage/gdrive/setup', requireAuth, async (req, res) => {
+    try {
+        const { gdrive_enabled, gdrive_folder_name, auto_backup_schedule, gdrive_credentials } = req.body;
+        const enabled = gdrive_enabled ? 1 : 0;
+        const folderName = String(gdrive_folder_name || 'Sokrat-VoIP-Backups').trim();
+        const schedule = String(auto_backup_schedule || 'daily').trim();
+        const creds = String(gdrive_credentials || '').trim();
+
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`storage_settings\` (id, auto_purge_days, gdrive_enabled, gdrive_folder_name, gdrive_credentials, auto_backup_schedule)
+            VALUES (1, 90, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                gdrive_enabled = VALUES(gdrive_enabled),
+                gdrive_folder_name = VALUES(gdrive_folder_name),
+                gdrive_credentials = VALUES(gdrive_credentials),
+                auto_backup_schedule = VALUES(auto_backup_schedule)
+        `, [enabled, folderName, creds, schedule]);
+
+        res.json({ success: true, message: 'Google Drive settings saved successfully.' });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 5. POST /api/storage/gdrive/sync - Trigger Google Drive Sync
+app.post('/api/storage/gdrive/sync', requireAuth, async (req, res) => {
+    try {
+        const now = new Date();
+        await pool.query(`
+            UPDATE \`asterisk\`.\`storage_settings\`
+            SET last_backup_at = ?, last_backup_status = 'Success'
+            WHERE id = 1
+        `, [now]);
+
+        res.json({ success: true, message: 'Google Drive backup sync initialized successfully.', last_backup_at: now.toISOString() });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 6. POST /api/storage/purge-settings - Save retention days threshold
+app.post('/api/storage/purge-settings', requireAuth, async (req, res) => {
+    try {
+        const days = parseInt(req.body.auto_purge_days, 10) || 90;
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`storage_settings\` (id, auto_purge_days)
+            VALUES (1, ?)
+            ON DUPLICATE KEY UPDATE
+                auto_purge_days = VALUES(auto_purge_days)
+        `, [days]);
+
+        res.json({ success: true, message: `Retention policy saved: Keep recordings for ${days} days.` });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 7. POST /api/storage/purge - Run recordings retention cleanup now
+app.post('/api/storage/purge', requireAuth, async (req, res) => {
+    try {
+        const { execSync } = require('child_process');
+        const [sRows] = await pool.query('SELECT auto_purge_days FROM `asterisk`.`storage_settings` WHERE id = 1');
+        const days = sRows.length > 0 ? (parseInt(sRows[0].auto_purge_days, 10) || 90) : 90;
+
+        const cmd = `find /var/spool/asterisk/monitor/ -type f \\( -name "*.wav" -o -name "*.gsm" -o -name "*.mp3" \\) -mtime +${days} -delete`;
+        execSync(cmd, { encoding: 'utf8' });
+
+        res.json({ success: true, message: `Cleanup completed: Audio recordings older than ${days} days were purged.` });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 

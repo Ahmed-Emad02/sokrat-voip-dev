@@ -1,0 +1,548 @@
+<%
+const words = {
+    en: {
+        title: "Storage & Backups", subtitle: "Management Console",
+        diskOverview: "Server Storage Overview",
+        recordingsStorage: "Call Recordings Size",
+        dbStorage: "CDR Database Metrics",
+        retentionPolicy: "Auto-Purge Retention",
+        pcExportTitle: "Export Call History & Recordings to PC",
+        pcExportDesc: "Package CDR records and audio files into a ZIP archive and download directly to your computer.",
+        gdriveTitle: "Google Drive Cloud Backup",
+        gdriveDesc: "Automatically or manually upload call logs and recordings directly to your Google Drive folder.",
+        startDate: "Start Date",
+        endDate: "End Date",
+        extension: "Extension Filter",
+        allExtensions: "All Extensions",
+        includeAudio: "Include Audio Recording Files (.wav / .gsm)",
+        includeCsv: "Include CDR Call History CSV",
+        downloadZipBtn: "Download Backup ZIP to PC",
+        gdriveEnable: "Enable Google Drive Sync",
+        gdriveFolder: "Target Folder Name",
+        gdriveCreds: "Service Account / API Credentials (JSON)",
+        gdriveSchedule: "Auto-Backup Schedule",
+        saveGdriveBtn: "Save Google Drive Settings",
+        syncGdriveBtn: "Sync to Google Drive Now",
+        purgeTitle: "Recordings Retention & Auto-Purge",
+        purgeDesc: "Automatically delete call recording files older than the specified retention threshold to free up disk space.",
+        purgeDaysLabel: "Keep Recordings For (Days)",
+        savePurgeBtn: "Save Retention Policy",
+        runPurgeBtn: "Run Cleanup Now",
+        lastBackup: "Last Synced:",
+        never: "Never",
+        active: "Active",
+        disabled: "Disabled",
+        processing: "Packaging & Exporting...",
+        saving: "Saving...",
+        success: "Operation completed successfully",
+        failed: "Operation failed"
+    },
+    ar: {
+        title: "التخزين والنسخ الاحتياطي", subtitle: "إدارة النظام",
+        diskOverview: "نظرة عامة على مساحة التخزين",
+        recordingsStorage: "حجم تسجيلات المكالمات",
+        dbStorage: "مقاييس قاعدة بيانات CDR",
+        retentionPolicy: "سياسة الاحتفاظ والحذف التلقائي",
+        pcExportTitle: "تصدير سجل المكالمات والتسجيلات إلى الكمبيوتر",
+        pcExportDesc: "حزم سجلات المكالمات والملفات الصوتية في أرشيف ZIP وتنزيلها مباشرة على جهازك.",
+        gdriveTitle: "النسخ الاحتياطي السحابي (Google Drive)",
+        gdriveDesc: "رفع سجلات وتسجيلات المكالمات تلقائياً أو يدوياً مباشرة إلى مجلد Google Drive الخاص بك.",
+        startDate: "تاريخ البداية",
+        endDate: "تاريخ النهاية",
+        extension: "تصفية حسب التحويلة",
+        allExtensions: "جميع التحويلات",
+        includeAudio: "تضمين التسجيلات الصوتية (.wav / .gsm)",
+        includeCsv: "تضمين ملف CSV لسجل المكالمات",
+        downloadZipBtn: "تنزيل الأرشيف ZIP على الكمبيوتر",
+        gdriveEnable: "تفعيل المزامنة مع Google Drive",
+        gdriveFolder: "اسم المجلد المستهدف",
+        gdriveCreds: "بيانات اعتماد API / Service Account (JSON)",
+        gdriveSchedule: "جدول النسخ الاحتياطي التلقائي",
+        saveGdriveBtn: "حفظ إعدادات Google Drive",
+        syncGdriveBtn: "بدء المزامنة الآن",
+        purgeTitle: "الاحتفاظ بالتسجيلات والتنظيف التلقائي",
+        purgeDesc: "حذف ملفات التسجيلات الصوتية الأقدم من المهلة المحسوبة تلقائياً لتوفير المساحة على القرص.",
+        purgeDaysLabel: "الاحتفاظ بالتسجيلات لـ (أيام)",
+        savePurgeBtn: "حفظ سياسة الاحتفاظ",
+        runPurgeBtn: "تشغيل التنظيف الآن",
+        lastBackup: "آخر مزامنة:",
+        never: "لم يتم",
+        active: "نشط",
+        disabled: "معطل",
+        processing: "جاري الحزم والتصدير...",
+        saving: "جاري الحفظ...",
+        success: "تمت العملية بنجاح",
+        failed: "فشلت العملية"
+    }
+};
+const t = words[currentLang] || words['en'];
+const isRtl = currentLang === 'ar';
+%>
+<!DOCTYPE html>
+<html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            if (theme === 'light') {
+                document.documentElement.classList.add('light-theme');
+            } else {
+                document.documentElement.classList.remove('light-theme');
+            }
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - Storage & Backups</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Roboto:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        :root {
+            --bg-primary: #050507;
+            --bg-secondary: #0c0c0e;
+            --bg-card: #121215;
+            --bg-hover: #1e1e24;
+            --border-primary: #18181c;
+            --border-accent: #2c2c34;
+            --text-primary: #f4f4f5;
+            --text-secondary: #a1a1aa;
+            --text-muted: #8e8e93;
+            --accent-color: #e53e3e;
+            --accent-hover: #fc8181;
+            --accent-soft: rgba(229, 62, 62, 0.14);
+            --accent-border: rgba(229, 62, 62, 0.42);
+        }
+        body.light-theme {
+            --bg-primary: #f4f4f6 !important;
+            --bg-secondary: #ffffff !important;
+            --bg-card: #f4f4f6 !important;
+            --bg-hover: #e4e4e9 !important;
+            --border-primary: #e4e4e9 !important;
+            --border-accent: #d4d4de !important;
+            --text-primary: #18181b !important;
+            --text-secondary: #3f3f46 !important;
+            --text-muted: #71717a !important;
+            --accent-color: #b91c1c !important;
+            --accent-hover: #991b1b !important;
+            --accent-soft: rgba(254, 226, 226, 0.72) !important;
+            --accent-border: rgba(220, 38, 38, 0.36) !important;
+        }
+        body.light-theme .text-white {
+            color: #18181b !important;
+        }
+        body.light-theme input,
+        body.light-theme select,
+        body.light-theme textarea {
+            background-color: #ffffff !important;
+            color: #18181b !important;
+            border-color: #cbd5e1 !important;
+        }
+        body.light-theme .bg-black\/20 {
+            background-color: #f1f5f9 !important;
+            border-color: #cbd5e1 !important;
+        }
+        body.light-theme .bg-zinc-800 {
+            background-color: #e2e8f0 !important;
+            color: #18181b !important;
+        }
+        body.light-theme .border-zinc-700 {
+            border-color: #cbd5e1 !important;
+        }
+        body { font-family: 'Roboto', 'IBM Plex Sans Arabic', sans-serif; background-color: var(--bg-primary); color: var(--text-primary); }
+        .panel-surface { background-color: var(--bg-secondary); border: 1px solid var(--border-primary); }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
+    <%- include('sidebar') %>
+
+    <div class="flex-1 p-6 md:p-8 relative flex flex-col min-h-screen">
+        
+        <!-- Header Section -->
+        <div class="mb-6 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h2 class="text-3xl font-extrabold text-white tracking-tight"><%= t.title %> <span class="text-[var(--accent-color)]"><%= t.subtitle %></span></h2>
+                <p class="text-xs text-[var(--text-muted)] mt-1"><%= isRtl ? 'إدارة مساحة التخزين والنسخ الاحتياطي إلى الكمبيوتر أو Google Drive' : 'Monitor server storage, purge old recordings, and export call data to PC or Google Drive' %></p>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <button onclick="fetchStorageInfo()" class="panel-surface hover:bg-[var(--bg-hover)] text-white border border-[var(--border-primary)] rounded-xl px-4 py-2 text-xs font-bold flex items-center gap-2 cursor-pointer transition shadow-sm">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <%= isRtl ? 'تحديث البيانات' : 'Refresh Metrics' %>
+                </button>
+            </div>
+        </div>
+
+        <!-- Top Metrics Cards Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+            <!-- Card 1: Server Disk Usage -->
+            <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.diskOverview %></span>
+                    <div class="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-baseline justify-between mb-1">
+                        <span id="disk-used-pct" class="text-2xl font-black text-white font-mono">- %</span>
+                        <span id="disk-free-text" class="text-xs text-[var(--text-muted)] font-mono">- free</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                        <div id="disk-progress-bar" class="h-full bg-blue-500 transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Call Recordings Storage -->
+            <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.recordingsStorage %></span>
+                    <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11a7 7 0 0 1-7 7m0 0a7 7 0 0 1-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 0 1-3-3V5a3 3 0 1 1 6 0v6a3 3 0 0 1-3 3z"/></svg>
+                    </div>
+                </div>
+                <div>
+                    <span id="recordings-size-text" class="text-2xl font-black text-white font-mono block mb-1">- MB</span>
+                    <span id="recordings-count-text" class="text-xs text-[var(--text-muted)] block">- files</span>
+                </div>
+            </div>
+
+            <!-- Card 3: CDR Database Metrics -->
+            <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.dbStorage %></span>
+                    <div class="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                    </div>
+                </div>
+                <div>
+                    <span id="cdr-rows-text" class="text-2xl font-black text-white font-mono block mb-1">- calls</span>
+                    <span id="cdr-size-text" class="text-xs text-[var(--text-muted)] block">- DB size</span>
+                </div>
+            </div>
+
+            <!-- Card 4: Retention Policy -->
+            <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.retentionPolicy %></span>
+                    <div class="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </div>
+                </div>
+                <div>
+                    <span id="retention-days-text" class="text-2xl font-black text-white font-mono block mb-1">90 Days</span>
+                    <span id="retention-status-text" class="text-xs text-emerald-400 font-bold block"><%= t.active %></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Workspace Grid: PC Export & Google Drive Sync -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            
+            <!-- Panel 1: Export Call History & Recordings to PC (ZIP Download) -->
+            <div class="panel-surface rounded-2xl p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center gap-3 border-b border-[var(--border-primary)] pb-4 mb-5">
+                        <div class="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-white"><%= t.pcExportTitle %></h3>
+                            <p class="text-xs text-[var(--text-muted)]"><%= t.pcExportDesc %></p>
+                        </div>
+                    </div>
+
+                    <form id="pcExportForm" onsubmit="handlePcExport(event)" class="flex flex-col gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.startDate %></label>
+                                <input type="date" id="exportStartDate" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.endDate %></label>
+                                <input type="date" id="exportEndDate" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.extension %></label>
+                            <select id="exportExtension" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full cursor-pointer">
+                                <option value="" selected><%= t.allExtensions %></option>
+                                <% roster.forEach(emp => { %>
+                                    <option value="<%= emp.extension %>"><%= emp.extension %> - <%= emp.name %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+
+                        <div class="flex flex-col gap-2 pt-1">
+                            <label class="inline-flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-[var(--text-primary)]">
+                                <input type="checkbox" id="includeCsv" checked class="w-4 h-4 accent-emerald-500 rounded">
+                                <span><%= t.includeCsv %></span>
+                            </label>
+                            <label class="inline-flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-[var(--text-primary)]">
+                                <input type="checkbox" id="includeAudio" checked class="w-4 h-4 accent-emerald-500 rounded">
+                                <span><%= t.includeAudio %></span>
+                            </label>
+                        </div>
+
+                        <div class="pt-4 border-t border-[var(--border-primary)]/50 mt-2">
+                            <button type="submit" id="downloadZipBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl py-3 px-4 text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-emerald-950/40">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                <span><%= t.downloadZipBtn %></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Panel 2: Google Drive Cloud Backup -->
+            <div class="panel-surface rounded-2xl p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-4 mb-5 gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11 12 4 5 11"/><path d="M12 4v12"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-bold text-white"><%= t.gdriveTitle %></h3>
+                                <p class="text-xs text-[var(--text-muted)]"><%= t.gdriveDesc %></p>
+                            </div>
+                        </div>
+                        <span id="gdrive-status-badge" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 shrink-0"><%= t.disabled %></span>
+                    </div>
+
+                    <form id="gdriveSetupForm" onsubmit="handleGdriveSave(event)" class="flex flex-col gap-4">
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-[var(--border-primary)]">
+                            <span class="text-xs font-bold text-[var(--text-primary)]"><%= t.gdriveEnable %></span>
+                            <input type="checkbox" id="gdriveEnabled" class="w-4 h-4 accent-blue-500 rounded cursor-pointer">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.gdriveFolder %></label>
+                            <input type="text" id="gdriveFolderName" value="Sokrat-VoIP-Backups" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full font-mono">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.gdriveSchedule %></label>
+                            <select id="gdriveSchedule" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full cursor-pointer">
+                                <option value="daily" selected>Daily (At 02:00 AM)</option>
+                                <option value="weekly">Weekly (Sunday at 02:00 AM)</option>
+                                <option value="monthly">Monthly (1st of month)</option>
+                                <option value="manual">Manual Only</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.gdriveCreds %></label>
+                            <textarea id="gdriveCreds" rows="3" placeholder='{"type": "service_account", "project_id": "...", ...}' class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl p-3 text-xs font-mono text-[var(--text-primary)] w-full"></textarea>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-primary)]/50">
+                            <button type="submit" id="saveGdriveBtn" class="bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2.5 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
+                                <span><%= t.saveGdriveBtn %></span>
+                            </button>
+                            <button type="button" onclick="syncGdriveNow()" id="syncGdriveBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl py-2.5 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-blue-950/40">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                <span><%= t.syncGdriveBtn %></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lower Section: Retention & Auto-Purge Manager -->
+        <div class="panel-surface rounded-2xl p-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4 mb-5">
+                <div class="flex items-center gap-3">
+                    <div class="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white"><%= t.purgeTitle %></h3>
+                        <p class="text-xs text-[var(--text-muted)]"><%= t.purgeDesc %></p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button onclick="savePurgePolicy()" id="savePurgeBtn" class="bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl px-4 py-2 text-xs cursor-pointer transition">
+                        <%= t.savePurgeBtn %>
+                    </button>
+                    <button onclick="runPurgeNow()" id="runPurgeBtn" class="bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-xl px-4 py-2 text-xs flex items-center gap-2 cursor-pointer transition shadow-md shadow-amber-950/40">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                        <%= t.runPurgeBtn %>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                <div class="flex flex-col gap-2">
+                    <div class="flex items-center justify-between text-xs font-bold text-[var(--text-secondary)]">
+                        <span><%= t.purgeDaysLabel %></span>
+                        <span id="purge-days-val" class="font-mono text-amber-400 font-bold text-sm">90 Days</span>
+                    </div>
+                    <input type="range" id="purgeDaysSlider" min="7" max="365" step="1" value="90" oninput="document.getElementById('purge-days-val').textContent = this.value + ' Days'" class="w-full cursor-pointer accent-amber-500">
+                </div>
+                <div class="p-3.5 rounded-xl bg-black/20 border border-[var(--border-primary)] text-xs text-[var(--text-muted)] space-y-1">
+                    <div class="font-bold text-[var(--text-primary)]">⚠️ Purge Safety Notice:</div>
+                    <p>Audio recording files (`.wav`, `.gsm`, `.mp3`) older than the selected threshold will be permanently deleted from `/var/spool/asterisk/monitor/`. CDR database call logs remain untouched.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Client-Side Javascript -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchStorageInfo();
+            // Set default date range to last 30 days
+            const end = new Date();
+            const start = new Date();
+            start.setDate(start.getDate() - 30);
+            document.getElementById('exportEndDate').value = end.toISOString().split('T')[0];
+            document.getElementById('exportStartDate').value = start.toISOString().split('T')[0];
+        });
+
+        function fetchStorageInfo() {
+            fetch('/api/storage/info')
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) return;
+                    
+                    // 1. Disk usage
+                    const usedPct = data.disk ? data.disk.usedPct : 0;
+                    document.getElementById('disk-used-pct').textContent = usedPct + ' %';
+                    document.getElementById('disk-free-text').textContent = (data.disk ? data.disk.freeGb : 0) + ' GB free';
+                    document.getElementById('disk-progress-bar').style.width = usedPct + '%';
+                    
+                    // 2. Recordings
+                    document.getElementById('recordings-size-text').textContent = data.recordings ? data.recordings.sizeMb + ' MB' : '0 MB';
+                    document.getElementById('recordings-count-text').textContent = data.recordings ? data.recordings.count + ' files' : '0 files';
+                    
+                    // 3. Database
+                    document.getElementById('cdr-rows-text').textContent = data.db ? data.db.totalRows.toLocaleString() + ' calls' : '0 calls';
+                    document.getElementById('cdr-size-text').textContent = data.db ? data.db.dbSizeMb + ' MB DB size' : '0 MB DB size';
+                    
+                    // 4. Retention & Google Drive
+                    if (data.settings) {
+                        document.getElementById('retention-days-text').textContent = data.settings.auto_purge_days + ' Days';
+                        document.getElementById('purgeDaysSlider').value = data.settings.auto_purge_days;
+                        document.getElementById('purge-days-val').textContent = data.settings.auto_purge_days + ' Days';
+
+                        document.getElementById('gdriveEnabled').checked = !!data.settings.gdrive_enabled;
+                        document.getElementById('gdriveFolderName').value = data.settings.gdrive_folder_name || 'Sokrat-VoIP-Backups';
+                        document.getElementById('gdriveSchedule').value = data.settings.auto_backup_schedule || 'daily';
+                        if (data.settings.gdrive_credentials) {
+                            document.getElementById('gdriveCreds').value = data.settings.gdrive_credentials;
+                        }
+
+                        const badge = document.getElementById('gdrive-status-badge');
+                        if (badge) {
+                            badge.textContent = data.settings.gdrive_enabled ? 'Active' : 'Disabled';
+                            badge.className = data.settings.gdrive_enabled 
+                                ? 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                : 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700';
+                        }
+                    }
+                })
+                .catch(err => console.error('Failed to fetch storage info:', err));
+        }
+
+        function handlePcExport(e) {
+            e.preventDefault();
+            const btn = document.getElementById('downloadZipBtn');
+            btn.disabled = true;
+            btn.querySelector('span').textContent = '<%= t.processing %>';
+
+            const startDate = document.getElementById('exportStartDate').value;
+            const endDate = document.getElementById('exportEndDate').value;
+            const extension = document.getElementById('exportExtension').value;
+            const includeAudio = document.getElementById('includeAudio').checked;
+            const includeCsv = document.getElementById('includeCsv').checked;
+
+            const url = `/api/storage/export/pc?startDate=${startDate}&endDate=${endDate}&extension=${extension}&includeAudio=${includeAudio}&includeCsv=${includeCsv}`;
+            
+            // Trigger direct browser download
+            window.location.href = url;
+
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.querySelector('span').textContent = '<%= t.downloadZipBtn %>';
+            }, 3000);
+        }
+
+        function handleGdriveSave(e) {
+            e.preventDefault();
+            const enabled = document.getElementById('gdriveEnabled').checked;
+            const folderName = document.getElementById('gdriveFolderName').value.trim();
+            const schedule = document.getElementById('gdriveSchedule').value;
+            const creds = document.getElementById('gdriveCreds').value.trim();
+
+            fetch('/api/storage/gdrive/setup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gdrive_enabled: enabled, gdrive_folder_name: folderName, auto_backup_schedule: schedule, gdrive_credentials: creds })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('<%= t.savedSuccess %>', 'success');
+                    fetchStorageInfo();
+                } else showToast(data.error || '<%= t.failed %>', 'error');
+            });
+        }
+
+        function syncGdriveNow() {
+            const btn = document.getElementById('syncGdriveBtn');
+            btn.disabled = true;
+            fetch('/api/storage/gdrive/sync', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    btn.disabled = false;
+                    if (data.success) {
+                        showToast(data.message || 'Google Drive Sync completed!', 'success');
+                        fetchStorageInfo();
+                    } else showToast(data.error || 'Sync failed', 'error');
+                })
+                .catch(err => {
+                    btn.disabled = false;
+                    showToast('Network error: ' + err.message, 'error');
+                });
+        }
+
+        function savePurgePolicy() {
+            const days = document.getElementById('purgeDaysSlider').value;
+            fetch('/api/storage/purge-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ auto_purge_days: parseInt(days, 10) })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('<%= t.savedSuccess %>', 'success');
+                    fetchStorageInfo();
+                } else showToast(data.error || '<%= t.failed %>', 'error');
+            });
+        }
+
+        function runPurgeNow() {
+            if (!confirm('Permanently delete audio recordings older than the specified days?')) return;
+            const btn = document.getElementById('runPurgeBtn');
+            btn.disabled = true;
+            fetch('/api/storage/purge', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    btn.disabled = false;
+                    if (data.success) {
+                        showToast(data.message || 'Cleanup completed!', 'success');
+                        fetchStorageInfo();
+                    } else showToast(data.error || 'Cleanup failed', 'error');
+                });
+        }
+    </script>
+</body>
+</html>

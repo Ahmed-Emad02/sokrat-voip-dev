@@ -18,7 +18,7 @@ const sidebarWords = {
         vmGreetingResetConfirm: "Reset to default Asterisk voicemail prompts?",
         vmGreetingChangeMode: "Changing mode will save a new greeting. Continue?",
         vmSelectAll: "Select All",
-        dashLink: "Dashboard", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", configLink: "PBX Config", contactsLink: "Address Book", usersLink: "Users", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Setup Password Reset Email", netInfo: "Show Network Info", logoutLabel: "Sign Out",
+        dashLink: "Dashboard", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", configLink: "PBX Config", contactsLink: "Address Book", usersLink: "Users", storageLink: "Backups", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Setup Password Reset Email", netInfo: "Show Network Info", logoutLabel: "Sign Out",
         settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
         recTitle: "Add a Recording", recName: "Recording Name", recPlaceholder: "e.g. welcome_greeting", recFile: "Audio File", recNote: "Accepted: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (max 50MB)", recUploadStatus: "Uploading...", recCancel: "Cancel", recUpload: "Upload", recComplete: "Complete!", recFailed: "Failed", recSelectFileErr: "Please select a file", recNameErr: "Please enter a recording name",
         timeSettings: "Time Settings", timeModalTitle: "Time & Timezone", currentTime: "Current Time", timezone: "Timezone", searchTimezone: "Search timezone...", ntpSync: "NTP Synchronization", setManually: "Set Manually", dateLabel: "Date", timeLabel: "Time", saveSettings: "Save Settings", saving: "Saving...", savedSuccess: "Time settings saved successfully", saveFailed: "Failed to save time settings", timezoneChanged: "Timezone changed", ntpToggled: "NTP toggled", timeSetManually: "Time set manually", loadingTimezone: "Loading..."
@@ -41,7 +41,7 @@ const sidebarWords = {
         vmGreetingResetConfirm: "إعادة تعيين ترحيب البريد الصوتي للافتراضي؟",
         vmGreetingChangeMode: "تغيير الوضع سيحفظ ترحيباً جديداً. هل تريد المتابعة؟",
         vmSelectAll: "اختر الكل",
-        dashLink: "لوحة التحكم", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", configLink: "إعدادات المقسم", contactsLink: "دفتر العناوين", usersLink: "المستخدمين", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعداد البريد لإعادة تعيين كلمة المرور", netInfo: "معلومات الشبكة", logoutLabel: "تسجيل الخروج",
+        dashLink: "لوحة التحكم", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", configLink: "إعدادات المقسم", contactsLink: "دفتر العناوين", usersLink: "المستخدمين", storageLink: "النسخ الاحتياطي", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعداد البريد لإعادة تعيين كلمة المرور", netInfo: "معلومات الشبكة", logoutLabel: "تسجيل الخروج",
         settingsSubtitle: "التفضيلات وعناصر تحكم النظام", preferencesLabel: "التفضيلات", systemLabel: "النظام", appearanceLabel: "المظهر", darkModeLabel: "الوضع الداكن", lightModeLabel: "الوضع الفاتح",
         recTitle: "إضافة تسجيل صوتي", recName: "اسم التسجيل", recPlaceholder: "مثال: welcome_greeting", recFile: "ملف الصوت", recNote: "المرفقات المقبولة: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (الحد الأقصى 50 ميجابايت)", recUploadStatus: "جاري الرفع...", recCancel: "إلغاء", recUpload: "رفع", recComplete: "اكتمل الرفع!", recFailed: "فشل الرفع", recSelectFileErr: "يرجى اختيار ملف", recNameErr: "يرجى إدخال اسم التسجيل",
         timeSettings: "إعدادات الوقت", timeModalTitle: "الوقت والمنطقة الزمنية", currentTime: "الوقت الحالي", timezone: "المنطقة الزمنية", searchTimezone: "ابحث عن المنطقة الزمنية...", ntpSync: "مزامنة NTP", setManually: "ضبط يدوي", dateLabel: "التاريخ", timeLabel: "الوقت", saveSettings: "حفظ الإعدادات", saving: "جاري الحفظ...", savedSuccess: "تم حفظ إعدادات الوقت بنجاح", saveFailed: "فشل حفظ إعدادات الوقت", timezoneChanged: "تم تغيير المنطقة الزمنية", ntpToggled: "تم تبديل NTP", timeSetManually: "تم ضبط الوقت يدوياً", loadingTimezone: "جارٍ التحميل..."
@@ -1593,6 +1593,16 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 <span><%= sbT.usersLink %></span>
             </a>
             <% } %>
+            <a href="/storage?lang=<%= currentLang %>" 
+               class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
+               <%= currentPage === '/storage' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-red-600 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span><%= sbT.storageLink %></span>
+            </a>
         </nav>
     </div>
 
