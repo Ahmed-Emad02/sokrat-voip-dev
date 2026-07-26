@@ -34,11 +34,11 @@ const words = {
         phoneNumber: "رقم الهاتف", reason: "السبب", actions: "الإجراءات",
         status: "الحالة", total: "الإجمالي", pending: "قيد الانتظار", connected: "متصل",
         dialing: "جاري الاتصال", failed: "فشل/آلي", start: "بدء", pause: "إيقاف مؤقت", stop: "إيقاف",
-        downloadTemplate: "تحميل نموذج CSV", templateNote: "الأعمدة: phone_number, first_name, last_name, company",
-        selectQueue: "— اختر طابور الاتصال —", selectQueueHint: "يجب أن يكون الطابور موجوداً على التبادل",
-        predictiveQueueRequired: "الطابور مطلوب للوضع التنبؤي"
-    }
 };
+const currentLang = typeof lang !== 'undefined' ? lang : 'en';
+const t = words[currentLang] || words.en;
+const isRtl = currentLang === 'ar';
+%>
 <!DOCTYPE html>
 <html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
 <head>
@@ -127,6 +127,8 @@ const words = {
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.originationCallerId %></label>
+                        <input type="text" id="campOriginationCid" value="101" class="config-input w-full">
+                    </div>
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.queueName %></label>
                         <select id="campQueueName" class="config-input w-full">
@@ -172,6 +174,11 @@ const words = {
                     <input type="file" id="leadsCsvFile" accept=".csv" required class="config-input w-full text-xs">
                     <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= t.templateNote %> <a href="/api/dialer/leads/template" class="text-amber-400 underline hover:text-amber-300"><%= t.downloadTemplate %></a></p>
                 </div>
+                <div class="flex justify-end gap-2 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('importLeadsModal')" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.cancel %></button>
+                    <button type="submit" class="config-btn-primary px-4 py-1.5 text-xs"><%= t.upload %></button>
+                </div>
+            </form>
         </div>
     </div>
 
