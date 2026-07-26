@@ -5522,25 +5522,25 @@ async function reconcileStaleAttempts() {
         console.log('DIALER ENGINE: Reconciling stale attempt ledger...');
         const [expiredAttempts] = await pool.query(`
             SELECT attempt_uuid, campaign_id, lead_id
-            FROM dialer_call_attempts
+            FROM \`asterisk\`.\`dialer_call_attempts\`
             WHERE active_flag = 1 AND lease_expires_at < NOW()
         `);
 
         for (const att of expiredAttempts) {
             await pool.query(`
-                UPDATE dialer_call_attempts
+                UPDATE \`asterisk\`.\`dialer_call_attempts\`
                 SET active_flag = NULL, status = 'stale', cause_code = 999
                 WHERE attempt_uuid = ? AND active_flag = 1
             `, [att.attempt_uuid]);
 
-            const [attCountRow] = await pool.query('SELECT COUNT(*) AS cnt FROM dialer_call_attempts WHERE lead_id = ?', [att.lead_id]);
+            const [attCountRow] = await pool.query('SELECT COUNT(*) AS cnt FROM `asterisk`.`dialer_call_attempts` WHERE lead_id = ?', [att.lead_id]);
             const totalAttempts = attCountRow[0]?.cnt || 1;
             const newStatus = totalAttempts >= 3 ? 'failed' : 'pending';
 
-            await pool.query('UPDATE dialer_leads SET status = ?, attempts = ? WHERE id = ?', [newStatus, totalAttempts, att.lead_id]);
+            await pool.query('UPDATE `asterisk`.`dialer_leads` SET status = ?, attempts = ? WHERE id = ?', [newStatus, totalAttempts, att.lead_id]);
         }
 
-        await pool.query("UPDATE dialer_agent_states SET state = 'idle', current_lead_id = NULL, current_attempt_uuid = NULL WHERE state = 'reserved' AND updated_at < NOW() - INTERVAL 1 MINUTE");
+        await pool.query("UPDATE `asterisk`.`dialer_agent_states` SET state = 'idle', current_lead_id = NULL, current_attempt_uuid = NULL WHERE state = 'reserved' AND updated_at < NOW() - INTERVAL 1 MINUTE");
         console.log(`DIALER ENGINE: Reconciliation complete. Reset ${expiredAttempts.length} stale attempt(s).`);
     } catch (err) {
         console.error('DIALER ENGINE: Reconciliation error:', err.message);
@@ -5554,8 +5554,8 @@ async function claimNextLeadAtomic(campaignId) {
 
         const [leads] = await conn.query(`
             SELECT l.id, l.phone_number, l.first_name, l.last_name, l.company, l.custom_data
-            FROM dialer_leads l
-            LEFT JOIN dialer_dnc d ON d.phone_number = l.phone_number
+            FROM \`asterisk\`.\`dialer_leads\` l
+            LEFT JOIN \`asterisk\`.\`dialer_dnc\` d ON d.phone_number = l.phone_number
             WHERE l.campaign_id = ? AND l.status = 'pending' AND d.phone_number IS NULL
             ORDER BY l.id ASC
             LIMIT 1
@@ -5570,10 +5570,10 @@ async function claimNextLeadAtomic(campaignId) {
         const lead = leads[0];
         const attemptUuid = 'att_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
 
-        await conn.query('UPDATE dialer_leads SET status = "dialing", attempts = attempts + 1, last_called_at = NOW() WHERE id = ?', [lead.id]);
+        await conn.query('UPDATE `asterisk`.`dialer_leads` SET status = "dialing", attempts = attempts + 1, last_called_at = NOW() WHERE id = ?', [lead.id]);
 
         await conn.query(`
-            INSERT INTO dialer_call_attempts
+            INSERT INTO \`asterisk\`.\`dialer_call_attempts\`
             (attempt_uuid, action_id, campaign_id, lead_id, active_flag, status, lease_expires_at)
             VALUES (?, ?, ?, ?, 1, 'originated', NOW() + INTERVAL 2 MINUTE)
         `, [attemptUuid, attemptUuid, campaignId, lead.id]);
@@ -5593,7 +5593,7 @@ async function runDialerPacerCycle() {
     if (!isDialerLeader) return;
 
     try {
-        const [campaigns] = await pool.query("SELECT * FROM dialer_campaigns WHERE status = 'running'");
+        const [campaigns] = await pool.query("SELECT * FROM `asterisk`.`dialer_campaigns` WHERE status = 'running'");
         if (campaigns.length === 0) return;
 
         for (const camp of campaigns) {
@@ -5609,13 +5609,13 @@ async function runDialerPacerCycle() {
                 const isOnline = peerStatus[ext] || false;
                 const isCall = activeCalls[ext] || false;
 
-                const [astates] = await pool.query('SELECT state, wrapup_until FROM dialer_agent_states WHERE extension = ?', [ext]);
+                const [astates] = await pool.query('SELECT state, wrapup_until FROM `asterisk`.`dialer_agent_states` WHERE extension = ?', [ext]);
                 const astate = astates[0] ? astates[0].state : 'idle';
                 const wrapupUntil = astates[0]?.wrapup_until ? new Date(astates[0].wrapup_until).getTime() : 0;
 
                 let isWrapupExpired = false;
                 if (astate === 'wrapup' && wrapupUntil > 0 && Date.now() >= wrapupUntil) {
-                    await pool.query("UPDATE dialer_agent_states SET state = 'idle', wrapup_until = NULL WHERE extension = ?", [ext]);
+                    await pool.query("UPDATE `asterisk`.`dialer_agent_states` SET state = 'idle', wrapup_until = NULL WHERE extension = ?", [ext]);
                     isWrapupExpired = true;
                 }
 
@@ -5626,7 +5626,7 @@ async function runDialerPacerCycle() {
                 }
             }
 
-            const [inflightRows] = await pool.query('SELECT COUNT(*) AS cnt FROM dialer_call_attempts WHERE campaign_id = ? AND active_flag = 1', [campId]);
+            const [inflightRows] = await pool.query('SELECT COUNT(*) AS cnt FROM `asterisk`.`dialer_call_attempts` WHERE campaign_id = ? AND active_flag = 1', [campId]);
             const countInflight = inflightRows[0]?.cnt || 0;
 
             let freeDonglesCount = maxCap;
@@ -5674,7 +5674,7 @@ async function runDialerPacerCycle() {
 
                 if (assignedAgent) {
                     await pool.query(`
-                        INSERT INTO dialer_agent_states (extension, state, current_lead_id, current_attempt_uuid)
+                        INSERT INTO \`asterisk\`.\`dialer_agent_states\` (extension, state, current_lead_id, current_attempt_uuid)
                         VALUES (?, 'reserved', ?, ?)
                         ON DUPLICATE KEY UPDATE state = 'reserved', current_lead_id = VALUES(current_lead_id), current_attempt_uuid = VALUES(current_attempt_uuid)
                     `, [assignedAgent, lead.id, attemptUuid]);
@@ -5766,7 +5766,7 @@ function handleDialerAmiEvents(event) {
     if (event.Event === 'QueueCallerJoin') {
         const uniqueid = event.Uniqueid;
         if (uniqueid) {
-            pool.query('UPDATE dialer_call_attempts SET status = "queued" WHERE uniqueid = ? AND active_flag = 1', [uniqueid]).catch(() => {});
+            pool.query('UPDATE `asterisk`.`dialer_call_attempts` SET status = "queued" WHERE uniqueid = ? AND active_flag = 1', [uniqueid]).catch(() => {});
         }
     }
 
@@ -5776,7 +5776,7 @@ function handleDialerAmiEvents(event) {
 
         if (uniqueid) {
             pool.query(`
-                SELECT attempt_uuid, lead_id, campaign_id FROM dialer_call_attempts WHERE (uniqueid = ? OR linkedid = ?) AND active_flag = 1
+                SELECT attempt_uuid, lead_id, campaign_id FROM \`asterisk\`.\`dialer_call_attempts\` WHERE (uniqueid = ? OR linkedid = ?) AND active_flag = 1
             `, [uniqueid, uniqueid]).then(([rows]) => {
                 if (rows.length > 0) {
                     const att = rows[0];
@@ -5784,13 +5784,13 @@ function handleDialerAmiEvents(event) {
 
                     if (agentExt) {
                         pool.query(`
-                            INSERT INTO dialer_agent_states (extension, state, current_lead_id, current_attempt_uuid)
+                            INSERT INTO \`asterisk\`.\`dialer_agent_states\` (extension, state, current_lead_id, current_attempt_uuid)
                             VALUES (?, 'in_call', ?, ?)
                             ON DUPLICATE KEY UPDATE state = 'in_call', current_lead_id = VALUES(current_lead_id), current_attempt_uuid = VALUES(current_attempt_uuid)
                         `, [agentExt, att.lead_id, att.attempt_uuid]).catch(() => {});
                     }
 
-                    pool.query('SELECT * FROM dialer_leads WHERE id = ?', [att.lead_id]).then(([lRows]) => {
+                    pool.query('SELECT * FROM `asterisk`.`dialer_leads` WHERE id = ?', [att.lead_id]).then(([lRows]) => {
                         if (lRows.length > 0) {
                             io.emit('dialerLeadPop', {
                                 agentExtension: agentExt,
@@ -5809,7 +5809,7 @@ function handleDialerAmiEvents(event) {
         const cause = parseInt(event.Cause || '0', 10);
         if (uniqueid) {
             pool.query(`
-                SELECT attempt_uuid, status FROM dialer_call_attempts WHERE (uniqueid = ? OR linkedid = ?) AND active_flag = 1
+                SELECT attempt_uuid, status FROM \`asterisk\`.\`dialer_call_attempts\` WHERE (uniqueid = ? OR linkedid = ?) AND active_flag = 1
             `, [uniqueid, uniqueid]).then(([rows]) => {
                 if (rows.length > 0) {
                     const att = rows[0];
@@ -5832,7 +5832,7 @@ async function updateAttemptStatus(attemptUuid, status, uniqueid = null, linkedi
         if (agentExt) { updates.push('agent_extension = ?'); params.push(agentExt); }
         params.push(attemptUuid);
 
-        await pool.query(`UPDATE dialer_call_attempts SET ${updates.join(', ')} WHERE attempt_uuid = ? AND active_flag = 1`, params);
+        await pool.query(`UPDATE \`asterisk\`.\`dialer_call_attempts\` SET ${updates.join(', ')} WHERE attempt_uuid = ? AND active_flag = 1`, params);
     } catch (err) {
         console.error('updateAttemptStatus error:', err.message);
     }
@@ -5840,18 +5840,18 @@ async function updateAttemptStatus(attemptUuid, status, uniqueid = null, linkedi
 
 async function finalizeAttempt(attemptUuid, terminalStatus, causeCode = 0) {
     try {
-        const [rows] = await pool.query('SELECT lead_id, campaign_id, agent_extension FROM dialer_call_attempts WHERE attempt_uuid = ?', [attemptUuid]);
+        const [rows] = await pool.query('SELECT lead_id, campaign_id, agent_extension FROM `asterisk`.`dialer_call_attempts` WHERE attempt_uuid = ?', [attemptUuid]);
         if (rows.length === 0) return;
 
         const att = rows[0];
 
         await pool.query(`
-            UPDATE dialer_call_attempts
+            UPDATE \`asterisk\`.\`dialer_call_attempts\`
             SET active_flag = NULL, status = ?, cause_code = ?
             WHERE attempt_uuid = ? AND active_flag = 1
         `, [terminalStatus, causeCode, attemptUuid]);
 
-        const [attCountRow] = await pool.query('SELECT COUNT(*) AS cnt FROM dialer_call_attempts WHERE lead_id = ?', [att.lead_id]);
+        const [attCountRow] = await pool.query('SELECT COUNT(*) AS cnt FROM `asterisk`.`dialer_call_attempts` WHERE lead_id = ?', [att.lead_id]);
         const totalAttempts = attCountRow[0]?.cnt || 1;
         let leadStatus = 'failed';
         if (terminalStatus === 'completed') leadStatus = 'connected';
@@ -5860,15 +5860,15 @@ async function finalizeAttempt(attemptUuid, terminalStatus, causeCode = 0) {
         else if (terminalStatus === 'no_answer') leadStatus = 'no_answer';
         else if (totalAttempts < 3) leadStatus = 'pending';
 
-        await pool.query('UPDATE dialer_leads SET status = ?, attempts = ? WHERE id = ?', [leadStatus, totalAttempts, att.lead_id]);
+        await pool.query('UPDATE `asterisk`.`dialer_leads` SET status = ?, attempts = ? WHERE id = ?', [leadStatus, totalAttempts, att.lead_id]);
 
         if (att.agent_extension) {
-            const [cRows] = await pool.query('SELECT wrapup_time_sec FROM dialer_campaigns WHERE id = ?', [att.campaign_id]);
+            const [cRows] = await pool.query('SELECT wrapup_time_sec FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [att.campaign_id]);
             const wrapupSec = cRows[0]?.wrapup_time_sec || 15;
             const wrapupUntil = new Date(Date.now() + wrapupSec * 1000);
 
             await pool.query(`
-                INSERT INTO dialer_agent_states (extension, state, wrapup_until)
+                INSERT INTO \`asterisk\`.\`dialer_agent_states\` (extension, state, wrapup_until)
                 VALUES (?, 'wrapup', ?)
                 ON DUPLICATE KEY UPDATE state = 'wrapup', wrapup_until = VALUES(wrapup_until), current_lead_id = NULL, current_attempt_uuid = NULL
             `, [att.agent_extension, wrapupUntil]);
