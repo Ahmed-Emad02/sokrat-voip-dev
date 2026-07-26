@@ -5656,44 +5656,11 @@ async function runDialerPacerCycle() {
         console.log('PACER skip - not leader');
         return;
     }
+    console.log('PACER heartbeat ' + new Date().toISOString());
     try {
         const [campaigns] = await pool.query("SELECT * FROM `asterisk`.`dialer_campaigns` WHERE status = 'running'");
-        console.log('PACER campaigns found: ' + campaigns.length + ' | isLeader: ' + isDialerLeader);
         if (campaigns.length === 0) return;
 
-        for (const camp of campaigns) {
-            const campId = camp.id;
-            const mode = camp.mode || 'progressive';
-            const maxCap = camp.max_concurrent_dials || 5;
-            console.log('PACER processing campaign ' + campId + ' mode=' + mode + ' maxCap=' + maxCap);
-            
-            const [roster] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY CAST(extension AS UNSIGNED) ASC');
-            console.log('PACER roster count: ' + roster.length);
-            let availableAgents = [];
-            for (const emp of roster) {
-                const ext = emp.extension;
-                const isOnline = peerStatus[ext] || false;
-                const isCall = activeCalls[ext] || false;
-                
-                const [astates] = await pool.query('SELECT state, wrapup_until FROM `asterisk`.`dialer_agent_states` WHERE extension = ?', [ext]);
-                const astate = astates[0] ? astates[0].state : 'idle';
-                const wrapupUntil = astates[0]?.wrapup_until ? new Date(astates[0].wrapup_until).getTime() : 0;
-
-                let isWrapupExpired = false;
-                if (astate === 'wrapup' && wrapupUntil > 0 && Date.now() >= wrapupUntil) {
-                    await pool.query("UPDATE `asterisk`.`dialer_agent_states` SET state = 'idle', wrapup_until = NULL WHERE extension = ?", [ext]);
-                    isWrapupExpired = true;
-                }
-
-                const currentEffectiveState = isWrapupExpired ? 'idle' : astate;
-                
-                if (ext === '101') console.log('PACER agent 101: online=' + isOnline + ' call=' + isCall + ' state=' + currentEffectiveState);
-
-                if (isOnline && !isCall && currentEffectiveState === 'idle') {
-                    availableAgents.push(ext);
-                }
-            }
-            console.log('PACER availableAgents: ' + JSON.stringify(availableAgents));
         for (const camp of campaigns) {
             const campId = camp.id;
             const mode = camp.mode || 'progressive';
