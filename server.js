@@ -568,6 +568,15 @@ function reloadGreetingConfig() {
         }
     } catch {}
 }
+// Helper function to extract extension number from Asterisk Channel string
+function getExtensionFromChannel(channelName) {
+    if (!channelName) return null;
+    let m = channelName.match(/^(SIP|PJSIP)\/(\d{2,5})-/i);
+    if (m) return m[2];
+    m = channelName.match(/^Local\/(\d{2,5})@/i);
+    if (m) return m[1];
+    return null;
+}
 let amiClient = null;
 
 // --- AUTO-DETECT DONGLE IMEI/SIM & CONFIGURE TRUNKS ---
@@ -833,17 +842,6 @@ function connectAMI() {
 
             // Handle Auto-Dialer AMI Events
             handleDialerAmiEvents(event);
-            // Helper function to extract extension number from Asterisk Channel string
-            function getExtensionFromChannel(channelName) {
-                if (!channelName) return null;
-                // Match SIP/101-00000abc or PJSIP/101-00000abc
-                let m = channelName.match(/^(SIP|PJSIP)\/(\d{2,5})-/i);
-                if (m) return m[2];
-                // Match Local/101@from-internal-...
-                m = channelName.match(/^Local\/(\d{2,5})@/i);
-                if (m) return m[1];
-                return null;
-            }
 
             // New channel = new call, always fresh timestamp
             if (event.Event === 'Newchannel') {
