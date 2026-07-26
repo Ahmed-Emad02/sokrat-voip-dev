@@ -168,6 +168,24 @@ async function initAuthDb() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS employee_extras (
+            extension VARCHAR(50) NOT NULL PRIMARY KEY,
+            photo VARCHAR(255) DEFAULT NULL,
+            title VARCHAR(255) DEFAULT NULL,
+            emp_group VARCHAR(100) DEFAULT NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS employee_groups (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL UNIQUE,
+            description TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
     // Ensure "super admins" group exists
     const [existingGroups] = await conn.execute('SELECT id FROM dashboard_groups WHERE name = ?', ['super admins']);
     let superAdminGroupId;
@@ -829,7 +847,7 @@ setInterval(autoHealDongles, 3000);
 // System Shared Middleware to fetch extension rosters and handle language toggles
 app.use(async (req, res, next) => {
     try {
-        const [roster] = await pool.query(`SELECT extension, name FROM ${tables.users} ORDER BY extension ASC`);
+        const [roster] = await pool.query(`SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group FROM ${tables.users} u LEFT JOIN employee_extras ee ON u.extension = ee.extension ORDER BY u.extension ASC`);
         let onlineMap = {};
         for (let e of roster) {
             let online = peerStatus[e.extension] || false;
@@ -3587,6 +3605,69 @@ app.delete('/api/config/extensions/:extension', async (req, res) => {
     }
 });
 
+// --- EMPLOYEE GROUPS CRUD ---
+app.get('/api/employee/groups', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM employee_groups ORDER BY name ASC');
+        res.json({ success: true, groups: rows });
+    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+app.post('/api/employee/groups', requireAuth, async (req, res) => {
+    try {
+        const { name, description } = req.body;
+        if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Group name is required' });
+        const [r] = await pool.query('INSERT INTO employee_groups (name, description) VALUES (?, ?)', [name.trim(), description || '']);
+        res.json({ success: true, id: r.insertId });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ success: false, error: 'Group name already exists' });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.put('/api/employee/groups/:id', requireAuth, async (req, res) => {
+    try {
+        const { name, description } = req.body;
+        if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Group name is required' });
+        await pool.query('UPDATE employee_groups SET name = ?, description = ? WHERE id = ?', [name.trim(), description || '', req.params.id]);
+        res.json({ success: true });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ success: false, error: 'Group name already exists' });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.delete('/api/employee/groups/:id', requireAuth, async (req, res) => {
+    try {
+        const [group] = await pool.query('SELECT name FROM employee_groups WHERE id = ?', [req.params.id]);
+        if (group.length) {
+            await pool.query('UPDATE employee_extras SET emp_group = NULL WHERE emp_group = ?', [group[0].name]);
+        }
+        await pool.query('DELETE FROM employee_groups WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+// --- EMPLOYEE EXTRAS CRUD ---
+app.get('/api/employee/extras/:extension', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT photo, title, emp_group FROM employee_extras WHERE extension = ?', [req.params.extension]);
+        res.json({ success: true, extras: rows.length ? rows[0] : null });
+    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+app.put('/api/employee/extras/:extension', requireAuth, async (req, res) => {
+    try {
+        const { photo, title, emp_group } = req.body;
+        await pool.query(`
+            INSERT INTO employee_extras (extension, photo, title, emp_group)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE photo = VALUES(photo), title = VALUES(title), emp_group = VALUES(emp_group)
+        `, [req.params.extension, photo || null, title || null, emp_group || null]);
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
 // --- 2. RING GROUPS MANAGEMENT APIs ---
 
 // GET /api/config/ringgroups - List all Ring Groups
@@ -5161,6 +5242,39 @@ const upload = multer({
         if (allowed.includes(ext)) return cb(null, true);
         cb(new Error('Unsupported audio format: ' + ext));
     }
+});
+
+// --- EMPLOYEE PHOTO UPLOAD ---
+const PHOTOS_DIR = path.join(__dirname, 'public', 'photos');
+if (!fs.existsSync(PHOTOS_DIR)) fs.mkdirSync(PHOTOS_DIR, { recursive: true });
+
+const photoStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, PHOTOS_DIR),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        cb(null, `emp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}${ext}`);
+    }
+});
+const photoUpload = multer({
+    storage: photoStorage,
+    limits: { fileSize: 50 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const allowed = ['.jpg','.jpeg','.png','.gif','.webp','.bmp'];
+        if (allowed.includes(path.extname(file.originalname).toLowerCase())) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files (jpg, jpeg, png, gif, webp, bmp) allowed'), false);
+        }
+    }
+});
+
+// POST /api/employee/photo - Upload employee photo
+app.post('/api/employee/photo', requireAuth, (req, res) => {
+    photoUpload.single('photo')(req, res, function(err) {
+        if (err) return res.status(400).json({ success: false, error: err.message });
+        if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+        res.json({ success: true, url: '/photos/' + req.file.filename });
+    });
 });
 
 function convertToWav(inputPath, outputPath) {

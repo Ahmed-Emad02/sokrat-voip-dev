@@ -273,6 +273,24 @@ const isRtl = currentLang === 'ar';
             color: var(--text-primary) !important;
         }
     </style>
+        /* Employee group manager modal config-input compat */
+        #groupManagerModal .config-input {
+            background-color: var(--bg-card) !important;
+            border: 1px solid var(--border-primary) !important;
+            color: var(--text-primary) !important;
+            border-radius: 0.5rem !important;
+            padding: 0.5rem 0.75rem !important;
+            outline: none !important;
+        }
+        #groupManagerModal .config-input:focus {
+            border-color: var(--accent-color) !important;
+        }
+        #groupManagerModal .config-btn-primary {
+            background-color: var(--accent-color) !important;
+            color: #fff !important;
+            font-weight: 700 !important;
+            border-radius: 0.5rem !important;
+        }
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
@@ -281,81 +299,124 @@ const isRtl = currentLang === 'ar';
         <div class="mb-3 shrink-0">
             <h2 class="text-xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
         </div>
+            <button onclick="openGroupManager()" class="mb-2 text-xs font-bold text-white bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 flex items-center gap-1.5 transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM15 21H3v-1a6 6 0 0112 0v1z"/></svg>
+                <%= isRtl ? 'إدارة مجموعات الموظفين' : 'Manage Employee Groups' %>
+            </button>
         <div class="flex-1 min-h-0 overflow-y-auto mb-4 bg-black/20 rounded-2xl p-3 border border-[#27272a]/30">
-            <div id="switchboardGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
-                <% roster.forEach(emp => {
-                    const live = activeCalls[emp.extension];
-                    let callState = 'idle';
-                    let partnerNum = '';
-                    let startTimeStamp = '';
-                    if (live) {
-                        callState = live.state === 'In Call' ? 'incall' : 'ringing';
-                        partnerNum = live.partner || '';
-                        startTimeStamp = live.start || '';
-                    }
-                    const isOnline = emp.online;
-                    
-                    let stateClass = 'state-offline';
-                    if (isOnline) {
-                        if (callState === 'incall') {
-                            stateClass = 'state-incall';
-                        } else if (callState === 'ringing') {
-                            stateClass = 'state-ringing';
-                        } else {
-                            stateClass = 'state-idle';
-                        }
-                    }
+            <div id="switchboardGrid">
+                <%
+                // Group roster by emp_group
+                var groups = {};
+                roster.forEach(function(emp) {
+                    var g = emp.emp_group || '___ungrouped___';
+                    if (!groups[g]) groups[g] = [];
+                    groups[g].push(emp);
+                });
+                var groupNames = Object.keys(groups).sort(function(a, b) {
+                    if (a === '___ungrouped___') return 1;
+                    if (b === '___ungrouped___') return -1;
+                    return a.localeCompare(b);
+                });
                 %>
-                    <div id="card-<%= emp.extension %>"
-                         data-start="<%= startTimeStamp %>"
-                         class="panel-surface rounded-lg p-2.5 flex flex-col justify-between min-h-[175px] transition-all duration-300 relative overflow-hidden shadow-sm border <%= stateClass %>">
-                        <div>
-                            <div class="flex justify-between items-start">
-                                <div class="<%= isRtl ? 'text-right' : 'text-left' %>">
-                                    <span class="text-2xl font-bold text-white block truncate" title="<%= emp.name %>"><%= emp.name %></span>
-                                    <span class="extension-number text-lg font-mono font-black text-[var(--accent-color)] tracking-wider block"><%= emp.extension %></span>
-                                </div>
-                                <div class="flex flex-col items-end shrink-0">
-                                    <div class="flex items-center gap-2">
-                                        <span id="sipBadge-<%= emp.extension %>" class="h-2 w-2 rounded-full bg-zinc-800 transition-all duration-300"></span>
-                                        <span id="sipLabel-<%= emp.extension %>" class="text-lg font-bold uppercase tracking-wider text-zinc-500 transition-all duration-300"><%= isOnline ? t.online : t.offline %></span>
-                                        <span id="ipBadge-<%= emp.extension %>" class="relative group cursor-help">
-                                            <svg class="w-3.5 h-3.5 text-zinc-600 hover:text-zinc-400 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
-                                            <span class="ip-tooltip hidden group-hover:block absolute right-0 top-full mt-1 bg-[#18181b] border border-[#27272a] text-xs font-mono text-zinc-300 px-2 py-1 rounded shadow-lg whitespace-nowrap z-50" id="ipText-<%= emp.extension %>"></span>
-                                        </span>
+                <% groupNames.forEach(function(gName) { %>
+                <div class="mb-4">
+                    <div class="flex items-center gap-2 mb-2 px-1">
+                        <div class="h-2 w-2 rounded-full bg-[var(--accent-color)]"></div>
+                        <span class="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">
+                            <%= gName === '___ungrouped___' ? (isRtl ? 'بدون مجموعة' : 'Ungrouped') : gName %>
+                        </span>
+                        <span class="text-[10px] font-bold text-[var(--text-muted)] bg-[var(--bg-card)] px-1.5 py-0.5 rounded-full">
+                            <%= groups[gName].length %>
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
+                        <% groups[gName].forEach(function(emp) {
+                            const live = activeCalls[emp.extension];
+                            let callState = 'idle';
+                            let partnerNum = '';
+                            let startTimeStamp = '';
+                            if (live) {
+                                callState = live.state === 'In Call' ? 'incall' : 'ringing';
+                                partnerNum = live.partner || '';
+                                startTimeStamp = live.start || '';
+                            }
+                            const isOnline = emp.online;
+                            let stateClass = 'state-offline';
+                            if (isOnline) {
+                                if (callState === 'incall') {
+                                    stateClass = 'state-incall';
+                                } else if (callState === 'ringing') {
+                                    stateClass = 'state-ringing';
+                                } else {
+                                    stateClass = 'state-idle';
+                                }
+                            }
+                        %>
+                        <div id="card-<%= emp.extension %>"
+                             data-start="<%= startTimeStamp %>"
+                             class="panel-surface rounded-lg p-2.5 flex flex-col justify-between min-h-[175px] transition-all duration-300 relative overflow-hidden shadow-sm border <%= stateClass %>">
+                            <div>
+                                <div class="flex justify-between items-start">
+                                    <div class="flex items-center gap-2 <%= isRtl ? 'text-right' : 'text-left' %>">
+                                        <% if (emp.photo) { %>
+                                        <img src="<%= emp.photo %>" class="w-8 h-8 rounded-full object-cover border border-[var(--border-primary)] shrink-0" alt="" onerror="this.style.display='none'">
+                                        <% } %>
+                                        <div>
+                                            <span class="text-2xl font-bold text-white block truncate" title="<%= emp.name %>"><%= emp.name %></span>
+                                            <span class="extension-number text-lg font-mono font-black text-[var(--accent-color)] tracking-wider block"><%= emp.extension %></span>
+                                            <% if (emp.title) { %>
+                                            <span class="text-[10px] font-semibold text-[var(--text-muted)] block truncate"><%= emp.title %></span>
+                                            <% } %>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col items-end shrink-0">
+                                        <div class="flex items-center gap-2">
+                                            <span id="sipBadge-<%= emp.extension %>" class="h-2 w-2 rounded-full bg-zinc-800 transition-all duration-300"></span>
+                                            <span id="sipLabel-<%= emp.extension %>" class="text-lg font-bold uppercase tracking-wider text-zinc-500 transition-all duration-300"><%= isOnline ? t.online : t.offline %></span>
+                                            <span id="ipBadge-<%= emp.extension %>" class="relative group cursor-help">
+                                                <svg class="w-3.5 h-3.5 text-zinc-600 hover:text-zinc-400 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
+                                                <span class="ip-tooltip hidden group-hover:block absolute right-0 top-full mt-1 bg-[#18181b] border border-[#27272a] text-xs font-mono text-zinc-300 px-2 py-1 rounded shadow-lg whitespace-nowrap z-50" id="ipText-<%= emp.extension %>"></span>
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="border-t border-zinc-900/50 pt-1 mt-1">
-                            <div class="flex items-center justify-between gap-1">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span id="badge-<%= emp.extension %>" class="h-2 w-2 rounded-full shrink-0 bg-transparent transition-all duration-300"></span>
-                                    <span id="status-<%= emp.extension %>" class="text-lg font-bold uppercase tracking-wide text-zinc-500 transition-all duration-300">
-                                        <%= callState === 'incall' ? t.incall : callState === 'ringing' ? t.ringing : t.noCall %>
+                            <div class="border-t border-zinc-900/50 pt-1 mt-1">
+                                <div class="flex items-center justify-between gap-1">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span id="badge-<%= emp.extension %>" class="h-2 w-2 rounded-full shrink-0 bg-transparent transition-all duration-300"></span>
+                                        <span id="status-<%= emp.extension %>" class="text-lg font-bold uppercase tracking-wide text-zinc-500 transition-all duration-300">
+                                            <%= callState === 'incall' ? t.incall : callState === 'ringing' ? t.ringing : t.noCall %>
+                                        </span>
+                                        <span id="timer-<%= emp.extension %>" class="text-lg font-mono font-bold text-[var(--accent-color)] tracking-wider <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
+                                    </div>
+                                    <span id="partner-<%= emp.extension %>" title="<%= partnerNum %>" class="text-lg font-mono font-bold truncate max-w-[180px] <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
+                                        <%= partnerNum %>
                                     </span>
-                                    <span id="timer-<%= emp.extension %>" class="text-lg font-mono font-bold text-[var(--accent-color)] tracking-wider <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
                                 </div>
-                                <span id="partner-<%= emp.extension %>" title="<%= partnerNum %>" class="text-lg font-mono font-bold truncate max-w-[180px] <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
-                                    <%= partnerNum %>
-                                </span>
-                            </div>
-                            <div class="mt-1 relative">
-                                <select id="actionSelect-<%= emp.extension %>" 
-                                        onchange="handleSelectAction('<%= emp.extension %>', this.value); this.value='';"
-                                        <%= (callState === 'incall' || callState === 'ringing') ? '' : 'disabled' %>
-                                        class="action-select w-full bg-[#18181b] text-lg font-semibold rounded pl-2 pr-6 py-0.5 border border-[#27272a] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 text-slate-300">
-                                    <option value="" disabled selected hidden><%= isRtl ? 'إجراءات المكالمة' : 'Call Actions' %></option>
-                                    <option value="listen"><%= isRtl ? 'استماع (Listen)' : 'Listen' %></option>
-                                    <option value="whisper"><%= isRtl ? 'همس (Whisper)' : 'Whisper' %></option>
-                                    <option value="barge"><%= isRtl ? 'تدخل (Barge)' : 'Barge' %></option>
-                                    <option value="hijack" class="text-amber-400 font-bold"><%= isRtl ? 'سحب المكالمة (Hijack)' : 'Hijack Call' %></option>
-                                    <option value="hangup" class="text-rose-400 font-bold"><%= isRtl ? 'إنهاء المكالمة' : 'End Call' %></option>
-                                </select>
+                                <div class="mt-1 relative">
+                                    <select id="actionSelect-<%= emp.extension %>"
+                                            onchange="handleSelectAction('<%= emp.extension %>', this.value); this.value='';"
+                                            <%= (callState === 'incall' || callState === 'ringing') ? '' : 'disabled' %>
+                                            class="action-select w-full bg-[#18181b] text-lg font-semibold rounded pl-2 pr-6 py-0.5 border border-[#27272a] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 text-slate-300">
+                                        <option value="" disabled selected hidden><%= isRtl ? 'إجراءات المكالمة' : 'Call Actions' %></option>
+                                        <option value="listen"><%= isRtl ? 'استماع (Listen)' : 'Listen' %></option>
+                                        <option value="whisper"><%= isRtl ? 'همس (Whisper)' : 'Whisper' %></option>
+                                        <option value="barge"><%= isRtl ? 'تدخل (Barge)' : 'Barge' %></option>
+                                        <option value="hijack" class="text-amber-400 font-bold"><%= isRtl ? 'سحب المكالمة (Hijack)' : 'Hijack Call' %></option>
+                                        <option value="hangup" class="text-rose-400 font-bold"><%= isRtl ? 'إنهاء المكالمة' : 'End Call' %></option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
+                        <% }) %>
                     </div>
+                </div>
                 <% }) %>
+                <% if (groupNames.length === 0) { %>
+                <div class="text-center py-8 text-[var(--text-muted)] text-sm font-semibold"><%= isRtl ? 'لا توجد تحويلات' : 'No extensions found' %></div>
+                <% } %>
             </div>
         </div>
         <div class="panel-surface rounded-2xl px-6 py-4 bg-black/40 flex <%= isRtl ? 'flex-row-reverse' : '' %> justify-between items-center shrink-0">
@@ -551,5 +612,92 @@ const isRtl = currentLang === 'ar';
             socket.on('callUpdate', handleCallUpdate);
         });
     </script>
+    <script>
+        var isRtl = <%= isRtl %>;
+        function escapeHtml(str) {
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+        function openGroupManager() {
+            document.getElementById('groupManagerModal').classList.remove('hidden');
+            loadGroupsList();
+        }
+        function closeGroupManager() {
+            document.getElementById('groupManagerModal').classList.add('hidden');
+        }
+
+        function loadGroupsList() {
+            fetch('/api/employee/groups')
+                .then(r => r.json())
+                .then(data => {
+                    const list = document.getElementById('groupsList');
+                    if (!data.success || !data.groups.length) {
+                        list.innerHTML = '<div class="text-center text-[var(--text-muted)] text-sm py-4">' + (isRtl ? 'لا توجد مجموعات' : 'No groups yet') + '</div>';
+                        return;
+                    }
+                    list.innerHTML = '';
+                    data.groups.forEach(g => {
+                        const div = document.createElement('div');
+                        div.className = 'flex items-center justify-between bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-2';
+                        div.innerHTML = '<div><div class="text-sm font-bold">' + escapeHtml(g.name) + '</div>' + (g.description ? '<div class="text-[10px] text-[var(--text-muted)]">' + escapeHtml(g.description) + '</div>' : '') + '</div>' +
+                            '<button onclick="deleteGroup(' + g.id + ', \'' + escapeHtml(g.name) + '\')" class="text-red-500 hover:text-red-400 cursor-pointer">' +
+                            '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
+                        list.appendChild(div);
+                    });
+                });
+        }
+        function addGroup(e) {
+            e.preventDefault();
+            const name = document.getElementById('newGroupName').value.trim();
+            if (!name) return;
+            fetch('/api/employee/groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('newGroupName').value = '';
+                    loadGroupsList();
+                } else {
+                    alert(data.error || 'Failed to create group');
+                }
+            });
+        }
+        function deleteGroup(id, name) {
+            if (!confirm((isRtl ? 'حذف المجموعة ' : 'Delete group ') + name + '?')) return;
+            fetch('/api/employee/groups/' + id, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) loadGroupsList();
+                else alert(data.error || 'Failed to delete group');
+            });
+        }
+    </script>
+
+    <!-- Employee Group Manager Modal -->
+    <div id="groupManagerModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-md w-full p-6 text-[var(--text-primary)]">
+            <div class="flex items-center justify-between mb-5 pb-3 border-b border-[var(--border-primary)]">
+                <h3 class="text-base font-extrabold"><%= isRtl ? 'إدارة مجموعات الموظفين' : 'Employee Groups' %></h3>
+                <button onclick="closeGroupManager()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">&#10005;</button>
+            </div>
+
+            <!-- Add group form -->
+            <form id="groupForm" onsubmit="addGroup(event)" class="flex gap-2 mb-4">
+                <input type="text" id="newGroupName" required placeholder="<%= isRtl ? 'اسم المجموعة' : 'Group name' %>" class="config-input flex-1 text-sm">
+                <button type="submit" class="config-btn-primary px-3 py-1.5 text-xs cursor-pointer whitespace-nowrap">
+                    <span><%= isRtl ? 'إضافة' : 'Add' %></span>
+                </button>
+            </form>
+
+            <div id="groupsList" class="space-y-2 max-h-60 overflow-y-auto">
+                <div class="text-center text-[var(--text-muted)] text-sm py-4"><%= isRtl ? 'جاري التحميل...' : 'Loading...' %></div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

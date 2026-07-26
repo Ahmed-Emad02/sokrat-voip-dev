@@ -892,6 +892,33 @@ function isTabAllowed(tabName) {
                             <option value="enabled"><%= isRtl ? 'مفعل (Enabled / Active)' : 'Enabled (Voicemail Active)' %></option>
                         </select>
                     </div>
+                    <!-- Employee Info Section -->
+                    <div class="border-t border-[var(--border-primary)] pt-3 mt-1">
+                        <div class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            <%= isRtl ? 'معلومات الموظف (اختياري)' : 'Employee Info (Optional)' %>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'صورة الموظف' : 'Photo' %></label>
+                                <div class="flex items-center gap-2">
+                                    <input type="file" id="extPhoto" accept="image/*" class="w-full text-[10px] text-[var(--text-secondary)] file:mr-2 rtl:file:mr-0 rtl:file:ml-2 file:py-1 file:px-2 file:rounded-lg file:border file:border-[var(--border-primary)] file:bg-[var(--bg-card)] file:text-[10px] file:font-bold file:text-[var(--text-primary)] hover:file:bg-[var(--bg-hover)] file:cursor-pointer transition cursor-pointer">
+                                    <img id="extPhotoPreview" class="hidden w-10 h-10 rounded-full object-cover border border-[var(--border-primary)] shrink-0" src="" alt="">
+                                </div>
+                                <input type="hidden" id="extPhotoUrl" value="">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'المسمى الوظيفي' : 'Job Title' %></label>
+                                <input type="text" id="extTitle" placeholder="e.g. Senior Sales Agent" class="config-input w-full">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'مجموعة الموظفين' : 'Employee Group' %></label>
+                                <select id="extGroup" class="config-input w-full font-semibold">
+                                    <option value=""><%= isRtl ? '— بدون مجموعة —' : '— No Group —' %></option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                     <!-- System Defaults Information Banner -->
                     <div class="p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl text-xs space-y-1">
                         <div class="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
@@ -1716,6 +1743,13 @@ function isTabAllowed(tabName) {
             document.getElementById('extensionForm').reset();
             document.getElementById('extVoicemail').value = "disabled";
             openModal('extensionModal');
+            document.getElementById('extPhoto').value = '';
+            document.getElementById('extPhotoUrl').value = '';
+            document.getElementById('extPhotoPreview').classList.add('hidden');
+            document.getElementById('extPhotoPreview').src = '';
+            document.getElementById('extTitle').value = '';
+            document.getElementById('extGroup').value = '';
+            loadEmployeeGroups();
         }
 
         function editExtension(extNum, name, secret, voicemail) {
@@ -1727,6 +1761,20 @@ function isTabAllowed(tabName) {
             document.getElementById('extSecret').value = secret || '';
             document.getElementById('extVoicemail').value = (voicemail === 'default' || voicemail === 'enabled') ? "enabled" : "disabled";
             openModal('extensionModal');
+            loadEmployeeGroups();
+            fetch('/api/employee/extras/' + extNum)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.extras) {
+                        if (data.extras.photo) {
+                            document.getElementById('extPhotoUrl').value = data.extras.photo;
+                            document.getElementById('extPhotoPreview').src = data.extras.photo;
+                            document.getElementById('extPhotoPreview').classList.remove('hidden');
+                        }
+                        document.getElementById('extTitle').value = data.extras.title || '';
+                        document.getElementById('extGroup').value = data.extras.emp_group || '';
+                    }
+                });
         }
 
         function saveExtension(e) {
@@ -1748,9 +1796,12 @@ function isTabAllowed(tabName) {
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    showToast(data.message, 'success');
-                    closeModal('extensionModal');
-                    fetchExtensions();
+                    // Save employee extras
+                    saveEmployeeExtras(extNum, function() {
+                        showToast(data.message, 'success');
+                        closeModal('extensionModal');
+                        fetchExtensions();
+                    });
                 } else {
                     showToast(data.error || 'Failed to save extension', 'error');
                 }
@@ -1767,6 +1818,62 @@ function isTabAllowed(tabName) {
                         showToast(data.message, 'success');
                         fetchExtensions();
                     } else showToast(data.error, 'error');
+                });
+        }
+
+        function saveEmployeeExtras(extNum, callback) {
+            const photoFile = document.getElementById('extPhoto').files[0];
+            const title = document.getElementById('extTitle').value.trim();
+            const empGroup = document.getElementById('extGroup').value;
+
+            function doSave(photoUrl) {
+                fetch('/api/employee/extras/' + extNum, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        photo: photoUrl || document.getElementById('extPhotoUrl').value || null,
+                        title: title || null,
+                        emp_group: empGroup || null
+                    })
+                }).then(r => r.json()).then(d => {
+                    if (callback) callback();
+                }).catch(() => { if (callback) callback(); });
+            }
+
+            if (photoFile) {
+                const fd = new FormData();
+                fd.append('photo', photoFile);
+                fetch('/api/employee/photo', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('extPhotoUrl').value = data.url;
+                        doSave(data.url);
+                    } else {
+                        doSave(null);
+                    }
+                })
+                .catch(() => doSave(null));
+            } else {
+                doSave(null);
+            }
+        }
+
+        function loadEmployeeGroups() {
+            fetch('/api/employee/groups')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) return;
+                    const sel = document.getElementById('extGroup');
+                    const currentVal = sel.value;
+                    sel.innerHTML = '<option value="">' + (isRtl ? '— بدون مجموعة —' : '— No Group —') + '</option>';
+                    data.groups.forEach(g => {
+                        const opt = document.createElement('option');
+                        opt.value = g.name;
+                        opt.textContent = g.name;
+                        sel.appendChild(opt);
+                    });
+                    sel.value = currentVal;
                 });
         }
 
