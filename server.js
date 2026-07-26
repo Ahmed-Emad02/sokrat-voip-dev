@@ -665,15 +665,24 @@ function connectAMI() {
                 io.emit('peerIPs', peerIPs);
             }
 
-            // Real-time peer registration changes
-            if (event.Event === 'PeerStatus') {
-                let rawPeer = event.Peer ? event.Peer.replace(/^(SIP|PJSIP)\//, '') : '';
-                let name = rawPeer ? rawPeer.split('/')[0] : '';
-                if (name) {
-                    let isOnline = event.PeerStatus === 'Registered' || event.PeerStatus === 'Reachable';
-                    
-                    // Debounce offline transitions to smooth out SIP registration refresh flicker
-                    if (peerStatus[name] && !isOnline) {
+            // Helper to handle fast presence updates
+            function updatePeerPresence(name, isOnline, ip = null) {
+                if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
+                    peerIPs[name] = ip;
+                    io.emit('peerIPs', peerIPs);
+                }
+
+                if (isOnline) {
+                    if (pendingOffline[name]) {
+                        clearTimeout(pendingOffline[name]);
+                        delete pendingOffline[name];
+                    }
+                    if (!peerStatus[name]) {
+                        peerStatus[name] = true;
+                        io.emit('peerStatus', peerStatus);
+                    }
+                } else {
+                    if (peerStatus[name]) {
                         if (!pendingOffline[name]) {
                             pendingOffline[name] = setTimeout(() => {
                                 if (pendingOffline[name]) {
@@ -681,23 +690,41 @@ function connectAMI() {
                                     io.emit('peerStatus', peerStatus);
                                     delete pendingOffline[name];
                                 }
-                            }, 4000);
+                            }, 500); // Fast 500ms transition
                         }
-                        return;
                     }
-                    if (isOnline && pendingOffline[name]) {
-                        clearTimeout(pendingOffline[name]);
-                        delete pendingOffline[name];
-                    }
-                    
-                    peerStatus[name] = isOnline;
-                    io.emit('peerStatus', peerStatus);
-                    io.emit('peerIPs', peerIPs);
+                }
+            }
 
-                    // Re-query SIPpeers on registration to capture IP for newly registered peers
-                    if (isOnline && amiClient) {
-                        amiClient.write('Action: SIPpeers\r\n\r\n');
-                    }
+            // Real-time peer registration changes
+            if (event.Event === 'PeerStatus') {
+                let rawPeer = event.Peer ? event.Peer.replace(/^(SIP|PJSIP)\//, '') : '';
+                let name = rawPeer ? rawPeer.split('/')[0] : '';
+                if (name) {
+                    let isOnline = event.PeerStatus === 'Registered' || event.PeerStatus === 'Reachable';
+                    let ip = event.Address || event.IPaddress || '';
+                    updatePeerPresence(name, isOnline, ip);
+                }
+            }
+
+            // Instant Asterisk DeviceStateChange event handling
+            if (event.Event === 'DeviceStateChange') {
+                let rawDev = event.Device ? event.Device.replace(/^(SIP|PJSIP)\//, '') : '';
+                let name = rawDev ? rawDev.split('/')[0] : '';
+                if (name) {
+                    let state = String(event.State || '').toLowerCase();
+                    let isOnline = !(state === 'unavailable' || state === 'invalid' || state === 'unknown' || state === '5' || state === '4');
+                    updatePeerPresence(name, isOnline);
+                }
+            }
+
+            // Instant Asterisk ExtensionStatus event handling
+            if (event.Event === 'ExtensionStatus') {
+                let name = String(event.Exten || '');
+                let statusStr = String(event.Status || '');
+                if (name && /^\d+$/.test(name)) {
+                    let isOnline = !(statusStr === '4' || statusStr === '5' || statusStr === '-1');
+                    updatePeerPresence(name, isOnline);
                 }
             }
 
@@ -3571,7 +3598,7 @@ app.post('/api/config/extensions', async (req, res) => {
             [extNum, 'permit', '0.0.0.0/0.0.0.0', 31],
             [extNum, 'port', '5060', 11],
             [extNum, 'qualify', 'yes', 12],
-            [extNum, 'qualifyfreq', '60', 13],
+            [extNum, 'qualifyfreq', '15', 13],
             [extNum, 'secret', extSecret, 2],
             [extNum, 'sendrpid', 'no', 8],
             [extNum, 'transport', 'udp', 14],
