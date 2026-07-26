@@ -568,13 +568,39 @@ function reloadGreetingConfig() {
         }
     } catch {}
 }
+// Helper to parse clean trunk technology & identifier from FreePBX trunk settings
+function parseTrunkIdentifier(channelId, name) {
+    const str = String(channelId || name || '').trim();
+    let m = str.match(/dongle\/(?:[a-z]:)?([a-z0-9_]+)/i);
+    if (m) return { tech: 'dongle', id: m[1].toLowerCase() };
+    m = str.match(/^(SIP|PJSIP)\/([a-z0-9_]+)/i);
+    if (m) return { tech: m[1].toLowerCase(), id: m[2].toLowerCase() };
+    m = str.match(/^([a-z0-9_]+)$/i);
+    if (m) return { tech: 'custom', id: m[1].toLowerCase() };
+    return null;
+}
+
+// Fetch live Asterisk channel names via CLI
+async function getLiveAsteriskChannelNames() {
+    try {
+        const stdout = await execPromise(`${ASTERISK_BIN} -rx "core show channels"`);
+        const lines = stdout.split('\n');
+        const channels = [];
+        for (const line of lines) {
+            const m = line.match(/^(\S+)\s+\S+/);
+            if (m && (m[1].includes('/') || m[1].includes('Local'))) {
+                channels.push(m[1].trim());
+            }
+        }
+        return channels;
+    } catch {
+        return [];
+    }
+}
+
 function extractDongleIdFromChannel(channelName) {
     if (!channelName) return null;
     let m = channelName.match(/^Dongle\/([^\/-]+)/i);
-    if (m) return m[1].toLowerCase();
-    m = channelName.match(/^SIP\/([^\/-]+)/i);
-    if (m) return m[1].toLowerCase();
-    m = channelName.match(/^PJSIP\/([^\/-]+)/i);
     if (m) return m[1].toLowerCase();
     return null;
 }
@@ -5649,20 +5675,35 @@ async function runDialerPacerCycle() {
                     ORDER BY rt.seq ASC
                 `, [camp.outbound_route_id]);
 
+                const liveChannels = await getLiveAsteriskChannelNames();
                 let totalFreeTrunkChannels = 0;
+
                 for (const tRow of rTrunks) {
-                    const trunkId = tRow.trunk_id;
-                    const dName = extractDongleIdFromChannel(tRow.channelid || tRow.trunk_name || '') || `trunk_${trunkId}`;
+                    const trunkInfo = parseTrunkIdentifier(tRow.channelid, tRow.trunk_name);
+                    const tId = trunkInfo ? trunkInfo.id : `trunk_${tRow.trunk_id}`;
+
+                    let isOccupied = false;
+                    if (trunkInfo) {
+                        for (const chan of liveChannels) {
+                            const cLower = chan.toLowerCase();
+                            if (trunkInfo.tech === 'dongle') {
+                                if (cLower.startsWith(`dongle/${tId}-`)) { isOccupied = true; break; }
+                            } else if (trunkInfo.tech === 'sip' || trunkInfo.tech === 'pjsip') {
+                                if (cLower.startsWith(`sip/${tId}-`) || cLower.startsWith(`pjsip/${tId}-`)) { isOccupied = true; break; }
+                            }
+                        }
+                    }
 
                     const [activeOnTrunk] = await pool.query(`
                         SELECT COUNT(*) AS cnt
                         FROM \`asterisk\`.\`dialer_call_attempts\`
                         WHERE active_flag = 1 AND (dongle_id = ? OR (dongle_id IS NULL AND campaign_id = ?))
-                    `, [dName, campId]);
+                    `, [tId, campId]);
 
-                    const inUse = activeOnTrunk[0]?.cnt || 0;
-                    const maxTrunkChans = 1; // 1 max concurrent channel per GSM dongle
-                    totalFreeTrunkChannels += Math.max(0, maxTrunkChans - inUse);
+                    const ledgerInUse = activeOnTrunk[0]?.cnt || 0;
+                    const maxTrunkChans = 1; // 1 max channel per GSM dongle
+                    const available = (isOccupied || ledgerInUse >= maxTrunkChans) ? 0 : 1;
+                    totalFreeTrunkChannels += available;
                 }
                 freeDonglesCount = Math.min(totalFreeTrunkChannels, maxCap);
             }
