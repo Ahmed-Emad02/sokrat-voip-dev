@@ -345,11 +345,12 @@ exten => s,1,NoOp(=== Predictive Auto-Dialer AMD & Handoff: ${LEAD_PHONE} (Attem
 [from-autodialer-progressive]
 exten => s,1,NoOp(=== Progressive Auto-Dialer: Agent Answered - Dialing Lead ${LEAD_PHONE} (Attempt: ${ATTEMPT_UUID}) ===)
  exten => s,n,Set(CDR(accountcode)=autodialer_progressive)
- exten => s,n,UserEvent(AutoDialerEvent,Status: AgentAnswered,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID},Agent: ${TARGET_AGENT})
+ exten => s,n,UserEvent(AutoDialerEvent,Status: AgentAnswered,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID},Agent: ${TARGET_AGENT},Uniqueid: ${UNIQUEID},Linkedid: ${LINKEDID})
  exten => s,n,Set(CALLERID(num)=${ORIGINATION_CALLER_ID})
  exten => s,n,Set(CALLERID(name)=${ORIGINATION_CALLER_ID})
  exten => s,n,Dial(Local/${LEAD_PHONE}@${OUTBOUND_CONTEXT}/n,30,tT)
- exten => s,n,UserEvent(AutoDialerEvent,Status: ProgressiveCompleted,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID})
+ exten => s,n,Set(PROG_DIALSTATUS=${DIALSTATUS})
+ exten => s,n,UserEvent(AutoDialerEvent,Status: ProgressiveCompleted,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID},DialStatus: ${PROG_DIALSTATUS})
  exten => s,n,Hangup()
 AUTODIALER
 asterisk -rx "dialplan reload" 2>/dev/null || true

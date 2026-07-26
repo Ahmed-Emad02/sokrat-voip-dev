@@ -5737,6 +5737,12 @@ function handleDialerAmiEvents(event) {
             updateAttemptStatus(attemptUuid, 'lead_answered', event.Uniqueid, event.Linkedid, event.Channel);
         } else if (status === 'AmdPassed') {
             updateAttemptStatus(attemptUuid, 'amd_passed', event.Uniqueid, event.Linkedid, event.Channel);
+        } else if (status === 'AgentAnswered') {
+            updateAttemptStatus(attemptUuid, 'agent_bridged', event.Uniqueid, event.Linkedid, event.Channel, event.Agent);
+        } else if (status === 'ProgressiveCompleted') {
+            const dialStatus = String(event.DialStatus || '').toUpperCase();
+            const termStatus = dialStatus === 'ANSWER' ? 'completed' : (dialStatus === 'BUSY' ? 'busy' : (dialStatus === 'NOANSWER' ? 'no_answer' : 'failed'));
+            finalizeAttempt(attemptUuid, termStatus, 0);
         } else if (status === 'Abandoned') {
             finalizeAttempt(attemptUuid, 'abandoned', 0);
         } else if (status === 'Machine') {
@@ -6043,7 +6049,7 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
         if (lines.length < 2) {
             return res.status(400).json({ success: false, error: 'CSV file is empty or missing data' });
         }
-            const [dncCheck] = await pool.query('SELECT phone_number FROM `asterisk`.`dialer_dnc` WHERE phone_number = ?', [cleanPhone]);
+
         const header = lines[0].toLowerCase().split(',').map(s => s.trim().replace(/^"|"$/g, ''));
         const phoneIdx = header.findIndex(h => h.includes('phone') || h.includes('mobile') || h.includes('tel') || h.includes('number'));
         const fnIdx = header.findIndex(h => h.includes('first') || h.includes('name'));
@@ -6054,15 +6060,14 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
         let skippedDnc = 0;
 
         for (let i = 1; i < lines.length; i++) {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`dialer_leads\` (campaign_id, phone_number, first_name, last_name, company, status)
-                VALUES (?, ?, ?, ?, ?, 'pending')
-            `, [campaignId, cleanPhone, firstName, lastName, company]);
+            const line = lines[i].trim();
+            if (!line) continue;
+            const cols = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
             const rawPhone = phoneIdx >= 0 ? cols[phoneIdx] : cols[0];
             const cleanPhone = normalizeDidNumber(rawPhone);
             if (!cleanPhone) continue;
 
-            const [dncCheck] = await pool.query('SELECT phone_number FROM dialer_dnc WHERE phone_number = ?', [cleanPhone]);
+            const [dncCheck] = await pool.query('SELECT phone_number FROM `asterisk`.`dialer_dnc` WHERE phone_number = ?', [cleanPhone]);
             if (dncCheck.length > 0) {
                 skippedDnc++;
                 continue;
@@ -6073,7 +6078,7 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
             const company = compIdx >= 0 ? cols[compIdx] : null;
 
             await pool.query(`
-                INSERT INTO dialer_leads (campaign_id, phone_number, first_name, last_name, company, status)
+                INSERT INTO \`asterisk\`.\`dialer_leads\` (campaign_id, phone_number, first_name, last_name, company, status)
                 VALUES (?, ?, ?, ?, ?, 'pending')
             `, [campaignId, cleanPhone, firstName, lastName, company]);
             imported++;
