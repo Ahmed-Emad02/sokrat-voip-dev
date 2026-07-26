@@ -6,9 +6,9 @@
 |---|---|---|---|
 | **Dev** | `C:\Users\0xSiTe\Desktop\sokrat-voip-dev` | `Ahmed-Emad02/sokrat-voip-dev.git` | `/opt/issabel-dashboard` |
 | **Stable** | `C:\Users\0xSiTe\Desktop\sokrat-voip-stable` | `Ahmed-Emad02/sokrat-voip-stable.git` | `/opt/sokrat-voip` |
-| **Primary Server** | `192.168.100.200` | — | `/opt/issabel-dashboard` |
+| **Primary Server** | `100.109.229.122` | — | `/opt/issabel-dashboard` |
 
-**Deployment policy:** `192.168.100.200` is the only active server. `100.91.135.84` is retired and MUST NOT be accessed, updated, or used for verification. Deploy from the dev repository and restart `issabel-dashboard.service`.
+**Deployment policy:** `100.109.229.122` is the active server. Deploy from the dev repository and restart `issabel-dashboard.service`.
 
 ---
 
