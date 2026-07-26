@@ -6,7 +6,7 @@ const words = {
         searchCallerid: "Caller ID", searchMailbox: "All Mailboxes", noData: "No voicemail messages found.",
         play: "Play", download: "Download", noAudio: "No Audio", footerLeft: "Voicemails", footerRight: "Total messages:",
         pagPrev: "Prev", pagNext: "Next", pagShowing: "Showing", pagOf: "of", pagResults: "results",
-        btn: "Search", exportCsv: "Download CSV"
+        btn: "Search", exportCsv: "Download CSV", startTime: "Start Time", endTime: "End Time", clearBtn: "Reset Filters"
     },
     ar: {
         title: "البريد الصوتي", subtitle: "صندوق الوارد", desc: "استمع إلى رسائل البريد الصوتي وأدرها",
@@ -14,7 +14,7 @@ const words = {
         searchCallerid: "رقم المتصل", searchMailbox: "جميع صناديق البريد", noData: "لم يتم العثور على رسائل بريد صوتي.",
         play: "تشغيل", download: "تحميل", noAudio: "لا يوجد صوت", footerLeft: "البريد الصوتي", footerRight: "إجمالي الرسائل:",
         pagPrev: "السابق", pagNext: "التالي", pagShowing: "عرض", pagOf: "من", pagResults: "نتيجة",
-        btn: "بحث", exportCsv: "تحميل CSV"
+        btn: "بحث", exportCsv: "تحميل CSV", startTime: "وقت البداية", endTime: "وقت النهاية", clearBtn: "إعادة ضبط التصفية"
     }
 };
 const t = words[currentLang];
@@ -80,11 +80,11 @@ function fmtDur(s) {
             </button>
         </div>
 
-        <form id="vmFilterForm" action="/voicemails" method="GET" class="panel-surface p-4 rounded-xl mb-4 shadow-lg flex flex-col md:flex-row items-end gap-3">
+        <form id="vmFilterForm" action="/voicemails" method="GET" class="panel-surface p-4 rounded-xl mb-4 shadow-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <input type="hidden" name="page" value="<%= filters.page %>">
             <input type="hidden" name="perPage" value="<%= filters.perPage %>">
-            <div class="flex-1 min-w-[200px]">
+            <div>
                 <label class="block text-[11px] font-bold uppercase text-zinc-400 mb-1 tracking-wider"><%= t.thMailbox %></label>
                 <select name="searchMailbox" class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                     <option value=""><%= t.searchMailbox %></option>
@@ -93,12 +93,21 @@ function fmtDur(s) {
                     <% }) %>
                 </select>
             </div>
-            <div class="flex-1 min-w-[200px]">
+            <div>
                 <label class="block text-[11px] font-bold uppercase text-zinc-400 mb-1 tracking-wider"><%= t.thCallerid %></label>
                 <input type="text" name="searchCallerid" value="<%= filters.searchCallerid %>" placeholder="e.g., 010..." class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-700 focus:outline-none focus:border-[var(--accent-color)]">
             </div>
+            <div>
+                <label class="block text-[11px] font-bold uppercase text-zinc-400 mb-1 tracking-wider"><%= t.startTime %></label>
+                <input type="datetime-local" name="startDate" value="<%= filters.startDate ? moment(filters.startDate).format('YYYY-MM-DDTHH:mm') : '' %>" class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold uppercase text-zinc-400 mb-1 tracking-wider"><%= t.endTime %></label>
+                <input type="datetime-local" name="endDate" value="<%= filters.endDate ? moment(filters.endDate).format('YYYY-MM-DDTHH:mm') : '' %>" class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
+            </div>
             <div class="flex items-center gap-2">
-                <button type="submit" class="btn-primary px-5 py-1.5 text-xs uppercase tracking-wider"><%= t.btn %></button>
+                <button type="submit" class="btn-primary flex-1 py-1.5 text-xs uppercase tracking-wider h-[34px] flex items-center justify-center cursor-pointer"><%= t.btn %></button>
+                <a href="/voicemails?lang=<%= currentLang %>" class="px-3 py-1.5 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg h-[34px] flex items-center justify-center transition cursor-pointer" title="<%= t.clearBtn %>">✕</a>
             </div>
         </form>
 

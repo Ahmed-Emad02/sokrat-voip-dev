@@ -51,7 +51,7 @@ const sbT = sidebarWords[currentLang] || sidebarWords['en'];
 const isRtl = currentLang === 'ar';
 const allowed = typeof allowedTabs !== 'undefined' ? allowedTabs : [];
 const isSuper = typeof isSuperAdmin !== 'undefined' && isSuperAdmin;
-function can(tab) { return allowed.includes(tab); }
+function can(tab) { return isSuper || allowed.includes(tab); }
 %>
 
 <!-- Prevent theme/JIT flickering loading screen overlay -->

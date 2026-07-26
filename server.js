@@ -1819,12 +1819,22 @@ app.get('/voicemails', (req, res) => {
     const allMsgs = scanVoicemails();
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
+    const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : '';
+    const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : '';
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const perPage = Math.min(200, Math.max(1, parseInt(req.query.perPage) || 25));
 
     let filtered = allMsgs;
-    if (searchCallerid) filtered = filtered.filter(m => m.callerid.toLowerCase().includes(searchCallerid.toLowerCase()));
+    if (searchCallerid) filtered = filtered.filter(m => (m.callerid || '').toLowerCase().includes(searchCallerid.toLowerCase()));
     if (searchMailbox) filtered = filtered.filter(m => m.mailbox === searchMailbox);
+    if (startDate) {
+        const startMs = moment(startDate).valueOf();
+        filtered = filtered.filter(m => m.origtime && m.origtime >= startMs);
+    }
+    if (endDate) {
+        const endMs = moment(endDate).valueOf();
+        filtered = filtered.filter(m => m.origtime && m.origtime <= endMs);
+    }
 
     const total = filtered.length;
     const totalPages = Math.ceil(total / perPage) || 1;
@@ -1834,7 +1844,7 @@ app.get('/voicemails', (req, res) => {
 
     res.render('voicemails', {
         messages: paged, mailboxes, moment,
-        filters: { searchCallerid, searchMailbox, page, perPage },
+        filters: { searchCallerid, searchMailbox, startDate, endDate, page, perPage },
         pagination: { total, totalPages, page, perPage }
     });
 });
@@ -1843,19 +1853,29 @@ app.get('/api/voicemails', (req, res) => {
     const allMsgs = scanVoicemails();
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
+    const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : '';
+    const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : '';
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const perPage = Math.min(200, Math.max(1, parseInt(req.query.perPage) || 25));
 
     let filtered = allMsgs;
-    if (searchCallerid) filtered = filtered.filter(m => m.callerid.toLowerCase().includes(searchCallerid.toLowerCase()));
+    if (searchCallerid) filtered = filtered.filter(m => (m.callerid || '').toLowerCase().includes(searchCallerid.toLowerCase()));
     if (searchMailbox) filtered = filtered.filter(m => m.mailbox === searchMailbox);
+    if (startDate) {
+        const startMs = moment(startDate).valueOf();
+        filtered = filtered.filter(m => m.origtime && m.origtime >= startMs);
+    }
+    if (endDate) {
+        const endMs = moment(endDate).valueOf();
+        filtered = filtered.filter(m => m.origtime && m.origtime <= endMs);
+    }
 
     const total = filtered.length;
     const totalPages = Math.ceil(total / perPage) || 1;
     const paged = filtered.slice((page - 1) * perPage, page * perPage);
     const mailboxes = getAllVoicemailMailboxes();
 
-    res.json({ messages: paged, mailboxes, pagination: { total, totalPages, page, perPage } });
+    res.json({ messages: paged, mailboxes, filters: { startDate, endDate }, pagination: { total, totalPages, page, perPage } });
 });
 
 app.get('/vm-audio/:mailbox/:file', (req, res) => {
@@ -1883,10 +1903,19 @@ app.get('/vm-export', (req, res) => {
     const allMsgs = scanVoicemails();
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
+    const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : '';
+    const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : '';
     let filtered = allMsgs;
-    if (searchCallerid) filtered = filtered.filter(m => m.callerid.toLowerCase().includes(searchCallerid.toLowerCase()));
+    if (searchCallerid) filtered = filtered.filter(m => (m.callerid || '').toLowerCase().includes(searchCallerid.toLowerCase()));
     if (searchMailbox) filtered = filtered.filter(m => m.mailbox === searchMailbox);
-
+    if (startDate) {
+        const startMs = moment(startDate).valueOf();
+        filtered = filtered.filter(m => m.origtime && m.origtime >= startMs);
+    }
+    if (endDate) {
+        const endMs = moment(endDate).valueOf();
+        filtered = filtered.filter(m => m.origtime && m.origtime <= endMs);
+    }
     const csvHeaders = ["Mailbox", "Caller ID", "Date", "Duration (Sec)", "Extension", "File"];
     let csv = "\ufeff" + csvHeaders.map(h => `"${h}"`).join(",") + "\n";
     for (const m of filtered) {
@@ -2796,12 +2825,12 @@ app.get('/api/storage/info', requireAuth, async (req, res) => {
 
         let db = { totalRows: 0, dbSizeMb: 0 };
         try {
-            const [rowsCount] = await pool.query('SELECT COUNT(*) AS totalRows FROM `asterisk`.`cdr`');
+            const [rowsCount] = await pool.query('SELECT COUNT(*) AS totalRows FROM `asteriskcdrdb`.`cdr`');
             db.totalRows = rowsCount[0] ? rowsCount[0].totalRows : 0;
             const [dbSize] = await pool.query(`
                 SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS dbSizeMb
                 FROM information_schema.tables
-                WHERE table_schema = 'asterisk' AND table_name = 'cdr'
+                WHERE table_schema = 'asteriskcdrdb' AND table_name = 'cdr'
             `);
             db.dbSizeMb = dbSize[0] ? dbSize[0].dbSizeMb : 0;
         } catch (_) {}
@@ -2843,12 +2872,13 @@ app.get('/api/storage/export/pc', requireAuth, async (req, res) => {
             params.push(endDate + ' 23:59:59');
         }
         if (extension) {
-            whereClauses.push('(src = ? OR dst = ?)');
-            params.push(extension, extension);
+            whereClauses.push('(src = ? OR dst = ? OR channel LIKE ? OR dstchannel LIKE ?)');
+            const extLike = `%/${extension}-%`;
+            params.push(extension, extension, extLike, extLike);
         }
 
         const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
-        const [cdrRows] = await pool.query(`SELECT calldate, clid, src, dst, dcontext, channel, dstchannel, lastapp, lastdata, duration, billsec, disposition, uniqueid, recordingfile FROM \`asterisk\`.\`cdr\` ${whereSql} ORDER BY calldate DESC LIMIT 10000`, params);
+        const [cdrRows] = await pool.query(`SELECT calldate, clid, src, dst, dcontext, channel, dstchannel, lastapp, lastdata, duration, billsec, disposition, uniqueid, recordingfile FROM \`asteriskcdrdb\`.\`cdr\` ${whereSql} ORDER BY calldate DESC LIMIT 10000`, params);
 
         const tmpDir = path.join('/tmp', `sokrat-export-${Date.now()}`);
         fs.mkdirSync(tmpDir, { recursive: true });
