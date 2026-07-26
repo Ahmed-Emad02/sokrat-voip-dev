@@ -5861,7 +5861,7 @@ async function finalizeAttempt(attemptUuid, terminalStatus, causeCode = 0) {
 // GET /api/dialer/campaigns
 app.get('/api/dialer/campaigns', async (req, res) => {
     try {
-        const [campaigns] = await pool.query('SELECT * FROM dialer_campaigns ORDER BY id DESC');
+        const [campaigns] = await pool.query('SELECT * FROM `asterisk`.`dialer_campaigns` ORDER BY id DESC');
         for (const c of campaigns) {
             const [stats] = await pool.query(`
                 SELECT 
@@ -5870,7 +5870,7 @@ app.get('/api/dialer/campaigns', async (req, res) => {
                     SUM(status = 'connected') AS connected_leads,
                     SUM(status = 'dialing') AS dialing_leads,
                     SUM(status IN ('no_answer','busy','failed','machine')) AS failed_leads
-                FROM dialer_leads WHERE campaign_id = ?
+                FROM \`asterisk\`.\`dialer_leads\` WHERE campaign_id = ?
             `, [c.id]);
             c.stats = stats[0];
         }
@@ -5898,7 +5898,7 @@ app.post('/api/dialer/campaigns', async (req, res) => {
         }
 
         const [r] = await pool.query(`
-            INSERT INTO dialer_campaigns
+            INSERT INTO \`asterisk\`.\`dialer_campaigns\`
             (name, mode, outbound_route_id, origination_caller_id, queue_name, pacing_ratio, max_concurrent_dials, wrapup_time_sec, max_queue_wait_sec, amd_enabled)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
@@ -5928,7 +5928,7 @@ app.post('/api/dialer/campaigns/:id/control', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Invalid action' });
         }
         const status = action === 'start' ? 'running' : (action === 'pause' ? 'paused' : 'completed');
-        await pool.query('UPDATE dialer_campaigns SET status = ? WHERE id = ?', [status, id]);
+        await pool.query('UPDATE `asterisk`.`dialer_campaigns` SET status = ? WHERE id = ?', [status, id]);
         res.json({ success: true, message: `Campaign status updated to ${status}` });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -5939,7 +5939,7 @@ app.post('/api/dialer/campaigns/:id/control', async (req, res) => {
 app.get('/api/dialer/leads/:campaignId', async (req, res) => {
     try {
         const campaignId = parseInt(req.params.campaignId, 10);
-        const [leads] = await pool.query('SELECT * FROM dialer_leads WHERE campaign_id = ? ORDER BY id DESC LIMIT 500', [campaignId]);
+        const [leads] = await pool.query('SELECT * FROM `asterisk`.`dialer_leads` WHERE campaign_id = ? ORDER BY id DESC LIMIT 500', [campaignId]);
         res.json({ success: true, leads });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -5954,7 +5954,7 @@ app.post('/api/dialer/disposition', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Lead ID and Disposition are required' });
         }
 
-        await pool.query('UPDATE dialer_leads SET disposition = ?, status = "connected" WHERE id = ?', [disposition, leadId]);
+        await pool.query('UPDATE `asterisk`.`dialer_leads` SET disposition = ?, status = "connected" WHERE id = ?', [disposition, leadId]);
 
         if (attemptUuid) {
             await finalizeAttempt(attemptUuid, 'completed', 0);
@@ -5963,7 +5963,7 @@ app.post('/api/dialer/disposition', async (req, res) => {
         if (agentExtension) {
             const wrapupUntil = new Date(Date.now() + 15 * 1000);
             await pool.query(`
-                INSERT INTO dialer_agent_states (extension, state, wrapup_until)
+                INSERT INTO \`asterisk\`.\`dialer_agent_states\` (extension, state, wrapup_until)
                 VALUES (?, 'wrapup', ?)
                 ON DUPLICATE KEY UPDATE state = 'wrapup', wrapup_until = VALUES(wrapup_until), current_lead_id = NULL, current_attempt_uuid = NULL
             `, [agentExtension, wrapupUntil]);
@@ -5978,7 +5978,7 @@ app.post('/api/dialer/disposition', async (req, res) => {
 // GET /api/dialer/dispositions
 app.get('/api/dialer/dispositions', async (req, res) => {
     try {
-        const [dispositions] = await pool.query('SELECT * FROM dialer_dispositions ORDER BY name ASC');
+        const [dispositions] = await pool.query('SELECT * FROM `asterisk`.`dialer_dispositions` ORDER BY name ASC');
         res.json({ success: true, dispositions });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -5988,7 +5988,7 @@ app.get('/api/dialer/dispositions', async (req, res) => {
 // GET /api/dialer/dnc
 app.get('/api/dialer/dnc', async (req, res) => {
     try {
-        const [dnc] = await pool.query('SELECT * FROM dialer_dnc ORDER BY created_at DESC');
+        const [dnc] = await pool.query('SELECT * FROM `asterisk`.`dialer_dnc` ORDER BY created_at DESC');
         res.json({ success: true, dnc });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -6002,8 +6002,8 @@ app.post('/api/dialer/dnc', async (req, res) => {
         if (!phone_number) return res.status(400).json({ success: false, error: 'Phone number is required' });
         const cleanPhone = String(phone_number).trim();
 
-        await pool.query('INSERT IGNORE INTO dialer_dnc (phone_number, reason) VALUES (?, ?)', [cleanPhone, reason || null]);
-        await pool.query('UPDATE dialer_leads SET status = "dnc" WHERE phone_number = ?', [cleanPhone]);
+        await pool.query('INSERT IGNORE INTO `asterisk`.`dialer_dnc` (phone_number, reason) VALUES (?, ?)', [cleanPhone, reason || null]);
+        await pool.query('UPDATE `asterisk`.`dialer_leads` SET status = "dnc" WHERE phone_number = ?', [cleanPhone]);
 
         res.json({ success: true, message: 'Phone number added to DNC list' });
     } catch (err) {
@@ -6014,7 +6014,7 @@ app.post('/api/dialer/dnc', async (req, res) => {
 app.delete('/api/dialer/dnc/:phone', async (req, res) => {
     try {
         const phone = String(req.params.phone || '').trim();
-        await pool.query('DELETE FROM dialer_dnc WHERE phone_number = ?', [phone]);
+        await pool.query('DELETE FROM `asterisk`.`dialer_dnc` WHERE phone_number = ?', [phone]);
         res.json({ success: true, message: 'Phone number removed from DNC list' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -6043,7 +6043,7 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
         if (lines.length < 2) {
             return res.status(400).json({ success: false, error: 'CSV file is empty or missing data' });
         }
-
+            const [dncCheck] = await pool.query('SELECT phone_number FROM `asterisk`.`dialer_dnc` WHERE phone_number = ?', [cleanPhone]);
         const header = lines[0].toLowerCase().split(',').map(s => s.trim().replace(/^"|"$/g, ''));
         const phoneIdx = header.findIndex(h => h.includes('phone') || h.includes('mobile') || h.includes('tel') || h.includes('number'));
         const fnIdx = header.findIndex(h => h.includes('first') || h.includes('name'));
@@ -6054,9 +6054,10 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
         let skippedDnc = 0;
 
         for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-            const cols = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+            await pool.query(`
+                INSERT INTO \`asterisk\`.\`dialer_leads\` (campaign_id, phone_number, first_name, last_name, company, status)
+                VALUES (?, ?, ?, ?, ?, 'pending')
+            `, [campaignId, cleanPhone, firstName, lastName, company]);
             const rawPhone = phoneIdx >= 0 ? cols[phoneIdx] : cols[0];
             const cleanPhone = normalizeDidNumber(rawPhone);
             if (!cleanPhone) continue;
