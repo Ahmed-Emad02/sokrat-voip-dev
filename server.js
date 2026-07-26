@@ -7,6 +7,8 @@ const net = require('net');
 const http = require('http');
 const { Server } = require('socket.io');
 const { exec, execFile } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
@@ -246,6 +248,7 @@ async function initAuthDb() {
         console.log('AUTH: Dashboard users table ready, existing users found');
     }
     await conn.end();
+    await syncAllExtensionsAstdb();
 }
 initAuthDb().catch(err => console.error('AUTH DB init error:', err));
 
@@ -3443,8 +3446,9 @@ function updateVoicemailConf(extNum, displayName, vmVal) {
 }
 
 // Helper function to sync extension astdb recording & user settings
-function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip') {
+async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip') {
     const techUpper = (tech || 'sip').toUpperCase();
+    const techLower = (tech || 'sip').toLowerCase();
     const commands = [
         `database put AMPUSER ${extNum}/answermode disabled`,
         `database put AMPUSER ${extNum}/cfringtimer 0`,
@@ -3460,18 +3464,33 @@ function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = '
         `database put AMPUSER ${extNum}/recording/priority 10`,
         `database put AMPUSER ${extNum}/ringtimer 0`,
         `database put AMPUSER ${extNum}/voicemail ${vmVal}`,
-        `database put DEVICE ${extNum} dial "${techUpper}/${extNum}"`,
-        `database put DEVICE ${extNum} tech "${tech.toLowerCase()}"`,
-        `database put DEVICE ${extNum} user "${extNum}"`,
-        `database put DEVICE ${extNum} type "fixed"`
+        `database put DEVICE/${extNum} default_user "${extNum}"`,
+        `database put DEVICE/${extNum} dial "${techUpper}/${extNum}"`,
+        `database put DEVICE/${extNum} tech "${techLower}"`,
+        `database put DEVICE/${extNum} user "${extNum}"`,
+        `database put DEVICE/${extNum} type "fixed"`
     ];
-    commands.forEach(cmd => {
-        exec(`${ASTERISK_BIN} -rx '${cmd}'`, (err) => {
-            if (err) console.error(`AstDB error (${cmd}):`, err.message);
-        });
-    });
+    for (const cmd of commands) {
+        try {
+            await execPromise(`${ASTERISK_BIN} -rx '${cmd}'`);
+        } catch (err) {
+            console.error(`AstDB error (${cmd}):`, err.message);
+        }
+    }
 
     updateVoicemailConf(extNum, displayName, vmVal);
+}
+
+async function syncAllExtensionsAstdb() {
+    try {
+        const [extensions] = await pool.query('SELECT extension, name, voicemail FROM `asterisk`.`users`');
+        for (const ext of extensions) {
+            await setExtensionAstdbDefaults(ext.extension, ext.name || ext.extension, ext.voicemail || 'novm');
+        }
+        console.log(`AstDB sync complete for ${extensions.length} extension(s).`);
+    } catch (err) {
+        console.error('syncAllExtensionsAstdb error:', err.message);
+    }
 }
 
 // GET /api/config/extensions - List all Extensions
@@ -3569,7 +3588,7 @@ app.post('/api/config/extensions', async (req, res) => {
         }
 
         // 4. Update astdb entries for call recording ALWAYS, DEVICE dial mapping and Voicemail setting
-        setExtensionAstdbDefaults(extNum, displayName, vmVal);
+        await setExtensionAstdbDefaults(extNum, displayName, vmVal);
         reloadPbxConfig();
 
         res.json({ success: true, message: `Extension ${extNum} created with Voicemail (${vmVal === 'default' ? 'Enabled' : 'Disabled'}) successfully.` });
@@ -3601,7 +3620,7 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         await pool.query('UPDATE `asterisk`.`users` SET voicemail = ?, recording = "out=always|in=always" WHERE extension = ?', [vmVal, extNum]);
         await pool.query('UPDATE `asterisk`.`sip` SET data = "yes" WHERE id = ? AND keyword = "nat"', [extNum]);
         
-        setExtensionAstdbDefaults(extNum, displayName || extNum, vmVal);
+        await setExtensionAstdbDefaults(extNum, displayName || extNum, vmVal);
         reloadPbxConfig();
 
         res.json({ success: true, message: `Extension ${extNum} updated successfully.` });
@@ -3929,8 +3948,6 @@ app.delete('/api/config/ringgroups/:grpnum', async (req, res) => {
 
 // --- 2.5 QUEUES MANAGEMENT APIs ---
 
-const util = require('util');
-const execPromise = util.promisify(exec);
 
 async function syncAstDbQueueAgents(num, dynmembers) {
     try {
