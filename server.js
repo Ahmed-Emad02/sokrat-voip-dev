@@ -434,21 +434,23 @@ async function detectDonglesAndSetTrunkCID() {
         const devicesOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
         if (!devicesOutput) return;
 
-        const lines = devicesOutput.split('\n').filter(l => l.trim() && !l.startsWith('ID'));
+        const parsed = parseDevicesOutput(devicesOutput, true);
         const dongleInfo = {};
 
-        for (const line of lines) {
-            const parts = line.trim().split(/\s{2,}/);
-            if (parts.length < 10) continue;
-            const name = parts[0];
-            const imei = parts[9] || '';
-            const imsi = parts[10] || '';
-            const number = parts[parts.length - 1] || '';
-            if (imei && imei !== 'Unknown') {
-                dongleInfo[name] = { imei, imsi: (imsi && imsi !== 'Unknown' && imsi !== '-') ? imsi : '', number: (number && number !== 'Unknown' && number.startsWith('+')) ? number : null };
+        for (const d of parsed) {
+            const st = (d.State || '').toLowerCase();
+            const isConnected = st === 'free' || st === 'dialing' || st === 'ringing' || st === 'incall' || st === 'active' || st === 'held';
+            if (!isConnected) continue;
+
+            const name = d.ID;
+            const imei = (d.IMEI && d.IMEI !== 'Unknown' && d.IMEI !== '-') ? d.IMEI : '';
+            const imsi = (d.IMSI && d.IMSI !== 'Unknown' && d.IMSI !== '-') ? d.IMSI : '';
+            const number = (d.Number && d.Number !== 'Unknown' && d.Number !== '-' && (d.Number.startsWith('+') || d.Number.startsWith('01'))) ? d.Number : null;
+
+            if (imei || imsi || name) {
+                dongleInfo[name] = { imei, imsi, number };
             }
         }
-
         if (!Object.keys(dongleInfo).length) {
             console.log('DONGLE-CID: No dongles with valid IMEI detected');
             return;
@@ -2313,9 +2315,16 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
             if ((!row.IMEI || row.IMEI === '-' || row.IMEI === 'Unknown') && row.IMSI && (row.IMSI.startsWith('86') || row.IMSI.startsWith('35'))) {
                 row.IMEI = row.IMSI;
             }
-            const mapped = astDbMappings[row.IMSI] || astDbMappings[row.ID] || astDbMappings[row.IMEI] || null;
-            if (mapped && (!row.Number || row.Number === 'Unknown' || row.Number === '-')) {
-                row.Number = mapped;
+            const st = (row.State || '').toLowerCase();
+            const isNotConnected = st.includes('not connec') || st.includes('not_conn') || st.includes('not init') || st.includes('not reg') || st.includes('not respond');
+
+            if (isNotConnected) {
+                row.Number = 'Unknown';
+            } else {
+                const mapped = (row.IMSI && astDbMappings[row.IMSI]) || (row.IMEI && astDbMappings[row.IMEI]) || (row.ID && astDbMappings[row.ID]) || null;
+                if (mapped && (!row.Number || row.Number === 'Unknown' || row.Number === '-')) {
+                    row.Number = mapped;
+                }
             }
             devices.push(row);
         }
@@ -2382,8 +2391,8 @@ function getAstDbNumbers(callback) {
                     .then(([rows]) => {
                         rows.forEach(r => {
                             if (r.imsi && !mappings[r.imsi]) mappings[r.imsi] = r.phone_number;
-                            if (r.dongle_name && !mappings[r.dongle_name]) mappings[r.dongle_name] = r.phone_number;
                             if (r.imei && !mappings[r.imei]) mappings[r.imei] = r.phone_number;
+                            if (r.dongle_name && !mappings[r.dongle_name]) mappings[r.dongle_name] = r.phone_number;
                         });
                         callback(mappings);
                     })
