@@ -568,6 +568,16 @@ function reloadGreetingConfig() {
         }
     } catch {}
 }
+function extractDongleIdFromChannel(channelName) {
+    if (!channelName) return null;
+    let m = channelName.match(/^Dongle\/([^\/-]+)/i);
+    if (m) return m[1].toLowerCase();
+    m = channelName.match(/^SIP\/([^\/-]+)/i);
+    if (m) return m[1].toLowerCase();
+    m = channelName.match(/^PJSIP\/([^\/-]+)/i);
+    if (m) return m[1].toLowerCase();
+    return null;
+}
 // Helper function to extract extension number from Asterisk Channel string
 function getExtensionFromChannel(channelName) {
     if (!channelName) return null;
@@ -5631,18 +5641,27 @@ async function runDialerPacerCycle() {
 
             let freeDonglesCount = maxCap;
             if (camp.outbound_route_id) {
-                const [rTrunks] = await pool.query('SELECT trunk_id FROM `asterisk`.`outbound_route_trunks` WHERE route_id = ? ORDER BY seq ASC', [camp.outbound_route_id]);
+                const [rTrunks] = await pool.query(`
+                    SELECT rt.trunk_id, t.channelid, t.name AS trunk_name
+                    FROM \`asterisk\`.\`outbound_route_trunks\` rt
+                    LEFT JOIN \`asterisk\`.\`trunks\` t ON t.trunkid = rt.trunk_id
+                    WHERE rt.route_id = ?
+                    ORDER BY rt.seq ASC
+                `, [camp.outbound_route_id]);
+
                 let totalFreeTrunkChannels = 0;
                 for (const tRow of rTrunks) {
                     const trunkId = tRow.trunk_id;
+                    const dName = extractDongleIdFromChannel(tRow.channelid || tRow.trunk_name || '') || `trunk_${trunkId}`;
+
                     const [activeOnTrunk] = await pool.query(`
                         SELECT COUNT(*) AS cnt
                         FROM \`asterisk\`.\`dialer_call_attempts\`
-                        WHERE active_flag = 1 AND (dongle_id = ? OR campaign_id = ?)
-                    `, [`trunk_${trunkId}`, campId]);
+                        WHERE active_flag = 1 AND (dongle_id = ? OR (dongle_id IS NULL AND campaign_id = ?))
+                    `, [dName, campId]);
 
                     const inUse = activeOnTrunk[0]?.cnt || 0;
-                    const maxTrunkChans = 1; // 1 channel max per GSM dongle
+                    const maxTrunkChans = 1; // 1 max concurrent channel per GSM dongle
                     totalFreeTrunkChannels += Math.max(0, maxTrunkChans - inUse);
                 }
                 freeDonglesCount = Math.min(totalFreeTrunkChannels, maxCap);
@@ -5730,6 +5749,11 @@ async function runDialerPacerCycle() {
 function handleDialerAmiEvents(event) {
     if (!event) return;
 
+    const dId = extractDongleIdFromChannel(event.Channel || event.Channel1 || event.Channel2 || '');
+    const aUuid = event.AttemptUUID || (event.ActionID && event.ActionID.startsWith('att_') ? event.ActionID : null);
+    if (dId && aUuid) {
+        pool.query('UPDATE `asterisk`.`dialer_call_attempts` SET dongle_id = ? WHERE attempt_uuid = ? AND active_flag = 1', [dId, aUuid]).catch(() => {});
+    }
     if (event.Event === 'OriginateResponse' && event.ActionID && event.ActionID.startsWith('att_')) {
         const attemptUuid = event.ActionID;
         const responseStatus = event.Response || '';
