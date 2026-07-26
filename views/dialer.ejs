@@ -34,6 +34,10 @@ const words = {
         phoneNumber: "رقم الهاتف", reason: "السبب", actions: "الإجراءات",
         status: "الحالة", total: "الإجمالي", pending: "قيد الانتظار", connected: "متصل",
         dialing: "جاري الاتصال", failed: "فشل/آلي", start: "بدء", pause: "إيقاف مؤقت", stop: "إيقاف",
+        downloadTemplate: "تحميل نموذج CSV", templateNote: "الأعمدة: phone_number, first_name, last_name, company",
+        selectQueue: "— اختر طابور الاتصال —", selectQueueHint: "يجب أن يكون الطابور موجوداً على التبادل",
+        predictiveQueueRequired: "الطابور مطلوب للوضع التنبؤي"
+    }
 };
 const currentLang = typeof lang !== 'undefined' ? lang : 'en';
 const t = words[currentLang] || words.en;
