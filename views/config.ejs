@@ -1317,12 +1317,26 @@ function isTabAllowed(tabName) {
                             <input type="text" id="trunkFailScript" placeholder="e.g. /usr/local/bin/failover.sh" class="config-input w-full font-mono text-xs">
                         </div>
                     </div>
+                    <!-- Custom Trunk Fields -->
+                    <div id="trunkCustomFields" class="relative border-t border-[var(--border-primary)] pt-3">
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سلسلة الاتصال المخصصة *' : 'Custom Dial String *' %></label>
+                        <input type="text" id="trunkDialString" placeholder="e.g. dongle/dongle0/$OUTNUM$" class="config-input w-full font-mono text-xs" autocomplete="off">
+                        
+                        <!-- DONGLE FLOATING POPUP -->
+                        <div id="dongleInfoPopup" class="absolute left-0 top-[calc(100%+4px)] w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-4 z-[60] hidden space-y-2">
+                            <div class="text-[11px] font-bold text-[var(--text-secondary)] uppercase flex items-center justify-between">
+                                <span><%= isRtl ? 'أجهزة Dongle المتصلة:' : 'Connected Dongles:' %></span>
+                                <button type="button" onclick="loadDongleInfoPopup()" class="text-[10px] text-blue-400 hover:underline">Refresh</button>
+                            </div>
+                            <div id="dongleInfoList" class="text-xs space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                                <span class="text-[11px] text-[var(--text-muted)]">Loading...</span>
+                            </div>
+                        </div>
 
                         <p class="text-[11px] text-[var(--text-muted)] mt-1">
                             Format: <code>dongle/dongle0/$OUTNUM$</code> or <code>dongle/i:359767037813558/$OUTNUM$</code>
                         </p>
                     </div>
-
                     <!-- SIP / IAX2 Trunk Fields -->
                     <div id="trunkSipIaxFields" class="hidden space-y-3 border-t border-[var(--border-primary)] pt-3">
                         <div class="grid grid-cols-4 gap-3">
