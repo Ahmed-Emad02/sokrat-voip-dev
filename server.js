@@ -648,7 +648,7 @@ function recomputeAllPjsipPresence() {
 
 async function getTrunkStatusMap() {
     try {
-        const [trunks] = await pool.query('SELECT trunkid, name, tech, channelid, disabled, usercontext FROM `asterisk`.`trunks` ORDER BY trunkid ASC');
+        const [trunks] = await pool.query("SELECT trunkid, name, tech, channelid, disabled, usercontext FROM `asterisk`.`trunks` WHERE LOWER(tech) IN ('sip', 'iax2', 'iax') ORDER BY trunkid ASC");
         const statusMap = {};
         for (const t of trunks) {
             let online = false;
