@@ -79,6 +79,7 @@ function tableName(dbName, table) {
 const tables = {
     cdr: tableName(CDR_DB, 'cdr'),
     users: tableName(ASTERISK_DB, 'users'),
+    devices: tableName(ASTERISK_DB, 'devices'),
     sip: tableName(ASTERISK_DB, 'sip'),
     sipfriends: tableName(ASTERISK_DB, 'sipfriends'),
     sippeers: tableName(ASTERISK_DB, 'sippeers'),
