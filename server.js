@@ -68,7 +68,7 @@ if ((process.env.USE_HTTPS === 'true' || process.env.SSL_PORT) && fs.existsSync(
 }
 const io = new Server(server);
 ffmpeg.setFfmpegPath('/usr/local/bin/ffmpeg');
-const PORT = process.env.PORT || 3000;
+const PORT = (process.env.USE_HTTPS === 'true' && process.env.SSL_PORT) ? parseInt(process.env.SSL_PORT, 10) : (parseInt(process.env.PORT, 10) || 3000);
 const SESSION_SECRET = process.env.SESSION_SECRET || 'issabel-dashboard-secret-change-me';
 
 const ROOT_USER = 'root';
@@ -3726,7 +3726,7 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create')
     content = content.replace(regex, '').trim();
 
     if (action !== 'delete') {
-        const newBlock = `\n\n${startMarker}\n[${extNum}]\ntype=endpoint\ncontext=from-internal\ndisallow=all\nallow=ulaw,alaw,opus,vp8\nauth=${extNum}-auth\naors=${extNum}\ntransport=transport-ws\nwebrtc=yes\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nrtp_symmetric=yes\nforce_rport=yes\nrewrite_contact=yes\ndirect_media=no\n\n[${extNum}-auth]\ntype=auth\nauth_type=userpass\nusername=${extNum}\npassword=${secret}\n\n[${extNum}]\ntype=aor\nmax_contacts=5\nremove_existing=yes\n${endMarker}`;
+        const newBlock = `\n\n${startMarker}\n[${extNum}]\ntype=endpoint\ncontext=from-internal\ndisallow=all\nallow=ulaw,alaw,opus,vp8\nauth=${extNum}-auth\naors=${extNum}\ntransport=transport-wss\nwebrtc=yes\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nrtp_symmetric=yes\nforce_rport=yes\nrewrite_contact=yes\ndirect_media=no\n\n[${extNum}-auth]\ntype=auth\nauth_type=userpass\nusername=${extNum}\npassword=${secret}\n\n[${extNum}]\ntype=aor\nmax_contacts=5\nremove_existing=yes\n${endMarker}`;
         content += newBlock;
     }
 
