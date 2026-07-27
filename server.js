@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const net = require('net');
 const http = require('http');
+const https = require('https');
 const { Server } = require('socket.io');
 const { exec, execFile } = require('child_process');
 const util = require('util');
@@ -47,7 +48,24 @@ function decrypt(text) {
 
 const app = express();
 app.set('trust proxy', true);
-const server = http.createServer(app);
+const SSL_CERT = process.env.SSL_CERT || '/etc/asterisk/keys/asterisk.pem';
+const SSL_KEY = process.env.SSL_KEY || '/etc/asterisk/keys/asterisk.pem';
+let server;
+if ((process.env.USE_HTTPS === 'true' || process.env.SSL_PORT) && fs.existsSync(SSL_CERT) && fs.existsSync(SSL_KEY)) {
+    try {
+        const sslOptions = {
+            key: fs.readFileSync(SSL_KEY),
+            cert: fs.readFileSync(SSL_CERT)
+        };
+        server = https.createServer(sslOptions, app);
+        console.log('HTTPS server active using SSL certificate:', SSL_CERT);
+    } catch (e) {
+        console.error('HTTPS setup error, falling back to HTTP:', e.message);
+        server = http.createServer(app);
+    }
+} else {
+    server = http.createServer(app);
+}
 const io = new Server(server);
 ffmpeg.setFfmpegPath('/usr/local/bin/ffmpeg');
 const PORT = process.env.PORT || 3000;
