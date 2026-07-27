@@ -1241,150 +1241,222 @@ function isTabAllowed(tabName) {
     </div>
 
     <!-- MODAL 3: TRUNK FORM -->
-    <div id="trunkModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-2xl w-full p-6 text-[var(--text-primary)] max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border-primary)]">
-                <h3 id="trunkModalTitle" class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إضافة خط ربط' : 'Add Trunk' %></h3>
-                <button onclick="closeModal('trunkModal')" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">✕</button>
+    <div id="trunkModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-4xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    </div>
+                    <div>
+                        <h3 id="trunkModalTitle" class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إضافة خط ربط' : 'Add Trunk' %></h3>
+                        <p class="text-[11px] text-[var(--text-muted)]"><%= isRtl ? 'تكوين خطوط الربط المخصصة أو SIP أو IAX2 للمكالمات الخارجية والواردة' : 'Configure Custom, SIP, or IAX2 trunks for outbound and inbound VoIP calls' %></p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModal('trunkModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-red-500/40 flex items-center justify-center cursor-pointer transition-colors">✕</button>
             </div>
-            <form id="trunkForm" onsubmit="saveTrunk(event)">
+
+            <!-- Scrollable Body -->
+            <form id="trunkForm" onsubmit="saveTrunk(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="trunkEditId" value="">
-                <div class="flex flex-col gap-4">
-                    <!-- General Settings -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم خط الربط *' : 'Trunk Name *' %></label>
-                            <input type="text" id="trunkName" required placeholder="e.g. vodafone_trunk" class="config-input w-full font-mono text-xs">
+                <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+                    
+                    <!-- SECTION 1: IDENTITY & CORE TECH (Blue Theme) -->
+                    <div class="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-blue-500/15">
+                            <span class="text-xs font-black uppercase tracking-wider text-blue-400 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+                                <%= isRtl ? 'هوية خط الربط والتقنية' : 'Identity & Core Technology' %>
+                            </span>
+                            <span class="text-[10px] text-blue-400/70 font-mono"><%= isRtl ? 'أساسي' : 'REQUIRED' %></span>
                         </div>
-                        <div>
-                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'نوع / تقنية خط الربط *' : 'Trunk Type / Technology *' %></label>
-                            <select id="trunkTech" onchange="onTrunkTechChange()" class="config-input w-full text-xs font-bold">
-                                <option value="custom"><%= isRtl ? 'خط مخصص (Custom / Dongle / Dahdi)' : 'Custom Trunk (Dongle / Local / Dahdi)' %></option>
-                                <option value="sip"><%= isRtl ? 'خط ربط SIP (chan_sip)' : 'SIP Trunk (chan_sip)' %></option>
-                                <option value="iax2"><%= isRtl ? 'خط ربط IAX2 (chan_iax2)' : 'IAX2 Trunk (chan_iax2)' %></option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-3 gap-3">
-                        <div>
-                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'رقم هوية المتصل الخارجي' : 'Outbound CallerID' %></label>
-                            <input type="text" id="trunkOutcid" placeholder='e.g. "Vodafone" <01027826232>' class="config-input w-full font-mono text-xs">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'خيارات هوية المتصل (CID Options)' : 'CID Options' %></label>
-                            <select id="trunkKeepCid" class="config-input w-full text-xs">
-                                <option value="off"><%= isRtl ? 'السماح بأي هوية (Allow Any CID)' : 'Allow Any CID' %></option>
-                                <option value="on"><%= isRtl ? 'حظر الهويات الخارجية (Block Foreign CIDs)' : 'Block Foreign CIDs' %></option>
-                                <option value="all"><%= isRtl ? 'فرض هوية الخط (Force Trunk CID)' : 'Force Trunk CID' %></option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'أقصى عدد قنوات' : 'Maximum Channels' %></label>
-                            <input type="number" id="trunkMaxChans" min="0" placeholder="e.g. 10" class="config-input w-full font-mono text-xs">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم خط الربط *' : 'Trunk Name *' %></label>
+                                <input type="text" id="trunkName" required placeholder="e.g. vodafone_trunk" class="config-input w-full font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'تقنية خط الربط *' : 'Trunk Technology *' %></label>
+                                <select id="trunkTech" onchange="onTrunkTechChange()" class="config-input w-full text-xs font-bold">
+                                    <option value="custom"><%= isRtl ? 'خط مخصص (Custom / Dongle / Dahdi)' : 'Custom Trunk (Dongle / Local / Dahdi)' %></option>
+                                    <option value="sip"><%= isRtl ? 'خط ربط SIP (chan_sip)' : 'SIP Trunk (chan_sip)' %></option>
+                                    <option value="iax2"><%= isRtl ? 'خط ربط IAX2 (chan_iax2)' : 'IAX2 Trunk (chan_iax2)' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'حالة الخط' : 'Trunk Status' %></label>
+                                <select id="trunkDisabled" class="config-input w-full text-xs font-bold">
+                                    <option value="off"><%= isRtl ? 'مفعل (Enabled)' : 'Enabled' %></option>
+                                    <option value="on"><%= isRtl ? 'معطل (Disabled)' : 'Disabled' %></option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'بادئة الاتصال للخط (Outbound Dial Prefix)' : 'Outbound Dial Prefix' %></label>
-                            <input type="text" id="trunkDialPrefix" placeholder="e.g. 9" class="config-input w-full font-mono text-xs">
+                    <!-- SECTION 2: OUTBOUND & CALLER ID (Amber Theme) -->
+                    <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-amber-500/15">
+                            <span class="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                                <%= isRtl ? 'إعدادات هوية المتصل والقنوات' : 'Outbound CID & Capacity Rules' %>
+                            </span>
+                            <span class="text-[10px] text-amber-400/70 font-mono"><%= isRtl ? 'توجيه' : 'ROUTING' %></span>
                         </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'حالة الخط' : 'Trunk Status' %></label>
-                            <select id="trunkDisabled" class="config-input w-full text-xs font-bold">
-                                <option value="off"><%= isRtl ? 'مفعل (Enabled)' : 'Enabled' %></option>
-                                <option value="on"><%= isRtl ? 'معطل (Disabled)' : 'Disabled' %></option>
-                            </select>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'رقم هوية المتصل الخارجي' : 'Outbound CallerID' %></label>
+                                <input type="text" id="trunkOutcid" placeholder='e.g. "Vodafone" <01027826232>' class="config-input w-full font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'خيارات هوية المتصل' : 'CID Options' %></label>
+                                <select id="trunkKeepCid" class="config-input w-full text-xs">
+                                    <option value="off"><%= isRtl ? 'السماح بأي هوية (Allow Any CID)' : 'Allow Any CID' %></option>
+                                    <option value="on"><%= isRtl ? 'حظر الهويات الخارجية (Block Foreign CIDs)' : 'Block Foreign CIDs' %></option>
+                                    <option value="all"><%= isRtl ? 'فرض هوية الخط (Force Trunk CID)' : 'Force Trunk CID' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'أقصى عدد قنوات' : 'Maximum Channels' %></label>
+                                <input type="number" id="trunkMaxChans" min="0" placeholder="e.g. 10 (blank = unlimited)" class="config-input w-full font-mono text-xs">
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- Issabel 5 Additional Trunk Settings -->
-                    <div class="grid grid-cols-3 gap-3 pt-2">
-                        <div>
-                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'خيارات اتصال Asterisk (Dial Options)' : 'Asterisk Trunk Dial Options' %></label>
-                            <input type="text" id="trunkDialOpts" placeholder="e.g. Ww" class="config-input w-full font-mono text-xs">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'بادئة الاتصال (Dial Prefix)' : 'Outbound Dial Prefix' %></label>
+                                <input type="text" id="trunkDialPrefix" placeholder="e.g. 9" class="config-input w-full font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'خيارات الاتصال (Asterisk Dial Options)' : 'Asterisk Trunk Dial Options' %></label>
+                                <input type="text" id="trunkDialOpts" placeholder="e.g. Ww" class="config-input w-full font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'متابعة عند الانشغال' : 'Continue if Busy' %></label>
+                                <select id="trunkContinue" class="config-input w-full text-xs font-bold">
+                                    <option value="off"><%= isRtl ? 'لا (No)' : 'No' %></option>
+                                    <option value="on"><%= isRtl ? 'نعم (Yes)' : 'Yes' %></option>
+                                </select>
+                            </div>
                         </div>
+
                         <div>
-                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'متابعة إذا كان مشغولاً (Continue if Busy)' : 'Continue if Busy' %></label>
-                            <select id="trunkContinue" class="config-input w-full text-xs font-bold">
-                                <option value="off"><%= isRtl ? 'لا' : 'No' %></option>
-                                <option value="on"><%= isRtl ? 'نعم' : 'Yes' %></option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'مراقبة فشل الخط (Monitor Trunk Failures)' : 'Monitor Trunk Failures' %></label>
+                            <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سكربت مراقبة الأعطال (Monitor Failures)' : 'Monitor Trunk Failures Script' %></label>
                             <input type="text" id="trunkFailScript" placeholder="e.g. /usr/local/bin/failover.sh" class="config-input w-full font-mono text-xs">
                         </div>
                     </div>
-                    <!-- Custom Trunk Fields -->
-                    <div id="trunkCustomFields" class="relative border-t border-[var(--border-primary)] pt-3">
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سلسلة الاتصال المخصصة *' : 'Custom Dial String *' %></label>
-                        <input type="text" id="trunkDialString" placeholder="e.g. dongle/dongle0/$OUTNUM$" class="config-input w-full font-mono text-xs" autocomplete="off">
-                        
-                        <!-- DONGLE FLOATING POPUP -->
-                        <div id="dongleInfoPopup" class="absolute left-0 top-[calc(100%+4px)] w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-4 z-[60] hidden space-y-2">
-                            <div class="text-[11px] font-bold text-[var(--text-secondary)] uppercase flex items-center justify-between">
-                                <span><%= isRtl ? 'أجهزة Dongle المتصلة:' : 'Connected Dongles:' %></span>
-                                <button type="button" onclick="loadDongleInfoPopup()" class="text-[10px] text-blue-400 hover:underline">Refresh</button>
-                            </div>
-                            <div id="dongleInfoList" class="text-xs space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                                <span class="text-[11px] text-[var(--text-muted)]">Loading...</span>
-                            </div>
-                        </div>
 
-                        <p class="text-[11px] text-[var(--text-muted)] mt-1">
-                            Format: <code>dongle/dongle0/$OUTNUM$</code> or <code>dongle/i:359767037813558/$OUTNUM$</code>
-                        </p>
-                    </div>
-                    <!-- SIP / IAX2 Trunk Fields -->
-                    <div id="trunkSipIaxFields" class="hidden space-y-3 border-t border-[var(--border-primary)] pt-3">
-                        <div class="grid grid-cols-4 gap-3">
-                            <div>
-                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'عنوان الخادم البعيد (IP/Domain) *' : 'Remote Host (IP / Domain) *' %></label>
-                                <input type="text" id="trunkHost" placeholder="e.g. 192.168.100.50" class="config-input w-full font-mono text-xs">
-                            </div>
-                            <div class="col-span-2">
-                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم المستخدم' : 'Username' %></label>
-                                <input type="text" id="trunkUsername" placeholder="e.g. 01027826232" class="config-input w-full font-mono text-xs">
-                            </div>
-                            <div>
-                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'كلمة السر / Secret' : 'Secret / Password' %></label>
-                                <input type="password" id="trunkSecret" placeholder="••••••••" class="config-input w-full font-mono text-xs">
-                            </div>
-                            <div>
-                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سياق (Context)' : 'Context *' %></label>
-                                <input type="text" id="trunkContext" placeholder="from-trunk" class="config-input w-full font-mono text-xs">
-                            </div>
+                    <!-- CUSTOM TRUNK SECTION -->
+                    <div id="trunkCustomFields" class="relative rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-emerald-500/15">
+                            <span class="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                <%= isRtl ? 'إعدادات الاتصال المخصص (Custom Dial String)' : 'Custom Connection Settings' %>
+                            </span>
+                            <span class="text-[10px] text-emerald-400/70 font-mono">CUSTOM</span>
                         </div>
-
-                        <!-- FreePBX PEER Details & USER Details Textareas -->
                         <div>
-                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'إعدادات الخروج (PEER Details)' : 'Outgoing Settings (PEER Details)' %></label>
-                            <textarea id="trunkPeerDetails" rows="4" placeholder="host=192.168.100.50&#10;username=user&#10;secret=pass&#10;type=peer&#10;context=from-trunk&#10;insecure=port,invite&#10;qualify=yes" class="config-input w-full font-mono text-xs py-1.5 px-2.5 resize-y"></textarea>
+                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سلسلة الاتصال المخصصة *' : 'Custom Dial String *' %></label>
+                            <input type="text" id="trunkDialString" placeholder="e.g. dongle/dongle0/$OUTNUM$" class="config-input w-full font-mono text-xs" autocomplete="off">
+                            
+                            <!-- DONGLE FLOATING POPUP -->
+                            <div id="dongleInfoPopup" class="absolute left-0 top-[calc(100%+4px)] w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-4 z-[60] hidden space-y-2">
+                                <div class="text-[11px] font-bold text-[var(--text-secondary)] uppercase flex items-center justify-between">
+                                    <span><%= isRtl ? 'أجهزة Dongle المتصلة:' : 'Connected Dongles:' %></span>
+                                    <button type="button" onclick="loadDongleInfoPopup()" class="text-[10px] text-blue-400 hover:underline">Refresh</button>
+                                </div>
+                                <div id="dongleInfoList" class="text-xs space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                                    <span class="text-[11px] text-[var(--text-muted)]">Loading...</span>
+                                </div>
+                            </div>
+
+                            <p class="text-[11px] text-[var(--text-muted)] mt-1.5 font-mono">
+                                Format: <code>dongle/dongle0/$OUTNUM$</code> or <code>dongle/i:359767037813558/$OUTNUM$</code>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- SIP / IAX2 TRUNK SECTION -->
+                    <div id="trunkSipIaxFields" class="hidden space-y-5">
+                        
+                        <!-- SECTION 3: OUTGOING PEER SETTINGS (Emerald Theme) -->
+                        <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
+                            <div class="flex items-center justify-between pb-2 border-b border-emerald-500/15">
+                                <span class="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                    <%= isRtl ? 'إعدادات الاتصال الخارجي (Outgoing PEER Details)' : 'Outgoing Connection & PEER Details' %>
+                                </span>
+                                <span class="text-[10px] text-emerald-400/70 font-mono">PEER</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'عنوان الخادم البعيد *' : 'Remote Host (IP / Domain) *' %></label>
+                                    <input type="text" id="trunkHost" placeholder="e.g. 192.168.100.50" class="config-input w-full font-mono text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سياق الخروج (Context) *' : 'Context *' %></label>
+                                    <input type="text" id="trunkContext" placeholder="from-trunk" class="config-input w-full font-mono text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم المستخدم' : 'Username' %></label>
+                                    <input type="text" id="trunkUsername" placeholder="e.g. 01027826232" class="config-input w-full font-mono text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'كلمة السر (Secret)' : 'Secret / Password' %></label>
+                                    <input type="password" id="trunkSecret" placeholder="••••••••" class="config-input w-full font-mono text-xs">
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase"><%= isRtl ? 'تفاصيل الخروج (PEER Details)' : 'Outgoing Settings (PEER Details)' %></label>
+                                    <span class="text-[10px] font-mono text-emerald-400">key=value</span>
+                                </div>
+                                <textarea id="trunkPeerDetails" rows="4" placeholder="host=192.168.100.50&#10;username=user&#10;secret=pass&#10;type=peer&#10;context=from-trunk&#10;insecure=port,invite&#10;qualify=yes" class="config-input w-full font-mono text-xs py-2 px-3 leading-relaxed resize-y bg-black/40 border-emerald-500/20 focus:border-emerald-500"></textarea>
+                            </div>
                         </div>
 
-                        <div class="border-t border-[var(--border-primary)] pt-2 space-y-2">
-                            <div class="grid grid-cols-2 gap-3">
+                        <!-- SECTION 4: INCOMING USER SETTINGS & REGISTRATION (Purple Theme) -->
+                        <div class="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-3">
+                            <div class="flex items-center justify-between pb-2 border-b border-purple-500/15">
+                                <span class="text-xs font-black uppercase tracking-wider text-purple-400 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+                                    <%= isRtl ? 'إعدادات الدخول والتسجيل (Incoming USER & Register)' : 'Incoming User Context & Registration' %>
+                                </span>
+                                <span class="text-[10px] text-purple-400/70 font-mono">USER & REG</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                 <div>
-                                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سياق المستخدم الوارد (User Context)' : 'User Context (Incoming)' %></label>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سياق المستخدم الوارد' : 'User Context (Incoming)' %></label>
                                     <input type="text" id="trunkUserContext" placeholder="e.g. from-trunk" class="config-input w-full font-mono text-xs">
                                 </div>
                                 <div>
-                                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'نص التسجيل (Register String)' : 'Register String' %></label>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'نص التسجيل (Register String)' : 'Register String' %></label>
                                     <input type="text" id="trunkRegister" placeholder="e.g. user:secret@host" class="config-input w-full font-mono text-xs">
                                 </div>
                             </div>
+
                             <div>
-                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'إعدادات الدخول (USER Details)' : 'Incoming Settings (USER Details)' %></label>
-                                <textarea id="trunkUserDetails" rows="3" placeholder="secret=pass&#10;type=user&#10;context=from-trunk" class="config-input w-full font-mono text-xs py-1.5 px-2.5 resize-y"></textarea>
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase"><%= isRtl ? 'تفاصيل الدخول (USER Details)' : 'Incoming Settings (USER Details)' %></label>
+                                    <span class="text-[10px] font-mono text-purple-400">key=value</span>
+                                </div>
+                                <textarea id="trunkUserDetails" rows="3" placeholder="secret=pass&#10;type=user&#10;context=from-trunk" class="config-input w-full font-mono text-xs py-2 px-3 leading-relaxed resize-y bg-black/40 border-purple-500/20 focus:border-purple-500"></textarea>
                             </div>
                         </div>
+
                     </div>
                 </div>
-                <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--border-primary)]">
-                    <button type="button" onclick="closeModal('trunkModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
-                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs"><%= isRtl ? 'حفظ خط الربط' : 'Save Trunk' %></button>
+
+                <!-- Footer -->
+                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                    <button type="button" onclick="closeModal('trunkModal')" class="config-btn-secondary px-5 py-2.5 text-xs font-semibold"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" class="config-btn-primary px-6 py-2.5 text-xs font-bold flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        <span><%= isRtl ? 'حفظ خط الربط' : 'Save Trunk' %></span>
+                    </button>
                 </div>
             </form>
         </div>
