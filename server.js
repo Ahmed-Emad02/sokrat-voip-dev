@@ -357,7 +357,7 @@ async function initAuthDb() {
             await conn.execute('INSERT INTO `asterisk`.`queues_config` (extension, descr, grppre, strategy, servicelevel, joinempty, leavewhenempty, ringinuse, timeout, retry, wrapuptime, maxlen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
                 '300', 'autodialer-queue', '', 'ringall', '30', 'yes', 'no', 'yes', '15', '5', '0', '0'
             ]);
-            await conn.execute('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', [300, 'member', 'Local/101@default/n', 0]);
+            await conn.execute('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', [300, 'member', 'SIP/101', 0]);
             console.log('QUEUE: Auto-provisioned default ACD queue 300 (autodialer-queue) with member Local/101@default');
         }
     } catch (qErr) {
@@ -3686,14 +3686,81 @@ async function syncAllExtensionsAstdb() {
     }
 }
 
+function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create') {
+    const pjsipPath = process.platform === 'win32'
+        ? path.join(__dirname, 'pjsip_custom.conf')
+        : '/etc/asterisk/pjsip_custom.conf';
+
+    let content = '';
+    try {
+        if (fs.existsSync(pjsipPath)) {
+            content = fs.readFileSync(pjsipPath, 'utf8');
+        }
+    } catch (e) {
+        console.error('Error reading pjsip_custom.conf:', e.message);
+    }
+
+    const startMarker = `; BEGIN WEBRTC EXTENSION ${extNum}`;
+    const endMarker = `; END WEBRTC EXTENSION ${extNum}`;
+
+    const regex = new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g');
+    content = content.replace(regex, '').trim();
+
+    if (action !== 'delete') {
+        const newBlock = `\n\n${startMarker}\n[${extNum}]\ntype=endpoint\ncontext=from-internal\ndisallow=all\nallow=ulaw,alaw,opus,vp8\nauth=${extNum}-auth\naors=${extNum}\ntransport=transport-wss\nwebrtc=yes\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nrtp_symmetric=yes\nforce_rport=yes\nrewrite_contact=yes\ndirect_media=no\n\n[${extNum}-auth]\ntype=auth\nauth_type=userpass\nusername=${extNum}\npassword=${secret}\n\n[${extNum}]\ntype=aor\nmax_contacts=5\nremove_existing=yes\n${endMarker}`;
+        content += newBlock;
+    }
+
+    try {
+        fs.writeFileSync(pjsipPath, content.trim() + '\n', 'utf8');
+    } catch (e) {
+        console.error('Error writing pjsip_custom.conf:', e.message);
+    }
+}
+
+function reloadPjsip() {
+    exec(`${ASTERISK_BIN} -rx "module reload res_pjsip.so"`, () => {});
+    exec(`${ASTERISK_BIN} -rx "pjsip reload"`, () => {});
+}
+
+app.get('/api/webrtc/config', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT u.extension, u.name, COALESCE(s_secret.data, '') AS secret, d.tech
+            FROM ${tables.users} u
+            LEFT JOIN ${tables.devices} d ON d.id = u.extension
+            LEFT JOIN ${tables.sip} s_secret ON s_secret.id = u.extension AND s_secret.keyword = 'secret'
+            WHERE d.tech = 'pjsip' OR u.extension = '200'
+        `);
+        const host = req.hostname || '127.0.0.1';
+        const wsPort = 5066;
+        const protocol = req.protocol === 'https' ? 'wss' : 'ws';
+        const wsUrl = `${protocol}://${host}:${wsPort}`;
+
+        res.json({
+            success: true,
+            wsUrl,
+            extensions: rows.map(r => ({
+                extension: r.extension,
+                name: r.name,
+                secret: r.secret || 'WebRTC200Secure!'
+            }))
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // GET /api/config/extensions - List all Extensions
 app.get('/api/config/extensions', async (req, res) => {
     try {
         const [extensions] = await pool.query(`
             SELECT u.extension, u.name, u.outboundcid, u.recording, u.voicemail,
                    s_secret.data AS secret, s_context.data AS context, s_nat.data AS nat,
+                   COALESCE(d.tech, 'sip') AS tech,
                    ee.photo, ee.title, ee.emp_group
             FROM ${tables.users} u
+            LEFT JOIN ${tables.devices} d ON d.id = u.extension
             LEFT JOIN ${tables.sip} s_secret ON s_secret.id = u.extension AND s_secret.keyword = 'secret'
             LEFT JOIN ${tables.sip} s_context ON s_context.id = u.extension AND s_context.keyword = 'context'
             LEFT JOIN ${tables.sip} s_nat ON s_nat.id = u.extension AND s_nat.keyword = 'nat'
@@ -3709,7 +3776,7 @@ app.get('/api/config/extensions', async (req, res) => {
 // POST /api/config/extensions - Create new Generic SIP Extension
 app.post('/api/config/extensions', async (req, res) => {
     try {
-        const { extension, name, secret, voicemail } = req.body;
+        const { extension, name, secret, voicemail, tech } = req.body;
         if (!extension || !/^\d+$/.test(extension)) {
             return res.status(400).json({ success: false, error: 'Valid numeric Extension number is required.' });
         }
@@ -3725,6 +3792,9 @@ app.post('/api/config/extensions', async (req, res) => {
         const extSecret = String(secret).trim();
         const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
         const extContext = 'from-internal';
+        const isWebRTC = tech === 'webrtc' || tech === 'pjsip';
+        const devTech = isWebRTC ? 'pjsip' : 'sip';
+        const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
 
         // Check if extension already exists
         const [existing] = await pool.query('SELECT extension FROM `asterisk`.`users` WHERE extension = ?', [extNum]);
@@ -3738,26 +3808,26 @@ app.post('/api/config/extensions', async (req, res) => {
             VALUES (?, '', ?, ?, 0, '', 'out=always|in=always', '', '', 'default')
         `, [extNum, displayName, vmVal]);
 
-        // 2. Insert into devices (Generic SIP Device)
+        // 2. Insert into devices (PJSIP or Generic SIP Device)
         await pool.query(`
             INSERT INTO \`asterisk\`.\`devices\` (id, tech, dial, devicetype, user, description, emergency_cid)
-            VALUES (?, 'sip', CONCAT('SIP/', ?), 'fixed', ?, ?, '')
-        `, [extNum, extNum, extNum, displayName]);
+            VALUES (?, ?, ?, 'fixed', ?, ?, '')
+        `, [extNum, devTech, devDial, extNum, displayName]);
 
-        // 3. Batch insert into sip table with nat=yes
+        // 3. Batch insert into sip table
         const sipPairs = [
             [extNum, 'account', extNum, 32],
             [extNum, 'accountcode', '', 28],
             [extNum, 'allow', '', 26],
-            [extNum, 'avpf', 'no', 15],
+            [extNum, 'avpf', isWebRTC ? 'yes' : 'no', 15],
             [extNum, 'callerid', `${displayName} <${extNum}>`, 33],
             [extNum, 'canreinvite', 'no', 4],
             [extNum, 'context', extContext, 5],
             [extNum, 'deny', '0.0.0.0/0.0.0.0', 30],
-            [extNum, 'dial', `SIP/${extNum}`, 27],
+            [extNum, 'dial', devDial, 27],
             [extNum, 'disallow', '', 25],
             [extNum, 'dtmfmode', 'rfc2833', 3],
-            [extNum, 'encryption', 'no', 22],
+            [extNum, 'encryption', isWebRTC ? 'yes' : 'no', 22],
             [extNum, 'host', 'dynamic', 6],
             [extNum, 'mailbox', `${extNum}@device`, 29],
             [extNum, 'nat', 'yes', 10],
@@ -3767,7 +3837,7 @@ app.post('/api/config/extensions', async (req, res) => {
             [extNum, 'qualifyfreq', '15', 13],
             [extNum, 'secret', extSecret, 2],
             [extNum, 'sendrpid', 'no', 8],
-            [extNum, 'transport', 'udp', 14],
+            [extNum, 'transport', isWebRTC ? 'wss' : 'udp', 14],
             [extNum, 'trustrpid', 'yes', 7],
             [extNum, 'type', 'friend', 9]
         ];
@@ -3780,11 +3850,21 @@ app.post('/api/config/extensions', async (req, res) => {
             `, [id, kw, data, flags]);
         }
 
+        // Write PJSIP custom endpoint config if WebRTC
+        if (isWebRTC) {
+            updatePjsipCustomConfig(extNum, extSecret, displayName, 'create');
+            reloadPjsip();
+        }
+
         // 4. Update astdb entries for call recording ALWAYS, DEVICE dial mapping and Voicemail setting
-        await setExtensionAstdbDefaults(extNum, displayName, vmVal);
+        await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech);
         reloadPbxConfig();
 
-        res.json({ success: true, message: `Extension ${extNum} created with Voicemail (${vmVal === 'default' ? 'Enabled' : 'Disabled'}) successfully.` });
+        res.json({
+            success: true,
+            message: `Extension ${extNum} (${isWebRTC ? 'WebRTC Softphone' : 'Generic SIP'}) created successfully.`,
+            extension: { extension: extNum, name: displayName, secret: extSecret, tech: devTech, isWebRTC }
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -3794,11 +3874,21 @@ app.post('/api/config/extensions', async (req, res) => {
 app.put('/api/config/extensions/:extension', async (req, res) => {
     try {
         const extNum = String(req.params.extension).trim();
-        const { name, secret, voicemail } = req.body;
+        const { name, secret, voicemail, tech } = req.body;
 
         const displayName = String(name || '').trim();
         const extSecret = String(secret || '').trim();
         const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
+
+        const [devRows] = await pool.query('SELECT tech FROM `asterisk`.`devices` WHERE id = ?', [extNum]);
+        const currentTech = devRows[0]?.tech || 'sip';
+        const isWebRTC = tech === 'webrtc' || tech === 'pjsip' || currentTech === 'pjsip';
+        const devTech = isWebRTC ? 'pjsip' : 'sip';
+        const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
+
+        if (tech) {
+            await pool.query('UPDATE `asterisk`.`devices` SET tech = ?, dial = ? WHERE id = ?', [devTech, devDial, extNum]);
+        }
 
         if (displayName) {
             await pool.query('UPDATE `asterisk`.`users` SET name = ? WHERE extension = ?', [displayName, extNum]);
@@ -3812,8 +3902,13 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         // Update voicemail & nat in users and sip table
         await pool.query('UPDATE `asterisk`.`users` SET voicemail = ?, recording = "out=always|in=always" WHERE extension = ?', [vmVal, extNum]);
         await pool.query('UPDATE `asterisk`.`sip` SET data = "yes" WHERE id = ? AND keyword = "nat"', [extNum]);
-        
-        await setExtensionAstdbDefaults(extNum, displayName || extNum, vmVal);
+
+        if (isWebRTC) {
+            updatePjsipCustomConfig(extNum, extSecret, displayName || extNum, 'create');
+            reloadPjsip();
+        }
+
+        await setExtensionAstdbDefaults(extNum, displayName || extNum, vmVal, devTech);
         reloadPbxConfig();
 
         res.json({ success: true, message: `Extension ${extNum} updated successfully.` });
@@ -3833,11 +3928,16 @@ app.delete('/api/config/extensions/:extension', async (req, res) => {
             `SELECT photo FROM ${tables.employeeExtras} WHERE extension = ?`,
             [extNum]
         );
+        
+        updatePjsipCustomConfig(extNum, '', '', 'delete');
+        reloadPjsip();
+
         await pool.query(`DELETE FROM ${tables.users} WHERE extension = ?`, [extNum]);
         await pool.query('DELETE FROM `asterisk`.`devices` WHERE id = ?', [extNum]);
         await pool.query(`DELETE FROM ${tables.sip} WHERE id = ?`, [extNum]);
         await pool.query(`DELETE FROM ${tables.employeeExtras} WHERE extension = ?`, [extNum]);
         if (employeeRows[0]?.photo) removeEmployeePhoto(employeeRows[0].photo);
+
         // Clean up astdb AMPUSER, DEVICE & voicemail.conf
         exec(`${ASTERISK_BIN} -rx 'database deltree AMPUSER ${extNum}'`, (err) => {
             if (err) console.error(`AstDB AMPUSER deltree error for ${extNum}:`, err.message);
@@ -4294,12 +4394,14 @@ app.post('/api/config/queues', async (req, res) => {
         if (Array.isArray(static_members)) staticArr = static_members;
         else if (typeof static_members === 'string') staticArr = static_members.split(/[\r\n, ]+/).filter(Boolean);
 
-        staticArr.forEach((ext, idx) => {
-            const cleanExt = String(ext).trim();
-            if (cleanExt) {
-                details.push([num, 'member', `Local/${cleanExt}@from-queue/n,0`, idx]);
-            }
-        });
+        for (let idx = 0; idx < staticArr.length; idx++) {
+            const cleanExt = String(staticArr[idx]).trim();
+            if (!cleanExt) continue;
+            // Resolve member interface from devices.dial: "SIP/101" or "PJSIP/200"
+            const [devRows] = await pool.query('SELECT dial FROM `asterisk`.`devices` WHERE id = ?', [cleanExt]);
+            const memberIf = devRows[0]?.dial || `SIP/${cleanExt}`;
+            details.push([num, 'member', `${memberIf}`, idx]);
+        }
 
         let dynStr = '';
         if (Array.isArray(dynmembers)) dynStr = dynmembers.join('\n');
@@ -4386,12 +4488,13 @@ app.put('/api/config/queues/:extension', async (req, res) => {
         if (Array.isArray(static_members)) staticArr = static_members;
         else if (typeof static_members === 'string') staticArr = static_members.split(/[\r\n, ]+/).filter(Boolean);
 
-        staticArr.forEach((ext, idx) => {
-            const cleanExt = String(ext).trim();
-            if (cleanExt) {
-                details.push([num, 'member', `Local/${cleanExt}@from-queue/n,0`, idx]);
-            }
-        });
+        for (let idx = 0; idx < staticArr.length; idx++) {
+            const cleanExt = String(staticArr[idx]).trim();
+            if (!cleanExt) continue;
+            const [devRows] = await pool.query('SELECT dial FROM `asterisk`.`devices` WHERE id = ?', [cleanExt]);
+            const memberIf = devRows[0]?.dial || `SIP/${cleanExt}`;
+            details.push([num, 'member', `${memberIf}`, idx]);
+        }
 
         let dynStr = '';
         if (Array.isArray(dynmembers)) dynStr = dynmembers.join('\n');
@@ -5651,6 +5754,21 @@ async function claimNextLeadAtomic(campaignId) {
     }
 }
 
+/**
+ * Extract extension number from a queue member string.
+ * "SIP/101" → "101", "Local/101@from-queue/n" → "101", "PJSIP/200" → "200"
+ */
+function extractExtFromQueueMember(memberData) {
+    if (!memberData) return null;
+    const m = memberData.trim();
+    let match = m.match(/^Local\/(\d+)@/);
+    if (match) return match[1];
+    match = m.match(/^(?:SIP|PJSIP)\/(\d+)/);
+    if (match) return match[1];
+    match = m.match(/^(\d+)$/);
+    if (match) return match[1];
+    return null;
+}
 async function runDialerPacerCycle() {
     if (!isDialerLeader) return;
 
@@ -5686,6 +5804,27 @@ async function runDialerPacerCycle() {
                 if (isOnline && !isCall && currentEffectiveState === 'idle') {
                     availableAgents.push(ext);
                 }
+            }
+
+            // Filter to queue members only for predictive mode
+            if (mode === 'predictive' && queueName) {
+                const [qMembers] = await pool.query(
+                    "SELECT keyword, data FROM `asterisk`.`queues_details` WHERE id = ? AND (keyword = 'member' OR keyword = 'dynmembers')",
+                    [queueName]
+                );
+                const memberExts = new Set();
+                for (const row of qMembers) {
+                    if (row.keyword === 'member') {
+                        const ext = extractExtFromQueueMember(row.data);
+                        if (ext) memberExts.add(ext);
+                    } else if (row.keyword === 'dynmembers') {
+                        // dynmembers is a comma-separated list: "101, 103"
+                        const parts = row.data.split(',').map(s => s.trim()).filter(Boolean);
+                        for (const p of parts) memberExts.add(p);
+                    }
+                }
+                // Always replace availableAgents with intersection (may become empty = no queue agents free)
+                availableAgents = availableAgents.filter(e => memberExts.has(e));
             }
 
             const [inflightRows] = await pool.query('SELECT COUNT(*) AS cnt FROM `asterisk`.`dialer_call_attempts` WHERE campaign_id = ? AND active_flag = 1', [campId]);
@@ -6071,10 +6210,25 @@ app.post('/api/dialer/campaigns/:id/control', async (req, res) => {
     }
 });
 
+// GET /api/dialer/leads/template - Download CSV Template (MUST be before :campaignId or Express shadows it)
+app.get('/api/dialer/leads/template', (req, res) => {
+    const csvHeaders = ['phone_number', 'first_name', 'last_name', 'company'];
+    const sampleRow = ['01001111111', 'Ahmed', 'Ali', 'Acme Corp'];
+    let csvContent = '\ufeff';
+    csvContent += csvHeaders.join(',') + '\n';
+    csvContent += sampleRow.join(',') + '\n';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="leads_template.csv"');
+    res.send(csvContent);
+});
+
 // GET /api/dialer/leads/:campaignId
 app.get('/api/dialer/leads/:campaignId', async (req, res) => {
     try {
         const campaignId = parseInt(req.params.campaignId, 10);
+        if (!Number.isInteger(campaignId) || campaignId <= 0) {
+            return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
+        }
         const [leads] = await pool.query('SELECT * FROM `asterisk`.`dialer_leads` WHERE campaign_id = ? ORDER BY id DESC LIMIT 500', [campaignId]);
         res.json({ success: true, leads });
     } catch (err) {
@@ -6218,18 +6372,6 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
-});
-
-// GET /api/dialer/leads/template - Download CSV Template for Lead Import
-app.get('/api/dialer/leads/template', (req, res) => {
-    const csvHeaders = ['phone_number', 'first_name', 'last_name', 'company'];
-    const sampleRow = ['01001111111', 'Ahmed', 'Ali', 'Acme Corp'];
-    let csvContent = '\ufeff';
-    csvContent += csvHeaders.join(',') + '\n';
-    csvContent += sampleRow.join(',') + '\n';
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="leads_template.csv"');
-    res.send(csvContent);
 });
 
 
