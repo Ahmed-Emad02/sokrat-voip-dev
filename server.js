@@ -46,6 +46,7 @@ function decrypt(text) {
 }
 
 const app = express();
+app.set('trust proxy', true);
 const server = http.createServer(app);
 const io = new Server(server);
 ffmpeg.setFfmpegPath('/usr/local/bin/ffmpeg');
@@ -3707,7 +3708,7 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create')
     content = content.replace(regex, '').trim();
 
     if (action !== 'delete') {
-        const newBlock = `\n\n${startMarker}\n[${extNum}]\ntype=endpoint\ncontext=from-internal\ndisallow=all\nallow=ulaw,alaw,opus,vp8\nauth=${extNum}-auth\naors=${extNum}\ntransport=transport-wss\nwebrtc=yes\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nrtp_symmetric=yes\nforce_rport=yes\nrewrite_contact=yes\ndirect_media=no\n\n[${extNum}-auth]\ntype=auth\nauth_type=userpass\nusername=${extNum}\npassword=${secret}\n\n[${extNum}]\ntype=aor\nmax_contacts=5\nremove_existing=yes\n${endMarker}`;
+        const newBlock = `\n\n${startMarker}\n[${extNum}]\ntype=endpoint\ncontext=from-internal\ndisallow=all\nallow=ulaw,alaw,opus,vp8\nauth=${extNum}-auth\naors=${extNum}\ntransport=transport-wss,transport-ws\nwebrtc=yes\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nrtp_symmetric=yes\nforce_rport=yes\nrewrite_contact=yes\ndirect_media=no\n\n[${extNum}-auth]\ntype=auth\nauth_type=userpass\nusername=${extNum}\npassword=${secret}\n\n[${extNum}]\ntype=aor\nmax_contacts=5\nremove_existing=yes\n${endMarker}`;
         content += newBlock;
     }
 
@@ -3744,10 +3745,11 @@ app.get('/api/webrtc/config', requireAuth, async (req, res) => {
 
         const [rows] = await pool.query(query, params);
         const host = req.hostname || '127.0.0.1';
-        const wsPort = 5066;
-        const protocol = req.protocol === 'https' ? 'wss' : 'ws';
-        const wsUrl = `${protocol}://${host}:${wsPort}`;
-
+        const wsPort = process.env.WEBRTC_PORT || 5066;
+        const isSecure = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https';
+        const protocol = isSecure ? 'wss' : 'ws';
+        const defaultWsUrl = `${protocol}://${host}:${wsPort}`;
+        const wsUrl = process.env.WEBRTC_WSS_URL || process.env.WEBRTC_WS_URL || defaultWsUrl;
         res.json({
             success: true,
             wsUrl,
