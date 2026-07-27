@@ -85,7 +85,9 @@ const tables = {
     sippeers: tableName(ASTERISK_DB, 'sippeers'),
     psEndpoints: tableName(ASTERISK_DB, 'ps_endpoints'),
     employeeExtras: tableName(ASTERISK_DB, 'employee_extras'),
-    employeeGroups: tableName(ASTERISK_DB, 'employee_groups')
+    employeeGroups: tableName(ASTERISK_DB, 'employee_groups'),
+    dashboardUsers: tableName(ASTERISK_DB, 'dashboard_users'),
+    dashboardGroupPermissions: tableName(ASTERISK_DB, 'dashboard_group_permissions')
 };
 
 function isInternalChannel(channel) {
@@ -379,8 +381,8 @@ function isSuperAdmin(req) {
 async function getUserPermissions(userId) {
     try {
         const [rows] = await pool.query(`
-            SELECT p.tab FROM dashboard_group_permissions p
-            JOIN dashboard_users u ON u.group_id = p.group_id
+            SELECT p.tab FROM ${tables.dashboardGroupPermissions} p
+            JOIN ${tables.dashboardUsers} u ON u.group_id = p.group_id
             WHERE u.id = ?
         `, [userId]);
         return rows.map(r => r.tab);
