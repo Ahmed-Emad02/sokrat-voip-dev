@@ -3726,20 +3726,20 @@ function reloadPjsip() {
 app.get('/api/webrtc/config', requireAuth, async (req, res) => {
     try {
         const isAdmin = isSuperAdmin(req);
-        const currentUser = req.session ? req.session.username : null;
+        const currentUser = req.session ? String(req.session.username || '').trim() : '';
 
         let query = `
             SELECT u.extension, u.name, COALESCE(s_secret.data, '') AS secret, d.tech
             FROM ${tables.users} u
             LEFT JOIN ${tables.devices} d ON d.id = u.extension
             LEFT JOIN ${tables.sip} s_secret ON s_secret.id = u.extension AND s_secret.keyword = 'secret'
-            WHERE d.tech = 'pjsip' OR u.extension = '200'
+            WHERE (d.tech = 'pjsip' OR u.extension = '200')
         `;
         let params = [];
 
         if (!isAdmin) {
-            query += ` AND (u.extension = ? OR u.name = ?)`;
-            params.push(currentUser, currentUser);
+            query += ` AND u.extension = ?`;
+            params.push(currentUser);
         }
 
         const [rows] = await pool.query(query, params);
@@ -3754,7 +3754,7 @@ app.get('/api/webrtc/config', requireAuth, async (req, res) => {
             extensions: rows.map(r => ({
                 extension: r.extension,
                 name: r.name,
-                secret: (isAdmin || r.extension === currentUser || r.name === currentUser) ? (r.secret || '') : ''
+                secret: (isAdmin || String(r.extension) === currentUser) ? (r.secret || '') : ''
             }))
         });
     } catch (err) {
