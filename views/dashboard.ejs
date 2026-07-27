@@ -979,54 +979,6 @@ const isRtl = currentLang === 'ar';
 
     <!-- SOFTPHONE LOGIC -->
     <script>
-        let sipUserAgent = null;
-        let currentSession = null;
-        let isRegistered = false;
-        const remoteAudio = new Audio();
-        remoteAudio.autoplay = true;
-
-        function toggleSoftphonePanel() {
-            const panel = document.getElementById('softphonePanel');
-            panel.classList.toggle('hidden');
-        }
-
-        function pressSoftphoneKey(key) {
-            const input = document.getElementById('softphoneDialInput');
-            input.value += key;
-            if (currentSession && currentSession.state === SIP.SessionState.Established) {
-                try { currentSession.sendDTMF(key); } catch(e){}
-            }
-        }
-
-        function clearSoftphoneDialInput() {
-            const input = document.getElementById('softphoneDialInput');
-            input.value = input.value.slice(0, -1);
-        }
-
-        async function loadWebRtcConfig() {
-            try {
-                const res = await fetch('/api/webrtc/config');
-                const data = await res.json();
-                if (!data.success || !data.extensions) return;
-
-                const selectEl = document.getElementById('softphoneExtSelect');
-                selectEl.innerHTML = '';
-                if (data.extensions.length === 0) {
-                    selectEl.innerHTML = '<option value="">No WebRTC Exts</option>';
-                    return;
-                }
-                data.extensions.forEach(ext => {
-                    const opt = document.createElement('option');
-                    opt.value = ext.extension;
-                    opt.dataset.secret = ext.secret;
-                    opt.textContent = `${ext.extension} (${ext.name})`;
-                    selectEl.appendChild(opt);
-                });
-                window.webrtcWsUrl = data.wsUrl;
-            } catch (e) {
-                console.error('Failed to load WebRTC config:', e);
-            }
-        }
         let ua = null;
         let currentSession = null;
         const remoteAudio = new Audio();
