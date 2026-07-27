@@ -1751,7 +1751,10 @@ function isTabAllowed(tabName) {
             fetch('/api/config/extensions')
                 .then(res => res.json())
                 .then(data => {
-                    if (!data.success || !data.extensions) return;
+                    if (!data || !data.success || !Array.isArray(data.extensions)) {
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="py-6 text-center text-rose-400 font-semibold">' + (data && data.error ? escapeHtml(data.error) : (isRtl ? 'تعذر تحميل التحويلات.' : 'Failed to load extensions.')) + '</td></tr>';
+                        return;
+                    }
                     loadedExtensionsList = data.extensions;
                     renderQuickPickPills();
                     if (!tbody) return;
@@ -1812,7 +1815,10 @@ function isTabAllowed(tabName) {
                         tbody.appendChild(tr);
                     });
                 })
-                .catch(err => console.error(err));
+                .catch(err => {
+                    console.error('fetchExtensions error:', err);
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="py-6 text-center text-rose-400 font-semibold">' + (isRtl ? 'خطأ في جلب بيانات التحويلات.' : 'Error fetching extensions.') + '</td></tr>';
+                });
         }
 
         function showEmployeePhotoPreview(url, label) {
