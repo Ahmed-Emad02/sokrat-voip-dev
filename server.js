@@ -118,9 +118,9 @@ function isOutboundCdr(row) {
 }
 
 app.set('view engine', 'ejs');
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/photos', express.static(path.join(__dirname, 'public', 'photos')));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 // --- SESSION CONFIGURATION ---
 app.use(session({
