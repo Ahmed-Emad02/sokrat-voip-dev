@@ -11,7 +11,7 @@ NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf | cut -d= -f2- | xargs)
 
 echo "============================================"
-echo " Issabel Dashboard Installer v1.2.0"
+echo " Issabel Dashboard Installer v1.3.0"
 echo " Target: Issabel 5 / Asterisk 18"
 echo "============================================"
 
@@ -488,26 +488,32 @@ fi
 sed -i '/RewriteEngine On/,/RewriteRule/d' /etc/httpd/conf.d/issabel.conf 2>/dev/null || true
 echo "  Issabel HTTPS redirect removed"
 
-# Create dashboard reverse proxy vhost for port 80 (do not define Listen 80 here to prevent duplicate listener error)
+# Create dashboard reverse proxy vhost for port 80 with WebSocket support
 cat > /etc/httpd/conf.d/dashboard.conf << 'DASHBOARD'
 <VirtualHost *:80>
     ProxyPreserveHost On
+
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteCond %{REQUEST_URI} ^/socket.io [NC]
+    RewriteRule /(.*) ws://127.0.0.1:8080/$1 [P,L]
+
+    ProxyPass /socket.io http://127.0.0.1:8080/socket.io
+    ProxyPassReverse /socket.io http://127.0.0.1:8080/socket.io
+
     ProxyPass / http://127.0.0.1:8080/
     ProxyPassReverse / http://127.0.0.1:8080/
 </VirtualHost>
 DASHBOARD
-echo "  dashboard.conf created (port 80 -> :8080)"
+echo "  dashboard.conf created (port 80 -> :8080 with WebSocket support)"
 
-# Add ProxyPass to SSL vhost (port 443 -> :8080)
+# Add ProxyPass & WebSocket rewrite to SSL vhost (port 443 -> :8080)
 if ! grep -q 'ProxyPass.*8080' /etc/httpd/conf.d/ssl.conf; then
-    sed -i '/^SSLEngine on$/a\    ProxyPreserveHost On' /etc/httpd/conf.d/ssl.conf
-    sed -i '/^SSLEngine on$/a\    ProxyPassReverse \/ http:\/\/127.0.0.1:8080\/' /etc/httpd/conf.d/ssl.conf
-    sed -i '/^SSLEngine on$/a\    ProxyPass \/ http:\/\/127.0.0.1:8080\/' /etc/httpd/conf.d/ssl.conf
-    echo "  SSL vhost proxied (port 443 -> :8080)"
+    sed -i '/^SSLEngine on$/a\    ProxyPreserveHost On\n    RewriteEngine On\n    RewriteCond %{HTTP:Upgrade} =websocket [NC]\n    RewriteCond %{REQUEST_URI} ^/socket.io [NC]\n    RewriteRule /(.*) ws://127.0.0.1:8080/\$1 [P,L]\n    ProxyPass /socket.io http://127.0.0.1:8080/socket.io\n    ProxyPassReverse /socket.io http://127.0.0.1:8080/socket.io\n    ProxyPass / http://127.0.0.1:8080/\n    ProxyPassReverse / http://127.0.0.1:8080/' /etc/httpd/conf.d/ssl.conf
+    echo "  SSL vhost proxied (port 443 -> :8080 with WebSocket support)"
 else
     echo "  SSL vhost already proxied"
 fi
-
 # Restart Apache
 httpd -t 2>&1 | grep -v 'Could not reliably' | grep -v 'AH00558' || true
 systemctl restart httpd
