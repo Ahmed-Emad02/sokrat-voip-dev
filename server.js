@@ -377,8 +377,19 @@ function isSuperAdmin(req) {
 }
 
 async function getUserPermissions(userId) {
+    try {
+        const [rows] = await pool.query(`
+            SELECT p.tab FROM dashboard_group_permissions p
+            JOIN dashboard_users u ON u.group_id = p.group_id
+            WHERE u.id = ?
+        `, [userId]);
+        return rows.map(r => r.tab);
+    } catch (err) {
+        console.error('getUserPermissions error:', err.message);
+        return [];
+    }
+}
 
-// Synchronize all MariaDB gsm_dongles mappings to Asterisk AstDB (sim_map, dongle_map, DONGLE_NUMBERS)
 async function syncAstDbDongleMappings() {
     try {
         const [rows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` WHERE phone_number IS NOT NULL AND phone_number != ""');
@@ -405,20 +416,6 @@ async function syncAstDbDongleMappings() {
     } catch (e) {
         console.error('ASTDB-SYNC: Error syncing GSM mappings:', e.message);
     }
-}
-    const conn = await mysql.createConnection({
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'admin',
-        password: process.env.DB_PASS || 'admin',
-        database: ASTERISK_DB
-    });
-    const [rows] = await conn.execute(`
-        SELECT p.tab FROM dashboard_group_permissions p
-        JOIN dashboard_users u ON u.group_id = p.group_id
-        WHERE u.id = ?
-    `, [userId]);
-    await conn.end();
-    return rows.map(r => r.tab);
 }
 
 const TAB_ROUTE_MAP = {
