@@ -81,7 +81,7 @@ const isRtl = currentLang === 'ar';
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sip.js@0.21.2/dist/sip.min.js"></script>
+    <script src="/js/jssip.min.js"></script>
     <style>
         :root {
             --bg-primary: #09090b;
@@ -1027,6 +1027,53 @@ const isRtl = currentLang === 'ar';
                 console.error('Failed to load WebRTC config:', e);
             }
         }
+        let ua = null;
+        let currentSession = null;
+        const remoteAudio = new Audio();
+        remoteAudio.autoplay = true;
+
+        function toggleSoftphonePanel() {
+            const panel = document.getElementById('softphonePanel');
+            panel.classList.toggle('hidden');
+        }
+
+        function pressSoftphoneKey(key) {
+            const input = document.getElementById('softphoneDialInput');
+            input.value += key;
+            if (currentSession && currentSession.isInProgress && currentSession.isInProgress()) {
+                try { currentSession.sendDTMF(key); } catch(e){}
+            }
+        }
+
+        function clearSoftphoneDialInput() {
+            const input = document.getElementById('softphoneDialInput');
+            input.value = input.value.slice(0, -1);
+        }
+
+        async function loadWebRtcConfig() {
+            try {
+                const res = await fetch('/api/webrtc/config');
+                const data = await res.json();
+                if (!data.success || !data.extensions) return;
+
+                const selectEl = document.getElementById('softphoneExtSelect');
+                selectEl.innerHTML = '';
+                if (data.extensions.length === 0) {
+                    selectEl.innerHTML = '<option value="">No WebRTC Exts</option>';
+                    return;
+                }
+                data.extensions.forEach(ext => {
+                    const opt = document.createElement('option');
+                    opt.value = ext.extension;
+                    opt.dataset.secret = ext.secret;
+                    opt.textContent = `${ext.extension} (${ext.name})`;
+                    selectEl.appendChild(opt);
+                });
+                window.webrtcWsUrl = data.wsUrl;
+            } catch (e) {
+                console.error('Failed to load WebRTC config:', e);
+            }
+        }
 
         function updateSoftphoneStatus(text, state) {
             const statusEl = document.getElementById('softphoneStatusText');
@@ -1048,9 +1095,9 @@ const isRtl = currentLang === 'ar';
         }
 
         function toggleSoftphoneRegister() {
-            if (isRegistered && sipUserAgent) {
-                sipUserAgent.stop();
-                isRegistered = false;
+            if (ua && ua.isConnected()) {
+                ua.stop();
+                ua = null;
                 document.getElementById('softphoneRegBtn').textContent = '<%= isRtl ? "اتصال" : "Connect" %>';
                 updateSoftphoneStatus('<%= isRtl ? "غير متصل" : "Offline" %>', 'offline');
                 return;
@@ -1067,115 +1114,125 @@ const isRtl = currentLang === 'ar';
             const secret = selectedOpt ? selectedOpt.dataset.secret : '';
             const wsUrl = window.webrtcWsUrl || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname + ':5066');
 
-            if (typeof SIP === 'undefined') {
-                alert('SIP.js library not loaded');
+            if (typeof JsSIP === 'undefined') {
+                alert('JsSIP library not loaded');
                 return;
             }
 
             try {
-                const uri = SIP.UserAgent.makeURI(`sip:${ext}@${location.hostname}`);
-                sipUserAgent = new SIP.UserAgent({
-                    uri: uri,
-                    transportOptions: { server: wsUrl },
-                    authorizationUsername: ext,
-                    authorizationPassword: secret,
-                    delegate: {
-                        onInvite: (invitation) => {
-                            currentSession = invitation;
-                            setupSessionListeners(currentSession);
-                            updateSoftphoneStatus('Ringing...', 'ringing');
-                            document.getElementById('softphoneAnswerBtn').classList.remove('hidden');
-                            document.getElementById('softphoneHangupBtn').classList.remove('hidden');
-                            document.getElementById('softphoneCallBtn').classList.add('hidden');
-                        }
+                const socket = new JsSIP.WebSocketInterface(wsUrl);
+                const configuration = {
+                    sockets: [socket],
+                    uri: `sip:${ext}@${location.hostname}`,
+                    password: secret,
+                    register: true
+                };
+
+                ua = new JsSIP.UA(configuration);
+
+                ua.on('connecting', () => {
+                    updateSoftphoneStatus('Connecting...', 'registering');
+                });
+
+                ua.on('connected', () => {
+                    updateSoftphoneStatus(`Online (${ext})`, 'online');
+                    document.getElementById('softphoneRegBtn').textContent = '<%= isRtl ? "قطع الاتصال" : "Disconnect" %>';
+                });
+
+                ua.on('disconnected', () => {
+                    updateSoftphoneStatus('Offline', 'offline');
+                    document.getElementById('softphoneRegBtn').textContent = '<%= isRtl ? "اتصال" : "Connect" %>';
+                });
+
+                ua.on('registrationFailed', (data) => {
+                    console.error('Registration failed:', data.cause);
+                    updateSoftphoneStatus('Reg Failed', 'offline');
+                });
+
+                ua.on('newRTCSession', (data) => {
+                    currentSession = data.session;
+                    setupSessionListeners(currentSession);
+
+                    if (currentSession.direction === 'incoming') {
+                        updateSoftphoneStatus('Ringing...', 'ringing');
+                        document.getElementById('softphoneAnswerBtn').classList.remove('hidden');
+                        document.getElementById('softphoneHangupBtn').classList.remove('hidden');
+                        document.getElementById('softphoneCallBtn').classList.add('hidden');
                     }
                 });
 
-                updateSoftphoneStatus('Connecting...', 'registering');
-
-                sipUserAgent.start()
-                    .then(() => {
-                        const registerer = new SIP.Registerer(sipUserAgent);
-                        registerer.register();
-                        isRegistered = true;
-                        document.getElementById('softphoneRegBtn').textContent = '<%= isRtl ? "قطع الاتصال" : "Disconnect" %>';
-                        updateSoftphoneStatus(`Online (${ext})`, 'online');
-                    })
-                    .catch(err => {
-                        console.error('SIP registration error:', err);
-                        updateSoftphoneStatus('Reg Failed', 'offline');
-                    });
+                ua.start();
             } catch (err) {
-                console.error('SIP Agent error:', err);
+                console.error('JsSIP initialization error:', err);
                 updateSoftphoneStatus('Error', 'offline');
             }
         }
 
         function makeSoftphoneCall() {
-            if (!sipUserAgent || !isRegistered) {
+            if (!ua || !ua.isConnected()) {
                 alert('Please connect softphone first!');
                 return;
             }
             const target = document.getElementById('softphoneDialInput').value.trim();
             if (!target) return;
 
-            try {
-                const targetUri = SIP.UserAgent.makeURI(`sip:${target}@${location.hostname}`);
-                const inviter = new SIP.Inviter(sipUserAgent, targetUri, {
-                    sessionDescriptionHandlerOptions: {
-                        constraints: { audio: true, video: false }
-                    }
-                });
-                currentSession = inviter;
-                setupSessionListeners(currentSession);
-                inviter.invite();
-                updateSoftphoneStatus(`Calling ${target}...`, 'incall');
-                document.getElementById('softphoneHangupBtn').classList.remove('hidden');
-                document.getElementById('softphoneCallBtn').classList.add('hidden');
-            } catch (e) {
-                console.error('Call failed:', e);
-            }
+            const eventHandlers = {
+                'progress': () => updateSoftphoneStatus(`Ringing ${target}...`, 'incall'),
+                'failed': (e) => {
+                    console.error('Call failed:', e.cause);
+                    updateSoftphoneStatus('Online', 'online');
+                    resetCallUI();
+                },
+                'ended': () => {
+                    updateSoftphoneStatus('Online', 'online');
+                    resetCallUI();
+                },
+                'confirmed': () => updateSoftphoneStatus('In Call', 'incall')
+            };
+
+            const options = {
+                eventHandlers: eventHandlers,
+                mediaConstraints: { audio: true, video: false }
+            };
+
+            currentSession = ua.call(`sip:${target}@${location.hostname}`, options);
+            document.getElementById('softphoneHangupBtn').classList.remove('hidden');
+            document.getElementById('softphoneCallBtn').classList.add('hidden');
         }
 
         function setupSessionListeners(session) {
-            session.stateChange.addListener((newState) => {
-                switch (newState) {
-                    case SIP.SessionState.Establishing:
-                        updateSoftphoneStatus('Connecting...', 'incall');
-                        break;
-                    case SIP.SessionState.Established:
-                        updateSoftphoneStatus('In Call', 'incall');
-                        attachRemoteAudio(session);
-                        break;
-                    case SIP.SessionState.Terminated:
-                        updateSoftphoneStatus('Online', 'online');
-                        currentSession = null;
-                        document.getElementById('softphoneAnswerBtn').classList.add('hidden');
-                        document.getElementById('softphoneHangupBtn').classList.add('hidden');
-                        document.getElementById('softphoneCallBtn').classList.remove('hidden');
-                        break;
-                }
+            session.on('peerconnection', (e) => {
+                const pc = e.peerconnection;
+                pc.ontrack = (event) => {
+                    if (event.streams && event.streams[0]) {
+                        remoteAudio.srcObject = event.streams[0];
+                        remoteAudio.play();
+                    }
+                };
+            });
+
+            session.on('ended', () => {
+                updateSoftphoneStatus('Online', 'online');
+                resetCallUI();
+            });
+
+            session.on('failed', () => {
+                updateSoftphoneStatus('Online', 'online');
+                resetCallUI();
             });
         }
 
-        function attachRemoteAudio(session) {
-            const sdh = session.sessionDescriptionHandler;
-            if (sdh && sdh.peerConnection) {
-                const receivers = sdh.peerConnection.getReceivers();
-                if (receivers.length > 0 && receivers[0].track) {
-                    const mediaStream = new MediaStream([receivers[0].track]);
-                    remoteAudio.srcObject = mediaStream;
-                    remoteAudio.play();
-                }
-            }
+        function resetCallUI() {
+            currentSession = null;
+            document.getElementById('softphoneAnswerBtn').classList.add('hidden');
+            document.getElementById('softphoneHangupBtn').classList.add('hidden');
+            document.getElementById('softphoneCallBtn').classList.remove('hidden');
         }
 
         function answerSoftphoneCall() {
-            if (currentSession && currentSession.accept) {
-                currentSession.accept({
-                    sessionDescriptionHandlerOptions: {
-                        constraints: { audio: true, video: false }
-                    }
+            if (currentSession) {
+                currentSession.answer({
+                    mediaConstraints: { audio: true, video: false }
                 });
                 document.getElementById('softphoneAnswerBtn').classList.add('hidden');
             }
@@ -1183,13 +1240,7 @@ const isRtl = currentLang === 'ar';
 
         function hangupSoftphoneCall() {
             if (currentSession) {
-                if (currentSession.state === SIP.SessionState.Established) {
-                    currentSession.bye();
-                } else if (currentSession.reject) {
-                    currentSession.reject();
-                } else if (currentSession.cancel) {
-                    currentSession.cancel();
-                }
+                currentSession.terminate();
             }
         }
 
