@@ -22,7 +22,7 @@ function isTabAllowed(tabName) {
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sokrat VOIP — <%= isRtl ? 'إعدادات المقسم' : 'PBX Configuration' %></title>
+    <title>Sokrat VOIP - <%= isRtl ? 'إعدادات المقسم' : 'PBX Configuration' %></title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2225,7 +2225,7 @@ function isTabAllowed(tabName) {
             select.innerHTML = '';
             const emptyOption = document.createElement('option');
             emptyOption.value = '';
-            emptyOption.textContent = isRtl ? '— بدون مجموعة —' : '— No Group —';
+            emptyOption.textContent = isRtl ? '(بدون مجموعة)' : '(No Group)';
             select.appendChild(emptyOption);
             groups.forEach(group => {
                 const option = document.createElement('option');
