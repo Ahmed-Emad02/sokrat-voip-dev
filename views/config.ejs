@@ -1242,43 +1242,81 @@ function isTabAllowed(tabName) {
 
     <!-- MODAL 3: TRUNK FORM -->
     <div id="trunkModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-xl w-full p-6 text-[var(--text-primary)]">
-            <div class="flex items-center justify-between mb-5 pb-3 border-b border-[var(--border-primary)]">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-2xl w-full p-6 text-[var(--text-primary)] max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border-primary)]">
                 <h3 id="trunkModalTitle" class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إضافة خط ربط' : 'Add Trunk' %></h3>
                 <button onclick="closeModal('trunkModal')" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">✕</button>
             </div>
             <form id="trunkForm" onsubmit="saveTrunk(event)">
                 <input type="hidden" id="trunkEditId" value="">
                 <div class="flex flex-col gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم خط الربط *' : 'Trunk Name *' %></label>
-                        <input type="text" id="trunkName" required placeholder="e.g. vodafone_trunk" class="config-input w-full font-mono text-xs">
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'نوع / تقنية خط الربط *' : 'Trunk Type / Technology *' %></label>
-                        <select id="trunkTech" onchange="onTrunkTechChange()" class="config-input w-full text-xs font-bold">
-                            <option value="custom"><%= isRtl ? 'خط مخصص (Custom / Dongle / Dahdi)' : 'Custom Trunk (Dongle / Local / Dahdi)' %></option>
-                            <option value="sip"><%= isRtl ? 'خط ربط SIP (chan_sip)' : 'SIP Trunk (chan_sip)' %></option>
-                            <option value="iax2"><%= isRtl ? 'خط ربط IAX2 (chan_iax2)' : 'IAX2 Trunk (chan_iax2)' %></option>
-                        </select>
-                    </div>
-
-                    <!-- Custom Trunk Fields -->
-                    <div id="trunkCustomFields" class="relative">
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سلسلة الاتصال المخصصة *' : 'Custom Dial String *' %></label>
-                        <input type="text" id="trunkDialString" placeholder="e.g. dongle/dongle0/$OUTNUM$" class="config-input w-full font-mono text-xs" autocomplete="off">
-                        
-                        <!-- DONGLE FLOATING POPUP -->
-                        <div id="dongleInfoPopup" class="absolute left-0 top-[calc(100%+4px)] w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-4 z-[60] hidden space-y-2">
-                            <div class="text-[11px] font-bold text-[var(--text-secondary)] uppercase flex items-center justify-between">
-                                <span><%= isRtl ? 'أجهزة Dongle المتصلة:' : 'Connected Dongles:' %></span>
-                                <button type="button" onclick="loadDongleInfoPopup()" class="text-[10px] text-blue-400 hover:underline">Refresh</button>
-                            </div>
-                            <div id="dongleInfoList" class="text-xs space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                                <span class="text-[11px] text-[var(--text-muted)]">Loading...</span>
-                            </div>
+                    <!-- General Settings -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم خط الربط *' : 'Trunk Name *' %></label>
+                            <input type="text" id="trunkName" required placeholder="e.g. vodafone_trunk" class="config-input w-full font-mono text-xs">
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'نوع / تقنية خط الربط *' : 'Trunk Type / Technology *' %></label>
+                            <select id="trunkTech" onchange="onTrunkTechChange()" class="config-input w-full text-xs font-bold">
+                                <option value="custom"><%= isRtl ? 'خط مخصص (Custom / Dongle / Dahdi)' : 'Custom Trunk (Dongle / Local / Dahdi)' %></option>
+                                <option value="sip"><%= isRtl ? 'خط ربط SIP (chan_sip)' : 'SIP Trunk (chan_sip)' %></option>
+                                <option value="iax2"><%= isRtl ? 'خط ربط IAX2 (chan_iax2)' : 'IAX2 Trunk (chan_iax2)' %></option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'رقم هوية المتصل الخارجي' : 'Outbound CallerID' %></label>
+                            <input type="text" id="trunkOutcid" placeholder='e.g. "Vodafone" <01027826232>' class="config-input w-full font-mono text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'خيارات هوية المتصل (CID Options)' : 'CID Options' %></label>
+                            <select id="trunkKeepCid" class="config-input w-full text-xs">
+                                <option value="off"><%= isRtl ? 'السماح بأي هوية (Allow Any CID)' : 'Allow Any CID' %></option>
+                                <option value="on"><%= isRtl ? 'حظر الهويات الخارجية (Block Foreign CIDs)' : 'Block Foreign CIDs' %></option>
+                                <option value="all"><%= isRtl ? 'فرض هوية الخط (Force Trunk CID)' : 'Force Trunk CID' %></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'أقصى عدد قنوات' : 'Maximum Channels' %></label>
+                            <input type="number" id="trunkMaxChans" min="0" placeholder="e.g. 10" class="config-input w-full font-mono text-xs">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'بادئة الاتصال للخط (Outbound Dial Prefix)' : 'Outbound Dial Prefix' %></label>
+                            <input type="text" id="trunkDialPrefix" placeholder="e.g. 9" class="config-input w-full font-mono text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'حالة الخط' : 'Trunk Status' %></label>
+                            <select id="trunkDisabled" class="config-input w-full text-xs font-bold">
+                                <option value="off"><%= isRtl ? 'مفعل (Enabled)' : 'Enabled' %></option>
+                                <option value="on"><%= isRtl ? 'معطل (Disabled)' : 'Disabled' %></option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Issabel 5 Additional Trunk Settings -->
+                    <div class="grid grid-cols-3 gap-3 pt-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'خيارات اتصال Asterisk (Dial Options)' : 'Asterisk Trunk Dial Options' %></label>
+                            <input type="text" id="trunkDialOpts" placeholder="e.g. Ww" class="config-input w-full font-mono text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'متابعة إذا كان مشغولاً (Continue if Busy)' : 'Continue if Busy' %></label>
+                            <select id="trunkContinue" class="config-input w-full text-xs font-bold">
+                                <option value="off"><%= isRtl ? 'لا' : 'No' %></option>
+                                <option value="on"><%= isRtl ? 'نعم' : 'Yes' %></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'مراقبة فشل الخط (Monitor Trunk Failures)' : 'Monitor Trunk Failures' %></label>
+                            <input type="text" id="trunkFailScript" placeholder="e.g. /usr/local/bin/failover.sh" class="config-input w-full font-mono text-xs">
+                        </div>
+                    </div>
 
                         <p class="text-[11px] text-[var(--text-muted)] mt-1">
                             Format: <code>dongle/dongle0/$OUTNUM$</code> or <code>dongle/i:359767037813558/$OUTNUM$</code>
@@ -1287,25 +1325,22 @@ function isTabAllowed(tabName) {
 
                     <!-- SIP / IAX2 Trunk Fields -->
                     <div id="trunkSipIaxFields" class="hidden space-y-3 border-t border-[var(--border-primary)] pt-3">
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-4 gap-3">
                             <div>
                                 <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'عنوان الخادم البعيد (IP/Domain) *' : 'Remote Host (IP / Domain) *' %></label>
                                 <input type="text" id="trunkHost" placeholder="e.g. 192.168.100.50" class="config-input w-full font-mono text-xs">
                             </div>
-                            <div>
-                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'رقم هوية المتصل الخارجي' : 'Outbound CallerID' %></label>
-                                <input type="text" id="trunkOutcid" placeholder='e.g. "Vodafone" <01027826232>' class="config-input w-full font-mono text-xs">
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
+                            <div class="col-span-2">
                                 <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم المستخدم' : 'Username' %></label>
                                 <input type="text" id="trunkUsername" placeholder="e.g. 01027826232" class="config-input w-full font-mono text-xs">
                             </div>
                             <div>
                                 <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'كلمة السر / Secret' : 'Secret / Password' %></label>
                                 <input type="password" id="trunkSecret" placeholder="••••••••" class="config-input w-full font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سياق (Context)' : 'Context *' %></label>
+                                <input type="text" id="trunkContext" placeholder="from-trunk" class="config-input w-full font-mono text-xs">
                             </div>
                         </div>
 
@@ -1332,6 +1367,7 @@ function isTabAllowed(tabName) {
                             </div>
                         </div>
                     </div>
+                </div>
                 <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--border-primary)]">
                     <button type="button" onclick="closeModal('trunkModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
                     <button type="submit" class="config-btn-primary px-5 py-2 text-xs"><%= isRtl ? 'حفظ خط الربط' : 'Save Trunk' %></button>
@@ -3337,6 +3373,14 @@ function isTabAllowed(tabName) {
             document.getElementById('trunkEditId').value = "";
             document.getElementById('trunkForm').reset();
             document.getElementById('trunkTech').value = "custom";
+            document.getElementById('trunkContext').value = "from-trunk";
+            document.getElementById('trunkKeepCid').value = "off";
+            document.getElementById('trunkMaxChans').value = "";
+            document.getElementById('trunkDialPrefix').value = "";
+            document.getElementById('trunkDisabled').value = "off";
+            document.getElementById('trunkDialOpts').value = "";
+            document.getElementById('trunkContinue').value = "off";
+            document.getElementById('trunkFailScript').value = "";
             onTrunkTechChange();
             openModal('trunkModal');
         }
@@ -3353,12 +3397,20 @@ function isTabAllowed(tabName) {
             document.getElementById('trunkContext').value = t.context || 'from-trunk';
             document.getElementById('trunkRegister').value = t.register || '';
             document.getElementById('trunkOutcid').value = t.outcid || '';
+            document.getElementById('trunkKeepCid').value = t.keepcid || 'off';
+            document.getElementById('trunkMaxChans').value = t.maxchans || '';
+            document.getElementById('trunkDialPrefix').value = t.dialoutprefix || '';
+            document.getElementById('trunkDisabled').value = t.disabled || 'off';
+            document.getElementById('trunkDialOpts').value = t.dialopts || '';
+            document.getElementById('trunkContinue').value = t.continue || 'off';
+            document.getElementById('trunkFailScript').value = t.failscript || '';
             document.getElementById('trunkUserContext').value = t.usercontext || '';
             document.getElementById('trunkPeerDetails').value = t.peerdetails || '';
             document.getElementById('trunkUserDetails').value = t.userdetails || '';
             onTrunkTechChange();
             openModal('trunkModal');
         }
+
 
         function saveTrunk(e) {
             e.preventDefault();
@@ -3372,6 +3424,13 @@ function isTabAllowed(tabName) {
             const context = document.getElementById('trunkContext').value.trim();
             const register = document.getElementById('trunkRegister').value.trim();
             const outcid = document.getElementById('trunkOutcid').value.trim();
+            const keepcid = document.getElementById('trunkKeepCid').value;
+            const maxchans = document.getElementById('trunkMaxChans').value.trim();
+            const dialoutprefix = document.getElementById('trunkDialPrefix').value.trim();
+            const disabled = document.getElementById('trunkDisabled').value;
+            const dialopts = document.getElementById('trunkDialOpts').value.trim();
+            const continueVal = document.getElementById('trunkContinue').value;
+            const failscript = document.getElementById('trunkFailScript').value.trim();
             const usercontext = document.getElementById('trunkUserContext').value.trim();
             const peerdetails = document.getElementById('trunkPeerDetails').value.trim();
             const userdetails = document.getElementById('trunkUserDetails').value.trim();
@@ -3382,7 +3441,7 @@ function isTabAllowed(tabName) {
             fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, tech, channelid, host, username, secret, context, register, outcid, usercontext, peerdetails, userdetails })
+                body: JSON.stringify({ name, tech, channelid, host, username, secret, context, register, outcid, keepcid, maxchans, dialoutprefix, disabled, dialopts, continue: continueVal, failscript, usercontext, peerdetails, userdetails })
             })
             .then(res => res.json())
             .then(data => {
@@ -3397,7 +3456,6 @@ function isTabAllowed(tabName) {
                 } else showToast(data.error, 'error');
             });
         }
-
         function deleteTrunk(trunkid) {
             if (!confirm(`Delete trunk ID ${trunkid}?`)) return;
             fetch('/api/config/trunks/' + trunkid, { method: 'DELETE' })

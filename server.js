@@ -4880,7 +4880,7 @@ function parseDetailsText(rawText) {
 app.get('/api/config/trunks', async (req, res) => {
     try {
         const [trunks] = await pool.query(`
-            SELECT trunkid, name, tech, outcid, channelid, disabled, usercontext
+            SELECT trunkid, name, tech, outcid, keepcid, maxchans, failscript, dialoutprefix, channelid, disabled, \`continue\`, usercontext
             FROM \`asterisk\`.\`trunks\`
             ORDER BY trunkid ASC
         `);
@@ -4891,11 +4891,21 @@ app.get('/api/config/trunks', async (req, res) => {
             t.secret = '';
             t.context = 'from-trunk';
             t.register = '';
+            t.dialopts = '';
             t.peerdetails = '';
             t.userdetails = '';
 
             const trunkKey = `tr-trunk-${t.trunkid}`;
             const targetTable = (t.tech === 'iax2' || t.tech === 'iax') ? 'iax' : 'sip';
+
+            // Read dialopts from AstDB
+            try {
+                const { stdout: astOut } = await execPromise(`asterisk -rx "database get TRUNK ${t.trunkid}/dialopts"`);
+                if (astOut) {
+                    const m = astOut.match(/: (.+)$/m);
+                    if (m) t.dialopts = m[1].trim();
+                }
+            } catch (e) { /* key not found */ }
 
             // Query PEER Details
             const [peerRows] = await pool.query(`SELECT keyword, data FROM \`asterisk\`.\`${targetTable}\` WHERE id = ? OR id = ?`, [trunkKey, t.name]);
@@ -4931,7 +4941,7 @@ app.get('/api/config/trunks', async (req, res) => {
 // POST /api/config/trunks - Create Trunk (Custom, SIP, IAX2)
 app.post('/api/config/trunks', async (req, res) => {
     try {
-        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid, peerdetails, userdetails } = req.body;
+        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid, keepcid, maxchans, dialoutprefix, disabled, dialopts, continue: contVal, failscript, peerdetails, userdetails } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, error: 'Trunk Name is required.' });
         }
@@ -4941,6 +4951,13 @@ app.post('/api/config/trunks', async (req, res) => {
         const dialString = String(channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:');
         const cidVal = String(outcid || '').trim();
         const userContextVal = String(usercontext || '').trim();
+        const keepCidVal = String(keepcid || 'off').trim();
+        const maxChansVal = String(maxchans || '').trim();
+        const dialPrefixVal = String(dialoutprefix || '').trim();
+        const disabledVal = String(disabled || 'off').trim();
+        const dialoptsVal = String(dialopts || '').trim();
+        const continueVal = String(contVal || 'off').trim();
+        const failscriptVal = String(failscript || '').trim();
 
         if (trunkTech === 'custom' && !dialString) {
             return res.status(400).json({ success: false, error: 'Custom Dial String is required for Custom trunks.' });
@@ -4952,8 +4969,15 @@ app.post('/api/config/trunks', async (req, res) => {
 
         await pool.query(`
             INSERT INTO \`asterisk\`.\`trunks\` (trunkid, name, tech, outcid, keepcid, maxchans, failscript, dialoutprefix, channelid, disabled, \`continue\`, usercontext)
-            VALUES (?, ?, ?, ?, 'off', '', '', '', ?, 'off', 'off', ?)
-        `, [nextTrunkId, trunkName, trunkTech, cidVal, dialString, userContextVal]);
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [nextTrunkId, trunkName, trunkTech, cidVal, keepCidVal, maxChansVal, failscriptVal, dialPrefixVal, dialString, disabledVal, continueVal, userContextVal]);
+
+        // Store dialopts in AstDB (Asterisk uses this at dialplan runtime)
+        if (dialoptsVal) {
+            try { await execPromise(`asterisk -rx "database put TRUNK ${nextTrunkId}/dialopts ${dialoptsVal}"`); } catch (e) {}
+        } else {
+            try { await execPromise(`asterisk -rx "database del TRUNK ${nextTrunkId}/dialopts"`); } catch (e) {}
+        }
 
         const targetTable = (trunkTech === 'iax2' || trunkTech === 'iax') ? 'iax' : 'sip';
 
@@ -5023,7 +5047,7 @@ app.post('/api/config/trunks', async (req, res) => {
 app.put('/api/config/trunks/:trunkid', async (req, res) => {
     try {
         const trunkId = parseInt(req.params.trunkid, 10);
-        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid, peerdetails, userdetails } = req.body;
+        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid, keepcid, maxchans, dialoutprefix, disabled, dialopts, continue: contVal, failscript, peerdetails, userdetails } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, error: 'Trunk Name is required.' });
         }
@@ -5033,20 +5057,26 @@ app.put('/api/config/trunks/:trunkid', async (req, res) => {
         const dialString = String(channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:');
         const cidVal = String(outcid || '').trim();
         const userContextVal = String(usercontext || '').trim();
+        const keepCidVal = String(keepcid || 'off').trim();
+        const maxChansVal = String(maxchans || '').trim();
+        const dialPrefixVal = String(dialoutprefix || '').trim();
+        const disabledVal = String(disabled || 'off').trim();
+        const dialoptsVal = String(dialopts || '').trim();
+        const continueVal = String(contVal || 'off').trim();
+        const failscriptVal = String(failscript || '').trim();
         const trunkKey = `tr-trunk-${trunkId}`;
 
         await pool.query(`
             UPDATE \`asterisk\`.\`trunks\`
-            SET name = ?, tech = ?, channelid = ?, outcid = ?, usercontext = ?
+            SET name = ?, tech = ?, channelid = ?, outcid = ?, keepcid = ?, maxchans = ?, failscript = ?, dialoutprefix = ?, disabled = ?, \`continue\` = ?, usercontext = ?
             WHERE trunkid = ?
-        `, [trunkName, trunkTech, dialString, cidVal, userContextVal, trunkId]);
+        `, [trunkName, trunkTech, dialString, cidVal, keepCidVal, maxChansVal, failscriptVal, dialPrefixVal, disabledVal, continueVal, userContextVal, trunkId]);
 
-        // Clear existing sip/iax params for this trunk
-        await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ? OR id = ?', [trunkKey, trunkName]);
-        await pool.query('DELETE FROM `asterisk`.`iax` WHERE id = ? OR id = ?', [trunkKey, trunkName]);
-        if (userContextVal) {
-            await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ?', [userContextVal]);
-            await pool.query('DELETE FROM `asterisk`.`iax` WHERE id = ?', [userContextVal]);
+        // Store dialopts in AstDB
+        if (dialoptsVal) {
+            try { await execPromise(`asterisk -rx "database put TRUNK ${trunkId}/dialopts ${dialoptsVal}"`); } catch (e) {}
+        } else {
+            try { await execPromise(`asterisk -rx "database del TRUNK ${trunkId}/dialopts"`); } catch (e) {}
         }
 
         const targetTable = (trunkTech === 'iax2' || trunkTech === 'iax') ? 'iax' : 'sip';
