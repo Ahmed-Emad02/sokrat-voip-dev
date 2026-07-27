@@ -588,10 +588,113 @@ const pool = mysql.createPool({
 });
 
 let activeCalls = {};
+let sipPresence = {};
+let pjsipPresence = {};
+let iaxPresence = {};
 let peerStatus = {};
 let peerIPs = {};
+let pjsipContactState = {};
+let pjsipSnapshotStartTime = 0;
+let pjsipBatchContactIds = new Set();
 let pendingOffline = {};
 let isPeerListLoaded = false;
+
+function updateExtensionPresence(name) {
+    if (!name) return;
+    let isOnline = (sipPresence[name] === true) || (pjsipPresence[name] === true);
+    if (peerStatus[name] !== isOnline) {
+        peerStatus[name] = isOnline;
+        io.emit('peerStatus', peerStatus);
+    }
+}
+
+function updateAllExtensionPresence() {
+    let allExts = new Set([...Object.keys(sipPresence), ...Object.keys(pjsipPresence)]);
+    for (let ext of allExts) {
+        let isOnline = (sipPresence[ext] === true) || (pjsipPresence[ext] === true);
+        peerStatus[ext] = isOnline;
+    }
+    io.emit('peerStatus', peerStatus);
+}
+
+function recomputePjsipPresence(name) {
+    if (!name) return;
+    let onlineCount = 0;
+    for (let cid in pjsipContactState) {
+        if (pjsipContactState[cid].endpoint === name && pjsipContactState[cid].isOnline) {
+            onlineCount++;
+        }
+    }
+    pjsipPresence[name] = onlineCount > 0;
+    updateExtensionPresence(name);
+}
+
+function recomputeAllPjsipPresence() {
+    let endpoints = new Set();
+    for (let cid in pjsipContactState) {
+        endpoints.add(pjsipContactState[cid].endpoint);
+    }
+    for (let ep of endpoints) {
+        let onlineCount = 0;
+        for (let cid in pjsipContactState) {
+            if (pjsipContactState[cid].endpoint === ep && pjsipContactState[cid].isOnline) {
+                onlineCount++;
+            }
+        }
+        pjsipPresence[ep] = onlineCount > 0;
+    }
+    updateAllExtensionPresence();
+}
+
+async function getTrunkStatusMap() {
+    try {
+        const [trunks] = await pool.query('SELECT trunkid, name, tech, channelid, disabled, usercontext FROM `asterisk`.`trunks` ORDER BY trunkid ASC');
+        const statusMap = {};
+        for (const t of trunks) {
+            let online = false;
+            let statusText = t.disabled === 'on' ? 'Disabled' : 'Offline';
+
+            if (t.tech === 'custom') {
+                online = t.disabled !== 'on';
+                statusText = online ? 'Active' : 'Disabled';
+            } else if (t.tech === 'sip') {
+                const sipKey = `tr-trunk-${t.trunkid}`;
+                online = (sipPresence[sipKey] === true) || (sipPresence[t.name] === true);
+                statusText = online ? 'OK' : 'Offline';
+            } else if (t.tech === 'iax2' || t.tech === 'iax') {
+                const iaxKey = `tr-trunk-${t.trunkid}`;
+                online = (iaxPresence[iaxKey] === true) || (iaxPresence[t.name] === true);
+                statusText = online ? 'OK' : 'Offline';
+            }
+
+            let activeCount = 0;
+            const trunkNameLower = String(t.name || '').toLowerCase();
+            const channelIdLower = String(t.channelid || '').toLowerCase().replace('/$outnum$', '');
+
+            for (const ext in activeCalls) {
+                const call = activeCalls[ext];
+                const ch = String(call?.channel || '').toLowerCase();
+                if (ch.includes(trunkNameLower) || (channelIdLower && ch.includes(channelIdLower))) {
+                    activeCount++;
+                }
+            }
+
+            statusMap[t.trunkid] = {
+                trunkid: t.trunkid,
+                name: t.name,
+                tech: t.tech,
+                channelid: t.channelid || '',
+                host: t.channelid || '',
+                online: online,
+                statusText: statusText,
+                activeCalls: activeCount
+            };
+        }
+        return statusMap;
+    } catch(e) {
+        return {};
+    }
+}
 let greetingConfig = { mode: 'none', extensions: [] };
 const VM_GREETING_CONFIG_PATH = path.join(__dirname, 'vm_greeting_config.json');
 function reloadGreetingConfig() {
@@ -742,7 +845,13 @@ async function detectDonglesAndSetTrunkCID() {
 // --- ASTERISK AMI REAL-TIME MONITORING ---
 function connectAMI() {
     activeCalls = {};
+    sipPresence = {};
+    pjsipPresence = {};
+    iaxPresence = {};
     peerStatus = {};
+    pjsipContactState = {};
+    pjsipSnapshotStartTime = 0;
+    pjsipBatchContactIds = new Set();
     pendingOffline = {};
     let loggedIn = false;
     let queriedPeers = false;
@@ -765,9 +874,13 @@ function connectAMI() {
     function queryPeerStatus() {
         if (queriedPeers) return;
         queriedPeers = true;
-        console.log('AMI: Sending SIPpeers and PJSIPShowEndpoints');
+        console.log('AMI: Sending SIPpeers, PJSIPShowEndpoints, PJSIPShowContacts, IAXpeerlist');
+        pjsipSnapshotStartTime = Date.now();
+        pjsipBatchContactIds.clear();
         client.write(`Action: SIPpeers\r\n\r\n`);
         client.write(`Action: PJSIPShowEndpoints\r\n\r\n`);
+        client.write(`Action: PJSIPShowContacts\r\n\r\n`);
+        client.write(`Action: IAXpeerlist\r\n\r\n`);
     }
 
     let buffer = '';
@@ -800,8 +913,9 @@ function connectAMI() {
                 let name = rawName ? rawName.split('/')[0] : '';
                 let status = event.Status || '';
                 if (name) {
-                    peerStatus[name] = status.toUpperCase().startsWith('OK');
-                    // Extract IP from IPaddress field
+                    sipPresence[name] = status.toUpperCase().startsWith('OK');
+                    updateExtensionPresence(name);
+                    getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
                     let ip = event.IPaddress || '';
                     if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
                         peerIPs[name] = ip;
@@ -810,28 +924,66 @@ function connectAMI() {
                 }
             }
 
-            // Parse PJSIPShowEndpoints endpoint entries
-            if (event.Event === 'EndpointList') {
+            // Parse IAXpeerlist peer list entries
+            if (event.Event === 'IAXPeerEntry') {
                 let rawName = event.ObjectName || '';
                 let name = rawName ? rawName.split('/')[0] : '';
+                let status = event.Status || '';
                 if (name) {
-                    let state = String(event.DeviceState || '').toLowerCase();
-                    if (state === 'unavailable' || state === 'invalid' || state === 'unknown' || state === '5' || state === '4') {
-                        peerStatus[name] = false;
-                    } else {
-                        peerStatus[name] = true;
-                    }
+                    iaxPresence[name] = status.toUpperCase().startsWith('OK');
+                    getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
                 }
             }
 
-            // Parse PJSIP ContactStatus events for IP info
+            // Parse IAXPeerStatus real-time events
+            if (event.Event === 'IAXPeerStatus') {
+                let rawPeer = event.Peer ? event.Peer.replace(/^(IAX2|IAX)\//i, '') : '';
+                let name = rawPeer ? rawPeer.split('/')[0] : '';
+                if (name) {
+                    let statusStr = String(event.PeerStatus || '').trim();
+                    let isOnline = statusStr === 'Registered' || statusStr === 'Reachable';
+                    iaxPresence[name] = isOnline;
+                    getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
+                }
+            }
+
+            // Parse PJSIP ContactStatus events — real-time Reachable/Unreachable updates
             if (event.Event === 'ContactStatus') {
-                let uri = event.URI || '';
-                let aor = event.AOR || '';
-                // Extract endpoint name from AOR (format: "endpoint/aor" or just "aor")
-                let name = aor.split('/')[0] || '';
-                if (name && uri) {
-                    // Extract IP from contact URI (format: sip:user@IP:port;params)
+                let name = event.EndpointName || '';
+                let contactStatus = String(event.ContactStatus || '').trim();
+                if (name) {
+                    let contactId = event.ID || event.URI || (name + '_contact');
+                    let statusLower = contactStatus.toLowerCase();
+                    let isOnline = statusLower === 'reachable' || statusLower === 'created' || statusLower === 'updated' || statusLower === 'unqualified' || statusLower === 'nonqualified';
+                    let now = Date.now();
+
+                    // Real-time event takes precedence over snapshot rows: stamp with Date.now()
+                    pjsipContactState[contactId] = { endpoint: name, isOnline: isOnline, time: now };
+
+                    if (isOnline) {
+                        if (pendingOffline[name]) {
+                            clearTimeout(pendingOffline[name]);
+                            delete pendingOffline[name];
+                        }
+                    } else if (statusLower === 'removed') {
+                        if (pendingOffline[name]) {
+                            clearTimeout(pendingOffline[name]);
+                            delete pendingOffline[name];
+                        }
+                    } else if (!isOnline && peerStatus[name]) {
+                        if (!pendingOffline[name]) {
+                            pendingOffline[name] = setTimeout(() => {
+                                if (pendingOffline[name]) {
+                                    recomputePjsipPresence(name);
+                                    delete pendingOffline[name];
+                                }
+                            }, 1000);
+                        }
+                    }
+
+                    recomputePjsipPresence(name);
+
+                    let uri = event.URI || '';
                     let match = uri.match(/@(\d+\.\d+\.\d+\.\d+)/);
                     if (match) {
                         peerIPs[name] = match[1];
@@ -840,53 +992,97 @@ function connectAMI() {
                 }
             }
 
+            // Parse PJSIPShowContacts response — batch refresh of contact status
+            if (event.Event === 'ContactList') {
+                let name = event.Endpoint || '';
+                let contactStatus = String(event.Status || '').trim();
+                if (name) {
+                    let contactId = event.ID || event.Uri || (name + '_contact');
+                    let statusLower = contactStatus.toLowerCase();
+                    let isOnline = statusLower === 'reachable' || statusLower === 'created' || statusLower === 'updated' || statusLower === 'nonqualified' || statusLower === 'unqualified';
+
+                    pjsipBatchContactIds.add(contactId);
+
+                    let existing = pjsipContactState[contactId];
+                    // Snapshot row applies ONLY if no real-time event was received after snapshot started!
+                    if (!existing || existing.time <= pjsipSnapshotStartTime) {
+                        pjsipContactState[contactId] = { endpoint: name, isOnline: isOnline, time: pjsipSnapshotStartTime };
+                        recomputePjsipPresence(name);
+                    }
+
+                    let uri = event.Uri || '';
+                    let match = uri.match(/@(\d+\.\d+\.\d+\.\d+)/);
+                    if (match) {
+                        peerIPs[name] = match[1];
+                    }
+                }
+            }
+
+            if (event.Event === 'ContactListComplete') {
+                // Purge any contacts not in batch whose last update was before this snapshot started
+                for (let cid in pjsipContactState) {
+                    let entry = pjsipContactState[cid];
+                    if (entry.time <= pjsipSnapshotStartTime && !pjsipBatchContactIds.has(cid)) {
+                        entry.isOnline = false;
+                    }
+                }
+                recomputeAllPjsipPresence();
+                pjsipBatchContactIds.clear();
+                io.emit('peerIPs', peerIPs);
+                getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
+            }
+
             // Emit peerStatus once initial list queries complete
             if (event.Event === 'PeerlistComplete' || event.Event === 'EndpointListComplete') {
                 console.log('AMI: Peer list complete, peers:', Object.keys(peerStatus));
                 isPeerListLoaded = true;
-                io.emit('peerStatus', peerStatus);
+                updateAllExtensionPresence();
                 io.emit('peerIPs', peerIPs);
+                getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
             }
 
-            // Helper to handle fast presence updates
-            function updatePeerPresence(name, isOnline, ip = null) {
-                if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
-                    peerIPs[name] = ip;
-                    io.emit('peerIPs', peerIPs);
-                }
+            // Real-time peer registration changes (chan_sip / chan_pjsip)
+            if (event.Event === 'PeerStatus') {
+                let rawPeer = event.Peer ? event.Peer.replace(/^(SIP|PJSIP)\//i, '') : '';
+                let name = rawPeer ? rawPeer.split('/')[0] : '';
+                if (name) {
+                    let statusStr = String(event.PeerStatus || '').trim();
+                    let isOnline = statusStr === 'Registered' || statusStr === 'Reachable';
 
-                if (isOnline) {
-                    if (pendingOffline[name]) {
-                        clearTimeout(pendingOffline[name]);
-                        delete pendingOffline[name];
-                    }
-                    if (!peerStatus[name]) {
-                        peerStatus[name] = true;
-                        io.emit('peerStatus', peerStatus);
-                    }
-                } else {
-                    if (peerStatus[name]) {
+                    if (statusStr === 'Unregistered' || statusStr === 'Rejected') {
+                        // Explicit unregister — turn offline IMMEDIATELY
+                        if (pendingOffline[name]) {
+                            clearTimeout(pendingOffline[name]);
+                            delete pendingOffline[name];
+                        }
+                        sipPresence[name] = false;
+                        updateExtensionPresence(name);
+                        getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
+                    } else if (!isOnline && sipPresence[name]) {
+                        // Qualify timeout / lost ping — short 1s debounce
                         if (!pendingOffline[name]) {
                             pendingOffline[name] = setTimeout(() => {
                                 if (pendingOffline[name]) {
-                                    peerStatus[name] = false;
-                                    io.emit('peerStatus', peerStatus);
+                                    sipPresence[name] = false;
+                                    updateExtensionPresence(name);
                                     delete pendingOffline[name];
                                 }
-                            }, 500); // Fast 500ms transition
+                            }, 1000);
                         }
+                    } else if (isOnline) {
+                        if (pendingOffline[name]) {
+                            clearTimeout(pendingOffline[name]);
+                            delete pendingOffline[name];
+                        }
+                        sipPresence[name] = true;
+                        updateExtensionPresence(name);
+                        getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
                     }
-                }
-            }
 
-            // Real-time peer registration changes
-            if (event.Event === 'PeerStatus') {
-                let rawPeer = event.Peer ? event.Peer.replace(/^(SIP|PJSIP)\//, '') : '';
-                let name = rawPeer ? rawPeer.split('/')[0] : '';
-                if (name) {
-                    let isOnline = event.PeerStatus === 'Registered' || event.PeerStatus === 'Reachable';
-                    let ip = event.Address || event.IPaddress || '';
-                    updatePeerPresence(name, isOnline, ip);
+                    // Re-query SIPpeers on registration to capture IP for newly registered peers
+                    if (isOnline && amiClient) {
+                        amiClient.write('Action: SIPpeers\r\n\r\n');
+                    }
                 }
             }
 
@@ -1028,7 +1224,7 @@ setInterval(() => {
     }
 }, 30000);
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     let clean = {};
     for (let ext in activeCalls) {
         clean[ext] = activeCalls[ext];
@@ -1036,6 +1232,7 @@ io.on('connection', (socket) => {
     socket.emit('initialState', clean);
     socket.emit('peerStatus', peerStatus);
     socket.emit('peerIPs', peerIPs);
+    socket.emit('initialTrunks', await getTrunkStatusMap());
 });
 
 
@@ -4662,70 +4859,210 @@ app.get('/api/config/recordings/audio/:id', async (req, res) => {
 app.get('/api/config/trunks', async (req, res) => {
     try {
         const [trunks] = await pool.query(`
-            SELECT trunkid, name, tech, channelid, disabled
+            SELECT trunkid, name, tech, outcid, channelid, disabled, usercontext
             FROM \`asterisk\`.\`trunks\`
             ORDER BY trunkid ASC
         `);
+
+        for (const t of trunks) {
+            t.host = '';
+            t.username = '';
+            t.secret = '';
+            t.context = 'from-trunk';
+            t.register = '';
+
+            const trunkKey = `tr-trunk-${t.trunkid}`;
+            if (t.tech === 'sip') {
+                const [sipRows] = await pool.query('SELECT keyword, data FROM `asterisk`.`sip` WHERE id = ? OR id = ?', [trunkKey, t.name]);
+                sipRows.forEach(r => {
+                    if (r.keyword === 'host') t.host = r.data;
+                    if (r.keyword === 'username') t.username = r.data;
+                    if (r.keyword === 'secret') t.secret = r.data;
+                    if (r.keyword === 'context') t.context = r.data;
+                    if (r.keyword === 'register') t.register = r.data;
+                });
+            } else if (t.tech === 'iax2' || t.tech === 'iax') {
+                const [iaxRows] = await pool.query('SELECT keyword, data FROM `asterisk`.`iax` WHERE id = ? OR id = ?', [trunkKey, t.name]);
+                iaxRows.forEach(r => {
+                    if (r.keyword === 'host') t.host = r.data;
+                    if (r.keyword === 'username') t.username = r.data;
+                    if (r.keyword === 'secret') t.secret = r.data;
+                    if (r.keyword === 'context') t.context = r.data;
+                    if (r.keyword === 'register') t.register = r.data;
+                });
+            }
+        }
         res.json({ success: true, trunks });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// POST /api/config/trunks - Create Custom Trunk
+// POST /api/config/trunks - Create Trunk (Custom, SIP, IAX2)
 app.post('/api/config/trunks', async (req, res) => {
     try {
-        const { name, channelid } = req.body;
+        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, error: 'Trunk Name is required.' });
         }
-        if (!channelid || !channelid.trim()) {
-            return res.status(400).json({ success: false, error: 'Custom Dial String is required.' });
-        }
 
         const trunkName = String(name).trim();
-        const dialString = String(channelid).trim().replace(/^dongle\/I:/, 'dongle/i:');
+        const trunkTech = String(tech || 'custom').trim().toLowerCase();
+        const dialString = String(channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:');
+        const cidVal = String(outcid || '').trim();
 
-        // Calculate next trunkid (primary key is not auto-increment)
+        if (trunkTech === 'custom' && !dialString) {
+            return res.status(400).json({ success: false, error: 'Custom Dial String is required for Custom trunks.' });
+        }
+        if ((trunkTech === 'sip' || trunkTech === 'iax2') && (!host || !host.trim())) {
+            return res.status(400).json({ success: false, error: `Remote Host is required for ${trunkTech.toUpperCase()} trunks.` });
+        }
+
         const [maxRow] = await pool.query('SELECT COALESCE(MAX(trunkid), 0) + 1 AS nextId FROM `asterisk`.`trunks`');
         const nextTrunkId = maxRow[0].nextId;
+        const trunkKey = `tr-trunk-${nextTrunkId}`;
 
-        // Insert into trunks table as tech='custom'
         await pool.query(`
-            INSERT INTO \`asterisk\`.\`trunks\` (trunkid, name, tech, outcid, keepcid, maxchans, failscript, dialoutprefix, channelid, disabled, \`continue\`)
-            VALUES (?, ?, 'custom', '', 'off', '', '', '', ?, 'off', 'off')
-        `, [nextTrunkId, trunkName, dialString]);
+            INSERT INTO \`asterisk\`.\`trunks\` (trunkid, name, tech, outcid, keepcid, maxchans, failscript, dialoutprefix, channelid, disabled, \`continue\`, usercontext)
+            VALUES (?, ?, ?, ?, 'off', '', '', '', ?, 'off', 'off', ?)
+        `, [nextTrunkId, trunkName, trunkTech, cidVal, dialString, String(usercontext || '').trim()]);
 
-        reloadPbxConfig();
-        res.json({ success: true, message: `Custom Trunk '${trunkName}' created successfully.` });
+        if (trunkTech === 'sip') {
+            const sipParams = [
+                ['account', trunkName, 0],
+                ['host', String(host || '').trim(), 1],
+                ['username', String(username || '').trim(), 2],
+                ['secret', String(secret || '').trim(), 3],
+                ['type', 'peer', 4],
+                ['context', String(context || 'from-trunk').trim(), 5],
+                ['insecure', 'port,invite', 6],
+                ['qualify', 'yes', 7]
+            ];
+            if (register && String(register).trim()) {
+                sipParams.push(['register', String(register).trim(), 8]);
+            }
+            for (const [kw, val, seq] of sipParams) {
+                if (val !== undefined && val !== '') {
+                    await pool.query(`
+                        INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags)
+                        VALUES (?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE data = VALUES(data)
+                    `, [trunkKey, kw, val, seq]);
+                }
+            }
+        } else if (trunkTech === 'iax2' || trunkTech === 'iax') {
+            const iaxParams = [
+                ['account', trunkName, 0],
+                ['host', String(host || '').trim(), 1],
+                ['username', String(username || '').trim(), 2],
+                ['secret', String(secret || '').trim(), 3],
+                ['type', 'peer', 4],
+                ['context', String(context || 'from-trunk').trim(), 5],
+                ['qualify', 'yes', 6]
+            ];
+            if (register && String(register).trim()) {
+                iaxParams.push(['register', String(register).trim(), 7]);
+            }
+            for (const [kw, val, seq] of iaxParams) {
+                if (val !== undefined && val !== '') {
+                    await pool.query(`
+                        INSERT INTO \`asterisk\`.\`iax\` (id, keyword, data, flags)
+                        VALUES (?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE data = VALUES(data)
+                    `, [trunkKey, kw, val, seq]);
+                }
+            }
+        }
+
+        const reloadRes = await reloadPbxConfigPromise();
+        res.json({
+            success: true,
+            message: `Trunk '${trunkName}' (${trunkTech.toUpperCase()}) created successfully.`,
+            applied: reloadRes.success,
+            reloadError: reloadRes.error
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// PUT /api/config/trunks/:trunkid - Modify Custom Trunk
+// PUT /api/config/trunks/:trunkid - Modify Trunk (Custom, SIP, IAX2)
 app.put('/api/config/trunks/:trunkid', async (req, res) => {
     try {
         const trunkId = parseInt(req.params.trunkid, 10);
-        const { name, channelid } = req.body;
+        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, error: 'Trunk Name is required.' });
         }
-        if (!channelid || !channelid.trim()) {
-            return res.status(400).json({ success: false, error: 'Custom Dial String is required.' });
-        }
 
         const trunkName = String(name).trim();
-        const dialString = String(channelid).trim().replace(/^dongle\/I:/, 'dongle/i:');
+        const trunkTech = String(tech || 'custom').trim().toLowerCase();
+        const dialString = String(channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:');
+        const cidVal = String(outcid || '').trim();
+        const trunkKey = `tr-trunk-${trunkId}`;
 
         await pool.query(`
             UPDATE \`asterisk\`.\`trunks\`
-            SET name = ?, channelid = ?, tech = 'custom'
+            SET name = ?, tech = ?, channelid = ?, outcid = ?, usercontext = ?
             WHERE trunkid = ?
-        `, [trunkName, dialString, trunkId]);
+        `, [trunkName, trunkTech, dialString, cidVal, String(usercontext || '').trim(), trunkId]);
 
-        reloadPbxConfig();
-        res.json({ success: true, message: `Custom Trunk '${trunkName}' updated successfully.` });
+        // Clear existing sip/iax params for this trunk
+        await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ? OR id = ?', [trunkKey, trunkName]);
+        await pool.query('DELETE FROM `asterisk`.`iax` WHERE id = ? OR id = ?', [trunkKey, trunkName]);
+
+        if (trunkTech === 'sip') {
+            const sipParams = [
+                ['account', trunkName, 0],
+                ['host', String(host || '').trim(), 1],
+                ['username', String(username || '').trim(), 2],
+                ['secret', String(secret || '').trim(), 3],
+                ['type', 'peer', 4],
+                ['context', String(context || 'from-trunk').trim(), 5],
+                ['insecure', 'port,invite', 6],
+                ['qualify', 'yes', 7]
+            ];
+            if (register && String(register).trim()) {
+                sipParams.push(['register', String(register).trim(), 8]);
+            }
+            for (const [kw, val, seq] of sipParams) {
+                if (val !== undefined && val !== '') {
+                    await pool.query(`
+                        INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags)
+                        VALUES (?, ?, ?, ?)
+                    `, [trunkKey, kw, val, seq]);
+                }
+            }
+        } else if (trunkTech === 'iax2' || trunkTech === 'iax') {
+            const iaxParams = [
+                ['account', trunkName, 0],
+                ['host', String(host || '').trim(), 1],
+                ['username', String(username || '').trim(), 2],
+                ['secret', String(secret || '').trim(), 3],
+                ['type', 'peer', 4],
+                ['context', String(context || 'from-trunk').trim(), 5],
+                ['qualify', 'yes', 6]
+            ];
+            if (register && String(register).trim()) {
+                iaxParams.push(['register', String(register).trim(), 7]);
+            }
+            for (const [kw, val, seq] of iaxParams) {
+                if (val !== undefined && val !== '') {
+                    await pool.query(`
+                        INSERT INTO \`asterisk\`.\`iax\` (id, keyword, data, flags)
+                        VALUES (?, ?, ?, ?)
+                    `, [trunkKey, kw, val, seq]);
+                }
+            }
+        }
+
+        const reloadRes = await reloadPbxConfigPromise();
+        res.json({
+            success: true,
+            message: `Trunk '${trunkName}' updated successfully.`,
+            applied: reloadRes.success,
+            reloadError: reloadRes.error
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -4737,13 +5074,20 @@ app.delete('/api/config/trunks/:trunkid', async (req, res) => {
         const trunkId = parseInt(req.params.trunkid, 10);
         const [tRows] = await pool.query('SELECT name FROM `asterisk`.`trunks` WHERE trunkid = ?', [trunkId]);
         const name = tRows[0] ? tRows[0].name : '';
+        const trunkKey = `tr-trunk-${trunkId}`;
 
         await pool.query('DELETE FROM `asterisk`.`trunks` WHERE trunkid = ?', [trunkId]);
-        await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ? OR id = ?', [`tr-trunk-${trunkId}`, name]);
+        await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ? OR id = ?', [trunkKey, name]);
+        await pool.query('DELETE FROM `asterisk`.`iax` WHERE id = ? OR id = ?', [trunkKey, name]);
         await pool.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE trunk_id = ?', [trunkId]);
 
-        reloadPbxConfig();
-        res.json({ success: true, message: `Trunk deleted successfully.` });
+        const reloadRes = await reloadPbxConfigPromise();
+        res.json({
+            success: true,
+            message: `Trunk deleted successfully.`,
+            applied: reloadRes.success,
+            reloadError: reloadRes.error
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
