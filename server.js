@@ -3725,13 +3725,24 @@ function reloadPjsip() {
 
 app.get('/api/webrtc/config', requireAuth, async (req, res) => {
     try {
-        const [rows] = await pool.query(`
+        const isAdmin = isSuperAdmin(req);
+        const currentUser = req.session ? req.session.username : null;
+
+        let query = `
             SELECT u.extension, u.name, COALESCE(s_secret.data, '') AS secret, d.tech
             FROM ${tables.users} u
             LEFT JOIN ${tables.devices} d ON d.id = u.extension
             LEFT JOIN ${tables.sip} s_secret ON s_secret.id = u.extension AND s_secret.keyword = 'secret'
             WHERE d.tech = 'pjsip' OR u.extension = '200'
-        `);
+        `;
+        let params = [];
+
+        if (!isAdmin) {
+            query += ` AND (u.extension = ? OR u.name = ?)`;
+            params.push(currentUser, currentUser);
+        }
+
+        const [rows] = await pool.query(query, params);
         const host = req.hostname || '127.0.0.1';
         const wsPort = 5066;
         const protocol = req.protocol === 'https' ? 'wss' : 'ws';
@@ -3743,7 +3754,7 @@ app.get('/api/webrtc/config', requireAuth, async (req, res) => {
             extensions: rows.map(r => ({
                 extension: r.extension,
                 name: r.name,
-                secret: r.secret || 'WebRTC200Secure!'
+                secret: (isAdmin || r.extension === currentUser || r.name === currentUser) ? (r.secret || '') : ''
             }))
         });
     } catch (err) {
