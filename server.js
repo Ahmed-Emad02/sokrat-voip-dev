@@ -3695,9 +3695,13 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
 
 async function syncAllExtensionsAstdb() {
     try {
-        const [extensions] = await pool.query('SELECT extension, name, voicemail FROM `asterisk`.`users`');
+        const [extensions] = await pool.query(`
+            SELECT u.extension, u.name, u.voicemail, COALESCE(d.tech, 'sip') AS tech
+            FROM \`asterisk\`.\`users\` u
+            LEFT JOIN \`asterisk\`.\`devices\` d ON d.id = u.extension
+        `);
         for (const ext of extensions) {
-            await setExtensionAstdbDefaults(ext.extension, ext.name || ext.extension, ext.voicemail || 'novm');
+            await setExtensionAstdbDefaults(ext.extension, ext.name || ext.extension, ext.voicemail || 'novm', ext.tech || 'sip');
         }
         console.log(`AstDB sync complete for ${extensions.length} extension(s).`);
     } catch (err) {
