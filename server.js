@@ -1354,7 +1354,9 @@ app.post('/login', async (req, res) => {
             req.session.username = ROOT_USER;
             req.session.userGroup = 'super admins';
             req.session.isRoot = true;
-            return res.redirect(req.body.redirect || '/');
+            return req.session.save(() => {
+                res.redirect(req.body.redirect || '/');
+            });
         }
         const conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
@@ -1380,7 +1382,9 @@ app.post('/login', async (req, res) => {
         req.session.userId = user.id;
         req.session.username = user.username;
         req.session.userGroup = user.group_name || null;
-        res.redirect(req.body.redirect || '/');
+        req.session.save(() => {
+            res.redirect(req.body.redirect || '/');
+        });
     } catch (err) {
         res.render('login', { redirect: req.body.redirect || '/', error: 'Login error: ' + err.message, currentLang: req.query.lang || 'en' });
     }
