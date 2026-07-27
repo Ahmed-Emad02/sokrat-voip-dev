@@ -1125,8 +1125,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             }
 
             // --- SMS INBOX MANAGEMENT ---
-            const smsInboxContainer = document.getElementById('sms-inbox-container');
-            const smsEmptyPlaceholder = document.getElementById('sms-empty-placeholder');
+            function getSmsContainer() {
+                return document.getElementById('sms-inbox-container');
+            }
 
             function updateSmsInboxTitle() {
                 const titleEl = document.getElementById('sms-inbox-title');
@@ -1274,17 +1275,20 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             }
 
             function filterAndRenderSms() {
+                const container = getSmsContainer();
+                if (!container) return;
+
                 if (!selectedDongleId) {
                     showEmptySmsInbox();
                     return;
                 }
                 
                 const filtered = allSmsMessages.filter(sms => (sms.dongleId || '').toLowerCase() === selectedDongleId.toLowerCase());
-                smsInboxContainer.innerHTML = '';
+                container.innerHTML = '';
                 
                 if (filtered.length > 0) {
                     filtered.forEach(sms => {
-                        smsInboxContainer.appendChild(renderSmsCard(sms));
+                        container.appendChild(renderSmsCard(sms));
                     });
                 } else {
                     showEmptySmsInbox();
@@ -1317,7 +1321,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             };
 
             function showEmptySmsInbox() {
-                smsInboxContainer.innerHTML = `
+                const container = getSmsContainer();
+                if (!container) return;
+                container.innerHTML = `
                     <div class="text-center py-8 text-[var(--text-muted)] italic" id="sms-empty-placeholder">
                         ${isRtl ? 'لا يوجد رسائل واردة حالياً' : 'No incoming SMS messages'}
                     </div>
@@ -1337,7 +1343,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         if (placeholder && placeholder.parentNode) {
                             placeholder.parentNode.removeChild(placeholder);
                         }
-                        smsInboxContainer.insertBefore(renderSmsCard(sms), smsInboxContainer.firstChild);
+                        const container = getSmsContainer();
+                        if (container) {
+                            container.insertBefore(renderSmsCard(sms), container.firstChild);
+                        }
                     }
                 });
 
