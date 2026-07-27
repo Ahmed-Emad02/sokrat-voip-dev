@@ -422,6 +422,7 @@ async function syncAstDbDongleMappings() {
 
             if (imsi) {
                 execFile(ASTERISK_BIN, ['-rx', `database put sim_map ${imsi} ${num}`]);
+                execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imsi} ${num}`]);
             }
             if (dongleName) {
                 execFile(ASTERISK_BIN, ['-rx', `database put dongle_map ${dongleName} ${num}`]);
