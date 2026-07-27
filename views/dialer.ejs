@@ -50,7 +50,6 @@ const isRtl = currentLang === 'ar';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sokrat VOIP — <%= t.title %></title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body class="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen flex flex-col md:flex-row m-0 p-0 font-sans">
     <%- include('sidebar', { activeTab: 'dialer', isRtl, currentLang }) %>
