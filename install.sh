@@ -5,10 +5,7 @@
 
 set -euo pipefail
 
-INSTALL_DIR=/opt/issabel-dashboard
-SERVICE_NAME=issabel-dashboard
-LEGACY_INSTALL_DIR=/opt/sokrat-voip
-LEGACY_SERVICE_NAME=sokrat-voip
+INSTALL_DIR=/opt/sokrat-voip
 REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voip-dev.git
 NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf | cut -d= -f2- | xargs)
@@ -21,45 +18,44 @@ echo "============================================"
 # ──────────────────────────────────────────────
 # Step 1 — System Packages + Disable Fail2Ban
 # ──────────────────────────────────────────────
-echo "[1/13] Installing system packages..."
-yum install -y nano net-tools btop sox sqlite
-systemctl disable --now fail2ban
-echo "  fail2ban disabled"
+echo "[1/12] Installing system packages..."
+# Install EPEL first so sox (which lives in EPEL) resolves
+yum install -y epel-release
+yum install -y nano net-tools sox sqlite
+echo "  System packages installed"
+# fail2ban is optional; disable if the unit exists
+if systemctl is-enabled fail2ban &>/dev/null; then
+    systemctl disable --now fail2ban
+    echo "  fail2ban disabled"
+else
+    echo "  fail2ban not present, skipping"
+fi
 
 # ──────────────────────────────────────────────
 # Step 2 — Install Node.js 22
 # ──────────────────────────────────────────────
-echo "[2/13] Installing Node.js 22..."
+echo "[2/12] Installing Node.js 22..."
 if ! command -v node &>/dev/null; then
-    curl -fsSL "$NODE_SETUP_URL" | bash -
+    curl -fsSL -o /tmp/nodesetup.sh "$NODE_SETUP_URL"
+    bash /tmp/nodesetup.sh
     yum install -y nodejs
+    rm -f /tmp/nodesetup.sh
 else
     echo "  Node.js already installed: $(node -v)"
 fi
 
 # ──────────────────────────────────────────────
-# Step 3 — Synchronize the Repository
+# Step 3 — Clone the Repository
 # ──────────────────────────────────────────────
-echo "[3/13] Synchronizing repository..."
-systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-systemctl stop "$LEGACY_SERVICE_NAME" 2>/dev/null || true
+echo "[3/12] Cloning repository..."
+systemctl stop sokrat-voip 2>/dev/null || true
 yum install -y git net-tools
-
-if [ ! -d "$INSTALL_DIR" ] && [ -d "$LEGACY_INSTALL_DIR" ]; then
-    echo "  Migrating $LEGACY_INSTALL_DIR to $INSTALL_DIR..."
-    mv "$LEGACY_INSTALL_DIR" "$INSTALL_DIR"
-fi
-
-if [ -d "$INSTALL_DIR/.git" ]; then
-    echo "  Repository exists, synchronizing with origin/main..."
+if [ -d "$INSTALL_DIR" ]; then
+    echo "  Directory $INSTALL_DIR exists, pulling latest..."
     cd "$INSTALL_DIR"
     git remote set-url origin "$REPO_URL"
-    git fetch origin main
-    git reset --hard origin/main
-elif [ -d "$INSTALL_DIR" ]; then
-    echo "  ERROR: $INSTALL_DIR exists but is not a Git repository."
-    echo "  Move or remove it, then run the installer again."
-    exit 1
+    git fetch origin
+    git checkout origin/main -B main
 else
     git clone "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
@@ -68,8 +64,8 @@ fi
 # ──────────────────────────────────────────────
 # Step 4 — Install Dependencies
 # ──────────────────────────────────────────────
-echo "[4/13] Installing npm dependencies..."
-npm ci --omit=dev
+echo "[4/12] Installing npm dependencies..."
+npm install
 
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
 if ! command -v ffmpeg &>/dev/null; then
@@ -87,9 +83,17 @@ fi
 # ──────────────────────────────────────────────
 # Step 5 — Create the Environment File
 # ──────────────────────────────────────────────
-echo "[5/13] Creating .env file..."
+echo "[5/12] Creating .env file..."
+AMPMGR_USER=$(grep -i '^AMPMGRUSER=' /etc/amportal.conf 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ' | xargs 2>/dev/null || echo "admin")
+AMPMGR_PASS=$(grep -i '^AMPMGRPASS=' /etc/amportal.conf 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ' | xargs 2>/dev/null || echo "admin")
+if [ -z "$AMPMGR_USER" ]; then AMPMGR_USER="admin"; fi
+if [ -z "$AMPMGR_PASS" ]; then AMPMGR_PASS="admin"; fi
+
 if [ -f "$INSTALL_DIR/.env" ]; then
-    echo "  .env already exists, skipping"
+    echo "  .env already exists, updating AMI credentials..."
+    sed -i "s/^AMI_USER=.*/AMI_USER=${AMPMGR_USER}/" "$INSTALL_DIR/.env"
+    sed -i "s/^AMI_PASS=.*/AMI_PASS=${AMPMGR_PASS}/" "$INSTALL_DIR/.env"
+    echo "  .env AMI credentials updated ($AMPMGR_USER)"
 else
     cat > "$INSTALL_DIR/.env" << EOF
 PORT=8080
@@ -100,8 +104,8 @@ CDR_DB=asteriskcdrdb
 ASTERISK_DB=asterisk
 AMI_HOST=127.0.0.1
 AMI_PORT=5038
-AMI_USER=admin
-AMI_PASS=admin
+AMI_USER=${AMPMGR_USER}
+AMI_PASS=${AMPMGR_PASS}
 RECORDING_ROOT=/var/spool/asterisk/monitor
 SESSION_SECRET=$(openssl rand -hex 32)
 ENCRYPTION_KEY=$(openssl rand -hex 32)
@@ -115,33 +119,43 @@ fi
 # ──────────────────────────────────────────────
 # Step 6 — Initialize Database Tables
 # ──────────────────────────────────────────────
-echo "[6/13] Initializing database tables and runtime directories..."
+echo "[6/12] Initializing database tables..."
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk < "$INSTALL_DIR/backend/install_db.sql"
-install -d -m 0755 "$INSTALL_DIR/public/photos"
-echo "  Database tables and employee photo directory ensured"
+echo "  Database tables ensured"
 
 # ──────────────────────────────────────────────
 # Step 7 — Configure Asterisk AMI
 # ──────────────────────────────────────────────
-echo "[7/13] Configuring Asterisk AMI..."
-if grep -q '^\[admin\]' /etc/asterisk/manager.conf; then
-    sed -i '/^\[admin\]/,/^\[/ s/deny=.*/permit=127.0.0.1\/255.255.255.0/' /etc/asterisk/manager.conf
-    echo "  [admin] section updated with permit line"
-else
-    cat >> /etc/asterisk/manager.conf << 'AMIEOF'
+echo "[7/12] Configuring Asterisk AMI..."
+python3 -c "
+import re, sys
+path = '/etc/asterisk/manager.conf'
+user = '$AMPMGR_USER'
+pwd = '$AMPMGR_PASS'
+try:
+    with open(path) as f: text = f.read()
+except Exception as e:
+    sys.exit(0)
 
-[admin]
-secret = admin
-read = system,call,agent,originate
-write = system,call,agent,originate
-permit = 127.0.0.1/255.255.255.0
+pattern = r'^\[\s*' + re.escape(user) + r'\s*\].*?(?=^\[|\Z)'
+m = re.search(pattern, text, re.MULTILINE | re.DOTALL)
+if m:
+    sec = m.group()
+    sec = re.sub(r'^\s*(deny|permit)\s*=.*$', '', sec, flags=re.MULTILINE)
+    if re.search(r'^\s*secret\s*=', sec, re.MULTILINE):
+        sec = re.sub(r'^\s*secret\s*=.*$', f'secret = {pwd}', sec, flags=re.MULTILINE)
+    else:
+        sec += f'secret = {pwd}\n'
+    sec = sec.rstrip() + '\npermit = 127.0.0.1/255.255.255.0\n'
+    text = text[:m.start()] + sec + text[m.end():]
+else:
+    text = text.rstrip() + f'\n\n[{user}]\nsecret = {pwd}\nread = system,call,agent,config,command,reporting,user,verbose\nwrite = system,call,agent,config,command,reporting,user,verbose\npermit = 127.0.0.1/255.255.255.0\n'
 
-AMIEOF
-    echo "  [admin] section appended"
-fi
+with open(path, 'w') as f: f.write(text)
+"
+echo "  AMI manager.conf configured for $AMPMGR_USER"
 asterisk -rx "manager reload" 2>/dev/null || true
 echo "  AMI reloaded"
-
 # ──────────────────────────────────────────────
 # Step 7b — Initialize SQLite Address Book Database
 # ──────────────────────────────────────────────
@@ -182,7 +196,7 @@ echo "  address_book.db initialized with schema and permissions set"
 # ──────────────────────────────────────────────
 # Step 8 — Add Required Dialplan Contexts
 # ──────────────────────────────────────────────
-echo "[8/13] Adding dialplan contexts..."
+echo "[8/12] Adding dialplan contexts..."
 DIALPLAN_FILE=/etc/asterisk/extensions_custom.conf
 
 # Ensure file exists
@@ -313,46 +327,6 @@ same => n,MacroExit()
 
 MACRO
 
-
-# Strip old auto-dialer contexts before appending
-echo "  Stripping old auto-dialer contexts..."
-python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\\[from-autodialer-.*?\\]\s*\\n.*?(?=\\n\\[|\\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
-echo "  Stripped."
-
-append_context '[from-autodialer-amd]' '[from-autodialer-amd]' << 'AUTODIALER'
-
-[from-autodialer-amd]
-exten => s,1,NoOp(=== Predictive Auto-Dialer AMD & Handoff: ${LEAD_PHONE} (Attempt: ${ATTEMPT_UUID}) ===)
- exten => s,n,Set(CDR(accountcode)=autodialer_predictive)
- exten => s,n,UserEvent(AutoDialerEvent,Status: LeadAnswered,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID},Phone: ${LEAD_PHONE})
- exten => s,n,ExecIf($["${AMD_ENABLE}" = "1"]?AMD(2500,1500,800,4000,100,50,4,256))
- exten => s,n,ExecIf($["${AMD_ENABLE}" = "1"]?GotoIf($["${AMDSTATUS}" = "HUMAN"]?human:machine))
- 
- exten => s,n(human),NoOp(Auto-Dialer: Human Answered - Handing to Queue ${TARGET_QUEUE})
- exten => s,n,UserEvent(AutoDialerEvent,Status: AmdPassed,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID},Phone: ${LEAD_PHONE})
- exten => s,n,Queue(${TARGET_QUEUE},t,,,${MAX_QUEUE_WAIT})
- exten => s,n,GotoIf($["${QUEUESTATUS}" = "TIMEOUT"]?overflow)
- exten => s,n,Hangup()
-
- exten => s,n(overflow),NoOp(Auto-Dialer: Queue Wait Exceeded - Triggering Fallback)
- exten => s,n,UserEvent(AutoDialerEvent,Status: Abandoned,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID})
- exten => s,n,Goto(${FALLBACK_DEST})
-
- exten => s,n(machine),NoOp(Auto-Dialer: Machine Detected - ${AMDSTATUS})
- exten => s,n,UserEvent(AutoDialerEvent,Status: Machine,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID})
- exten => s,n,Hangup()
-
-[from-autodialer-progressive]
-exten => s,1,NoOp(=== Progressive Auto-Dialer: Agent Answered - Dialing Lead ${LEAD_PHONE} (Attempt: ${ATTEMPT_UUID}) ===)
- exten => s,n,Set(CDR(accountcode)=autodialer_progressive)
- exten => s,n,UserEvent(AutoDialerEvent,Status: AgentAnswered,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID},Agent: ${TARGET_AGENT},Uniqueid: ${UNIQUEID},Linkedid: ${LINKEDID})
- exten => s,n,Set(CALLERID(num)=${ORIGINATION_CALLER_ID})
- exten => s,n,Set(CALLERID(name)=${ORIGINATION_CALLER_ID})
- exten => s,n,Dial(Local/${LEAD_PHONE}@${OUTBOUND_CONTEXT}/n,30,tT)
- exten => s,n,Set(PROG_DIALSTATUS=${DIALSTATUS})
- exten => s,n,UserEvent(AutoDialerEvent,Status: ProgressiveCompleted,AttemptUUID: ${ATTEMPT_UUID},LeadID: ${LEAD_ID},DialStatus: ${PROG_DIALSTATUS})
- exten => s,n,Hangup()
-AUTODIALER
 asterisk -rx "dialplan reload" 2>/dev/null || true
 echo "  Dialplan reloaded"
 
@@ -360,7 +334,7 @@ echo "  Dialplan reloaded"
 # Step 9 — GSM Dongle Setup
 # ──────────────────────────────────────────────
 echo ""
-echo "[9/13] Setting up GSM dongles & chan_dongle..."
+echo "[9/12] Setting up GSM dongles & chan_dongle..."
 
 # 9a — Install Build Dependencies
 echo "  [9a] Installing build dependencies..."
@@ -369,7 +343,7 @@ yum -y install asterisk18-devel
 
 # 9b — Compile and Install chan_dongle
 echo "  [9b] Compiling chan_dongle..."
-if [ ! -f /usr/lib/asterisk/modules/chan_dongle.so ]; then
+if [ ! -f /usr/lib64/asterisk/modules/chan_dongle.so ] && [ ! -f /usr/lib/asterisk/modules/chan_dongle.so ]; then
     cd /usr/src
     if [ ! -d asterisk-chan-dongle ]; then
         git clone https://github.com/wdoekes/asterisk-chan-dongle.git
@@ -389,18 +363,15 @@ fi
 echo "  [9c] Configuring and applying dongle.conf..."
 NUM_DONGLES=4
 if [ -c /dev/tty ]; then
-    while true; do
-        read -rp "Enter the number of GSM dongles to activate on this server (1-25) [default: 4]: " user_val < /dev/tty
-        if [ -z "$user_val" ]; then
-            NUM_DONGLES=4
-            break
-        elif [[ "$user_val" =~ ^[0-9]+$ ]] && [ "$user_val" -ge 1 ] && [ "$user_val" -le 25 ]; then
+    printf "Enter the number of GSM dongles to activate on this server (1-25) [default: 4]: " > /dev/tty 2>/dev/null || true
+    if read -t 15 -r user_val < /dev/tty 2>/dev/null; then
+        user_val=$(echo "$user_val" | tr -d '\r\n ')
+        if [[ "$user_val" =~ ^[0-9]+$ ]] && [ "$user_val" -ge 1 ] && [ "$user_val" -le 25 ]; then
             NUM_DONGLES=$user_val
-            break
-        else
-            echo "Invalid input. Please enter a number between 1 and 25." > /dev/tty
+        elif [ -z "$user_val" ]; then
+            NUM_DONGLES=4
         fi
-    done
+    fi
 fi
 
 echo "  Configuring $NUM_DONGLES dongle(s)..."
@@ -493,7 +464,7 @@ fi
 # ──────────────────────────────────────────────
 # Step 10 — Configure Apache Reverse Proxy
 # ──────────────────────────────────────────────
-echo "[10/13] Configuring Apache reverse proxy..."
+echo "[10/12] Configuring Apache reverse proxy..."
 yum install -y mod_ssl 2>/dev/null || true
 
 # Restore Listen 80 in httpd.conf if it was replaced, and ensure Listen 3000 is present
@@ -545,34 +516,30 @@ echo "  Apache restarted"
 # ──────────────────────────────────────────────
 # Step 11 — Create systemd Service
 # ──────────────────────────────────────────────
-echo "[11/13] Creating systemd service..."
-cat > "/etc/systemd/system/${SERVICE_NAME}.service" << UNIT
+echo "[11/12] Creating systemd service..."
+cat > /etc/systemd/system/sokrat-voip.service << 'UNIT'
 [Unit]
-Description=Sokrat VoIP Dashboard
-Wants=network-online.target
-After=network-online.target mariadb.service asterisk.service
+Description=Issabel Dashboard
+After=network.target mysqld.service asterisk.service
 
 [Service]
 Type=simple
-WorkingDirectory=${INSTALL_DIR}
-ExecStart=/usr/bin/node ${INSTALL_DIR}/server.js
+WorkingDirectory=/opt/sokrat-voip
+ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=5
 User=root
 Environment=NODE_ENV=production
 Environment=LANG=en_US.UTF-8
 Environment=LC_ALL=en_US.UTF-8
-EnvironmentFile=-${INSTALL_DIR}/.env
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 
-systemctl disable "$LEGACY_SERVICE_NAME" 2>/dev/null || true
-rm -f "/etc/systemd/system/${LEGACY_SERVICE_NAME}.service"
 systemctl daemon-reload
-systemctl enable --now "$SERVICE_NAME"
-echo "  ${SERVICE_NAME}.service enabled and started"
+systemctl enable --now sokrat-voip
+echo "  Service enabled and started"
 
 # ──────────────────────────────────────────────
 # Step 12 — Set timezone to Africa/Cairo
@@ -588,10 +555,10 @@ echo "  Current timezone: $(timedatectl 2>/dev/null | grep 'Time zone' || echo '
 echo ""
 echo "[13/13] Verifying installation..."
 sleep 2
-systemctl status "$SERVICE_NAME" --no-pager -l | head -12
+systemctl status sokrat-voip --no-pager -l | head -12
 echo ""
 echo "--- Last 10 log lines ---"
-journalctl -u "$SERVICE_NAME" -n 10 --no-pager -l
+journalctl -u sokrat-voip -n 10 --no-pager -l
 echo ""
 echo "============================================"
 echo " Installation complete!"
