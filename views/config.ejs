@@ -1309,18 +1309,29 @@ function isTabAllowed(tabName) {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سياق المكالمات الواردة' : 'Incoming Context' %></label>
-                                <input type="text" id="trunkContext" value="from-trunk" placeholder="from-trunk" class="config-input w-full font-mono text-xs">
+                        <!-- FreePBX PEER Details & USER Details Textareas -->
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'إعدادات الخروج (PEER Details)' : 'Outgoing Settings (PEER Details)' %></label>
+                            <textarea id="trunkPeerDetails" rows="4" placeholder="host=192.168.100.50&#10;username=user&#10;secret=pass&#10;type=peer&#10;context=from-trunk&#10;insecure=port,invite&#10;qualify=yes" class="config-input w-full font-mono text-xs py-1.5 px-2.5 resize-y"></textarea>
+                        </div>
+
+                        <div class="border-t border-[var(--border-primary)] pt-2 space-y-2">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سياق المستخدم الوارد (User Context)' : 'User Context (Incoming)' %></label>
+                                    <input type="text" id="trunkUserContext" placeholder="e.g. from-trunk" class="config-input w-full font-mono text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'نص التسجيل (Register String)' : 'Register String' %></label>
+                                    <input type="text" id="trunkRegister" placeholder="e.g. user:secret@host" class="config-input w-full font-mono text-xs">
+                                </div>
                             </div>
                             <div>
-                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'نص التسجيل (Register String)' : 'Register String' %></label>
-                                <input type="text" id="trunkRegister" placeholder="e.g. user:secret@host" class="config-input w-full font-mono text-xs">
+                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'إعدادات الدخول (USER Details)' : 'Incoming Settings (USER Details)' %></label>
+                                <textarea id="trunkUserDetails" rows="3" placeholder="secret=pass&#10;type=user&#10;context=from-trunk" class="config-input w-full font-mono text-xs py-1.5 px-2.5 resize-y"></textarea>
                             </div>
                         </div>
                     </div>
-                </div>
                 <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--border-primary)]">
                     <button type="button" onclick="closeModal('trunkModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
                     <button type="submit" class="config-btn-primary px-5 py-2 text-xs"><%= isRtl ? 'حفظ خط الربط' : 'Save Trunk' %></button>
@@ -3342,6 +3353,9 @@ function isTabAllowed(tabName) {
             document.getElementById('trunkContext').value = t.context || 'from-trunk';
             document.getElementById('trunkRegister').value = t.register || '';
             document.getElementById('trunkOutcid').value = t.outcid || '';
+            document.getElementById('trunkUserContext').value = t.usercontext || '';
+            document.getElementById('trunkPeerDetails').value = t.peerdetails || '';
+            document.getElementById('trunkUserDetails').value = t.userdetails || '';
             onTrunkTechChange();
             openModal('trunkModal');
         }
@@ -3358,6 +3372,9 @@ function isTabAllowed(tabName) {
             const context = document.getElementById('trunkContext').value.trim();
             const register = document.getElementById('trunkRegister').value.trim();
             const outcid = document.getElementById('trunkOutcid').value.trim();
+            const usercontext = document.getElementById('trunkUserContext').value.trim();
+            const peerdetails = document.getElementById('trunkPeerDetails').value.trim();
+            const userdetails = document.getElementById('trunkUserDetails').value.trim();
 
             const url = editId ? '/api/config/trunks/' + editId : '/api/config/trunks';
             const method = editId ? 'PUT' : 'POST';
@@ -3365,7 +3382,7 @@ function isTabAllowed(tabName) {
             fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, tech, channelid, host, username, secret, context, register, outcid })
+                body: JSON.stringify({ name, tech, channelid, host, username, secret, context, register, outcid, usercontext, peerdetails, userdetails })
             })
             .then(res => res.json())
             .then(data => {

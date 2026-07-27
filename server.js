@@ -4855,6 +4855,27 @@ app.get('/api/config/recordings/audio/:id', async (req, res) => {
 
 // --- 3. TRUNKS MANAGEMENT APIs ---
 
+// Helper to parse key=value lines from PEER/USER details textarea
+function parseDetailsText(rawText) {
+    if (!rawText) return [];
+    const lines = String(rawText).split(/[\r\n]+/);
+    const result = [];
+    let seq = 0;
+    for (let line of lines) {
+        line = line.trim();
+        if (!line || line.startsWith(';') || line.startsWith('#')) continue;
+        const idx = line.indexOf('=');
+        if (idx > 0) {
+            const kw = line.substring(0, idx).trim();
+            const val = line.substring(idx + 1).trim();
+            if (kw && val) {
+                result.push([kw, val, seq++]);
+            }
+        }
+    }
+    return result;
+}
+
 // GET /api/config/trunks - List Trunks
 app.get('/api/config/trunks', async (req, res) => {
     try {
@@ -4870,26 +4891,35 @@ app.get('/api/config/trunks', async (req, res) => {
             t.secret = '';
             t.context = 'from-trunk';
             t.register = '';
+            t.peerdetails = '';
+            t.userdetails = '';
 
             const trunkKey = `tr-trunk-${t.trunkid}`;
-            if (t.tech === 'sip') {
-                const [sipRows] = await pool.query('SELECT keyword, data FROM `asterisk`.`sip` WHERE id = ? OR id = ?', [trunkKey, t.name]);
-                sipRows.forEach(r => {
-                    if (r.keyword === 'host') t.host = r.data;
-                    if (r.keyword === 'username') t.username = r.data;
-                    if (r.keyword === 'secret') t.secret = r.data;
-                    if (r.keyword === 'context') t.context = r.data;
-                    if (r.keyword === 'register') t.register = r.data;
+            const targetTable = (t.tech === 'iax2' || t.tech === 'iax') ? 'iax' : 'sip';
+
+            // Query PEER Details
+            const [peerRows] = await pool.query(`SELECT keyword, data FROM \`asterisk\`.\`${targetTable}\` WHERE id = ? OR id = ?`, [trunkKey, t.name]);
+            const peerLines = [];
+            peerRows.forEach(r => {
+                if (r.keyword === 'host') t.host = r.data;
+                if (r.keyword === 'username') t.username = r.data;
+                if (r.keyword === 'secret') t.secret = r.data;
+                if (r.keyword === 'context') t.context = r.data;
+                if (r.keyword === 'register') t.register = r.data;
+                if (r.keyword !== 'account') {
+                    peerLines.push(`${r.keyword}=${r.data}`);
+                }
+            });
+            t.peerdetails = peerLines.join('\n');
+
+            // Query USER Details (if usercontext provided)
+            if (t.usercontext) {
+                const [userRows] = await pool.query(`SELECT keyword, data FROM \`asterisk\`.\`${targetTable}\` WHERE id = ?`, [t.usercontext]);
+                const userLines = [];
+                userRows.forEach(r => {
+                    userLines.push(`${r.keyword}=${r.data}`);
                 });
-            } else if (t.tech === 'iax2' || t.tech === 'iax') {
-                const [iaxRows] = await pool.query('SELECT keyword, data FROM `asterisk`.`iax` WHERE id = ? OR id = ?', [trunkKey, t.name]);
-                iaxRows.forEach(r => {
-                    if (r.keyword === 'host') t.host = r.data;
-                    if (r.keyword === 'username') t.username = r.data;
-                    if (r.keyword === 'secret') t.secret = r.data;
-                    if (r.keyword === 'context') t.context = r.data;
-                    if (r.keyword === 'register') t.register = r.data;
-                });
+                t.userdetails = userLines.join('\n');
             }
         }
         res.json({ success: true, trunks });
@@ -4901,7 +4931,7 @@ app.get('/api/config/trunks', async (req, res) => {
 // POST /api/config/trunks - Create Trunk (Custom, SIP, IAX2)
 app.post('/api/config/trunks', async (req, res) => {
     try {
-        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid } = req.body;
+        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid, peerdetails, userdetails } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, error: 'Trunk Name is required.' });
         }
@@ -4910,12 +4940,10 @@ app.post('/api/config/trunks', async (req, res) => {
         const trunkTech = String(tech || 'custom').trim().toLowerCase();
         const dialString = String(channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:');
         const cidVal = String(outcid || '').trim();
+        const userContextVal = String(usercontext || '').trim();
 
         if (trunkTech === 'custom' && !dialString) {
             return res.status(400).json({ success: false, error: 'Custom Dial String is required for Custom trunks.' });
-        }
-        if ((trunkTech === 'sip' || trunkTech === 'iax2') && (!host || !host.trim())) {
-            return res.status(400).json({ success: false, error: `Remote Host is required for ${trunkTech.toUpperCase()} trunks.` });
         }
 
         const [maxRow] = await pool.query('SELECT COALESCE(MAX(trunkid), 0) + 1 AS nextId FROM `asterisk`.`trunks`');
@@ -4925,51 +4953,56 @@ app.post('/api/config/trunks', async (req, res) => {
         await pool.query(`
             INSERT INTO \`asterisk\`.\`trunks\` (trunkid, name, tech, outcid, keepcid, maxchans, failscript, dialoutprefix, channelid, disabled, \`continue\`, usercontext)
             VALUES (?, ?, ?, ?, 'off', '', '', '', ?, 'off', 'off', ?)
-        `, [nextTrunkId, trunkName, trunkTech, cidVal, dialString, String(usercontext || '').trim()]);
+        `, [nextTrunkId, trunkName, trunkTech, cidVal, dialString, userContextVal]);
 
-        if (trunkTech === 'sip') {
-            const sipParams = [
-                ['account', trunkName, 0],
-                ['host', String(host || '').trim(), 1],
-                ['username', String(username || '').trim(), 2],
-                ['secret', String(secret || '').trim(), 3],
-                ['type', 'peer', 4],
-                ['context', String(context || 'from-trunk').trim(), 5],
-                ['insecure', 'port,invite', 6],
-                ['qualify', 'yes', 7]
-            ];
-            if (register && String(register).trim()) {
-                sipParams.push(['register', String(register).trim(), 8]);
+        const targetTable = (trunkTech === 'iax2' || trunkTech === 'iax') ? 'iax' : 'sip';
+
+        if (trunkTech === 'sip' || trunkTech === 'iax2' || trunkTech === 'iax') {
+            let peerParams = parseDetailsText(peerdetails);
+            if (peerParams.length === 0 && host) {
+                peerParams = [
+                    ['account', trunkName, 0],
+                    ['host', String(host || '').trim(), 1],
+                    ['username', String(username || '').trim(), 2],
+                    ['secret', String(secret || '').trim(), 3],
+                    ['type', 'peer', 4],
+                    ['context', String(context || 'from-trunk').trim(), 5],
+                    ['qualify', 'yes', 6]
+                ];
+                if (trunkTech === 'sip') peerParams.push(['insecure', 'port,invite', 7]);
+            } else {
+                peerParams.unshift(['account', trunkName, 0]);
             }
-            for (const [kw, val, seq] of sipParams) {
+
+            if (register && String(register).trim()) {
+                peerParams.push(['register', String(register).trim(), 99]);
+            }
+
+            for (const [kw, val, seq] of peerParams) {
                 if (val !== undefined && val !== '') {
                     await pool.query(`
-                        INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags)
+                        INSERT INTO \`asterisk\`.\`${targetTable}\` (id, keyword, data, flags)
                         VALUES (?, ?, ?, ?)
                         ON DUPLICATE KEY UPDATE data = VALUES(data)
                     `, [trunkKey, kw, val, seq]);
                 }
             }
-        } else if (trunkTech === 'iax2' || trunkTech === 'iax') {
-            const iaxParams = [
-                ['account', trunkName, 0],
-                ['host', String(host || '').trim(), 1],
-                ['username', String(username || '').trim(), 2],
-                ['secret', String(secret || '').trim(), 3],
-                ['type', 'peer', 4],
-                ['context', String(context || 'from-trunk').trim(), 5],
-                ['qualify', 'yes', 6]
-            ];
-            if (register && String(register).trim()) {
-                iaxParams.push(['register', String(register).trim(), 7]);
-            }
-            for (const [kw, val, seq] of iaxParams) {
-                if (val !== undefined && val !== '') {
-                    await pool.query(`
-                        INSERT INTO \`asterisk\`.\`iax\` (id, keyword, data, flags)
-                        VALUES (?, ?, ?, ?)
-                        ON DUPLICATE KEY UPDATE data = VALUES(data)
-                    `, [trunkKey, kw, val, seq]);
+
+            if (userContextVal) {
+                const userParams = parseDetailsText(userdetails);
+                if (userParams.length === 0 && secret) {
+                    userParams.push(['secret', String(secret).trim(), 0]);
+                    userParams.push(['type', 'user', 1]);
+                    userParams.push(['context', String(context || 'from-trunk').trim(), 2]);
+                }
+                for (const [kw, val, seq] of userParams) {
+                    if (val !== undefined && val !== '') {
+                        await pool.query(`
+                            INSERT INTO \`asterisk\`.\`${targetTable}\` (id, keyword, data, flags)
+                            VALUES (?, ?, ?, ?)
+                            ON DUPLICATE KEY UPDATE data = VALUES(data)
+                        `, [userContextVal, kw, val, seq]);
+                    }
                 }
             }
         }
@@ -4990,7 +5023,7 @@ app.post('/api/config/trunks', async (req, res) => {
 app.put('/api/config/trunks/:trunkid', async (req, res) => {
     try {
         const trunkId = parseInt(req.params.trunkid, 10);
-        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid } = req.body;
+        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid, peerdetails, userdetails } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, error: 'Trunk Name is required.' });
         }
@@ -4999,59 +5032,69 @@ app.put('/api/config/trunks/:trunkid', async (req, res) => {
         const trunkTech = String(tech || 'custom').trim().toLowerCase();
         const dialString = String(channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:');
         const cidVal = String(outcid || '').trim();
+        const userContextVal = String(usercontext || '').trim();
         const trunkKey = `tr-trunk-${trunkId}`;
 
         await pool.query(`
             UPDATE \`asterisk\`.\`trunks\`
             SET name = ?, tech = ?, channelid = ?, outcid = ?, usercontext = ?
             WHERE trunkid = ?
-        `, [trunkName, trunkTech, dialString, cidVal, String(usercontext || '').trim(), trunkId]);
+        `, [trunkName, trunkTech, dialString, cidVal, userContextVal, trunkId]);
 
         // Clear existing sip/iax params for this trunk
         await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ? OR id = ?', [trunkKey, trunkName]);
         await pool.query('DELETE FROM `asterisk`.`iax` WHERE id = ? OR id = ?', [trunkKey, trunkName]);
+        if (userContextVal) {
+            await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ?', [userContextVal]);
+            await pool.query('DELETE FROM `asterisk`.`iax` WHERE id = ?', [userContextVal]);
+        }
 
-        if (trunkTech === 'sip') {
-            const sipParams = [
-                ['account', trunkName, 0],
-                ['host', String(host || '').trim(), 1],
-                ['username', String(username || '').trim(), 2],
-                ['secret', String(secret || '').trim(), 3],
-                ['type', 'peer', 4],
-                ['context', String(context || 'from-trunk').trim(), 5],
-                ['insecure', 'port,invite', 6],
-                ['qualify', 'yes', 7]
-            ];
-            if (register && String(register).trim()) {
-                sipParams.push(['register', String(register).trim(), 8]);
+        const targetTable = (trunkTech === 'iax2' || trunkTech === 'iax') ? 'iax' : 'sip';
+
+        if (trunkTech === 'sip' || trunkTech === 'iax2' || trunkTech === 'iax') {
+            let peerParams = parseDetailsText(peerdetails);
+            if (peerParams.length === 0 && host) {
+                peerParams = [
+                    ['account', trunkName, 0],
+                    ['host', String(host || '').trim(), 1],
+                    ['username', String(username || '').trim(), 2],
+                    ['secret', String(secret || '').trim(), 3],
+                    ['type', 'peer', 4],
+                    ['context', String(context || 'from-trunk').trim(), 5],
+                    ['qualify', 'yes', 6]
+                ];
+                if (trunkTech === 'sip') peerParams.push(['insecure', 'port,invite', 7]);
+            } else {
+                peerParams.unshift(['account', trunkName, 0]);
             }
-            for (const [kw, val, seq] of sipParams) {
+
+            if (register && String(register).trim()) {
+                peerParams.push(['register', String(register).trim(), 99]);
+            }
+
+            for (const [kw, val, seq] of peerParams) {
                 if (val !== undefined && val !== '') {
                     await pool.query(`
-                        INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags)
+                        INSERT INTO \`asterisk\`.\`${targetTable}\` (id, keyword, data, flags)
                         VALUES (?, ?, ?, ?)
                     `, [trunkKey, kw, val, seq]);
                 }
             }
-        } else if (trunkTech === 'iax2' || trunkTech === 'iax') {
-            const iaxParams = [
-                ['account', trunkName, 0],
-                ['host', String(host || '').trim(), 1],
-                ['username', String(username || '').trim(), 2],
-                ['secret', String(secret || '').trim(), 3],
-                ['type', 'peer', 4],
-                ['context', String(context || 'from-trunk').trim(), 5],
-                ['qualify', 'yes', 6]
-            ];
-            if (register && String(register).trim()) {
-                iaxParams.push(['register', String(register).trim(), 7]);
-            }
-            for (const [kw, val, seq] of iaxParams) {
-                if (val !== undefined && val !== '') {
-                    await pool.query(`
-                        INSERT INTO \`asterisk\`.\`iax\` (id, keyword, data, flags)
-                        VALUES (?, ?, ?, ?)
-                    `, [trunkKey, kw, val, seq]);
+
+            if (userContextVal) {
+                const userParams = parseDetailsText(userdetails);
+                if (userParams.length === 0 && secret) {
+                    userParams.push(['secret', String(secret).trim(), 0]);
+                    userParams.push(['type', 'user', 1]);
+                    userParams.push(['context', String(context || 'from-trunk').trim(), 2]);
+                }
+                for (const [kw, val, seq] of userParams) {
+                    if (val !== undefined && val !== '') {
+                        await pool.query(`
+                            INSERT INTO \`asterisk\`.\`${targetTable}\` (id, keyword, data, flags)
+                            VALUES (?, ?, ?, ?)
+                        `, [userContextVal, kw, val, seq]);
+                    }
                 }
             }
         }
