@@ -3969,9 +3969,7 @@ async function getCurrentPjsipSecret(extNum) {
 }
 
 function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create') {
-    const pjsipPath = process.platform === 'win32'
-        ? path.join(__dirname, 'pjsip_custom.conf')
-        : '/etc/asterisk/pjsip_custom.conf';
+    const pjsipPath = '/etc/asterisk/pjsip_custom_post.conf';
 
     let content = '';
     try {
@@ -3979,7 +3977,7 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create')
             content = fs.readFileSync(pjsipPath, 'utf8');
         }
     } catch (e) {
-        console.error('Error reading pjsip_custom.conf:', e.message);
+        console.error('Error reading pjsip_custom_post.conf:', e.message);
     }
 
     const startMarker = `; BEGIN WEBRTC EXTENSION ${extNum}`;
@@ -3989,14 +3987,33 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create')
     content = content.replace(regex, '').trim();
 
     if (action !== 'delete') {
-        const newBlock = `\n\n${startMarker}\n[${extNum}]\ntype=endpoint\ncontext=from-internal\ndisallow=all\nallow=ulaw,alaw,opus,vp8\nauth=${extNum}-auth\naors=${extNum}\ntransport=transport-wss\nwebrtc=yes\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nrtp_symmetric=yes\nforce_rport=yes\nrewrite_contact=yes\ndirect_media=no\n\n[${extNum}-auth]\ntype=auth\nauth_type=userpass\nusername=${extNum}\npassword=${secret}\n\n[${extNum}]\ntype=aor\nmax_contacts=5\nremove_existing=yes\n${endMarker}`;
+        const newBlock = `
+\n${startMarker}
+[${extNum}](+)
+transport=transport-wss
+webrtc=yes
+ice_support=yes
+use_avpf=yes
+media_use_received_transport=yes
+direct_media=no\nrtcp_mux=yes
+media_encryption=dtls
+dtls_cert_file=/etc/asterisk/keys/asterisk.pem
+dtls_private_key=/etc/asterisk/keys/asterisk.pem
+dtls_ca_file=/etc/asterisk/keys/asterisk.pem
+dtls_verify=fingerprint
+dtls_setup=actpass
+
+[${extNum}](+type=aor)
+max_contacts=5
+remove_existing=yes
+${endMarker}`;
         content += newBlock;
     }
 
     try {
         fs.writeFileSync(pjsipPath, content.trim() + '\n', 'utf8');
     } catch (e) {
-        console.error('Error writing pjsip_custom.conf:', e.message);
+        console.error('Error writing pjsip_custom_post.conf:', e.message);
     }
 }
 

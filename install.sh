@@ -234,6 +234,21 @@ else
 fi
 
 # Ensure WSS transport exists for PJSIP (needed by WebRTC)
+WSS_TRANSPORT=/etc/asterisk/pjsip_transport_custom.conf
+if [ ! -f "$WSS_TRANSPORT" ] || ! grep -q 'transport-wss' "$WSS_TRANSPORT" 2>/dev/null; then
+    cat >> "$WSS_TRANSPORT" << 'TRPEOF'
+
+[transport-wss]
+type=transport
+protocol=wss
+allow_reload=true
+bind=0.0.0.0:5066
+TRPEOF
+    echo "  WSS transport added to pjsip_transport_custom.conf"
+else
+    echo "  WSS transport already configured"
+fi
+
 asterisk -rx "pjsip reload" 2>/dev/null || true
 asterisk -rx "module load chan_sip.so" 2>/dev/null || true
 echo "  PJSIP reloaded, chan_sip loaded"
