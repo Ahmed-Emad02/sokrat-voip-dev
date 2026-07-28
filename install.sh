@@ -11,7 +11,7 @@ NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf | cut -d= -f2- | xargs)
 
 echo "============================================"
-echo " Issabel Dashboard Installer v1.3.0"
+echo " Issabel Dashboard Installer v1.4.0"
 echo " Target: Issabel 5 / Asterisk 18"
 echo "============================================"
 
@@ -59,6 +59,15 @@ if [ -d "$INSTALL_DIR" ]; then
 else
     git clone "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
+fi
+
+mkdir -p "$INSTALL_DIR/public/js"
+if [ ! -f "$INSTALL_DIR/public/js/jssip.min.js" ]; then
+    echo "  Warning: jssip.min.js missing, fetching static asset..."
+    curl -fsSL -o "$INSTALL_DIR/public/js/jssip.min.js" https://cdn.jsdelivr.net/npm/jssip@3.10.1/dist/jssip.min.js || true
+fi
+if [ -f "$INSTALL_DIR/public/js/jssip.min.js" ]; then
+    echo "  WebRTC static assets verified (jssip.min.js)"
 fi
 
 # ──────────────────────────────────────────────
