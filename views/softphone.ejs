@@ -112,6 +112,15 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
 
     <div class="flex-1 min-w-0 p-6 md:p-8 max-w-[1600px] w-full mx-auto flex flex-col gap-6">
 
+        <!-- Persistent Window Hint Banner (Main Tab Only) -->
+        <div id="popoutBanner" class="hidden soft-card p-3 px-4 bg-amber-500/10 border-amber-500/30 flex items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-2 text-amber-400 font-bold">
+                <span>💡 <%= isRtl ? 'للحفاظ على الاتصال أثناء التنقل في لوحة التحكم، افتح الهاتف في نافذة مستقلة.' : 'To stay connected while navigating Dashboard tabs, open in a persistent window.' %></span>
+            </div>
+            <button type="button" onclick="openPersistentWindow()" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs transition shrink-0">
+                <%= isRtl ? 'فتح في نافذة مستقلة ↗' : 'Open Persistent Window ↗' %>
+            </button>
+        </div>
         <!-- Top Header & Status Bar -->
         <div class="soft-card p-5 flex flex-col lg:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-3">
@@ -229,6 +238,12 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                         <button type="button" id="spMuteBtn" onclick="toggleMute()" class="hidden py-3 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer">
                             <svg id="muteIcon" class="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
                             <span id="muteBtnText"><%= isRtl ? 'كتم الميكروفون' : 'Mute Mic' %></span>
+                        </button>
+
+                        <!-- Pop out PiP window (requires user gesture) -->
+                        <button type="button" id="spPipBtn" onclick="openPipWindow()" class="py-3 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer" title="<%= isRtl ? 'نافذة منبثقة' : 'Pop out window' %>">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                            <span><%= isRtl ? 'منبثقة' : 'Pop out' %></span>
                         </button>
 
                         <!-- Hangup Call (Active during call) -->
@@ -396,8 +411,46 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
         let pendingTransferSource = null;
         let callLogs = JSON.parse(localStorage.getItem('softphone_call_logs') || '[]');
         let loadedAddressBook = [];
+        function lookupContact(number) {
+            if (!number) return null;
+            const strNum = String(number).trim();
+            const digitsOnly = strNum.replace(/\D/g, '');
+
+            const contact = (loadedAddressBook || []).find(c => {
+                const rawPhone = String(c.telefono || '').trim();
+                const phoneDigits = rawPhone.replace(/\D/g, '');
+                if (!phoneDigits || !digitsOnly) return false;
+                if (phoneDigits === digitsOnly) return true;
+                const minLen = Math.min(phoneDigits.length, digitsOnly.length);
+                const suffixLen = Math.min(minLen, 10);
+                if (suffixLen >= 7) {
+                    return phoneDigits.slice(-suffixLen) === digitsOnly.slice(-suffixLen);
+                }
+                return false;
+            });
+
+            if (contact) {
+                const fullName = `${contact.name || ''} ${contact.last_name || ''}`.trim();
+                return {
+                    name: fullName || 'Contact',
+                    phone: contact.telefono || number,
+                    displayName: fullName ? `${fullName} (${contact.telefono || number})` : (contact.telefono || number)
+                };
+            }
+            return null;
+        }
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
         let _intentionalDisconnect = false;
         let _reconnectTimer = null;
+        let _keepaliveTimer = null;
         let _storedPassword = '';
 
         // --- INCOMING CALL NOTIFICATION & RINGTONE ---
@@ -636,6 +689,24 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
 
                 window.webrtcWsUrl = data.wsUrl;
                 document.getElementById('activeExtBadge').textContent = `Ext: ${selectEl.value || '--'}`;
+
+                // Auto-restore credentials and auto-connect if not manually disconnected
+                try {
+                    const manualDisconnect = sessionStorage.getItem('webrtc_manual_disconnect');
+                    const savedExt = sessionStorage.getItem('webrtc_ext');
+                    const savedPwd = sessionStorage.getItem('webrtc_pwd');
+                    if (manualDisconnect !== 'true' && savedExt && savedPwd) {
+                        if (selectEl) selectEl.value = savedExt;
+                        const pwdInput = document.getElementById('spPassword');
+                        if (pwdInput) pwdInput.value = savedPwd;
+                        document.getElementById('activeExtBadge').textContent = `Ext: ${savedExt}`;
+                        setTimeout(() => {
+                            if (!ua || !ua.isConnected()) {
+                                toggleRegistration();
+                            }
+                        }, 300);
+                    }
+                } catch(e) {}
             } catch (e) {
                 console.error('Failed to load WebRTC config:', e);
             }
@@ -657,13 +728,84 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 if (['online', 'incall', 'ringing'].includes(state)) pingEl.classList.remove('hidden');
                 else pingEl.classList.add('hidden');
             }
+            // Broadcast status to sidebar floating widget
+            window._spwLastStatus = state;
+            try {
+                if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone');
+                window._spwBc.postMessage({ type: 'status', status: state });
+            } catch(e) {}
         }
 
+        // Respond to sidebar widget status requests
+        (function(){
+            try {
+                var bc = new BroadcastChannel('sokrat-softphone');
+                bc.onmessage = function(e) {
+                    if (e.data && e.data.type === 'requestStatus' && window._spwLastStatus) {
+                        bc.postMessage({ type: 'status', status: window._spwLastStatus });
+                    }
+                };
+            } catch(e) {}
+        })();
+
+        /* Heartbeat + command listener for sidebar widget */
+        (function(){
+            try {
+                var ch = new BroadcastChannel('sokrat-softphone');
+                // Heartbeat every 3s so widget knows the popup is alive
+                setInterval(function(){
+                    try { ch.postMessage({type:'heartbeat'}); } catch(e){}
+                }, 3000);
+                // Commands from widget
+                ch.onmessage = function(e) {
+                    if (!e.data) return;
+                    var d = e.data;
+                    if (d.type === 'dial' && d.number) {
+                        var inp = document.getElementById('spDialInput');
+                        if (inp) inp.value = d.number;
+                        makeCall();
+                    } else if (d.type === 'answer') {
+                        // Find the first ringing session
+                        var ringingId = null;
+                        for (var id in activeSessions) {
+                            if (activeSessions[id] && activeSessions[id].status === 'ringing') {
+                                ringingId = id;
+                                break;
+                            }
+                        }
+                        if (ringingId) answerCall(ringingId);
+                    } else if (d.type === 'hangup') {
+                        // Hangup the most recent active call
+                        var ids = Object.keys(activeSessions);
+                        if (ids.length > 0) {
+                            hangupCall(ids[ids.length - 1]);
+                            closePipWindow();
+                        }
+                    } else if (d.type === 'toggleMute') {
+                        toggleMute();
+                    }
+                };
+            } catch(e) {}
+        })();
+
+        window.openPersistentWindow = function() {
+            if (ua) {
+                _intentionalDisconnect = true;
+                if (window._visHandler) document.removeEventListener('visibilitychange', window._visHandler);
+                try { ua.stop(); } catch(e) {}
+                ua = null;
+                updateStatus(isRtlLang ? 'غير متصل' : 'Offline', 'offline');
+            }
+            const w = window.open('/softphone', 'sokratSoftphone', 'width=450,height=700,scrollbars=0');
+            if (!w) { window.location.href = '/softphone'; }
+        };
         async function toggleRegistration() {
             if (ua && ua.isConnected()) {
                 _intentionalDisconnect = true;
+                if (window._visHandler) document.removeEventListener('visibilitychange', window._visHandler);
                 ua.stop();
                 ua = null;
+                try { sessionStorage.setItem('webrtc_manual_disconnect', 'true'); } catch(e) {}
                 document.getElementById('spRegBtn').textContent = isRtlLang ? 'اتصال' : 'Connect';
                 updateStatus(isRtlLang ? 'غير متصل' : 'Offline', 'offline');
                 return;
@@ -723,9 +865,16 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 ua.on('connected', () => {
                     _intentionalDisconnect = false;
                     if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+                });
+                ua.on('registered', () => {
                     updateStatus(`Online (${ext})`, 'online');
                     document.getElementById('spRegBtn').textContent = isRtlLang ? 'قطع الاتصال' : 'Disconnect';
                     document.getElementById('activeExtBadge').textContent = `Ext: ${ext}`;
+                    try {
+                        sessionStorage.setItem('webrtc_ext', ext);
+                        sessionStorage.setItem('webrtc_pwd', secret);
+                        sessionStorage.removeItem('webrtc_manual_disconnect');
+                    } catch(e) {}
                 });
                 ua.on('disconnected', () => {
                     updateStatus('Offline', 'offline');
@@ -750,6 +899,10 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                         _intentionalDisconnect = true;
                         if (ua) { try { ua.stop(); } catch(e) {} ua = null; }
                         if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+                        try {
+                            sessionStorage.removeItem('webrtc_pwd');
+                            sessionStorage.setItem('webrtc_manual_disconnect', 'true');
+                        } catch(e) {}
                         document.getElementById('spRegBtn').textContent = isRtlLang ? 'اتصال' : 'Connect';
                     } else if (!_intentionalDisconnect && ua) {
                         document.getElementById('spRegBtn').textContent = isRtlLang ? 'إعادة الاتصال...' : 'Reconnecting...';
@@ -771,6 +924,8 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
 
                     const callId = 'call_' + (nextCallId++);
                     const caller = session.remote_identity.uri.user || 'Unknown';
+                    const contactMatch = lookupContact(caller);
+                    const callerLabel = contactMatch ? contactMatch.displayName : caller;
 
                     activeSessions[callId] = {
                         id: callId,
@@ -787,13 +942,25 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
 
                     setupSessionListeners(session, callId);
 
-                    updateStatus('Ringing from ' + caller + '...', 'ringing');
+                    updateStatus('Ringing from ' + callerLabel + '...', 'ringing');
                     addCallLog({ number: caller, direction: 'incoming', status: 'ringing', timestamp: new Date().toISOString() });
                     switchSubTab('activecalls');
                     renderActiveCalls();
                     playRingtone();
-                    showIncomingNotification(caller);
+                    showIncomingNotification(callerLabel);
+                    try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'incoming', caller: callerLabel }); } catch(e) {}
                 });
+
+                // Reconnect immediately when tab comes back to foreground
+                // Remove stale handler if any, then attach new one
+                if (window._visHandler) document.removeEventListener('visibilitychange', window._visHandler);
+                window._visHandler = function() {
+                    if (document.visibilityState === 'visible' && ua && !ua.isConnected() && !_intentionalDisconnect) {
+                        if (_reconnectTimer) clearTimeout(_reconnectTimer);
+                        try { ua.start(); } catch(e) {}
+                    }
+                };
+                document.addEventListener('visibilitychange', window._visHandler);
 
                 ua.start();
             } catch (err) {
@@ -850,12 +1017,13 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
             };
 
             const eventHandlers = {
-                'progress': () => { updateStatus('Ringing ' + target, 'incall'); renderActiveCalls(); },
+                'progress': () => { updateStatus('Ringing ' + target, 'incall'); renderActiveCalls(); try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callProgress', remote: target }); } catch(e){} },
                 'failed': (e) => {
                     const durSec = Math.round((Date.now() - startTime) / 1000);
                     removeSession(callId);
                     updateStatus('Online', 'online');
                     addCallLog({ number: target, direction: 'outgoing', status: 'failed', timestamp: new Date().toISOString(), durationSec: durSec });
+                    try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callEnded' }); } catch(e){}
                 },
                 'ended': () => {
                     const entry = activeSessions[callId];
@@ -865,6 +1033,7 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                     removeSession(callId);
                     updateStatus('Online', 'online');
                     addCallLog({ number: target, direction: 'outgoing', status: 'answered', timestamp: new Date().toISOString(), durationSec: durSec });
+                    try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callEnded' }); } catch(e){}
                 },
                 'confirmed': () => {
                     if (activeSessions[callId]) {
@@ -873,6 +1042,7 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                         startCallTimer(callId);
                         updateStatus('In Call (' + target + ')', 'incall');
                         renderActiveCalls();
+                        try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callStarted', remote: target }); } catch(e){}
                     }
                 }
             };
@@ -888,6 +1058,160 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
             setupSessionListeners(session, callId);
             switchSubTab('activecalls');
             renderActiveCalls();
+        }
+
+        // ── Document Picture-in-Picture (Google Meet style pop-out) ──
+        var _pipWindow = null;
+
+        function closePipWindow() {
+            if (_pipWindow) {
+                try { _pipWindow.close(); } catch(e){}
+                _pipWindow = null;
+            }
+        }
+
+        // DTMF button helper used by PiP dialpad (declared globally for onclick='pipDtmf(...)' in PiP)
+        window.pipDtmf = function(d) {
+            var pip = _pipWindow;
+            if (pip) {
+                var inp = pip.document.getElementById('pipNum');
+                if (inp) inp.value += d;
+            }
+        };
+
+        function openPipWindow() {
+            closePipWindow();
+            if (!window.documentPictureInPicture) { showToast('PiP not supported', 'error'); return; }
+            window.documentPictureInPicture.requestWindow({ width: 340, height: 420 })
+                .then(function(pip) {
+                    _pipWindow = pip;
+                    pip.document.title = 'Sokrat Softphone';
+                    pip.document.body.innerHTML = ''
+                        + '<div id="pipRoot" style="display:flex;flex-direction:column;height:100vh;font-family:sans-serif;background:#0f172a;color:#f1f5f9;margin:0;padding:12px 16px;box-sizing:border-box;">'
+                        /* Header */
+                        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+                        + '<div style="display:flex;align-items:center;gap:8px;">'
+                        + '<span id="pipDot" style="width:8px;height:8px;border-radius:50%;background:#71717a;display:inline-block;"></span>'
+                        + '<span id="pipStatus" style="font-size:11px;font-weight:bold;color:#94a3b8;">Offline</span>'
+                        + '</div>'
+                        + '<button id="pipClose" style="background:none;border:none;color:#64748b;font-size:16px;cursor:pointer;padding:0;line-height:1;">×</button>'
+                        + '</div>'
+                        /* Content: dialpad (idle) or call controls (active) */
+                        + '<div id="pipIdle" style="flex:1;display:flex;flex-direction:column;gap:8px;">'
+                        + '<div style="display:flex;gap:6px;">'
+                        + '<input id="pipNum" type="tel" placeholder="Number" style="flex:1;padding:8px 10px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f1f5f9;font-size:14px;font-family:monospace;font-weight:bold;outline:none;">'
+                        + '<button id="pipCallBtn" style="padding:8px 16px;border-radius:10px;border:none;background:#059669;color:white;font-weight:bold;font-size:12px;cursor:pointer;">Call</button>'
+                        + '</div>'
+                        + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;" id="pipDialpad">'
+                        + '123456789*0#'.split('').map(function(d){return '<button data-digit="'+d+'" style="padding:10px;border-radius:8px;border:none;background:#1e293b;color:#f1f5f9;font-size:14px;font-weight:bold;cursor:pointer;">'+d+'</button>';}).join('')
+                        + '</div>'
+                        + '</div>'
+                        /* Active call controls */
+                        + '<div id="pipCall" style="flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;">'
+                        + '<div id="pipCallLabel" style="font-size:11px;color:#94a3b8;font-weight:bold;">Call with</div>'
+                        + '<div id="pipCaller" style="font-size:20px;font-weight:900;font-family:monospace;">...</div>'
+                        + '<div style="display:flex;gap:10px;">'
+                        + '<button id="pipAnswerBtn" style="display:none;padding:8px 20px;border-radius:12px;border:none;background:#059669;color:white;font-size:12px;font-weight:bold;cursor:pointer;">Answer</button>'
+                        + '<button id="pipMuteBtn" style="padding:8px 20px;border-radius:12px;border:1px solid #334155;background:#1e293b;color:#f1f5f9;font-size:12px;font-weight:bold;cursor:pointer;">Mute</button>'
+                        + '<button id="pipHangupBtn" style="padding:8px 20px;border-radius:12px;border:none;background:#dc2626;color:white;font-size:12px;font-weight:bold;cursor:pointer;">Hang Up</button>'
+                        + '</div>'
+                        + '</div>'
+                        + '</div>';
+
+                    // Set up BroadcastChannel for live updates + commands
+                    try {
+                        var pipBc = new BroadcastChannel('sokrat-softphone');
+                        var pipWin = pip;
+                        var doc = pip.document;
+
+                        // Close button
+                        doc.getElementById('pipClose').onclick = function(){ closePipWindow(); };
+
+                        // Dialpad button
+                        doc.getElementById('pipCallBtn').onclick = function(){
+                            var n = doc.getElementById('pipNum').value.replace(/[^0-9*#+]/g,'');
+                            if (n) { pipBc.postMessage({type:'dial', number: n}); doc.getElementById('pipNum').value = ''; }
+                        };
+                        doc.getElementById('pipNum').onkeydown = function(e){
+                            if (e.key === 'Enter') doc.getElementById('pipCallBtn').click();
+                        };
+
+                        // Wire digit buttons via delegation on dialpad container
+                        doc.getElementById('pipDialpad').addEventListener('click', function(e){
+                            var btn = e.target;
+                            var digit = btn.getAttribute ? btn.getAttribute('data-digit') : null;
+                            if (digit) {
+                                var inp = doc.getElementById('pipNum');
+                                if (inp) inp.value += digit;
+                            }
+                        });
+
+                        // Call control buttons
+                        doc.getElementById('pipAnswerBtn').onclick = function(){ pipBc.postMessage({type:'answer'}); };
+                        doc.getElementById('pipHangupBtn').onclick = function(){ pipBc.postMessage({type:'hangup'}); };
+                        doc.getElementById('pipMuteBtn').onclick = function(){ pipBc.postMessage({type:'toggleMute'}); };
+
+                        // Live state updates via BroadcastChannel
+                        pipBc.onmessage = function(e) {
+                            var d = e.data || {};
+                            var dot = doc.getElementById('pipDot');
+                            var status = doc.getElementById('pipStatus');
+                            var idle = doc.getElementById('pipIdle');
+                            var call = doc.getElementById('pipCall');
+                            var caller = doc.getElementById('pipCaller');
+                            var callLabel = doc.getElementById('pipCallLabel');
+                            var colors = {online:'#10b981',offline:'#71717a',ringing:'#f59e0b',incall:'#a855f7',registering:'#3b82f6'};
+                            var labels = {online:'Online',offline:'Offline',ringing:'Ringing',incall:'In Call',registering:'Connecting...'};
+
+                            if (d.type === 'status' || d.type === 'heartbeat') {
+                                var s = d.type === 'status' ? d.status : (pipBc._lastStatus || 'online');
+                                if (d.type === 'status') pipBc._lastStatus = d.status;
+                                if (dot) dot.style.background = colors[s] || '#71717a';
+                                if (status) status.textContent = labels[s] || 'Offline';
+                            }
+                            if (d.type === 'incoming') {
+                                if (dot) dot.style.background = '#f59e0b';
+                                if (status) status.textContent = 'Incoming Call';
+                                if (idle) idle.style.display = 'none';
+                                if (call) call.style.display = 'flex';
+                                if (callLabel) callLabel.textContent = 'Incoming Call';
+                                if (caller) caller.textContent = d.caller || 'Unknown';
+                                var ans = doc.getElementById('pipAnswerBtn');
+                                if (ans) ans.style.display = 'inline-block';
+                            }
+                            if (d.type === 'callProgress' || d.type === 'callStarted') {
+                                if (idle) idle.style.display = 'none';
+                                if (call) call.style.display = 'flex';
+                                if (callLabel) callLabel.textContent = d.type === 'callProgress' ? 'Calling' : 'Call with';
+                                if (caller) caller.textContent = d.remote || 'Connected';
+                                var ans = doc.getElementById('pipAnswerBtn');
+                                if (ans) ans.style.display = 'none';
+                            }
+                            if (d.type === 'callEnded') {
+                                if (idle) idle.style.display = 'flex';
+                                if (call) call.style.display = 'none';
+                                var ans = doc.getElementById('pipAnswerBtn');
+                                if (ans) ans.style.display = 'none';
+                                var s2 = pipBc._lastStatus || 'online';
+                                if (dot) dot.style.background = colors[s2] || '#71717a';
+                                if (status) status.textContent = labels[s2] || 'Offline';
+                            }
+                        };
+                        // Seed initial state if active calls exist when PiP opens
+                        var activeList = Object.values(activeSessions);
+                        if (activeList.length > 0) {
+                            var currentCall = activeList[0];
+                            if (currentCall.status === 'ringing' && currentCall.direction === 'incoming') {
+                                pipBc.onmessage({ data: { type: 'incoming', caller: currentCall.target } });
+                            } else if (currentCall.status === 'incall' || currentCall.status === 'ringing') {
+                                pipBc.onmessage({ data: { type: currentCall.status === 'incall' ? 'callStarted' : 'callProgress', remote: currentCall.target } });
+                            }
+                        }
+                    } catch(e) {}
+
+                    pip.addEventListener('pagehide', function() { _pipWindow = null; });
+                })
+                .catch(function(){});
         }
 
         function setupSessionListeners(session, callId) {
@@ -914,6 +1238,7 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 if (entry.direction === 'incoming') {
                     addCallLog({ number: entry.target, direction: 'incoming', status: 'answered', timestamp: new Date(entry.startTime).toISOString(), durationSec: durSec });
                 }
+                try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callEnded' }); } catch(e){}
             });
 
             session.on('failed', () => {
@@ -925,6 +1250,7 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 stopRingtone();
                 removeSession(callId);
                 updateStatus('Online', 'online');
+                try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callEnded' }); } catch(e){}
             });
         }
 
@@ -936,6 +1262,7 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
             renderActiveCalls();
             if (Object.keys(activeSessions).length === 0) {
                 resetCallUI();
+                closePipWindow();
             }
         }
 
@@ -956,6 +1283,7 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
             stopRingtone();
             updateStatus('In Call', 'incall');
             renderActiveCalls();
+            try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callStarted', remote: entry.target }); } catch(e){}
         }
 
         function hangupCall(callId) {
@@ -1088,6 +1416,8 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
 
         function resetCallUI() {
             updateStatus('Online', 'online');
+            var pipBtn = document.getElementById('spPipBtn');
+            if (pipBtn) pipBtn.classList.add('hidden');
         }
 
         function formatDuration(seconds) {
@@ -1105,10 +1435,16 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 container.innerHTML = '<div class="text-center py-8 text-xs text-[var(--text-muted)] italic">' + (isRtlLang ? 'لا توجد مكالمات نشطة' : 'No active calls') + '</div>';
                 var c = document.getElementById('activeCallsCount');
                 if (c) { c.textContent = '0'; c.classList.add('hidden'); }
+                var pipBtn = document.getElementById('spPipBtn');
+                if (pipBtn) pipBtn.classList.add('hidden');
                 return;
             }
             var c = document.getElementById('activeCallsCount');
             if (c) { c.textContent = entries.filter(function(e) { return e.status !== 'ended'; }).length; c.classList.remove('hidden'); }
+            /* Show PiP button when calls exist */
+    // Also show on page load if the user may want to pop out
+            var pipBtn = document.getElementById('spPipBtn');
+            if (pipBtn) pipBtn.classList.remove('hidden');
 
             var html = '';
             for (var i = 0; i < entries.length; i++) {
@@ -1134,8 +1470,10 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 }
 
                 var dirColor = e.direction === 'outgoing' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                var contactMatch = lookupContact(e.target);
+                var targetLabel = escapeHtml(contactMatch ? contactMatch.displayName : e.target);
 
-                html += '<div class="flex items-center justify-between p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] gap-2"><div class="flex items-center gap-2 min-w-0"><div class="w-7 h-7 rounded-lg border flex items-center justify-center font-bold text-xs shrink-0 ' + dirColor + '">' + dirIcon + '</div><div class="flex flex-col min-w-0"><span class="text-xs font-extrabold text-[var(--text-primary)] font-mono truncate">' + e.target + '</span><span class="text-[10px] text-[var(--text-muted)]">' + statusBadge + '</span></div></div><div class="flex items-center gap-1.5 shrink-0">' + actions + '</div></div>';
+                html += '<div class="flex items-center justify-between p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] gap-2"><div class="flex items-center gap-2 min-w-0"><div class="w-7 h-7 rounded-lg border flex items-center justify-center font-bold text-xs shrink-0 ' + dirColor + '">' + dirIcon + '</div><div class="flex flex-col min-w-0"><span class="text-xs font-extrabold text-[var(--text-primary)] font-mono truncate">' + targetLabel + '</span><span class="text-[10px] text-[var(--text-muted)]">' + statusBadge + '</span></div></div><div class="flex items-center gap-1.5 shrink-0">' + actions + '</div></div>';
             }
             container.innerHTML = html;
 
@@ -1237,6 +1575,9 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 const arrowIcon = isOut ? '↗' : '↙';
                 const timeStr = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const durStr = log.durationSec ? `${log.durationSec}s` : (log.status || '');
+                const contactMatch = lookupContact(log.number);
+                const displayLogNum = escapeHtml(contactMatch ? contactMatch.displayName : log.number);
+                const rawNum = escapeHtml(log.number);
 
                 item.innerHTML = `
                     <div class="flex items-center gap-3 min-w-0">
@@ -1244,11 +1585,11 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                             ${arrowIcon}
                         </div>
                         <div class="flex flex-col min-w-0">
-                            <span class="text-xs font-extrabold text-[var(--text-primary)] font-mono truncate">${log.number}</span>
+                            <span class="text-xs font-extrabold text-[var(--text-primary)] font-mono truncate">${displayLogNum}</span>
                             <span class="text-[10px] text-[var(--text-muted)]">${timeStr} • ${durStr}</span>
                         </div>
                     </div>
-                    <button type="button" onclick="directCallNumber('${log.number}')" class="px-3 py-1.5 bg-emerald-600/15 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-lg text-xs font-bold transition cursor-pointer shrink-0">
+                    <button type="button" onclick="directCallNumber('${rawNum}')" class="px-3 py-1.5 bg-emerald-600/15 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-lg text-xs font-bold transition cursor-pointer shrink-0">
                         ${isRtlLang ? 'اتصال' : 'Call'}
                     </button>
                 `;
@@ -1368,7 +1709,12 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
 
         // INITIALIZATION
         document.addEventListener('DOMContentLoaded', () => {
+            if (!window.opener && window.name !== 'sokratSoftphone') {
+                const b = document.getElementById('popoutBanner');
+                if (b) b.classList.remove('hidden');
+            }
             checkMicPermission();
+            fetchAddressBookContacts();
             loadWebRtcConfig();
             renderCallLogs();
         });
