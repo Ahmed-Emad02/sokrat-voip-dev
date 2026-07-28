@@ -119,6 +119,7 @@ function isOutboundCdr(row) {
 
 app.set('view engine', 'ejs');
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/photos', express.static(path.join(__dirname, 'public', 'photos')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -133,7 +134,7 @@ app.use(session({
 
 // --- DATABASE INIT & AUTO-PROVISION ---
 const ALL_TABS = [
-    'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'contacts', 'users', 'config', 'storage',
+    'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'softphone', 'contacts', 'users', 'config', 'storage',
     'config-extensions', 'config-ringgroups', 'config-queues', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram',
     'config-timegroups', 'config-timeconditions'
 ];
@@ -446,6 +447,7 @@ const TAB_ROUTE_MAP = {
     '/ext-stats': 'ext-stats',
     '/operator': 'operator',
     '/gsm-dongles': 'gsm-dongles',
+    '/softphone': 'softphone',
     '/contacts': 'contacts',
     'users': 'users',
     'config': 'config',
@@ -522,7 +524,7 @@ app.use(async (req, res, next) => {
         return next();
     }
     // Denied — redirect to the first tab they *can* access, or /login
-    const tabToRoute = { dashboard: '/', cdr: '/cdr', voicemails: '/voicemails', 'ext-stats': '/ext-stats', operator: '/operator', 'gsm-dongles': '/gsm-dongles', contacts: '/contacts', users: '/users', config: '/config' };
+    const tabToRoute = { dashboard: '/', cdr: '/cdr', voicemails: '/voicemails', 'ext-stats': '/ext-stats', operator: '/operator', 'gsm-dongles': '/gsm-dongles', softphone: '/softphone', contacts: '/contacts', users: '/users', config: '/config' };
     const firstAllowed = req.session.userPermissions.find(p => tabToRoute[p] || (p.startsWith('config-') && tabToRoute['config']));
     res.redirect(firstAllowed ? (tabToRoute[firstAllowed] || '/config') : '/login');
 });
@@ -1094,7 +1096,9 @@ function connectAMI() {
                 if (name) {
                     let state = String(event.State || '').toLowerCase();
                     let isOnline = !(state === 'unavailable' || state === 'invalid' || state === 'unknown' || state === '5' || state === '4');
-                    updatePeerPresence(name, isOnline);
+                    sipPresence[name] = isOnline;
+                    pjsipPresence[name] = isOnline;
+                    updateExtensionPresence(name);
                 }
             }
 
@@ -1104,7 +1108,9 @@ function connectAMI() {
                 let statusStr = String(event.Status || '');
                 if (name && /^\d+$/.test(name)) {
                     let isOnline = !(statusStr === '4' || statusStr === '5' || statusStr === '-1');
-                    updatePeerPresence(name, isOnline);
+                    sipPresence[name] = isOnline;
+                    pjsipPresence[name] = isOnline;
+                    updateExtensionPresence(name);
                 }
             }
 
@@ -2583,7 +2589,15 @@ app.post('/api/hangup/:extension', (req, res) => {
 });
 
 // POST /api/spy - Originate call spy session (Listen, Whisper, Barge) to supervisor extension
-app.post('/api/spy', (req, res) => {
+async function resolveDeviceChannel(ext) {
+    try {
+        const [rows] = await pool.query('SELECT dial FROM `asterisk`.`devices` WHERE id = ?', [ext]);
+        if (rows.length && rows[0].dial) return rows[0].dial;
+    } catch (e) { /* fall back to SIP/ */ }
+    return `SIP/${ext}`;
+}
+
+app.post('/api/spy', async (req, res) => {
     try {
         const { targetExtension, supervisorExtension, mode } = req.body;
         const target = String(targetExtension || '').trim();
@@ -2593,15 +2607,19 @@ app.post('/api/spy', (req, res) => {
         if (!target || !supervisor) {
             return res.status(400).json({ success: false, error: 'Target and Supervisor extensions are required.' });
         }
+        if (!/^\d{2,5}$/.test(target) || !/^\d{2,5}$/.test(supervisor)) {
+            return res.status(400).json({ success: false, error: 'Invalid extension format.' });
+        }
 
         const prefix = spyMode === 'whisper' ? '223' : (spyMode === 'barge' ? '224' : '222');
         const spyExten = `${prefix}${target}`;
+        const supervisorChan = await resolveDeviceChannel(supervisor);
 
         if (amiClient) {
-            amiClient.write(`Action: Originate\r\nChannel: SIP/${supervisor}\r\nContext: from-internal\r\nExten: ${spyExten}\r\nPriority: 1\r\nCallerID: "Call Spy" <${spyExten}>\r\n\r\n`);
+            amiClient.write(`Action: Originate\r\nChannel: ${supervisorChan}\r\nContext: from-internal\r\nExten: ${spyExten}\r\nPriority: 1\r\nCallerID: "Call Spy" <${spyExten}>\r\n\r\n`);
             return res.json({ success: true, message: `Calling supervisor extension ${supervisor} for ${spyMode} mode on ${target}.` });
         } else {
-            exec(`${ASTERISK_BIN} -rx "channel originate SIP/${supervisor} extension ${spyExten}@from-internal"`, (err) => {
+            exec(`${ASTERISK_BIN} -rx "channel originate ${supervisorChan} extension ${spyExten}@from-internal"`, (err) => {
                 if (err) return res.status(500).json({ success: false, error: err.message });
                 res.json({ success: true, message: `Calling supervisor extension ${supervisor} for ${spyMode} mode on ${target}.` });
             });
@@ -2623,6 +2641,9 @@ app.post('/api/hijack', (req, res) => {
         }
         if (!supervisor) {
             return res.status(400).json({ success: false, error: 'Supervisor extension is required.' });
+        }
+        if (!/^\d{2,5}$/.test(target) || !/^\d{2,5}$/.test(supervisor)) {
+            return res.status(400).json({ success: false, error: 'Invalid extension format.' });
         }
 
         const call = activeCalls[target];
@@ -2669,6 +2690,18 @@ app.get('/operator', (req, res) => {
     try {
         res.render('operator', { moment });
     } catch (error) { res.status(500).send("Operator Panel Engine Error: " + error.message); }
+});
+app.get('/softphone', requireAuth, (req, res) => {
+    try {
+        const currentLang = res.locals.currentLang || 'en';
+        res.render('softphone', {
+            currentPage: '/softphone',
+            currentLang,
+            isSuperAdmin: isSuperAdmin(req)
+        });
+    } catch (error) {
+        res.status(500).send("Softphone Engine Error: " + error.message);
+    }
 });
 
 // --- GSM DONGLES MONITOR & USSD ROUTING ENGINE ---
@@ -3705,10 +3738,16 @@ app.get('/contacts', requireAuth, async (req, res) => {
     }
 });
 
-app.post('/api/contacts/add', async (req, res) => {
-    if (!isSuperAdmin(req)) {
-        return res.status(403).json({ success: false, error: 'Unauthorized' });
+app.get('/api/contacts', requireAuth, async (req, res) => {
+    try {
+        const stdout = await runSqliteQuery("SELECT id, name, last_name, telefono FROM contact ORDER BY name ASC, last_name ASC;");
+        const contacts = parseSqliteRows(stdout);
+        res.json({ success: true, contacts });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
+});
+app.post('/api/contacts/add', requireAuth, async (req, res) => {
     try {
         const { firstName, lastName, phone } = req.body;
         if (!firstName || !phone) {
@@ -3822,6 +3861,12 @@ function reloadPbxConfig(callback) {
     });
 }
 
+function reloadPbxConfigPromise() {
+    return new Promise((resolve) => {
+        reloadPbxConfig((result) => resolve(result));
+    });
+}
+
 // POST /api/config/reload - Trigger retrieve_conf and core reload
 app.post('/api/config/reload', (req, res) => {
     reloadPbxConfig((result) => {
@@ -3911,6 +3956,18 @@ async function syncAllExtensionsAstdb() {
     }
 }
 
+async function getCurrentPjsipSecret(extNum) {
+    try {
+        const [rows] = await pool.query(
+            'SELECT data FROM `asterisk`.`sip` WHERE id = ? AND keyword = "secret"',
+            [extNum]
+        );
+        return rows[0]?.data || '';
+    } catch (e) {
+        return '';
+    }
+}
+
 function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create') {
     const pjsipPath = process.platform === 'win32'
         ? path.join(__dirname, 'pjsip_custom.conf')
@@ -3932,7 +3989,7 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create')
     content = content.replace(regex, '').trim();
 
     if (action !== 'delete') {
-        const newBlock = `\n\n${startMarker}\n[${extNum}]\ntype=endpoint\ncontext=from-internal\ndisallow=all\nallow=ulaw,alaw,opus,vp8\nauth=${extNum}-auth\naors=${extNum}\ntransport=transport-ws\nwebrtc=yes\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nrtp_symmetric=yes\nforce_rport=yes\nrewrite_contact=yes\ndirect_media=no\n\n[${extNum}-auth]\ntype=auth\nauth_type=userpass\nusername=${extNum}\npassword=${secret}\n\n[${extNum}]\ntype=aor\nmax_contacts=5\nremove_existing=yes\n${endMarker}`;
+        const newBlock = `\n\n${startMarker}\n[${extNum}]\ntype=endpoint\ncontext=from-internal\ndisallow=all\nallow=ulaw,alaw,opus,vp8\nauth=${extNum}-auth\naors=${extNum}\ntransport=transport-ws,transport-wss\nwebrtc=yes\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nrtp_symmetric=yes\nforce_rport=yes\nrewrite_contact=yes\ndirect_media=no\n\n[${extNum}-auth]\ntype=auth\nauth_type=userpass\nusername=${extNum}\npassword=${secret}\n\n[${extNum}]\ntype=aor\nmax_contacts=5\nremove_existing=yes\n${endMarker}`;
         content += newBlock;
     }
 
@@ -3954,11 +4011,10 @@ app.get('/api/webrtc/config', requireAuth, async (req, res) => {
         const currentUser = req.session ? String(req.session.username || '').trim() : '';
 
         let query = `
-            SELECT u.extension, u.name, COALESCE(s_secret.data, '') AS secret, d.tech
+            SELECT u.extension, u.name, d.tech
             FROM ${tables.users} u
             LEFT JOIN ${tables.devices} d ON d.id = u.extension
-            LEFT JOIN ${tables.sip} s_secret ON s_secret.id = u.extension AND s_secret.keyword = 'secret'
-            WHERE (d.tech = 'pjsip' OR u.extension = '200')
+            WHERE (d.tech = 'pjsip' OR u.extension = '101' OR u.extension = '200')
         `;
         let params = [];
 
@@ -3968,19 +4024,19 @@ app.get('/api/webrtc/config', requireAuth, async (req, res) => {
         }
 
         const [rows] = await pool.query(query, params);
-        const host = req.hostname || '127.0.0.1';
-        const wsPort = process.env.WEBRTC_PORT || 5066;
         const isSecure = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https';
+        const host = req.hostname || '127.0.0.1';
+        const defaultPort = isSecure ? 8089 : 8088;
+        const wsPort = process.env.WEBRTC_PORT || defaultPort;
         const protocol = isSecure ? 'wss' : 'ws';
-        const defaultWsUrl = `${protocol}://${host}:${wsPort}`;
-        const wsUrl = process.env.WEBRTC_WSS_URL || process.env.WEBRTC_WS_URL || defaultWsUrl;
+        const defaultWsUrl = `${protocol}://${host}:${wsPort}/ws`;
+        const wsUrl = process.env.WEBRTC_WSS_URL || (isSecure ? defaultWsUrl : (process.env.WEBRTC_WS_URL || defaultWsUrl));
         res.json({
             success: true,
             wsUrl,
             extensions: rows.map(r => ({
                 extension: r.extension,
-                name: r.name,
-                secret: (isAdmin || String(r.extension) === currentUser) ? (r.secret || '') : ''
+                name: r.name
             }))
         });
     } catch (err) {
@@ -4141,7 +4197,9 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         await pool.query('UPDATE `asterisk`.`sip` SET data = "yes" WHERE id = ? AND keyword = "nat"', [extNum]);
 
         if (isWebRTC) {
-            updatePjsipCustomConfig(extNum, extSecret, displayName || extNum, 'create');
+            // Only update pjsip config secret if a new one was provided
+            const pjsipSecret = extSecret || (await getCurrentPjsipSecret(extNum));
+            updatePjsipCustomConfig(extNum, pjsipSecret, displayName || extNum, 'create');
             reloadPjsip();
         }
 
@@ -5155,8 +5213,8 @@ app.delete('/api/config/trunks/:trunkid', async (req, res) => {
         const trunkKey = `tr-trunk-${trunkId}`;
 
         await pool.query('DELETE FROM `asterisk`.`trunks` WHERE trunkid = ?', [trunkId]);
-        await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ? OR id = ?', [trunkKey, name]);
-        await pool.query('DELETE FROM `asterisk`.`iax` WHERE id = ? OR id = ?', [trunkKey, name]);
+        await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ?', [trunkKey]);
+        await pool.query('DELETE FROM `asterisk`.`iax` WHERE id = ?', [trunkKey]);
         await pool.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE trunk_id = ?', [trunkId]);
 
         const reloadRes = await reloadPbxConfigPromise();
@@ -5279,7 +5337,9 @@ app.put('/api/config/routes/inbound', async (req, res) => {
             SET description = ?, extension = ?, destination = ?
             WHERE (extension = ? OR extension = ? OR (extension IS NULL AND ? = ''))
               AND (description = ? OR (description IS NULL AND ? = ''))
-        `, [desc, ext, dest, origExt, rawOrigExt, origExt, origDesc, origDesc]);
+              AND (destination = ? OR (destination IS NULL AND ? = ''))
+            LIMIT 1
+        `, [desc, ext, dest, origExt, rawOrigExt, origExt, origDesc, origDesc, origDest, origDest]);
 
         reloadPbxConfig();
         res.json({ success: true, message: `Inbound Route '${desc}' updated successfully.` });
@@ -5301,7 +5361,9 @@ app.delete('/api/config/routes/inbound', async (req, res) => {
             DELETE FROM \`asterisk\`.\`incoming\`
             WHERE (extension = ? OR extension = ? OR (extension IS NULL AND ? = ''))
               AND (description = ? OR (description IS NULL AND ? = ''))
-        `, [rawExt, normExt, rawExt, desc, desc]);
+              AND (destination = ? OR (destination IS NULL AND ? = ''))
+            LIMIT 1
+        `, [rawExt, normExt, rawExt, desc, desc, dest, dest]);
 
         reloadPbxConfig();
         res.json({ success: true, message: 'Inbound Route deleted successfully.' });
@@ -5428,15 +5490,17 @@ app.put('/api/config/ivrs/:id', async (req, res) => {
         const announceId = announcement ? parseInt(announcement, 10) : 0;
         const dirDial = directdial || 'disabled';
 
+        const [existingIvrs] = await pool.query('SELECT timeout_retry_recording, invalid_retry_recording FROM `asterisk`.`ivr_details` WHERE id = ?', [ivrId]);
+        const existingIvr = existingIvrs[0] || {};
+
         const timeoutSec = timeout_time ? parseInt(timeout_time, 10) : 10;
         const timeoutRetry = timeout_loops ? String(timeout_loops) : '3';
-        const timeoutRec = timeout_retry_recording || 'default';
+        const timeoutRec = timeout_retry_recording !== undefined ? timeout_retry_recording : (existingIvr.timeout_retry_recording || 'default');
         const timeoutDest = timeout_destination || 'app-blackhole,hangup,1';
 
         const invalidRetry = invalid_loops ? String(invalid_loops) : '3';
-        const invalidRec = invalid_retry_recording || 'default';
+        const invalidRec = invalid_retry_recording !== undefined ? invalid_retry_recording : (existingIvr.invalid_retry_recording || 'default');
         const invalidDest = invalid_destination || 'app-blackhole,hangup,1';
-
         await pool.query(`
             UPDATE \`asterisk\`.\`ivr_details\`
             SET name = ?, description = ?, announcement = ?, directdial = ?,
@@ -5533,15 +5597,6 @@ app.get('/api/config/routes/outbound', async (req, res) => {
     }
 });
 
-// GET /api/config/queues - List PBX ACD Queues
-app.get('/api/config/queues', async (req, res) => {
-    try {
-        const [queues] = await pool.query('SELECT extension, descr FROM `asterisk`.`queues_config` ORDER BY CAST(extension AS UNSIGNED) ASC');
-        res.json({ success: true, queues });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
 
 // POST /api/config/routes/outbound - Create Outbound Route
 app.post('/api/config/routes/outbound', async (req, res) => {

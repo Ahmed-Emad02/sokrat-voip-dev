@@ -1067,6 +1067,72 @@ function isTabAllowed(tabName) {
                                 <input type="text" id="rgDesc" required placeholder="e.g. Sales Support Team" class="config-input w-full text-xs">
                             </div>
                         </div>
+                    </div>
+
+                    <!-- SECTION 2: RING STRATEGY & TIMING -->
+                    <div class="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-sky-500/15">
+                            <span class="text-xs font-black uppercase tracking-wider text-sky-400 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                                <%= isRtl ? 'استراتيجية الرنين والتوقيت' : 'Ring Strategy & Timing' %>
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'استراتيجية الرنين' : 'Ring Strategy' %></label>
+                                <select id="rgStrategy" class="config-input w-full text-xs">
+                                    <option value="ringall"><%= isRtl ? 'الكل معًا' : 'Ring All' %></option>
+                                    <option value="hunt"><%= isRtl ? 'تسلسلي (Hunt)' : 'Hunt' %></option>
+                                    <option value="memoryhunt"><%= isRtl ? 'تسلسلي مع التذكر' : 'Memory Hunt' %></option>
+                                    <option value="random"><%= isRtl ? 'عشوائي' : 'Random' %></option>
+                                    <option value="firstavailable"><%= isRtl ? 'أول متاح' : 'First Available' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'مدة الرنين (ثوانٍ)' : 'Ring Time (seconds)' %></label>
+                                <input type="number" id="rgTime" min="5" max="120" placeholder="20" class="config-input w-full text-xs">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 3: MEMBERS EXTENSIONS -->
+                    <div class="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-violet-500/15">
+                            <span class="text-xs font-black uppercase tracking-wider text-violet-400 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-violet-400"></span>
+                                <%= isRtl ? 'قائمة الأعضاء' : 'Member Extensions' %>
+                            </span>
+                            <button type="button" onclick="clearQuickPickExts()" class="text-[11px] font-bold text-rose-400 hover:text-rose-300 underline cursor-pointer"><%= isRtl ? 'مسح' : 'Clear' %></button>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'الأرقام (مفصولة بفواصل)' : 'Numbers (comma-separated)' %></label>
+                            <input type="text" id="rgList" placeholder="e.g. 101,102,103" class="config-input w-full text-xs font-mono">
+                        </div>
+                                                <div id="rgQuickPickContainer" class="flex flex-wrap gap-1.5"></div>
+                    </div>
+
+                    <!-- SECTION 4: ANNOUNCEMENT -->
+                    <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-amber-500/15">
+                            <span class="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                                <%= isRtl ? 'الإعلان الصوتي' : 'Announcement' %>
+                            </span>
+                        </div>
+                        <select id="rgAnnMsg" class="config-input w-full text-xs">
+                            <option value="0"><%= isRtl ? 'بدون إعلان' : 'None / No Announcement' %></option>
+                        </select>
+                    </div>
+
+                </div>
+                <!-- Footer Buttons -->
+                <div class="flex justify-end gap-3 px-6 py-4 border-t border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                    <button type="button" onclick="closeModal('ringGroupModal')" class="config-btn-secondary px-5 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs"><%= isRtl ? 'حفظ' : 'Save' %></button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- MODAL 2.5: QUEUE FORM -->
     <div id="queueModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
@@ -1193,6 +1259,74 @@ function isTabAllowed(tabName) {
                         </div>
                     </div>
 
+                    <!-- SECTION 4: AGENT TIMEOUT & RETRY (Violet Theme) -->
+                    <div class="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-violet-500/15">
+                            <span class="text-xs font-black uppercase tracking-wider text-violet-400 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-violet-400"></span>
+                                <%= isRtl ? 'إعدادات الوكلاء والتكرار' : 'Agent Timeout, Retry & Autofill' %>
+                            </span>
+                            <span class="text-[10px] text-violet-400/70 font-mono">ADVANCED</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'مهلة الوكيل (ثوانٍ)' : 'Agent Timeout (seconds)' %></label>
+                                <input type="number" id="queueAgentTimeout" min="1" value="15" class="config-input w-full font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'إعادة المحاولة (ثوانٍ)' : 'Retry (seconds)' %></label>
+                                <input type="number" id="queueRetry" min="1" value="5" class="config-input w-full font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'ملء تلقائي' : 'Autofill' %></label>
+                                <select id="queueAutofill" class="config-input w-full text-xs font-semibold">
+                                    <option value="yes"><%= isRtl ? 'نعم' : 'Yes' %></option>
+                                    <option value="no"><%= isRtl ? 'لا' : 'No' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'تجاهل المشغول' : 'Skip Busy Agent' %></label>
+                                <select id="queueSkipBusy" class="config-input w-full text-xs font-semibold">
+                                    <option value="yes"><%= isRtl ? 'نعم' : 'Yes' %></option>
+                                    <option value="no"><%= isRtl ? 'لا' : 'No' %></option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 5: DESTINATION TARGET (Blue Theme) -->
+                    <div class="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-blue-500/15">
+                            <span class="text-xs font-black uppercase tracking-wider text-blue-400 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+                                <%= isRtl ? 'الوجهة النهائية' : 'Destination Target' %>
+                            </span>
+                            <span class="text-[10px] text-blue-400/70 font-mono">TARGET</span>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'تحديد الوجهة *' : 'Set Destination *' %></label>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <select id="queueDestType" onchange="onQueueDestTypeChange()" class="config-input w-full text-xs font-semibold" required>
+                                    <option value="">== <%= isRtl ? 'اختر' : 'choose one' %> ==</option>
+                                    <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
+                                    <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
+                                    <option value="queues"><%= isRtl ? 'طوابير الانتظار (Queues)' : 'Queues' %></option>
+                                    <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail' %></option>
+                                    <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
+                                    <option value="terminate"><%= isRtl ? 'إنهاء (Hangup)' : 'Terminate (Hangup)' %></option>
+                                </select>
+                                
+                                <div id="queueDestTargetContainer">
+                                    <select id="queueDestTargetSelect" onchange="updateQueueDestinationValue()" class="config-input w-full text-xs font-semibold hidden">
+                                        <option value="">== <%= isRtl ? 'اختر الهدف' : 'choose target' %> ==</option>
+                                    </select>
+                                    <input type="text" id="queueDestTargetInput" oninput="updateQueueDestinationValue()" placeholder="e.g. custom-context,s,1" class="config-input w-full font-mono text-xs hidden">
+                                </div>
+                            </div>
+                            <input type="hidden" id="queueDestination" required>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- Footer -->
@@ -1261,7 +1395,7 @@ function isTabAllowed(tabName) {
                     </div>
 
                     <!-- SECTION 2: OUTBOUND & CALLER ID (Amber Theme) -->
-                    <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+                    <div id="trunkCidSection" class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-amber-500/15">
                             <span class="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-2">
                                 <span class="w-2 h-2 rounded-full bg-amber-400"></span>
@@ -1797,6 +1931,10 @@ function isTabAllowed(tabName) {
                         <span><%= isRtl ? 'حفظ المسار الصادر' : 'Save Outbound Route' %></span>
                     </button>
                 </div>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL 8: TIME GROUP FORM -->
     <div id="timeGroupModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
         <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
@@ -2343,7 +2481,7 @@ function isTabAllowed(tabName) {
                     document.getElementById('credExt').textContent = extNum;
                     document.getElementById('credName').textContent = name;
                     document.getElementById('credSecret').textContent = secret;
-                    document.getElementById('credWsUrl').textContent = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname + ':5066';
+                    document.getElementById('credWsUrl').textContent = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname + (location.protocol === 'https:' ? ':8089/ws' : ':8088/ws');
                     openModal('webrtcCredentialsModal');
                 }
             } catch (error) {
@@ -2769,14 +2907,14 @@ function isTabAllowed(tabName) {
 
             const dest = q.dest || 'app-blackhole,hangup,1';
             const destTypeSelect = document.getElementById('queueDestType');
-            if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
+            if (dest.startsWith('ext-local,vmu')) {
+                destTypeSelect.value = 'voicemail';
+            } else if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
                 destTypeSelect.value = 'extensions';
             } else if (dest.startsWith('ext-group,')) {
                 destTypeSelect.value = 'ringgroups';
             } else if (dest.startsWith('ext-queues,')) {
                 destTypeSelect.value = 'queues';
-            } else if (dest.startsWith('ext-local,vmu')) {
-                destTypeSelect.value = 'voicemail';
             } else if (dest.startsWith('app-blackhole,')) {
                 destTypeSelect.value = 'terminate';
             } else {
@@ -3252,7 +3390,9 @@ function isTabAllowed(tabName) {
             container.appendChild(div);
 
             const typeSelect = div.querySelector('.ivr-entry-type');
-            if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
+            if (dest.startsWith('ext-local,vmu')) {
+                typeSelect.value = 'voicemail';
+            } else if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
                 typeSelect.value = 'extensions';
             } else if (dest.startsWith('ext-group,')) {
                 typeSelect.value = 'ringgroups';
@@ -3260,8 +3400,6 @@ function isTabAllowed(tabName) {
                 typeSelect.value = 'queues';
             } else if (dest.startsWith('ivr-')) {
                 typeSelect.value = 'ivr';
-            } else if (dest.startsWith('ext-local,vmu')) {
-                typeSelect.value = 'voicemail';
             } else if (dest === 'app-blackhole,hangup,1') {
                 typeSelect.value = 'terminate';
             } else if (dest) {
@@ -3354,7 +3492,9 @@ function isTabAllowed(tabName) {
             const hidden = document.getElementById('ivrTimeoutDestination');
             hidden.value = dest;
 
-            if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
+            if (dest.startsWith('ext-local,vmu')) {
+                typeSelect.value = 'voicemail';
+            } else if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
                 typeSelect.value = 'extensions';
             } else if (dest.startsWith('ext-group,')) {
                 typeSelect.value = 'ringgroups';
@@ -3362,8 +3502,6 @@ function isTabAllowed(tabName) {
                 typeSelect.value = 'queues';
             } else if (dest.startsWith('ivr-')) {
                 typeSelect.value = 'ivr';
-            } else if (dest.startsWith('ext-local,vmu')) {
-                typeSelect.value = 'voicemail';
             } else if (dest === 'app-blackhole,hangup,1') {
                 typeSelect.value = 'terminate';
             } else if (dest) {
@@ -3414,7 +3552,9 @@ function isTabAllowed(tabName) {
             const hidden = document.getElementById('ivrInvalidDestination');
             hidden.value = dest;
 
-            if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
+            if (dest.startsWith('ext-local,vmu')) {
+                typeSelect.value = 'voicemail';
+            } else if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
                 typeSelect.value = 'extensions';
             } else if (dest.startsWith('ext-group,')) {
                 typeSelect.value = 'ringgroups';
@@ -3422,8 +3562,6 @@ function isTabAllowed(tabName) {
                 typeSelect.value = 'queues';
             } else if (dest.startsWith('ivr-')) {
                 typeSelect.value = 'ivr';
-            } else if (dest.startsWith('ext-local,vmu')) {
-                typeSelect.value = 'voicemail';
             } else if (dest === 'app-blackhole,hangup,1') {
                 typeSelect.value = 'terminate';
             } else if (dest) {
@@ -3553,17 +3691,20 @@ function isTabAllowed(tabName) {
             const tech = document.getElementById('trunkTech').value;
             const customDiv = document.getElementById('trunkCustomFields');
             const sipIaxDiv = document.getElementById('trunkSipIaxFields');
+            const cidSection = document.getElementById('trunkCidSection');
             const dialInput = document.getElementById('trunkDialString');
             const hostInput = document.getElementById('trunkHost');
 
             if (tech === 'custom') {
                 customDiv.classList.remove('hidden');
                 sipIaxDiv.classList.add('hidden');
+                if (cidSection) cidSection.classList.add('hidden');
                 if (dialInput) dialInput.required = true;
                 if (hostInput) hostInput.required = false;
             } else {
                 customDiv.classList.add('hidden');
                 sipIaxDiv.classList.remove('hidden');
+                if (cidSection) cidSection.classList.remove('hidden');
                 if (dialInput) dialInput.required = false;
                 if (hostInput) hostInput.required = true;
             }
@@ -4150,18 +4291,21 @@ function isTabAllowed(tabName) {
             renderModalTrunksSequence();
         }
 
+        let loadedOutboundRoutesList = [];
+
         function fetchOutboundRoutes() {
             const tbody = document.getElementById('outbound-table-body');
             fetch('/api/config/routes/outbound')
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success || !data.routes) return;
+                    loadedOutboundRoutesList = data.routes;
                     tbody.innerHTML = '';
                     if (data.routes.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">No outbound routes found.</td></tr>';
                         return;
                     }
-                    data.routes.forEach(r => {
+                    data.routes.forEach((r, idx) => {
                         const tr = document.createElement('tr');
                         tr.className = 'hover:bg-[var(--bg-hover)] transition-colors';
                         
@@ -4178,18 +4322,15 @@ function isTabAllowed(tabName) {
                         const trunkHtml = r.trunks.map(t => {
                             return `<div class="font-mono text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 w-fit inline-block mr-1 mb-1">${t.trunk_name}</div>`;
                         }).join(' ➔ ') || '<span class="text-[var(--text-muted)]">-</span>';
-                        
-                        const patternsJson = JSON.stringify(r.patterns).replace(/"/g, '&quot;');
-                        const trunksJson = JSON.stringify(r.trunks).replace(/"/g, '&quot;');
 
                         tr.innerHTML = `
                             <td class="py-3 px-4 font-mono font-bold text-[var(--text-muted)]">${r.route_id}</td>
-                            <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${r.name}</td>
+                            <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${escapeHtml(r.name)}</td>
                             <td class="py-3 px-4">${patHtml}</td>
                             <td class="py-3 px-4">${trunkHtml}</td>
                             <td class="py-3 px-4 text-center">
                                 <div class="flex items-center justify-center gap-2">
-                                    <button onclick="editOutboundRoute(${r.route_id}, '${r.name}', '${patternsJson}', '${trunksJson}')" class="px-2.5 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30">Edit</button>
+                                    <button onclick="editOutboundRouteByIndex(${idx})" class="px-2.5 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30">Edit</button>
                                     <button onclick="deleteOutboundRoute(${r.route_id})" class="px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded border border-red-500/30">Delete</button>
                                 </div>
                             </td>
@@ -4198,6 +4339,12 @@ function isTabAllowed(tabName) {
                     });
                 })
                 .catch(err => console.error(err));
+        }
+
+        function editOutboundRouteByIndex(idx) {
+            const r = loadedOutboundRoutesList[idx];
+            if (!r) return;
+            editOutboundRoute(r.route_id, r.name, r.patterns, r.trunks);
         }
 
         function openOutboundModal() {
@@ -4227,8 +4374,8 @@ function isTabAllowed(tabName) {
             openModal('outboundModal');
         }
 
-        function editOutboundRoute(routeId, name, patternsJson, trunksJson) {
-            document.getElementById('outboundModalTitle').textContent = (isRtl ? 'تعديل المسار الصادر ' : 'Edit Outbound Route ') + name;
+        function editOutboundRoute(routeId, name, patterns, trunks) {
+            document.getElementById('outboundModalTitle').textContent = (isRtl ? 'تعديل المسار الصادر ' : 'Edit Outbound Route ') + (name || '');
             document.getElementById('outboundEditId').value = routeId;
             document.getElementById('outName').value = name || '';
             editingPatternIndex = -1;
@@ -4236,20 +4383,22 @@ function isTabAllowed(tabName) {
             const btn = document.getElementById('addPatternBtn');
             if (btn) btn.textContent = isRtl ? '+ إضافة نمط' : '+ Add Pattern';
 
-            try {
-                modalPatternsList = JSON.parse(patternsJson) || [];
-            } catch(e) {
-                modalPatternsList = [];
+            if (Array.isArray(patterns)) {
+                modalPatternsList = patterns;
+            } else {
+                try { modalPatternsList = JSON.parse(patterns) || []; } catch(e) { modalPatternsList = []; }
             }
 
-            try {
-                const trs = JSON.parse(trunksJson) || [];
-                trs.sort((a,b) => a.seq - b.seq);
+            if (Array.isArray(trunks)) {
+                const trs = [...trunks].sort((a,b) => (a.seq || 0) - (b.seq || 0));
                 modalTrunksSequence = trs.map(t => String(t.trunk_id));
-            } catch(e) {
-                modalTrunksSequence = [];
+            } else {
+                try {
+                    const trs = JSON.parse(trunks) || [];
+                    trs.sort((a,b) => (a.seq || 0) - (b.seq || 0));
+                    modalTrunksSequence = trs.map(t => String(t.trunk_id));
+                } catch(e) { modalTrunksSequence = []; }
             }
-
             const sel = document.getElementById('sequenceTrunkSelect');
             if (sel) {
                 sel.innerHTML = '<option value="">-- Choose Trunk --</option>';

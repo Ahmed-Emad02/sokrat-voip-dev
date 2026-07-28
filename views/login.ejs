@@ -10,6 +10,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script>
+        (function() {
+            if (window.location.protocol !== 'https:'
+                && window.location.hostname !== 'localhost'
+                && window.location.hostname !== '127.0.0.1'
+                && window.location.hostname !== '::1') {
+                window.location.replace(
+                    'https://' + window.location.hostname + window.location.pathname + window.location.search
+                );
+            }
+        })();
+    </script>
     <style>
         :root {
             --bg-primary: #050507;
@@ -102,7 +114,7 @@
 
             <!-- Form White Card Container -->
             <div class="bg-white rounded-2xl shadow-2xl w-full p-8 border border-gray-100 flex flex-col">
-                <form method="POST" action="/login" class="space-y-4">
+                <form id="loginForm" method="POST" action="/login" class="space-y-4">
                     <input type="hidden" name="redirect" value="<%= typeof redirect !== 'undefined' ? redirect : '/' %>">
                     
                     <!-- Username -->
@@ -214,6 +226,25 @@
                 btn.textContent = uiLabels.send;
             }
         }
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('loginForm');
+            if (form) {
+                form.addEventListener('submit', async function(e) {
+                    if (this.dataset.micDone) return;
+                    e.preventDefault();
+                    const isSecure = window.isSecureContext === true
+                        && typeof navigator.mediaDevices !== 'undefined'
+                        && typeof navigator.mediaDevices.getUserMedia === 'function';
+                    if (isSecure) {
+                        try {
+                            await navigator.mediaDevices.getUserMedia({ audio: true });
+                        } catch (_) {}
+                    }
+                    this.dataset.micDone = 'true';
+                    this.submit();
+                });
+            }
+        });
     </script>
 </body>
 </html>

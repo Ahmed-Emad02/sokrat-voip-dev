@@ -1,0 +1,1377 @@
+<% 
+const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
+%>
+<!DOCTYPE html>
+<html lang="<%= isRtl ? 'ar' : 'en' %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - <%= isRtl ? 'هاتف المتصفح (WebRTC Softphone)' : 'WebRTC Softphone' %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script>
+        (function() {
+            if (window.location.protocol !== 'https:'
+                && window.location.hostname !== 'localhost'
+                && window.location.hostname !== '127.0.0.1'
+                && window.location.hostname !== '::1') {
+                window.location.replace(
+                    'https://' + window.location.hostname + window.location.pathname + window.location.search
+                );
+            }
+        })();
+    </script>
+    <script src="/js/jssip.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #050507;
+            --bg-secondary: #0b0b0e;
+            --bg-card: #121216;
+            --bg-hover: #1b1b22;
+            --border-primary: #1f1f28;
+            --border-accent: #2e2e3a;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --accent-color: #dc2626;
+            --accent-hover: #ef4444;
+        }
+        html.light-theme {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-card: #f1f5f9;
+            --bg-hover: #e2e8f0;
+            --border-primary: #cbd5e1;
+            --border-accent: #94a3b8;
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --text-muted: #64748b;
+        }
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif;
+            min-height: 100vh;
+        }
+        .soft-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 1.25rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        }
+        .soft-input {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            border-radius: 0.75rem;
+            padding: 0.625rem 0.875rem;
+            transition: all 150ms ease;
+        }
+        .soft-input:focus {
+            outline: none;
+            border-color: #9333ea;
+        }
+        .tab-active {
+            background: linear-gradient(135deg, #9333ea 0%, #7e22ce 100%) !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 14px rgba(147, 51, 234, 0.35);
+        }
+        .keypad-btn {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            font-size: 1.125rem;
+            border-radius: 0.75rem;
+            padding: 0.875rem 0;
+            transition: all 100ms ease;
+            cursor: pointer;
+            user-select: none;
+        }
+        .keypad-btn:hover {
+            background-color: var(--bg-hover);
+            border-color: #9333ea;
+            transform: translateY(-1px);
+        }
+        .keypad-btn:active {
+            transform: scale(0.96);
+        }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
+
+    <%- include('sidebar') %>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-[99999] flex flex-col gap-2 pointer-events-none"></div>
+
+    <div class="flex-1 min-w-0 p-6 md:p-8 max-w-[1600px] w-full mx-auto flex flex-col gap-6">
+
+        <!-- Top Header & Status Bar -->
+        <div class="soft-card p-5 flex flex-col lg:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-3 bg-purple-500/10 text-purple-400 rounded-xl border border-purple-500/20 shrink-0">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold text-[var(--text-primary)] tracking-tight">
+                        <%= isRtl ? 'هاتف المتصفح البرمجي (WebRTC Softphone)' : 'WebRTC Softphone' %>
+                    </h1>
+                    <p class="text-xs text-[var(--text-muted)] mt-0.5">
+                        <%= isRtl ? 'إجراء واستقبال المكالمات مباشرة من المتصفح مع سجل المكالمات ودفتر العناوين' : 'Make and receive calls directly in your browser with call history and address book integration' %>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Softphone Extension Registration Control Bar -->
+            <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
+                <div class="flex items-center gap-2">
+                    <label class="text-xs font-bold text-[var(--text-secondary)] uppercase whitespace-nowrap"><%= isRtl ? 'التحويلة:' : 'Extension:' %></label>
+                    <select id="spExtSelect" class="soft-input font-mono font-bold text-xs min-w-[180px]">
+                        <option value=""><%= isRtl ? 'جاري التحميل...' : 'Loading Extensions...' %></option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs font-bold text-[var(--text-secondary)] uppercase whitespace-nowrap"><%= isRtl ? 'كلمة السر:' : 'Password:' %></label>
+                    <input type="password" id="spPassword" placeholder="<%= isRtl ? 'أدخل كلمة السر' : 'Enter password' %>" class="soft-input font-mono text-xs w-[140px]">
+                </div>
+
+                <button type="button" id="spRegBtn" onclick="toggleRegistration()" class="px-5 py-2 rounded-xl text-xs font-extrabold text-white bg-purple-600 hover:bg-purple-700 transition cursor-pointer shadow-lg shadow-purple-600/20">
+                    <%= isRtl ? 'اتصال' : 'Connect' %>
+                </button>
+
+                <!-- Status Badge -->
+                <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] font-mono text-xs font-bold">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span id="spStatusPing" class="hidden animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span id="spStatusDot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-500"></span>
+                    </span>
+                    <span id="spStatusText" class="text-[var(--text-secondary)]"><%= isRtl ? 'غير متصل' : 'Offline' %></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Microphone Permission Banner -->
+        <div id="micBanner" class="soft-card p-4 border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="p-2 rounded-lg bg-amber-500/20 text-amber-400 shrink-0">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                </div>
+                <div>
+                    <h4 id="micBannerTitle" class="text-xs font-bold text-amber-300">
+                        <%= isRtl ? 'إذن استخدام الميكروفون مطلوب' : 'Microphone Access Required' %>
+                    </h4>
+                    <p id="micBannerDesc" class="text-[11px] text-amber-200/80">
+                        <%= isRtl ? 'يجب منح إذن الوصول للميكروفون لتتمكن من إجراء واستقبال المكالمات الصوتية بوضوح.' : 'You must grant microphone permission to make and receive audio calls.' %>
+                    </p>
+                </div>
+            </div>
+            <button type="button" id="micGrantBtn" onclick="requestMicPermission()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-xl transition cursor-pointer shrink-0 shadow-md">
+                <%= isRtl ? 'السماح بالميكروفون' : 'Grant Microphone Permission' %>
+            </button>
+        </div>
+
+        <!-- Main Workspace (2 Columns) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- LEFT COLUMN: Softphone Control Panel (Dialpad + Active Call Card) (5 Cols) -->
+            <div class="lg:col-span-5 flex flex-col gap-5">
+                <div class="soft-card p-6 flex flex-col gap-5">
+                    <div class="flex items-center justify-between pb-3 border-b border-[var(--border-primary)]">
+                        <h3 class="text-sm font-extrabold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
+                            <svg class="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                            <span><%= isRtl ? 'لوحة الاتصال' : 'Dialer Console' %></span>
+                        </h3>
+                        <span id="activeExtBadge" class="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20">
+                            Ext: --
+                        </span>
+                    </div>
+
+                    <!-- Dial Display -->
+                    <div class="relative">
+                        <input type="text" id="spDialInput" placeholder="<%= isRtl ? 'أدخل الرقم أو التحويلة...' : 'Enter number or extension...' %>" class="w-full soft-input text-center text-xl font-mono font-black tracking-widest py-3">
+                        <button type="button" onclick="clearDialInput()" class="absolute right-3 top-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm cursor-pointer transition">⌫</button>
+                    </div>
+
+                    <!-- Keypad Grid -->
+                    <div class="grid grid-cols-3 gap-2.5">
+                        <% ['1','2','3','4','5','6','7','8','9','*','0','#'].forEach(key => { %>
+                        <button type="button" onclick="pressKey('<%= key %>')" class="keypad-btn">
+                            <%= key %>
+                        </button>
+                        <% }) %>
+                    </div>
+
+                    <!-- Main Call Controls -->
+                    <div class="grid grid-cols-2 gap-3 pt-2">
+                        <!-- Make Call -->
+                        <button type="button" id="spCallBtn" onclick="makeCall()" class="col-span-2 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-600/20">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                            <span><%= isRtl ? 'إجراء مكالمة' : 'Make Call' %></span>
+                        </button>
+
+                        <!-- Answer Call (Hidden by default) -->
+                        <button type="button" id="spAnswerBtn" onclick="answerCall()" class="hidden col-span-2 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-blue-600/20 animate-bounce">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                            <span><%= isRtl ? 'الرد على المكالمة الواردة' : 'Answer Incoming Call' %></span>
+                        </button>
+
+                        <!-- Mute Mic Toggle (Active during call) -->
+                        <button type="button" id="spMuteBtn" onclick="toggleMute()" class="hidden py-3 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer">
+                            <svg id="muteIcon" class="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                            <span id="muteBtnText"><%= isRtl ? 'كتم الميكروفون' : 'Mute Mic' %></span>
+                        </button>
+
+                        <!-- Hangup Call (Active during call) -->
+                        <button type="button" id="spHangupBtn" onclick="hangupCall()" class="hidden py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-rose-600/20">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            <span><%= isRtl ? 'إنهاء المكالمة' : 'Hang Up' %></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Sub-Tabs for Call Logs & Address Book Contacts (7 Cols) -->
+            <div class="lg:col-span-7 flex flex-col gap-5">
+                <div class="soft-card p-6 flex flex-col gap-5">
+                    
+                    <!-- Sub-Tab Header Buttons -->
+                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
+                        <div class="flex items-center gap-2">
+                            <button type="button" id="tabBtnLogs" onclick="switchSubTab('logs')" class="px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer tab-active flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                                <span><%= isRtl ? 'سجل المكالمات' : 'Call History' %></span>
+                            </button>
+                            <button type="button" id="tabBtnCalls" onclick="switchSubTab('activecalls')" class="px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-white transition cursor-pointer flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><circle cx="12" cy="10" r="3"/><path d="M8 16c0-2 4-3 4-3s4 1 4 3"/></svg>
+                                <span><%= isRtl ? 'المكالمات النشطة' : 'Active Calls' %></span>
+                                <span id="activeCallsCount" class="px-1.5 py-0.5 bg-rose-600 text-white text-[10px] font-bold rounded-full hidden">0</span>
+                            </button>
+                            <button type="button" id="tabBtnContacts" onclick="switchSubTab('contacts')" class="px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-white transition cursor-pointer flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><circle cx="12" cy="10" r="3"/><path d="M8 16c0-2 4-3 4-3s4 1 4 3"/></svg>
+                                <span><%= isRtl ? 'دفتر العناوين' : 'Address Book' %></span>
+                            </button>
+                        </div>
+
+                        <!-- Add Contact Action (Shown on Contacts Tab) -->
+                        <div id="contactsTabActions" class="hidden">
+                            <button type="button" onclick="openAddContactModal()" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-md">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                <span><%= isRtl ? 'إضافة جهة اتصال' : 'Add Contact' %></span>
+                            </button>
+                        </div>
+
+                        <!-- Clear Logs Action (Shown on Logs Tab) -->
+                        <div id="logsTabActions">
+                            <button type="button" onclick="clearCallLogs()" class="px-3 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 rounded-xl border border-rose-500/20 font-bold transition cursor-pointer">
+                                <%= isRtl ? 'مسح السجل' : 'Clear Logs' %>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- SUB-TAB 1: CALL LOGS / HISTORY -->
+                    <div id="subTabLogs" class="flex flex-col gap-3">
+                        <div id="logsContainer" class="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
+                            <div class="text-center py-8 text-xs text-[var(--text-muted)] italic">
+                                <%= isRtl ? 'لا توجد مكالمات مسجلة حتى الآن' : 'No recent softphone calls' %>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SUB-TAB 2: ADDRESS BOOK CONTACTS -->
+                    <div id="subTabContacts" class="hidden flex flex-col gap-4">
+                        <div class="relative">
+                            <input type="text" id="contactSearchInput" oninput="filterContacts()" placeholder="<%= isRtl ? 'بحث بالاسم أو رقم الهاتف...' : 'Search contact by name or phone...' %>" class="w-full soft-input text-xs px-3 py-2.5">
+                        </div>
+
+                        <div id="contactsContainer" class="flex flex-col gap-2 max-h-[460px] overflow-y-auto pr-1">
+                            <div class="text-center py-8 text-xs text-[var(--text-muted)] italic">
+                                <%= isRtl ? 'جاري تحميل جهات الاتصال...' : 'Loading Address Book...' %>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SUB-TAB 3: ACTIVE CALLS -->
+                    <div id="subTabActiveCalls" class="hidden flex flex-col gap-3">
+                        <div id="activeCallsContainer" class="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
+                            <div class="text-center py-8 text-xs text-[var(--text-muted)] italic">
+                                <%= isRtl ? 'لا توجد مكالمات نشطة' : 'No active calls' %>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODAL: ADD CONTACT TO ADDRESS BOOK -->
+    <div id="addContactModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden p-4">
+        <div class="soft-card max-w-md w-full p-6 text-[var(--text-primary)]">
+            <div class="flex items-center justify-between pb-3 border-b border-[var(--border-primary)] mb-4">
+                <h3 class="text-sm font-extrabold text-purple-400 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><circle cx="12" cy="10" r="3"/><path d="M8 16c0-2 4-3 4-3s4 1 4 3"/></svg>
+                    <span><%= isRtl ? 'إضافة جهة اتصال لدفتر العناوين' : 'Add Contact to Address Book' %></span>
+                </h3>
+                <button type="button" onclick="closeAddContactModal()" class="text-[var(--text-muted)] hover:text-white cursor-pointer">✕</button>
+            </div>
+
+            <form onsubmit="saveContactToAddressBook(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'الاسم الأول' : 'First Name' %></label>
+                    <input type="text" id="contactFirstName" required class="soft-input w-full">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم العائلة' : 'Last Name' %></label>
+                    <input type="text" id="contactLastName" class="soft-input w-full">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'رقم الهاتف' : 'Phone Number' %></label>
+                    <input type="text" id="contactPhone" required placeholder="01xxxxxxxxx" class="soft-input w-full font-mono">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeAddContactModal()" class="px-4 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-white rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] cursor-pointer">
+                        <%= isRtl ? 'إلغاء' : 'Cancel' %>
+                    </button>
+                    <button type="submit" id="saveContactBtn" class="px-5 py-2 text-xs font-extrabold text-white bg-purple-600 hover:bg-purple-700 rounded-xl cursor-pointer shadow-md">
+                        <%= isRtl ? 'حفظ في دفتر العناوين' : 'Save to Address Book' %>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: TRANSFER CALL -->
+    <div id="transferModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden p-4">
+        <div class="soft-card max-w-sm w-full p-6 text-[var(--text-primary)]">
+            <div class="flex items-center justify-between pb-3 border-b border-[var(--border-primary)] mb-4">
+                <h3 id="xferModalTitle" class="text-sm font-extrabold text-purple-400">
+                    <%= isRtl ? 'تحويل المكالمة' : 'Transfer Call' %>
+                </h3>
+                <button type="button" onclick="closeTransferModal()" class="text-[var(--text-muted)] hover:text-white cursor-pointer">✕</button>
+            </div>
+
+            <div class="flex flex-col gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'الرقم الهدف' : 'Target Number' %></label>
+                    <input type="text" id="xferTargetInput" placeholder="<%= isRtl ? 'رقم التحويلة أو الهاتف' : 'Extension or phone number' %>" class="soft-input w-full font-mono">
+                </div>
+
+                <div class="flex justify-between gap-2 pt-2">
+                    <button type="button" onclick="doBlindTransfer()" class="flex-1 px-4 py-2 text-xs font-extrabold text-white bg-purple-600 hover:bg-purple-700 rounded-xl cursor-pointer shadow-md">
+                        <%= isRtl ? 'تحويل مباشر' : 'Blind Transfer' %>
+                    </button>
+                    <button type="button" onclick="doAttendedTransfer()" class="flex-1 px-4 py-2 text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer shadow-md">
+                        <%= isRtl ? 'تحويل بانتظار' : 'Attended Xfer' %>
+                    </button>
+                    <button type="button" onclick="closeTransferModal()" class="px-4 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-white rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] cursor-pointer">
+                        <%= isRtl ? 'إلغاء' : 'Cancel' %>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Remote Audio Element for Call Audio Stream -->
+    <audio id="remoteAudio" autoplay></audio>
+
+    <script>
+        const isRtlLang = <%= isRtl %>;
+        let ua = null;
+        let activeSessions = {};
+        let nextCallId = 0;
+        let localMicStream = null;
+        let micPermissionGranted = false;
+        let pendingTransferSource = null;
+        let callLogs = JSON.parse(localStorage.getItem('softphone_call_logs') || '[]');
+        let loadedAddressBook = [];
+        let _intentionalDisconnect = false;
+        let _reconnectTimer = null;
+        let _storedPassword = '';
+
+        // --- INCOMING CALL NOTIFICATION & RINGTONE ---
+        let _ringtoneCtx = null;
+        let _ringtoneOsc = null;
+        let _ringtoneGain = null;
+        let _ringtoneTimer = null;
+
+        function stopRingtone() {
+            if (_ringtoneOsc) { try { _ringtoneOsc.stop(); } catch(e) {} _ringtoneOsc = null; }
+            if (_ringtoneTimer) { clearInterval(_ringtoneTimer); _ringtoneTimer = null; }
+            if (_ringtoneGain) { _ringtoneGain.disconnect(); _ringtoneGain = null; }
+        }
+
+        function initRingtoneAudio() {
+            // Unlock AudioContext on user gesture so first playRingtone() won't be blocked
+            try {
+                if (!_ringtoneCtx) _ringtoneCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (_ringtoneCtx.state === 'suspended') _ringtoneCtx.resume();
+            } catch(e) { /* Audio not available */ }
+        }
+
+        function playRingtone() {
+            stopRingtone();
+            try {
+                if (!_ringtoneCtx) _ringtoneCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (_ringtoneCtx.state === 'suspended') _ringtoneCtx.resume();
+                _ringtoneGain = _ringtoneCtx.createGain();
+                _ringtoneGain.gain.value = 0.25;
+                _ringtoneOsc = _ringtoneCtx.createOscillator();
+                _ringtoneOsc.type = 'sine';
+                _ringtoneOsc.frequency.value = 440;
+                _ringtoneOsc.connect(_ringtoneGain);
+                _ringtoneGain.connect(_ringtoneCtx.destination);
+                _ringtoneOsc.start();
+                var ampOn = true;
+                _ringtoneTimer = setInterval(function() {
+                    ampOn = !ampOn;
+                    if (_ringtoneGain) _ringtoneGain.gain.value = ampOn ? 0.25 : 0;
+                }, 600);
+            } catch(e) { console.warn('Ringtone error:', e); }
+        }
+
+        function showIncomingNotification(caller) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    var n = new Notification('Incoming Call', {
+                        body: caller + ' is calling',
+                        icon: '/favicon.ico',
+                        tag: 'sokrat-call',
+                        requireInteraction: true
+                    });
+                    n.onclick = function() { window.focus(); this.close(); };
+                    setTimeout(function() { n.close(); }, 15000);
+                } catch(e) { /* notification blocked */ }
+            }
+        }
+
+        function requestNotifPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-emerald-600 border-emerald-500' : type === 'error' ? 'bg-rose-600 border-rose-500' : 'bg-purple-600 border-purple-500';
+            toast.className = `px-4 py-3 rounded-xl text-white text-xs font-bold border shadow-xl flex items-center gap-2 pointer-events-auto transition-all transform translate-y-2 ${bgClass}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // --- MICROPHONE PERMISSION HANDLER ---
+        let softphoneSecureCtx = false;
+
+        (function() {
+            softphoneSecureCtx = window.isSecureContext === true
+                && typeof navigator.mediaDevices !== 'undefined'
+                && typeof navigator.mediaDevices.getUserMedia === 'function';
+        })();
+
+        function httpsRedirectUrl() {
+            return 'https://' + window.location.hostname + window.location.pathname + window.location.search;
+        }
+
+        async function checkMicPermission() {
+            if (!softphoneSecureCtx) {
+                updateMicBannerInsecure();
+                return;
+            }
+            try {
+                if (navigator.permissions && navigator.permissions.query) {
+                    const status = await navigator.permissions.query({ name: 'microphone' });
+                    if (status.state === 'granted') {
+                        await acquireMicStream();
+                        return;
+                    }
+                    if (status.state === 'denied') {
+                        updateMicBannerDenied();
+                        return;
+                    }
+                }
+            } catch (_) {}
+            await acquireMicStream(true);
+        }
+
+        async function acquireMicStream(silent = false) {
+            if (!softphoneSecureCtx) {
+                updateMicBannerInsecure();
+                return;
+            }
+            try {
+                localMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                micPermissionGranted = true;
+                updateMicBannerGranted();
+            } catch (err) {
+                micPermissionGranted = false;
+                const msg = err.message || err.name || '';
+                if (msg.includes('denied') || msg.includes('Denied') || msg.includes('NotAllowed')) {
+                    updateMicBannerDenied();
+                } else {
+                    updateMicBannerError(msg);
+                }
+                if (!silent) {
+                    showToast(isRtlLang ? 'تعذر الوصول للميكروفون: ' + msg : 'Microphone error: ' + msg, 'error');
+                }
+            }
+        }
+
+        async function requestMicPermission() {
+            if (!softphoneSecureCtx) {
+                window.location.href = httpsRedirectUrl();
+                return;
+            }
+            await acquireMicStream(false);
+        }
+
+        function updateMicBannerInsecure() {
+            const banner = document.getElementById('micBanner');
+            const title = document.getElementById('micBannerTitle');
+            const desc = document.getElementById('micBannerDesc');
+            const btn = document.getElementById('micGrantBtn');
+            if (!banner) return;
+            banner.className = 'soft-card p-4 border-rose-500/30 bg-rose-500/10 flex flex-col sm:flex-row items-center justify-between gap-3';
+            title.className = 'text-xs font-bold text-rose-300';
+            title.textContent = isRtlLang ? '🔒 يتطلب اتصال HTTPS' : '🔒 HTTPS Connection Required';
+            desc.textContent = isRtlLang
+                ? 'يتطلب الوصول إلى الميكروفون اتصال HTTPS آمن. يرجى استخدام الرابط الآمن أدناه.'
+                : 'Microphone access requires a secure HTTPS connection. Please use the secure link below.';
+            btn.textContent = isRtlLang ? '🔗 فتح HTTPS' : '🔗 Switch to HTTPS';
+            btn.className = 'px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl transition cursor-pointer shrink-0 shadow-md';
+            btn.onclick = function() { window.location.href = httpsRedirectUrl(); };
+        }
+
+        function updateMicBannerDenied() {
+            const banner = document.getElementById('micBanner');
+            const title = document.getElementById('micBannerTitle');
+            const desc = document.getElementById('micBannerDesc');
+            const btn = document.getElementById('micGrantBtn');
+            if (!banner) return;
+            banner.className = 'soft-card p-4 border-rose-500/30 bg-rose-500/10 flex flex-col sm:flex-row items-center justify-between gap-3';
+            title.className = 'text-xs font-bold text-rose-300';
+            title.textContent = isRtlLang ? '🚫 تم رفض الإذن' : '🚫 Permission Denied';
+            desc.textContent = isRtlLang
+                ? 'تم حظر الميكروفون في إعدادات المتصفح. يرجى فتح إعدادات الموقع والسماح بالميكروفون، أو استخدم HTTPS.'
+                : 'Microphone is blocked in browser site settings. Please enable it in site permissions, or use HTTPS.';
+            btn.textContent = isRtlLang ? '🔗 فتح HTTPS' : '🔗 Switch to HTTPS';
+            btn.className = 'px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl transition cursor-pointer shrink-0 shadow-md';
+            btn.onclick = function() { window.location.href = httpsRedirectUrl(); };
+        }
+
+        function updateMicBannerError(errDetail) {
+            const banner = document.getElementById('micBanner');
+            const title = document.getElementById('micBannerTitle');
+            const desc = document.getElementById('micBannerDesc');
+            const btn = document.getElementById('micGrantBtn');
+            if (!banner) return;
+            banner.className = 'soft-card p-4 border-rose-500/30 bg-rose-500/10 flex flex-col sm:flex-row items-center justify-between gap-3';
+            title.className = 'text-xs font-bold text-rose-300';
+            title.textContent = isRtlLang ? '⚠️ خطأ في الميكروفون' : '⚠️ Microphone Error';
+            desc.textContent = isRtlLang
+                ? 'حدث خطأ: ' + errDetail + '. يرجى المحاولة مرة أخرى أو استخدام HTTPS.'
+                : 'Microphone error: ' + errDetail + '. Please try again or use HTTPS.';
+            btn.textContent = isRtlLang ? '🔄 المحاولة مرة أخرى' : '🔄 Retry';
+            btn.className = 'px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl transition cursor-pointer shrink-0 shadow-md';
+            btn.onclick = function() {
+                if (!softphoneSecureCtx) {
+                    window.location.href = httpsRedirectUrl();
+                } else {
+                    acquireMicStream(false);
+                }
+            };
+        }
+
+        function updateMicBannerGranted() {
+            const banner = document.getElementById('micBanner');
+            const title = document.getElementById('micBannerTitle');
+            const desc = document.getElementById('micBannerDesc');
+            const btn = document.getElementById('micGrantBtn');
+            if (!banner) return;
+            banner.className = 'soft-card p-4 border-emerald-500/30 bg-emerald-500/10 flex flex-col sm:flex-row items-center justify-between gap-3';
+            title.className = 'text-xs font-bold text-emerald-300';
+            title.textContent = isRtlLang ? '🎤 تم منح إذن استخدام الميكروفون' : '🎤 Microphone Access Granted';
+            desc.textContent = isRtlLang
+                ? 'الميكروفون جاهز للاستخدام في إجراء واستقبال المكالمات الصوتية.'
+                : 'Microphone is ready for clear audio calls.';
+            btn.className = 'hidden';
+            btn.onclick = null;
+        }
+
+        // --- WEBRTC CONFIG & REGISTRATION ---
+        async function loadWebRtcConfig() {
+            try {
+                const res = await fetch('/api/webrtc/config');
+                const data = await res.json();
+                if (!data.success || !data.extensions) return;
+
+                const selectEl = document.getElementById('spExtSelect');
+                selectEl.innerHTML = '';
+                if (data.extensions.length === 0) {
+                    selectEl.innerHTML = `<option value="">${isRtlLang ? 'لا توجد تحويلات WebRTC' : 'No WebRTC Exts'}</option>`;
+                    return;
+                }
+
+                data.extensions.forEach(ext => {
+                    const opt = document.createElement('option');
+                    opt.value = ext.extension;
+                    opt.textContent = `${ext.extension} (${ext.name || 'Ext'})`;
+                    selectEl.appendChild(opt);
+                });
+
+                window.webrtcWsUrl = data.wsUrl;
+                document.getElementById('activeExtBadge').textContent = `Ext: ${selectEl.value || '--'}`;
+            } catch (e) {
+                console.error('Failed to load WebRTC config:', e);
+            }
+        }
+
+        function updateStatus(text, state) {
+            const statusEl = document.getElementById('spStatusText');
+            const dotEl = document.getElementById('spStatusDot');
+            const pingEl = document.getElementById('spStatusPing');
+            if (statusEl) statusEl.textContent = text;
+            if (dotEl) {
+                dotEl.className = 'relative inline-flex rounded-full h-2.5 w-2.5 ' + (
+                    state === 'online' ? 'bg-emerald-500' :
+                    state === 'incall' ? 'bg-purple-500' :
+                    state === 'ringing' ? 'bg-amber-500' : 'bg-zinc-500'
+                );
+            }
+            if (pingEl) {
+                if (['online', 'incall', 'ringing'].includes(state)) pingEl.classList.remove('hidden');
+                else pingEl.classList.add('hidden');
+            }
+        }
+
+        async function toggleRegistration() {
+            if (ua && ua.isConnected()) {
+                _intentionalDisconnect = true;
+                ua.stop();
+                ua = null;
+                document.getElementById('spRegBtn').textContent = isRtlLang ? 'اتصال' : 'Connect';
+                updateStatus(isRtlLang ? 'غير متصل' : 'Offline', 'offline');
+                return;
+            }
+
+            // Request notification permission + init ringtone (must be before any await)
+            requestNotifPermission();
+            initRingtoneAudio();
+            stopRingtone();
+
+            if (!micPermissionGranted) {
+                await acquireMicStream();
+                if (!micPermissionGranted) {
+                    showToast(isRtlLang ? 'يرجى السماح بالميكروفون أولاً' : 'Please grant microphone permission first', 'error');
+                    return;
+                }
+            }
+
+            const selectEl = document.getElementById('spExtSelect');
+            if (!selectEl || !selectEl.value) {
+                showToast(isRtlLang ? 'اختر تحويلة أولاً' : 'Please select an extension', 'error');
+                return;
+            }
+
+            const ext = selectEl.value;
+            const pwdInput = document.getElementById('spPassword');
+            const secret = pwdInput ? pwdInput.value.trim() : '';
+            if (!secret) {
+                showToast(isRtlLang ? 'أدخل كلمة السر للتحويلة' : 'Enter extension password', 'error');
+                return;
+            }
+            _storedPassword = secret;
+            // Clean up any stale UA before creating new one
+            if (ua) { try { ua.stop(); } catch(e) {} ua = null; }
+            if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+            _intentionalDisconnect = false;
+            const wsUrl = window.webrtcWsUrl || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname + (location.protocol === 'https:' ? ':8089/ws' : ':8088/ws'));
+
+            if (typeof JsSIP === 'undefined') {
+                showToast('JsSIP library not loaded', 'error');
+                return;
+            }
+
+            try {
+                const socket = new JsSIP.WebSocketInterface(wsUrl);
+                const configuration = {
+                    sockets: [socket],
+                    uri: `sip:${ext}@${location.hostname}`,
+                    password: secret,
+                    register: true,
+                    register_expires: 120
+                };
+
+                ua = new JsSIP.UA(configuration);
+
+                ua.on('connecting', () => updateStatus('Connecting...', 'registering'));
+                ua.on('connected', () => {
+                    _intentionalDisconnect = false;
+                    if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+                    updateStatus(`Online (${ext})`, 'online');
+                    document.getElementById('spRegBtn').textContent = isRtlLang ? 'قطع الاتصال' : 'Disconnect';
+                    document.getElementById('activeExtBadge').textContent = `Ext: ${ext}`;
+                });
+                ua.on('disconnected', () => {
+                    updateStatus('Offline', 'offline');
+                    if (!_intentionalDisconnect && ua) {
+                        document.getElementById('spRegBtn').textContent = isRtlLang ? 'إعادة الاتصال...' : 'Reconnecting...';
+                        if (_reconnectTimer) clearTimeout(_reconnectTimer);
+                        _reconnectTimer = setTimeout(function() {
+                            if (ua && !ua.isConnected() && !_intentionalDisconnect) {
+                                document.getElementById('spRegBtn').textContent = isRtlLang ? 'اتصال' : 'Connect';
+                                try { ua.start(); } catch(e) {}
+                            }
+                        }, 3000);
+                    } else {
+                        document.getElementById('spRegBtn').textContent = isRtlLang ? 'اتصال' : 'Connect';
+                    }
+                });
+                ua.on('registrationFailed', (data) => {
+                    var code = data.response ? data.response.status_code : 0;
+                    if ((code === 401 || code === 403) && !_intentionalDisconnect) {
+                        showToast(isRtlLang ? 'فشل المصادقة: تحقق من كلمة السر' : 'Auth failed: check password', 'error');
+                        // Tear down UA so user can retry with correct password
+                        _intentionalDisconnect = true;
+                        if (ua) { try { ua.stop(); } catch(e) {} ua = null; }
+                        if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+                        document.getElementById('spRegBtn').textContent = isRtlLang ? 'اتصال' : 'Connect';
+                    } else if (!_intentionalDisconnect && ua) {
+                        document.getElementById('spRegBtn').textContent = isRtlLang ? 'إعادة الاتصال...' : 'Reconnecting...';
+                        if (_reconnectTimer) clearTimeout(_reconnectTimer);
+                        _reconnectTimer = setTimeout(function() {
+                            if (ua && !ua.isConnected() && !_intentionalDisconnect) {
+                                document.getElementById('spRegBtn').textContent = isRtlLang ? 'اتصال' : 'Connect';
+                                try { ua.start(); } catch(e) {}
+                            }
+                        }, code === 0 ? 3000 : 5000);
+                    }
+                    updateStatus('Reg Failed', 'offline');
+                });
+
+                ua.on('newRTCSession', (data) => {
+                    const session = data.session;
+                    // newRTCSession fires for ALL calls; outgoing is handled by makeCall()
+                    if (session.direction !== 'incoming') return;
+
+                    const callId = 'call_' + (nextCallId++);
+                    const caller = session.remote_identity.uri.user || 'Unknown';
+
+                    activeSessions[callId] = {
+                        id: callId,
+                        jsSipSession: session,
+                        direction: 'incoming',
+                        target: caller,
+                        status: 'ringing',
+                        startTime: Date.now(),
+                        answerTime: null,
+                        endTime: null,
+                        isHeld: false,
+                        timerId: null
+                    };
+
+                    setupSessionListeners(session, callId);
+
+                    updateStatus('Ringing from ' + caller + '...', 'ringing');
+                    addCallLog({ number: caller, direction: 'incoming', status: 'ringing', timestamp: new Date().toISOString() });
+                    switchSubTab('activecalls');
+                    renderActiveCalls();
+                    playRingtone();
+                    showIncomingNotification(caller);
+                });
+
+                ua.start();
+            } catch (err) {
+                showToast('JsSIP Error: ' + err.message, 'error');
+                updateStatus('Error', 'offline');
+            }
+        }
+
+        // --- CALL CONTROL & KEYPAD ---
+        function pressKey(key) {
+            const input = document.getElementById('spDialInput');
+            if (input) input.value += key;
+            const activeCall = Object.values(activeSessions).find(s => s.status === 'incall' || s.status === 'held');
+            if (activeCall) {
+                try { activeCall.jsSipSession.sendDTMF(key); } catch(_) {}
+            }
+        }
+
+        function clearDialInput() {
+            const input = document.getElementById('spDialInput');
+            if (input) input.value = input.value.slice(0, -1);
+        }
+
+        async function makeCall() {
+            if (!ua || !ua.isConnected()) {
+                showToast(isRtlLang ? 'يرجى الاتصال بالتحويلة أولاً' : 'Please connect softphone first', 'error');
+                return;
+            }
+            if (!micPermissionGranted) {
+                await acquireMicStream();
+                if (!micPermissionGranted) return;
+            }
+
+            const target = document.getElementById('spDialInput').value.trim();
+            if (!target) {
+                showToast(isRtlLang ? 'أدخل رقم التحويلة المراد الاتصال بها' : 'Enter target number or extension', 'error');
+                return;
+            }
+
+            const callId = 'call_' + (nextCallId++);
+            const startTime = Date.now();
+
+            activeSessions[callId] = {
+                id: callId,
+                jsSipSession: null,
+                direction: 'outgoing',
+                target: target,
+                status: 'ringing',
+                startTime: startTime,
+                answerTime: null,
+                endTime: null,
+                isHeld: false,
+                timerId: null
+            };
+
+            const eventHandlers = {
+                'progress': () => { updateStatus('Ringing ' + target, 'incall'); renderActiveCalls(); },
+                'failed': (e) => {
+                    const durSec = Math.round((Date.now() - startTime) / 1000);
+                    removeSession(callId);
+                    updateStatus('Online', 'online');
+                    addCallLog({ number: target, direction: 'outgoing', status: 'failed', timestamp: new Date().toISOString(), durationSec: durSec });
+                },
+                'ended': () => {
+                    const entry = activeSessions[callId];
+                    const durSec = entry && entry.answerTime
+                        ? Math.round((Date.now() - entry.answerTime) / 1000)
+                        : Math.round((Date.now() - startTime) / 1000);
+                    removeSession(callId);
+                    updateStatus('Online', 'online');
+                    addCallLog({ number: target, direction: 'outgoing', status: 'answered', timestamp: new Date().toISOString(), durationSec: durSec });
+                },
+                'confirmed': () => {
+                    if (activeSessions[callId]) {
+                        activeSessions[callId].status = 'incall';
+                        activeSessions[callId].answerTime = Date.now();
+                        startCallTimer(callId);
+                        updateStatus('In Call (' + target + ')', 'incall');
+                        renderActiveCalls();
+                    }
+                }
+            };
+
+            const options = {
+                eventHandlers: eventHandlers,
+                mediaConstraints: { audio: true, video: false }
+            };
+            if (localMicStream) options.mediaStream = localMicStream;
+
+            const session = ua.call('sip:' + target + '@' + location.hostname, options);
+            activeSessions[callId].jsSipSession = session;
+            setupSessionListeners(session, callId);
+            switchSubTab('activecalls');
+            renderActiveCalls();
+        }
+
+        function setupSessionListeners(session, callId) {
+            session.on('peerconnection', (e) => {
+                const pc = e.peerconnection;
+                pc.ontrack = (event) => {
+                    const remoteAudio = document.getElementById('remoteAudio');
+                    if (remoteAudio && event.streams && event.streams[0]) {
+                        remoteAudio.srcObject = event.streams[0];
+                        remoteAudio.play();
+                    }
+                };
+            });
+
+            session.on('ended', () => {
+                const entry = activeSessions[callId];
+                if (!entry) return;
+                const durSec = entry.answerTime
+                    ? Math.round((Date.now() - entry.answerTime) / 1000)
+                    : 0;
+                stopRingtone();
+                removeSession(callId);
+                updateStatus('Online', 'online');
+                if (entry.direction === 'incoming') {
+                    addCallLog({ number: entry.target, direction: 'incoming', status: 'answered', timestamp: new Date(entry.startTime).toISOString(), durationSec: durSec });
+                }
+            });
+
+            session.on('failed', () => {
+                const entry = activeSessions[callId];
+                if (!entry) return;
+                if (entry.direction === 'incoming') {
+                    addCallLog({ number: entry.target, direction: 'incoming', status: entry.status === 'ringing' ? 'missed' : 'failed', timestamp: new Date(entry.startTime).toISOString(), durationSec: 0 });
+                }
+                stopRingtone();
+                removeSession(callId);
+                updateStatus('Online', 'online');
+            });
+        }
+
+        function removeSession(callId) {
+            const entry = activeSessions[callId];
+            if (!entry) return;
+            stopCallTimer(callId);
+            delete activeSessions[callId];
+            renderActiveCalls();
+            if (Object.keys(activeSessions).length === 0) {
+                resetCallUI();
+            }
+        }
+
+        function answerCall(callId) {
+            if (!callId) {
+                var incoming = Object.values(activeSessions).find(function(s) { return s.status === 'ringing' && s.direction === 'incoming'; });
+                if (incoming) callId = incoming.id;
+            }
+            const entry = activeSessions[callId];
+            if (!entry || !entry.jsSipSession) return;
+            entry.jsSipSession.answer({
+                mediaConstraints: { audio: true, video: false },
+                mediaStream: localMicStream || undefined
+            });
+            entry.status = 'incall';
+            entry.answerTime = Date.now();
+            startCallTimer(callId);
+            stopRingtone();
+            updateStatus('In Call', 'incall');
+            renderActiveCalls();
+        }
+
+        function hangupCall(callId) {
+            if (!callId) {
+                var first = Object.values(activeSessions)[0];
+                if (first) callId = first.id;
+            }
+            const entry = activeSessions[callId];
+            if (!entry || !entry.jsSipSession) return;
+            entry.jsSipSession.terminate();
+        }
+
+        function toggleMute(callId) {
+            if (!callId) {
+                var first = Object.values(activeSessions).find(function(s) { return s.status === 'incall'; });
+                if (first) callId = first.id;
+            }
+            const entry = activeSessions[callId];
+            if (!entry || !entry.jsSipSession) return;
+            const isMuted = entry.jsSipSession.isMuted ? entry.jsSipSession.isMuted().audio : false;
+            if (isMuted) {
+                entry.jsSipSession.unmute({ audio: true });
+            } else {
+                entry.jsSipSession.mute({ audio: true });
+            }
+            renderActiveCalls();
+        }
+
+        function holdCall(callId) {
+            const entry = activeSessions[callId];
+            if (!entry || !entry.jsSipSession || !entry.jsSipSession.hold) return;
+            entry.jsSipSession.hold();
+            entry.isHeld = true;
+            entry.status = 'held';
+            stopCallTimer(callId);
+            renderActiveCalls();
+        }
+
+        function resumeCall(callId) {
+            const entry = activeSessions[callId];
+            if (!entry || !entry.jsSipSession || !entry.jsSipSession.unhold) return;
+            entry.jsSipSession.unhold();
+            entry.isHeld = false;
+            entry.status = 'incall';
+            startCallTimer(callId);
+            renderActiveCalls();
+        }
+
+        function openTransferModal(callId) {
+            const modal = document.getElementById('transferModal');
+            if (!modal) return;
+            modal.dataset.callId = callId;
+            const entry = activeSessions[callId];
+            document.getElementById('xferModalTitle').textContent = isRtlLang
+                ? 'تحويل المكالمة من ' + (entry ? entry.target : '')
+                : 'Transfer call from ' + (entry ? entry.target : '');
+            modal.classList.remove('hidden');
+        }
+
+        function closeTransferModal() {
+            const modal = document.getElementById('transferModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function doBlindTransfer() {
+            const modal = document.getElementById('transferModal');
+            if (!modal) return;
+            const callId = modal.dataset.callId;
+            const entry = activeSessions[callId];
+            if (!entry || !entry.jsSipSession) return;
+            const target = document.getElementById('xferTargetInput').value.trim();
+            if (!target) {
+                showToast(isRtlLang ? 'أدخل رقم التحويلة' : 'Enter target extension', 'error');
+                return;
+            }
+            try {
+                entry.jsSipSession.refer('sip:' + target + '@' + location.hostname);
+                showToast('Blind transfer to ' + target, 'success');
+                closeTransferModal();
+            } catch(e) {
+                showToast('Transfer failed: ' + e.message, 'error');
+            }
+        }
+
+        function doAttendedTransfer() {
+            const modal = document.getElementById('transferModal');
+            if (!modal) return;
+            const sourceCallId = modal.dataset.callId;
+            const sourceEntry = activeSessions[sourceCallId];
+            if (!sourceEntry || !sourceEntry.jsSipSession) return;
+            const target = document.getElementById('xferTargetInput').value.trim();
+            if (!target) {
+                showToast(isRtlLang ? 'أدخل رقم التحويلة' : 'Enter target extension', 'error');
+                return;
+            }
+            closeTransferModal();
+            pendingTransferSource = sourceCallId;
+            document.getElementById('spDialInput').value = target;
+            showToast(isRtlLang ? 'اتصل بالرقم ' + target + ' ثم اضغط تحويل مكتمل' : 'Call ' + target + ' then press Complete Transfer', 'info');
+            makeCall();
+        }
+
+        function completeAttendedTransfer(sourceCallId, consultationCallId) {
+            const sourceEntry = activeSessions[sourceCallId];
+            const consultEntry = activeSessions[consultationCallId];
+            if (!sourceEntry || !sourceEntry.jsSipSession || !consultEntry || !consultEntry.jsSipSession) return;
+            try {
+                sourceEntry.jsSipSession.refer('sip:' + consultEntry.target + '@' + location.hostname, { replaces: consultEntry.jsSipSession });
+                showToast(isRtlLang ? 'تم التحويل بنجاح' : 'Attended transfer completed', 'success');
+                pendingTransferSource = null;
+            } catch(e) {
+                showToast('Transfer failed: ' + e.message, 'error');
+            }
+        }
+
+        function startCallTimer(callId) {
+            const entry = activeSessions[callId];
+            if (!entry) return;
+            stopCallTimer(callId);
+            entry.timerId = setInterval(function() { renderActiveCalls(); }, 1000);
+        }
+
+        function stopCallTimer(callId) {
+            const entry = activeSessions[callId];
+            if (entry && entry.timerId) {
+                clearInterval(entry.timerId);
+                entry.timerId = null;
+            }
+        }
+
+        function resetCallUI() {
+            updateStatus('Online', 'online');
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds || seconds < 0) return '00:00';
+            var m = Math.floor(seconds / 60);
+            var s = seconds % 60;
+            return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        function renderActiveCalls() {
+            var container = document.getElementById('activeCallsContainer');
+            if (!container) return;
+            var entries = Object.values(activeSessions);
+            if (entries.length === 0) {
+                container.innerHTML = '<div class="text-center py-8 text-xs text-[var(--text-muted)] italic">' + (isRtlLang ? 'لا توجد مكالمات نشطة' : 'No active calls') + '</div>';
+                var c = document.getElementById('activeCallsCount');
+                if (c) { c.textContent = '0'; c.classList.add('hidden'); }
+                return;
+            }
+            var c = document.getElementById('activeCallsCount');
+            if (c) { c.textContent = entries.filter(function(e) { return e.status !== 'ended'; }).length; c.classList.remove('hidden'); }
+
+            var html = '';
+            for (var i = 0; i < entries.length; i++) {
+                var e = entries[i];
+                var durSeconds = e.status === 'incall' && e.answerTime ? Math.floor((Date.now() - e.answerTime) / 1000) : 0;
+                var isRinging = e.status === 'ringing';
+                var isInCall = e.status === 'incall';
+                var isHeld = e.status === 'held';
+                var dirIcon = e.direction === 'outgoing' ? '↗' : '↙';
+                var statusBadge = isRinging
+                    ? '<span class="text-amber-400 font-bold">🔔 ' + (isRtlLang ? 'رنين' : 'Ringing') + '</span>'
+                    : isHeld
+                    ? '<span class="text-blue-400 font-bold">⏸ ' + (isRtlLang ? 'معلق' : 'On Hold') + '</span>'
+                    : '<span class="text-emerald-400 font-bold">🎧 ' + formatDuration(durSeconds) + '</span>';
+
+                var actions = '';
+                if (isRinging && e.direction === 'incoming') {
+                    actions = '<button onclick="answerCall(\'' + e.id + '\')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition">' + (isRtlLang ? 'رد' : 'Answer') + '</button><button onclick="hangupCall(\'' + e.id + '\')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition ml-1">' + (isRtlLang ? 'إنهاء' : 'Hangup') + '</button>';
+                } else if (isInCall) {
+                    actions = '<button onclick="holdCall(\'' + e.id + '\')" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-primary)] rounded-lg text-xs font-bold transition hover:border-purple-500/40">⏸ ' + (isRtlLang ? 'تعليق' : 'Hold') + '</button><button onclick="openTransferModal(\'' + e.id + '\')" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-primary)] rounded-lg text-xs font-bold transition hover:border-purple-500/40 ml-1">↪ ' + (isRtlLang ? 'تحويل' : 'Xfer') + '</button><button onclick="hangupCall(\'' + e.id + '\')" class="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition ml-1">✕</button>';
+                } else if (isHeld) {
+                    actions = '<button onclick="resumeCall(\'' + e.id + '\')" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition">▶ ' + (isRtlLang ? 'استئناف' : 'Resume') + '</button><button onclick="openTransferModal(\'' + e.id + '\')" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-primary)] rounded-lg text-xs font-bold transition hover:border-purple-500/40 ml-1">↪ ' + (isRtlLang ? 'تحويل' : 'Xfer') + '</button><button onclick="hangupCall(\'' + e.id + '\')" class="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition ml-1">✕</button>';
+                }
+
+                var dirColor = e.direction === 'outgoing' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+
+                html += '<div class="flex items-center justify-between p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] gap-2"><div class="flex items-center gap-2 min-w-0"><div class="w-7 h-7 rounded-lg border flex items-center justify-center font-bold text-xs shrink-0 ' + dirColor + '">' + dirIcon + '</div><div class="flex flex-col min-w-0"><span class="text-xs font-extrabold text-[var(--text-primary)] font-mono truncate">' + e.target + '</span><span class="text-[10px] text-[var(--text-muted)]">' + statusBadge + '</span></div></div><div class="flex items-center gap-1.5 shrink-0">' + actions + '</div></div>';
+            }
+            container.innerHTML = html;
+
+            if (pendingTransferSource) {
+                var consultId = null;
+                var keys = Object.keys(activeSessions);
+                for (var k = 0; k < keys.length; k++) {
+                    if (keys[k] !== pendingTransferSource && activeSessions[keys[k]].status === 'incall') {
+                        consultId = keys[k];
+                        break;
+                    }
+                }
+                if (consultId) {
+                    container.innerHTML += '<div class="mt-2 p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-between"><span class="text-xs text-purple-300 font-bold">' + (isRtlLang ? 'تحويل مكتمل؟' : 'Complete Transfer?') + '</span><button onclick="completeAttendedTransfer(\'' + pendingTransferSource + '\', \'' + consultId + '\')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition">' + (isRtlLang ? 'تحويل مكتمل' : 'Complete') + '</button></div>';
+                }
+            }
+        }
+
+        function directCallNumber(number) {
+            document.getElementById('spDialInput').value = number;
+            makeCall();
+        }
+
+        // --- SUB-TAB SWITCHING ---
+        function switchSubTab(tab) {
+            const logsTab = document.getElementById('subTabLogs');
+            const contactsTab = document.getElementById('subTabContacts');
+            const callsTab = document.getElementById('subTabActiveCalls');
+            const btnLogs = document.getElementById('tabBtnLogs');
+            const btnCalls = document.getElementById('tabBtnCalls');
+            const btnContacts = document.getElementById('tabBtnContacts');
+            const logsActions = document.getElementById('logsTabActions');
+            const contactsActions = document.getElementById('contactsTabActions');
+
+            if (tab === 'logs') {
+                logsTab.classList.remove('hidden');
+                if (contactsTab) contactsTab.classList.add('hidden');
+                if (callsTab) callsTab.classList.add('hidden');
+                btnLogs.className = 'px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer tab-active flex items-center gap-2';
+                if (btnCalls) btnCalls.className = 'px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-white transition cursor-pointer flex items-center gap-2';
+                if (btnContacts) btnContacts.className = 'px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-white transition cursor-pointer flex items-center gap-2';
+                logsActions.classList.remove('hidden');
+                if (contactsActions) contactsActions.classList.add('hidden');
+                renderCallLogs();
+            } else if (tab === 'activecalls') {
+                if (logsTab) logsTab.classList.add('hidden');
+                if (contactsTab) contactsTab.classList.add('hidden');
+                if (callsTab) callsTab.classList.remove('hidden');
+                if (btnCalls) btnCalls.className = 'px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer tab-active flex items-center gap-2';
+                btnLogs.className = 'px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-white transition cursor-pointer flex items-center gap-2';
+                if (btnContacts) btnContacts.className = 'px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-white transition cursor-pointer flex items-center gap-2';
+                if (logsActions) logsActions.classList.add('hidden');
+                if (contactsActions) contactsActions.classList.add('hidden');
+                renderActiveCalls();
+            } else {
+                if (logsTab) logsTab.classList.add('hidden');
+                contactsTab.classList.remove('hidden');
+                if (callsTab) callsTab.classList.add('hidden');
+                btnContacts.className = 'px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer tab-active flex items-center gap-2';
+                btnLogs.className = 'px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-white transition cursor-pointer flex items-center gap-2';
+                if (btnCalls) btnCalls.className = 'px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-white transition cursor-pointer flex items-center gap-2';
+                contactsActions.classList.remove('hidden');
+                if (logsActions) logsActions.classList.add('hidden');
+                fetchAddressBookContacts();
+            }
+        }
+
+        // --- CALL LOGS (HISTORY) ---
+        function addCallLog(log) {
+            callLogs.unshift(log);
+            if (callLogs.length > 50) callLogs.pop();
+            localStorage.setItem('softphone_call_logs', JSON.stringify(callLogs));
+            renderCallLogs();
+        }
+
+        function clearCallLogs() {
+            if (!confirm(isRtlLang ? 'هل أنت متأكد من مسح سجل المكالمات؟' : 'Clear call history?')) return;
+            callLogs = [];
+            localStorage.removeItem('softphone_call_logs');
+            renderCallLogs();
+        }
+
+        function renderCallLogs() {
+            const container = document.getElementById('logsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (callLogs.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-xs text-[var(--text-muted)] italic">${isRtlLang ? 'لا توجد مكالمات مسجلة حتى الآن' : 'No recent softphone calls'}</div>`;
+                return;
+            }
+
+            callLogs.forEach(log => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] hover:border-purple-500/30 transition gap-3';
+                
+                const isOut = log.direction === 'outgoing';
+                const iconColor = isOut ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                const arrowIcon = isOut ? '↗' : '↙';
+                const timeStr = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const durStr = log.durationSec ? `${log.durationSec}s` : (log.status || '');
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-lg border flex items-center justify-center font-bold text-sm shrink-0 ${iconColor}">
+                            ${arrowIcon}
+                        </div>
+                        <div class="flex flex-col min-w-0">
+                            <span class="text-xs font-extrabold text-[var(--text-primary)] font-mono truncate">${log.number}</span>
+                            <span class="text-[10px] text-[var(--text-muted)]">${timeStr} • ${durStr}</span>
+                        </div>
+                    </div>
+                    <button type="button" onclick="directCallNumber('${log.number}')" class="px-3 py-1.5 bg-emerald-600/15 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-lg text-xs font-bold transition cursor-pointer shrink-0">
+                        ${isRtlLang ? 'اتصال' : 'Call'}
+                    </button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // --- ADDRESS BOOK CONTACTS INTEGRATION ---
+        async function fetchAddressBookContacts() {
+            const container = document.getElementById('contactsContainer');
+            if (!container) return;
+
+            try {
+                const res = await fetch('/api/contacts');
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Failed to fetch contacts');
+
+                loadedAddressBook = data.contacts || [];
+                renderAddressBookContacts(loadedAddressBook);
+            } catch (err) {
+                container.innerHTML = `<div class="text-center py-8 text-xs text-rose-400">${err.message}</div>`;
+            }
+        }
+
+        function filterContacts() {
+            const q = (document.getElementById('contactSearchInput')?.value || '').toLowerCase().trim();
+            if (!q) {
+                renderAddressBookContacts(loadedAddressBook);
+                return;
+            }
+            const filtered = loadedAddressBook.filter(c => {
+                const fullName = `${c.name || ''} ${c.last_name || ''}`.toLowerCase();
+                const phone = String(c.telefono || '').toLowerCase();
+                return fullName.includes(q) || phone.includes(q);
+            });
+            renderAddressBookContacts(filtered);
+        }
+
+        function renderAddressBookContacts(contactsList) {
+            const container = document.getElementById('contactsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (contactsList.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-xs text-[var(--text-muted)] italic">${isRtlLang ? 'لم يتم العثور على جهات اتصال' : 'No contacts found'}</div>`;
+                return;
+            }
+
+            contactsList.forEach(c => {
+                const fullName = `${c.name || ''} ${c.last_name || ''}`.trim() || 'Unnamed';
+                const phone = c.telefono || '';
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] hover:border-purple-500/30 transition gap-3';
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center font-bold text-xs shrink-0">
+                            ${fullName.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="flex flex-col min-w-0">
+                            <span class="text-xs font-extrabold text-[var(--text-primary)] truncate">${fullName}</span>
+                            <span class="text-[11px] font-mono text-purple-400 font-semibold truncate">${phone}</span>
+                        </div>
+                    </div>
+                    <button type="button" onclick="directCallNumber('${phone}')" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shrink-0 shadow-sm flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                        <span>${isRtlLang ? 'اتصال' : 'Call'}</span>
+                    </button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // --- ADD CONTACT MODAL & ADDRESS BOOK SAVING ---
+        function openAddContactModal() {
+            document.getElementById('addContactModal').classList.remove('hidden');
+        }
+
+        function closeAddContactModal() {
+            document.getElementById('addContactModal').classList.add('hidden');
+        }
+
+        async function saveContactToAddressBook(e) {
+            e.preventDefault();
+            const firstName = document.getElementById('contactFirstName').value.trim();
+            const lastName = document.getElementById('contactLastName').value.trim();
+            const phone = document.getElementById('contactPhone').value.trim();
+            const saveBtn = document.getElementById('saveContactBtn');
+
+            if (!firstName || !phone) {
+                showToast(isRtlLang ? 'يرجى إدخال الاسم ورقم الهاتف' : 'First name and phone number required', 'error');
+                return;
+            }
+
+            saveBtn.disabled = true;
+            try {
+                const res = await fetch('/api/contacts/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ firstName, lastName, phone })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save contact');
+
+                showToast(data.message || 'Contact added to Address Book!', 'success');
+                closeAddContactModal();
+                document.getElementById('contactFirstName').value = '';
+                document.getElementById('contactLastName').value = '';
+                document.getElementById('contactPhone').value = '';
+                fetchAddressBookContacts();
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                saveBtn.disabled = false;
+            }
+        }
+
+        // INITIALIZATION
+        document.addEventListener('DOMContentLoaded', () => {
+            checkMicPermission();
+            loadWebRtcConfig();
+            renderCallLogs();
+        });
+    </script>
+</body>
+</html>
