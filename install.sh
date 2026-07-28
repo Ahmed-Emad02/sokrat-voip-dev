@@ -194,9 +194,54 @@ chmod 664 /var/www/db/address_book.db
 echo "  address_book.db initialized with schema and permissions set"
 
 # ──────────────────────────────────────────────
+# Step 7c — Configure WebRTC / PJSIP Infrastructure
+# ──────────────────────────────────────────────
+echo "[7c/13] Configuring WebRTC / PJSIP infrastructure..."
+
+# Generate DTLS certificate for WebRTC if missing
+if [ ! -f /etc/asterisk/keys/asterisk.pem ]; then
+    mkdir -p /etc/asterisk/keys
+    openssl req -x509 -newkey rsa:4096 -keyout /etc/asterisk/keys/asterisk.pem \
+        -out /etc/asterisk/keys/asterisk.pem -days 3650 -nodes \
+        -subj "/C=EG/ST=Cairo/L=Cairo/O=sokrat-voip/CN=$(hostname -f 2>/dev/null || echo 'localhost')"
+    chown -R asterisk:asterisk /etc/asterisk/keys
+    chmod 640 /etc/asterisk/keys/asterisk.pem
+    echo "  DTLS certificate generated at /etc/asterisk/keys/asterisk.pem"
+else
+    echo "  DTLS certificate already exists"
+fi
+
+# Ensure modules_custom.conf loads chan_sip
+MODULES_CUSTOM=/etc/asterisk/modules_custom.conf
+touch "$MODULES_CUSTOM"
+if ! grep -q 'load => chan_sip.so' "$MODULES_CUSTOM"; then
+    echo 'load => chan_sip.so' >> "$MODULES_CUSTOM"
+    echo "  Added load => chan_sip.so to modules_custom.conf"
+else
+    echo "  chan_sip already configured in modules_custom.conf"
+fi
+
+# Disable chan_sip WebSocket to avoid conflict with PJSIP WebSocket
+SIP_GENERAL_CUSTOM=/etc/asterisk/sip_general_custom.conf
+touch "$SIP_GENERAL_CUSTOM"
+if ! grep -q 'websocket_enabled=no' "$SIP_GENERAL_CUSTOM"; then
+    echo '' >> "$SIP_GENERAL_CUSTOM"
+    echo '; Disable chan_sip WebSocket — PJSIP handles WebRTC' >> "$SIP_GENERAL_CUSTOM"
+    echo 'websocket_enabled=no' >> "$SIP_GENERAL_CUSTOM"
+    echo "  Disabled chan_sip WebSocket in sip_general_custom.conf"
+else
+    echo "  chan_sip WebSocket already disabled"
+fi
+
+# Ensure WSS transport exists for PJSIP (needed by WebRTC)
+asterisk -rx "pjsip reload" 2>/dev/null || true
+asterisk -rx "module load chan_sip.so" 2>/dev/null || true
+echo "  PJSIP reloaded, chan_sip loaded"
+
+# ──────────────────────────────────────────────
 # Step 8 — Add Required Dialplan Contexts
 # ──────────────────────────────────────────────
-echo "[8/12] Adding dialplan contexts..."
+echo "[9/14] Adding dialplan contexts..."
 DIALPLAN_FILE=/etc/asterisk/extensions_custom.conf
 
 # Ensure file exists
@@ -338,7 +383,7 @@ echo "  Dialplan reloaded"
 # Step 9 — GSM Dongle Setup
 # ──────────────────────────────────────────────
 echo ""
-echo "[9/12] Setting up GSM dongles & chan_dongle..."
+echo "[10/14] Setting up GSM dongles & chan_dongle..."
 
 # 9a — Install Build Dependencies
 echo "  [9a] Installing build dependencies..."
@@ -468,7 +513,7 @@ fi
 # ──────────────────────────────────────────────
 # Step 10 — Configure Apache Reverse Proxy
 # ──────────────────────────────────────────────
-echo "[10/12] Configuring Apache reverse proxy..."
+echo "[11/14] Configuring Apache reverse proxy..."
 yum install -y mod_ssl 2>/dev/null || true
 
 # Restore Listen 80 in httpd.conf if it was replaced, and ensure Listen 3000 is present
@@ -526,7 +571,7 @@ echo "  Apache restarted"
 # ──────────────────────────────────────────────
 # Step 11 — Create systemd Service
 # ──────────────────────────────────────────────
-echo "[11/12] Creating systemd service..."
+echo "[12/14] Creating systemd service..."
 cat > /etc/systemd/system/sokrat-voip.service << 'UNIT'
 [Unit]
 Description=Issabel Dashboard
@@ -555,7 +600,7 @@ echo "  Service enabled and started"
 # Step 12 — Set timezone to Africa/Cairo
 # ──────────────────────────────────────────────
 echo ""
-echo "[12/13] Setting timezone to Africa/Cairo..."
+echo "[13/14] Setting timezone to Africa/Cairo..."
 timedatectl set-timezone Africa/Cairo 2>/dev/null && echo "  Timezone set to Africa/Cairo" || echo "  Warning: Could not set timezone (timedatectl may not be available)"
 echo "  Current timezone: $(timedatectl 2>/dev/null | grep 'Time zone' || echo 'N/A')"
 
@@ -563,7 +608,7 @@ echo "  Current timezone: $(timedatectl 2>/dev/null | grep 'Time zone' || echo '
 # Step 13 — Verify
 # ──────────────────────────────────────────────
 echo ""
-echo "[13/13] Verifying installation..."
+echo "[14/14] Verifying installation..."
 sleep 2
 systemctl status sokrat-voip --no-pager -l | head -12
 echo ""
