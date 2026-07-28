@@ -313,7 +313,7 @@ same => n,Set(FOUND_NAME=${SHELL(sqlite3 /var/www/db/address_book.db "SELECT nam
 same => n,GotoIf($["${FOUND_NAME}" = ""]?skip_cid)
 same => n,NoOp(Found Contact Name: ${FOUND_NAME})
 same => n,Set(CALLERID(name)=${FOUND_NAME})
-same => n(skip_cid),Goto(from-trunk,${MY_SIM_NUMBER},1)
+same => n(skip_cid),GotoIf($["${MY_SIM_NUMBER}" != ""]?from-trunk,${MY_SIM_NUMBER},1:from-trunk,s,1)
 
 DONGLE
 
