@@ -816,6 +816,8 @@ function fmtDur(s) {
                 altFormat: "m/d/Y h:i K",
                 time_24hr: false,
                 allowInput: true,
+                scrollInputIntoView: false,
+                appendTo: document.body,
                 monthSelectorType: "dropdown"
             });
         });
@@ -834,20 +836,7 @@ function fmtDur(s) {
                     sel.style.setProperty('opacity', '1', 'important');
                 });
             }
-            document.addEventListener('click', function(e) {
-                var el = e.target.closest('.flatpickr-current-month');
-                if (!el) return;
-                var sel = el.querySelector('.flatpickr-monthDropdown-months');
-                if (!sel) return;
-                if (e.target === sel) return;
-                e.preventDefault();
-                e.stopPropagation();
-                if (typeof sel.showPicker === 'function') {
-                    sel.showPicker();
-                } else {
-                    try { sel.click(); } catch(_) {}
-                }
-            }, true);
+            // Force month select element display
             forceMonthSelect();
             var pollTimer = setInterval(function() { forceMonthSelect(); }, 100);
             setTimeout(function() { clearInterval(pollTimer); }, 3000);

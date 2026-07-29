@@ -646,9 +646,13 @@ const isRtl = currentLang === 'ar';
             // Initialize Flatpickr on datetime inputs
             flatpickr('input[type="datetime-local"]', {
                 enableTime: true,
-                dateFormat: "Y-m-d\\TH:i",
+                dateFormat: "Y-m-d H:i:S",
                 altInput: true,
                 altFormat: "m/d/Y h:i K",
+                time_24hr: false,
+                allowInput: true,
+                scrollInputIntoView: false,
+                appendTo: document.body,
                 monthSelectorType: "dropdown"
             });
         });
@@ -843,19 +847,6 @@ const isRtl = currentLang === 'ar';
     </script>
     <% } %>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            flatpickr("input[name='startDate'], input[name='endDate']", {
-                enableTime: true,
-                dateFormat: "Y-m-d H:i:S",
-                altInput: true,
-                altFormat: "m/d/Y h:i K",
-                time_24hr: false,
-                allowInput: true,
-                monthSelectorType: "dropdown"
-            });
-        });
-    </script>
-    <script>
         // Fix Flatpickr month dropdown: force <select> visible, handle click for showPicker()
         (function() {
             function forceMonthSelect() {
@@ -870,21 +861,7 @@ const isRtl = currentLang === 'ar';
                     sel.style.setProperty('opacity', '1', 'important');
                 });
             }
-            // Add click handlers separately (non-polled, one-time)
-            document.addEventListener('click', function(e) {
-                var el = e.target.closest('.flatpickr-current-month');
-                if (!el) return;
-                var sel = el.querySelector('.flatpickr-monthDropdown-months');
-                if (!sel) return;
-                if (e.target === sel) return; // let native click work
-                e.preventDefault();
-                e.stopPropagation();
-                if (typeof sel.showPicker === 'function') {
-                    sel.showPicker();
-                } else {
-                    try { sel.click(); } catch(_) {}
-                }
-            }, true);
+            // Force month select element display
             // Initial run + poll aggressively for 3 seconds
             forceMonthSelect();
             var pollTimer = setInterval(function() {

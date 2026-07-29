@@ -299,6 +299,28 @@ async function initAuthDb() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS storage_settings (
+            id INT PRIMARY KEY DEFAULT 1,
+            auto_purge_days INT DEFAULT 90,
+            gdrive_enabled TINYINT(1) DEFAULT 0,
+            gdrive_folder_name VARCHAR(255) DEFAULT 'Sokrat-VoIP-Backups',
+            gdrive_credentials TEXT DEFAULT NULL,
+            auto_backup_schedule VARCHAR(50) DEFAULT 'daily',
+            last_backup_at DATETIME DEFAULT NULL,
+            last_backup_status VARCHAR(50) DEFAULT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    // Migrate columns for existing partial tables
+    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN auto_purge_days INT DEFAULT 90'); } catch (_) {}
+    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN gdrive_enabled TINYINT(1) DEFAULT 0'); } catch (_) {}
+    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN gdrive_folder_name VARCHAR(255) DEFAULT \'Sokrat-VoIP-Backups\''); } catch (_) {}
+    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN gdrive_credentials TEXT DEFAULT NULL'); } catch (_) {}
+    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN auto_backup_schedule VARCHAR(50) DEFAULT \'daily\''); } catch (_) {}
+    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN last_backup_at DATETIME DEFAULT NULL'); } catch (_) {}
+    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN last_backup_status VARCHAR(50) DEFAULT NULL'); } catch (_) {}
+    // Seed default row if missing
+    await conn.execute('INSERT IGNORE INTO storage_settings (id) VALUES (1)');
 
     // Default dispositions
     const defaultDispositions = [
