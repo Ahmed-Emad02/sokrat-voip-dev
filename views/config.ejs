@@ -915,8 +915,8 @@ function isTabAllowed(tabName) {
                             <div>
                                 <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'نوع جهاز التحويلة *' : 'Extension Tech / Device Type *' %></label>
                                 <select id="extTech" class="config-input w-full text-xs font-semibold">
-                                    <option value="webrtc" selected><%= isRtl ? 'هاتف المتصفح البرمجي (WebRTC Softphone - WSS / Port 5066)' : 'WebRTC Softphone (Browser WSS / Port 5066)' %></option>
-                                    <option value="sip"><%= isRtl ? 'هاتف شبكة اعتيادي (Generic SIP Device - UDP / Port 5060)' : 'Generic SIP Device (Hardware / Port 5060)' %></option>
+                                    <option value="sip" selected><%= isRtl ? 'هاتف شبكة اعتيادي (Generic SIP Device - UDP / Port 5060)' : 'Generic SIP Device (Hardware / Port 5060)' %></option>
+                                    <option value="webrtc"><%= isRtl ? 'هاتف المتصفح البرمجي (WebRTC Softphone - WSS / Port 5066)' : 'WebRTC Softphone (Browser WSS / Port 5066)' %></option>
                                 </select>
                             </div>
                             <div>
@@ -1460,7 +1460,7 @@ function isTabAllowed(tabName) {
                             <input type="text" id="trunkDialString" placeholder="e.g. dongle/dongle0/$OUTNUM$" class="config-input w-full font-mono text-xs" autocomplete="off">
                             
                             <!-- DONGLE FLOATING POPUP -->
-                            <div id="dongleInfoPopup" class="absolute left-0 top-[calc(100%+4px)] w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-4 z-[60] hidden space-y-2">
+                            <div id="dongleInfoPopup" class="fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-4 z-[999999] hidden space-y-2">
                                 <div class="text-[11px] font-bold text-[var(--text-secondary)] uppercase flex items-center justify-between">
                                     <span><%= isRtl ? 'أجهزة Dongle المتصلة:' : 'Connected Dongles:' %></span>
                                     <button type="button" onclick="loadDongleInfoPopup()" class="text-[10px] text-blue-400 hover:underline">Refresh</button>
@@ -2390,7 +2390,9 @@ function isTabAllowed(tabName) {
             document.getElementById('extNum').disabled = false;
             document.getElementById('extensionForm').reset();
             document.getElementById('extVoicemail').value = 'disabled';
-            document.getElementById('extTech').value = 'webrtc';
+            document.getElementById('extTech').value = 'sip';
+            document.getElementById('extVoicemail').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extTech').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
             openModal('extensionModal');
             try {
@@ -2409,6 +2411,8 @@ function isTabAllowed(tabName) {
             document.getElementById('extSecret').value = secret || '';
             document.getElementById('extVoicemail').value = (voicemail === 'default' || voicemail === 'enabled') ? 'enabled' : 'disabled';
             document.getElementById('extTech').value = (tech === 'pjsip' || tech === 'webrtc') ? 'webrtc' : 'sip';
+            document.getElementById('extVoicemail').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extTech').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
             openModal('extensionModal');
 
@@ -4526,9 +4530,11 @@ function isTabAllowed(tabName) {
                         `;
                         listContainer.appendChild(div);
                     });
+                    if (typeof window.positionDonglePopup === 'function') window.positionDonglePopup();
                 })
                 .catch(err => {
                     listContainer.innerHTML = `<span class="text-[11px] text-red-400">Error: ${err.message}</span>`;
+                    if (typeof window.positionDonglePopup === 'function') window.positionDonglePopup();
                 });
         }
 
@@ -4552,19 +4558,66 @@ function isTabAllowed(tabName) {
             if (document.getElementById('tab-btn-voicemail')) fetchVoicemailExtensions();
             if (document.getElementById('tab-btn-ivr')) fetchIvrs();
 
-            // Dongle popup handlers
+            // Dongle popup handlers (Portaled Fixed Positioning so it renders OVER popup menus)
             const dialInput = document.getElementById('trunkDialString');
             const popup = document.getElementById('dongleInfoPopup');
             if (dialInput && popup) {
+                if (popup.parentNode !== document.body) {
+                    document.body.appendChild(popup);
+                }
+                
+                window.positionDonglePopup = function() {
+                    if (popup.classList.contains('hidden')) return;
+                    const rect = dialInput.getBoundingClientRect();
+                    const width = Math.max(rect.width, 320);
+                    let left = rect.left;
+                    if (left + width > window.innerWidth - 8) {
+                        left = window.innerWidth - width - 8;
+                    }
+                    if (left < 8) left = 8;
+                    
+                    popup.style.position = 'fixed';
+                    popup.style.left = left + 'px';
+                    popup.style.width = width + 'px';
+                    popup.style.zIndex = '999999';
+                    
+                    const maxAvailHeight = Math.min(window.innerHeight - 30, 280);
+                    popup.style.maxHeight = maxAvailHeight + 'px';
+                    
+                    const spaceBelow = window.innerHeight - rect.bottom;
+                    const spaceAbove = rect.top;
+                    const popupEstHeight = Math.min(popup.offsetHeight || 220, maxAvailHeight);
+                    
+                    if (spaceBelow < popupEstHeight && spaceAbove > spaceBelow) {
+                        popup.style.top = 'auto';
+                        popup.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+                    } else {
+                        popup.style.top = (rect.bottom + 6) + 'px';
+                        popup.style.bottom = 'auto';
+                    }
+                };
+
                 dialInput.addEventListener('focus', () => {
                     popup.classList.remove('hidden');
+                    window.positionDonglePopup();
                     loadDongleInfoPopup();
+                });
+                dialInput.addEventListener('click', () => {
+                    popup.classList.remove('hidden');
+                    window.positionDonglePopup();
                 });
                 
                 document.addEventListener('click', (e) => {
                     if (!dialInput.contains(e.target) && !popup.contains(e.target)) {
                         popup.classList.add('hidden');
                     }
+                });
+
+                window.addEventListener('scroll', () => {
+                    if (!popup.classList.contains('hidden')) window.positionDonglePopup();
+                }, true);
+                window.addEventListener('resize', () => {
+                    if (!popup.classList.contains('hidden')) window.positionDonglePopup();
                 });
             }
         });
