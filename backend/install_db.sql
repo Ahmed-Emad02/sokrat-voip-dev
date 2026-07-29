@@ -150,3 +150,14 @@ CREATE TABLE IF NOT EXISTS `dialer_dnc` (
   `reason` VARCHAR(255) DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `storage_settings` (
+  `id` INT PRIMARY KEY DEFAULT 1,
+  `auto_purge_days` INT DEFAULT 90,
+  `gdrive_enabled` TINYINT(1) DEFAULT 0,
+  `gdrive_folder_name` VARCHAR(255) DEFAULT 'Sokrat-VoIP-Backups',
+  `gdrive_credentials` TEXT DEFAULT NULL,
+  `auto_backup_schedule` VARCHAR(50) DEFAULT 'daily',
+  `last_backup_at` DATETIME DEFAULT NULL,
+  `last_backup_status` VARCHAR(50) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
