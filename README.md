@@ -7,7 +7,7 @@ Real-time PBX analytics dashboard for **Issabel 5 / Asterisk 18** with CDR logs,
 Run as root on a fresh Issabel 5 server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/issabel-analytics/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/install.sh | bash
 ```
 
 ## Features
@@ -49,8 +49,8 @@ node -v
 ```bash
 yum install -y git net-tools
 cd /opt
-git clone https://github.com/Ahmed-Emad02/issabel-analytics.git issabel-dashboard
-cd /opt/issabel-dashboard
+git clone https://github.com/Ahmed-Emad02/sokrat-voip-dev.git /opt/sokrat-voip
+cd /opt/sokrat-voip
 ```
 
 ### Step 4 — Install Dependencies
