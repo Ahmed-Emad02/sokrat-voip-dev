@@ -948,6 +948,9 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                     renderActiveCalls();
                     playRingtone();
                     showIncomingNotification(callerLabel);
+                    if (typeof showFullScreenCallModal === 'function') {
+                        showFullScreenCallModal(callerLabel);
+                    }
                     try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'incoming', caller: callerLabel }); } catch(e) {}
                 });
 
@@ -968,6 +971,7 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 updateStatus('Error', 'offline');
             }
         }
+
 
         // --- CALL CONTROL & KEYPAD ---
         function pressKey(key) {
@@ -1219,13 +1223,25 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 const pc = e.peerconnection;
                 pc.ontrack = (event) => {
                     const remoteAudio = document.getElementById('remoteAudio');
-                    if (remoteAudio && event.streams && event.streams[0]) {
+                    if (remoteAudio) {
                         remoteAudio.srcObject = event.streams[0];
-                        remoteAudio.play();
                     }
                 };
             });
 
+            session.on('accepted', () => {
+                const entry = activeSessions[callId];
+                entry.status = 'incall';
+                entry.answerTime = Date.now();
+                stopRingtone();
+                startCallTimer(callId);
+                updateStatus('In Call with ' + entry.target, 'incall');
+                renderActiveCalls();
+                if (typeof hideFullScreenCallModal === 'function') {
+                    hideFullScreenCallModal();
+                }
+                try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callStarted', remote: entry.target }); } catch(e){}
+            });
             session.on('ended', () => {
                 const entry = activeSessions[callId];
                 if (!entry) return;
@@ -1237,6 +1253,9 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 updateStatus('Online', 'online');
                 if (entry.direction === 'incoming') {
                     addCallLog({ number: entry.target, direction: 'incoming', status: 'answered', timestamp: new Date(entry.startTime).toISOString(), durationSec: durSec });
+                }
+                if (typeof hideFullScreenCallModal === 'function') {
+                    hideFullScreenCallModal();
                 }
                 try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callEnded' }); } catch(e){}
             });
@@ -1250,6 +1269,9 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                 stopRingtone();
                 removeSession(callId);
                 updateStatus('Online', 'online');
+                if (typeof hideFullScreenCallModal === 'function') {
+                    hideFullScreenCallModal();
+                }
                 try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callEnded' }); } catch(e){}
             });
         }
@@ -1266,35 +1288,65 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
             }
         }
 
-        function answerCall(callId) {
+        window.answerCall = async function answerCall(callId) {
             if (!callId) {
                 var incoming = Object.values(activeSessions).find(function(s) { return s.status === 'ringing' && s.direction === 'incoming'; });
                 if (incoming) callId = incoming.id;
             }
             const entry = activeSessions[callId];
             if (!entry || !entry.jsSipSession) return;
-            entry.jsSipSession.answer({
-                mediaConstraints: { audio: true, video: false },
-                mediaStream: localMicStream || undefined
-            });
+
+            if (!localMicStream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                try {
+                    localMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    micPermissionGranted = true;
+                    updateMicBannerGranted();
+                } catch (e) {
+                    console.warn('Could not acquire mic stream on answer:', e);
+                }
+            }
+
+            const answerOpts = {
+                mediaConstraints: { audio: true, video: false }
+            };
+            if (localMicStream) {
+                answerOpts.mediaStream = localMicStream;
+            }
+
+            try {
+                entry.jsSipSession.answer(answerOpts);
+            } catch (e) {
+                console.error('Answer call error:', e);
+            }
+
             entry.status = 'incall';
             entry.answerTime = Date.now();
             startCallTimer(callId);
             stopRingtone();
             updateStatus('In Call', 'incall');
             renderActiveCalls();
+            if (typeof hideFullScreenCallModal === 'function') {
+                hideFullScreenCallModal();
+            }
             try { if (!window._spwBc) window._spwBc = new BroadcastChannel('sokrat-softphone'); window._spwBc.postMessage({ type: 'callStarted', remote: entry.target }); } catch(e){}
-        }
+        };
 
-        function hangupCall(callId) {
+        window.hangupCall = function hangupCall(callId) {
             if (!callId) {
                 var first = Object.values(activeSessions)[0];
                 if (first) callId = first.id;
             }
             const entry = activeSessions[callId];
+            if (typeof hideFullScreenCallModal === 'function') {
+                hideFullScreenCallModal();
+            }
             if (!entry || !entry.jsSipSession) return;
-            entry.jsSipSession.terminate();
-        }
+            try {
+                entry.jsSipSession.terminate();
+            } catch (e) {
+                console.error('Hangup call error:', e);
+            }
+        };
 
         function toggleMute(callId) {
             if (!callId) {

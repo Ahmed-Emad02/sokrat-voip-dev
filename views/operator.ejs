@@ -818,6 +818,11 @@ const isRtl = currentLang === 'ar';
                     alert('<%= isRtl ? "رقم تحويلة غير صالح" : "Invalid extension number" %>');
                     return;
                 }
+
+                const prefix = action === 'whisper' ? '223' : (action === 'barge' ? '224' : '222');
+                const spyFeatureCode = prefix + extension;
+
+                // SIP only: Server originate to desk phone
                 fetch('/api/spy', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

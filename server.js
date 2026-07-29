@@ -2337,21 +2337,29 @@ app.get('/api/voicemails', (req, res) => {
 
 app.get('/vm-audio/:mailbox/:file', (req, res) => {
     const filePath = path.join(VM_ROOT, req.params.mailbox, 'INBOX', req.params.file);
-    if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
+    if (!fs.existsSync(filePath)) return res.status(404).send('Voicemail audio missing.');
     const stat = fs.statSync(filePath);
     const ext = path.extname(filePath).toLowerCase();
     const mimeTypes = { '.wav': 'audio/wav', '.WAV': 'audio/wav', '.gsm': 'audio/x-gsm', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
     const contentType = mimeTypes[ext] || 'audio/wav';
     const isDownload = req.query.download === '1';
+    if (isDownload) {
+        res.setHeader('Content-Type', contentType);
+        return res.download(filePath, req.params.file, (err) => {
+            if (err && !res.headersSent) {
+                res.status(500).send("Voicemail Download Error: " + err.message);
+            }
+        });
+    }
     const range = req.headers.range;
-    if (range && !isDownload) {
+    if (range) {
         const parts = range.replace(/bytes=/, '').split('-');
         const start = parseInt(parts[0], 10);
         const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
         res.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${stat.size}`, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': contentType });
         fs.createReadStream(filePath, { start, end }).pipe(res);
     } else {
-        res.writeHead(200, { 'Content-Length': stat.size, 'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Content-Disposition': `${isDownload ? 'attachment' : 'inline'}; filename="${req.params.file}"` });
+        res.writeHead(200, { 'Content-Length': stat.size, 'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Content-Disposition': `inline; filename="${req.params.file}"` });
         fs.createReadStream(filePath).pipe(res);
     }
 });
@@ -2591,10 +2599,10 @@ app.post('/api/hangup/:extension', (req, res) => {
 // POST /api/spy - Originate call spy session (Listen, Whisper, Barge) to supervisor extension
 async function resolveDeviceChannel(ext) {
     try {
-        const [rows] = await pool.query('SELECT dial FROM `asterisk`.`devices` WHERE id = ?', [ext]);
+        const [rows] = await pool.query('SELECT dial, tech FROM `asterisk`.`devices` WHERE id = ?', [ext]);
         if (rows.length && rows[0].dial) return rows[0].dial;
-    } catch (e) { /* fall back to SIP/ */ }
-    return `SIP/${ext}`;
+    } catch (e) { /* fall back to PJSIP/ */ }
+    return `PJSIP/${ext}`;
 }
 
 app.post('/api/spy', async (req, res) => {
@@ -2616,7 +2624,7 @@ app.post('/api/spy', async (req, res) => {
         const supervisorChan = await resolveDeviceChannel(supervisor);
 
         if (amiClient) {
-            amiClient.write(`Action: Originate\r\nChannel: ${supervisorChan}\r\nContext: from-internal\r\nExten: ${spyExten}\r\nPriority: 1\r\nCallerID: "Call Spy" <${spyExten}>\r\n\r\n`);
+            amiClient.write(`Action: Originate\r\nChannel: ${supervisorChan}\r\nContext: from-internal\r\nExten: ${spyExten}\r\nPriority: 1\r\nCallerID: "Call Spy" <${spyExten}>\r\nVariable: __SIPADDHEADER=X-Call-Purpose: Monitoring\r\nAsync: true\r\n\r\n`);
             return res.json({ success: true, message: `Calling supervisor extension ${supervisor} for ${spyMode} mode on ${target}.` });
         } else {
             exec(`${ASTERISK_BIN} -rx "channel originate ${supervisorChan} extension ${spyExten}@from-internal"`, (err) => {
@@ -3575,29 +3583,61 @@ app.post('/api/gsm-dongles/ussd', (req, res) => {
 app.get('/audio/:uniqueid', async (req, res) => {
     try {
         const { uniqueid } = req.params;
-        const [rows] = await pool.query(`SELECT calldate, recordingfile FROM ${tables.cdr} WHERE uniqueid = ? LIMIT 1`, [uniqueid]);
+        const [rows] = await pool.query(
+            `SELECT calldate, recordingfile FROM ${tables.cdr} WHERE uniqueid = ? AND recordingfile IS NOT NULL AND recordingfile != '' ORDER BY billsec DESC, calldate ASC LIMIT 1`,
+            [uniqueid]
+        );
         if (!rows.length || !rows[0].recordingfile) return res.status(404).send("Audio not found.");
 
         const callDate = moment(rows[0].calldate);
-        const filename = rows[0].recordingfile;
-        const pathsToSearch = [
-            path.join(RECORDING_ROOT, callDate.format('YYYY'), callDate.format('MM'), callDate.format('DD'), filename),
-            path.join(RECORDING_ROOT, filename)
+        const rawFilename = rows[0].recordingfile;
+        const baseName = path.basename(rawFilename);
+
+        const possibleDirs = [
+            path.join(RECORDING_ROOT, callDate.format('YYYY'), callDate.format('MM'), callDate.format('DD')),
+            path.join(RECORDING_ROOT, callDate.format('YYYY/MM/DD')),
+            RECORDING_ROOT
         ];
 
+        const ext = path.extname(baseName);
+        const nameWithoutExt = ext ? baseName.slice(0, -ext.length) : baseName;
+        const possibleExts = ext ? [ext, ext.toUpperCase(), ext.toLowerCase()] : ['.wav', '.WAV', '.gsm', '.mp3', '.ogg', '.sln'];
+
         let targetPath = null;
-        for (const p of pathsToSearch) { if (fs.existsSync(p)) { targetPath = p; break; } }
-        if (!targetPath) return res.status(404).send("Audio file missing.");
+        for (const dir of possibleDirs) {
+            for (const e of possibleExts) {
+                const candidate = path.join(dir, nameWithoutExt + e);
+                if (fs.existsSync(candidate)) {
+                    targetPath = candidate;
+                    break;
+                }
+            }
+            if (targetPath) break;
+        }
+
+        if (!targetPath && fs.existsSync(rawFilename)) {
+            targetPath = rawFilename;
+        }
+
+        if (!targetPath) return res.status(404).send("Audio file missing on server.");
 
         const stat = fs.statSync(targetPath);
         const fileSize = stat.size;
-        const ext = path.extname(filename).toLowerCase();
-        const mimeTypes = { '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wma': 'audio/x-ms-wma', '.sln': 'audio/wav', '.wav49': 'audio/wav' };
-        const contentType = mimeTypes[ext] || 'audio/wav';
+        const fileExt = path.extname(targetPath).toLowerCase();
+        const mimeTypes = { '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wma': 'audio/x-ms-wma', '.sln': 'audio/wav', '.wav49': 'audio/wav', '.gsm': 'audio/x-gsm' };
+        const contentType = mimeTypes[fileExt] || 'audio/wav';
 
         const isDownload = req.query.download === '1';
+        if (isDownload) {
+            res.setHeader('Content-Type', contentType);
+            return res.download(targetPath, baseName, (err) => {
+                if (err && !res.headersSent) {
+                    res.status(500).send("Audio Download Error: " + err.message);
+                }
+            });
+        }
         const range = req.headers.range;
-        if (range && !isDownload) {
+        if (range) {
             const parts = range.replace(/bytes=/, '').split('-');
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
@@ -3610,12 +3650,11 @@ app.get('/audio/:uniqueid', async (req, res) => {
             });
             fs.createReadStream(targetPath, { start, end }).pipe(res);
         } else {
-            const disposition = isDownload ? 'attachment' : 'inline';
             res.writeHead(200, {
                 'Content-Length': fileSize,
                 'Content-Type': contentType,
                 'Accept-Ranges': 'bytes',
-                'Content-Disposition': `${disposition}; filename="${filename}"`
+                'Content-Disposition': `inline; filename="${baseName}"`
             });
             fs.createReadStream(targetPath).pipe(res);
         }
@@ -4898,14 +4937,22 @@ app.get('/api/config/recordings/audio/:id', async (req, res) => {
         const soundPath = path.join('/var/lib/asterisk/sounds', relFile + '.wav');
         if (!fs.existsSync(soundPath)) return res.status(404).send("Recording file missing on disk.");
 
+        const displayFilename = (rows[0].displayname || path.basename(relFile)) + '.wav';
+        const isDownload = req.query.download === '1';
+
+        if (isDownload) {
+            return res.download(soundPath, displayFilename, (err) => {
+                if (err && !res.headersSent) {
+                    res.status(500).send("Recording Download Error: " + err.message);
+                }
+            });
+        }
+
         const stat = fs.statSync(soundPath);
         const fileSize = stat.size;
         const contentType = 'audio/wav';
-        const isDownload = req.query.download === '1';
-        const displayFilename = (rows[0].displayname || path.basename(relFile)) + '.wav';
-
         const range = req.headers.range;
-        if (range && !isDownload) {
+        if (range) {
             const parts = range.replace(/bytes=/, '').split('-');
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
@@ -4918,12 +4965,11 @@ app.get('/api/config/recordings/audio/:id', async (req, res) => {
             });
             fs.createReadStream(soundPath, { start, end }).pipe(res);
         } else {
-            const disposition = isDownload ? 'attachment' : 'inline';
             res.writeHead(200, {
                 'Content-Length': fileSize,
                 'Content-Type': contentType,
                 'Accept-Ranges': 'bytes',
-                'Content-Disposition': `${disposition}; filename="${encodeURIComponent(displayFilename)}"`
+                'Content-Disposition': `inline; filename="${displayFilename}"`
             });
             fs.createReadStream(soundPath).pipe(res);
         }
