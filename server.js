@@ -10,6 +10,12 @@ const { Server } = require('socket.io');
 const { exec, execFile } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
+const execFileAsync = (file, args, options) => new Promise((resolve, reject) => {
+    execFile(file, args, options, (err, stdout) => {
+        if (err) return reject(err);
+        resolve(stdout || '');
+    });
+});
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
@@ -1460,32 +1466,36 @@ app.post('/users/add', async (req, res) => {
     try {
         const { username, password, email, group_id } = req.body;
         if (!username || !password || password.length < 3) {
-            return res.redirect('/users?error=Username and password (min 3 chars) required');
+            return res.redirect('/users?error=' + encodeURIComponent('Username and password (min 3 chars) required'));
         }
         if (username === ROOT_USER) {
-            return res.redirect('/users?error=Username cannot be reserved');
-        }
-        if (!email || !email.includes('@')) {
-            return res.redirect('/users?error=A valid email is required (for password reset)');
+            return res.redirect('/users?error=' + encodeURIComponent('Username cannot be reserved'));
         }
         if (!group_id) {
-            return res.redirect('/users?error=A group must be selected');
+            return res.redirect('/users?error=' + encodeURIComponent('A group must be selected'));
         }
-        const hash = await bcrypt.hash(password, 10);
+        const cleanEmail = (email && email.trim()) ? email.trim() : null;
         const conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'admin',
             password: process.env.DB_PASS || 'admin',
             database: ASTERISK_DB
         });
-        const [existingEmail] = await conn.execute('SELECT id FROM dashboard_users WHERE email = ?', [email]);
-        if (existingEmail.length > 0) {
-            await conn.end();
-            return res.redirect('/users?error=' + encodeURIComponent('Email is already in use by another user'));
+        if (cleanEmail) {
+            if (!cleanEmail.includes('@')) {
+                await conn.end();
+                return res.redirect('/users?error=' + encodeURIComponent('If provided, email must be valid'));
+            }
+            const [existingEmail] = await conn.execute('SELECT id FROM dashboard_users WHERE email = ? AND email IS NOT NULL AND email != ""', [cleanEmail]);
+            if (existingEmail.length > 0) {
+                await conn.end();
+                return res.redirect('/users?error=' + encodeURIComponent('Email is already in use by another user'));
+            }
         }
-        await conn.execute('INSERT INTO dashboard_users (username, email, password_hash, group_id) VALUES (?, ?, ?, ?)', [username, email, hash, group_id]);
+        const hash = await bcrypt.hash(password, 10);
+        await conn.execute('INSERT INTO dashboard_users (username, email, password_hash, group_id) VALUES (?, ?, ?, ?)', [username, cleanEmail, hash, group_id]);
         await conn.end();
-        res.redirect('/users?success=User added');
+        res.redirect('/users?success=' + encodeURIComponent('User added successfully'));
     } catch (err) {
         res.redirect('/users?error=' + encodeURIComponent(err.message));
     }
@@ -3098,6 +3108,7 @@ function sendAtAndWait(dongleId, atCmd, timeoutMs, callback) {
 
 // Endpoint to manually set/save a SIM's phone number mapping
 // Endpoint to manually set/save a SIM's phone number mapping
+// Endpoint to manually set/save a SIM's phone number mapping and program SIM card via AT commands
 app.post('/api/gsm-dongles/save-number', async (req, res) => {
     try {
         const { imsi, number, dongleId } = req.body;
@@ -3146,7 +3157,48 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
         if (foundImsi) execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${foundImsi} ${normNumber}`]);
 
         io.emit('dongleNumberUpdated', { dongleId: dId, imsi: foundImsi, number: normNumber });
-        return res.json({ success: true, message: 'SIM number saved to database and AstDB.' });
+
+        // 3. Preserve verbatim entered phone number for AT+CPBW command
+        const formattedNum = normNumber;
+        const targetDongle = dId || 'dongle0';
+        const numType = 145;
+
+        const cmdSteps = [
+            `dongle cmd ${targetDongle} AT+CPBS=\\"ON\\"`,
+            `dongle cmd ${targetDongle} AT+CPBW=1,\\"${formattedNum}\\",${numType}`,
+            `module unload chan_dongle.so`,
+            `module load chan_dongle.so`,
+            `dongle show devices`
+        ];
+
+        const results = [];
+        let allSuccess = true;
+
+        for (let i = 0; i < cmdSteps.length; i++) {
+            const stepCmd = cmdSteps[i];
+            try {
+                const out = await execFileAsync(ASTERISK_BIN, ['-rx', stepCmd]);
+                results.push({ step: stepCmd, success: true, output: (out || '').trim() });
+            } catch (err) {
+                allSuccess = false;
+                results.push({ step: stepCmd, success: false, error: err ? err.message : 'Command failed' });
+            }
+            if (i < cmdSteps.length - 1) {
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+        try {
+            await detectDonglesAndSetTrunkCID();
+        } catch (_) {}
+        io.emit('usbDevicesUpdated');
+
+        return res.json({
+            success: true,
+            dbSaved: true,
+            atSuccess: allSuccess,
+            results: results,
+            message: allSuccess ? 'SIM number saved to SIM card & Asterisk successfully.' : 'SIM number saved to Dashboard & AstDB (AT command warnings).'
+        });
     } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
     }
@@ -5320,23 +5372,11 @@ function sanitizeAmiValue(raw) {
     return String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
 }
 
-// Strict helper to normalize & validate phone numbers (removes non-digits/symbols, enforces 3-15 digits)
+// Helper to clean DID number string while preserving international + prefix and verbatim digits
 function normalizeDidNumber(raw) {
     if (!raw) return '';
     let ext = String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
     ext = ext.replace(/(?!^\+)[^\d]/g, '');
-    if (ext.startsWith('+20')) {
-        ext = '0' + ext.slice(3);
-    } else if (ext.startsWith('0020')) {
-        ext = '0' + ext.slice(4);
-    } else if (ext.startsWith('20') && ext.length === 12) {
-        ext = '0' + ext.slice(2);
-    } else if (ext.length === 10 && ext.startsWith('1')) {
-        ext = '0' + ext;
-    }
-    if (!/^\+?\d{3,15}$/.test(ext)) {
-        return '';
-    }
     return ext;
 }
 

@@ -780,7 +780,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
     </div>
 
     <!-- Toast Notification Container -->
-    <div id="toast-container" class="fixed bottom-5 right-5 z-[200] flex flex-col gap-2.5 max-w-sm pointer-events-none"></div>
+    <div id="toast-container" class="fixed bottom-5 z-[999999] flex flex-col gap-2.5 max-w-sm pointer-events-none <%= isRtl ? 'left-5' : 'right-5' %>"></div>
 
     <!-- SMS Detail Modal -->
     <div id="sms-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200">
@@ -1187,8 +1187,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             function showToast(title, message, type) {
                 if (!toastContainer) return;
                 const toast = document.createElement('div');
-                const borderColor = type === 'error' ? 'border-red-900' : type === 'success' ? 'border-emerald-900' : 'border-[var(--border-primary)]';
-                const titleColor = type === 'error' ? 'text-red-400' : type === 'success' ? 'text-emerald-400' : 'text-[var(--text-primary)]';
+                const borderColor = type === 'error' ? 'border-red-900' : type === 'warning' ? 'border-amber-500/50' : type === 'success' ? 'border-emerald-900' : 'border-[var(--border-primary)]';
+                const titleColor = type === 'error' ? 'text-red-400' : type === 'warning' ? 'text-amber-400' : type === 'success' ? 'text-emerald-400' : 'text-[var(--text-primary)]';
                 toast.className = 'bg-[var(--bg-secondary)]/90 border ' + borderColor + ' shadow-2xl p-4 rounded-xl flex flex-col gap-1.5 transform translate-y-5 opacity-0 transition-all duration-300 pointer-events-auto max-w-xs';
                 toast.innerHTML = '\
                     <div class="flex items-center justify-between text-xs">\
@@ -1544,10 +1544,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const trimmed = newNum.trim().replace(/\s+/g, '');
                 if (!trimmed) return;
 
-                if (!/^\+?\d{11}$/.test(trimmed)) {
-                    showToast(dongleId, isRtl ? 'يجب إدخال رقم مكون من 11 رقمًا بالضبط.' : 'Enter exactly 11 digits.', 'error');
-                    return;
-                }
+                // Removed 11-digit restriction to accept any entered SIM phone number string verbatim
                 
                 const displaySpan = document.getElementById('display-num-' + dongleId);
                 if (displaySpan) displaySpan.innerHTML = '<span class="text-zinc-500 italic">Saving...</span>';
@@ -1566,11 +1563,15 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             const status = r.error ? '❌' : '✅';
                             return status + ' ' + r.step + (r.error ? ': ' + r.error : '');
                         }).join('\n');
-                        showToast(dongleId + ' ' + (data.success ? (isRtl ? 'تم' : 'Done') : (isRtl ? 'فشل' : 'Failed')), details, data.success ? 'success' : 'error');
+                        const isAtSuccess = data.atSuccess !== false && !data.results.some(r => r.error);
+                        const toastTitle = dongleId + ' - ' + (isAtSuccess
+                            ? (isRtl ? 'تم الحفظ في الشريحة واللوحة' : 'Saved to SIM Card & Dashboard')
+                            : (isRtl ? 'تم الحفظ في اللوحة (تحذير أستريسك)' : 'Saved to Dashboard (Asterisk Warning)'));
+                        showToast(toastTitle, details, isAtSuccess ? 'success' : 'warning');
                     } else if (data.success) {
-                        showToast(dongleId, isRtl ? 'تم الحفظ' : 'Number saved', 'success');
+                        showToast(dongleId, isRtl ? 'تم الحفظ في اللوحة' : 'Saved to Dashboard', 'success');
                     } else {
-                        showToast(dongleId, (isRtl ? 'فشل: ' : 'Failed: ') + (data.error || 'Unknown error'), 'error');
+                        showToast(dongleId, (isRtl ? 'فشل الحفظ: ' : 'Failed: ') + (data.error || 'Unknown error'), 'error');
                     }
                     refreshDevicesList();
                 })

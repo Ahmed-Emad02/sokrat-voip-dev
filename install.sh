@@ -345,8 +345,8 @@ echo "  Stripping old [from-dongle-custom]..."
 python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\\[from-dongle-custom\\].*?(?=\\n\\[|\\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
 echo "  Stripped."
 
-# Append from-dongle-custom
-append_context '[from-dongle-custom]' '[from-dongle-custom]' << 'DONGLE'
+# Append updated from-dongle-custom
+cat << 'DONGLE' >> "$DIALPLAN_FILE"
 
 [from-dongle-custom]
 exten => sms,1,NoOp(--- Incoming SMS on ${DONGLENAME} ---)
@@ -358,35 +358,33 @@ same => n,NoOp(USSD Session Type: ${USSD_TYPE})
 same => n,NoOp(USSD Content: ${USSD})
 same => n,Hangup()
 
-exten => _+X.,1,Goto(s,1)
-exten => _X.,1,Goto(s,1)
+exten => _+X.,1,NoOp(Checking if extension ${EXTEN} exists in from-trunk context)
+same => n,ExecIf($[${DIALPLAN_EXISTS(from-trunk,${EXTEN},1)}]?Set(MY_SIM_NUMBER=${EXTEN}))
+same => n,Goto(s,process)
 
-exten => s,1,NoOp(--- Incoming call from Dongle ${DONGLENAME} ---)
-same => n,Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})})
+exten => _X.,1,NoOp(Checking if extension ${EXTEN} exists in from-trunk context)
+same => n,ExecIf($[${DIALPLAN_EXISTS(from-trunk,${EXTEN},1)}]?Set(MY_SIM_NUMBER=${EXTEN}))
+same => n,Goto(s,process)
+
+exten => s,1,Set(MY_SIM_NUMBER=)
+same => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)
+same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMSI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(sim_map/${DONGLEIMSI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(dongle_map/${DONGLENAME})}))
-same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=s))
+same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${EXTEN}))
 same => n,NoOp(This call arrived on SIM number: ${MY_SIM_NUMBER})
 same => n,Set(CALLERID(dnid)=${MY_SIM_NUMBER})
+
 same => n,Set(CALLER_NUMBER=${FILTER(0123456789+,${CALLERID(num)})})
-same => n,GotoIf($["${CALLER_NUMBER:0:3}" = "+20"]?strip_plus20)
-same => n,GotoIf($["${CALLER_NUMBER:0:4}" = "0020"]?strip_0020)
-same => n,GotoIf($["${CALLER_NUMBER:0:2}" = "20"]?strip_20)
-same => n,Goto(query_db)
-same => n(strip_plus20),Set(CALLER_NUMBER=0${CALLER_NUMBER:3})
-same => n,Goto(query_db)
-same => n(strip_0020),Set(CALLER_NUMBER=0${CALLER_NUMBER:4})
-same => n,Goto(query_db)
-same => n(strip_20),Set(CALLER_NUMBER=0${CALLER_NUMBER:2})
-same => n,Goto(query_db)
-same => n(query_db),NoOp(Standardized Caller Number: ${CALLER_NUMBER})
+same => n,NoOp(Caller Number: ${CALLER_NUMBER})
 same => n,Set(FOUND_NAME=${SHELL(sqlite3 /var/www/db/address_book.db "SELECT name || ' ' || last_name FROM contact WHERE (replace(replace(replace(replace(replace(telefono,'-',''),' ',''),'(',''),')',''),'.','') = '${CALLER_NUMBER}' OR '${CALLER_NUMBER}' LIKE '%' || replace(replace(replace(replace(replace(telefono,'-',''),' ',''),'(',''),')',''),'.','') OR replace(replace(replace(replace(replace(telefono,'-',''),' ',''),'(',''),')',''),'.','') LIKE '%${CALLER_NUMBER}') AND length(replace(replace(replace(replace(replace(telefono,'-',''),' ',''),'(',''),')',''),'.','')) >= 5 LIMIT 1" | tr -d '\n')})
 same => n,GotoIf($["${FOUND_NAME}" = ""]?skip_cid)
 same => n,NoOp(Found Contact Name: ${FOUND_NAME})
 same => n,Set(CALLERID(name)=${FOUND_NAME})
-same => n(skip_cid),GotoIf($["${MY_SIM_NUMBER}" != ""]?from-trunk,${MY_SIM_NUMBER},1:from-trunk,s,1)
-
+same => n(skip_cid),GotoIf($["${MY_SIM_NUMBER}" != "" & "${MY_SIM_NUMBER}" != "s" & "${MY_SIM_NUMBER}" != "+1234567890"]?goto_did:goto_catchall)
+same => n(goto_did),Goto(from-trunk,${MY_SIM_NUMBER},1)
+same => n(goto_catchall),Goto(from-trunk,s,1)
 DONGLE
 
 # Strip old [macro-dialout-trunk-predial-hook] before appending
@@ -437,15 +435,15 @@ fi
 
 # 9c — Configure and apply dongle.conf
 echo "  [9c] Configuring and applying dongle.conf..."
-NUM_DONGLES=6
+NUM_DONGLES=1
 if [ -c /dev/tty ]; then
-    printf "Enter the number of GSM dongles to activate on this server (1-25) [default: 6]: " > /dev/tty 2>/dev/null || true
+    printf "Enter the number of GSM dongles to activate on this server (1-25) [default: 1]: " > /dev/tty 2>/dev/null || true
     if read -t 15 -r user_val < /dev/tty 2>/dev/null; then
         user_val=$(echo "$user_val" | tr -d '\r\n ')
         if [[ "$user_val" =~ ^[0-9]+$ ]] && [ "$user_val" -ge 1 ] && [ "$user_val" -le 25 ]; then
             NUM_DONGLES=$user_val
         elif [ -z "$user_val" ]; then
-            NUM_DONGLES=6
+            NUM_DONGLES=1
         fi
     fi
 fi
