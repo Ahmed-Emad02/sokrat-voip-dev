@@ -405,11 +405,56 @@ async function initAuthDb() {
     try {
         const [qCount] = await conn.execute('SELECT COUNT(*) AS cnt FROM `asterisk`.`queues_config`');
         if (qCount[0].cnt === 0) {
-            await conn.execute('INSERT INTO `asterisk`.`queues_config` (extension, descr, grppre, strategy, servicelevel, joinempty, leavewhenempty, ringinuse, timeout, retry, wrapuptime, maxlen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
-                '300', 'autodialer-queue', '', 'ringall', '30', 'yes', 'no', 'yes', '15', '5', '0', '0'
-            ]);
-            await conn.execute('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', [300, 'member', 'SIP/101', 0]);
-            console.log('QUEUE: Auto-provisioned default ACD queue 300 (autodialer-queue) with member Local/101@default');
+            const queueExtension = '300';
+            const queueName = 'autodialer-queue';
+            const failDestination = 'app-blackhole,hangup,1';
+
+            await conn.beginTransaction();
+            try {
+                await conn.execute(`
+                    INSERT INTO \`asterisk\`.\`queues_config\`
+                    (extension, descr, grppre, alertinfo, joinannounce_id, ringing, agentannounce_id, maxwait, password, ivr_id, callback_id, dest, destcontinue, cwignore, qregex, queuewait, use_queue_context, togglehint, qnoanswer, callconfirm, callconfirm_id, monitor_type, monitor_heard, monitor_spoken)
+                    VALUES (?, ?, '', '', 0, 0, 0, '0', '', 'none', 'none', ?, ?, 0, '', 0, 0, 0, 0, 0, 0, '', 0, 0)
+                `, [queueExtension, queueName, failDestination, failDestination]);
+
+                const [deviceRows] = await conn.execute(
+                    'SELECT dial FROM `asterisk`.`devices` WHERE id = ?',
+                    ['101']
+                );
+                const memberInterface = deviceRows[0]?.dial || 'SIP/101';
+                const queueDetails = [
+                    ['strategy', 'ringall'],
+                    ['autofill', 'yes'],
+                    ['ringinuse', 'yes'],
+                    ['musicclass', 'default'],
+                    ['music', 'default'],
+                    ['timeout', '15'],
+                    ['retry', '5'],
+                    ['maxwait', '0'],
+                    ['goto', failDestination],
+                    ['servicelevel', '30'],
+                    ['joinempty', 'yes'],
+                    ['leavewhenempty', 'no'],
+                    ['monitor-join', 'yes'],
+                    ['wrapuptime', '0'],
+                    ['maxlen', '0'],
+                    ['member', memberInterface]
+                ];
+
+                for (const [keyword, data] of queueDetails) {
+                    await conn.execute(
+                        'INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, 0)',
+                        [queueExtension, keyword, data]
+                    );
+                }
+
+                await conn.commit();
+                reloadPbxConfig();
+                console.log(`QUEUE: Auto-provisioned default ACD queue ${queueExtension} (${queueName}) with member ${memberInterface}`);
+            } catch (error) {
+                await conn.rollback();
+                throw error;
+            }
         }
     } catch (qErr) {
         console.error('QUEUE auto-provision error:', qErr.message);
@@ -3957,20 +4002,20 @@ app.get('/dialer', requireAuth, (req, res) => {
 // Helper function to reload PBX config via retrieve_conf & core reload
 function reloadPbxConfig(callback) {
     const cmd = '/var/lib/asterisk/bin/retrieve_conf && asterisk -rx "core reload"';
-    exec(cmd, (error, stdout, stderr) => {
+    exec(cmd, (error) => {
         if (error) {
-            exec('sudo -u asterisk /var/lib/asterisk/bin/retrieve_conf && /usr/sbin/asterisk -rx "core reload"', (err2, out2, errOut2) => {
-                if (err2) {
-                    console.error('PBX Reload error:', err2.message);
-                    return callback ? callback({ success: false, error: err2.message, details: errOut2 }) : null;
+            exec('sudo -u asterisk /var/lib/asterisk/bin/retrieve_conf && /usr/sbin/asterisk -rx "core reload"', (fallbackError) => {
+                if (fallbackError) {
+                    console.error('PBX Reload error:', fallbackError.message);
+                    return callback ? callback({ success: false, error: fallbackError.message }) : null;
                 }
-                console.log('PBX Reload success (fallback):', out2);
-                return callback ? callback({ success: true, output: out2 }) : null;
+                console.log('PBX Reload success (fallback)');
+                return callback ? callback({ success: true }) : null;
             });
             return;
         }
-        console.log('PBX Reload success:', stdout);
-        return callback ? callback({ success: true, output: stdout }) : null;
+        console.log('PBX Reload success');
+        return callback ? callback({ success: true }) : null;
     });
 }
 
