@@ -607,12 +607,11 @@ function isTabAllowed(tabName) {
                                 <th class="py-3 px-4"><%= isRtl ? 'اسم الخط' : 'Trunk Name' %></th>
                                 <th class="py-3 px-4"><%= isRtl ? 'التقنية' : 'Tech' %></th>
                                 <th class="py-3 px-4"><%= isRtl ? 'عنوان الخادم / سلسلة الطلب' : 'Host / Dial String' %></th>
-                                <th class="py-3 px-4"><%= isRtl ? 'هوية المتصل' : 'Outbound CID' %></th>
                                 <th class="py-3 px-4 text-center"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
                             </tr>
                         </thead>
                         <tbody id="trunks-table-body" class="divide-y divide-[var(--border-primary)] text-sm font-medium text-[var(--text-primary)]">
-                            <tr><td colspan="6" class="py-8 text-center text-[var(--text-muted)]">Loading trunks...</td></tr>
+                            <tr><td colspan="5" class="py-8 text-center text-[var(--text-muted)]">Loading trunks...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -3832,7 +3831,7 @@ function isTabAllowed(tabName) {
                     if (!tbody) return;
                     tbody.innerHTML = '';
                     if (data.trunks.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-[var(--text-muted)]">No trunks found.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">No trunks found.</td></tr>';
                         return;
                     }
                     data.trunks.forEach(t => {
@@ -3851,7 +3850,6 @@ function isTabAllowed(tabName) {
                             <td class="py-3 px-4 font-bold text-[var(--text-primary)] font-mono">${escapeHtml(t.name)}</td>
                             <td class="py-3 px-4"><span class="px-2 py-0.5 text-[10px] font-extrabold rounded border ${techBadgeClass}">${techUpper}</span></td>
                             <td class="py-3 px-4 font-mono text-xs text-blue-400 font-semibold">${escapeHtml(targetStr)}</td>
-                            <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">${t.outcid ? escapeHtml(t.outcid) : '-'}</td>
                             <td class="py-3 px-4 text-center">
                                 <div class="flex items-center justify-center gap-2">
                                     <button onclick="editTrunkByIndex(${t.trunkid})" class="px-2.5 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30">Edit</button>
@@ -4039,8 +4037,8 @@ function isTabAllowed(tabName) {
                         const destText = formatDestination(r.destination);
 
                         tr.innerHTML = `
-                            <td class="py-3 px-4 font-mono font-bold text-emerald-400">${escapeHtml(extText)}</td>
                             <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${escapeHtml(r.description || '')}</td>
+                            <td class="py-3 px-4 font-mono font-bold text-emerald-400">${escapeHtml(extText)}</td>
                             <td class="py-3 px-4 font-mono text-xs text-blue-400 font-semibold">${escapeHtml(destText)}</td>
                             <td class="py-3 px-4 text-center">
                                 <div class="flex items-center justify-center gap-2">
