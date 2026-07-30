@@ -718,6 +718,27 @@ function can(tab) { return isSuper || allowed.includes(tab); }
     [dir="rtl"] .app-sidebar {
         box-shadow: -1px 0 0 rgba(255, 255, 255, 0.02), -4px 0 25px rgba(0, 0, 0, 0.15) !important;
     }
+    /* Toast Notification Positioning: Bottom Right (LTR/English) & Bottom Left (RTL/Arabic) */
+    #toastContainer, #toast-container {
+        position: fixed !important;
+        top: auto !important;
+        bottom: 1.25rem !important;
+        z-index: 999999 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+        pointer-events: none !important;
+    }
+    [dir="ltr"] #toastContainer, [dir="ltr"] #toast-container,
+    html:not([dir="rtl"]) #toastContainer, html:not([dir="rtl"]) #toast-container {
+        right: 1.25rem !important;
+        left: auto !important;
+    }
+    [dir="rtl"] #toastContainer, [dir="rtl"] #toast-container,
+    html[dir="rtl"] #toastContainer, html[dir="rtl"] #toast-container {
+        left: 1.25rem !important;
+        right: auto !important;
+    }
     @media (min-width: 768px) {
         html.sidebar-collapsed #appSidebar,
         #appSidebar.sidebar-collapsed {
@@ -1167,12 +1188,11 @@ function can(tab) { return isSuper || allowed.includes(tab); }
             padding-left: 0.75rem !important;
             padding-right: 0.75rem !important;
         }
-        #toastContainer {
-            left: 1rem !important;
-            right: 1rem !important;
+        #toastContainer, #toast-container {
+            top: auto !important;
             bottom: 1rem !important;
             min-width: 0 !important;
-            max-width: none !important;
+            max-width: calc(100vw - 2rem) !important;
         }
         table {
             font-size: 0.8125rem;
@@ -1990,7 +2010,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 </div>
 
 <!-- Toast Notification -->
-<div id="toastContainer" class="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none" style="min-width:280px;max-width:420px"></div>
+<div id="toastContainer" class="fixed bottom-5 z-[999999] flex flex-col gap-2 pointer-events-none <%= isRtl ? 'left-5' : 'right-5' %>" style="min-width:280px;max-width:420px"></div>
 
 <div id="flashData" data-success="<%= typeof success !== 'undefined' ? success : '' %>" data-error="<%= typeof error !== 'undefined' ? error : '' %>" style="display:none"></div>
 
@@ -2016,17 +2036,23 @@ function closeRecordingModal() {
 }
 
 function showToast(msg, type) {
-    var toastContainer = document.getElementById('toastContainer');
+    var toastContainer = document.getElementById('toastContainer') || document.getElementById('toast-container');
     if (!toastContainer) return;
     var el = document.createElement('div');
     el.className = 'pointer-events-auto px-5 py-3 rounded-xl text-sm font-semibold shadow-2xl shadow-black/40';
-    el.style.transform = 'translateX(120%)';
+    var isRtl = document.documentElement.dir === 'rtl';
+    var initialX = isRtl ? 'translateX(-120%)' : 'translateX(120%)';
+    el.style.transform = initialX;
     el.style.opacity = '0';
     el.style.transition = 'all 0.3s';
     if (type === 'error') {
         el.style.backgroundColor = 'rgba(255,59,48,0.15)';
         el.style.border = '1px solid rgba(255,59,48,0.35)';
         el.style.color = '#ff6b6b';
+    } else if (type === 'warning') {
+        el.style.backgroundColor = 'rgba(245,158,11,0.15)';
+        el.style.border = '1px solid rgba(245,158,11,0.35)';
+        el.style.color = '#fbbf24';
     } else {
         el.style.backgroundColor = 'rgba(34,197,94,0.15)';
         el.style.border = '1px solid rgba(34,197,94,0.35)';
@@ -2039,9 +2065,9 @@ function showToast(msg, type) {
         el.style.opacity = '1';
     });
     setTimeout(function() {
-        el.style.transform = 'translateX(120%)';
+        el.style.transform = initialX;
         el.style.opacity = '0';
-        setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
+        setTimeout(function() { if (el && el.parentNode) el.parentNode.removeChild(el); }, 300);
     }, 5000);
 }
 
@@ -2141,6 +2167,10 @@ document.addEventListener('DOMContentLoaded', function() {
             el.style.backgroundColor = 'rgba(255,59,48,0.15)';
             el.style.border = '1px solid rgba(255,59,48,0.35)';
             el.style.color = '#ff6b6b';
+        } else if (type === 'warning') {
+            el.style.backgroundColor = 'rgba(245,158,11,0.15)';
+            el.style.border = '1px solid rgba(245,158,11,0.35)';
+            el.style.color = '#fbbf24';
         } else {
             el.style.backgroundColor = 'rgba(34,197,94,0.15)';
             el.style.border = '1px solid rgba(34,197,94,0.35)';
@@ -2512,7 +2542,20 @@ function enhanceSelectElements() {
             wrapper.appendChild(select);
         }
         
-        select.style.display = 'none';
+        select.style.position = 'absolute';
+        select.style.opacity = '0';
+        select.style.width = '1px';
+        select.style.height = '1px';
+        select.style.padding = '0';
+        select.style.margin = '0';
+        select.style.border = 'none';
+        select.style.clip = 'rect(0,0,0,0)';
+        select.style.pointerEvents = 'none';
+
+        select.addEventListener('invalid', () => {
+            trigger.classList.add('border-red-500', 'ring-2', 'ring-red-500/50');
+            trigger.focus();
+        });
         
         const trigger = document.createElement('button');
         trigger.type = 'button';
@@ -2538,7 +2581,9 @@ function enhanceSelectElements() {
         
         function positionMenuFixed() {
             const rect = trigger.getBoundingClientRect();
-            const width = Math.max(rect.width, 140);
+            const width = Math.min(Math.max(rect.width, 280), window.innerWidth - 16);
+            menu.style.width = width + 'px';
+
             let left = rect.left;
             if (left + width > window.innerWidth - 8) {
                 left = window.innerWidth - width - 8;
@@ -2546,8 +2591,6 @@ function enhanceSelectElements() {
             if (left < 8) left = 8;
             
             menu.style.left = left + 'px';
-            menu.style.width = width + 'px';
-            
             const spaceBelow = window.innerHeight - rect.bottom;
             const spaceAbove = rect.top;
             const menuEstHeight = Math.min(select.options.length * 36 + 12, 240);
@@ -2602,7 +2645,10 @@ function enhanceSelectElements() {
             if (selectedOpt) labelSpan.textContent = selectedOpt.textContent;
         }
 
-        select.addEventListener('change', syncState);
+        select.addEventListener('change', () => {
+            trigger.classList.remove('border-red-500', 'ring-2', 'ring-red-500/50');
+            syncState();
+        });
         try {
             const observer = new MutationObserver(syncState);
             observer.observe(select, { attributes: true, attributeFilter: ['disabled'] });
