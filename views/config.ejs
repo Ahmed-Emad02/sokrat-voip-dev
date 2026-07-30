@@ -1898,6 +1898,7 @@ function isTabAllowed(tabName) {
                                     <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
                                     <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
                                     <option value="queues"><%= isRtl ? 'طوابير الانتظار (Queues)' : 'Queues' %></option>
+                                    <option value="timeconditions"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></option>
                                     <option value="ivr"><%= isRtl ? 'الرد الآلي (IVR Menu)' : 'IVR Menu' %></option>
                                     <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail' %></option>
                                     <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
@@ -2297,7 +2298,7 @@ function isTabAllowed(tabName) {
             if (tabId === 'ivr') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); }
             if (tabId === 'recordings') fetchRecordings();
             if (tabId === 'trunks') fetchTrunks();
-            if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchInboundRoutes(); }
+            if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchInboundRoutes(); }
             if (tabId === 'outbound') fetchOutboundRoutes();
             if (tabId === 'voicemail') { fetchRecordings(); fetchVoicemailExtensions(); }
             if (tabId === 'diagram') fetchDiagramData();
@@ -4004,6 +4005,14 @@ function isTabAllowed(tabName) {
                 return `Ring Group: ${grpNum}${descStr}`;
             }
             
+            if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
+                const parts = dest.split(',');
+                const conditionId = parts[1];
+                const condition = loadedTimeConditionsList.find(tc => String(tc.timeconditions_id) === String(conditionId));
+                const name = condition ? condition.displayname : conditionId;
+                return `${isRtl ? 'شرط زمني' : 'Time Condition'}: ${name}`;
+            }
+
             return dest; // Fallback to raw string
         }
 
@@ -4058,6 +4067,17 @@ function isTabAllowed(tabName) {
             deleteInboundRoute(r.extension || '', r.description || '', r.destination || '');
         }
 
+        function getInboundDestinationType(destination) {
+            const value = String(destination || '');
+            if (value.startsWith('from-did-direct,')) return 'extensions';
+            if (value.startsWith('ext-group,')) return 'ringgroups';
+            if (value.startsWith('ext-queues,')) return 'queues';
+            if (value.startsWith('timeconditions,') || value.startsWith('ext-timeconditions,')) return 'timeconditions';
+            if (value.startsWith('ivr-')) return 'ivr';
+            if (value.startsWith('ext-local,vmu')) return 'voicemail';
+            return value ? 'custom' : '';
+        }
+
         function loadInboundDestOptions() {
             const destTypeSelect = document.getElementById('inDestType');
             const destType = destTypeSelect ? destTypeSelect.value : '';
@@ -4065,6 +4085,7 @@ function isTabAllowed(tabName) {
             const inputEl = document.getElementById('inDestTargetInput');
             const actualInput = document.getElementById('inDestination');
             const savedDest = actualInput ? actualInput.value : '';
+            const savedDestType = getInboundDestinationType(savedDest);
 
             if (!selectEl || !inputEl || !actualInput) return;
 
@@ -4115,6 +4136,20 @@ function isTabAllowed(tabName) {
                 if (savedDest.startsWith('ext-queues,')) {
                     selectEl.value = savedDest;
                 }
+            } else if (destType === 'timeconditions') {
+                selectEl.innerHTML = '<option value="">== choose time condition ==</option>';
+                selectEl.classList.remove('hidden');
+                selectEl.required = true;
+
+                loadedTimeConditionsList.forEach(condition => {
+                    const opt = document.createElement('option');
+                    opt.value = `timeconditions,${condition.timeconditions_id},1`;
+                    opt.textContent = `${condition.displayname || 'Time Condition'} (ID: ${condition.timeconditions_id})`;
+                    selectEl.appendChild(opt);
+                });
+                if (savedDest.startsWith('timeconditions,') || savedDest.startsWith('ext-timeconditions,')) {
+                    selectEl.value = savedDest;
+                }
             } else if (destType === 'ivr') {
                 selectEl.innerHTML = '<option value="">== choose IVR ==</option>';
                 selectEl.classList.remove('hidden');
@@ -4148,14 +4183,10 @@ function isTabAllowed(tabName) {
             } else if (destType === 'custom') {
                 inputEl.classList.remove('hidden');
                 inputEl.required = true;
-                if (savedDest) {
-                    inputEl.value = savedDest;
-                } else {
-                    inputEl.value = '';
-                }
+                inputEl.value = savedDestType === 'custom' ? savedDest : '';
             }
 
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail'].includes(destType) && savedDest) {
+            if (savedDestType === destType && ['extensions', 'ringgroups', 'queues', 'timeconditions', 'ivr', 'voicemail'].includes(destType) && savedDest) {
                 if (selectEl.value !== savedDest) {
                     const fallbackOpt = document.createElement('option');
                     fallbackOpt.value = savedDest;
@@ -4182,8 +4213,8 @@ function isTabAllowed(tabName) {
             const actualInput = document.getElementById('inDestination');
             if (!actualInput) return;
             
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail'].includes(destType)) {
-                if (selectEl && selectEl.value) actualInput.value = selectEl.value;
+            if (['extensions', 'ringgroups', 'queues', 'timeconditions', 'ivr', 'voicemail'].includes(destType)) {
+                actualInput.value = selectEl ? selectEl.value : '';
             } else if (destType === 'custom') {
                 if (inputEl) actualInput.value = inputEl.value.trim();
             } else {
@@ -4221,21 +4252,7 @@ function isTabAllowed(tabName) {
             actualInput.value = destination || '';
             
             const destTypeSelect = document.getElementById('inDestType');
-            if (destination.startsWith('from-did-direct,')) {
-                destTypeSelect.value = 'extensions';
-            } else if (destination.startsWith('ext-group,')) {
-                destTypeSelect.value = 'ringgroups';
-            } else if (destination.startsWith('ext-queues,')) {
-                destTypeSelect.value = 'queues';
-            } else if (destination.startsWith('ivr-')) {
-                destTypeSelect.value = 'ivr';
-            } else if (destination.startsWith('ext-local,vmu')) {
-                destTypeSelect.value = 'voicemail';
-            } else if (destination) {
-                destTypeSelect.value = 'custom';
-            } else {
-                destTypeSelect.value = '';
-            }
+            destTypeSelect.value = getInboundDestinationType(destination);
             destTypeSelect.dispatchEvent(new Event('change', { bubbles: true }));
             
             loadInboundDestOptions();
@@ -5148,6 +5165,12 @@ function isTabAllowed(tabName) {
                 }
                 if (dest.startsWith('ext-queues,')) {
                     return `${isRtl ? 'طابور:' : 'Queue:'} ${dest.split(',')[1]}`;
+                }
+                if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
+                    const conditionId = dest.split(',')[1];
+                    const condition = (diagramRawData.timeconditions || [])
+                        .find(tc => String(tc.timeconditions_id) === String(conditionId));
+                    return `${isRtl ? 'شرط زمني' : 'Time Condition'}: ${condition ? condition.displayname : conditionId}`;
                 }
                 return dest;
             }

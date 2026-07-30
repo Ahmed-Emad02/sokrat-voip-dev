@@ -7,18 +7,19 @@ set -euo pipefail
 
 INSTALL_DIR=/opt/sokrat-voip
 REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voip-dev.git
+REPO_BRANCH=main
 NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf | cut -d= -f2- | xargs)
 
 echo "============================================"
-echo " Issabel Dashboard Installer v1.5.0"
+echo " Issabel Dashboard Installer v1.5.1"
 echo " Target: Issabel 5 / Asterisk 18"
 echo "============================================"
 
 # ──────────────────────────────────────────────
 # Step 1 — System Packages + Disable Fail2Ban
 # ──────────────────────────────────────────────
-echo "[1/12] Installing system packages..."
+echo "[1/14] Installing system packages..."
 # Install EPEL first so sox (which lives in EPEL) resolves
 yum install -y epel-release
 yum install -y nano net-tools sox sqlite
@@ -34,7 +35,7 @@ fi
 # ──────────────────────────────────────────────
 # Step 2 — Install Node.js 22
 # ──────────────────────────────────────────────
-echo "[2/12] Installing Node.js 22..."
+echo "[2/14] Installing Node.js 22..."
 if ! command -v node &>/dev/null; then
     curl -fsSL -o /tmp/nodesetup.sh "$NODE_SETUP_URL"
     bash /tmp/nodesetup.sh
@@ -47,17 +48,17 @@ fi
 # ──────────────────────────────────────────────
 # Step 3 — Clone the Repository
 # ──────────────────────────────────────────────
-echo "[3/12] Cloning repository..."
+echo "[3/14] Cloning repository..."
 systemctl stop sokrat-voip 2>/dev/null || true
 yum install -y git net-tools
 if [ -d "$INSTALL_DIR" ]; then
     echo "  Directory $INSTALL_DIR exists, pulling latest..."
     cd "$INSTALL_DIR"
     git remote set-url origin "$REPO_URL"
-    git fetch origin
-    git checkout origin/main -B main
+    git fetch origin "$REPO_BRANCH"
+    git checkout -B "$REPO_BRANCH" "origin/$REPO_BRANCH"
 else
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    git clone --branch "$REPO_BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
 
@@ -76,8 +77,8 @@ fi
 # ──────────────────────────────────────────────
 # Step 4 — Install Dependencies
 # ──────────────────────────────────────────────
-echo "[4/12] Installing npm dependencies..."
-npm install
+echo "[4/14] Installing npm dependencies from package-lock.json..."
+npm ci --omit=dev
 
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
 if ! command -v ffmpeg &>/dev/null; then
@@ -95,7 +96,7 @@ fi
 # ──────────────────────────────────────────────
 # Step 5 — Create the Environment File
 # ──────────────────────────────────────────────
-echo "[5/12] Creating .env file..."
+echo "[5/14] Creating .env file..."
 AMPMGR_USER=$(grep -i '^AMPMGRUSER=' /etc/amportal.conf 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ' | xargs 2>/dev/null || echo "admin")
 AMPMGR_PASS=$(grep -i '^AMPMGRPASS=' /etc/amportal.conf 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ' | xargs 2>/dev/null || echo "admin")
 if [ -z "$AMPMGR_USER" ]; then AMPMGR_USER="admin"; fi
@@ -131,14 +132,14 @@ fi
 # ──────────────────────────────────────────────
 # Step 6 — Initialize Database Tables
 # ──────────────────────────────────────────────
-echo "[6/12] Initializing database tables..."
+echo "[6/14] Initializing database tables..."
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk < "$INSTALL_DIR/backend/install_db.sql"
 echo "  Database tables ensured"
 
 # ──────────────────────────────────────────────
 # Step 7 — Configure Asterisk AMI
 # ──────────────────────────────────────────────
-echo "[7/12] Configuring Asterisk AMI..."
+echo "[7/14] Configuring Asterisk AMI..."
 python3 -c "
 import re, sys
 path = '/etc/asterisk/manager.conf'
@@ -206,9 +207,9 @@ chmod 664 /var/www/db/address_book.db
 echo "  address_book.db initialized with schema and permissions set"
 
 # ──────────────────────────────────────────────
-# Step 7c — Configure WebRTC / PJSIP Infrastructure
+# Step 8 — Configure WebRTC / PJSIP Infrastructure
 # ──────────────────────────────────────────────
-echo "[7c/13] Configuring WebRTC / PJSIP infrastructure..."
+echo "[8/14] Configuring WebRTC / PJSIP infrastructure..."
 
 # Generate DTLS certificate for WebRTC if missing
 if [ ! -f /etc/asterisk/keys/asterisk.pem ]; then
@@ -266,7 +267,7 @@ asterisk -rx "module load chan_sip.so" 2>/dev/null || true
 echo "  PJSIP reloaded, chan_sip loaded"
 
 # ──────────────────────────────────────────────
-# Step 8 — Add Required Dialplan Contexts
+# Step 9 — Add Required Dialplan Contexts
 # ──────────────────────────────────────────────
 echo "[9/14] Adding dialplan contexts..."
 DIALPLAN_FILE=/etc/asterisk/extensions_custom.conf
@@ -405,18 +406,18 @@ asterisk -rx "dialplan reload" 2>/dev/null || true
 echo "  Dialplan reloaded"
 
 # ──────────────────────────────────────────────
-# Step 9 — GSM Dongle Setup
+# Step 10 — GSM Dongle Setup
 # ──────────────────────────────────────────────
 echo ""
 echo "[10/14] Setting up GSM dongles & chan_dongle..."
 
-# 9a — Install Build Dependencies
-echo "  [9a] Installing build dependencies..."
+# 10a — Install Build Dependencies
+echo "  [10a] Installing build dependencies..."
 yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom
 yum -y install asterisk18-devel
 
-# 9b — Compile and Install chan_dongle
-echo "  [9b] Compiling chan_dongle..."
+# 10b — Compile and Install chan_dongle
+echo "  [10b] Compiling chan_dongle..."
 if [ ! -f /usr/lib64/asterisk/modules/chan_dongle.so ] && [ ! -f /usr/lib/asterisk/modules/chan_dongle.so ]; then
     cd /usr/src
     if [ ! -d asterisk-chan-dongle ]; then
@@ -433,8 +434,8 @@ else
     echo "  chan_dongle already installed"
 fi
 
-# 9c — Configure and apply dongle.conf
-echo "  [9c] Configuring and applying dongle.conf..."
+# 10c — Configure and apply dongle.conf
+echo "  [10c] Configuring and applying dongle.conf..."
 NUM_DONGLES=1
 if [ -c /dev/tty ]; then
     printf "Enter the number of GSM dongles to activate on this server (1-25) [default: 1]: " > /dev/tty 2>/dev/null || true
@@ -475,8 +476,8 @@ cp "$TEMP_CONF" /etc/asterisk/dongle.conf
 rm -f "$TEMP_CONF"
 echo "  dongle.conf successfully generated with $NUM_DONGLES dongle(s) at /etc/asterisk/dongle.conf"
 
-# 8c2 — Ensure /var/log/asterisk/full captures VERBOSE messages (required for SMS/USSD parsing)
-echo "  [9c2] Enabling verbose logging in Asterisk logger.conf..."
+# 10c2 — Ensure /var/log/asterisk/full captures VERBOSE messages (required for SMS/USSD parsing)
+echo "  [10c2] Enabling verbose logging in Asterisk logger.conf..."
 if grep -q '^full\s*=>' /etc/asterisk/logger.conf; then
     if ! grep -q 'verbose' /etc/asterisk/logger.conf; then
         sed -i 's/^\(full\s*=>.*\)/\1,verbose/' /etc/asterisk/logger.conf
@@ -486,8 +487,8 @@ if grep -q '^full\s*=>' /etc/asterisk/logger.conf; then
     fi
 fi
 
-# 9d — Permissions & udev
-echo "  [9d] Configuring permissions and udev..."
+# 10d — Permissions & udev
+echo "  [10d] Configuring permissions and udev..."
 usermod -a -G lock,dialout asterisk
 chgrp asterisk /run/lock 2>/dev/null || true
 chmod 775 /run/lock 2>/dev/null || true
@@ -517,16 +518,16 @@ systemctl disable dongle-auto-reload.service 2>/dev/null || true
 rm -f /etc/systemd/system/dongle-auto-reload.service
 echo "  Old dongle-auto-reload.service removed"
 
-# 9e — Reload and restart
-echo "  [9e] Reloading rules and restarting Asterisk..."
+# 10e — Reload and restart
+echo "  [10e] Reloading rules and restarting Asterisk..."
 systemctl daemon-reload
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger 2>/dev/null || true
 systemctl restart asterisk
 echo "  Asterisk restarted"
 
-# 9f — Initialize sim_mappings.json
-echo "  [9f] Initializing sim_mappings.json..."
+# 10f — Initialize sim_mappings.json
+echo "  [10f] Initializing sim_mappings.json..."
 if [ ! -f "$INSTALL_DIR/sim_mappings.json" ]; then
     echo '{}' > "$INSTALL_DIR/sim_mappings.json"
     chmod 644 "$INSTALL_DIR/sim_mappings.json"
@@ -536,7 +537,7 @@ else
 fi
 
 # ──────────────────────────────────────────────
-# Step 10 — Configure Apache Reverse Proxy
+# Step 11 — Configure Apache Reverse Proxy
 # ──────────────────────────────────────────────
 echo "[11/14] Configuring Apache reverse proxy..."
 yum install -y mod_ssl 2>/dev/null || true
@@ -594,7 +595,7 @@ systemctl restart httpd
 echo "  Apache restarted"
 
 # ──────────────────────────────────────────────
-# Step 11 — Create systemd Service
+# Step 12 — Create systemd Service
 # ──────────────────────────────────────────────
 echo "[12/14] Creating systemd service..."
 cat > /etc/systemd/system/sokrat-voip.service << 'UNIT'
@@ -622,7 +623,7 @@ systemctl enable --now sokrat-voip
 echo "  Service enabled and started"
 
 # ──────────────────────────────────────────────
-# Step 12 — Set timezone to Africa/Cairo
+# Step 13 — Set timezone to Africa/Cairo
 # ──────────────────────────────────────────────
 echo ""
 echo "[13/14] Setting timezone to Africa/Cairo..."
@@ -630,7 +631,7 @@ timedatectl set-timezone Africa/Cairo 2>/dev/null && echo "  Timezone set to Afr
 echo "  Current timezone: $(timedatectl 2>/dev/null | grep 'Time zone' || echo 'N/A')"
 
 # ──────────────────────────────────────────────
-# Step 13 — Verify
+# Step 14 — Verify
 # ──────────────────────────────────────────────
 echo ""
 echo "[14/14] Verifying installation..."
