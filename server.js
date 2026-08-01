@@ -670,55 +670,105 @@ let iaxPresence = {};
 let peerStatus = {};
 let peerIPs = {};
 let pjsipContactState = {};
+let sipSnapshotStartTime = 0;
 let pjsipSnapshotStartTime = 0;
 let pjsipBatchContactIds = new Set();
 let pendingOffline = {};
 let isPeerListLoaded = false;
+let extensionLastRealtimeTime = {};
 
 function updateExtensionPresence(name) {
     if (!name) return;
-    let isOnline = (sipPresence[name] === true) || (pjsipPresence[name] === true);
+    let hasPjsipContactOnline = false;
+    for (let cid in pjsipContactState) {
+        if (pjsipContactState[cid].endpoint === name && pjsipContactState[cid].isOnline) {
+            hasPjsipContactOnline = true;
+            break;
+        }
+    }
+    let isOnline = (sipPresence[name] === true) || (pjsipPresence[name] === true) || hasPjsipContactOnline;
     if (peerStatus[name] !== isOnline) {
         peerStatus[name] = isOnline;
         io.emit('peerStatus', peerStatus);
+        getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
     }
 }
 
 function updateAllExtensionPresence() {
     let allExts = new Set([...Object.keys(sipPresence), ...Object.keys(pjsipPresence)]);
+    for (let cid in pjsipContactState) {
+        allExts.add(pjsipContactState[cid].endpoint);
+    }
     for (let ext of allExts) {
-        let isOnline = (sipPresence[ext] === true) || (pjsipPresence[ext] === true);
+        let hasPjsipContactOnline = false;
+        for (let cid in pjsipContactState) {
+            if (pjsipContactState[cid].endpoint === ext && pjsipContactState[cid].isOnline) {
+                hasPjsipContactOnline = true;
+                break;
+            }
+        }
+        let isOnline = (sipPresence[ext] === true) || (pjsipPresence[ext] === true) || hasPjsipContactOnline;
         peerStatus[ext] = isOnline;
     }
     io.emit('peerStatus', peerStatus);
+    getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
+}
+
+function setExtensionOffline(name, source) {
+    if (!name) return;
+    const now = Date.now();
+    extensionLastRealtimeTime[name] = now;
+
+    if (pendingOffline[name]) {
+        clearTimeout(pendingOffline[name]);
+        delete pendingOffline[name];
+    }
+
+    sipPresence[name] = false;
+    pjsipPresence[name] = false;
+    for (let cid in pjsipContactState) {
+        if (pjsipContactState[cid].endpoint === name) {
+            pjsipContactState[cid].isOnline = false;
+            pjsipContactState[cid].time = now;
+        }
+    }
+
+    updateExtensionPresence(name);
+}
+
+function setExtensionOnline(name, source, ip) {
+    if (!name) return;
+    const now = Date.now();
+    extensionLastRealtimeTime[name] = now;
+
+    if (pendingOffline[name]) {
+        clearTimeout(pendingOffline[name]);
+        delete pendingOffline[name];
+    }
+
+    sipPresence[name] = true;
+    pjsipPresence[name] = true;
+    for (let cid in pjsipContactState) {
+        if (pjsipContactState[cid].endpoint === name) {
+            pjsipContactState[cid].isOnline = true;
+            pjsipContactState[cid].time = now;
+        }
+    }
+
+    if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
+        peerIPs[name] = ip;
+        io.emit('peerIPs', peerIPs);
+    }
+
+    updateExtensionPresence(name);
 }
 
 function recomputePjsipPresence(name) {
     if (!name) return;
-    let onlineCount = 0;
-    for (let cid in pjsipContactState) {
-        if (pjsipContactState[cid].endpoint === name && pjsipContactState[cid].isOnline) {
-            onlineCount++;
-        }
-    }
-    pjsipPresence[name] = onlineCount > 0;
     updateExtensionPresence(name);
 }
 
 function recomputeAllPjsipPresence() {
-    let endpoints = new Set();
-    for (let cid in pjsipContactState) {
-        endpoints.add(pjsipContactState[cid].endpoint);
-    }
-    for (let ep of endpoints) {
-        let onlineCount = 0;
-        for (let cid in pjsipContactState) {
-            if (pjsipContactState[cid].endpoint === ep && pjsipContactState[cid].isOnline) {
-                onlineCount++;
-            }
-        }
-        pjsipPresence[ep] = onlineCount > 0;
-    }
     updateAllExtensionPresence();
 }
 
@@ -951,6 +1001,7 @@ function connectAMI() {
         if (queriedPeers) return;
         queriedPeers = true;
         console.log('AMI: Sending SIPpeers, PJSIPShowEndpoints, PJSIPShowContacts, IAXpeerlist');
+        sipSnapshotStartTime = Date.now();
         pjsipSnapshotStartTime = Date.now();
         pjsipBatchContactIds.clear();
         client.write(`Action: SIPpeers\r\n\r\n`);
@@ -989,9 +1040,12 @@ function connectAMI() {
                 let name = rawName ? rawName.split('/')[0] : '';
                 let status = event.Status || '';
                 if (name) {
-                    sipPresence[name] = status.toUpperCase().startsWith('OK');
-                    updateExtensionPresence(name);
-                    getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
+                    let isOnline = status.toUpperCase().startsWith('OK');
+                    let realtimeTime = extensionLastRealtimeTime[name] || 0;
+                    if (realtimeTime <= sipSnapshotStartTime) {
+                        sipPresence[name] = isOnline;
+                        updateExtensionPresence(name);
+                    }
                     let ip = event.IPaddress || '';
                     if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
                         peerIPs[name] = ip;
@@ -1032,38 +1086,49 @@ function connectAMI() {
                     let statusLower = contactStatus.toLowerCase();
                     let isOnline = statusLower === 'reachable' || statusLower === 'created' || statusLower === 'updated' || statusLower === 'unqualified' || statusLower === 'nonqualified';
                     let now = Date.now();
+                    let uri = event.URI || '';
+                    let match = uri.match(/@(\d+\.\d+\.\d+\.\d+)/);
+                    let ip = match ? match[1] : '';
 
                     // Real-time event takes precedence over snapshot rows: stamp with Date.now()
                     pjsipContactState[contactId] = { endpoint: name, isOnline: isOnline, time: now };
 
                     if (isOnline) {
-                        if (pendingOffline[name]) {
-                            clearTimeout(pendingOffline[name]);
-                            delete pendingOffline[name];
-                        }
+                        setExtensionOnline(name, 'ContactStatus', ip);
                     } else if (statusLower === 'removed') {
-                        if (pendingOffline[name]) {
-                            clearTimeout(pendingOffline[name]);
-                            delete pendingOffline[name];
+                        let anyOnline = false;
+                        for (let cid in pjsipContactState) {
+                            if (pjsipContactState[cid].endpoint === name && pjsipContactState[cid].isOnline) {
+                                anyOnline = true;
+                                break;
+                            }
                         }
-                    } else if (!isOnline && peerStatus[name]) {
-                        if (!pendingOffline[name]) {
-                            pendingOffline[name] = setTimeout(() => {
-                                if (pendingOffline[name]) {
-                                    recomputePjsipPresence(name);
+                        if (!anyOnline) {
+                            setExtensionOffline(name, 'ContactStatus:Removed');
+                        } else {
+                            updateExtensionPresence(name);
+                        }
+                    } else if (!isOnline) {
+                        let anyOnline = false;
+                        for (let cid in pjsipContactState) {
+                            if (pjsipContactState[cid].endpoint === name && pjsipContactState[cid].isOnline) {
+                                anyOnline = true;
+                                break;
+                            }
+                        }
+                        if (!anyOnline) {
+                            if (!pendingOffline[name]) {
+                                const markTime = now;
+                                pendingOffline[name] = setTimeout(() => {
                                     delete pendingOffline[name];
-                                }
-                            }, 1000);
+                                    if ((extensionLastRealtimeTime[name] || 0) <= markTime) {
+                                        setExtensionOffline(name, 'ContactStatus:Unreachable');
+                                    }
+                                }, 1000);
+                            }
+                        } else {
+                            updateExtensionPresence(name);
                         }
-                    }
-
-                    recomputePjsipPresence(name);
-
-                    let uri = event.URI || '';
-                    let match = uri.match(/@(\d+\.\d+\.\d+\.\d+)/);
-                    if (match) {
-                        peerIPs[name] = match[1];
-                        io.emit('peerIPs', peerIPs);
                     }
                 }
             }
@@ -1075,13 +1140,14 @@ function connectAMI() {
                 if (name) {
                     let contactId = event.ID || event.Uri || (name + '_contact');
                     let statusLower = contactStatus.toLowerCase();
-                    let isOnline = statusLower === 'reachable' || statusLower === 'created' || statusLower === 'updated' || statusLower === 'nonqualified' || statusLower === 'unqualified';
+                    let isOnline = statusLower === 'reachable' || statusLower === 'created' || statusLower === 'updated' || statusLower === 'unqualified' || statusLower === 'nonqualified';
 
                     pjsipBatchContactIds.add(contactId);
 
                     let existing = pjsipContactState[contactId];
+                    let realtimeTime = extensionLastRealtimeTime[name] || 0;
                     // Snapshot row applies ONLY if no real-time event was received after snapshot started!
-                    if (!existing || existing.time <= pjsipSnapshotStartTime) {
+                    if (realtimeTime <= pjsipSnapshotStartTime && (!existing || existing.time <= pjsipSnapshotStartTime)) {
                         pjsipContactState[contactId] = { endpoint: name, isOnline: isOnline, time: pjsipSnapshotStartTime };
                         recomputePjsipPresence(name);
                     }
@@ -1124,40 +1190,24 @@ function connectAMI() {
                 if (name) {
                     let statusStr = String(event.PeerStatus || '').trim();
                     let isOnline = statusStr === 'Registered' || statusStr === 'Reachable';
+                    let ip = event.Address || event.IPaddress || '';
 
                     if (statusStr === 'Unregistered' || statusStr === 'Rejected') {
                         // Explicit unregister — turn offline IMMEDIATELY
-                        if (pendingOffline[name]) {
-                            clearTimeout(pendingOffline[name]);
-                            delete pendingOffline[name];
-                        }
-                        sipPresence[name] = false;
-                        updateExtensionPresence(name);
-                        getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
-                    } else if (!isOnline && sipPresence[name]) {
+                        setExtensionOffline(name, 'PeerStatus:Unregistered');
+                    } else if (statusStr === 'Unreachable') {
                         // Qualify timeout / lost ping — short 1s debounce
                         if (!pendingOffline[name]) {
+                            const markTime = Date.now();
                             pendingOffline[name] = setTimeout(() => {
-                                if (pendingOffline[name]) {
-                                    sipPresence[name] = false;
-                                    updateExtensionPresence(name);
-                                    delete pendingOffline[name];
+                                delete pendingOffline[name];
+                                if ((extensionLastRealtimeTime[name] || 0) <= markTime) {
+                                    setExtensionOffline(name, 'PeerStatus:Unreachable');
                                 }
                             }, 1000);
                         }
                     } else if (isOnline) {
-                        if (pendingOffline[name]) {
-                            clearTimeout(pendingOffline[name]);
-                            delete pendingOffline[name];
-                        }
-                        sipPresence[name] = true;
-                        updateExtensionPresence(name);
-                        getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
-                    }
-
-                    // Re-query SIPpeers on registration to capture IP for newly registered peers
-                    if (isOnline && amiClient) {
-                        amiClient.write('Action: SIPpeers\r\n\r\n');
+                        setExtensionOnline(name, 'PeerStatus:Registered', ip);
                     }
                 }
             }
@@ -1169,9 +1219,11 @@ function connectAMI() {
                 if (name) {
                     let state = String(event.State || '').toLowerCase();
                     let isOnline = !(state === 'unavailable' || state === 'invalid' || state === 'unknown' || state === '5' || state === '4');
-                    sipPresence[name] = isOnline;
-                    pjsipPresence[name] = isOnline;
-                    updateExtensionPresence(name);
+                    if (isOnline) {
+                        setExtensionOnline(name, 'DeviceStateChange');
+                    } else {
+                        setExtensionOffline(name, 'DeviceStateChange');
+                    }
                 }
             }
 
@@ -1181,9 +1233,11 @@ function connectAMI() {
                 let statusStr = String(event.Status || '');
                 if (name && /^\d+$/.test(name)) {
                     let isOnline = !(statusStr === '4' || statusStr === '5' || statusStr === '-1');
-                    sipPresence[name] = isOnline;
-                    pjsipPresence[name] = isOnline;
-                    updateExtensionPresence(name);
+                    if (isOnline) {
+                        setExtensionOnline(name, 'ExtensionStatus');
+                    } else {
+                        setExtensionOffline(name, 'ExtensionStatus');
+                    }
                 }
             }
 
