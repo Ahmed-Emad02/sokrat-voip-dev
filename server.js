@@ -7662,6 +7662,37 @@ app.post('/api/settings/time', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+let isSystemUpdateInProgress = false;
+
+// POST /api/system/update - Trigger dashboard system update (Super Admin Only)
+app.post('/api/system/update', requireAuth, (req, res) => {
+    if (!isSuperAdmin(req)) {
+        return res.status(403).json({ success: false, error: 'Access denied. Super Admin authorization required.' });
+    }
+
+    if (isSystemUpdateInProgress) {
+        return res.status(409).json({ success: false, error: 'A system update is already in progress.' });
+    }
+
+    isSystemUpdateInProgress = true;
+
+    res.json({
+        success: true,
+        message: 'Dashboard update initiated. The system will pull the latest version and restart.'
+    });
+
+    setTimeout(() => {
+        const cmd = 'cd /opt/sokrat-voip && git fetch origin main && git reset --hard origin/main && npm ci --omit=dev && systemctl restart sokrat-voip';
+        exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+            isSystemUpdateInProgress = false;
+            if (error) {
+                console.error('System Update Error:', error.message, stderr);
+            } else {
+                console.log('System Update Output:', stdout);
+            }
+        });
+    }, 500);
+});
 
 // --- NETWORK INFO ROUTE ---
 app.get('/api/network-info', async (req, res) => {
