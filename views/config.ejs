@@ -4315,6 +4315,14 @@ function isTabAllowed(tabName) {
                 return `Ring Group: ${grpNum}${descStr}`;
             }
             
+            if (dest.startsWith('ext-queues,')) {
+                const parts = dest.split(',');
+                const qNum = parts[1];
+                const qMatch = loadedQueuesList.find(q => String(q.extension) === String(qNum));
+                const descStr = qMatch ? ` - ${qMatch.descr}` : '';
+                return `Queue: ${qNum}${descStr}`;
+            }
+
             if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
                 const parts = dest.split(',');
                 const conditionId = parts[1];
@@ -4322,6 +4330,31 @@ function isTabAllowed(tabName) {
                 const name = condition ? condition.displayname : conditionId;
                 return `${isRtl ? 'شرط زمني' : 'Time Condition'}: ${name}`;
             }
+
+            if (dest.startsWith('app-announcement-')) {
+                const parts = dest.split(',');
+                const annId = parts[0].replace('app-announcement-', '');
+                const ann = loadedAnnouncementsList.find(a => String(a.announcement_id) === String(annId));
+                const name = ann ? ann.description : annId;
+                return `${isRtl ? 'إعلان' : 'Announcement'}: ${name}`;
+            }
+
+            if (dest.startsWith('ivr-')) {
+                const parts = dest.split(',');
+                const ivrId = parts[0].replace('ivr-', '');
+                const ivr = loadedIvrsList.find(i => String(i.id) === String(ivrId));
+                const name = ivr ? ivr.name : ivrId;
+                return `IVR: ${name}`;
+            }
+
+            if (dest.startsWith('ext-local,vmu')) {
+                const ext = dest.substring(13).split(',')[0];
+                return `Voicemail: ${ext}`;
+            }
+
+            if (dest.startsWith('app-blackhole,hangup')) return isRtl ? 'إنهاء (قطع خط)' : 'Hangup Call';
+            if (dest.startsWith('app-blackhole,congestion')) return isRtl ? 'نغمة ازدحام' : 'Play Congestion';
+            if (dest.startsWith('app-blackhole,busy')) return isRtl ? 'نغمة مشغول' : 'Play Busy';
 
             return dest; // Fallback to raw string
         }
