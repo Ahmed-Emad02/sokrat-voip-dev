@@ -142,7 +142,7 @@ app.use(session({
 const ALL_TABS = [
     'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'softphone', 'contacts', 'users', 'config', 'storage',
     'config-extensions', 'config-ringgroups', 'config-queues', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram',
-    'config-timegroups', 'config-timeconditions'
+    'config-timegroups', 'config-timeconditions', 'config-announcements'
 ];
 
 async function initAuthDb() {
@@ -629,6 +629,8 @@ app.use('/api/config', (req, res, next) => {
         subTab = 'timegroups';
     } else if (req.path.startsWith('/timeconditions')) {
         subTab = 'timeconditions';
+    } else if (req.path.startsWith('/announcements')) {
+        subTab = 'announcements';
     } else if (req.path === '/reload') {
         const perms = req.session.userPermissions || [];
         const hasAnyConfig = perms.includes('config') || perms.some(p => p.startsWith('config-'));
@@ -5153,6 +5155,112 @@ app.get('/api/config/recordings/audio/:id', async (req, res) => {
         }
     } catch (err) {
         res.status(500).send("Audio Error: " + err.message);
+    }
+});
+// --- ANNOUNCEMENTS MANAGEMENT APIs ---
+
+// GET /api/config/announcements - List all announcements
+app.get('/api/config/announcements', async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT a.announcement_id, a.description, a.recording_id, a.allow_skip, a.post_dest, a.return_ivr, a.noanswer, a.repeat_msg, a.tts_lang, a.tts_text,
+                   r.displayname AS recording_name
+            FROM \`asterisk\`.\`announcement\` a
+            LEFT JOIN \`asterisk\`.\`recordings\` r ON a.recording_id = r.id
+            ORDER BY CAST(a.announcement_id AS UNSIGNED) ASC
+        `);
+        res.json({ success: true, announcements: rows });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/announcements - Create Announcement
+app.post('/api/config/announcements', async (req, res) => {
+    try {
+        const { description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg } = req.body;
+        const name = String(description || '').trim();
+        if (!name) {
+            return res.status(400).json({ success: false, error: 'Announcement Description/Name is required.' });
+        }
+        const recId = parseInt(recording_id, 10) || 0;
+        const allowSkipVal = allow_skip ? 1 : 0;
+        const returnIvrVal = return_ivr ? 1 : 0;
+        const noAnswerVal = noanswer ? 1 : 0;
+        const repeatMsgVal = String(repeat_msg || '').trim();
+        const postDestVal = String(post_dest || '').trim() || 'app-blackhole,hangup,1';
+
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`announcement\`
+            (description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg, tts_lang, tts_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, '', '')
+        `, [name, recId, allowSkipVal, postDestVal, returnIvrVal, noAnswerVal, repeatMsgVal]);
+
+        const reloadRes = await reloadPbxConfigPromise();
+        res.json({
+            success: true,
+            message: `Announcement '${name}' created successfully.`,
+            applied: reloadRes.success,
+            reloadError: reloadRes.error
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// PUT /api/config/announcements/:id - Modify Announcement
+app.put('/api/config/announcements/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ success: false, error: 'Invalid announcement ID.' });
+
+        const { description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg } = req.body;
+        const name = String(description || '').trim();
+        if (!name) {
+            return res.status(400).json({ success: false, error: 'Announcement Description/Name is required.' });
+        }
+        const recId = parseInt(recording_id, 10) || 0;
+        const allowSkipVal = allow_skip ? 1 : 0;
+        const returnIvrVal = return_ivr ? 1 : 0;
+        const noAnswerVal = noanswer ? 1 : 0;
+        const repeatMsgVal = String(repeat_msg || '').trim();
+        const postDestVal = String(post_dest || '').trim() || 'app-blackhole,hangup,1';
+
+        await pool.query(`
+            UPDATE \`asterisk\`.\`announcement\`
+            SET description = ?, recording_id = ?, allow_skip = ?, post_dest = ?, return_ivr = ?, noanswer = ?, repeat_msg = ?
+            WHERE announcement_id = ?
+        `, [name, recId, allowSkipVal, postDestVal, returnIvrVal, noAnswerVal, repeatMsgVal, id]);
+
+        const reloadRes = await reloadPbxConfigPromise();
+        res.json({
+            success: true,
+            message: `Announcement '${name}' updated successfully.`,
+            applied: reloadRes.success,
+            reloadError: reloadRes.error
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// DELETE /api/config/announcements/:id - Delete Announcement
+app.delete('/api/config/announcements/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ success: false, error: 'Invalid announcement ID.' });
+
+        await pool.query('DELETE FROM `asterisk`.`announcement` WHERE announcement_id = ?', [id]);
+
+        const reloadRes = await reloadPbxConfigPromise();
+        res.json({
+            success: true,
+            message: 'Announcement deleted successfully.',
+            applied: reloadRes.success,
+            reloadError: reloadRes.error
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
