@@ -1268,8 +1268,16 @@ function isTabAllowed(tabName) {
                     <!-- SECTION 5: DESTINATION IF NO ANSWER (Post Destination) -->
                     <div class="panel-surface p-4 rounded-xl border border-[var(--border-primary)] space-y-3">
                         <span class="text-xs font-bold text-amber-400 uppercase tracking-wider block"><%= isRtl ? 'الوجهة عند عدم الرد *' : 'Destination if No Answer *' %></span>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <select id="rgPostDestType" onchange="onRgPostDestTypeChange()" class="config-input w-full text-xs font-semibold" required>
+                        
+                        <!-- Create Mode Auto-Destination Banner -->
+                        <div id="rgPostDestCreateNotice" class="hidden p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-xs text-emerald-300 font-semibold flex items-center gap-2">
+                            <svg class="w-4 h-4 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span><%= isRtl ? 'الوجهة التلقائية عند إنشاء المجموعة: مجموعة الاتصال نفسها' : 'Default destination upon creation: Automatically set to this Ring Group itself' %> (<span id="rgPostDestCreateNoticeNum" class="font-mono text-white">ext-group,600,1</span>)</span>
+                        </div>
+
+                        <!-- Edit Mode Editable Selectors -->
+                        <div id="rgPostDestEditContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <select id="rgPostDestType" onchange="onRgPostDestTypeChange()" class="config-input w-full text-xs font-semibold">
                                 <option value="">== <%= isRtl ? 'اختر نوع الوجهة' : 'Choose Destination Type' %> ==</option>
                                 <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
                                 <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
@@ -1286,7 +1294,7 @@ function isTabAllowed(tabName) {
                                 <input type="text" id="rgPostDestTargetInput" oninput="updateRgPostDestinationValue()" placeholder="e.g. app-blackhole,hangup,1" class="config-input w-full font-mono text-xs hidden">
                             </div>
                         </div>
-                        <input type="hidden" id="rgPostDestination" required>
+                        <input type="hidden" id="rgPostDestination">
                     </div>
 
                 </div>
@@ -2867,6 +2875,21 @@ function isTabAllowed(tabName) {
         }
 
         // --- 2. RING GROUPS ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const rgNumEl = document.getElementById('rgNum');
+            if (rgNumEl) {
+                rgNumEl.addEventListener('input', () => {
+                    const isEdit = document.getElementById('rgEditMode').value === "true";
+                    if (!isEdit) {
+                        const num = rgNumEl.value.trim() || '600';
+                        const destVal = `ext-group,${num},1`;
+                        const noticeNumEl = document.getElementById('rgPostDestCreateNoticeNum');
+                        if (noticeNumEl) noticeNumEl.textContent = destVal;
+                        document.getElementById('rgPostDestination').value = destVal;
+                    }
+                });
+            }
+        });
         function renderQuickPickPills() {
             const container = document.getElementById('rgQuickPickContainer');
             if (!container) return;
@@ -2969,9 +2992,23 @@ function isTabAllowed(tabName) {
             populateAnnouncementsDropdown();
             renderQuickPickPills();
 
-            document.getElementById('rgPostDestType').value = 'terminate';
-            onRgPostDestTypeChange();
-            document.getElementById('rgPostDestination').value = 'app-blackhole,hangup,1';
+            // Create Mode: Auto-set destination to Ring Group itself & hide change controls
+            const noticeEl = document.getElementById('rgPostDestCreateNotice');
+            const editCont = document.getElementById('rgPostDestEditContainer');
+            const typeSelect = document.getElementById('rgPostDestType');
+            const targetSelect = document.getElementById('rgPostDestTargetSelect');
+            const targetInput = document.getElementById('rgPostDestTargetInput');
+            if (noticeEl) noticeEl.classList.remove('hidden');
+            if (editCont) editCont.classList.add('hidden');
+            if (typeSelect) typeSelect.required = false;
+            if (targetSelect) targetSelect.required = false;
+            if (targetInput) targetInput.required = false;
+
+            const num = document.getElementById('rgNum').value.trim() || '600';
+            const destVal = `ext-group,${num},1`;
+            const noticeNumEl = document.getElementById('rgPostDestCreateNoticeNum');
+            if (noticeNumEl) noticeNumEl.textContent = destVal;
+            document.getElementById('rgPostDestination').value = destVal;
 
             openModal('ringGroupModal');
         }
@@ -2993,7 +3030,7 @@ function isTabAllowed(tabName) {
                 let items = [];
                 const currNum = document.getElementById('rgNum').value;
                 if (type === 'extensions') items = loadedExtensionsList.map(e => ({ val: `from-did-direct,${e.extension},1`, label: `${e.extension} - ${e.name}` }));
-                if (type === 'ringgroups') items = loadedRingGroupsList.filter(rg => String(rg.grpnum) !== String(currNum)).map(rg => ({ val: `ext-group,${rg.grpnum},1`, label: `${rg.grpnum} - ${rg.description}` }));
+                if (type === 'ringgroups') items = loadedRingGroupsList.map(rg => ({ val: `ext-group,${rg.grpnum},1`, label: `${rg.grpnum} - ${rg.description || ''}` }));
                 if (type === 'queues') items = loadedQueuesList.map(q => ({ val: `ext-queues,${q.extension},1`, label: `${q.extension} - ${q.descr}` }));
                 if (type === 'timeconditions') items = loadedTimeConditionsList.map(tc => ({ val: `timeconditions,${tc.timeconditions_id},1`, label: `${tc.displayname} (ID: ${tc.timeconditions_id})` }));
                 if (type === 'ivr') items = loadedIvrsList.map(i => ({ val: `ivr-${i.id},s,1`, label: i.name }));
@@ -3072,6 +3109,14 @@ function isTabAllowed(tabName) {
             document.getElementById('rgAnnMsg').value = rg.annmsg_id || 0;
             renderQuickPickPills();
 
+            // Edit Mode: Show editable destination controls
+            const noticeEl = document.getElementById('rgPostDestCreateNotice');
+            const editCont = document.getElementById('rgPostDestEditContainer');
+            const typeSelect = document.getElementById('rgPostDestType');
+            if (noticeEl) noticeEl.classList.add('hidden');
+            if (editCont) editCont.classList.remove('hidden');
+            if (typeSelect) typeSelect.required = true;
+
             const parsedDest = parseRgPostDestination(rg.postdest);
             document.getElementById('rgPostDestType').value = parsedDest.type;
             onRgPostDestTypeChange();
@@ -3080,8 +3125,7 @@ function isTabAllowed(tabName) {
             } else {
                 document.getElementById('rgPostDestTargetSelect').value = parsedDest.target;
             }
-            document.getElementById('rgPostDestination').value = rg.postdest || 'app-blackhole,hangup,1';
-
+            document.getElementById('rgPostDestination').value = rg.postdest || `ext-group,${grpnum},1`;
             openModal('ringGroupModal');
         }
 
@@ -3094,7 +3138,7 @@ function isTabAllowed(tabName) {
             const grptime = document.getElementById('rgTime').value;
             const grplist = document.getElementById('rgList').value.trim();
             const annmsg_id = document.getElementById('rgAnnMsg').value;
-            const postdest = document.getElementById('rgPostDestination').value.trim();
+            const postdest = isEdit ? document.getElementById('rgPostDestination').value.trim() : (`ext-group,${grpnum},1`);
 
             const url = isEdit ? '/api/config/ringgroups/' + grpnum : '/api/config/ringgroups';
             const method = isEdit ? 'PUT' : 'POST';
