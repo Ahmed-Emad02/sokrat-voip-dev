@@ -2359,9 +2359,9 @@ function isTabAllowed(tabName) {
 
                 <!-- 2. System Recording -->
                 <div>
-                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'التسجيل الصوتي *' : 'System Recording *' %></label>
-                    <select id="annRecording" class="config-input w-full text-xs font-semibold" required>
-                        <option value="">== <%= isRtl ? 'اختر تسجيل صوتي' : 'Choose Recording' %> ==</option>
+                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'التسجيل الصوتي' : 'System Recording' %></label>
+                    <select id="annRecording" onchange="onAnnRecordingChange()" class="config-input w-full text-xs font-semibold">
+                        <option value="0">== <%= isRtl ? 'بدون تسجيل (استخدام تحويل النص إلى كلام)' : 'None (Use Text-To-Speech TTS)' %> ==</option>
                     </select>
                 </div>
 
@@ -2385,6 +2385,27 @@ function isTabAllowed(tabName) {
                     </select>
                 </div>
 
+                <!-- 3.5 Text-to-Speech Engine (TTS) -->
+                <div class="panel-surface p-4 rounded-xl border border-[var(--border-primary)] space-y-3">
+                    <span class="text-xs font-bold text-sky-400 uppercase tracking-wider block"><%= isRtl ? 'تحويل النص إلى كلام (Text-To-Speech)' : 'Text-To-Speech (TTS Engine)' %></span>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اللغة' : 'Language' %></label>
+                            <select id="annTtsLang" class="config-input w-full text-xs font-semibold">
+                                <option value="en-US">English (en-US)</option>
+                                <option value="en-GB">English (en-GB)</option>
+                                <option value="es-ES">Spanish (es-ES)</option>
+                                <option value="fr-FR">French (fr-FR)</option>
+                                <option value="it-IT">Italian (it-IT)</option>
+                                <option value="de-DE">German (de-DE)</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'النص الصوتي (ينشط عند عدم اختيار تسجيل)' : 'TTS Text (used when System Recording is None)' %></label>
+                            <input type="text" id="annTtsText" placeholder="e.g. Welcome to our company. Please hold." class="config-input w-full text-xs">
+                        </div>
+                    </div>
+                </div>
                 <!-- 4. Playback Behavior Flags -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                     <label class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
@@ -7071,7 +7092,7 @@ function isTabAllowed(tabName) {
         function populateAnnouncementRecordingsDropdown(selectedId = 0) {
             const sel = document.getElementById('annRecording');
             if (!sel) return;
-            sel.innerHTML = '<option value="">== choose recording ==</option>';
+            sel.innerHTML = '<option value="0">== ' + (isRtl ? 'بدون تسجيل (استخدام تحويل النص إلى كلام)' : 'None (Use Text-To-Speech TTS)') + ' ==</option>';
             loadedRecordingsList.forEach(r => {
                 const opt = document.createElement('option');
                 opt.value = r.id;
@@ -7081,15 +7102,47 @@ function isTabAllowed(tabName) {
             });
         }
 
+        function onAnnRecordingChange() {
+            const recId = parseInt(document.getElementById('annRecording').value, 10) || 0;
+            const ttsLang = document.getElementById('annTtsLang');
+            const ttsText = document.getElementById('annTtsText');
+            const allowSkip = document.getElementById('annAllowSkip');
+
+            if (!ttsLang || !ttsText || !allowSkip) return;
+
+            if (recId === 0) {
+                ttsLang.disabled = false;
+                ttsText.disabled = false;
+                ttsLang.classList.remove('opacity-40');
+                ttsText.classList.remove('opacity-40');
+
+                allowSkip.checked = false;
+                allowSkip.disabled = true;
+                allowSkip.closest('label').classList.add('opacity-40', 'cursor-not-allowed');
+            } else {
+                ttsLang.disabled = true;
+                ttsText.disabled = true;
+                ttsLang.classList.add('opacity-40');
+                ttsText.classList.add('opacity-40');
+
+                allowSkip.disabled = false;
+                allowSkip.closest('label').classList.remove('opacity-40', 'cursor-not-allowed');
+            }
+        }
+        window.onAnnRecordingChange = onAnnRecordingChange;
+
         function openAnnouncementModal() {
             document.getElementById('annEditMode').value = 'false';
             document.getElementById('annId').value = '';
             document.getElementById('annDescription').value = '';
             document.getElementById('annRepeatMsg').value = '';
+            document.getElementById('annTtsLang').value = 'en-US';
+            document.getElementById('annTtsText').value = '';
             document.getElementById('annAllowSkip').checked = false;
             document.getElementById('annReturnIvr').checked = false;
             document.getElementById('annNoAnswer').checked = false;
             populateAnnouncementRecordingsDropdown();
+            onAnnRecordingChange();
 
             document.getElementById('annPostDestType').value = 'terminate';
             onAnnPostDestTypeChange();
@@ -7099,7 +7152,6 @@ function isTabAllowed(tabName) {
             openModal('announcementModal');
         }
         window.openAnnouncementModal = openAnnouncementModal;
-
         function onAnnPostDestTypeChange() {
             const type = document.getElementById('annPostDestType').value;
             const select = document.getElementById('annPostDestTargetSelect');
@@ -7189,10 +7241,13 @@ function isTabAllowed(tabName) {
             document.getElementById('annId').value = ann.announcement_id;
             document.getElementById('annDescription').value = ann.description || '';
             document.getElementById('annRepeatMsg').value = ann.repeat_msg || '';
+            document.getElementById('annTtsLang').value = ann.tts_lang || 'en-US';
+            document.getElementById('annTtsText').value = ann.tts_text || '';
             document.getElementById('annAllowSkip').checked = !!ann.allow_skip;
             document.getElementById('annReturnIvr').checked = !!ann.return_ivr;
             document.getElementById('annNoAnswer').checked = !!ann.noanswer;
             populateAnnouncementRecordingsDropdown(ann.recording_id || 0);
+            onAnnRecordingChange();
 
             const parsedDest = parseAnnPostDestination(ann.post_dest);
             document.getElementById('annPostDestType').value = parsedDest.type;
@@ -7215,8 +7270,11 @@ function isTabAllowed(tabName) {
             const id = document.getElementById('annId').value;
             const description = document.getElementById('annDescription').value.trim();
             const recording_id = document.getElementById('annRecording').value;
+            const recId = parseInt(recording_id, 10) || 0;
             const repeat_msg = document.getElementById('annRepeatMsg').value;
-            const allow_skip = document.getElementById('annAllowSkip').checked ? 1 : 0;
+            const tts_lang = recId === 0 ? (document.getElementById('annTtsLang').value || 'en-US') : 'en-US';
+            const tts_text = recId === 0 ? document.getElementById('annTtsText').value.trim() : '';
+            const allow_skip = recId === 0 ? 0 : (document.getElementById('annAllowSkip').checked ? 1 : 0);
             const return_ivr = document.getElementById('annReturnIvr').checked ? 1 : 0;
             const noanswer = document.getElementById('annNoAnswer').checked ? 1 : 0;
             const post_dest = document.getElementById('annPostDestination').value.trim();
@@ -7227,12 +7285,12 @@ function isTabAllowed(tabName) {
             }
 
             const method = editMode ? 'PUT' : 'POST';
-            const url = editMode ? `/api/config/announcements/${id}` : '/api/config/announcements';
+            const url = editMode ? '/api/config/announcements/' + id : '/api/config/announcements';
 
             fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg })
+                body: JSON.stringify({ description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg, tts_lang, tts_text })
             })
             .then(res => res.json())
             .then(data => {

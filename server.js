@@ -5178,7 +5178,7 @@ app.get('/api/config/announcements', async (req, res) => {
 // POST /api/config/announcements - Create Announcement
 app.post('/api/config/announcements', async (req, res) => {
     try {
-        const { description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg } = req.body;
+        const { description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg, tts_lang, tts_text } = req.body;
         const name = String(description || '').trim();
         if (!name) {
             return res.status(400).json({ success: false, error: 'Announcement Description/Name is required.' });
@@ -5189,12 +5189,16 @@ app.post('/api/config/announcements', async (req, res) => {
         const noAnswerVal = noanswer ? 1 : 0;
         const repeatMsgVal = String(repeat_msg || '').trim();
         const postDestVal = String(post_dest || '').trim() || 'app-blackhole,hangup,1';
+        const SUPPORTED_TTS_LANGS = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'it-IT', 'de-DE'];
+        const rawTtsLang = String(tts_lang || '').trim();
+        const ttsLangVal = SUPPORTED_TTS_LANGS.includes(rawTtsLang) ? rawTtsLang : 'en-US';
+        const ttsTextVal = String(tts_text || '').trim();
 
         await pool.query(`
             INSERT INTO \`asterisk\`.\`announcement\`
             (description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg, tts_lang, tts_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, '', '')
-        `, [name, recId, allowSkipVal, postDestVal, returnIvrVal, noAnswerVal, repeatMsgVal]);
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [name, recId, allowSkipVal, postDestVal, returnIvrVal, noAnswerVal, repeatMsgVal, ttsLangVal, ttsTextVal]);
 
         const reloadRes = await reloadPbxConfigPromise();
         res.json({
@@ -5214,7 +5218,7 @@ app.put('/api/config/announcements/:id', async (req, res) => {
         const id = parseInt(req.params.id, 10);
         if (!id) return res.status(400).json({ success: false, error: 'Invalid announcement ID.' });
 
-        const { description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg } = req.body;
+        const { description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg, tts_lang, tts_text } = req.body;
         const name = String(description || '').trim();
         if (!name) {
             return res.status(400).json({ success: false, error: 'Announcement Description/Name is required.' });
@@ -5225,12 +5229,16 @@ app.put('/api/config/announcements/:id', async (req, res) => {
         const noAnswerVal = noanswer ? 1 : 0;
         const repeatMsgVal = String(repeat_msg || '').trim();
         const postDestVal = String(post_dest || '').trim() || 'app-blackhole,hangup,1';
+        const SUPPORTED_TTS_LANGS = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'it-IT', 'de-DE'];
+        const rawTtsLang = String(tts_lang || '').trim();
+        const ttsLangVal = SUPPORTED_TTS_LANGS.includes(rawTtsLang) ? rawTtsLang : 'en-US';
+        const ttsTextVal = String(tts_text || '').trim();
 
         await pool.query(`
             UPDATE \`asterisk\`.\`announcement\`
-            SET description = ?, recording_id = ?, allow_skip = ?, post_dest = ?, return_ivr = ?, noanswer = ?, repeat_msg = ?
+            SET description = ?, recording_id = ?, allow_skip = ?, post_dest = ?, return_ivr = ?, noanswer = ?, repeat_msg = ?, tts_lang = ?, tts_text = ?
             WHERE announcement_id = ?
-        `, [name, recId, allowSkipVal, postDestVal, returnIvrVal, noAnswerVal, repeatMsgVal, id]);
+        `, [name, recId, allowSkipVal, postDestVal, returnIvrVal, noAnswerVal, repeatMsgVal, ttsLangVal, ttsTextVal, id]);
 
         const reloadRes = await reloadPbxConfigPromise();
         res.json({
