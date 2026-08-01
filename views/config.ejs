@@ -3125,7 +3125,7 @@ function isTabAllowed(tabName) {
             } else {
                 document.getElementById('rgPostDestTargetSelect').value = parsedDest.target;
             }
-            document.getElementById('rgPostDestination').value = rg.postdest || `ext-group,${grpnum},1`;
+            document.getElementById('rgPostDestination').value = rg.postdest || 'app-blackhole,hangup,1';
             openModal('ringGroupModal');
         }
 
