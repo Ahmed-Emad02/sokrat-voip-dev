@@ -5184,15 +5184,15 @@ app.post('/api/config/announcements', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Announcement Description/Name is required.' });
         }
         const recId = parseInt(recording_id, 10) || 0;
-        const allowSkipVal = allow_skip ? 1 : 0;
+        const allowSkipVal = recId === 0 ? 0 : (allow_skip ? 1 : 0);
         const returnIvrVal = return_ivr ? 1 : 0;
         const noAnswerVal = noanswer ? 1 : 0;
         const repeatMsgVal = String(repeat_msg || '').trim();
         const postDestVal = String(post_dest || '').trim() || 'app-blackhole,hangup,1';
         const SUPPORTED_TTS_LANGS = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'it-IT', 'de-DE'];
         const rawTtsLang = String(tts_lang || '').trim();
-        const ttsLangVal = SUPPORTED_TTS_LANGS.includes(rawTtsLang) ? rawTtsLang : 'en-US';
-        const ttsTextVal = String(tts_text || '').trim();
+        const ttsLangVal = recId === 0 ? (SUPPORTED_TTS_LANGS.includes(rawTtsLang) ? rawTtsLang : 'en-US') : 'en-US';
+        const ttsTextVal = recId === 0 ? String(tts_text || '').trim() : '';
 
         await pool.query(`
             INSERT INTO \`asterisk\`.\`announcement\`
@@ -5224,15 +5224,15 @@ app.put('/api/config/announcements/:id', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Announcement Description/Name is required.' });
         }
         const recId = parseInt(recording_id, 10) || 0;
-        const allowSkipVal = allow_skip ? 1 : 0;
+        const allowSkipVal = recId === 0 ? 0 : (allow_skip ? 1 : 0);
         const returnIvrVal = return_ivr ? 1 : 0;
         const noAnswerVal = noanswer ? 1 : 0;
         const repeatMsgVal = String(repeat_msg || '').trim();
         const postDestVal = String(post_dest || '').trim() || 'app-blackhole,hangup,1';
         const SUPPORTED_TTS_LANGS = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'it-IT', 'de-DE'];
         const rawTtsLang = String(tts_lang || '').trim();
-        const ttsLangVal = SUPPORTED_TTS_LANGS.includes(rawTtsLang) ? rawTtsLang : 'en-US';
-        const ttsTextVal = String(tts_text || '').trim();
+        const ttsLangVal = recId === 0 ? (SUPPORTED_TTS_LANGS.includes(rawTtsLang) ? rawTtsLang : 'en-US') : 'en-US';
+        const ttsTextVal = recId === 0 ? String(tts_text || '').trim() : '';
 
         await pool.query(`
             UPDATE \`asterisk\`.\`announcement\`
