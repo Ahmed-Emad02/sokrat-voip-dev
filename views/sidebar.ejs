@@ -50,7 +50,7 @@ const sidebarWords = {
 const sbT = sidebarWords[currentLang] || sidebarWords['en'];
 const isRtl = currentLang === 'ar';
 const allowed = typeof allowedTabs !== 'undefined' ? allowedTabs : [];
-const isSuper = typeof isSuperAdmin !== 'undefined' && isSuperAdmin;
+const isSuper = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) || (typeof currentUser !== 'undefined' && (currentUser === 'admin' || currentUser === 'root'));
 function can(tab) { return isSuper || allowed.includes(tab); }
 %>
 

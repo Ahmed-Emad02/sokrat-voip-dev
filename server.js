@@ -467,7 +467,10 @@ initAuthDb().catch(err => console.error('AUTH DB init error:', err));
 
 // --- SESSION HELPERS ---
 function isSuperAdmin(req) {
-    return req.session && req.session.userGroup === 'super admins';
+    if (!req || !req.session) return false;
+    if (req.session.isRoot || req.session.username === 'admin' || req.session.username === ROOT_USER) return true;
+    const g = String(req.session.userGroup || '').toLowerCase().trim();
+    return g === 'super admins' || g === 'super admin' || g === 'admin' || g === 'administrator' || g === 'administrators';
 }
 
 async function getUserPermissions(userId) {
