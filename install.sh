@@ -12,7 +12,7 @@ NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf | cut -d= -f2- | xargs)
 
 echo "============================================"
-echo " Issabel Dashboard Installer v1.5.1"
+echo " Issabel Dashboard Installer v1.6.0"
 echo " Target: Issabel 5 / Asterisk 18"
 echo "============================================"
 
@@ -22,7 +22,31 @@ echo "============================================"
 echo "[1/14] Installing system packages..."
 # Install EPEL first so sox (which lives in EPEL) resolves
 yum install -y epel-release
-yum install -y nano net-tools sox sqlite
+yum install -y nano net-tools sox sqlite picotts
+
+# Announcements in Issabel use picotts.agi, which requires both sox and pico2wave.
+PICO_AGI_SOURCE=/var/www/html/admin/modules/announcement/agi-bin/picotts.agi
+PICO_AGI_TARGET=/var/lib/asterisk/agi-bin/picotts.agi
+if ! command -v pico2wave &>/dev/null; then
+    echo "  Error: picotts installed without the required pico2wave binary" >&2
+    exit 1
+fi
+if [ ! -f "$PICO_AGI_SOURCE" ]; then
+    echo "  Error: Issabel's Announcements module is missing $PICO_AGI_SOURCE" >&2
+    exit 1
+fi
+install -d -o asterisk -g asterisk -m 0755 "$(dirname "$PICO_AGI_TARGET")"
+install -o asterisk -g asterisk -m 0755 "$PICO_AGI_SOURCE" "$PICO_AGI_TARGET"
+perl -c "$PICO_AGI_TARGET" >/dev/null 2>&1
+
+PICO_TEST_WAV="/tmp/sokrat-pico-test-$$.wav"
+if ! pico2wave -l en-US -w "$PICO_TEST_WAV" "Sokrat VoIP" || [ ! -s "$PICO_TEST_WAV" ]; then
+    rm -f "$PICO_TEST_WAV"
+    echo "  Error: Pico TTS synthesis check failed" >&2
+    exit 1
+fi
+rm -f "$PICO_TEST_WAV"
+echo "  Announcement TTS dependencies verified"
 echo "  System packages installed"
 # fail2ban is optional; disable if the unit exists
 if systemctl is-enabled fail2ban &>/dev/null; then
@@ -134,6 +158,30 @@ fi
 # ──────────────────────────────────────────────
 echo "[6/14] Initializing database tables..."
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk < "$INSTALL_DIR/backend/install_db.sql"
+
+# Older/partial Announcement module installs can lack the Pico TTS columns.
+# Use information_schema checks rather than version-specific ADD IF NOT EXISTS syntax.
+ANNOUNCEMENT_TABLE_EXISTS=$(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse \
+    "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'announcement'")
+if [ "$ANNOUNCEMENT_TABLE_EXISTS" != "1" ]; then
+    echo "  Error: Issabel's required asterisk.announcement table is missing" >&2
+    exit 1
+fi
+
+ANNOUNCEMENT_TTS_LANG_EXISTS=$(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse \
+    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'announcement' AND COLUMN_NAME = 'tts_lang'")
+if [ "$ANNOUNCEMENT_TTS_LANG_EXISTS" = "0" ]; then
+    mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e \
+        "ALTER TABLE \`announcement\` ADD \`tts_lang\` VARCHAR(10) NOT NULL DEFAULT 'en-US'"
+fi
+
+ANNOUNCEMENT_TTS_TEXT_EXISTS=$(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse \
+    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'announcement' AND COLUMN_NAME = 'tts_text'")
+if [ "$ANNOUNCEMENT_TTS_TEXT_EXISTS" = "0" ]; then
+    mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e \
+        "ALTER TABLE \`announcement\` ADD \`tts_text\` TEXT NOT NULL DEFAULT ('')"
+fi
+echo "  Announcement TTS schema ensured"
 echo "  Database tables ensured"
 
 # ──────────────────────────────────────────────
