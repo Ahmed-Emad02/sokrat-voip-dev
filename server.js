@@ -1248,6 +1248,11 @@ function connectAMI() {
                     } else {
                         setExtensionOffline(name, 'ExtensionStatus');
                     }
+                    // Clear call from activeCalls if extension status reports Idle (0) or unavailable/unregistered
+                    if ((statusStr === '0' || !isOnline) && activeCalls[name]) {
+                        delete activeCalls[name];
+                        io.emit('callUpdate', { extension: name, callData: null });
+                    }
                 }
             }
 
@@ -1329,13 +1334,30 @@ function connectAMI() {
                 }
             }
 
-            // Clean tear down when either party terminates the call
-            if (event.Event === 'Hangup') {
-                let exten = getExtensionFromChannel(event.Channel);
-                if (exten && activeCalls[exten]) {
-                    delete activeCalls[exten];
-                    io.emit('callUpdate', { extension: exten, callData: null });
+            // Clean tear down when either party terminates the tracked call channel
+            if (event.Event === 'Hangup' || event.Event === 'HangupRequest' || event.Event === 'SoftHangupRequest' || event.Event === 'ChannelDestroy') {
+                let extsToClear = new Set();
+
+                for (let e in activeCalls) {
+                    const call = activeCalls[e];
+                    if (call) {
+                        const eventChan = event.Channel || '';
+                        if ((call.channel && call.channel === eventChan) ||
+                            (event.Channel1 && call.channel === event.Channel1) ||
+                            (event.Channel2 && call.channel === event.Channel2)) {
+                            extsToClear.add(e);
+                        } else if (!call.channel && getExtensionFromChannel(eventChan) === e && event.Event === 'Hangup') {
+                            extsToClear.add(e);
+                        }
+                    }
                 }
+
+                extsToClear.forEach(e => {
+                    if (activeCalls[e]) {
+                        delete activeCalls[e];
+                        io.emit('callUpdate', { extension: e, callData: null });
+                    }
+                });
             }
         });
     });
@@ -1359,6 +1381,40 @@ setInterval(() => {
         }
     }
 }, 60000);
+
+// Periodic reconciliation of active calls against Asterisk live channels (every 4 seconds)
+async function reconcileActiveCallsWithAsterisk() {
+    try {
+        const activeExts = Object.keys(activeCalls);
+        if (activeExts.length === 0) return;
+
+        const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels concise']);
+        const liveLines = output.split('\n').filter(Boolean);
+        const liveExts = new Set();
+        const liveChans = new Set();
+
+        for (const line of liveLines) {
+            const parts = line.split('!');
+            const chan = parts[0] || '';
+            if (chan) liveChans.add(chan);
+            const ext = getExtensionFromChannel(chan);
+            if (ext) liveExts.add(ext);
+        }
+
+        for (const ext of activeExts) {
+            const call = activeCalls[ext];
+            const storedChan = call?.channel;
+            const isChanLive = storedChan ? liveChans.has(storedChan) : false;
+            const isExtLive = liveExts.has(ext);
+
+            if (!isChanLive && !isExtLive) {
+                delete activeCalls[ext];
+                io.emit('callUpdate', { extension: ext, callData: null });
+            }
+        }
+    } catch (_) {}
+}
+setInterval(reconcileActiveCallsWithAsterisk, 4000);
 
 // Periodic SIPpeers + PJSIP contacts refresh to keep IPs current (every 30s)
 setInterval(() => {
@@ -2334,6 +2390,36 @@ app.get('/cdr/export', async (req, res) => {
 
     } catch (error) {
         res.status(500).send("CDR Export Error: " + error.message);
+    }
+});
+
+// POST /api/cdr/delete — Delete a call history record (Super Admins only)
+app.post('/api/cdr/delete', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Super Admin access required' });
+        }
+        const { uniqueid, calldate } = req.body;
+        if (!uniqueid) {
+            return res.status(400).json({ success: false, error: 'Unique ID is required' });
+        }
+
+        let query = `DELETE FROM ${tables.cdr} WHERE uniqueid = ?`;
+        let params = [uniqueid];
+        if (calldate) {
+            query += ` AND calldate = ?`;
+            params.push(calldate);
+        }
+
+        const [result] = await pool.query(query, params);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Call record not found' });
+        }
+
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('CDR Delete Error:', err);
+        return res.status(500).json({ success: false, error: 'Database error: ' + err.message });
     }
 });
 

@@ -313,7 +313,7 @@ function isTabAllowed(tabName) {
                 <!-- 9. voicemails -->
                 <% if (isTabAllowed('voicemail')) { %>
                 <button onclick="switchTab('voicemail')" id="tab-btn-voicemail" title="<%= isRtl ? 'البريد الصوتي' : 'Voicemails' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
-                    <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 19v-8.93a2 2 0 01.89-1.664l8-5.333a2 2 0 012.22 0l8 5.333A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-5.625-3.75" /></svg>
+                    <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                     <span class="subsidebar-text truncate"><%= isRtl ? 'البريد الصوتي' : 'Voicemails' %></span>
                 </button>
                 <% } %>
@@ -340,7 +340,7 @@ function isTabAllowed(tabName) {
                 <% if (isTabAllowed('diagram')) { %>
                 <button onclick="switchTab('diagram')" id="tab-btn-diagram" title="<%= isRtl ? 'مخطط الإعدادات' : 'Config Diagram' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
                     <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h8M12 7v6m-4 0h8m-10 4h4m6 0h4M4 17v2a1 1 0 001 1h4a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1zm10 0v2a1 1 0 001 1h4a1 1 0 001-1v-2a1 1 0 00-1-1h-4a1 1 0 00-1 1zM9 5v2a1 1 0 001 1h4a1 1 0 001-1V5a1 1 0 00-1-1h-4a1 1 0 00-1 1z" />
                     </svg>
                     <span class="subsidebar-text truncate"><%= isRtl ? 'مخطط الإعدادات' : 'Config Diagram' %></span>
                 </button>
@@ -824,8 +824,8 @@ function isTabAllowed(tabName) {
                 
                 /* Global wires in light theme should be darker to be visible */
                 .light-theme .diagram-wire[data-type="ext-route-global"] {
-                    stroke: #94a3b8 !important;
-                    opacity: 0.5 !important;
+                    stroke: #475569 !important;
+                    opacity: 0.6 !important;
                 }
             </style>
             <div class="config-card p-6 relative">
@@ -877,9 +877,8 @@ function isTabAllowed(tabName) {
                                 <circle cx="2" cy="2" r="1.5" fill="#222" />
                             </pattern>
                             <!-- Drop shadow filter for highlights -->
-                            <filter id="glow-filter" x="-20%" y="-20%" width="140%" height="140%">
-                                <feGaussianBlur stdDeviation="4" result="blur" />
-                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            <filter id="glow-filter" x="-40%" y="-40%" width="180%" height="180%" filterUnits="userSpaceOnUse">
+                                <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#ffffff" flood-opacity="0.8" />
                             </filter>
                         </defs>
                         <!-- Grid rect -->
@@ -1949,12 +1948,12 @@ function isTabAllowed(tabName) {
                                 <input type="text" id="inExtension" placeholder="e.g. 01012345678 (blank = ANY)" class="config-input w-full font-mono text-xs" autocomplete="off">
 
                                 <!-- DONGLE DID FLOATING POPUP FOR INBOUND ROUTES -->
-                                <div id="inboundDongleInfoPopup" class="fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-4 z-[999999] hidden space-y-2">
-                                    <div class="text-[11px] font-bold text-[var(--text-secondary)] uppercase flex items-center justify-between">
+                                <div id="inboundDongleInfoPopup" class="fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-4 z-[999999] hidden space-y-2 max-h-[320px] flex flex-col">
+                                    <div class="text-[11px] font-bold text-[var(--text-secondary)] uppercase flex items-center justify-between shrink-0">
                                         <span><%= isRtl ? 'أجهزة Dongle والأرقام المعرفة:' : 'Connected Dongles & Numbers:' %></span>
                                         <button type="button" onclick="loadInboundDonglePopup()" class="text-[10px] text-blue-400 hover:underline">Refresh</button>
                                     </div>
-                                    <div id="inboundDongleList" class="text-xs space-y-2 flex flex-col overflow-visible pr-1">
+                                    <div id="inboundDongleList" class="text-xs space-y-2 flex flex-col overflow-y-auto max-h-[260px] pr-1 custom-scrollbar flex-1">
                                         <span class="text-[11px] text-[var(--text-muted)]">Loading...</span>
                                     </div>
                                 </div>
@@ -5138,12 +5137,6 @@ function isTabAllowed(tabName) {
                             btnGroup.appendChild(btnNum);
                         }
 
-                        const btnId = document.createElement('button');
-                        btnId.type = 'button';
-                        btnId.className = 'px-2 py-0.5 text-[9px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded cursor-pointer transition-colors';
-                        btnId.textContent = 'Use ID (' + d.ID + ')';
-                        btnId.addEventListener('click', () => selectInboundDid(d.ID));
-                        btnGroup.appendChild(btnId);
 
                         div.appendChild(infoDiv);
                         div.appendChild(btnGroup);
@@ -5348,13 +5341,20 @@ function isTabAllowed(tabName) {
                     inPopup.style.left = left + 'px';
                     inPopup.style.zIndex = '999999';
 
-                    inPopup.style.maxHeight = 'none';
-                    inPopup.style.overflow = 'visible';
+                    const spaceBelow = window.innerHeight - rect.bottom - 16;
+                    const spaceAbove = rect.top - 16;
+                    const maxPopupHeight = Math.min(320, Math.max(spaceBelow, spaceAbove, 180));
 
-                    const spaceBelow = window.innerHeight - rect.bottom;
-                    const spaceAbove = rect.top;
-                    const popupEstHeight = inPopup.offsetHeight || 220;
-                    if (spaceBelow < popupEstHeight && spaceAbove > spaceBelow) {
+                    inPopup.style.maxHeight = maxPopupHeight + 'px';
+                    inPopup.style.overflow = 'hidden';
+
+                    const listEl = document.getElementById('inboundDongleList');
+                    if (listEl) {
+                        listEl.style.maxHeight = Math.max(80, maxPopupHeight - 45) + 'px';
+                        listEl.style.overflowY = 'auto';
+                    }
+
+                    if (spaceBelow < 220 && spaceAbove > spaceBelow) {
                         inPopup.style.top = 'auto';
                         inPopup.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
                     } else {
@@ -5838,7 +5838,7 @@ function isTabAllowed(tabName) {
                 const routeTrunks = Array.isArray(route.trunks) ? route.trunks : [];
                 routeTrunks.forEach(tk => {
                     const tkId = tk.trunk_id || tk.trunkid;
-                    const matchedTrunk = trunks.find(t => String(t.trunkid) === String(tkId));
+                    const matchedTrunk = trunks.find(t => String(t.trunkid) === String(tkId) || (tk.trunk_name && String(t.name) === String(tk.trunk_name)));
                     const targetTrunkId = matchedTrunk ? matchedTrunk.trunkid : tkId;
                     if (targetTrunkId !== undefined && targetTrunkId !== null) {
                         diagramLinks.push({
@@ -5870,8 +5870,14 @@ function isTabAllowed(tabName) {
                     const controlY2 = y2 + arcOffset;
                     d = `M ${x1} ${y1} C ${x1 + colSpacing * 0.4} ${controlY1}, ${x2 - colSpacing * 0.4} ${controlY2}, ${x2} ${y2}`;
                 } else {
-                    const dx = colDistance * 0.45;
-                    d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+                    const dx = colDistance * 0.42;
+                    const controlX1 = (x2 >= x1) ? (x1 + dx) : (x1 - dx);
+                    const controlX2 = (x2 >= x1) ? (x2 - dx) : (x2 + dx);
+                    const dy = y2 - y1;
+                    const bow = (dy >= 0 ? 1 : -1) * Math.min(25, Math.abs(dy) * 0.2);
+                    const controlY1 = y1 + bow;
+                    const controlY2 = y2 - bow;
+                    d = `M ${x1} ${y1} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${x2} ${y2}`;
                 }
 
                 let strokeColor = '#3f3f46';
@@ -5883,7 +5889,7 @@ function isTabAllowed(tabName) {
                 else if (link.type === 'queue-member') strokeColor = '#f59e0b';
                 else if (link.type === 'queue-dest') strokeColor = '#3b82f6';
                 else if (link.type === 'ext-route-restricted') strokeColor = '#f97316';
-                else if (link.type === 'ext-route-global') strokeColor = '#27272a';
+                else if (link.type === 'ext-route-global') strokeColor = '#64748b';
                 else if (link.type === 'route-trunk') strokeColor = '#06b6d4';
 
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -5892,10 +5898,10 @@ function isTabAllowed(tabName) {
                 path.setAttribute('d', d);
                 path.setAttribute('fill', 'none');
                 path.setAttribute('stroke', strokeColor);
-                path.setAttribute('stroke-width', link.type === 'ext-route-global' ? '1.5px' : '2px');
+                path.setAttribute('stroke-width', '2px');
                 path.setAttribute('stroke-linecap', 'round');
                 path.setAttribute('data-type', link.type);
-                path.style.opacity = link.type === 'ext-route-global' ? '0.2' : '0.5';
+                path.style.opacity = '0.5';
                 
                 svgWires.appendChild(path);
             });
@@ -6198,7 +6204,7 @@ function isTabAllowed(tabName) {
                 if (activeWireIds.has(id)) {
                     wire.style.opacity = '1';
                     wire.style.strokeWidth = '3.5px';
-                    wire.style.filter = 'url(#glow-filter)';
+                    wire.style.filter = 'none';
                 } else {
                     wire.style.opacity = '0.04';
                     wire.style.strokeWidth = '1.5px';
@@ -6242,13 +6248,19 @@ function isTabAllowed(tabName) {
                 } else if (type === 'rg-member') {
                     wire.style.stroke = '#a855f7';
                     wire.style.opacity = '0.5';
+                } else if (type === 'queue-member') {
+                    wire.style.stroke = '#f59e0b';
+                    wire.style.opacity = '0.5';
+                } else if (type === 'queue-dest') {
+                    wire.style.stroke = '#3b82f6';
+                    wire.style.opacity = '0.5';
                 } else if (type === 'ext-route-restricted') {
                     wire.style.stroke = '#f97316';
                     wire.style.opacity = '0.5';
                 } else if (type === 'ext-route-global') {
-                    wire.style.stroke = '#27272a';
-                    wire.style.strokeWidth = '1.5px';
-                    wire.style.opacity = '0.2';
+                    wire.style.stroke = '#64748b';
+                    wire.style.strokeWidth = '2px';
+                    wire.style.opacity = '0.5';
                 } else if (type === 'route-trunk') {
                     wire.style.stroke = '#06b6d4';
                     wire.style.opacity = '0.5';

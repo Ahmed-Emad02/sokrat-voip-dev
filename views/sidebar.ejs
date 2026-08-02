@@ -1459,27 +1459,36 @@ function can(tab) { return isSuper || allowed.includes(tab); }
                 settingsMenu.style.width = ''; // reset to auto first
                 const rect = settingsBtn.getBoundingClientRect();
                 const gap = 8;
+                const menuWidth = settingsMenu.offsetWidth || 280;
+                const menuHeight = settingsMenu.offsetHeight || 360;
+
                 let left = rect.left;
-                if (left + settingsMenu.offsetWidth > window.innerWidth - gap) {
-                    left = window.innerWidth - settingsMenu.offsetWidth - gap;
+                if (left + menuWidth > window.innerWidth - gap) {
+                    left = window.innerWidth - menuWidth - gap;
                 }
                 if (left < gap) left = gap;
                 settingsMenu.style.left = left + 'px';
-                
-                let top = rect.top - settingsMenu.offsetHeight - gap;
+
+                let top = rect.top - menuHeight - gap;
                 if (top < gap) {
                     top = rect.bottom + gap;
+                    if (top + menuHeight > window.innerHeight - gap) {
+                        top = Math.max(gap, window.innerHeight - menuHeight - gap);
+                    }
                 }
                 settingsMenu.style.top = top + 'px';
+                settingsMenu.style.maxHeight = (window.innerHeight - 2 * gap) + 'px';
             }
             function setSettingsMenuOpen(isOpen) {
-                if (isOpen) positionMenu();
-                settingsMenu.classList.toggle('visible', isOpen);
-                settingsMenu.classList.toggle('invisible', !isOpen);
-                settingsMenu.classList.toggle('opacity-0', !isOpen);
-                settingsMenu.classList.toggle('scale-95', !isOpen);
-                settingsMenu.classList.toggle('opacity-100', isOpen);
-                settingsMenu.classList.toggle('scale-100', isOpen);
+                if (isOpen) {
+                    settingsMenu.classList.add('visible');
+                    settingsMenu.classList.remove('invisible', 'opacity-0', 'scale-95');
+                    settingsMenu.classList.add('opacity-100', 'scale-100');
+                    positionMenu();
+                } else {
+                    settingsMenu.classList.remove('visible', 'opacity-100', 'scale-100');
+                    settingsMenu.classList.add('invisible', 'opacity-0', 'scale-95');
+                }
                 settingsMenu.style.pointerEvents = isOpen ? 'auto' : 'none';
                 settingsBtn.setAttribute('aria-expanded', String(isOpen));
             }
