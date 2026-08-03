@@ -417,12 +417,13 @@ same => n,Goto(s,process)
 
 exten => s,1,Set(MY_SIM_NUMBER=)
 same => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)
-same => n,Set(JITTERBUFFER(adaptive)=default)
-same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})}))
+same => n,Set(DENOISE(rx)=on)
+same => n,Set(DENOISE(tx)=on)
+same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(dongle_map/${DONGLENAME})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMSI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(sim_map/${DONGLEIMSI})}))
-same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(dongle_map/${DONGLENAME})}))
-same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${EXTEN}))
+same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})}))
+same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${EXTEN}))
 same => n,NoOp(This call arrived on SIM number: ${MY_SIM_NUMBER})
 same => n,Set(CALLERID(dnid)=${MY_SIM_NUMBER})
 
@@ -432,9 +433,12 @@ same => n,Set(FOUND_NAME=${SHELL(sqlite3 /var/www/db/address_book.db "SELECT nam
 same => n,GotoIf($["${FOUND_NAME}" = ""]?skip_cid)
 same => n,NoOp(Found Contact Name: ${FOUND_NAME})
 same => n,Set(CALLERID(name)=${FOUND_NAME})
-same => n(skip_cid),GotoIf($["${MY_SIM_NUMBER}" != "" & "${MY_SIM_NUMBER}" != "s" & "${MY_SIM_NUMBER}" != "+1234567890"]?goto_did:goto_catchall)
+same => n(skip_cid),GotoIf($["${MY_SIM_NUMBER}" != "" & "${MY_SIM_NUMBER}" != "s" & "${MY_SIM_NUMBER}" != "+1234567890" & ${DIALPLAN_EXISTS(from-trunk,${MY_SIM_NUMBER},1)}]?goto_did:no_route)
 same => n(goto_did),Goto(from-trunk,${MY_SIM_NUMBER},1)
-same => n(goto_catchall),Goto(from-trunk,s,1)
+same => n(no_route),NoOp(DONGLE-ERROR: No matching inbound route in from-trunk for DID '${MY_SIM_NUMBER}' on dongle '${DONGLENAME}')
+same => n,Playtones(congestion)
+same => n,Congestion(10)
+same => n,Hangup()
 DONGLE
 
 # Strip old [macro-dialout-trunk-predial-hook] before appending
