@@ -6968,6 +6968,23 @@ app.get('/api/config/modem/rtcp', async (req, res) => {
         const lines = (output || '').split('\n').filter(Boolean);
         const channels = [];
 
+        const sipStatsMap = {};
+        try {
+            const sipStatsOut = await execFileAsync(ASTERISK_BIN, ['-rx', 'sip show channelstats']);
+            const sipLines = (sipStatsOut || '').split('\n');
+            for (const sLine of sipLines) {
+                const sParts = sLine.trim().split(/\s+/);
+                if (sParts.length >= 7 && sParts[1] && sParts[1].length >= 5) {
+                    const callIdPrefix = sParts[1];
+                    const lostPctMatch = sLine.match(/\(\s*([\d.]+)\s*%\)/);
+                    const lostPct = lostPctMatch ? parseFloat(lostPctMatch[1]) : 0;
+                    const jitterSec = parseFloat(sParts[6]) || 0;
+                    const jitterMs = Math.round(jitterSec * 1000 * 10) / 10;
+                    sipStatsMap[callIdPrefix] = { jitterMs, packetLoss: lostPct };
+                }
+            }
+        } catch (_) {}
+
         for (const line of lines) {
             const parts = line.split('!');
             const chanName = parts[0] || '';
@@ -6988,26 +7005,34 @@ app.get('/api/config/modem/rtcp', async (req, res) => {
             try {
                 const chanDetail = await execFileAsync(ASTERISK_BIN, ['-rx', `core show channel ${chanName}`]);
                 
-                const fmtMatch = chanDetail.match(/NativeFormat:\s*\(([^)]+)\)/i) || chanDetail.match(/ReadFormat:\s*([^\r\n]+)/i);
+                const fmtMatch = chanDetail.match(/NativeFormats?:\s*\(([^)]+)\)/i) || chanDetail.match(/ReadFormat:\s*([^\r\n]+)/i);
                 if (fmtMatch) format = fmtMatch[1].trim();
 
-                let sipDetail = '';
-                if (chanName.startsWith('SIP/')) {
-                    try { sipDetail = await execFileAsync(ASTERISK_BIN, ['-rx', `sip show channel ${chanName}`]); } catch (_) {}
-                } else if (chanName.startsWith('PJSIP/')) {
-                    try { sipDetail = await execFileAsync(ASTERISK_BIN, ['-rx', `pjsip show channel ${chanName}`]); } catch (_) {}
+                const sipCallIdMatch = chanDetail.match(/SIPCALLID=([^\r\n]+)/i);
+                if (sipCallIdMatch && isRtp) {
+                    const sipCallId = sipCallIdMatch[1].trim();
+                    for (const prefix in sipStatsMap) {
+                        if (sipCallId.startsWith(prefix)) {
+                            rxjitter = sipStatsMap[prefix].jitterMs;
+                            rxploss = sipStatsMap[prefix].packetLoss;
+                            break;
+                        }
+                    }
                 }
 
-                const combined = chanDetail + '\n' + sipDetail;
-
-                const jitterMatch = combined.match(/(?:Rx\s*Jitter|rxjitter|Jitter|Jitter\s*Count)\s*[:=]\s*([\d.]+)/i);
-                if (jitterMatch) rxjitter = Math.round(parseFloat(jitterMatch[1]) * 100) / 100;
-
-                const lossMatch = combined.match(/(?:Rx\s*Packet\s*Loss|Packet\s*Loss|Lost\s*Packets|Lost|rxploss)\s*[:=]\s*([\d.]+)/i);
-                if (lossMatch) rxploss = Math.round(parseFloat(lossMatch[1]) * 100) / 100;
-
-                const rttMatch = combined.match(/(?:RTT|Round\s*Trip|rtt)\s*[:=]\s*([\d.]+)/i);
-                if (rttMatch) rtt = Math.round(parseFloat(rttMatch[1]) * 100) / 100;
+                if (rxjitter === null && isRtp) {
+                    let sipDetail = '';
+                    if (chanName.startsWith('SIP/')) {
+                        try { sipDetail = await execFileAsync(ASTERISK_BIN, ['-rx', `sip show channel ${chanName}`]); } catch (_) {}
+                    }
+                    const combined = chanDetail + '\n' + sipDetail;
+                    const jitterMatch = combined.match(/(?:Rx\s*Jitter|rxjitter|Jitter|Jitter\s*Count)\s*[:=]\s*([\d.]+)/i);
+                    if (jitterMatch) rxjitter = Math.round(parseFloat(jitterMatch[1]) * 100) / 100;
+                    const lossMatch = combined.match(/(?:Rx\s*Packet\s*Loss|Packet\s*Loss|Lost\s*Packets|Lost|rxploss)\s*[:=]\s*([\d.]+)/i);
+                    if (lossMatch) rxploss = Math.round(parseFloat(lossMatch[1]) * 100) / 100;
+                    const rttMatch = combined.match(/(?:RTT|Round\s*Trip|rtt)\s*[:=]\s*([\d.]+)/i);
+                    if (rttMatch) rtt = Math.round(parseFloat(rttMatch[1]) * 100) / 100;
+                }
             } catch (_) {}
 
             const ext = getExtensionFromChannel(chanName) || exten || chanName;
