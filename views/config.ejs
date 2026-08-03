@@ -2592,6 +2592,7 @@ function isTabAllowed(tabName) {
             btn.classList.remove('config-tab-inactive');
             btn.classList.add('config-tab-active');
 
+            stopRtcpTimer();
             if (tabId === 'extensions') fetchExtensions();
             if (tabId === 'ringgroups') { fetchRecordings(); fetchRingGroups(); fetchExtensions(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); }
             if (tabId === 'queues') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchAnnouncements(); }
@@ -2605,7 +2606,7 @@ function isTabAllowed(tabName) {
             if (tabId === 'timegroups') fetchTimeGroups();
             if (tabId === 'timeconditions') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeGroups(); fetchTimeConditions(); fetchAnnouncements(); }
             if (tabId === 'announcements') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); }
-            if (tabId === 'modem') { fetchModemConfig(); fetchRtcpDiagnostics(); }
+            if (tabId === 'modem') { fetchModemConfig(); fetchRtcpDiagnostics(); startRtcpTimer(); }
         }
         window.switchTab = switchTab;
 
@@ -7792,13 +7793,14 @@ function isTabAllowed(tabName) {
                     const hasJitter = ch.jitterMs !== null && ch.jitterMs !== undefined && typeof ch.jitterMs === 'number';
                     const hasLoss = ch.packetLoss !== null && ch.packetLoss !== undefined && typeof ch.packetLoss === 'number';
                     const hasRtt = ch.rttMs !== null && ch.rttMs !== undefined && typeof ch.rttMs === 'number';
+                    const isDongle = String(ch.channel || '').startsWith('Dongle/');
+                    const naText = isDongle ? 'N/A (GSM Direct)' : 'N/A (Non-RTP)';
 
-                    const jitterText = hasJitter ? `${ch.jitterMs} ms` : 'N/A';
-                    const lossText = hasLoss ? `${ch.packetLoss}%` : 'N/A';
-                    const rttText = hasRtt ? `${ch.rttMs} ms` : 'N/A';
+                    const jitterText = hasJitter ? `${ch.jitterMs} ms` : naText;
+                    const lossText = hasLoss ? `${ch.packetLoss}%` : naText;
+                    const rttText = hasRtt ? `${ch.rttMs} ms` : naText;
 
                     const neutralClass = 'text-[var(--text-muted)] bg-[var(--bg-card)] border-[var(--border-primary)]';
-
                     const jitterClass = !hasJitter ? neutralClass : (ch.jitterMs < 20 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : (ch.jitterMs < 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'));
 
                     const lossClass = !hasLoss ? neutralClass : (ch.packetLoss === 0 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : (ch.packetLoss < 3 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'));
@@ -7826,6 +7828,17 @@ function isTabAllowed(tabName) {
                 container.innerHTML = html;
             } catch (e) {
                 container.innerHTML = `<div class="text-center py-6 text-xs text-red-400">Error rendering RTCP diagnostics: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+        let rtcpTimer = null;
+        function startRtcpTimer() {
+            stopRtcpTimer();
+            rtcpTimer = setInterval(fetchRtcpDiagnostics, 3000);
+        }
+        function stopRtcpTimer() {
+            if (rtcpTimer) {
+                clearInterval(rtcpTimer);
+                rtcpTimer = null;
             }
         }
         window.fetchRtcpDiagnostics = fetchRtcpDiagnostics;

@@ -6983,6 +6983,7 @@ app.get('/api/config/modem/rtcp', async (req, res) => {
             let rxploss = null;
             let rtt = null;
             let format = 'slin (8kHz)';
+            const isRtp = chanName.startsWith('SIP/') || chanName.startsWith('PJSIP/');
 
             try {
                 const chanDetail = await execFileAsync(ASTERISK_BIN, ['-rx', `core show channel ${chanName}`]);
@@ -6999,20 +7000,21 @@ app.get('/api/config/modem/rtcp', async (req, res) => {
 
                 const combined = chanDetail + '\n' + sipDetail;
 
-                const jitterMatch = combined.match(/Jitter:\s*([\d.]+)/i) || combined.match(/rxjitter:\s*([\d.]+)/i) || combined.match(/Jitter\s*=\s*([\d.]+)/i);
-                if (jitterMatch) rxjitter = parseFloat(jitterMatch[1]);
+                const jitterMatch = combined.match(/(?:Rx\s*Jitter|rxjitter|Jitter|Jitter\s*Count)\s*[:=]\s*([\d.]+)/i);
+                if (jitterMatch) rxjitter = Math.round(parseFloat(jitterMatch[1]) * 100) / 100;
 
-                const lossMatch = combined.match(/Loss:\s*([\d.]+)/i) || combined.match(/rxploss:\s*([\d.]+)/i) || combined.match(/Lost\s*=\s*([\d.]+)/i);
-                if (lossMatch) rxploss = parseFloat(lossMatch[1]);
+                const lossMatch = combined.match(/(?:Rx\s*Packet\s*Loss|Packet\s*Loss|Lost\s*Packets|Lost|rxploss)\s*[:=]\s*([\d.]+)/i);
+                if (lossMatch) rxploss = Math.round(parseFloat(lossMatch[1]) * 100) / 100;
 
-                const rttMatch = combined.match(/RTT:\s*([\d.]+)/i) || combined.match(/rtt:\s*([\d.]+)/i) || combined.match(/RTT\s*=\s*([\d.]+)/i);
-                if (rttMatch) rtt = parseFloat(rttMatch[1]);
+                const rttMatch = combined.match(/(?:RTT|Round\s*Trip|rtt)\s*[:=]\s*([\d.]+)/i);
+                if (rttMatch) rtt = Math.round(parseFloat(rttMatch[1]) * 100) / 100;
             } catch (_) {}
 
             const ext = getExtensionFromChannel(chanName) || exten || chanName;
             channels.push({
                 channel: chanName,
                 extension: ext,
+                isRtp: isRtp,
                 state: state === 'Up' ? 'In Call' : (state || 'Ringing'),
                 duration: duration + 's',
                 format: format,
