@@ -7221,22 +7221,20 @@ app.get('/api/config/modem/denoise', async (req, res) => {
 // POST /api/config/modem/denoise - Update DSP noise suppression settings (rx/tx)
 app.post('/api/config/modem/denoise', async (req, res) => {
     try {
-        const { rx, tx } = req.body;
-        setDialplanDenoiseStatus({ rx, tx });
+        setDialplanDenoiseStatus({ rx: false, tx: false });
 
         try {
             await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
         } catch (_) {}
 
-        const updated = getDialplanDenoiseStatus();
-        res.json({
+        return res.json({
             success: true,
-            rx: updated.rx,
-            tx: updated.tx,
-            message: 'DSP Background Noise Suppression settings updated and Asterisk dialplan reloaded.'
+            rx: false,
+            tx: false,
+            message: 'Asterisk DENOISE is disabled to prevent libspeexdsp system library crash.'
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({ success: false, error: error.message });
     }
 });
 // ============================================================================
