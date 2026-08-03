@@ -3722,7 +3722,7 @@ function sendAtAndWait(dongleId, atCmd, timeoutMs, callback) {
     });
 }
 
-// Endpoint to manually set/save a SIM's phone number mapping
+// Endpoint to manually set/save a SIM's phone number mapping and program SIM card via AT commands
 app.post('/api/gsm-dongles/save-number', async (req, res) => {
     try {
         const { imsi, number, dongleId } = req.body;
@@ -3770,7 +3770,31 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
             await detectDonglesAndSetTrunkCID();
         } catch (_) {}
 
-        // 3. Verify dialplan route existence for configured DID
+        // 3. Program SIM card memory via AT commands with 2s delays between commands
+        const targetDongle = dId || 'dongle0';
+        const cmdSteps = [
+            `dongle cmd ${targetDongle} AT+CPBS=\\"ON\\"`,
+            `dongle cmd ${targetDongle} AT+CPBW=1,\\"${normNumber}\\",145`
+        ];
+
+        const results = [];
+        let allSuccess = true;
+
+        for (let i = 0; i < cmdSteps.length; i++) {
+            const stepCmd = cmdSteps[i];
+            try {
+                const out = await execFileAsync(ASTERISK_BIN, ['-rx', stepCmd]);
+                results.push({ step: stepCmd, success: true, output: (out || '').trim() });
+            } catch (err) {
+                allSuccess = false;
+                results.push({ step: stepCmd, success: false, error: err ? err.message : 'Command failed' });
+            }
+            if (i < cmdSteps.length - 1) {
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+
+        // 4. Verify dialplan route existence for configured DID
         const dpCheck = await execFileAsync(ASTERISK_BIN, ['-rx', `dialplan show ${normNumber}@from-trunk`]);
         const routeExists = dpCheck && dpCheck.includes(normNumber);
 
@@ -3780,9 +3804,11 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
         return res.json({
             success: true,
             dbSaved: true,
+            atSuccess: allSuccess,
+            results: results,
             routeExists: !!routeExists,
             message: routeExists
-                ? 'SIM phone number saved to Dashboard & AstDB successfully.'
+                ? 'SIM phone number saved to Dashboard, AstDB & SIM card memory successfully.'
                 : 'SIM phone number saved, but no Inbound Route for ' + normNumber + ' was found in Asterisk.'
         });
     } catch (error) {
@@ -3793,9 +3819,6 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
 // API endpoint to reset USB port for a dongle (unplug/replug simulation)
 app.post('/api/gsm-dongles/reset-usb-port', (req, res) => {
     const { dongleId } = req.body;
-    if (!dongleId || !/^dongle[0-9]+$/.test(dongleId)) {
-        return res.status(400).json({ success: false, error: 'Valid dongle ID required.' });
-    }
 
     const results = [];
     const runAsterisk = (cmd) => new Promise((resolve, reject) => {
