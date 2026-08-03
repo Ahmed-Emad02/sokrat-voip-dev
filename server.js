@@ -341,6 +341,20 @@ async function initAuthDb() {
             await conn.execute('INSERT IGNORE INTO dialer_dispositions (name, category) VALUES (?, ?)', [dName, dCat]);
         } catch (_) {}
     }
+    // Auto-provision HD Voice / Wideband codec priorities (G.722 / Opus > G.711) for high-quality extension calls
+    try {
+        await conn.execute("UPDATE `asterisk`.`sipsettings` SET `data` = '1', `seq` = 0 WHERE `keyword` = 'g722'");
+        await conn.execute("UPDATE `asterisk`.`sipsettings` SET `data` = '2', `seq` = 1 WHERE `keyword` = 'opus'");
+        await conn.execute("UPDATE `asterisk`.`sipsettings` SET `data` = '3', `seq` = 2 WHERE `keyword` = 'ulaw'");
+        await conn.execute("UPDATE `asterisk`.`sipsettings` SET `data` = '4', `seq` = 3 WHERE `keyword` = 'alaw'");
+        await conn.execute("UPDATE `asterisk`.`sipsettings` SET `data` = '5', `seq` = 4 WHERE `keyword` = 'gsm'");
+
+        await conn.execute("UPDATE `asterisk`.`pjsipsettings` SET `data` = '1', `seq` = 0 WHERE `keyword` = 'g722'");
+        await conn.execute("UPDATE `asterisk`.`pjsipsettings` SET `data` = '2', `seq` = 1 WHERE `keyword` = 'opus'");
+        await conn.execute("UPDATE `asterisk`.`pjsipsettings` SET `data` = '3', `seq` = 2 WHERE `keyword` = 'ulaw'");
+        await conn.execute("UPDATE `asterisk`.`pjsipsettings` SET `data` = '4', `seq` = 3 WHERE `keyword` = 'alaw'");
+        await conn.execute("UPDATE `asterisk`.`pjsipsettings` SET `data` = '5', `seq` = 4 WHERE `keyword` = 'gsm'");
+    } catch (_) {}
 
     // Migrate metadata written by the short-lived dual-database implementation.
     // INSERT IGNORE makes ASTERISK_DB canonical without overwriting newer canonical rows.

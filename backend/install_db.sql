@@ -161,3 +161,15 @@ CREATE TABLE IF NOT EXISTS `storage_settings` (
   `last_backup_at` DATETIME DEFAULT NULL,
   `last_backup_status` VARCHAR(50) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- Prioritize HD Voice / Wideband Codecs (G.722 / Opus) for high-quality extension-to-extension calls
+UPDATE `asterisk`.`sipsettings` SET `data` = '1', `seq` = 0 WHERE `keyword` = 'g722';
+UPDATE `asterisk`.`sipsettings` SET `data` = '2', `seq` = 1 WHERE `keyword` = 'opus';
+UPDATE `asterisk`.`sipsettings` SET `data` = '3', `seq` = 2 WHERE `keyword` = 'ulaw';
+UPDATE `asterisk`.`sipsettings` SET `data` = '4', `seq` = 3 WHERE `keyword` = 'alaw';
+UPDATE `asterisk`.`sipsettings` SET `data` = '5', `seq` = 4 WHERE `keyword` = 'gsm';
+
+UPDATE `asterisk`.`pjsipsettings` SET `data` = '1', `seq` = 0 WHERE `keyword` = 'g722';
+UPDATE `asterisk`.`pjsipsettings` SET `data` = '2', `seq` = 1 WHERE `keyword` = 'opus';
+UPDATE `asterisk`.`pjsipsettings` SET `data` = '3', `seq` = 2 WHERE `keyword` = 'ulaw';
+UPDATE `asterisk`.`pjsipsettings` SET `data` = '4', `seq` = 3 WHERE `keyword` = 'alaw';
+UPDATE `asterisk`.`pjsipsettings` SET `data` = '5', `seq` = 4 WHERE `keyword` = 'gsm';
