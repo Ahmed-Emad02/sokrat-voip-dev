@@ -411,9 +411,16 @@ function fmtDur(s) {
                     <label class="block text-[11px] font-bold uppercase text-zinc-400 mb-1 tracking-wider"><%= t.roster %></label>
                     <select name="targetExtension" class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                         <option value="ALL"><%= t.allExt %></option>
-                        <% roster.forEach(emp => { %>
+                        <% 
+                          let targetFound = false;
+                          roster.forEach(emp => { 
+                              if (filters.targetExtension === emp.extension) targetFound = true;
+                        %>
                             <option value="<%= emp.extension %>" <%= filters.targetExtension === emp.extension ? 'selected' : '' %>><%= emp.extension %> - <%= emp.name %></option>
                         <% }) %>
+                        <% if (filters.targetExtension && filters.targetExtension !== 'ALL' && !targetFound) { %>
+                            <option value="<%= filters.targetExtension %>" selected><%= filters.targetExtension %> - Extension <%= filters.targetExtension %></option>
+                        <% } %>
                     </select>
                 </div>
                 <div>

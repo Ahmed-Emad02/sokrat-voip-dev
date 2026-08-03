@@ -889,12 +889,15 @@ function extractDongleIdFromChannel(channelName) {
     if (m) return m[1].toLowerCase();
     return null;
 }
-// Helper function to extract extension number from Asterisk Channel string
 function getExtensionFromChannel(channelName) {
     if (!channelName) return null;
-    let m = channelName.match(/^(SIP|PJSIP)\/(\d{2,5})-/i);
-    if (m) return m[2];
-    m = channelName.match(/^Local\/(\d{2,5})@/i);
+    let m = String(channelName).match(/^(?:SIP|PJSIP|IAX2|Local)\/(\d{2,5})(?:[-@:;]|$)/i);
+    if (m) return m[1];
+    return null;
+}
+function getEndpointExtensionFromChannel(channelName) {
+    if (!channelName) return null;
+    let m = String(channelName).match(/^(?:SIP|PJSIP|IAX2)\/(\d{2,5})(?:[-@:;]|$)/i);
     if (m) return m[1];
     return null;
 }
@@ -1486,12 +1489,74 @@ setInterval(autoHealDongles, 3000);
 app.use(async (req, res, next) => {
 // System Shared Middleware to fetch extension rosters and handle language toggles
     try {
-        const [roster] = await pool.query(`
+        const [users] = await pool.query(`
             SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group
             FROM ${tables.users} u
             LEFT JOIN ${tables.employeeExtras} ee ON u.extension = ee.extension
-            ORDER BY CAST(u.extension AS UNSIGNED) ASC
         `);
+
+        let devices = [];
+        try {
+            const [devRows] = await pool.query(`SELECT id as extension, description as name FROM ${tables.devices}`);
+            devices = devRows;
+        } catch (_) {}
+
+        let sipExts = [];
+        try {
+            const [sRows] = await pool.query(`SELECT DISTINCT id as extension FROM ${tables.sip} WHERE keyword = 'secret' AND id REGEXP '^[0-9]{2,5}$'`);
+            sipExts = sRows;
+        } catch (_) {}
+
+        let psExts = [];
+        try {
+            const [psRows] = await pool.query(`SELECT DISTINCT id as extension FROM ${tables.psEndpoints} WHERE id REGEXP '^[0-9]{2,5}$'`);
+            psExts = psRows;
+        } catch (_) {}
+        let cdrChannels = [];
+        try {
+            const [cRows] = await pool.query(`
+                SELECT DISTINCT channel, dstchannel
+                FROM ${tables.cdr}
+                WHERE calldate >= NOW() - INTERVAL 180 DAY
+            `);
+            cdrChannels = cRows;
+        } catch (_) {}
+
+        const extMap = new Map();
+
+        users.forEach(u => {
+            if (u.extension && /^\d+$/.test(u.extension)) {
+                extMap.set(u.extension, { extension: u.extension, name: u.name || u.extension, photo: u.photo, title: u.title, emp_group: u.emp_group });
+            }
+        });
+
+        devices.forEach(d => {
+            if (d.extension && /^\d+$/.test(d.extension) && !extMap.has(d.extension)) {
+                extMap.set(d.extension, { extension: d.extension, name: d.name || d.extension, photo: null, title: null, emp_group: null });
+            }
+        });
+
+        sipExts.forEach(s => {
+            if (s.extension && /^\d+$/.test(s.extension) && !extMap.has(s.extension)) {
+                extMap.set(s.extension, { extension: s.extension, name: 'Extension ' + s.extension, photo: null, title: null, emp_group: null });
+            }
+        });
+
+        psExts.forEach(p => {
+            if (p.extension && /^\d+$/.test(p.extension) && !extMap.has(p.extension)) {
+                extMap.set(p.extension, { extension: p.extension, name: 'Extension ' + p.extension, photo: null, title: null, emp_group: null });
+            }
+        });
+
+        cdrChannels.forEach(r => {
+            [getEndpointExtensionFromChannel(r.channel), getEndpointExtensionFromChannel(r.dstchannel)].forEach(ext => {
+                if (ext && /^\d{2,5}$/.test(ext) && !extMap.has(ext)) {
+                    extMap.set(ext, { extension: ext, name: 'Extension ' + ext, photo: null, title: null, emp_group: null });
+                }
+            });
+        });
+
+        const roster = Array.from(extMap.values()).sort((a, b) => parseInt(a.extension, 10) - parseInt(b.extension, 10));
         let onlineMap = {};
         for (let e of roster) {
             let online = peerStatus[e.extension] || false;
@@ -2240,7 +2305,7 @@ app.get('/cdr', async (req, res) => {
         let countParams = [startDate, endDate];
 
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, 'No Name') as src_name,
+            SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             ${directionCase} as direction
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
@@ -2250,10 +2315,10 @@ app.get('/cdr', async (req, res) => {
         let queryParams = [startDate, endDate];
 
         if (selectedExtension !== 'ALL') {
-            const clause = " AND (c.src = ? OR c.dst = ?)";
+            const clause = " AND (c.src = ? OR c.dst = ? OR c.cnum = ? OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)'))";
             query += clause; countQuery += clause;
-            queryParams.push(selectedExtension, selectedExtension);
-            countParams.push(selectedExtension, selectedExtension);
+            queryParams.push(selectedExtension, selectedExtension, selectedExtension, selectedExtension, selectedExtension);
+            countParams.push(selectedExtension, selectedExtension, selectedExtension, selectedExtension, selectedExtension);
         }
         if (searchSrc) {
             const clause = " AND c.src LIKE ?";
@@ -2331,7 +2396,7 @@ app.get('/cdr/export', async (req, res) => {
         `;
 
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, 'No Name') as src_name,
+            SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             ${directionCase} as direction
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
@@ -2341,9 +2406,9 @@ app.get('/cdr/export', async (req, res) => {
         let queryParams = [startDate, endDate];
 
         if (selectedExtension !== 'ALL') {
-            const clause = " AND (c.src = ? OR c.dst = ?)";
+            const clause = " AND (c.src = ? OR c.dst = ? OR c.cnum = ? OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)'))";
             query += clause;
-            queryParams.push(selectedExtension, selectedExtension);
+            queryParams.push(selectedExtension, selectedExtension, selectedExtension, selectedExtension, selectedExtension);
         }
         if (searchSrc) {
             const clause = " AND c.src LIKE ?";
@@ -2663,27 +2728,29 @@ app.get('/api/ext-overview', async (req, res) => {
         rows.forEach(row => {
             const sec = parseInt(row.billsec) || 0;
             const isOutbound = isOutboundCdr(row);
+            const srcExt = row.src || getExtensionFromChannel(row.channel);
+            const dstExt = row.dst || getExtensionFromChannel(row.dstchannel);
 
-            if (employeeMetrics[row.src]) {
-                employeeMetrics[row.src].totalCalls++;
-                employeeMetrics[row.src].uniqueNumbers.add(row.dst);
+            if (srcExt && employeeMetrics[srcExt]) {
+                employeeMetrics[srcExt].totalCalls++;
+                if (dstExt) employeeMetrics[srcExt].uniqueNumbers.add(dstExt);
                 if (isOutbound) {
-                    employeeMetrics[row.src].outboundCalls++;
-                    if (row.disposition === 'ANSWERED') employeeMetrics[row.src].outboundTalkSec += sec;
+                    employeeMetrics[srcExt].outboundCalls++;
+                    if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].outboundTalkSec += sec;
                 } else {
-                    employeeMetrics[row.src].inboundCalls++;
-                    if (row.disposition === 'ANSWERED') employeeMetrics[row.src].inboundTalkSec += sec;
+                    employeeMetrics[srcExt].inboundCalls++;
+                    if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].inboundTalkSec += sec;
                 }
             }
-            if (employeeMetrics[row.dst]) {
-                employeeMetrics[row.dst].totalCalls++;
-                employeeMetrics[row.dst].uniqueNumbers.add(row.src);
+            if (dstExt && employeeMetrics[dstExt] && dstExt !== srcExt) {
+                employeeMetrics[dstExt].totalCalls++;
+                if (srcExt) employeeMetrics[dstExt].uniqueNumbers.add(srcExt);
                 if (isOutbound) {
-                    employeeMetrics[row.dst].outboundCalls++;
-                    if (row.disposition === 'ANSWERED') employeeMetrics[row.dst].outboundTalkSec += sec;
+                    employeeMetrics[dstExt].outboundCalls++;
+                    if (row.disposition === 'ANSWERED') employeeMetrics[dstExt].outboundTalkSec += sec;
                 } else {
-                    employeeMetrics[row.dst].inboundCalls++;
-                    if (row.disposition === 'ANSWERED') employeeMetrics[row.dst].inboundTalkSec += sec;
+                    employeeMetrics[dstExt].inboundCalls++;
+                    if (row.disposition === 'ANSWERED') employeeMetrics[dstExt].inboundTalkSec += sec;
                 }
             }
         });
@@ -2717,12 +2784,12 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
         const direction = req.query.direction || 'all';
 
         const [rows] = await pool.query(
-             `SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.channel, c.dstchannel, c.uniqueid
+             `SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.channel, c.dstchannel, c.uniqueid, c.cnum
               FROM ${tables.cdr} c
               WHERE c.calldate BETWEEN ? AND ?
-             AND (c.src = ? OR c.dst = ?)
+             AND (c.src = ? OR c.dst = ? OR c.cnum = ? OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)'))
              ORDER BY c.calldate DESC`,
-            [startDate, endDate, extension, extension]
+            [startDate, endDate, extension, extension, extension, extension, extension]
         );
 
         const stats = {
@@ -2739,11 +2806,10 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
         rows.forEach(row => {
             const sec = parseInt(row.billsec) || 0;
             const isOutboundCall = isOutboundCdr(row);
-            const isSrc = row.src === extension;
-            const isDst = row.dst === extension;
+            const isSrc = row.src === extension || row.cnum === extension || getExtensionFromChannel(row.channel) === extension;
+            const isDst = row.dst === extension || getExtensionFromChannel(row.dstchannel) === extension;
 
             if (!isSrc && !isDst) return;
-
             let callDirection = 'internal';
             if (isSrc && isOutboundCall) callDirection = 'outbound';
             else if (isDst && !isOutboundCall) callDirection = 'inbound';
@@ -2794,8 +2860,8 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
         for (const row of rows) {
             const sec = parseInt(row.billsec) || 0;
             const isOutboundCall = isOutboundCdr(row);
-            const isSrc = row.src === extension;
-            const isDst = row.dst === extension;
+            const isSrc = row.src === extension || row.cnum === extension || getExtensionFromChannel(row.channel) === extension;
+            const isDst = row.dst === extension || getExtensionFromChannel(row.dstchannel) === extension;
             if (!isSrc && !isDst) continue;
             let callDirection = 'internal';
             if (isSrc && isOutboundCall) callDirection = 'outbound';

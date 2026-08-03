@@ -517,6 +517,24 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         position: relative !important;
         z-index: 100 !important;
     }
+    .custom-select-options::-webkit-scrollbar,
+    .custom-select-menu::-webkit-scrollbar {
+        width: 6px;
+    }
+    .custom-select-options::-webkit-scrollbar-track,
+    .custom-select-menu::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+    }
+    .custom-select-options::-webkit-scrollbar-thumb,
+    .custom-select-menu::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+    }
+    .custom-select-options::-webkit-scrollbar-thumb:hover,
+    .custom-select-menu::-webkit-scrollbar-thumb:hover {
+        background: var(--accent-color);
+    }
 
     /* Terminal panes intentionally stay dark in both themes. */
     .light-theme .terminal-screen,
@@ -2616,9 +2634,49 @@ function enhanceSelectElements() {
         wrapper.appendChild(trigger);
         
         const menu = document.createElement('div');
-        menu.className = 'custom-select-menu fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl z-[999999] max-h-60 overflow-y-auto hidden no-scrollbar p-1 space-y-0.5';
+        menu.className = 'custom-select-menu fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl z-[999999] hidden p-1 flex flex-col gap-1';
+        menu.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
         document.body.appendChild(menu);
-        
+        let searchInput = null;
+        let searchContainer = null;
+
+        const optionsContainer = document.createElement('div');
+        optionsContainer.className = 'custom-select-options max-h-60 overflow-y-auto space-y-0.5 p-0.5';
+        menu.appendChild(optionsContainer);
+
+        function setupSearchIfNecessary() {
+            if (select.options.length > 3 && !searchContainer) {
+                searchContainer = document.createElement('div');
+                searchContainer.className = 'p-1 shrink-0';
+                searchContainer.addEventListener('click', (e) => e.stopPropagation());
+
+                searchInput = document.createElement('input');
+                searchInput.type = 'text';
+                const isAr = document.documentElement.getAttribute('dir') === 'rtl' || (document.documentElement.getAttribute('lang') || '').startsWith('ar');
+                searchInput.placeholder = isAr ? 'بحث...' : 'Search...';
+                searchInput.className = 'custom-select-search w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]';
+                searchInput.addEventListener('click', (e) => e.stopPropagation());
+                searchContainer.appendChild(searchInput);
+                menu.insertBefore(searchContainer, optionsContainer);
+
+                searchInput.addEventListener('input', (e) => {
+                    buildOptions(e.target.value);
+                });
+                searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        closeMenu();
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const firstMatch = optionsContainer.querySelector('.custom-select-option');
+                        if (firstMatch) firstMatch.click();
+                    }
+                });
+            }
+        }
+
+        setupSearchIfNecessary();
         function positionMenuFixed() {
             const rect = trigger.getBoundingClientRect();
             const width = Math.min(Math.max(rect.width, 280), window.innerWidth - 16);
@@ -2633,7 +2691,7 @@ function enhanceSelectElements() {
             menu.style.left = left + 'px';
             const spaceBelow = window.innerHeight - rect.bottom;
             const spaceAbove = rect.top;
-            const menuEstHeight = Math.min(select.options.length * 36 + 12, 240);
+            const menuEstHeight = Math.min(select.options.length * 36 + 48, 280);
             
             if (spaceBelow < menuEstHeight && spaceAbove > spaceBelow) {
                 menu.style.top = 'auto';
@@ -2644,32 +2702,52 @@ function enhanceSelectElements() {
             }
         }
         
-        function buildOptions() {
-            menu.innerHTML = '';
+        function buildOptions(filterText = '') {
+            optionsContainer.innerHTML = '';
+            const query = (filterText || '').toLowerCase().trim();
+            let matchCount = 0;
+
             Array.from(select.options).forEach((opt, idx) => {
                 if (opt.disabled && opt.hidden) return;
+                const text = opt.textContent || '';
+                const val = opt.value || '';
+                if (query && !text.toLowerCase().includes(query) && !val.toLowerCase().includes(query)) {
+                    return;
+                }
+                matchCount++;
                 const item = document.createElement('div');
                 const isSelected = select.selectedIndex === idx;
                 item.className = `custom-select-option px-3 py-2 text-xs font-mono rounded-lg cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'is-selected font-bold' : ''}`;
                 item.setAttribute('role', 'option');
                 item.setAttribute('aria-selected', String(isSelected));
-                item.textContent = opt.textContent;
+                item.textContent = text;
                 item.addEventListener('click', (e) => {
                     e.stopPropagation();
                     select.selectedIndex = idx;
                     select.dispatchEvent(new Event('change', { bubbles: true }));
                     syncState();
-                    menu.classList.add('hidden');
-                    trigger.setAttribute('aria-expanded', 'false');
-                    trigger.classList.remove('border-[var(--accent-color)]');
+                    closeMenu();
                     buildOptions();
                 });
-                menu.appendChild(item);
+                optionsContainer.appendChild(item);
             });
+
+            if (matchCount === 0) {
+                const isAr = document.documentElement.getAttribute('dir') === 'rtl' || (document.documentElement.getAttribute('lang') || '').startsWith('ar');
+                const noResult = document.createElement('div');
+                noResult.className = 'px-3 py-2 text-xs font-mono text-[var(--text-muted)] text-center italic';
+                noResult.textContent = isAr ? 'لا توجد نتائج خيارات' : 'No matching options';
+                optionsContainer.appendChild(noResult);
+            }
         }
         buildOptions();
         
-        
+        function closeMenu() {
+            menu.classList.add('hidden');
+            trigger.setAttribute('aria-expanded', 'false');
+            trigger.classList.remove('border-[var(--accent-color)]');
+        }
+
         function syncState() {
             const isDisabled = select.disabled || select.hasAttribute('disabled');
             trigger.disabled = isDisabled;
@@ -2690,8 +2768,11 @@ function enhanceSelectElements() {
             syncState();
         });
         try {
-            const observer = new MutationObserver(syncState);
-            observer.observe(select, { attributes: true, attributeFilter: ['disabled'] });
+            const observer = new MutationObserver(() => {
+                syncState();
+                setupSearchIfNecessary();
+            });
+            observer.observe(select, { attributes: true, attributeFilter: ['disabled'], childList: true });
         } catch(_) {}
         syncState();
         trigger.addEventListener('click', (e) => {
@@ -2709,15 +2790,18 @@ function enhanceSelectElements() {
             });
             
             if (isOpening) {
+                setupSearchIfNecessary();
+                if (searchInput) searchInput.value = '';
                 buildOptions();
                 positionMenuFixed();
                 menu.classList.remove('hidden');
                 trigger.setAttribute('aria-expanded', 'true');
                 trigger.classList.add('border-[var(--accent-color)]');
+                if (searchInput) setTimeout(() => searchInput.focus(), 50);
+                const selectedItem = optionsContainer.querySelector('.is-selected');
+                if (selectedItem) selectedItem.scrollIntoView({ block: 'nearest' });
             } else {
-                menu.classList.add('hidden');
-                trigger.setAttribute('aria-expanded', 'false');
-                trigger.classList.remove('border-[var(--accent-color)]');
+                closeMenu();
             }
         });
     });
@@ -2730,7 +2814,10 @@ document.addEventListener('click', function() {
     document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.add('hidden'));
     document.querySelectorAll('.custom-select-trigger').forEach(t => t.setAttribute('aria-expanded', 'false'));
 });
-window.addEventListener('scroll', function() {
+window.addEventListener('scroll', function(e) {
+    if (e && e.target && (e.target.classList?.contains('custom-select-options') || e.target.classList?.contains('custom-select-menu') || (e.target.closest && e.target.closest('.custom-select-menu')))) {
+        return;
+    }
     document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.add('hidden'));
     document.querySelectorAll('.custom-select-trigger').forEach(t => t.setAttribute('aria-expanded', 'false'));
 }, true);
