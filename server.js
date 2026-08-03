@@ -3092,6 +3092,92 @@ function setDialplanJitterBufferStatus(enable) {
         fs.writeFileSync(filePath, updatedLines.join('\n'), 'utf8');
     }
 }
+const SOKRAT_DENOISE_RX_LINE = 'same => n,Set(DENOISE(rx)=on)';
+const SOKRAT_DENOISE_TX_LINE = 'same => n,Set(DENOISE(tx)=on)';
+const SOKRAT_DENOISE_CONTEXTS = ['from-dongle-custom', 'macro-dialout-trunk-predial-hook'];
+
+function getDialplanDenoiseStatus() {
+    const filePath = '/etc/asterisk/extensions_custom.conf';
+    if (!fs.existsSync(filePath)) return { rx: false, tx: false };
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split(/\r?\n/);
+    let currentContext = null;
+    let rxFound = false;
+    let txFound = false;
+
+    for (let line of lines) {
+        let trimmed = line.trim();
+        let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
+        if (ctxMatch) {
+            currentContext = ctxMatch[1].trim();
+        } else if (currentContext && SOKRAT_DENOISE_CONTEXTS.includes(currentContext)) {
+            if (!trimmed.startsWith(';') && !trimmed.startsWith('#')) {
+                if (trimmed.includes('DENOISE(rx)=on')) rxFound = true;
+                if (trimmed.includes('DENOISE(tx)=on')) txFound = true;
+            }
+        }
+    }
+    return { rx: rxFound, tx: txFound };
+}
+
+function setDialplanDenoiseStatus({ rx, tx }) {
+    const filePath = '/etc/asterisk/extensions_custom.conf';
+    if (!fs.existsSync(filePath)) {
+        throw new Error('/etc/asterisk/extensions_custom.conf file not found');
+    }
+
+    let content = fs.readFileSync(filePath, 'utf8');
+    let lines = content.split(/\r?\n/);
+
+    const rxState = Boolean(rx);
+    const txState = Boolean(tx);
+
+    let currentContext = null;
+    let newLines = [];
+
+    for (let line of lines) {
+        let trimmed = line.trim();
+        let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
+        if (ctxMatch) {
+            currentContext = ctxMatch[1].trim();
+        }
+        if (currentContext && SOKRAT_DENOISE_CONTEXTS.includes(currentContext)) {
+            const compact = trimmed.replace(/\s+/g, '');
+            if (compact === 'same=>n,Set(DENOISE(rx)=on)' || compact === 'same=>n,Set(DENOISE(tx)=on)') {
+                continue;
+            }
+        }
+        newLines.push(line);
+    }
+
+    lines = newLines;
+
+    if (rxState || txState) {
+        let updatedLines = [];
+        currentContext = null;
+
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+            updatedLines.push(line);
+            let trimmed = line.trim();
+            let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
+            if (ctxMatch) {
+                currentContext = ctxMatch[1].trim();
+            }
+
+            if (currentContext === 'from-dongle-custom' && trimmed.includes('same => n(process),NoOp')) {
+                if (rxState) updatedLines.push(SOKRAT_DENOISE_RX_LINE);
+                if (txState) updatedLines.push(SOKRAT_DENOISE_TX_LINE);
+            } else if (currentContext === 'macro-dialout-trunk-predial-hook' && trimmed.includes('exten => s,1,NoOp')) {
+                if (rxState) updatedLines.push(SOKRAT_DENOISE_RX_LINE);
+                if (txState) updatedLines.push(SOKRAT_DENOISE_TX_LINE);
+            }
+        }
+        lines = updatedLines;
+    }
+
+    fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
+}
 app.post('/api/spy', async (req, res) => {
     try {
         const { targetExtension, supervisorExtension, mode } = req.body;
@@ -6975,6 +7061,37 @@ app.post('/api/config/modem/jitterbuffer', async (req, res) => {
             message: targetState
                 ? 'Jitter buffer enabled in Asterisk dialplan and reloaded.'
                 : 'Jitter buffer removed from Asterisk dialplan and reloaded.'
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// GET /api/config/modem/denoise - Fetch DSP noise suppression status (rx/tx)
+app.get('/api/config/modem/denoise', async (req, res) => {
+    try {
+        const status = getDialplanDenoiseStatus();
+        res.json({ success: true, ...status });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/modem/denoise - Update DSP noise suppression settings (rx/tx)
+app.post('/api/config/modem/denoise', async (req, res) => {
+    try {
+        const { rx, tx } = req.body;
+        setDialplanDenoiseStatus({ rx, tx });
+
+        try {
+            await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
+        } catch (_) {}
+
+        const updated = getDialplanDenoiseStatus();
+        res.json({
+            success: true,
+            rx: updated.rx,
+            tx: updated.tx,
+            message: 'DSP Background Noise Suppression settings updated and Asterisk dialplan reloaded.'
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

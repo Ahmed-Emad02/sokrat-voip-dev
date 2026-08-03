@@ -1033,6 +1033,14 @@ function isTabAllowed(tabName) {
                         <span class="w-2 h-2 rounded-full bg-gray-400"></span>
                         <span><%= isRtl ? 'صاقل التلعثم (Jitter Buffer)' : 'Jitter Buffer' %></span>
                     </button>
+                    <button type="button" id="toggleDenoiseRxBtn" onclick="toggleDenoise('rx')" class="px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-gray-500/10 text-gray-400 border-gray-500/30">
+                        <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+                        <span><%= isRtl ? 'عزل ضوضاء الاستقبال (Rx Denoise)' : 'Rx Denoise' %></span>
+                    </button>
+                    <button type="button" id="toggleDenoiseTxBtn" onclick="toggleDenoise('tx')" class="px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-gray-500/10 text-gray-400 border-gray-500/30">
+                        <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+                        <span><%= isRtl ? 'عزل ضوضاء الإرسال (Tx Denoise)' : 'Tx Denoise' %></span>
+                    </button>
                     <button type="button" onclick="resetAllDongleGains()" class="config-btn-secondary px-4 py-2 text-xs flex items-center gap-1.5 text-red-400 hover:text-red-300 border-red-500/30 hover:bg-red-500/10 cursor-pointer">
                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         <span><%= isRtl ? 'إعادة ضبط الكل (txgain=0 & rxgain=0)' : 'Reset All (txgain=0 & rxgain=0)' %></span>
@@ -7454,6 +7462,36 @@ function isTabAllowed(tabName) {
                     }
                 }
 
+                let denoiseStatus = { rx: false, tx: false };
+                try {
+                    const dnRes = await fetch('/api/config/modem/denoise');
+                    const dnData = await dnRes.json();
+                    if (dnData.success) denoiseStatus = { rx: Boolean(dnData.rx), tx: Boolean(dnData.tx) };
+                } catch (_) {}
+                window.currentDenoiseState = denoiseStatus;
+
+                const rxBtn = document.getElementById('toggleDenoiseRxBtn');
+                if (rxBtn) {
+                    if (denoiseStatus.rx) {
+                        rxBtn.className = 'px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30';
+                        rxBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>' + (isRtl ? 'عزل ضوضاء الاستقبال (Rx Denoise): مفعل' : 'Rx Denoise: ON') + '</span>';
+                    } else {
+                        rxBtn.className = 'px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-red-500/10 text-red-400 border-red-500/30 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/30';
+                        rxBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-400"></span><span>' + (isRtl ? 'عزل ضوضاء الاستقبال (Rx Denoise): معطل' : 'Rx Denoise: OFF') + '</span>';
+                    }
+                }
+
+                const txBtn = document.getElementById('toggleDenoiseTxBtn');
+                if (txBtn) {
+                    if (denoiseStatus.tx) {
+                        txBtn.className = 'px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-sky-500/10 text-sky-400 border-sky-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30';
+                        txBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span><span>' + (isRtl ? 'عزل ضوضاء الإرسال (Tx Denoise): مفعل' : 'Tx Denoise: ON') + '</span>';
+                    } else {
+                        txBtn.className = 'px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-red-500/10 text-red-400 border-red-500/30 hover:bg-sky-500/10 hover:text-sky-400 hover:border-sky-500/30';
+                        txBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-400"></span><span>' + (isRtl ? 'عزل ضوضاء الإرسال (Tx Denoise): معطل' : 'Tx Denoise: OFF') + '</span>';
+                    }
+                }
+
                 const res = await fetch('/api/config/modem');
                 const data = await res.json();
                 if (!data.success || !data.dongles) {
@@ -7657,6 +7695,30 @@ function isTabAllowed(tabName) {
             }
         }
         window.toggleJitterBuffer = toggleJitterBuffer;
+        async function toggleDenoise(direction) {
+            const currentState = window.currentDenoiseState || { rx: false, tx: false };
+            const nextRx = direction === 'rx' ? !currentState.rx : currentState.rx;
+            const nextTx = direction === 'tx' ? !currentState.tx : currentState.tx;
+
+            try {
+                const res = await fetch('/api/config/modem/denoise', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rx: nextRx, tx: nextTx })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    window.currentDenoiseState = { rx: data.rx, tx: data.tx };
+                    showToast(data.message || 'DSP Noise Suppression settings updated!', 'success');
+                    fetchModemConfig();
+                } else {
+                    showToast(data.error || 'Failed to update noise suppression.', 'error');
+                }
+            } catch (e) {
+                showToast('Error updating noise suppression: ' + e.message, 'error');
+            }
+        }
+        window.toggleDenoise = toggleDenoise;
     </script>
     </div>
 </body>
