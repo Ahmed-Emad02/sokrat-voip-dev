@@ -1363,24 +1363,8 @@ function isTabAllowed(tabName) {
                         </div>
 
                         <!-- Edit Mode Editable Selectors -->
-                        <div id="rgPostDestEditContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <select id="rgPostDestType" onchange="onRgPostDestTypeChange()" class="config-input w-full text-xs font-semibold">
-                                <option value="">== <%= isRtl ? 'اختر نوع الوجهة' : 'Choose Destination Type' %> ==</option>
-                                <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
-                                <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
-                                <option value="queues"><%= isRtl ? 'طوابير الانتظار (Queues)' : 'Queues' %></option>
-                                <option value="timeconditions"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></option>
-                                <option value="ivr"><%= isRtl ? 'الرد الآلي (IVR Menu)' : 'IVR Menu' %></option>
-                                <option value="announcements"><%= isRtl ? 'الإعلانات (Announcements)' : 'Announcements' %></option>
-                                <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail Box' %></option>
-                                <option value="terminate"><%= isRtl ? 'إنهاء المكالمة (Terminate Call)' : 'Terminate Call' %></option>
-                                <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
-                            </select>
-                            <div class="relative flex-1">
-                                <select id="rgPostDestTargetSelect" onchange="updateRgPostDestinationValue()" class="config-input w-full text-xs hidden font-semibold"></select>
-                                <input type="text" id="rgPostDestTargetInput" oninput="updateRgPostDestinationValue()" placeholder="e.g. app-blackhole,hangup,1" class="config-input w-full font-mono text-xs hidden">
-                            </div>
-                        </div>
+                        <!-- Edit Mode Editable DestinationSelect Component -->
+                        <div id="rgPostDestComponentContainer"></div>
                         <input type="hidden" id="rgPostDestination">
                     </div>
 
@@ -1565,27 +1549,7 @@ function isTabAllowed(tabName) {
                         </div>
                         <div>
                             <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'تحديد الوجهة *' : 'Set Destination *' %></label>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <select id="queueDestType" onchange="onQueueDestTypeChange()" class="config-input w-full text-xs font-semibold" required>
-                                    <option value="">== <%= isRtl ? 'اختر' : 'choose one' %> ==</option>
-                                    <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
-                                    <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
-                                    <option value="queues"><%= isRtl ? 'طوابير الانتظار (Queues)' : 'Queues' %></option>
-                                    <option value="ivr"><%= isRtl ? 'الرد الآلي (IVR Menu)' : 'IVR Menu' %></option>
-                                    <option value="announcements"><%= isRtl ? 'الإعلانات (Announcements)' : 'Announcements' %></option>
-                                    <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail' %></option>
-                                    <option value="timeconditions"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></option>
-                                    <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
-                                    <option value="terminate"><%= isRtl ? 'إنهاء (Hangup)' : 'Terminate (Hangup)' %></option>
-                                </select>
-                                
-                                <div id="queueDestTargetContainer">
-                                    <select id="queueDestTargetSelect" onchange="updateQueueDestinationValue()" class="config-input w-full text-xs font-semibold hidden">
-                                        <option value="">== <%= isRtl ? 'اختر الهدف' : 'choose target' %> ==</option>
-                                    </select>
-                                    <input type="text" id="queueDestTargetInput" oninput="updateQueueDestinationValue()" placeholder="e.g. custom-context,s,1" class="config-input w-full font-mono text-xs hidden">
-                                </div>
-                            </div>
+                            <div id="queueDestComponentContainer"></div>
                             <input type="hidden" id="queueDestination" required>
                         </div>
                     </div>
@@ -1907,24 +1871,8 @@ function isTabAllowed(tabName) {
                             </div>
                             <div>
                                 <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'وجهة انتهاء المهلة' : 'Timeout Destination' %></label>
-                                <div class="grid grid-cols-1 gap-2">
-                                    <select id="ivrTimeoutDestType" onchange="onIvrTimeoutDestTypeChange()" class="config-input w-full text-xs font-semibold">
-                                        <option value="extensions"><%= isRtl ? 'الهواتف الفرعية' : 'Extensions' %></option>
-                                        <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين' : 'Ring Groups' %></option>
-                                        <option value="queues"><%= isRtl ? 'طوابير الانتظار' : 'Queues' %></option>
-                                        <option value="ivr"><%= isRtl ? 'قائمة رد آلي أخرى' : 'IVR Menu' %></option>
-                                        <option value="announcements"><%= isRtl ? 'الإعلانات' : 'Announcements' %></option>
-                                        <option value="timeconditions"><%= isRtl ? 'شروط الوقت' : 'Time Conditions' %></option>
-                                        <option value="voicemail"><%= isRtl ? 'البريد الصوتي' : 'Voicemail' %></option>
-                                        <option value="terminate"><%= isRtl ? 'إنهاء المكالمة' : 'Terminate Call' %></option>
-                                        <option value="custom"><%= isRtl ? 'مخصص' : 'Custom' %></option>
-                                    </select>
-                                    <select id="ivrTimeoutDestSelect" onchange="updateIvrTimeoutDestValue()" class="config-input w-full text-xs hidden font-semibold">
-                                        <option value="">== choose target ==</option>
-                                    </select>
-                                    <input type="text" id="ivrTimeoutDestInput" oninput="updateIvrTimeoutDestValue()" placeholder="e.g. app-blackhole,hangup,1" class="config-input w-full font-mono text-xs hidden">
-                                    <input type="hidden" id="ivrTimeoutDestination" value="app-blackhole,hangup,1">
-                                </div>
+                                <div id="ivrTimeoutDestComponentContainer"></div>
+                                <input type="hidden" id="ivrTimeoutDestination" value="app-blackhole,hangup,1">
                             </div>
                         </div>
 
@@ -1943,24 +1891,8 @@ function isTabAllowed(tabName) {
                             </div>
                             <div>
                                 <label class="block text-[10px] text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'وجهة الإدخال الخاطئ' : 'Invalid Destination' %></label>
-                                <div class="grid grid-cols-1 gap-2">
-                                    <select id="ivrInvalidDestType" onchange="onIvrInvalidDestTypeChange()" class="config-input w-full text-xs font-semibold">
-                                        <option value="extensions"><%= isRtl ? 'الهواتف الفرعية' : 'Extensions' %></option>
-                                        <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين' : 'Ring Groups' %></option>
-                                        <option value="queues"><%= isRtl ? 'طوابير الانتظار' : 'Queues' %></option>
-                                        <option value="ivr"><%= isRtl ? 'قائمة رد آلي أخرى' : 'IVR Menu' %></option>
-                                        <option value="announcements"><%= isRtl ? 'الإعلانات' : 'Announcements' %></option>
-                                        <option value="timeconditions"><%= isRtl ? 'شروط الوقت' : 'Time Conditions' %></option>
-                                        <option value="voicemail"><%= isRtl ? 'البريد الصوتي' : 'Voicemail' %></option>
-                                        <option value="terminate"><%= isRtl ? 'إنهاء المكالمة' : 'Terminate Call' %></option>
-                                        <option value="custom"><%= isRtl ? 'مخصص' : 'Custom' %></option>
-                                    </select>
-                                    <select id="ivrInvalidDestSelect" onchange="updateIvrInvalidDestValue()" class="config-input w-full text-xs hidden font-semibold">
-                                        <option value="">== choose target ==</option>
-                                    </select>
-                                    <input type="text" id="ivrInvalidDestInput" oninput="updateIvrInvalidDestValue()" placeholder="e.g. app-blackhole,hangup,1" class="config-input w-full font-mono text-xs hidden">
-                                    <input type="hidden" id="ivrInvalidDestination" value="app-blackhole,hangup,1">
-                                </div>
+                                <div id="ivrInvalidDestComponentContainer"></div>
+                                <input type="hidden" id="ivrInvalidDestination" value="app-blackhole,hangup,1">
                             </div>
                         </div>
                     </div>
@@ -2064,26 +1996,7 @@ function isTabAllowed(tabName) {
                         </div>
                         <div>
                             <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'تحديد الوجهة *' : 'Set Destination *' %></label>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <select id="inDestType" onchange="onInboundDestTypeChange()" class="config-input w-full text-xs font-semibold" required>
-                                    <option value="">== choose one ==</option>
-                                    <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
-                                    <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
-                                    <option value="queues"><%= isRtl ? 'طوابير الانتظار (Queues)' : 'Queues' %></option>
-                                    <option value="timeconditions"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></option>
-                                    <option value="ivr"><%= isRtl ? 'الرد الآلي (IVR Menu)' : 'IVR Menu' %></option>
-                                    <option value="announcements"><%= isRtl ? 'الإعلانات (Announcements)' : 'Announcements' %></option>
-                                    <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail' %></option>
-                                    <option value="terminate"><%= isRtl ? 'إنهاء المكالمة (Terminate Call / Hangup)' : 'Terminate Call (Hangup)' %></option>
-                                    <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
-                                </select>
-                                <div id="inDestTargetContainer">
-                                    <select id="inDestTargetSelect" onchange="updateInboundDestinationValue()" class="config-input w-full text-xs font-semibold hidden">
-                                        <option value="">== choose target ==</option>
-                                    </select>
-                                    <input type="text" id="inDestTargetInput" oninput="updateInboundDestinationValue()" placeholder="e.g. custom-context,s,1" class="config-input w-full font-mono text-xs hidden">
-                                </div>
-                            </div>
+                            <div id="inDestComponentContainer"></div>
                             <input type="hidden" id="inDestination" required>
                         </div>
                     </div>
@@ -2348,31 +2261,8 @@ function isTabAllowed(tabName) {
                                 </span>
                                 <span class="text-[10px] text-emerald-400/70 font-mono">MATCHED</span>
                             </div>
-                            <div class="space-y-3">
-                                <div>
-                                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">Destination Type</label>
-                                    <select id="tcTrueType" onchange="onTcDestTypeChange('true')" class="config-input w-full text-xs font-semibold" required>
-                                        <option value="">-- choose type --</option>
-                                        <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
-                                        <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
-                                        <option value="announcements"><%= isRtl ? 'الإعلانات (Announcements)' : 'Announcements' %></option>
-                                        <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail Box' %></option>
-                                        <option value="timeconditions"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></option>
-                                        <option value="terminate"><%= isRtl ? 'إنهاء المكالمة (Terminate Call)' : 'Terminate Call' %></option>
-                                        <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">Target</label>
-                                    <div id="tcTrueTargetContainer">
-                                        <select id="tcTrueTargetSelect" onchange="updateTcDestValue('true')" class="config-input w-full text-xs font-semibold hidden">
-                                            <option value="">-- choose target --</option>
-                                        </select>
-                                        <input type="text" id="tcTrueTargetInput" oninput="updateTcDestValue('true')" placeholder="e.g. custom-context,s,1" class="config-input w-full font-mono text-xs hidden">
-                                    </div>
-                                </div>
-                                <input type="hidden" id="tcTrueGoto" required>
-                            </div>
+                            <div id="tcTrueDestComponentContainer"></div>
+                            <input type="hidden" id="tcTrueGoto" required>
                         </div>
 
                         <!-- Destination if NO MATCH (False / Closed) -->
@@ -2384,31 +2274,8 @@ function isTabAllowed(tabName) {
                                 </span>
                                 <span class="text-[10px] text-rose-400/70 font-mono">UNMATCHED</span>
                             </div>
-                            <div class="space-y-3">
-                                <div>
-                                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">Destination Type</label>
-                                    <select id="tcFalseType" onchange="onTcDestTypeChange('false')" class="config-input w-full text-xs font-semibold" required>
-                                        <option value="">-- choose type --</option>
-                                        <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
-                                        <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
-                                        <option value="announcements"><%= isRtl ? 'الإعلانات (Announcements)' : 'Announcements' %></option>
-                                        <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail Box' %></option>
-                                        <option value="timeconditions"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></option>
-                                        <option value="terminate"><%= isRtl ? 'إنهاء المكالمة (Terminate Call)' : 'Terminate Call' %></option>
-                                        <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">Target</label>
-                                    <div id="tcFalseTargetContainer">
-                                        <select id="tcFalseTargetSelect" onchange="updateTcDestValue('false')" class="config-input w-full text-xs font-semibold hidden">
-                                            <option value="">-- choose target --</option>
-                                        </select>
-                                        <input type="text" id="tcFalseTargetInput" oninput="updateTcDestValue('false')" placeholder="e.g. custom-context,s,1" class="config-input w-full font-mono text-xs hidden">
-                                    </div>
-                                </div>
-                                <input type="hidden" id="tcFalseGoto" required>
-                            </div>
+                            <div id="tcFalseDestComponentContainer"></div>
+                            <input type="hidden" id="tcFalseGoto" required>
                         </div>
                     </div>
 
@@ -2524,27 +2391,9 @@ function isTabAllowed(tabName) {
                 <!-- 5. Post Playback Destination -->
                 <div class="panel-surface p-4 rounded-xl border border-[var(--border-primary)] space-y-3">
                     <span class="text-xs font-bold text-amber-400 uppercase tracking-wider block"><%= isRtl ? 'الوجهة المستهدفة بعد الانتهاء *' : 'Post Playback Destination *' %></span>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <select id="annPostDestType" onchange="onAnnPostDestTypeChange()" class="config-input w-full text-xs font-semibold" required>
-                            <option value="">== <%= isRtl ? 'اختر نوع الوجهة' : 'Choose Destination Type' %> ==</option>
-                            <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
-                            <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
-                            <option value="queues"><%= isRtl ? 'طوابير الانتظار (Queues)' : 'Queues' %></option>
-                            <option value="timeconditions"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></option>
-                            <option value="ivr"><%= isRtl ? 'الرد الآلي (IVR Menu)' : 'IVR Menu' %></option>
-                            <option value="announcements"><%= isRtl ? 'الإعلانات (Announcements)' : 'Announcements' %></option>
-                            <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail Box' %></option>
-                            <option value="terminate"><%= isRtl ? 'إنهاء المكالمة (Terminate Call)' : 'Terminate Call' %></option>
-                            <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
-                        </select>
-                        <div class="relative flex-1">
-                            <select id="annPostDestTargetSelect" onchange="updateAnnPostDestinationValue()" class="config-input w-full text-xs hidden font-semibold"></select>
-                            <input type="text" id="annPostDestTargetInput" oninput="updateAnnPostDestinationValue()" placeholder="e.g. app-blackhole,hangup,1" class="config-input w-full font-mono text-xs hidden">
-                        </div>
-                    </div>
+                    <div id="annPostDestComponentContainer"></div>
                     <input type="hidden" id="annPostDestination" required>
                 </div>
-
                 <!-- Form Action Buttons -->
                 <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-primary)] shrink-0">
                     <button type="button" onclick="closeModal('announcementModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
@@ -2934,6 +2783,85 @@ function isTabAllowed(tabName) {
             }
         }
         window.DestinationSelect = DestinationSelect;
+        let inboundDestSelectInstance = null;
+        let rgPostDestSelectInstance = null;
+        let queueDestSelectInstance = null;
+        let annPostDestSelectInstance = null;
+        let tcTrueDestSelectInstance = null;
+        let tcFalseDestSelectInstance = null;
+        let ivrTimeoutDestSelectInstance = null;
+        let ivrInvalidDestSelectInstance = null;
+
+        function initDestinationSelectInstances() {
+            const inContainer = document.getElementById('inDestComponentContainer');
+            if (inContainer && !inboundDestSelectInstance) {
+                inboundDestSelectInstance = new DestinationSelect(inContainer, {
+                    initialDialplan: 'app-blackhole,hangup,1',
+                    onChange: (p) => { document.getElementById('inDestination').value = p.dialplan; }
+                });
+            }
+            const rgContainer = document.getElementById('rgPostDestComponentContainer');
+            if (rgContainer && !rgPostDestSelectInstance) {
+                rgPostDestSelectInstance = new DestinationSelect(rgContainer, {
+                    initialDialplan: 'app-blackhole,hangup,1',
+                    onChange: (p) => { document.getElementById('rgPostDestination').value = p.dialplan; }
+                });
+            }
+            const queueContainer = document.getElementById('queueDestComponentContainer');
+            if (queueContainer && !queueDestSelectInstance) {
+                queueDestSelectInstance = new DestinationSelect(queueContainer, {
+                    initialDialplan: 'app-blackhole,hangup,1',
+                    onChange: (p) => { document.getElementById('queueDestination').value = p.dialplan; }
+                });
+            }
+            const annContainer = document.getElementById('annPostDestComponentContainer');
+            if (annContainer && !annPostDestSelectInstance) {
+                annPostDestSelectInstance = new DestinationSelect(annContainer, {
+                    initialDialplan: 'app-blackhole,hangup,1',
+                    onChange: (p) => { document.getElementById('annPostDestination').value = p.dialplan; }
+                });
+            }
+            const tcTrueContainer = document.getElementById('tcTrueDestComponentContainer');
+            if (tcTrueContainer && !tcTrueDestSelectInstance) {
+                tcTrueDestSelectInstance = new DestinationSelect(tcTrueContainer, {
+                    initialDialplan: 'app-blackhole,hangup,1',
+                    onChange: (p) => { document.getElementById('tcTrueGoto').value = p.dialplan; }
+                });
+            }
+            const tcFalseContainer = document.getElementById('tcFalseDestComponentContainer');
+            if (tcFalseContainer && !tcFalseDestSelectInstance) {
+                tcFalseDestSelectInstance = new DestinationSelect(tcFalseContainer, {
+                    initialDialplan: 'app-blackhole,hangup,1',
+                    onChange: (p) => { document.getElementById('tcFalseGoto').value = p.dialplan; }
+                });
+            }
+            const ivrTimeoutContainer = document.getElementById('ivrTimeoutDestComponentContainer');
+            if (ivrTimeoutContainer && !ivrTimeoutDestSelectInstance) {
+                ivrTimeoutDestSelectInstance = new DestinationSelect(ivrTimeoutContainer, {
+                    initialDialplan: 'app-blackhole,hangup,1',
+                    onChange: (p) => { document.getElementById('ivrTimeoutDestination').value = p.dialplan; }
+                });
+            }
+            const ivrInvalidContainer = document.getElementById('ivrInvalidDestComponentContainer');
+            if (ivrInvalidContainer && !ivrInvalidDestSelectInstance) {
+                ivrInvalidDestSelectInstance = new DestinationSelect(ivrInvalidContainer, {
+                    initialDialplan: 'app-blackhole,hangup,1',
+                    onChange: (p) => { document.getElementById('ivrInvalidDestination').value = p.dialplan; }
+                });
+            }
+        }
+
+        function ensureAllConfigListsLoaded() {
+            return Promise.allSettled([
+                fetchExtensions(),
+                fetchRingGroups(),
+                fetchQueues(),
+                fetchIvrs(),
+                fetchAnnouncements(),
+                fetchTimeConditions(),
+                fetchRecordings()
+            ]);
+        }
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -3442,7 +3370,8 @@ function isTabAllowed(tabName) {
                 .catch(err => console.error(err));
         }
 
-        function openRingGroupModal() {
+        async function openRingGroupModal() {
+            await ensureAllConfigListsLoaded();
             document.getElementById('rgModalTitle').textContent = isRtl ? 'إضافة مجموعة جديدة' : 'Add Ring Group';
             document.getElementById('rgEditMode').value = "false";
             document.getElementById('rgNum').disabled = false;
@@ -3450,108 +3379,18 @@ function isTabAllowed(tabName) {
             populateAnnouncementsDropdown();
             renderQuickPickPills();
 
-            // Create Mode: Auto-set destination to Ring Group itself & hide change controls
-            const noticeEl = document.getElementById('rgPostDestCreateNotice');
-            const editCont = document.getElementById('rgPostDestEditContainer');
-            const typeSelect = document.getElementById('rgPostDestType');
-            const targetSelect = document.getElementById('rgPostDestTargetSelect');
-            const targetInput = document.getElementById('rgPostDestTargetInput');
-            if (noticeEl) noticeEl.classList.remove('hidden');
-            if (editCont) editCont.classList.add('hidden');
-            if (typeSelect) typeSelect.required = false;
-            if (targetSelect) targetSelect.required = false;
-            if (targetInput) targetInput.required = false;
-
             const num = document.getElementById('rgNum').value.trim() || '600';
             const destVal = `ext-group,${num},1`;
-            const noticeNumEl = document.getElementById('rgPostDestCreateNoticeNum');
-            if (noticeNumEl) noticeNumEl.textContent = destVal;
             document.getElementById('rgPostDestination').value = destVal;
+
+            initDestinationSelectInstances();
+            if (rgPostDestSelectInstance) rgPostDestSelectInstance.setDialplan(destVal);
 
             openModal('ringGroupModal');
         }
 
-        function onRgPostDestTypeChange() {
-            const type = document.getElementById('rgPostDestType').value;
-            const select = document.getElementById('rgPostDestTargetSelect');
-            const input = document.getElementById('rgPostDestTargetInput');
-
-            select.innerHTML = '<option value="">-- choose target --</option>';
-            select.classList.add('hidden');
-            input.classList.add('hidden');
-            select.required = false;
-            input.required = false;
-
-            if (['extensions', 'ringgroups', 'queues', 'timeconditions', 'ivr', 'announcements', 'voicemail'].includes(type)) {
-                select.classList.remove('hidden');
-                select.required = true;
-                let items = [];
-                const currNum = document.getElementById('rgNum').value;
-                if (type === 'extensions') items = loadedExtensionsList.map(e => ({ val: `from-did-direct,${e.extension},1`, label: `${e.extension} - ${e.name}` }));
-                if (type === 'ringgroups') items = loadedRingGroupsList.map(rg => ({ val: `ext-group,${rg.grpnum},1`, label: `${rg.grpnum} - ${rg.description || ''}` }));
-                if (type === 'queues') items = loadedQueuesList.map(q => ({ val: `ext-queues,${q.extension},1`, label: `${q.extension} - ${q.descr}` }));
-                if (type === 'timeconditions') items = loadedTimeConditionsList.map(tc => ({ val: `timeconditions,${tc.timeconditions_id},1`, label: `${tc.displayname} (ID: ${tc.timeconditions_id})` }));
-                if (type === 'ivr') items = loadedIvrsList.map(i => ({ val: `ivr-${i.id},s,1`, label: i.name }));
-                if (type === 'announcements') items = loadedAnnouncementsList.map(a => ({ val: `app-announcement-${a.announcement_id},s,1`, label: `Announcement: ${a.description}` }));
-                if (type === 'voicemail') items = loadedExtensionsList.map(e => ({ val: `ext-local,vmu${e.extension},1`, label: `VM ${e.extension} - ${e.name}` }));
-
-                items.forEach(it => {
-                    const opt = document.createElement('option');
-                    opt.value = it.val;
-                    opt.textContent = it.label;
-                    select.appendChild(opt);
-                });
-            } else if (type === 'terminate') {
-                select.classList.remove('hidden');
-                select.required = true;
-                const terminateTargets = [
-                    { value: 'app-blackhole,hangup,1', label: 'Hangup Call' },
-                    { value: 'app-blackhole,congestion,1', label: 'Play Congestion Tone' },
-                    { value: 'app-blackhole,busy,1', label: 'Play Busy Tone' }
-                ];
-                terminateTargets.forEach(tgt => {
-                    const opt = document.createElement('option');
-                    opt.value = tgt.value;
-                    opt.textContent = tgt.label;
-                    select.appendChild(opt);
-                });
-            } else if (type === 'custom') {
-                input.classList.remove('hidden');
-                input.required = true;
-            }
-
-            updateRgPostDestinationValue();
-        }
-
-        function updateRgPostDestinationValue() {
-            const type = document.getElementById('rgPostDestType').value;
-            const select = document.getElementById('rgPostDestTargetSelect');
-            const input = document.getElementById('rgPostDestTargetInput');
-            const hidden = document.getElementById('rgPostDestination');
-
-            let val = '';
-            if (['extensions', 'ringgroups', 'queues', 'timeconditions', 'ivr', 'announcements', 'voicemail', 'terminate'].includes(type) && select.value) {
-                val = select.value;
-            } else if (type === 'custom' && input.value.trim()) {
-                val = input.value.trim();
-            }
-            hidden.value = val;
-        }
-
-        function parseRgPostDestination(dest) {
-            if (!dest) return { type: 'terminate', target: 'app-blackhole,hangup,1' };
-            if (dest.startsWith('from-did-direct,')) return { type: 'extensions', target: dest };
-            if (dest.startsWith('ext-group,')) return { type: 'ringgroups', target: dest };
-            if (dest.startsWith('ext-queues,')) return { type: 'queues', target: dest };
-            if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) return { type: 'timeconditions', target: dest };
-            if (dest.startsWith('ivr-')) return { type: 'ivr', target: dest };
-            if (dest.startsWith('app-announcement-')) return { type: 'announcements', target: dest };
-            if (dest.startsWith('ext-local,vmu')) return { type: 'voicemail', target: dest };
-            if (dest.startsWith('app-blackhole,')) return { type: 'terminate', target: dest };
-            return { type: 'custom', target: dest };
-        }
-
-        function editRingGroup(grpnum) {
+        async function editRingGroup(grpnum) {
+            await ensureAllConfigListsLoaded();
             const rg = loadedRingGroupsList.find(g => String(g.grpnum) === String(grpnum));
             if (!rg) return;
 
@@ -3567,25 +3406,15 @@ function isTabAllowed(tabName) {
             document.getElementById('rgAnnMsg').value = rg.annmsg_id || 0;
             renderQuickPickPills();
 
-            // Edit Mode: Show editable destination controls
-            const noticeEl = document.getElementById('rgPostDestCreateNotice');
-            const editCont = document.getElementById('rgPostDestEditContainer');
-            const typeSelect = document.getElementById('rgPostDestType');
-            if (noticeEl) noticeEl.classList.add('hidden');
-            if (editCont) editCont.classList.remove('hidden');
-            if (typeSelect) typeSelect.required = true;
+            const destVal = rg.postdest || `ext-group,${grpnum},1`;
+            document.getElementById('rgPostDestination').value = destVal;
 
-            const parsedDest = parseRgPostDestination(rg.postdest);
-            document.getElementById('rgPostDestType').value = parsedDest.type;
-            onRgPostDestTypeChange();
-            if (parsedDest.type === 'custom') {
-                document.getElementById('rgPostDestTargetInput').value = parsedDest.target;
-            } else {
-                document.getElementById('rgPostDestTargetSelect').value = parsedDest.target;
-            }
-            document.getElementById('rgPostDestination').value = rg.postdest || 'app-blackhole,hangup,1';
+            initDestinationSelectInstances();
+            if (rgPostDestSelectInstance) rgPostDestSelectInstance.setDialplan(destVal);
+
             openModal('ringGroupModal');
         }
+
 
         function saveRingGroup(e) {
             e.preventDefault();
@@ -3771,13 +3600,13 @@ function isTabAllowed(tabName) {
                 .catch(err => console.error(err));
         }
 
-        function openQueueModal() {
+        async function openQueueModal() {
+            await ensureAllConfigListsLoaded();
             document.getElementById('queueModalTitle').textContent = isRtl ? 'إضافة طابور انتظار جديد' : 'Add Queue';
             document.getElementById('queueEditMode').value = "false";
             document.getElementById('queueNum').disabled = false;
             document.getElementById('queueForm').reset();
             
-            // Set Defaults as requested
             document.getElementById('queueStrategy').value = 'rrmemory';
             document.getElementById('queueMoh').value = 'default';
             document.getElementById('queueRecording').value = 'yes';
@@ -3787,16 +3616,20 @@ function isTabAllowed(tabName) {
             document.getElementById('queueAutofill').value = 'yes';
             document.getElementById('queueSkipBusy').value = 'yes';
 
-            document.getElementById('queueDestType').value = 'terminate';
-            onQueueDestTypeChange();
-            document.getElementById('queueDestination').value = 'app-blackhole,hangup,1';
+            const destVal = 'app-blackhole,hangup,1';
+            document.getElementById('queueDestination').value = destVal;
 
             populateQueueAnnouncementsDropdown();
             renderQueueAgentChecklist();
+
+            initDestinationSelectInstances();
+            if (queueDestSelectInstance) queueDestSelectInstance.setDialplan(destVal);
+
             openModal('queueModal');
         }
 
-        function editQueue(extNum) {
+        async function editQueue(extNum) {
+            await ensureAllConfigListsLoaded();
             const q = loadedQueuesList.find(item => String(item.extension) === String(extNum));
             if (!q) return;
 
@@ -3825,76 +3658,15 @@ function isTabAllowed(tabName) {
             populateQueueAnnouncementsDropdown();
             document.getElementById('queueAnnMsg').value = q.joinannounce_id || 0;
 
-            const dest = q.dest || 'app-blackhole,hangup,1';
-            const destTypeSelect = document.getElementById('queueDestType');
-            if (dest.startsWith('ext-local,vmu')) {
-                destTypeSelect.value = 'voicemail';
-            } else if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
-                destTypeSelect.value = 'extensions';
-            } else if (dest.startsWith('ext-group,')) {
-                destTypeSelect.value = 'ringgroups';
-            } else if (dest.startsWith('ext-queues,')) {
-                destTypeSelect.value = 'queues';
-            } else if (dest.startsWith('ivr-')) {
-                destTypeSelect.value = 'ivr';
-            } else if (dest.startsWith('app-announcement-')) {
-                destTypeSelect.value = 'announcements';
-            } else if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
-                destTypeSelect.value = 'timeconditions';
-            } else if (dest.startsWith('app-blackhole,')) {
-                destTypeSelect.value = 'terminate';
-            } else {
-                destTypeSelect.value = 'custom';
-            }
-            onQueueDestTypeChange();
-            document.getElementById('queueDestination').value = dest;
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(destTypeSelect.value)) {
-                document.getElementById('queueDestTargetSelect').value = dest;
-            } else if (destTypeSelect.value === 'custom') {
-                document.getElementById('queueDestTargetInput').value = dest;
-            }
+            const destVal = q.dest || 'app-blackhole,hangup,1';
+            document.getElementById('queueDestination').value = destVal;
 
             renderQueueAgentChecklist();
+
+            initDestinationSelectInstances();
+            if (queueDestSelectInstance) queueDestSelectInstance.setDialplan(destVal);
+
             openModal('queueModal');
-        }
-
-        function onQueueDestTypeChange() {
-            const destType = document.getElementById('queueDestType').value;
-            const selectEl = document.getElementById('queueDestTargetSelect');
-            const inputEl = document.getElementById('queueDestTargetInput');
-            const actualInput = document.getElementById('queueDestination');
-
-            selectEl.classList.add('hidden');
-            inputEl.classList.add('hidden');
-            selectEl.required = false;
-            inputEl.required = false;
-
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(destType)) {
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-                populateIvrTargetSelect(selectEl, destType, actualInput.value);
-            } else if (destType === 'terminate') {
-                actualInput.value = 'app-blackhole,hangup,1';
-            } else if (destType === 'custom') {
-                inputEl.classList.remove('hidden');
-                inputEl.required = true;
-            }
-            updateQueueDestinationValue();
-        }
-
-        function updateQueueDestinationValue() {
-            const destType = document.getElementById('queueDestType').value;
-            const selectEl = document.getElementById('queueDestTargetSelect');
-            const inputEl = document.getElementById('queueDestTargetInput');
-            const actualInput = document.getElementById('queueDestination');
-
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(destType)) {
-                actualInput.value = selectEl.value;
-            } else if (destType === 'terminate') {
-                actualInput.value = 'app-blackhole,hangup,1';
-            } else if (destType === 'custom') {
-                actualInput.value = inputEl.value.trim();
-            }
         }
 
         function saveQueue(e) {
@@ -4372,133 +4144,6 @@ function isTabAllowed(tabName) {
             }
         }
 
-        function onIvrTimeoutDestTypeChange() {
-            const type = document.getElementById('ivrTimeoutDestType').value;
-            const sel = document.getElementById('ivrTimeoutDestSelect');
-            const inp = document.getElementById('ivrTimeoutDestInput');
-            const hidden = document.getElementById('ivrTimeoutDestination');
-
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
-                sel.classList.remove('hidden');
-                inp.classList.add('hidden');
-                populateIvrTargetSelect(sel, type, hidden.value);
-            } else if (type === 'terminate') {
-                sel.classList.add('hidden');
-                inp.classList.add('hidden');
-                hidden.value = 'app-blackhole,hangup,1';
-            } else if (type === 'custom') {
-                sel.classList.add('hidden');
-                inp.classList.remove('hidden');
-                inp.value = hidden.value;
-            }
-            updateIvrTimeoutDestValue();
-        }
-
-        function updateIvrTimeoutDestValue() {
-            const type = document.getElementById('ivrTimeoutDestType').value;
-            const sel = document.getElementById('ivrTimeoutDestSelect');
-            const inp = document.getElementById('ivrTimeoutDestInput');
-            const hidden = document.getElementById('ivrTimeoutDestination');
-
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
-                hidden.value = sel.value;
-            } else if (type === 'terminate') {
-                hidden.value = 'app-blackhole,hangup,1';
-            } else if (type === 'custom') {
-                hidden.value = inp.value.trim();
-            }
-        }
-
-        function setIvrTimeoutDest(dest) {
-            const typeSelect = document.getElementById('ivrTimeoutDestType');
-            const hidden = document.getElementById('ivrTimeoutDestination');
-            hidden.value = dest;
-
-            if (dest.startsWith('ext-local,vmu')) {
-                typeSelect.value = 'voicemail';
-            } else if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
-                typeSelect.value = 'extensions';
-            } else if (dest.startsWith('ext-group,')) {
-                typeSelect.value = 'ringgroups';
-            } else if (dest.startsWith('ext-queues,')) {
-                typeSelect.value = 'queues';
-            } else if (dest.startsWith('ivr-')) {
-                typeSelect.value = 'ivr';
-            } else if (dest.startsWith('app-announcement-')) {
-                typeSelect.value = 'announcements';
-            } else if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
-                typeSelect.value = 'timeconditions';
-            } else if (dest === 'app-blackhole,hangup,1') {
-                typeSelect.value = 'terminate';
-            } else if (dest) {
-                typeSelect.value = 'custom';
-            }
-            onIvrTimeoutDestTypeChange();
-        }
-
-        function onIvrInvalidDestTypeChange() {
-            const type = document.getElementById('ivrInvalidDestType').value;
-            const sel = document.getElementById('ivrInvalidDestSelect');
-            const inp = document.getElementById('ivrInvalidDestInput');
-            const hidden = document.getElementById('ivrInvalidDestination');
-
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
-                sel.classList.remove('hidden');
-                inp.classList.add('hidden');
-                populateIvrTargetSelect(sel, type, hidden.value);
-            } else if (type === 'terminate') {
-                sel.classList.add('hidden');
-                inp.classList.add('hidden');
-                hidden.value = 'app-blackhole,hangup,1';
-            } else if (type === 'custom') {
-                sel.classList.add('hidden');
-                inp.classList.remove('hidden');
-                inp.value = hidden.value;
-            }
-            updateIvrInvalidDestValue();
-        }
-
-        function updateIvrInvalidDestValue() {
-            const type = document.getElementById('ivrInvalidDestType').value;
-            const sel = document.getElementById('ivrInvalidDestSelect');
-            const inp = document.getElementById('ivrInvalidDestInput');
-            const hidden = document.getElementById('ivrInvalidDestination');
-
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
-                hidden.value = sel.value;
-            } else if (type === 'terminate') {
-                hidden.value = 'app-blackhole,hangup,1';
-            } else if (type === 'custom') {
-                hidden.value = inp.value.trim();
-            }
-        }
-
-        function setIvrInvalidDest(dest) {
-            const typeSelect = document.getElementById('ivrInvalidDestType');
-            const hidden = document.getElementById('ivrInvalidDestination');
-            hidden.value = dest;
-
-            if (dest.startsWith('ext-local,vmu')) {
-                typeSelect.value = 'voicemail';
-            } else if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
-                typeSelect.value = 'extensions';
-            } else if (dest.startsWith('ext-group,')) {
-                typeSelect.value = 'ringgroups';
-            } else if (dest.startsWith('ext-queues,')) {
-                typeSelect.value = 'queues';
-            } else if (dest.startsWith('ivr-')) {
-                typeSelect.value = 'ivr';
-            } else if (dest.startsWith('app-announcement-')) {
-                typeSelect.value = 'announcements';
-            } else if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
-                typeSelect.value = 'timeconditions';
-            } else if (dest === 'app-blackhole,hangup,1') {
-                typeSelect.value = 'terminate';
-            } else if (dest) {
-                typeSelect.value = 'custom';
-            }
-            onIvrInvalidDestTypeChange();
-        }
 
         async function openIvrModal(id = null) {
             const modal = document.getElementById('ivrModal');
@@ -4920,215 +4565,31 @@ function isTabAllowed(tabName) {
             deleteInboundRoute(r.extension || '', r.description || '', r.destination || '');
         }
 
-        function getInboundDestinationType(destination) {
-            const value = String(destination || '');
-            if (value.startsWith('from-did-direct,')) return 'extensions';
-            if (value.startsWith('ext-group,')) return 'ringgroups';
-            if (value.startsWith('ext-queues,')) return 'queues';
-            if (value.startsWith('timeconditions,') || value.startsWith('ext-timeconditions,')) return 'timeconditions';
-            if (value.startsWith('ivr-')) return 'ivr';
-            if (value.startsWith('ext-local,vmu')) return 'voicemail';
-            if (value.startsWith('app-announcement-')) return 'announcements';
-            if (value.startsWith('app-blackhole,')) return 'terminate';
-            return value ? 'custom' : '';
-        }
-        function loadInboundDestOptions() {
-            const destTypeSelect = document.getElementById('inDestType');
-            const destType = destTypeSelect ? destTypeSelect.value : '';
-            const selectEl = document.getElementById('inDestTargetSelect');
-            const inputEl = document.getElementById('inDestTargetInput');
-            const actualInput = document.getElementById('inDestination');
-            const savedDest = actualInput ? actualInput.value : '';
-            const savedDestType = getInboundDestinationType(savedDest);
 
-            if (!selectEl || !inputEl || !actualInput) return;
-
-            selectEl.classList.add('hidden');
-            inputEl.classList.add('hidden');
-            selectEl.required = false;
-            inputEl.required = false;
-            
-            if (destType === 'extensions') {
-                selectEl.innerHTML = '<option value="">== choose extension ==</option>';
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-                
-                loadedExtensionsList.forEach(ext => {
-                    const opt = document.createElement('option');
-                    opt.value = `from-did-direct,${ext.extension},1`;
-                    opt.textContent = `${ext.extension} - ${ext.name || ''}`;
-                    selectEl.appendChild(opt);
-                });
-                if (savedDest.startsWith('from-did-direct,')) {
-                    selectEl.value = savedDest;
-                }
-            } else if (destType === 'ringgroups') {
-                selectEl.innerHTML = '<option value="">== choose ring group ==</option>';
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-                
-                loadedRingGroupsList.forEach(rg => {
-                    const opt = document.createElement('option');
-                    opt.value = `ext-group,${rg.grpnum},1`;
-                    opt.textContent = `${rg.grpnum} - ${rg.description || ''}`;
-                    selectEl.appendChild(opt);
-                });
-                if (savedDest.startsWith('ext-group,')) {
-                    selectEl.value = savedDest;
-                }
-            } else if (destType === 'queues') {
-                selectEl.innerHTML = '<option value="">== choose queue ==</option>';
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-                
-                loadedQueuesList.forEach(q => {
-                    const opt = document.createElement('option');
-                    opt.value = `ext-queues,${q.extension},1`;
-                    opt.textContent = `${q.extension} - ${q.descr || ''}`;
-                    selectEl.appendChild(opt);
-                });
-                if (savedDest.startsWith('ext-queues,')) {
-                    selectEl.value = savedDest;
-                }
-            } else if (destType === 'timeconditions') {
-                selectEl.innerHTML = '<option value="">== choose time condition ==</option>';
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-
-                loadedTimeConditionsList.forEach(condition => {
-                    const opt = document.createElement('option');
-                    opt.value = `timeconditions,${condition.timeconditions_id},1`;
-                    opt.textContent = `${condition.displayname || 'Time Condition'} (ID: ${condition.timeconditions_id})`;
-                    selectEl.appendChild(opt);
-                });
-                if (savedDest.startsWith('timeconditions,') || savedDest.startsWith('ext-timeconditions,')) {
-                    selectEl.value = savedDest;
-                }
-            } else if (destType === 'ivr') {
-                selectEl.innerHTML = '<option value="">== choose IVR ==</option>';
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-                
-                (typeof loadedIvrsList !== 'undefined' ? loadedIvrsList : []).forEach(ivr => {
-                    const opt = document.createElement('option');
-                    opt.value = `ivr-${ivr.id},s,1`;
-                    opt.textContent = `${ivr.name || ('IVR #' + ivr.id)}${ivr.description ? ' (' + ivr.description + ')' : ''}`;
-                    selectEl.appendChild(opt);
-                });
-                if (savedDest.startsWith('ivr-')) {
-                    selectEl.value = savedDest;
-                }
-            } else if (destType === 'voicemail') {
-                selectEl.innerHTML = '<option value="">== choose voicemail ==</option>';
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-
-                (typeof vmExtensionsList !== 'undefined' ? vmExtensionsList : []).forEach(item => {
-                    const ext = typeof item === 'object' ? (item.extension || item.mailbox) : item;
-                    if (!ext) return;
-                    const opt = document.createElement('option');
-                    opt.value = `ext-local,vmu${ext},1`;
-                    opt.textContent = `Extension ${ext} Voicemail`;
-                    selectEl.appendChild(opt);
-                });
-                if (savedDest.startsWith('ext-local,vmu')) {
-                    selectEl.value = savedDest;
-                }
-            } else if (destType === 'announcements') {
-                selectEl.innerHTML = '<option value="">== choose announcement ==</option>';
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-
-                loadedAnnouncementsList.forEach(ann => {
-                    const opt = document.createElement('option');
-                    opt.value = `app-announcement-${ann.announcement_id},s,1`;
-                    opt.textContent = `${ann.description || 'Announcement'} (ID: ${ann.announcement_id})`;
-                    selectEl.appendChild(opt);
-                });
-                if (savedDest.startsWith('app-announcement-')) {
-                    selectEl.value = savedDest;
-                }
-            } else if (destType === 'terminate') {
-                actualInput.value = 'app-blackhole,hangup,1';
-            } else if (destType === 'custom') {
-                selectEl.classList.add('hidden');
-                inputEl.classList.remove('hidden');
-                inputEl.required = true;
-                inputEl.value = savedDestType === 'custom' ? savedDest : '';
-            }
-
-            if (savedDestType === destType && ['extensions', 'ringgroups', 'queues', 'timeconditions', 'ivr', 'voicemail', 'announcements'].includes(destType) && savedDest) {
-                if (selectEl.value !== savedDest) {
-                    const fallbackOpt = document.createElement('option');
-                    fallbackOpt.value = savedDest;
-                    fallbackOpt.textContent = savedDest;
-                    selectEl.appendChild(fallbackOpt);
-                    selectEl.value = savedDest;
-                }
-                selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-
-            updateInboundDestinationValue();
-        }
-
-        function onInboundDestTypeChange() {
-            loadInboundDestOptions();
-            updateInboundDestinationValue();
-        }
-
-        function updateInboundDestinationValue() {
-            const destTypeSelect = document.getElementById('inDestType');
-            const destType = destTypeSelect ? destTypeSelect.value : '';
-            const selectEl = document.getElementById('inDestTargetSelect');
-            const inputEl = document.getElementById('inDestTargetInput');
-            const actualInput = document.getElementById('inDestination');
-            if (!actualInput) return;
-            
-            if (['extensions', 'ringgroups', 'queues', 'timeconditions', 'ivr', 'voicemail', 'announcements'].includes(destType)) {
-                actualInput.value = selectEl ? selectEl.value : '';
-            } else if (destType === 'terminate') {
-                actualInput.value = 'app-blackhole,hangup,1';
-            } else if (destType === 'custom') {
-                if (inputEl) actualInput.value = inputEl.value.trim();
-            } else {
-                actualInput.value = '';
-            }
-        }
-
-        function openInboundModal() {
+        async function openInboundModal() {
+            await ensureAllConfigListsLoaded();
             document.getElementById('inboundModalTitle').textContent = isRtl ? 'إضافة مسار وارد' : 'Add Inbound Route';
             document.getElementById('inboundEditExt').value = "";
             document.getElementById('inboundEditDesc').value = "";
             document.getElementById('inboundEditDest').value = "";
             document.getElementById('inboundForm').reset();
-            const destTypeSelect = document.getElementById('inDestType');
-            if (destTypeSelect) {
-                destTypeSelect.value = "";
-                destTypeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            document.getElementById('inDestTargetSelect').classList.add('hidden');
-            document.getElementById('inDestTargetInput').classList.add('hidden');
-            document.getElementById('inDestination').value = "";
+            document.getElementById('inDestination').value = "app-blackhole,hangup,1";
+            initDestinationSelectInstances();
+            if (inboundDestSelectInstance) inboundDestSelectInstance.setDialplan('app-blackhole,hangup,1');
             openModal('inboundModal');
         }
 
-        function editInboundRoute(extension, description, destination) {
-            document.getElementById('inboundModalTitle').textContent = isRtl ? 'تعديل المسار الوارد' : 'Edit Inbound Route';
-            document.getElementById('inboundEditExt').value = extension || '';
-            document.getElementById('inboundEditDesc').value = description || '';
-            document.getElementById('inboundEditDest').value = destination || '';
-            
-            document.getElementById('inDescription').value = description || '';
-            document.getElementById('inExtension').value = extension || '';
-            
-            const actualInput = document.getElementById('inDestination');
-            actualInput.value = destination || '';
-            
-            const destTypeSelect = document.getElementById('inDestType');
-            destTypeSelect.value = getInboundDestinationType(destination);
-            destTypeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            loadInboundDestOptions();
+        async function editInboundRoute(extension, description, destination) {
+            await ensureAllConfigListsLoaded();
+            document.getElementById('inboundModalTitle').textContent = isRtl ? 'تعديل مسار وارد' : 'Edit Inbound Route';
+            document.getElementById('inboundEditExt').value = extension;
+            document.getElementById('inboundEditDesc').value = description;
+            document.getElementById('inboundEditDest').value = destination;
+            document.getElementById('inExtension').value = extension;
+            document.getElementById('inDescription').value = description;
+            document.getElementById('inDestination').value = destination;
+            initDestinationSelectInstances();
+            if (inboundDestSelectInstance) inboundDestSelectInstance.setDialplan(destination || 'app-blackhole,hangup,1');
             openModal('inboundModal');
         }
 
@@ -7293,176 +6754,47 @@ function isTabAllowed(tabName) {
                 });
         }
 
-        function openTimeConditionModal() {
+        async function openTimeConditionModal() {
+            await ensureAllConfigListsLoaded();
+            document.getElementById('timeConditionForm').reset();
             document.getElementById('tcEditMode').value = 'false';
             document.getElementById('tcId').value = '';
             document.getElementById('tcDisplayName').value = '';
             document.getElementById('tcTimeGroup').value = '';
-            
-            document.getElementById('tcTrueType').value = '';
-            onTcDestTypeChange('true');
-            document.getElementById('tcTrueGoto').value = '';
+            document.getElementById('tcTrueGoto').value = 'app-blackhole,hangup,1';
+            document.getElementById('tcFalseGoto').value = 'app-blackhole,hangup,1';
 
-            document.getElementById('tcFalseType').value = '';
-            onTcDestTypeChange('false');
-            document.getElementById('tcFalseGoto').value = '';
+            initDestinationSelectInstances();
+            if (tcTrueDestSelectInstance) tcTrueDestSelectInstance.setDialplan('app-blackhole,hangup,1');
+            if (tcFalseDestSelectInstance) tcFalseDestSelectInstance.setDialplan('app-blackhole,hangup,1');
 
             document.getElementById('timeConditionModalTitle').textContent = isRtl ? 'إضافة شرط وقت جديد' : 'Add Time Condition';
+            populateTcTimeGroupsSelect();
             openModal('timeConditionModal');
         }
 
-        function onTcDestTypeChange(prefix) {
-            const type = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}Type`).value;
-            const select = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}TargetSelect`);
-            const input = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}TargetInput`);
-
-            select.innerHTML = '<option value="">-- choose target --</option>';
-            select.classList.add('hidden');
-            input.classList.add('hidden');
-            select.required = false;
-            input.required = false;
-
-            if (type === 'extensions') {
-                select.classList.remove('hidden');
-                select.required = true;
-                loadedExtensionsList.forEach(ext => {
-                    const opt = document.createElement('option');
-                    opt.value = ext.extension;
-                    opt.textContent = `${ext.name} (Ext: ${ext.extension})`;
-                    select.appendChild(opt);
-                });
-            } else if (type === 'ringgroups') {
-                select.classList.remove('hidden');
-                select.required = true;
-                loadedRingGroupsList.forEach(rg => {
-                    const opt = document.createElement('option');
-                    opt.value = rg.grpnum;
-                    opt.textContent = `${rg.description} (Group: ${rg.grpnum})`;
-                    select.appendChild(opt);
-                });
-            } else if (type === 'queues') {
-                select.classList.remove('hidden');
-                select.required = true;
-                loadedQueuesList.forEach(q => {
-                    const opt = document.createElement('option');
-                    opt.value = q.extension;
-                    opt.textContent = `${q.descr} (Queue: ${q.extension})`;
-                    select.appendChild(opt);
-                });
-            } else if (type === 'voicemail') {
-                select.classList.remove('hidden');
-                select.required = true;
-                loadedExtensionsList.forEach(ext => {
-                    if (ext.voicemail !== 'novm') {
-                        const opt = document.createElement('option');
-                        opt.value = ext.extension;
-                        opt.textContent = `${ext.name} (Voicemail: ${ext.extension})`;
-                        select.appendChild(opt);
-                    }
-                });
-            } else if (type === 'timeconditions') {
-                select.classList.remove('hidden');
-                select.required = true;
-                const currTcId = document.getElementById('tcId').value;
-                loadedTimeConditionsList.forEach(tc => {
-                    if (tc.timeconditions_id != currTcId) {
-                        const opt = document.createElement('option');
-                        opt.value = tc.timeconditions_id;
-                        opt.textContent = `${tc.displayname} (ID: ${tc.timeconditions_id})`;
-                        select.appendChild(opt);
-                    }
-                });
-            } else if (type === 'announcements') {
-                select.classList.remove('hidden');
-                select.required = true;
-                loadedAnnouncementsList.forEach(ann => {
-                    const opt = document.createElement('option');
-                    opt.value = ann.announcement_id;
-                    opt.textContent = `${ann.description} (ID: ${ann.announcement_id})`;
-                    select.appendChild(opt);
-                });
-            } else if (type === 'terminate') {
-                select.classList.remove('hidden');
-                select.required = true;
-                
-                const terminateTargets = [
-                    { value: 'hangup', label: 'Hangup Call' },
-                    { value: 'congestion', label: 'Play Congestion Tone' },
-                    { value: 'busy', label: 'Play Busy Tone' }
-                ];
-                terminateTargets.forEach(tgt => {
-                    const opt = document.createElement('option');
-                    opt.value = tgt.value;
-                    opt.textContent = tgt.label;
-                    select.appendChild(opt);
-                });
-            } else if (type === 'custom') {
-                input.classList.remove('hidden');
-                input.required = true;
-            }
-            
-            updateTcDestValue(prefix);
-        }
-
-        function updateTcDestValue(prefix) {
-            const type = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}Type`).value;
-            const select = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}TargetSelect`);
-            const input = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}TargetInput`);
-            const hidden = document.getElementById(`tc${prefix === 'true' ? 'True' : 'False'}Goto`);
-
-            let val = '';
-            if (type === 'extensions' && select.value) {
-                val = `from-did-direct,${select.value},1`;
-            } else if (type === 'ringgroups' && select.value) {
-                val = `ext-group,${select.value},1`;
-            } else if (type === 'queues' && select.value) {
-                val = `ext-queues,${select.value},1`;
-            } else if (type === 'voicemail' && select.value) {
-                val = `ext-local,vmu${select.value},1`;
-            } else if (type === 'timeconditions' && select.value) {
-                val = `timeconditions,${select.value},1`;
-            } else if (type === 'announcements' && select.value) {
-                val = `app-announcement-${select.value},s,1`;
-            } else if (type === 'terminate' && select.value) {
-                val = `app-blackhole,${select.value},1`;
-            } else if (type === 'custom' && input.value.trim()) {
-                val = input.value.trim();
-            }
-            hidden.value = val;
-        }
-
-        function editTimeCondition(id) {
-            const tc = loadedTimeConditionsList.find(c => c.timeconditions_id === id);
+        async function editTimeCondition(id) {
+            await ensureAllConfigListsLoaded();
+            const tc = loadedTimeConditionsList.find(c => c.timeconditions_id == id);
             if (!tc) return;
-            
+
             document.getElementById('tcEditMode').value = 'true';
             document.getElementById('tcId').value = tc.timeconditions_id;
-            document.getElementById('tcDisplayName').value = tc.displayname;
+            document.getElementById('tcDisplayName').value = tc.displayname || '';
+            populateTcTimeGroupsSelect();
             document.getElementById('tcTimeGroup').value = tc.timegroup_id;
             
-            const parsedTrue = parseTcDestination(tc.truegoto);
-            document.getElementById('tcTrueType').value = parsedTrue.type;
-            onTcDestTypeChange('true');
-            if (parsedTrue.type === 'custom') {
-                document.getElementById('tcTrueTargetInput').value = parsedTrue.target;
-            } else {
-                document.getElementById('tcTrueTargetSelect').value = parsedTrue.target;
-            }
-            document.getElementById('tcTrueGoto').value = tc.truegoto || '';
+            document.getElementById('tcTrueGoto').value = tc.truegoto || 'app-blackhole,hangup,1';
+            document.getElementById('tcFalseGoto').value = tc.falsegoto || 'app-blackhole,hangup,1';
 
-            const parsedFalse = parseTcDestination(tc.falsegoto);
-            document.getElementById('tcFalseType').value = parsedFalse.type;
-            onTcDestTypeChange('false');
-            if (parsedFalse.type === 'custom') {
-                document.getElementById('tcFalseTargetInput').value = parsedFalse.target;
-            } else {
-                document.getElementById('tcFalseTargetSelect').value = parsedFalse.target;
-            }
-            document.getElementById('tcFalseGoto').value = tc.falsegoto || '';
+            initDestinationSelectInstances();
+            if (tcTrueDestSelectInstance) tcTrueDestSelectInstance.setDialplan(tc.truegoto || 'app-blackhole,hangup,1');
+            if (tcFalseDestSelectInstance) tcFalseDestSelectInstance.setDialplan(tc.falsegoto || 'app-blackhole,hangup,1');
 
             document.getElementById('timeConditionModalTitle').textContent = (isRtl ? 'تعديل شرط الوقت: ' : 'Edit Time Condition: ') + tc.displayname;
             openModal('timeConditionModal');
         }
+
 
         function saveTimeCondition(e) {
             e.preventDefault();
@@ -7515,39 +6847,6 @@ function isTabAllowed(tabName) {
                 });
         }
 
-        function parseTcDestination(gotoStr) {
-            if (!gotoStr) return { type: '', target: '' };
-            if (gotoStr.startsWith('from-did-direct,')) {
-                const parts = gotoStr.split(',');
-                return { type: 'extensions', target: parts[1] };
-            }
-            if (gotoStr.startsWith('ext-group,')) {
-                const parts = gotoStr.split(',');
-                return { type: 'ringgroups', target: parts[1] };
-            }
-            if (gotoStr.startsWith('ext-queues,')) {
-                const parts = gotoStr.split(',');
-                return { type: 'queues', target: parts[1] };
-            }
-            if (gotoStr.startsWith('ext-local,vmu')) {
-                const ext = gotoStr.substring(13).split(',')[0];
-                return { type: 'voicemail', target: ext };
-            }
-            if (gotoStr.startsWith('timeconditions,')) {
-                const parts = gotoStr.split(',');
-                return { type: 'timeconditions', target: parts[1] };
-            }
-            if (gotoStr.startsWith('app-announcement-')) {
-                const parts = gotoStr.split(',');
-                const id = parts[0].replace('app-announcement-', '');
-                return { type: 'announcements', target: id };
-            }
-            if (gotoStr.startsWith('app-blackhole,')) {
-                const parts = gotoStr.split(',');
-                return { type: 'terminate', target: parts[1] };
-            }
-            return { type: 'custom', target: gotoStr };
-        }
 
         // --- ANNOUNCEMENTS CLIENT LOGIC ---
 
@@ -7638,7 +6937,9 @@ function isTabAllowed(tabName) {
         }
         window.onAnnRecordingChange = onAnnRecordingChange;
 
-        function openAnnouncementModal() {
+        async function openAnnouncementModal() {
+            await ensureAllConfigListsLoaded();
+            document.getElementById('announcementForm').reset();
             document.getElementById('annEditMode').value = 'false';
             document.getElementById('annId').value = '';
             document.getElementById('annDescription').value = '';
@@ -7649,99 +6950,19 @@ function isTabAllowed(tabName) {
             document.getElementById('annReturnIvr').checked = false;
             document.getElementById('annNoAnswer').checked = false;
             populateAnnouncementRecordingsDropdown();
-            onAnnRecordingChange();
-
-            document.getElementById('annPostDestType').value = 'terminate';
-            onAnnPostDestTypeChange();
             document.getElementById('annPostDestination').value = 'app-blackhole,hangup,1';
+
+            initDestinationSelectInstances();
+            if (annPostDestSelectInstance) annPostDestSelectInstance.setDialplan('app-blackhole,hangup,1');
 
             document.getElementById('announcementModalTitle').textContent = isRtl ? 'إضافة إعلان جديد' : 'Add Announcement';
             openModal('announcementModal');
         }
         window.openAnnouncementModal = openAnnouncementModal;
-        function onAnnPostDestTypeChange() {
-            const type = document.getElementById('annPostDestType').value;
-            const select = document.getElementById('annPostDestTargetSelect');
-            const input = document.getElementById('annPostDestTargetInput');
 
-            select.innerHTML = '<option value="">-- choose target --</option>';
-            select.classList.add('hidden');
-            input.classList.add('hidden');
-            select.required = false;
-            input.required = false;
-
-            if (['extensions', 'ringgroups', 'queues', 'timeconditions', 'ivr', 'announcements', 'voicemail'].includes(type)) {
-                select.classList.remove('hidden');
-                select.required = true;
-                let items = [];
-                if (type === 'extensions') items = loadedExtensionsList.map(e => ({ val: 'from-did-direct,' + e.extension + ',1', label: e.extension + ' - ' + e.name }));
-                if (type === 'ringgroups') items = loadedRingGroupsList.map(rg => ({ val: 'ext-group,' + rg.grpnum + ',1', label: rg.grpnum + ' - ' + rg.description }));
-                if (type === 'queues') items = loadedQueuesList.map(q => ({ val: 'ext-queues,' + q.extension + ',1', label: q.extension + ' - ' + q.descr }));
-                if (type === 'timeconditions') items = loadedTimeConditionsList.map(tc => ({ val: 'timeconditions,' + tc.timeconditions_id + ',1', label: tc.displayname + ' (ID: ' + tc.timeconditions_id + ')' }));
-                if (type === 'ivr') items = loadedIvrsList.map(i => ({ val: 'ivr-' + i.id + ',s,1', label: i.name }));
-                if (type === 'announcements') items = loadedAnnouncementsList.map(a => ({ val: 'app-announcement-' + a.announcement_id + ',s,1', label: 'Announcement: ' + a.description }));
-                if (type === 'voicemail') items = loadedExtensionsList.map(e => ({ val: 'ext-local,vmu' + e.extension + ',1', label: 'VM ' + e.extension + ' - ' + e.name }));
-
-                items.forEach(it => {
-                    const opt = document.createElement('option');
-                    opt.value = it.val;
-                    opt.textContent = it.label;
-                    select.appendChild(opt);
-                });
-            } else if (type === 'terminate') {
-                select.classList.remove('hidden');
-                select.required = true;
-                const terminateTargets = [
-                    { value: 'app-blackhole,hangup,1', label: 'Hangup Call' },
-                    { value: 'app-blackhole,congestion,1', label: 'Play Congestion Tone' },
-                    { value: 'app-blackhole,busy,1', label: 'Play Busy Tone' }
-                ];
-                terminateTargets.forEach(tgt => {
-                    const opt = document.createElement('option');
-                    opt.value = tgt.value;
-                    opt.textContent = tgt.label;
-                    select.appendChild(opt);
-                });
-            } else if (type === 'custom') {
-                input.classList.remove('hidden');
-                input.required = true;
-            }
-
-            updateAnnPostDestinationValue();
-        }
-        window.onAnnPostDestTypeChange = onAnnPostDestTypeChange;
-
-        function updateAnnPostDestinationValue() {
-            const type = document.getElementById('annPostDestType').value;
-            const select = document.getElementById('annPostDestTargetSelect');
-            const input = document.getElementById('annPostDestTargetInput');
-            const hidden = document.getElementById('annPostDestination');
-
-            let val = '';
-            if (['extensions', 'ringgroups', 'queues', 'timeconditions', 'ivr', 'announcements', 'voicemail', 'terminate'].includes(type) && select.value) {
-                val = select.value;
-            } else if (type === 'custom' && input.value.trim()) {
-                val = input.value.trim();
-            }
-            hidden.value = val;
-        }
-        window.updateAnnPostDestinationValue = updateAnnPostDestinationValue;
-
-        function parseAnnPostDestination(dest) {
-            if (!dest) return { type: 'terminate', target: 'app-blackhole,hangup,1' };
-            if (dest.startsWith('from-did-direct,')) return { type: 'extensions', target: dest };
-            if (dest.startsWith('ext-group,')) return { type: 'ringgroups', target: dest };
-            if (dest.startsWith('ext-queues,')) return { type: 'queues', target: dest };
-            if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) return { type: 'timeconditions', target: dest };
-            if (dest.startsWith('ivr-')) return { type: 'ivr', target: dest };
-            if (dest.startsWith('app-announcement-')) return { type: 'announcements', target: dest };
-            if (dest.startsWith('ext-local,vmu')) return { type: 'voicemail', target: dest };
-            if (dest.startsWith('app-blackhole,')) return { type: 'terminate', target: dest };
-            return { type: 'custom', target: dest };
-        }
-
-        function editAnnouncement(id) {
-            const ann = loadedAnnouncementsList.find(a => a.announcement_id === id);
+        async function editAnnouncement(id) {
+            await ensureAllConfigListsLoaded();
+            const ann = loadedAnnouncementsList.find(a => a.announcement_id == id);
             if (!ann) return;
 
             document.getElementById('annEditMode').value = 'true';
@@ -7754,17 +6975,10 @@ function isTabAllowed(tabName) {
             document.getElementById('annReturnIvr').checked = !!ann.return_ivr;
             document.getElementById('annNoAnswer').checked = !!ann.noanswer;
             populateAnnouncementRecordingsDropdown(ann.recording_id || 0);
-            onAnnRecordingChange();
+            document.getElementById('annPostDestination').value = ann.post_dest || 'app-blackhole,hangup,1';
 
-            const parsedDest = parseAnnPostDestination(ann.post_dest);
-            document.getElementById('annPostDestType').value = parsedDest.type;
-            onAnnPostDestTypeChange();
-            if (parsedDest.type === 'custom') {
-                document.getElementById('annPostDestTargetInput').value = parsedDest.target;
-            } else {
-                document.getElementById('annPostDestTargetSelect').value = parsedDest.target;
-            }
-            document.getElementById('annPostDestination').value = ann.post_dest || '';
+            initDestinationSelectInstances();
+            if (annPostDestSelectInstance) annPostDestSelectInstance.setDialplan(ann.post_dest || 'app-blackhole,hangup,1');
 
             document.getElementById('announcementModalTitle').textContent = (isRtl ? 'تعديل الإعلان: ' : 'Edit Announcement: ') + (ann.description || '');
             openModal('announcementModal');
