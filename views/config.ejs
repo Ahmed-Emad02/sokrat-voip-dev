@@ -2074,9 +2074,9 @@ function isTabAllowed(tabName) {
                                     <option value="ivr"><%= isRtl ? 'الرد الآلي (IVR Menu)' : 'IVR Menu' %></option>
                                     <option value="announcements"><%= isRtl ? 'الإعلانات (Announcements)' : 'Announcements' %></option>
                                     <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail' %></option>
+                                    <option value="terminate"><%= isRtl ? 'إنهاء المكالمة (Terminate Call / Hangup)' : 'Terminate Call (Hangup)' %></option>
                                     <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
                                 </select>
-                                
                                 <div id="inDestTargetContainer">
                                     <select id="inDestTargetSelect" onchange="updateInboundDestinationValue()" class="config-input w-full text-xs font-semibold hidden">
                                         <option value="">== choose target ==</option>
@@ -3885,6 +3885,12 @@ function isTabAllowed(tabName) {
                     if (currentDest === opt.value || currentDest === `ext-timeconditions,${tc.timeconditions_id},1`) opt.selected = true;
                     selectEl.appendChild(opt);
                 });
+            } else if (type === 'terminate') {
+                const opt = document.createElement('option');
+                opt.value = 'app-blackhole,hangup,1';
+                opt.textContent = isRtl ? 'إنهاء المكالمة (Hangup)' : 'Terminate Call (Hangup)';
+                opt.selected = true;
+                selectEl.appendChild(opt);
             }
         }
 
@@ -3917,7 +3923,7 @@ function isTabAllowed(tabName) {
                         <option value="voicemail">Voicemail</option>
                         <option value="announcements">Announcements</option>
                         <option value="timeconditions">Time Conditions</option>
-                        <option value="terminate">Terminate Call</option>
+                        <option value="terminate">Terminate Call (Hangup)</option>
                         <option value="custom">Custom</option>
                     </select>
                 </div>
@@ -4129,7 +4135,7 @@ function isTabAllowed(tabName) {
             onIvrInvalidDestTypeChange();
         }
 
-        function openIvrModal(id = null) {
+        async function openIvrModal(id = null) {
             const modal = document.getElementById('ivrModal');
             const form = document.getElementById('ivrForm');
             const title = document.getElementById('ivrModalTitle');
@@ -4491,7 +4497,7 @@ function isTabAllowed(tabName) {
                 return `Voicemail: ${ext}`;
             }
 
-            if (dest.startsWith('app-blackhole,hangup')) return isRtl ? 'إنهاء (قطع خط)' : 'Hangup Call';
+            if (dest.startsWith('app-blackhole,hangup') || dest === 'app-blackhole,hangup,1') return isRtl ? 'إنهاء المكالمة (Hangup)' : 'Terminate Call (Hangup)';
             if (dest.startsWith('app-blackhole,congestion')) return isRtl ? 'نغمة ازدحام' : 'Play Congestion';
             if (dest.startsWith('app-blackhole,busy')) return isRtl ? 'نغمة مشغول' : 'Play Busy';
 
@@ -4558,9 +4564,9 @@ function isTabAllowed(tabName) {
             if (value.startsWith('ivr-')) return 'ivr';
             if (value.startsWith('ext-local,vmu')) return 'voicemail';
             if (value.startsWith('app-announcement-')) return 'announcements';
+            if (value.startsWith('app-blackhole,')) return 'terminate';
             return value ? 'custom' : '';
         }
-
         function loadInboundDestOptions() {
             const destTypeSelect = document.getElementById('inDestType');
             const destType = destTypeSelect ? destTypeSelect.value : '';
@@ -4677,7 +4683,10 @@ function isTabAllowed(tabName) {
                 if (savedDest.startsWith('app-announcement-')) {
                     selectEl.value = savedDest;
                 }
+            } else if (destType === 'terminate') {
+                actualInput.value = 'app-blackhole,hangup,1';
             } else if (destType === 'custom') {
+                selectEl.classList.add('hidden');
                 inputEl.classList.remove('hidden');
                 inputEl.required = true;
                 inputEl.value = savedDestType === 'custom' ? savedDest : '';
@@ -4712,6 +4721,8 @@ function isTabAllowed(tabName) {
             
             if (['extensions', 'ringgroups', 'queues', 'timeconditions', 'ivr', 'voicemail', 'announcements'].includes(destType)) {
                 actualInput.value = selectEl ? selectEl.value : '';
+            } else if (destType === 'terminate') {
+                actualInput.value = 'app-blackhole,hangup,1';
             } else if (destType === 'custom') {
                 if (inputEl) actualInput.value = inputEl.value.trim();
             } else {
