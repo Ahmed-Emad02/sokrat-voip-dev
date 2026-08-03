@@ -2569,6 +2569,371 @@ function isTabAllowed(tabName) {
         let modalTrunksSequence = [];
         let editingPatternIndex = -1;
 
+        // --- DYNAMIC NESTED PBX DESTINATION SELECTOR COMPONENT (DestinationSelect) ---
+        class DestinationSelect {
+            constructor(containerEl, options = {}) {
+                this.container = typeof containerEl === 'string' ? document.getElementById(containerEl) : containerEl;
+                this.initialDialplan = options.initialDialplan || 'app-blackhole,hangup,1';
+                this.onChangeCallback = options.onChange || null;
+                this.inputName = options.inputName || null;
+                this.isRtl = Boolean(options.isRtl || (typeof isRtl !== 'undefined' ? isRtl : false));
+
+                this.selectedCategory = 'terminate';
+                this.selectedTarget = 'hangup';
+                this.dialplanString = this.initialDialplan;
+                this.customDialplanString = '';
+                this.searchTerm = '';
+
+                this.init();
+            }
+
+            static getCategories() {
+                const rtl = typeof isRtl !== 'undefined' ? isRtl : false;
+                
+                const extTargets = (typeof loadedExtensionsList !== 'undefined' ? loadedExtensionsList : []).map(e => ({
+                    id: String(e.extension),
+                    label: `${e.extension} - ${e.name || ''}`,
+                    dialplanString: `from-did-direct,${e.extension},1`
+                }));
+
+                const ringTargets = (typeof loadedRingGroupsList !== 'undefined' ? loadedRingGroupsList : []).map(rg => ({
+                    id: String(rg.grpnum),
+                    label: `Group ${rg.grpnum} - ${rg.description || ''}`,
+                    dialplanString: `ext-group,${rg.grpnum},1`
+                }));
+
+                const queueTargets = (typeof loadedQueuesList !== 'undefined' ? loadedQueuesList : []).map(q => ({
+                    id: String(q.extension),
+                    label: `Queue ${q.extension} - ${q.descr || ''}`,
+                    dialplanString: `ext-queues,${q.extension},1`
+                }));
+
+                const ivrTargets = (typeof loadedIvrsList !== 'undefined' ? loadedIvrsList : []).map(i => ({
+                    id: String(i.id),
+                    label: `IVR #${i.id} - ${i.name || ''}`,
+                    dialplanString: `ivr-${i.id},s,1`
+                }));
+
+                const annTargets = (typeof loadedAnnouncementsList !== 'undefined' ? loadedAnnouncementsList : []).map(a => ({
+                    id: String(a.announcement_id),
+                    label: `Announcement: ${a.description || ''} (ID: ${a.announcement_id})`,
+                    dialplanString: `app-announcement-${a.announcement_id},s,1`
+                }));
+
+                const vmTargets = (typeof loadedExtensionsList !== 'undefined' ? loadedExtensionsList : []).map(e => ({
+                    id: `vmu${e.extension}`,
+                    label: `VM: ${e.extension} - ${e.name || ''}`,
+                    dialplanString: `ext-local,vmu${e.extension},1`
+                }));
+
+                const tcTargets = (typeof loadedTimeConditionsList !== 'undefined' ? loadedTimeConditionsList : []).map(tc => ({
+                    id: String(tc.timeconditions_id),
+                    label: `Time Condition: ${tc.displayname || ''}`,
+                    dialplanString: `timeconditions,${tc.timeconditions_id},1`
+                }));
+
+                const trunkTargets = (typeof loadedTrunksList !== 'undefined' ? loadedTrunksList : []).map(t => ({
+                    id: String(t.trunkid),
+                    label: `Trunk: ${t.name || ''} (${t.tech || ''})`,
+                    dialplanString: `ext-trunk,${t.trunkid},1`
+                }));
+
+                return [
+                    {
+                        id: 'terminate',
+                        label: rtl ? 'إنهاء المكالمة (Terminate Call)' : 'Terminate Call',
+                        targets: [
+                            { id: 'hangup', label: rtl ? 'قطع الخط (Hangup)' : 'Hangup', dialplanString: 'app-blackhole,hangup,1' },
+                            { id: 'congestion', label: rtl ? 'نغمة ازدحام (Congestion)' : 'Congestion', dialplanString: 'app-blackhole,congestion,1' },
+                            { id: 'busy', label: rtl ? 'نغمة مشغول (Busy)' : 'Busy', dialplanString: 'app-blackhole,busy,1' },
+                            { id: 'zapateller', label: rtl ? 'تشغيل نغمة SIT (Zapateller)' : 'Play SIT Tone (Zapateller)', dialplanString: 'app-blackhole,zapateller,1' },
+                            { id: 'musiconhold', label: rtl ? 'وضع المتصل في الانتظار الدائم' : 'Put caller on hold forever', dialplanString: 'app-blackhole,musiconhold,1' },
+                            { id: 'ringback', label: rtl ? 'تشغيل نغمة رنين حتى قطع الخط' : 'Play ringtones to caller until they hangup', dialplanString: 'app-blackhole,ringing,1' }
+                        ]
+                    },
+                    {
+                        id: 'extensions',
+                        label: rtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions',
+                        targets: extTargets
+                    },
+                    {
+                        id: 'ringgroups',
+                        label: rtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups',
+                        targets: ringTargets
+                    },
+                    {
+                        id: 'queues',
+                        label: rtl ? 'طوابير الانتظار (Queues)' : 'Queues',
+                        targets: queueTargets
+                    },
+                    {
+                        id: 'ivr',
+                        label: rtl ? 'قائمة الرد الآلي (IVR Menu)' : 'IVR Menu',
+                        targets: ivrTargets
+                    },
+                    {
+                        id: 'announcements',
+                        label: rtl ? 'الإعلانات الصوتية (Announcements)' : 'Announcements',
+                        targets: annTargets
+                    },
+                    {
+                        id: 'voicemail',
+                        label: rtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail',
+                        targets: vmTargets
+                    },
+                    {
+                        id: 'timeconditions',
+                        label: rtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions',
+                        targets: tcTargets
+                    },
+                    {
+                        id: 'trunks',
+                        label: rtl ? 'خطوط الربط (Trunks)' : 'Trunks',
+                        targets: trunkTargets
+                    },
+                    {
+                        id: 'custom',
+                        label: rtl ? 'تطبيق مخصص (Custom App)' : 'Custom App',
+                        targets: []
+                    }
+                ];
+            }
+
+            static parseDialplanString(destStr) {
+                const dest = String(destStr || '').trim();
+                if (!dest || dest === 'app-blackhole,hangup,1') return { category: 'terminate', target: 'hangup', dialplan: 'app-blackhole,hangup,1' };
+                if (dest === 'app-blackhole,congestion,1') return { category: 'terminate', target: 'congestion', dialplan: 'app-blackhole,congestion,1' };
+                if (dest === 'app-blackhole,busy,1') return { category: 'terminate', target: 'busy', dialplan: 'app-blackhole,busy,1' };
+                if (dest === 'app-blackhole,zapateller,1') return { category: 'terminate', target: 'zapateller', dialplan: 'app-blackhole,zapateller,1' };
+                if (dest === 'app-blackhole,musiconhold,1') return { category: 'terminate', target: 'musiconhold', dialplan: 'app-blackhole,musiconhold,1' };
+                if (dest === 'app-blackhole,ringing,1') return { category: 'terminate', target: 'ringback', dialplan: 'app-blackhole,ringing,1' };
+
+                if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
+                    const ext = dest.split(',')[1];
+                    if (ext && ext.startsWith('vmu')) {
+                        return { category: 'voicemail', target: ext, dialplan: dest };
+                    }
+                    return { category: 'extensions', target: ext, dialplan: dest };
+                }
+                if (dest.startsWith('ext-group,')) return { category: 'ringgroups', target: dest.split(',')[1], dialplan: dest };
+                if (dest.startsWith('ext-queues,')) return { category: 'queues', target: dest.split(',')[1], dialplan: dest };
+                if (dest.startsWith('ivr-')) return { category: 'ivr', target: dest.split(',')[0].replace('ivr-', ''), dialplan: dest };
+                if (dest.startsWith('app-announcement-')) return { category: 'announcements', target: dest.split(',')[0].replace('app-announcement-', ''), dialplan: dest };
+                if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) return { category: 'timeconditions', target: dest.split(',')[1], dialplan: dest };
+                if (dest.startsWith('ext-trunk,')) return { category: 'trunks', target: dest.split(',')[1], dialplan: dest };
+
+                return { category: 'custom', target: 'custom', dialplan: dest };
+            }
+
+            init() {
+                const parsed = DestinationSelect.parseDialplanString(this.initialDialplan);
+                this.selectedCategory = parsed.category;
+                this.selectedTarget = parsed.target;
+                this.dialplanString = parsed.dialplan;
+                if (this.selectedCategory === 'custom') {
+                    this.customDialplanString = parsed.dialplan;
+                }
+
+                this.render();
+            }
+
+            setDialplan(destStr) {
+                this.initialDialplan = destStr;
+                const parsed = DestinationSelect.parseDialplanString(destStr);
+                this.selectedCategory = parsed.category;
+                this.selectedTarget = parsed.target;
+                this.dialplanString = parsed.dialplan;
+                if (this.selectedCategory === 'custom') {
+                    this.customDialplanString = parsed.dialplan;
+                } else {
+                    this.customDialplanString = '';
+                }
+                this.searchTerm = '';
+                this.render();
+            }
+
+            emitChange() {
+                const payload = {
+                    category: this.selectedCategory,
+                    target: this.selectedTarget,
+                    dialplan: this.dialplanString
+                };
+                if (typeof this.onChangeCallback === 'function') {
+                    this.onChangeCallback(payload);
+                }
+            }
+
+            render() {
+                if (!this.container) return;
+                const categories = DestinationSelect.getCategories();
+                const currentCatObj = categories.find(c => c.id === this.selectedCategory) || categories[0];
+                
+                let filteredTargets = currentCatObj.targets || [];
+                if (this.searchTerm.trim()) {
+                    const term = this.searchTerm.toLowerCase().trim();
+                    filteredTargets = filteredTargets.filter(t => 
+                        t.label.toLowerCase().includes(term) || 
+                        t.id.toLowerCase().includes(term) ||
+                        t.dialplanString.toLowerCase().includes(term)
+                    );
+                }
+
+                const isCustom = this.selectedCategory === 'custom';
+
+                this.container.innerHTML = `
+                    <div class="destination-select-wrapper space-y-2 text-xs">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <!-- Primary Category Select -->
+                            <div>
+                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+                                    ${this.isRtl ? 'فئة الوجهة (Category)' : 'Category'}
+                                </label>
+                                <select class="dest-primary-select config-input w-full font-bold text-xs py-1.5">
+                                    ${categories.map(c => `<option value="${c.id}" ${c.id === this.selectedCategory ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
+                                </select>
+                            </div>
+
+                            <!-- Secondary Target Select / Custom Input -->
+                            <div>
+                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+                                    ${this.isRtl ? 'الهدف / الإجراء (Target)' : 'Target'}
+                                </label>
+                                ${isCustom ? `
+                                    <input type="text" value="${escapeHtml(this.customDialplanString)}" placeholder="e.g. custom-app,s,1" class="dest-custom-input config-input w-full font-mono text-xs py-1.5">
+                                ` : `
+                                    <div class="relative dest-combobox-wrapper">
+                                        <div class="dest-combobox-trigger config-input w-full py-1.5 px-3 flex items-center justify-between cursor-pointer bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg font-semibold text-xs">
+                                            <span class="truncate text-[var(--text-primary)]">
+                                                ${escapeHtml((currentCatObj.targets.find(t => t.id === this.selectedTarget) || currentCatObj.targets[0])?.label || 'Choose Target')}
+                                            </span>
+                                            <svg class="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                        </div>
+
+                                        <!-- Searchable Combobox Dropdown -->
+                                        <div class="dest-dropdown-menu hidden absolute left-0 right-0 top-full mt-1 z-50 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-xl p-2 space-y-2 max-h-56 flex flex-col">
+                                            <!-- Search Filter Input -->
+                                            <div class="relative shrink-0">
+                                                <svg class="w-3.5 h-3.5 absolute left-2.5 top-2 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                                <input type="text" value="${escapeHtml(this.searchTerm)}" placeholder="${this.isRtl ? 'بحث في الخيارات...' : 'Search targets...'}" class="dest-search-input config-input w-full pl-8 pr-2 py-1 text-xs font-medium">
+                                            </div>
+                                            <!-- Options List -->
+                                            <div class="options-list overflow-y-auto space-y-1 custom-scrollbar flex-1">
+                                                ${filteredTargets.length === 0 ? `
+                                                    <div class="px-3 py-2 text-center text-[var(--text-muted)] text-[11px] italic">${this.isRtl ? 'لا توجد نتائج مطابقة' : 'No matching targets'}</div>
+                                                ` : filteredTargets.map(t => `
+                                                    <div data-target-id="${t.id}" data-dialplan="${t.dialplanString}" class="dest-option-item px-3 py-1.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between text-xs ${t.id === this.selectedTarget ? 'bg-[var(--accent-color)]/15 text-[var(--accent-color)] font-bold' : 'hover:bg-[var(--bg-hover)] text-[var(--text-primary)]'}">
+                                                        <span class="truncate">${escapeHtml(t.label)}</span>
+                                                        <span class="font-mono text-[10px] opacity-60 ml-2 shrink-0">${escapeHtml(t.dialplanString.split(',')[0])}</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                        ${this.inputName ? `<input type="hidden" name="${this.inputName}" class="dest-hidden-output" value="${escapeHtml(this.dialplanString)}">` : ''}
+                    </div>
+                `;
+
+                this.bindEvents();
+            }
+
+            bindEvents() {
+                const primarySelect = this.container.querySelector('.dest-primary-select');
+                const customInput = this.container.querySelector('.dest-custom-input');
+                const trigger = this.container.querySelector('.dest-combobox-trigger');
+                const menu = this.container.querySelector('.dest-dropdown-menu');
+                const searchInput = this.container.querySelector('.dest-search-input');
+                const optionItems = this.container.querySelectorAll('.dest-option-item');
+
+                if (primarySelect) {
+                    primarySelect.addEventListener('change', (e) => {
+                        this.selectedCategory = e.target.value;
+                        const categories = DestinationSelect.getCategories();
+                        const catObj = categories.find(c => c.id === this.selectedCategory);
+                        this.selectedTarget = catObj && catObj.targets.length ? catObj.targets[0].id : (this.selectedCategory === 'custom' ? 'custom' : '');
+                        this.dialplanString = catObj && catObj.targets.length ? catObj.targets[0].dialplanString : (this.selectedCategory === 'custom' ? this.customDialplanString : '');
+                        this.searchTerm = '';
+                        this.render();
+                        this.emitChange();
+                    });
+                }
+
+                if (customInput) {
+                    customInput.addEventListener('input', (e) => {
+                        this.customDialplanString = e.target.value.trim();
+                        this.dialplanString = this.customDialplanString;
+                        this.emitChange();
+                    });
+                }
+
+                if (trigger && menu) {
+                    trigger.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const isHidden = menu.classList.contains('hidden');
+                        document.querySelectorAll('.dest-dropdown-menu').forEach(m => m.classList.add('hidden'));
+                        if (isHidden) {
+                            menu.classList.remove('hidden');
+                            if (searchInput) searchInput.focus();
+                        }
+                    });
+
+                    document.addEventListener('click', () => {
+                        if (menu) menu.classList.add('hidden');
+                    });
+
+                    menu.addEventListener('click', (e) => e.stopPropagation());
+                }
+
+                if (searchInput) {
+                    searchInput.addEventListener('input', (e) => {
+                        this.searchTerm = e.target.value;
+                        const categories = DestinationSelect.getCategories();
+                        const catObj = categories.find(c => c.id === this.selectedCategory) || categories[0];
+                        let filtered = catObj.targets || [];
+                        if (this.searchTerm.trim()) {
+                            const term = this.searchTerm.toLowerCase().trim();
+                            filtered = filtered.filter(t => t.label.toLowerCase().includes(term) || t.id.toLowerCase().includes(term) || t.dialplanString.toLowerCase().includes(term));
+                        }
+                        const optionsList = this.container.querySelector('.options-list');
+                        if (optionsList) {
+                            optionsList.innerHTML = filtered.length === 0 ? `
+                                <div class="px-3 py-2 text-center text-[var(--text-muted)] text-[11px] italic">${this.isRtl ? 'لا توجد نتائج مطابقة' : 'No matching targets'}</div>
+                            ` : filtered.map(t => `
+                                <div data-target-id="${t.id}" data-dialplan="${t.dialplanString}" class="dest-option-item px-3 py-1.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between text-xs ${t.id === this.selectedTarget ? 'bg-[var(--accent-color)]/15 text-[var(--accent-color)] font-bold' : 'hover:bg-[var(--bg-hover)] text-[var(--text-primary)]'}">
+                                    <span class="truncate">${escapeHtml(t.label)}</span>
+                                    <span class="font-mono text-[10px] opacity-60 ml-2 shrink-0">${escapeHtml(t.dialplanString.split(',')[0])}</span>
+                                </div>
+                            `).join('');
+
+                            optionsList.querySelectorAll('.dest-option-item').forEach(item => {
+                                item.addEventListener('click', () => {
+                                    this.selectedTarget = item.getAttribute('data-target-id');
+                                    this.dialplanString = item.getAttribute('data-dialplan');
+                                    if (menu) menu.classList.add('hidden');
+                                    this.render();
+                                    this.emitChange();
+                                });
+                            });
+                        }
+                    });
+                }
+
+                if (optionItems) {
+                    optionItems.forEach(item => {
+                        item.addEventListener('click', () => {
+                            this.selectedTarget = item.getAttribute('data-target-id');
+                            this.dialplanString = item.getAttribute('data-dialplan');
+                            if (menu) menu.classList.add('hidden');
+                            this.render();
+                            this.emitChange();
+                        });
+                    });
+                }
+            }
+        }
+        window.DestinationSelect = DestinationSelect;
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
