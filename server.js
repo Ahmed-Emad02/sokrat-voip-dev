@@ -6961,6 +6961,76 @@ app.get('/api/config/modem', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+// GET /api/config/modem/rtcp - Real-time RTCP audio diagnostics for active calls
+app.get('/api/config/modem/rtcp', async (req, res) => {
+    try {
+        const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channels concise']);
+        const lines = (output || '').split('\n').filter(Boolean);
+        const channels = [];
+
+        for (const line of lines) {
+            const parts = line.split('!');
+            const chanName = parts[0] || '';
+            const context = parts[1] || '';
+            const exten = parts[2] || '';
+            const state = parts[4] || '';
+            const appName = parts[5] || '';
+            const duration = parts[10] || '0';
+
+            if (!chanName) continue;
+
+            let rxjitter = null;
+            let rxploss = null;
+            let rtt = null;
+            let format = 'slin (8kHz)';
+
+            try {
+                const chanDetail = await execFileAsync(ASTERISK_BIN, ['-rx', `core show channel ${chanName}`]);
+                
+                const fmtMatch = chanDetail.match(/NativeFormat:\s*\(([^)]+)\)/i) || chanDetail.match(/ReadFormat:\s*([^\r\n]+)/i);
+                if (fmtMatch) format = fmtMatch[1].trim();
+
+                let sipDetail = '';
+                if (chanName.startsWith('SIP/')) {
+                    try { sipDetail = await execFileAsync(ASTERISK_BIN, ['-rx', `sip show channel ${chanName}`]); } catch (_) {}
+                } else if (chanName.startsWith('PJSIP/')) {
+                    try { sipDetail = await execFileAsync(ASTERISK_BIN, ['-rx', `pjsip show channel ${chanName}`]); } catch (_) {}
+                }
+
+                const combined = chanDetail + '\n' + sipDetail;
+
+                const jitterMatch = combined.match(/Jitter:\s*([\d.]+)/i) || combined.match(/rxjitter:\s*([\d.]+)/i) || combined.match(/Jitter\s*=\s*([\d.]+)/i);
+                if (jitterMatch) rxjitter = parseFloat(jitterMatch[1]);
+
+                const lossMatch = combined.match(/Loss:\s*([\d.]+)/i) || combined.match(/rxploss:\s*([\d.]+)/i) || combined.match(/Lost\s*=\s*([\d.]+)/i);
+                if (lossMatch) rxploss = parseFloat(lossMatch[1]);
+
+                const rttMatch = combined.match(/RTT:\s*([\d.]+)/i) || combined.match(/rtt:\s*([\d.]+)/i) || combined.match(/RTT\s*=\s*([\d.]+)/i);
+                if (rttMatch) rtt = parseFloat(rttMatch[1]);
+            } catch (_) {}
+
+            const ext = getExtensionFromChannel(chanName) || exten || chanName;
+            channels.push({
+                channel: chanName,
+                extension: ext,
+                state: state === 'Up' ? 'In Call' : (state || 'Ringing'),
+                duration: duration + 's',
+                format: format,
+                jitterMs: rxjitter !== null && !isNaN(rxjitter) ? rxjitter : null,
+                packetLoss: rxploss !== null && !isNaN(rxploss) ? rxploss : null,
+                rttMs: rtt !== null && !isNaN(rtt) ? rtt : null
+            });
+        }
+
+        res.json({
+            success: true,
+            activeCount: channels.length,
+            channels: channels
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 // POST /api/config/modem/gain - Update volume gain (txgain, rxgain) for dongle(s)
 app.post('/api/config/modem/gain', async (req, res) => {
