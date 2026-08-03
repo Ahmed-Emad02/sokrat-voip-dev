@@ -221,10 +221,6 @@ same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBER
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(sim_map/${DONGLEIMSI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${EXTEN}))
-
-same => n,ExecIf($["${MY_SIM_NUMBER}" != "" & !${DIALPLAN_EXISTS(from-trunk,${MY_SIM_NUMBER},1)} & "${MY_SIM_NUMBER:0:3}" = "+20" & ${DIALPLAN_EXISTS(from-trunk,0${MY_SIM_NUMBER:3},1)}]?Set(MY_SIM_NUMBER=0${MY_SIM_NUMBER:3}))
-same => n,ExecIf($["${MY_SIM_NUMBER}" != "" & !${DIALPLAN_EXISTS(from-trunk,${MY_SIM_NUMBER},1)} & "${MY_SIM_NUMBER:0:2}" = "01" & ${DIALPLAN_EXISTS(from-trunk,+20${MY_SIM_NUMBER:1},1)}]?Set(MY_SIM_NUMBER=+20${MY_SIM_NUMBER:1}))
-
 same => n,NoOp(This call arrived on SIM number: ${MY_SIM_NUMBER})
 same => n,Set(CALLERID(dnid)=${MY_SIM_NUMBER})
 
@@ -234,10 +230,8 @@ same => n,Set(FOUND_NAME=${SHELL(sqlite3 /var/www/db/address_book.db "SELECT nam
 same => n,GotoIf($["${FOUND_NAME}" = ""]?skip_cid)
 same => n,NoOp(Found Contact Name: ${FOUND_NAME})
 same => n,Set(CALLERID(name)=${FOUND_NAME})
-same => n(skip_cid),GotoIf($["${MY_SIM_NUMBER}" != "" & "${MY_SIM_NUMBER}" != "s" & "${MY_SIM_NUMBER}" != "+1234567890" & ${DIALPLAN_EXISTS(from-trunk,${MY_SIM_NUMBER},1)}]?goto_did:check_catchall)
+same => n(skip_cid),GotoIf($["${MY_SIM_NUMBER}" != "" & "${MY_SIM_NUMBER}" != "s" & "${MY_SIM_NUMBER}" != "+1234567890" & ${DIALPLAN_EXISTS(from-trunk,${MY_SIM_NUMBER},1)}]?goto_did:no_route)
 same => n(goto_did),Goto(from-trunk,${MY_SIM_NUMBER},1)
-same => n(check_catchall),GotoIf($[${DIALPLAN_EXISTS(from-trunk,s,1)}]?goto_catchall:no_route)
-same => n(goto_catchall),Goto(from-trunk,s,1)
 same => n(no_route),NoOp(DONGLE-ERROR: No matching inbound route in from-trunk for DID '${MY_SIM_NUMBER}' on dongle '${DONGLENAME}')
 same => n,Playtones(congestion)
 same => n,Congestion(10)
