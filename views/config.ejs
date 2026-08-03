@@ -365,6 +365,15 @@ function isTabAllowed(tabName) {
                     <span class="subsidebar-text truncate"><%= isRtl ? 'إعدادات المودم' : 'Modem Conf' %></span>
                 </button>
                 <% } %>
+                <!-- 15. dynamic dongle DID mappings -->
+                <% if (isTabAllowed('dongles')) { %>
+                <button onclick="switchTab('dongles')" id="tab-btn-dongles" title="<%= isRtl ? 'خريطة الشرائح و DIDs' : 'GSM DID Mappings' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
+                    <svg class="w-4 h-4 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    <span class="subsidebar-text truncate"><%= isRtl ? 'خريطة الشرائح و DIDs' : 'GSM DID Mappings' %></span>
+                </button>
+                <% } %>
             </nav>
         </div>
 
@@ -1089,6 +1098,85 @@ function isTabAllowed(tabName) {
                     <!-- Rendered dynamically by fetchRtcpDiagnostics() -->
                 </div>
             </div>
+        <% } %>
+        <!-- 15. DYNAMIC GSM DID MAPPINGS TAB PANEL -->
+        <% if (isTabAllowed('dongles')) { %>
+        <div id="section-dongles" class="tab-section hidden space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4">
+                <div>
+                    <h2 class="text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                        <span><%= isRtl ? 'خريطة الشرائح التلقائية (GSM Dynamic DIDs)' : 'GSM Dynamic DID Mappings' %></span>
+                    </h2>
+                    <p class="text-xs text-[var(--text-muted)] mt-1">
+                        <%= isRtl ? 'عرض مباشر ومطابقة ديناميكية لشرائح GSM وأرقام DIDs ومفاتيح AstDB ومسارات PBX الواردة' : 'Live status of logical slots (dongle0, dongle1), configured DIDs, hardware IMSI/IMEI aliases, AstDB keys, and FreePBX Inbound Routes.' %>
+                    </p>
+                </div>
+                <div class="flex items-center gap-2.5 flex-wrap">
+                    <button type="button" onclick="fetchDongleMappingsTab()" class="config-btn-secondary px-3.5 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        <span><%= isRtl ? 'تحديث البيانات' : 'Refresh Mappings' %></span>
+                    </button>
+                    <button type="button" onclick="reconcileDonglesNow()" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        <span><%= isRtl ? 'إعادة مطابقة AstDB الآن' : 'Re-Sync AstDB Now' %></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Telemetry Cards Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
+                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'إجمالي فتحات GSM' : 'Total Dongle Slots' %></span>
+                    <div id="dmCardTotal" class="text-xl font-extrabold font-mono text-[var(--text-primary)]">-</div>
+                </div>
+                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
+                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'الأجهزة المتصلة' : 'Connected Modems' %></span>
+                    <div id="dmCardConnected" class="text-xl font-extrabold font-mono text-emerald-400">-</div>
+                </div>
+                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
+                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'مفاتيح AstDB المطابقة' : 'AstDB Synced Keys' %></span>
+                    <div id="dmCardSynced" class="text-xl font-extrabold font-mono text-cyan-400">-</div>
+                </div>
+                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
+                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'المسارات الواردة المرتبطة' : 'Inbound Routes Linked' %></span>
+                    <div id="dmCardRoutes" class="text-xl font-extrabold font-mono text-purple-400">-</div>
+                </div>
+            </div>
+
+            <!-- Dynamic Mappings Table Card -->
+            <div class="config-card p-6 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-extrabold text-[var(--text-primary)] flex items-center gap-2">
+                        <span><%= isRtl ? 'جدول مطابقة DIDs والشرائح (Dynamic DID Table)' : 'Dynamic DID Mapping Roster' %></span>
+                    </h3>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-[var(--border-primary)]">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] text-[var(--text-muted)] uppercase font-mono font-bold">
+                                <th class="p-3"><%= isRtl ? 'اسم الفتحة (Dongle)' : 'Dongle Slot' %></th>
+                                <th class="p-3"><%= isRtl ? 'رقم DID المعرف' : 'Configured DID' %></th>
+                                <th class="p-3"><%= isRtl ? 'معرفات العتاد (IMSI / IMEI)' : 'Hardware IDs' %></th>
+                                <th class="p-3"><%= isRtl ? 'رقم الشريحة' : 'SIM Report' %></th>
+                                <th class="p-3"><%= isRtl ? 'مفاتيح AstDB' : 'AstDB Keys' %></th>
+                                <th class="p-3"><%= isRtl ? 'مسار PBX الوارد' : 'Inbound Route Link' %></th>
+                                <th class="p-3"><%= isRtl ? 'الحالة والشبكة' : 'Status & Network' %></th>
+                                <th class="p-3 text-right"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="dmTableBody" class="divide-y divide-[var(--border-primary)]">
+                            <tr>
+                                <td colspan="8" class="p-4 text-center text-[var(--text-muted)] italic">Loading GSM dynamic mappings...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
         <% } %>
 
     </div>
@@ -2904,6 +2992,7 @@ function isTabAllowed(tabName) {
             if (tabId === 'timeconditions') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeGroups(); fetchTimeConditions(); fetchAnnouncements(); }
             if (tabId === 'announcements') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); }
             if (tabId === 'modem') { fetchModemConfig(); fetchRtcpDiagnostics(); startRtcpTimer(); }
+            if (tabId === 'dongles') fetchDongleMappingsTab();
         }
         window.switchTab = switchTab;
 
@@ -7326,6 +7415,128 @@ function isTabAllowed(tabName) {
                 showToast('Error updating noise suppression: ' + e.message, 'error');
             }
         }
+        // --- GSM DYNAMIC DID MAPPINGS SUBTAB ---
+        async function fetchDongleMappingsTab() {
+            try {
+                const res = await fetch('/api/config/dongle-mappings');
+                const data = await res.json();
+                if (!data.success) {
+                    showToast(isRtl ? 'فشل تحميل بيانات خريطة DIDs' : 'Failed to load DID mappings', 'error');
+                    return;
+                }
+
+                document.getElementById('dmCardTotal').textContent = data.summary.totalCount || 0;
+                document.getElementById('dmCardConnected').textContent = data.summary.connectedCount || 0;
+                document.getElementById('dmCardSynced').textContent = data.summary.syncedCount || 0;
+                document.getElementById('dmCardRoutes').textContent = data.summary.routeFoundCount || 0;
+
+                const tbody = document.getElementById('dmTableBody');
+                if (!tbody) return;
+
+                if (!data.mappings || data.mappings.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-[var(--text-muted)] italic">' + (isRtl ? 'لا توجد فتحات شرائح معرفة' : 'No GSM dongle slots found.') + '</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.mappings.map(m => {
+                    const isConnected = m.state && !m.state.toLowerCase().includes('disconnected') && !m.state.toLowerCase().includes('not');
+                    const stateBadge = isConnected
+                        ? '<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">' + m.state + '</span>'
+                        : '<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">' + m.state + '</span>';
+
+                    const configuredDidDisplay = m.phoneNumber
+                        ? '<span class="font-mono font-bold text-emerald-400 text-sm">' + m.phoneNumber + '</span>'
+                        : '<span class="text-zinc-500 italic text-[11px]">Unconfigured</span>';
+
+                    const simReportDisplay = (m.simNumber && m.simNumber !== 'Unknown' && m.simNumber !== '-')
+                        ? '<span class="font-mono text-white">' + m.simNumber + '</span>'
+                        : '<span class="px-2 py-0.5 text-[10px] font-mono rounded bg-amber-500/10 text-amber-400 border border-amber-500/20" title="SIM own-number empty; Asterisk uses configured DID mapping">Unknown</span>';
+
+                    const astdbDongleOk = m.astdb.dongle_map === m.phoneNumber && m.phoneNumber !== '';
+                    const astdbBadge = astdbDongleOk
+                        ? '<span class="px-2 py-0.5 text-[10px] font-mono rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">dongle_map: OK</span>'
+                        : '<span class="px-2 py-0.5 text-[10px] font-mono rounded bg-red-500/10 text-red-400 border border-red-500/20">dongle_map: Missing</span>';
+
+                    let routeBadge = '';
+                    if (m.inboundRoute && m.inboundRoute.found) {
+                        routeBadge = '<div class="space-y-0.5"><span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">→ ' + (m.inboundRoute.description || m.inboundRoute.destination) + '</span><div class="text-[10px] font-mono text-[var(--text-muted)]">' + m.inboundRoute.destination + '</div></div>';
+                    } else {
+                        routeBadge = '<span class="px-2 py-0.5 text-[10px] font-mono rounded bg-red-500/10 text-red-400 border border-red-500/20">No Route for ' + (m.phoneNumber || 'DID') + '</span>';
+                    }
+
+                    return `
+                        <tr class="hover:bg-[var(--bg-hover)]/40 transition">
+                            <td class="p-3 font-mono font-bold text-white">${m.dongleName}</td>
+                            <td class="p-3">${configuredDidDisplay}</td>
+                            <td class="p-3 space-y-0.5 font-mono text-[11px]">
+                                <div><span class="text-[var(--text-muted)]">IMSI:</span> ${m.imsi || '-'}</div>
+                                <div><span class="text-[var(--text-muted)]">IMEI:</span> ${m.imei || '-'}</div>
+                            </td>
+                            <td class="p-3">${simReportDisplay}</td>
+                            <td class="p-3">${astdbBadge}</td>
+                            <td class="p-3">${routeBadge}</td>
+                            <td class="p-3 space-y-1">
+                                <div>${stateBadge}</div>
+                                <div class="text-[11px] text-[var(--text-muted)]">${m.provider} (${m.rssi} dBm)</div>
+                            </td>
+                            <td class="p-3 text-right">
+                                <button onclick="editDongleTabDid('${m.dongleName}', '${m.imsi}', '${m.phoneNumber}')" class="config-btn-secondary px-2.5 py-1 text-[11px] cursor-pointer">
+                                    ${isRtl ? 'تعديل DID' : 'Edit DID'}
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                console.error('fetchDongleMappingsTab error:', err);
+            }
+        }
+        window.fetchDongleMappingsTab = fetchDongleMappingsTab;
+
+        async function editDongleTabDid(dongleId, imsi, currentVal) {
+            const newNum = prompt(isRtl ? `أدخل رقم DID المعرف لـ ${dongleId}:` : `Enter configured DID for ${dongleId}:`, currentVal);
+            if (newNum === null) return;
+            const trimmed = newNum.trim();
+            if (!trimmed) return;
+
+            showToast(isRtl ? 'جاري حفظ رقم DID...' : 'Saving DID mapping...', 'info');
+
+            try {
+                const res = await fetch('/api/gsm-dongles/save-number', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dongleId, imsi, number: trimmed })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(isRtl ? 'تم حفظ رقم DID ومطابقة AstDB بنجاح' : 'DID saved & AstDB reconciled successfully!', 'success');
+                    fetchDongleMappingsTab();
+                } else {
+                    showToast(data.error || 'Failed to save DID', 'error');
+                }
+            } catch (e) {
+                showToast(e.message || 'Connection error', 'error');
+            }
+        }
+        window.editDongleTabDid = editDongleTabDid;
+
+        async function reconcileDonglesNow() {
+            showToast(isRtl ? 'جاري إعادة مطابقة AstDB...' : 'Reconciling AstDB dongle mappings...', 'info');
+            try {
+                const res = await fetch('/api/gsm-dongles/redetect', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(isRtl ? 'تمت إعادة مطابقة AstDB بنجاح' : 'AstDB mappings reconciled successfully!', 'success');
+                    fetchDongleMappingsTab();
+                } else {
+                    showToast(data.error || 'Reconciliation failed', 'error');
+                }
+            } catch (e) {
+                showToast(e.message || 'Network error', 'error');
+            }
+        }
+        window.reconcileDonglesNow = reconcileDonglesNow;
         window.toggleDenoise = toggleDenoise;
         async function fetchRtcpDiagnostics() {
             const container = document.getElementById('rtcpDiagnosticsContainer');

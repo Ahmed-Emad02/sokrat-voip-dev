@@ -142,7 +142,7 @@ app.use(session({
 const ALL_TABS = [
     'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'softphone', 'contacts', 'users', 'config', 'storage',
     'config-extensions', 'config-ringgroups', 'config-queues', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram',
-    'config-timegroups', 'config-timeconditions', 'config-announcements', 'config-modem'
+    'config-timegroups', 'config-timeconditions', 'config-announcements', 'config-modem', 'config-dongles'
 ];
 
 async function initAuthDb() {
@@ -7258,6 +7258,118 @@ app.post('/api/config/modem/denoise', async (req, res) => {
         });
     } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// GET /api/config/dongle-mappings - Fetch detailed GSM dongle DID dynamic mappings & telemetry
+app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
+    try {
+        const { execFile: execFileCb } = require('child_process');
+        const execFileAsync = (cmd, args) => new Promise((resolve) => {
+            execFileCb(cmd, args, (err, stdout) => resolve(err ? '' : stdout || ''));
+        });
+
+        const [dbRows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number, updated_at FROM `asterisk`.`gsm_dongles`');
+
+        const devicesOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
+        const liveDevices = parseDevicesOutput(devicesOutput || '', true);
+        const liveMap = {};
+        for (const dev of liveDevices) {
+            if (dev.ID) liveMap[dev.ID] = dev;
+        }
+
+        const getAstDbMap = async (family) => {
+            const out = await execFileAsync(ASTERISK_BIN, ['-rx', `database show ${family}`]);
+            const map = {};
+            if (out) {
+                const lines = out.split('\n');
+                lines.forEach(line => {
+                    const regex = new RegExp(`\\/${family}\\/([a-zA-Z0-9_]+)\\s*:\\s*(.+)`);
+                    const m = regex.exec(line);
+                    if (m) map[m[1].trim()] = m[2].trim();
+                });
+            }
+            return map;
+        };
+
+        const [dongleMap, simMap, dongleNumMap] = await Promise.all([
+            getAstDbMap('dongle_map'),
+            getAstDbMap('sim_map'),
+            getAstDbMap('DONGLE_NUMBERS')
+        ]);
+
+        const [routes] = await pool.query('SELECT extension, destination, description FROM `asterisk`.`incoming`');
+        const routeMap = {};
+        for (const r of routes) {
+            if (r.extension) routeMap[r.extension.trim()] = r;
+        }
+
+        const allDongleNames = new Set([
+            ...dbRows.map(r => r.dongle_name),
+            ...Object.keys(liveMap),
+            ...Object.keys(dongleMap)
+        ]);
+
+        const mappings = [];
+        for (const dName of Array.from(allDongleNames)) {
+            if (!dName || !dName.startsWith('dongle')) continue;
+
+            const dbRow = dbRows.find(r => r.dongle_name === dName);
+            const liveDev = liveMap[dName];
+
+            const phoneNum = dbRow ? (dbRow.phone_number || '') : (dongleMap[dName] || '');
+            const imsi = liveDev?.IMSI && liveDev.IMSI !== '-' ? liveDev.IMSI : (dbRow?.imsi || '');
+            const imei = liveDev?.IMEI && liveDev.IMEI !== '-' ? liveDev.IMEI : (dbRow?.imei || '');
+            const simNum = liveDev?.Number || 'Unknown';
+            const state = liveDev?.State || 'Disconnected';
+            const rssi = liveDev?.RSSI || '-';
+            const provider = liveDev?.['Provider Name'] || 'Unknown';
+
+            const astdbStatus = {
+                dongle_map: dongleMap[dName] || null,
+                sim_map: imsi ? (simMap[imsi] || null) : null,
+                DONGLE_NUMBERS_IMSI: imsi ? (dongleNumMap[imsi] || null) : null,
+                DONGLE_NUMBERS_IMEI: imei ? (dongleNumMap[imei] || null) : null
+            };
+
+            let routeMatch = null;
+            if (phoneNum) {
+                routeMatch = routeMap[phoneNum] || null;
+            }
+
+            mappings.push({
+                dongleName: dName,
+                phoneNumber: phoneNum,
+                imsi,
+                imei,
+                simNumber: simNum,
+                state,
+                rssi,
+                provider,
+                astdb: astdbStatus,
+                inboundRoute: routeMatch ? {
+                    found: true,
+                    extension: routeMatch.extension,
+                    destination: routeMatch.destination,
+                    description: routeMatch.description
+                } : { found: false },
+                updatedAt: dbRow?.updated_at || null
+            });
+        }
+
+        mappings.sort((a, b) => a.dongleName.localeCompare(b.dongleName));
+
+        return res.json({
+            success: true,
+            mappings,
+            summary: {
+                totalCount: mappings.length,
+                connectedCount: Object.keys(liveMap).length,
+                syncedCount: mappings.filter(m => m.astdb.dongle_map === m.phoneNumber && m.phoneNumber !== '').length,
+                routeFoundCount: mappings.filter(m => m.inboundRoute.found).length
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 // ============================================================================
