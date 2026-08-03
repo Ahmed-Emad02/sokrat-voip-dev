@@ -355,6 +355,16 @@ function isTabAllowed(tabName) {
                     <span class="subsidebar-text truncate"><%= isRtl ? 'الإعلانات' : 'Announcements' %></span>
                 </button>
                 <% } %>
+
+                <!-- 14. modem conf -->
+                <% if (isTabAllowed('modem')) { %>
+                <button onclick="switchTab('modem')" id="tab-btn-modem" title="<%= isRtl ? 'إعدادات المودم' : 'Modem Conf' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
+                    <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                    <span class="subsidebar-text truncate"><%= isRtl ? 'إعدادات المودم' : 'Modem Conf' %></span>
+                </button>
+                <% } %>
             </nav>
         </div>
 
@@ -999,6 +1009,40 @@ function isTabAllowed(tabName) {
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+        <% } %>
+
+        <!-- 14. MODEM CONF TAB SECTION -->
+        <% if (isTabAllowed('modem')) { %>
+        <div id="section-modem" class="tab-section hidden space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4">
+                <div>
+                    <h2 class="text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
+                        <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                        </svg>
+                        <span><%= isRtl ? 'إعدادات المودم وشرائح GSM' : 'Modem Conf (GSM Dongles)' %></span>
+                    </h2>
+                    <p class="text-xs text-[var(--text-muted)] mt-1">
+                        <%= isRtl ? 'التحكم بمستوى الصوت والكسب (Gain) لشرائح GSM ومستويات الإرسال والاستقبال في Asterisk (على مقياس من 0 إلى 20)' : 'Adjust volume gain (Tx & Rx) for each GSM dongle on scale 0-20 directly in dongle.conf' %>
+                    </p>
+                </div>
+                <div class="flex items-center gap-2.5">
+                    <button type="button" onclick="resetAllDongleGains()" class="config-btn-secondary px-4 py-2 text-xs flex items-center gap-1.5 text-red-400 hover:text-red-300 border-red-500/30 hover:bg-red-500/10 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        <span><%= isRtl ? 'إعادة ضبط الكل (txgain=0 & rxgain=0)' : 'Reset All (txgain=0 & rxgain=0)' %></span>
+                    </button>
+                    <button type="button" onclick="saveAllDongleGains()" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        <span><%= isRtl ? 'حفظ جميع التغييرات' : 'Save All Dongle Gains' %></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dongles Volume Gain List Grid -->
+            <div id="modemDonglesGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Rendered dynamically by fetchModemConfig() -->
             </div>
         </div>
         <% } %>
@@ -2517,6 +2561,7 @@ function isTabAllowed(tabName) {
             if (tabId === 'timegroups') fetchTimeGroups();
             if (tabId === 'timeconditions') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeGroups(); fetchTimeConditions(); fetchAnnouncements(); }
             if (tabId === 'announcements') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); }
+            if (tabId === 'modem') fetchModemConfig();
         }
         window.switchTab = switchTab;
 
@@ -7378,6 +7423,195 @@ function isTabAllowed(tabName) {
                 });
         }
         window.deleteAnnouncement = deleteAnnouncement;
+        // --- MODEM CONF (DONGLE VOLUME GAIN) CLIENT LOGIC ---
+
+        async function fetchModemConfig() {
+            const grid = document.getElementById('modemDonglesGrid');
+            if (!grid) return;
+            grid.innerHTML = `<div class="col-span-2 text-center text-xs text-[var(--text-muted)] py-8">${isRtl ? 'جاري تحميل إعدادات المودم...' : 'Loading modem configurations...'}</div>`;
+
+            try {
+                const res = await fetch('/api/config/modem');
+                const data = await res.json();
+                if (!data.success || !data.dongles) {
+                    grid.innerHTML = `<div class="col-span-2 text-center text-xs text-red-400 py-8">${data.error || 'Failed to load modem configurations.'}</div>`;
+                    return;
+                }
+
+                const dongleIds = Object.keys(data.dongles);
+                if (dongleIds.length === 0) {
+                    grid.innerHTML = `<div class="col-span-2 text-center text-xs text-[var(--text-muted)] py-8">${isRtl ? 'لا توجد شرائح GSM معرفة في dongle.conf' : 'No GSM dongles found in dongle.conf'}</div>`;
+                    return;
+                }
+
+                grid.innerHTML = '';
+                dongleIds.forEach(id => {
+                    const d = data.dongles[id];
+                    const rxVal = Math.max(0, Math.min(20, parseInt(d.rxgain, 10) || 0));
+                    const txVal = Math.max(0, Math.min(20, parseInt(d.txgain, 10) || 0));
+                    const phoneNum = d.phone_number ? escapeHtml(d.phone_number) : (isRtl ? 'غير محدد' : 'Not set');
+
+                    const card = document.createElement('div');
+                    card.className = 'config-card p-5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] flex flex-col gap-4 shadow-sm';
+                    card.setAttribute('data-dongle-id', id);
+
+                    card.innerHTML = `
+                        <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs font-mono">
+                                    ${escapeHtml(id.replace('dongle', 'D'))}
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-black text-[var(--text-primary)] font-mono">${escapeHtml(id)}</h3>
+                                    <span class="text-[11px] text-[var(--text-muted)] block font-mono">${phoneNum}</span>
+                                </div>
+                            </div>
+                            <span class="px-2.5 py-1 text-[10px] font-extrabold rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                                Active
+                            </span>
+                        </div>
+
+                        <!-- Volume Controls Grid -->
+                        <div class="space-y-4 pt-1">
+                            <!-- Rx Gain (Receive Volume) -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between text-xs">
+                                    <label class="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                                        <span>${isRtl ? 'كسب الاستقبال (Rx Gain - Receiving Volume)' : 'Rx Gain (Receiving Volume)'}</span>
+                                    </label>
+                                    <span id="rxValBadge_${id}" class="font-mono font-black text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                                        ${rxVal} / 20
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <input type="range" id="rxRange_${id}" min="0" max="20" value="${rxVal}" step="1"
+                                        oninput="document.getElementById('rxValBadge_${id}').textContent = this.value + ' / 20'; document.getElementById('rxInput_${id}').value = this.value"
+                                        class="w-full accent-emerald-500 bg-[var(--bg-primary)] h-2 rounded-lg cursor-pointer">
+                                    <input type="number" id="rxInput_${id}" min="0" max="20" value="${rxVal}"
+                                        oninput="let v = Math.max(0, Math.min(20, parseInt(this.value)||0)); this.value = v; document.getElementById('rxRange_${id}').value = v; document.getElementById('rxValBadge_${id}').textContent = v + ' / 20';"
+                                        class="config-input w-16 text-center font-mono font-bold text-xs py-1">
+                                </div>
+                            </div>
+
+                            <!-- Tx Gain (Transmit Volume) -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between text-xs">
+                                    <label class="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                                        <span>${isRtl ? 'كسب الإرسال (Tx Gain - Transmit Volume)' : 'Tx Gain (Transmit Volume)'}</span>
+                                    </label>
+                                    <span id="txValBadge_${id}" class="font-mono font-black text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                                        ${txVal} / 20
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <input type="range" id="txRange_${id}" min="0" max="20" value="${txVal}" step="1"
+                                        oninput="document.getElementById('txValBadge_${id}').textContent = this.value + ' / 20'; document.getElementById('txInput_${id}').value = this.value"
+                                        class="w-full accent-blue-500 bg-[var(--bg-primary)] h-2 rounded-lg cursor-pointer">
+                                    <input type="number" id="txInput_${id}" min="0" max="20" value="${txVal}"
+                                        oninput="let v = Math.max(0, Math.min(20, parseInt(this.value)||0)); this.value = v; document.getElementById('txRange_${id}').value = v; document.getElementById('txValBadge_${id}').textContent = v + ' / 20';"
+                                        class="config-input w-16 text-center font-mono font-bold text-xs py-1">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-2 border-t border-[var(--border-primary)] mt-1">
+                            <button type="button" onclick="saveSingleDongleGain('${id}')" class="config-btn-secondary px-3 py-1.5 text-xs flex items-center gap-1 cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                <span>${isRtl ? 'حفظ' : 'Save'} ${escapeHtml(id)}</span>
+                            </button>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            } catch (e) {
+                grid.innerHTML = `<div class="col-span-2 text-center text-xs text-red-400 py-8">Error loading modem config: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+        window.fetchModemConfig = fetchModemConfig;
+
+        async function saveSingleDongleGain(dongleId) {
+            const rxInput = document.getElementById(`rxInput_${dongleId}`);
+            const txInput = document.getElementById(`txInput_${dongleId}`);
+            if (!rxInput || !txInput) return;
+
+            const rxgain = Math.max(0, Math.min(20, parseInt(rxInput.value, 10) || 0));
+            const txgain = Math.max(0, Math.min(20, parseInt(txInput.value, 10) || 0));
+
+            try {
+                const res = await fetch('/api/config/modem/gain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dongleId, rxgain, txgain })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || `${dongleId} volume gain updated successfully!`, 'success');
+                } else {
+                    showToast(data.error || 'Failed to update volume gain.', 'error');
+                }
+            } catch (e) {
+                showToast('Error updating volume gain: ' + e.message, 'error');
+            }
+        }
+        window.saveSingleDongleGain = saveSingleDongleGain;
+
+        async function saveAllDongleGains() {
+            const cards = document.querySelectorAll('#modemDonglesGrid [data-dongle-id]');
+            if (!cards.length) return;
+
+            const gains = {};
+            cards.forEach(card => {
+                const dongleId = card.getAttribute('data-dongle-id');
+                const rxInput = document.getElementById(`rxInput_${dongleId}`);
+                const txInput = document.getElementById(`txInput_${dongleId}`);
+                if (dongleId && rxInput && txInput) {
+                    gains[dongleId] = {
+                        rxgain: Math.max(0, Math.min(20, parseInt(rxInput.value, 10) || 0)),
+                        txgain: Math.max(0, Math.min(20, parseInt(txInput.value, 10) || 0))
+                    };
+                }
+            });
+
+            try {
+                const res = await fetch('/api/config/modem/gain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gains })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || 'All dongle volume gains updated successfully!', 'success');
+                } else {
+                    showToast(data.error || 'Failed to update volume gains.', 'error');
+                }
+            } catch (e) {
+                showToast('Error saving all gains: ' + e.message, 'error');
+            }
+        }
+        window.saveAllDongleGains = saveAllDongleGains;
+
+        async function resetAllDongleGains() {
+            if (!confirm(isRtl ? 'هل أنت تأكد من إعادة ضبط مستويات كسب جميع الشرائح إلى (txgain=0 و rxgain=0) في dongle.conf؟' : 'Are you sure you want to reset all dongle gains to txgain=0 and rxgain=0 in dongle.conf?')) return;
+
+            try {
+                const res = await fetch('/api/config/modem/reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || 'All dongle gains reset to 0 in dongle.conf!', 'success');
+                    fetchModemConfig();
+                } else {
+                    showToast(data.error || 'Failed to reset gains.', 'error');
+                }
+            } catch (e) {
+                showToast('Error resetting gains: ' + e.message, 'error');
+            }
+        }
+        window.resetAllDongleGains = resetAllDongleGains;
     </script>
     </div>
 </body>

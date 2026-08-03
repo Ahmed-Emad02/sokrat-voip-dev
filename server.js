@@ -142,7 +142,7 @@ app.use(session({
 const ALL_TABS = [
     'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'softphone', 'contacts', 'users', 'config', 'storage',
     'config-extensions', 'config-ringgroups', 'config-queues', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram',
-    'config-timegroups', 'config-timeconditions', 'config-announcements'
+    'config-timegroups', 'config-timeconditions', 'config-announcements', 'config-modem'
 ];
 
 async function initAuthDb() {
@@ -634,6 +634,8 @@ app.use('/api/config', (req, res, next) => {
         subTab = 'timeconditions';
     } else if (req.path.startsWith('/announcements')) {
         subTab = 'announcements';
+    } else if (req.path.startsWith('/modem')) {
+        subTab = 'modem';
     } else if (req.path === '/reload') {
         const perms = req.session.userPermissions || [];
         const hasAnyConfig = perms.includes('config') || perms.some(p => p.startsWith('config-'));
@@ -2832,6 +2834,144 @@ async function resolveDeviceChannel(ext) {
     return `PJSIP/${ext}`;
 }
 
+// Helper functions for dongle.conf gain management (Modem Conf)
+function parseDongleConfGain() {
+    const confPath = '/etc/asterisk/dongle.conf';
+    if (!fs.existsSync(confPath)) {
+        return { defaults: { rxgain: '0', txgain: '0' }, dongles: {} };
+    }
+    const content = fs.readFileSync(confPath, 'utf8');
+    const lines = content.split(/\r?\n/);
+    let currentSection = null;
+    const sections = {};
+
+    for (let line of lines) {
+        let trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith(';') || trimmed.startsWith('#')) continue;
+        const secMatch = trimmed.match(/^\[([^\]]+)\]/);
+        if (secMatch) {
+            currentSection = secMatch[1].trim();
+            if (!sections[currentSection]) sections[currentSection] = {};
+            continue;
+        }
+        if (currentSection && trimmed.includes('=')) {
+            const parts = trimmed.split('=');
+            const key = parts[0].trim().toLowerCase();
+            let val = parts.slice(1).join('=').trim();
+            if (val.includes(';')) val = val.split(';')[0].trim();
+            sections[currentSection][key] = val;
+        }
+    }
+
+    const defaults = {
+        rxgain: parseInt(sections['defaults']?.rxgain || '0', 10) || 0,
+        txgain: parseInt(sections['defaults']?.txgain || '0', 10) || 0
+    };
+
+    const dongles = {};
+    for (const sec in sections) {
+        if (sec.startsWith('dongle') || (sec !== 'general' && sec !== 'defaults')) {
+            dongles[sec] = {
+                id: sec,
+                rxgain: Math.max(0, Math.min(20, parseInt(sections[sec].rxgain ?? defaults.rxgain, 10) || 0)),
+                txgain: Math.max(0, Math.min(20, parseInt(sections[sec].txgain ?? defaults.txgain, 10) || 0)),
+                audio: sections[sec].audio || '',
+                data: sections[sec].data || '',
+                imei: sections[sec].imei || '',
+                imsi: sections[sec].imsi || ''
+            };
+        }
+    }
+
+    return { defaults, dongles };
+}
+
+function updateDongleGainsInConf(gainMap, isResetAll = false) {
+    const confPath = '/etc/asterisk/dongle.conf';
+    if (!fs.existsSync(confPath)) {
+        throw new Error('/etc/asterisk/dongle.conf file not found');
+    }
+
+    let content = fs.readFileSync(confPath, 'utf8');
+    let lines = content.split(/\r?\n/);
+    let sectionHeaderLineIdx = {};
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        let secMatch = line.match(/^\[([^\]]+)\]/);
+        if (secMatch) {
+            sectionHeaderLineIdx[secMatch[1].trim()] = i;
+        }
+    }
+
+    const { dongles } = parseDongleConfGain();
+    const targetDongles = isResetAll ? Object.keys(dongles) : Object.keys(gainMap);
+
+    for (const dongleId of targetDongles) {
+        const rxVal = isResetAll ? 0 : Math.max(0, Math.min(20, parseInt(gainMap[dongleId]?.rxgain, 10) || 0));
+        const txVal = isResetAll ? 0 : Math.max(0, Math.min(20, parseInt(gainMap[dongleId]?.txgain, 10) || 0));
+
+        if (sectionHeaderLineIdx.hasOwnProperty(dongleId)) {
+            const headerIdx = sectionHeaderLineIdx[dongleId];
+            let endIdx = lines.length;
+            for (let j = headerIdx + 1; j < lines.length; j++) {
+                if (lines[j].trim().match(/^\[([^\]]+)\]/)) {
+                    endIdx = j;
+                    break;
+                }
+            }
+
+            let rxFound = false;
+            let txFound = false;
+
+            for (let j = headerIdx + 1; j < endIdx; j++) {
+                let lineTrim = lines[j].trim();
+                if (lineTrim.startsWith('rxgain=')) {
+                    lines[j] = `rxgain=${rxVal}`;
+                    rxFound = true;
+                } else if (lineTrim.startsWith('txgain=')) {
+                    lines[j] = `txgain=${txVal}`;
+                    txFound = true;
+                }
+            }
+
+            if (!rxFound) {
+                lines.splice(headerIdx + 1, 0, `rxgain=${rxVal}`);
+                for (let k in sectionHeaderLineIdx) {
+                    if (sectionHeaderLineIdx[k] > headerIdx) sectionHeaderLineIdx[k]++;
+                }
+            }
+            if (!txFound) {
+                lines.splice(headerIdx + 1, 0, `txgain=${txVal}`);
+                for (let k in sectionHeaderLineIdx) {
+                    if (sectionHeaderLineIdx[k] > headerIdx) sectionHeaderLineIdx[k]++;
+                }
+            }
+        }
+    }
+
+    if (isResetAll && sectionHeaderLineIdx.hasOwnProperty('defaults')) {
+        const headerIdx = sectionHeaderLineIdx['defaults'];
+        let endIdx = lines.length;
+        for (let j = headerIdx + 1; j < lines.length; j++) {
+            if (lines[j].trim().match(/^\[([^\]]+)\]/)) {
+                endIdx = j;
+                break;
+            }
+        }
+        let rxFound = false;
+        let txFound = false;
+        for (let j = headerIdx + 1; j < endIdx; j++) {
+            let lineTrim = lines[j].trim();
+            if (lineTrim.startsWith('rxgain=')) { lines[j] = `rxgain=0`; rxFound = true; }
+            if (lineTrim.startsWith('txgain=')) { lines[j] = `txgain=0`; txFound = true; }
+        }
+        if (!rxFound) lines.splice(headerIdx + 1, 0, `rxgain=0`);
+        if (!txFound) lines.splice(headerIdx + 1, 0, `txgain=0`);
+    }
+
+    fs.writeFileSync(confPath, lines.join('\n'), 'utf8');
+}
 app.post('/api/spy', async (req, res) => {
     try {
         const { targetExtension, supervisorExtension, mode } = req.body;
@@ -6592,6 +6732,98 @@ app.delete('/api/config/timeconditions/:id', async (req, res) => {
         const id = parseInt(req.params.id, 10);
         await pool.query('DELETE FROM `asterisk`.`timeconditions` WHERE timeconditions_id = ?', [id]);
         res.json({ success: true, message: 'Time Condition deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// GET /api/config/modem - List modem gain settings from dongle.conf
+app.get('/api/config/modem', async (req, res) => {
+    try {
+        const { defaults, dongles } = parseDongleConfGain();
+        try {
+            const [rows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles`');
+            for (const r of rows) {
+                if (r.dongle_name && dongles[r.dongle_name]) {
+                    if (r.phone_number) dongles[r.dongle_name].phone_number = r.phone_number;
+                    if (r.imsi) dongles[r.dongle_name].imsi = r.imsi;
+                    if (r.imei) dongles[r.dongle_name].imei = r.imei;
+                }
+            }
+        } catch (_) {}
+        res.json({ success: true, defaults, dongles });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/modem/gain - Update volume gain (txgain, rxgain) for dongle(s)
+app.post('/api/config/modem/gain', async (req, res) => {
+    try {
+        const { dongleId, rxgain, txgain, gains } = req.body;
+        const { dongles } = parseDongleConfGain();
+        const validDongleIds = new Set(Object.keys(dongles));
+        let rawGainMap = {};
+
+        if (gains && typeof gains === 'object') {
+            rawGainMap = gains;
+        } else if (dongleId) {
+            rawGainMap[dongleId] = { rxgain, txgain };
+        } else {
+            return res.status(400).json({ success: false, error: 'Missing dongleId or gains payload' });
+        }
+
+        const safeGainMap = {};
+        for (const id in rawGainMap) {
+            const cleanId = String(id || '').trim();
+            if (validDongleIds.has(cleanId) && /^[a-zA-Z0-9_-]+$/.test(cleanId)) {
+                safeGainMap[cleanId] = {
+                    rxgain: Math.max(0, Math.min(20, parseInt(rawGainMap[id]?.rxgain, 10) || 0)),
+                    txgain: Math.max(0, Math.min(20, parseInt(rawGainMap[id]?.txgain, 10) || 0))
+                };
+            }
+        }
+
+        if (Object.keys(safeGainMap).length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid dongle IDs provided.' });
+        }
+
+        updateDongleGainsInConf(safeGainMap, false);
+
+        try {
+            await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so']);
+        } catch (_) {}
+
+        for (const id in safeGainMap) {
+            try {
+                await execFileAsync(ASTERISK_BIN, ['-rx', `dongle restart now ${id}`]);
+            } catch (_) {}
+        }
+
+        res.json({ success: true, message: 'Dongle volume gain updated successfully and reloaded in Asterisk.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/modem/reset - Reset all dongle gains to 0 in dongle.conf
+app.post('/api/config/modem/reset', async (req, res) => {
+    try {
+        const { dongles } = parseDongleConfGain();
+        updateDongleGainsInConf({}, true);
+
+        try {
+            await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so']);
+        } catch (_) {}
+
+        for (const id in dongles) {
+            if (/^[a-zA-Z0-9_-]+$/.test(id)) {
+                try {
+                    await execFileAsync(ASTERISK_BIN, ['-rx', `dongle restart now ${id}`]);
+                } catch (_) {}
+            }
+        }
+
+        res.json({ success: true, message: 'All dongle gains reset to txgain=0 and rxgain=0 in dongle.conf and reloaded.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
