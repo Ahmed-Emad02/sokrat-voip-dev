@@ -2972,6 +2972,112 @@ function updateDongleGainsInConf(gainMap, isResetAll = false) {
 
     fs.writeFileSync(confPath, lines.join('\n'), 'utf8');
 }
+const SOKRAT_JB_LINE = 'same => n,Set(JITTERBUFFER(adaptive)=default)';
+const SOKRAT_MANAGED_CONTEXTS = ['from-dongle-custom', 'macro-dialout-trunk-predial-hook', 'macro-dialout-one-predial-hook'];
+
+function getDialplanJitterBufferStatus() {
+    const filePath = '/etc/asterisk/extensions_custom.conf';
+    if (!fs.existsSync(filePath)) return false;
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split(/\r?\n/);
+    let currentContext = null;
+    const foundContexts = new Set();
+
+    for (let line of lines) {
+        let trimmed = line.trim();
+        let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
+        if (ctxMatch) {
+            currentContext = ctxMatch[1].trim();
+        } else if (currentContext && SOKRAT_MANAGED_CONTEXTS.includes(currentContext)) {
+            if (!trimmed.startsWith(';') && !trimmed.startsWith('#') && trimmed.includes('JITTERBUFFER(adaptive)=default')) {
+                foundContexts.add(currentContext);
+            }
+        }
+    }
+    return SOKRAT_MANAGED_CONTEXTS.every(ctx => foundContexts.has(ctx));
+}
+
+function setDialplanJitterBufferStatus(enable) {
+    const filePath = '/etc/asterisk/extensions_custom.conf';
+    if (!fs.existsSync(filePath)) {
+        throw new Error('/etc/asterisk/extensions_custom.conf file not found');
+    }
+
+    let content = fs.readFileSync(filePath, 'utf8');
+    let lines = content.split(/\r?\n/);
+
+    if (!enable) {
+        let currentContext = null;
+        let newLines = [];
+        for (let line of lines) {
+            let trimmed = line.trim();
+            let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
+            if (ctxMatch) {
+                currentContext = ctxMatch[1].trim();
+            }
+            if (currentContext && SOKRAT_MANAGED_CONTEXTS.includes(currentContext) && trimmed.includes('JITTERBUFFER(adaptive)=default')) {
+                continue;
+            }
+            newLines.push(line);
+        }
+        fs.writeFileSync(filePath, newLines.join('\n'), 'utf8');
+    } else {
+        let currentContext = null;
+        let contextHasJb = { 'from-dongle-custom': false, 'macro-dialout-trunk-predial-hook': false, 'macro-dialout-one-predial-hook': false };
+
+        for (let line of lines) {
+            let trimmed = line.trim();
+            let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
+            if (ctxMatch) {
+                currentContext = ctxMatch[1].trim();
+            } else if (currentContext && SOKRAT_MANAGED_CONTEXTS.includes(currentContext)) {
+                if (!trimmed.startsWith(';') && !trimmed.startsWith('#') && trimmed.includes('JITTERBUFFER(adaptive)=default')) {
+                    contextHasJb[currentContext] = true;
+                }
+            }
+        }
+
+        let updatedLines = [];
+        currentContext = null;
+
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+            updatedLines.push(line);
+            let trimmed = line.trim();
+            let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
+            if (ctxMatch) {
+                currentContext = ctxMatch[1].trim();
+            }
+
+            if (currentContext === 'from-dongle-custom' && !contextHasJb['from-dongle-custom']) {
+                if (trimmed.includes('same => n(process),NoOp')) {
+                    updatedLines.push(SOKRAT_JB_LINE);
+                    contextHasJb['from-dongle-custom'] = true;
+                }
+            } else if (currentContext === 'macro-dialout-trunk-predial-hook' && !contextHasJb['macro-dialout-trunk-predial-hook']) {
+                if (trimmed.includes('exten => s,1,NoOp')) {
+                    updatedLines.push(SOKRAT_JB_LINE);
+                    contextHasJb['macro-dialout-trunk-predial-hook'] = true;
+                }
+            } else if (currentContext === 'macro-dialout-one-predial-hook' && !contextHasJb['macro-dialout-one-predial-hook']) {
+                if (trimmed.includes('exten => s,1,NoOp')) {
+                    updatedLines.push(SOKRAT_JB_LINE);
+                    contextHasJb['macro-dialout-one-predial-hook'] = true;
+                }
+            }
+        }
+
+        if (!content.includes('[macro-dialout-one-predial-hook]')) {
+            updatedLines.push('');
+            updatedLines.push('[macro-dialout-one-predial-hook]');
+            updatedLines.push('exten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer for Internal/Extension Call ---)');
+            updatedLines.push(SOKRAT_JB_LINE);
+            updatedLines.push('same => n,MacroExit()');
+        }
+
+        fs.writeFileSync(filePath, updatedLines.join('\n'), 'utf8');
+    }
+}
 app.post('/api/spy', async (req, res) => {
     try {
         const { targetExtension, supervisorExtension, mode } = req.body;
@@ -6824,6 +6930,38 @@ app.post('/api/config/modem/reset', async (req, res) => {
         }
 
         res.json({ success: true, message: 'All dongle gains reset to txgain=0 and rxgain=0 in dongle.conf and reloaded.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// GET /api/config/modem/jitterbuffer - Check if dialplan jitter buffer is enabled
+app.get('/api/config/modem/jitterbuffer', async (req, res) => {
+    try {
+        const enabled = getDialplanJitterBufferStatus();
+        res.json({ success: true, enabled });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/modem/jitterbuffer - Enable or disable dialplan jitter buffer
+app.post('/api/config/modem/jitterbuffer', async (req, res) => {
+    try {
+        const { enabled } = req.body;
+        const targetState = Boolean(enabled);
+        setDialplanJitterBufferStatus(targetState);
+
+        try {
+            await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
+        } catch (_) {}
+
+        res.json({
+            success: true,
+            enabled: targetState,
+            message: targetState
+                ? 'Jitter buffer enabled in Asterisk dialplan and reloaded.'
+                : 'Jitter buffer removed from Asterisk dialplan and reloaded.'
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
