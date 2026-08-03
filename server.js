@@ -1507,7 +1507,9 @@ setInterval(autoHealDongles, 3000);
 
 
 app.use(async (req, res, next) => {
-// System Shared Middleware to fetch extension rosters and handle language toggles
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     try {
         const [users] = await pool.query(`
             SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group
