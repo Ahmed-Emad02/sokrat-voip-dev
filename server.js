@@ -501,35 +501,84 @@ async function getUserPermissions(userId) {
     }
 }
 
-async function syncAstDbDongleMappings() {
+async function reconcileDongleMappings() {
     try {
-        const [rows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` WHERE phone_number IS NOT NULL AND phone_number != ""');
-        for (const row of rows) {
-            const num = String(row.phone_number || '').trim();
-            if (!num) continue;
-            const imsi = String(row.imsi || '').trim();
-            const dongleName = String(row.dongle_name || '').trim();
-            const imei = String(row.imei || '').trim();
+        const { execFile: execFileCb } = require('child_process');
+        const execFileAsync = (cmd, args) => new Promise((resolve) => {
+            execFileCb(cmd, args, (err, stdout) => resolve(err ? '' : stdout || ''));
+        });
 
-            if (imsi) {
-                execFile(ASTERISK_BIN, ['-rx', `database put sim_map ${imsi} ${num}`]);
-                execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imsi} ${num}`]);
-            }
-            if (dongleName) {
-                execFile(ASTERISK_BIN, ['-rx', `database put dongle_map ${dongleName} ${num}`]);
-            }
-            if (imei) {
-                execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imei} ${num}`]);
+        const devicesOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
+        const parsed = parseDevicesOutput(devicesOutput || '', true);
+        const liveDongles = {};
+
+        for (const d of parsed) {
+            const st = (d.State || '').toLowerCase();
+            const isConnected = ['free', 'dialing', 'ringing', 'incall', 'active', 'held'].includes(st);
+            if (!isConnected) continue;
+
+            const name = d.ID;
+            const imei = (d.IMEI && d.IMEI !== 'Unknown' && d.IMEI !== '-') ? d.IMEI : '';
+            const imsi = (d.IMSI && d.IMSI !== 'Unknown' && d.IMSI !== '-') ? d.IMSI : '';
+            liveDongles[name] = { name, imei, imsi };
+        }
+
+        const [dbRows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles`');
+
+        // Conflict check / logging without deleting live database records
+        for (const row of dbRows) {
+            if (!liveDongles[row.dongle_name] && row.imsi) {
+                const activeWithSameImsi = Object.values(liveDongles).find(l => l.imsi === row.imsi);
+                if (activeWithSameImsi) {
+                    console.warn(`DONGLE-RECONCILE: Inactive row '${row.dongle_name}' shares IMSI ${row.imsi} with active '${activeWithSameImsi.name}'. Active slot takes precedence.`);
+                }
             }
         }
-        if (rows.length > 0) {
-            console.log(`ASTDB-SYNC: Synchronized ${rows.length} GSM mappings to AstDB (sim_map, dongle_map, DONGLE_NUMBERS)`);
+
+        // Update live dongles and sync AstDB
+        for (const [dongleName, live] of Object.entries(liveDongles)) {
+            let match = dbRows.find(r => r.dongle_name === dongleName);
+            if (!match && live.imsi) {
+                const imsiMatches = dbRows.filter(r => r.imsi === live.imsi && r.phone_number && r.phone_number.trim() !== '');
+                const distinctNumbers = [...new Set(imsiMatches.map(r => r.phone_number.trim()))];
+                if (distinctNumbers.length > 1) {
+                    console.error(`DONGLE-RECONCILE ERROR: Ambiguous IMSI match for ${dongleName} (IMSI: ${live.imsi}) with conflicting phone numbers: [${distinctNumbers.join(', ')}]. Skipping AstDB alias synchronization.`);
+                    continue;
+                }
+                if (imsiMatches.length > 0) {
+                    match = imsiMatches[0];
+                }
+            }
+
+            const configuredNumber = match ? String(match.phone_number || '').trim() : '';
+
+            await pool.query(`
+                INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, imsi, imei, phone_number)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    imsi = COALESCE(NULLIF(VALUES(imsi), ''), imsi),
+                    imei = COALESCE(NULLIF(VALUES(imei), ''), imei),
+                    phone_number = CASE WHEN phone_number IS NOT NULL AND phone_number != '' THEN phone_number ELSE VALUES(phone_number) END
+            `, [dongleName, live.imsi || '', live.imei || '', configuredNumber]);
+
+            if (configuredNumber) {
+                await execFileAsync(ASTERISK_BIN, ['-rx', `database put dongle_map ${dongleName} ${configuredNumber}`]);
+                if (live.imsi) {
+                    await execFileAsync(ASTERISK_BIN, ['-rx', `database put sim_map ${live.imsi} ${configuredNumber}`]);
+                    await execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${live.imsi} ${configuredNumber}`]);
+                }
+                if (live.imei) {
+                    await execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${live.imei} ${configuredNumber}`]);
+                }
+
+                const verifyOutput = await execFileAsync(ASTERISK_BIN, ['-rx', `database get dongle_map ${dongleName}`]);
+                console.log(`DONGLE-RECONCILE: Synced and verified dongle_map/${dongleName} -> ${configuredNumber} (AstDB: ${verifyOutput.trim()})`);
+            }
         }
     } catch (e) {
-        console.error('ASTDB-SYNC: Error syncing GSM mappings:', e.message);
+        console.error('DONGLE-RECONCILE: Error syncing GSM mappings:', e.message);
     }
 }
-
 const TAB_ROUTE_MAP = {
     '/': 'dashboard',
     '/cdr': 'cdr',
@@ -906,87 +955,40 @@ let amiClient = null;
 // --- AUTO-DETECT DONGLE IMEI/SIM & CONFIGURE TRUNKS ---
 async function detectDonglesAndSetTrunkCID() {
     try {
+        await reconcileDongleMappings();
+
         const { execFile: execFileCb } = require('child_process');
         const execFileAsync = (cmd, args) => new Promise((resolve) => {
             execFileCb(cmd, args, (err, stdout) => resolve(err ? '' : stdout || ''));
         });
 
-        const devicesOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
-        if (!devicesOutput) return;
+        const [dongleRows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles`');
+        if (!dongleRows.length) return;
 
-        const parsed = parseDevicesOutput(devicesOutput, true);
-        const dongleInfo = {};
-
-        for (const d of parsed) {
-            const st = (d.State || '').toLowerCase();
-            const isConnected = st === 'free' || st === 'dialing' || st === 'ringing' || st === 'incall' || st === 'active' || st === 'held';
-            if (!isConnected) continue;
-
-            const name = d.ID;
-            const imei = (d.IMEI && d.IMEI !== 'Unknown' && d.IMEI !== '-') ? d.IMEI : '';
-            const imsi = (d.IMSI && d.IMSI !== 'Unknown' && d.IMSI !== '-') ? d.IMSI : '';
-            const number = (d.Number && d.Number !== 'Unknown' && d.Number !== '-' && (d.Number.startsWith('+') || d.Number.startsWith('01'))) ? d.Number : null;
-
-            if (imei || imsi || name) {
-                dongleInfo[name] = { imei, imsi, number };
-            }
-        }
-        if (!Object.keys(dongleInfo).length) {
-            console.log('DONGLE-CID: No dongles with valid IMEI detected');
-            return;
-        }
-
-        console.log('DONGLE-CID: Detected dongles:', dongleInfo);
-
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
-
-        for (const [dongleName, info] of Object.entries(dongleInfo)) {
-            if (info.imsi || info.imei || dongleName) {
-                try {
-                    await conn.execute(`
-                        INSERT INTO gsm_dongles (dongle_name, imsi, imei, phone_number)
-                        VALUES (?, ?, ?, ?)
-                        ON DUPLICATE KEY UPDATE
-                            imsi = COALESCE(NULLIF(VALUES(imsi), ''), imsi),
-                            imei = COALESCE(NULLIF(VALUES(imei), ''), imei),
-                            phone_number = CASE WHEN VALUES(phone_number) != '' AND VALUES(phone_number) IS NOT NULL THEN VALUES(phone_number) ELSE phone_number END
-                    `, [dongleName, info.imsi || '', info.imei || '', info.number || '']);
-                } catch (_) {}
-            }
-            if (info.number) {
-                if (info.imsi) execFileAsync(ASTERISK_BIN, ['-rx', `database put sim_map ${info.imsi} ${info.number}`]);
-                if (dongleName) execFileAsync(ASTERISK_BIN, ['-rx', `database put dongle_map ${dongleName} ${info.number}`]);
-                if (info.imei) execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${info.imei} ${info.number}`]);
-            }
-        }
-        const [trunks] = await conn.execute('SELECT trunkid, channelid FROM trunks WHERE tech = ?', ['custom']);
+        const [trunks] = await pool.query('SELECT trunkid, channelid FROM `asterisk`.`trunks` WHERE tech = ?', ['custom']);
         for (const trunk of trunks) {
-            for (const [dongleName, info] of Object.entries(dongleInfo)) {
-                if (trunk.channelid && (trunk.channelid.includes(dongleName) || (info.imei && trunk.channelid.includes(info.imei)))) {
-                    // Preserve IMEI-based dial strings (e.g. dongle/i:IMEI/$OUTNUM$ or dongle/IMEI/$OUTNUM$)
-                    if (info.imei && trunk.channelid.includes(info.imei)) {
+            for (const row of dongleRows) {
+                const dongleName = row.dongle_name;
+                const imei = row.imei;
+                const num = String(row.phone_number || '').trim();
+
+                if (trunk.channelid && (trunk.channelid.includes(dongleName) || (imei && trunk.channelid.includes(imei)))) {
+                    if (imei && trunk.channelid.includes(imei)) {
                         console.log(`DONGLE-CID: Preserved IMEI-based channel for trunk ${trunk.trunkid}: ${trunk.channelid}`);
                     } else {
                         const newChannelId = `dongle/${dongleName}/$OUTNUM$`;
                         if (trunk.channelid !== newChannelId) {
-                            await conn.execute('UPDATE trunks SET channelid = ? WHERE trunkid = ?', [newChannelId, trunk.trunkid]);
+                            await pool.query('UPDATE `asterisk`.`trunks` SET channelid = ? WHERE trunkid = ?', [newChannelId, trunk.trunkid]);
                             console.log(`DONGLE-CID: Updated trunk ${trunk.trunkid} channel to Device-based: ${newChannelId}`);
                         }
                     }
-                    if (info.number) {
-                        await execFileAsync(ASTERISK_BIN, ['-rx', `database put TRUNK ${trunk.trunkid} outcid ${info.number}`]);
-                        console.log(`DONGLE-CID: Set trunk ${trunk.trunkid} (${dongleName}) caller ID to ${info.number}`);
+                    if (num) {
+                        await execFileAsync(ASTERISK_BIN, ['-rx', `database put TRUNK ${trunk.trunkid} outcid ${num}`]);
+                        console.log(`DONGLE-CID: Set trunk ${trunk.trunkid} (${dongleName}) caller ID to ${num}`);
                     }
                 }
             }
         }
-
-        await conn.end();
 
         const { execFile: rcExec } = require('child_process');
         rcExec('/var/lib/asterisk/bin/retrieve_conf', [], (err) => {
@@ -3725,8 +3727,6 @@ function sendAtAndWait(dongleId, atCmd, timeoutMs, callback) {
 }
 
 // Endpoint to manually set/save a SIM's phone number mapping
-// Endpoint to manually set/save a SIM's phone number mapping
-// Endpoint to manually set/save a SIM's phone number mapping and program SIM card via AT commands
 app.post('/api/gsm-dongles/save-number', async (req, res) => {
     try {
         const { imsi, number, dongleId } = req.body;
@@ -3768,54 +3768,26 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
             `, [dId || 'unknown', foundImsi || '', imei || '', normNumber]);
         }
 
-        // 2. Write to AstDB immediately (sim_map, dongle_map, DONGLE_NUMBERS)
-        if (foundImsi) execFile(ASTERISK_BIN, ['-rx', `database put sim_map ${foundImsi} ${normNumber}`]);
-        if (dId) execFile(ASTERISK_BIN, ['-rx', `database put dongle_map ${dId} ${normNumber}`]);
-        if (imei) execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${imei} ${normNumber}`]);
-        if (foundImsi) execFile(ASTERISK_BIN, ['-rx', `database put DONGLE_NUMBERS ${foundImsi} ${normNumber}`]);
-
-        io.emit('dongleNumberUpdated', { dongleId: dId, imsi: foundImsi, number: normNumber });
-
-        // 3. Preserve verbatim entered phone number for AT+CPBW command
-        const formattedNum = normNumber;
-        const targetDongle = dId || 'dongle0';
-        const numType = 145;
-
-        const cmdSteps = [
-            `dongle cmd ${targetDongle} AT+CPBS=\\"ON\\"`,
-            `dongle cmd ${targetDongle} AT+CPBW=1,\\"${formattedNum}\\",${numType}`,
-            `module unload chan_dongle.so`,
-            `module load chan_dongle.so`,
-            `dongle show devices`
-        ];
-
-        const results = [];
-        let allSuccess = true;
-
-        for (let i = 0; i < cmdSteps.length; i++) {
-            const stepCmd = cmdSteps[i];
-            try {
-                const out = await execFileAsync(ASTERISK_BIN, ['-rx', stepCmd]);
-                results.push({ step: stepCmd, success: true, output: (out || '').trim() });
-            } catch (err) {
-                allSuccess = false;
-                results.push({ step: stepCmd, success: false, error: err ? err.message : 'Command failed' });
-            }
-            if (i < cmdSteps.length - 1) {
-                await new Promise(r => setTimeout(r, 2000));
-            }
-        }
+        // 2. Await full reconciliation of AstDB mappings
+        await reconcileDongleMappings();
         try {
             await detectDonglesAndSetTrunkCID();
         } catch (_) {}
+
+        // 3. Verify dialplan route existence for configured DID
+        const dpCheck = await execFileAsync(ASTERISK_BIN, ['-rx', `dialplan show ${normNumber}@from-trunk`]);
+        const routeExists = dpCheck && dpCheck.includes(normNumber);
+
+        io.emit('dongleNumberUpdated', { dongleId: dId, imsi: foundImsi, number: normNumber });
         io.emit('usbDevicesUpdated');
 
         return res.json({
             success: true,
             dbSaved: true,
-            atSuccess: allSuccess,
-            results: results,
-            message: allSuccess ? 'SIM number saved to SIM card & Asterisk successfully.' : 'SIM number saved to Dashboard & AstDB (AT command warnings).'
+            routeExists: !!routeExists,
+            message: routeExists
+                ? 'SIM phone number saved to Dashboard & AstDB successfully.'
+                : 'SIM phone number saved, but no Inbound Route for ' + normNumber + ' was found in Asterisk.'
         });
     } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
