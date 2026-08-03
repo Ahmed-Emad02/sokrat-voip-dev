@@ -2280,12 +2280,12 @@ app.get('/cdr', async (req, res) => {
         const statusFilter = req.query.statusFilter || 'ALL';
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
+        const searchDid = req.query.searchDid || '';
         const searchUniqueId = req.query.searchUniqueId || '';
         const directionFilter = req.query.directionFilter || 'ALL';
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const perPage = Math.min(200, Math.max(1, parseInt(req.query.perPage) || 25));
         const offset = (page - 1) * perPage;
-
         const directionCase = `
             CASE
                 WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
@@ -2332,6 +2332,12 @@ app.get('/cdr', async (req, res) => {
             queryParams.push(`%${searchDst}%`);
             countParams.push(`%${searchDst}%`);
         }
+        if (searchDid) {
+            const clause = " AND c.did LIKE ?";
+            query += clause; countQuery += clause;
+            queryParams.push(`%${searchDid}%`);
+            countParams.push(`%${searchDid}%`);
+        }
         if (searchUniqueId) {
             const clause = " AND c.uniqueid LIKE ?";
             query += clause; countQuery += clause;
@@ -2367,7 +2373,7 @@ app.get('/cdr', async (req, res) => {
 
         res.render('cdr', {
             calls: formattedRows,
-            filters: { startDate, endDate, targetExtension: selectedExtension, statusFilter, searchSrc, searchDst, searchUniqueId, directionFilter, page, perPage },
+            filters: { startDate, endDate, targetExtension: selectedExtension, statusFilter, searchSrc, searchDst, searchDid, searchUniqueId, directionFilter, page, perPage },
             pagination: { total, totalPages, page, perPage },
             moment
         });
@@ -2383,9 +2389,9 @@ app.get('/cdr/export', async (req, res) => {
         const statusFilter = req.query.statusFilter || 'ALL';
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
+        const searchDid = req.query.searchDid || '';
         const searchUniqueId = req.query.searchUniqueId || '';
         const directionFilter = req.query.directionFilter || 'ALL';
-
         const directionCase = `
             CASE
                 WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
@@ -2394,7 +2400,6 @@ app.get('/cdr/export', async (req, res) => {
                 ELSE 'INBOUND'
             END
         `;
-
         let query = `
             SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             ${directionCase} as direction
@@ -2420,6 +2425,11 @@ app.get('/cdr/export', async (req, res) => {
             query += clause;
             queryParams.push(`%${searchDst}%`);
         }
+        if (searchDid) {
+            const clause = " AND c.did LIKE ?";
+            query += clause;
+            queryParams.push(`%${searchDid}%`);
+        }
         if (searchUniqueId) {
             const clause = " AND c.uniqueid LIKE ?";
             query += clause;
@@ -2441,7 +2451,7 @@ app.get('/cdr/export', async (req, res) => {
         const [rows] = await pool.query(query, queryParams);
 
         // Build CSV string
-        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Channel", "Destination Channel", "Unique ID"];
+        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Channel", "Destination Channel", "Unique ID"];
         
         let csvContent = "\ufeff"; // BOM for UTF-8 Excel support
         csvContent += csvHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n";
@@ -2453,6 +2463,7 @@ app.get('/cdr/export', async (req, res) => {
                 /^\+?\d+$/.test(String(row.src || '')) ? `="` + String(row.src || '').trim() + `"` : `"${String(row.src || '').replace(/"/g, '""')}"`,
                 `"${String(row.src_name || '').replace(/"/g, '""')}"`,
                 /^\+?\d+$/.test(formattedDst) ? `="` + formattedDst + `"` : `"${formattedDst.replace(/"/g, '""')}"`,
+                /^\+?\d+$/.test(String(row.did || '')) ? `="` + String(row.did || '').trim() + `"` : `"${String(row.did || '').replace(/"/g, '""')}"`,
                 row.duration || 0,
                 row.billsec || 0,
                 `"${row.disposition || ''}"`,
