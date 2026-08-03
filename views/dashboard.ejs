@@ -393,11 +393,11 @@ const isRtl = currentLang === 'ar';
     </div>
 
     <script>
-        const trendData = <%- trendData %>;
-        const dispositionData = <%- dispositionData %>;
-        const hourlyData = <%- hourlyData %>;
-        const topTalkersData = <%- topTalkers %>;
-        const _isRtl = <%= isRtl %>;
+        const trendData = <%- (typeof trendData !== 'undefined' && trendData) ? trendData : '[]' %>;
+        const dispositionData = <%- (typeof dispositionData !== 'undefined' && dispositionData) ? dispositionData : '[]' %>;
+        const hourlyData = <%- (typeof hourlyData !== 'undefined' && hourlyData) ? hourlyData : '[]' %>;
+        const topTalkersData = <%- (typeof topTalkers !== 'undefined' && topTalkers) ? topTalkers : '[]' %>;
+        const _isRtl = <%= (typeof isRtl !== 'undefined' && isRtl) ? 'true' : 'false' %>;
         const _t = {
             talkTime: '<%= t.talkTime %>',
             min: '<%= t.min %>',
