@@ -417,6 +417,7 @@ same => n,Goto(s,process)
 
 exten => s,1,Set(MY_SIM_NUMBER=)
 same => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)
+same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMSI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(sim_map/${DONGLEIMSI})}))
@@ -446,9 +447,24 @@ append_context '[macro-dialout-trunk-predial-hook]' '[macro-dialout-trunk-predia
 
 [macro-dialout-trunk-predial-hook]
 exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid) ---)
+same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,MacroExit()
 
 MACRO
+# Strip old [macro-dialout-one-predial-hook] before appending
+echo "  Stripping old [macro-dialout-one-predial-hook]..."
+python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\\[macro-dialout-one-predial-hook\\].*?(?=\\n\\[|\\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
+echo "  Stripped."
+
+# Append macro-dialout-one-predial-hook
+append_context '[macro-dialout-one-predial-hook]' '[macro-dialout-one-predial-hook]' << 'ONEHOOK'
+
+[macro-dialout-one-predial-hook]
+exten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer for Internal/Extension Call ---)
+same => n,Set(JITTERBUFFER(adaptive)=default)
+same => n,MacroExit()
+
+ONEHOOK
 
 asterisk -rx "dialplan reload" 2>/dev/null || true
 echo "  Dialplan reloaded"
