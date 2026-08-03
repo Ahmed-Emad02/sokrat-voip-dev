@@ -1571,8 +1571,10 @@ function isTabAllowed(tabName) {
                                     <option value="extensions"><%= isRtl ? 'الهواتف الفرعية (Extensions)' : 'Extensions' %></option>
                                     <option value="ringgroups"><%= isRtl ? 'مجموعات الرنين (Ring Groups)' : 'Ring Groups' %></option>
                                     <option value="queues"><%= isRtl ? 'طوابير الانتظار (Queues)' : 'Queues' %></option>
+                                    <option value="ivr"><%= isRtl ? 'الرد الآلي (IVR Menu)' : 'IVR Menu' %></option>
                                     <option value="announcements"><%= isRtl ? 'الإعلانات (Announcements)' : 'Announcements' %></option>
                                     <option value="voicemail"><%= isRtl ? 'البريد الصوتي (Voicemail)' : 'Voicemail' %></option>
+                                    <option value="timeconditions"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></option>
                                     <option value="custom"><%= isRtl ? 'تطبيق مخصص (Custom)' : 'Custom Application' %></option>
                                     <option value="terminate"><%= isRtl ? 'إنهاء (Hangup)' : 'Terminate (Hangup)' %></option>
                                 </select>
@@ -1912,6 +1914,7 @@ function isTabAllowed(tabName) {
                                         <option value="queues"><%= isRtl ? 'طوابير الانتظار' : 'Queues' %></option>
                                         <option value="ivr"><%= isRtl ? 'قائمة رد آلي أخرى' : 'IVR Menu' %></option>
                                         <option value="announcements"><%= isRtl ? 'الإعلانات' : 'Announcements' %></option>
+                                        <option value="timeconditions"><%= isRtl ? 'شروط الوقت' : 'Time Conditions' %></option>
                                         <option value="voicemail"><%= isRtl ? 'البريد الصوتي' : 'Voicemail' %></option>
                                         <option value="terminate"><%= isRtl ? 'إنهاء المكالمة' : 'Terminate Call' %></option>
                                         <option value="custom"><%= isRtl ? 'مخصص' : 'Custom' %></option>
@@ -1947,6 +1950,7 @@ function isTabAllowed(tabName) {
                                         <option value="queues"><%= isRtl ? 'طوابير الانتظار' : 'Queues' %></option>
                                         <option value="ivr"><%= isRtl ? 'قائمة رد آلي أخرى' : 'IVR Menu' %></option>
                                         <option value="announcements"><%= isRtl ? 'الإعلانات' : 'Announcements' %></option>
+                                        <option value="timeconditions"><%= isRtl ? 'شروط الوقت' : 'Time Conditions' %></option>
                                         <option value="voicemail"><%= isRtl ? 'البريد الصوتي' : 'Voicemail' %></option>
                                         <option value="terminate"><%= isRtl ? 'إنهاء المكالمة' : 'Terminate Call' %></option>
                                         <option value="custom"><%= isRtl ? 'مخصص' : 'Custom' %></option>
@@ -2643,7 +2647,7 @@ function isTabAllowed(tabName) {
         // --- 1. EXTENSIONS ---
         function fetchExtensions() {
             const tbody = document.getElementById('extensions-table-body');
-            fetch('/api/config/extensions')
+            return fetch('/api/config/extensions')
                 .then(res => res.json())
                 .then(data => {
                     if (!data || !data.success || !Array.isArray(data.extensions)) {
@@ -3034,12 +3038,12 @@ function isTabAllowed(tabName) {
 
         function fetchRingGroups() {
             const tbody = document.getElementById('ringgroups-table-body');
-            if (!tbody) return;
-            fetch('/api/config/ringgroups')
+            return fetch('/api/config/ringgroups')
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success || !data.ringgroups) return;
                     loadedRingGroupsList = data.ringgroups;
+                    if (!tbody) return;
                     tbody.innerHTML = '';
                     if (data.ringgroups.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="py-6 text-center text-[var(--text-muted)]">No ring groups found.</td></tr>';
@@ -3361,12 +3365,12 @@ function isTabAllowed(tabName) {
 
         function fetchQueues() {
             const tbody = document.getElementById('queues-table-body');
-            if (!tbody) return;
-            fetch('/api/config/queues')
+            return fetch('/api/config/queues')
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success || !data.queues) return;
                     loadedQueuesList = data.queues;
+                    if (!tbody) return;
                     tbody.innerHTML = '';
                     if (data.queues.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" class="py-6 text-center text-[var(--text-muted)]">No queues found.</td></tr>';
@@ -3466,8 +3470,12 @@ function isTabAllowed(tabName) {
                 destTypeSelect.value = 'ringgroups';
             } else if (dest.startsWith('ext-queues,')) {
                 destTypeSelect.value = 'queues';
+            } else if (dest.startsWith('ivr-')) {
+                destTypeSelect.value = 'ivr';
             } else if (dest.startsWith('app-announcement-')) {
                 destTypeSelect.value = 'announcements';
+            } else if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
+                destTypeSelect.value = 'timeconditions';
             } else if (dest.startsWith('app-blackhole,')) {
                 destTypeSelect.value = 'terminate';
             } else {
@@ -3475,7 +3483,7 @@ function isTabAllowed(tabName) {
             }
             onQueueDestTypeChange();
             document.getElementById('queueDestination').value = dest;
-            if (['extensions', 'ringgroups', 'queues', 'voicemail', 'announcements'].includes(destTypeSelect.value)) {
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(destTypeSelect.value)) {
                 document.getElementById('queueDestTargetSelect').value = dest;
             } else if (destTypeSelect.value === 'custom') {
                 document.getElementById('queueDestTargetInput').value = dest;
@@ -3495,53 +3503,11 @@ function isTabAllowed(tabName) {
             inputEl.classList.add('hidden');
             selectEl.required = false;
             inputEl.required = false;
-            selectEl.innerHTML = '<option value="">== choose target ==</option>';
 
-            if (destType === 'extensions') {
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(destType)) {
                 selectEl.classList.remove('hidden');
                 selectEl.required = true;
-                loadedExtensionsList.forEach(ext => {
-                    const opt = document.createElement('option');
-                    opt.value = `from-did-direct,${ext.extension},1`;
-                    opt.textContent = `${ext.extension} - ${ext.name || ''}`;
-                    selectEl.appendChild(opt);
-                });
-            } else if (destType === 'ringgroups') {
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-                loadedRingGroupsList.forEach(rg => {
-                    const opt = document.createElement('option');
-                    opt.value = `ext-group,${rg.grpnum},1`;
-                    opt.textContent = `${rg.grpnum} - ${rg.description || ''}`;
-                    selectEl.appendChild(opt);
-                });
-            } else if (destType === 'queues') {
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-                loadedQueuesList.forEach(q => {
-                    const opt = document.createElement('option');
-                    opt.value = `ext-queues,${q.extension},1`;
-                    opt.textContent = `${q.extension} - ${q.descr || ''}`;
-                    selectEl.appendChild(opt);
-                });
-            } else if (destType === 'voicemail') {
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-                loadedExtensionsList.forEach(ext => {
-                    const opt = document.createElement('option');
-                    opt.value = `ext-local,vmu${ext.extension},1`;
-                    opt.textContent = `Voicemail: ${ext.extension} (${ext.name || ''})`;
-                    selectEl.appendChild(opt);
-                });
-            } else if (destType === 'announcements') {
-                selectEl.classList.remove('hidden');
-                selectEl.required = true;
-                loadedAnnouncementsList.forEach(ann => {
-                    const opt = document.createElement('option');
-                    opt.value = `app-announcement-${ann.announcement_id},s,1`;
-                    opt.textContent = `Announcement: ${ann.description || ''} (ID: ${ann.announcement_id})`;
-                    selectEl.appendChild(opt);
-                });
+                populateIvrTargetSelect(selectEl, destType, actualInput.value);
             } else if (destType === 'terminate') {
                 actualInput.value = 'app-blackhole,hangup,1';
             } else if (destType === 'custom') {
@@ -3557,7 +3523,7 @@ function isTabAllowed(tabName) {
             const inputEl = document.getElementById('queueDestTargetInput');
             const actualInput = document.getElementById('queueDestination');
 
-            if (['extensions', 'ringgroups', 'queues', 'voicemail', 'announcements'].includes(destType)) {
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(destType)) {
                 actualInput.value = selectEl.value;
             } else if (destType === 'terminate') {
                 actualInput.value = 'app-blackhole,hangup,1';
@@ -3624,7 +3590,7 @@ function isTabAllowed(tabName) {
         // --- 3. SYSTEM RECORDINGS ---
         function fetchRecordings() {
             const tbody = document.getElementById('recordings-table-body');
-            fetch('/api/config/recordings')
+            return fetch('/api/config/recordings')
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success || !data.recordings) return;
@@ -3810,12 +3776,13 @@ function isTabAllowed(tabName) {
 
         function fetchIvrs() {
             const tbody = document.getElementById('ivrs-table-body');
-            fetch('/api/config/ivrs')
+            return fetch('/api/config/ivrs')
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success || !data.ivrs) return;
-                    tbody.innerHTML = '';
                     loadedIvrsList = data.ivrs;
+                    if (!tbody) return;
+                    tbody.innerHTML = '';
                     if (data.ivrs.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-[var(--text-muted)]">No IVR menus found.</td></tr>';
                         return;
@@ -3861,13 +3828,13 @@ function isTabAllowed(tabName) {
 
         function populateIvrTargetSelect(selectEl, type, currentDest) {
             if (!selectEl) return;
-            selectEl.innerHTML = '<option value="">== choose target ==</option>';
+            selectEl.innerHTML = '<option value="">== ' + (isRtl ? 'اختر الهدف Target' : 'choose target') + ' ==</option>';
             if (type === 'extensions') {
                 loadedExtensionsList.forEach(e => {
                     const opt = document.createElement('option');
                     opt.value = `from-did-direct,${e.extension},1`;
                     opt.textContent = `${e.extension} - ${e.name}`;
-                    if (currentDest === opt.value) opt.selected = true;
+                    if (currentDest === opt.value || currentDest === `ext-local,${e.extension},1`) opt.selected = true;
                     selectEl.appendChild(opt);
                 });
             } else if (type === 'ringgroups') {
@@ -3899,7 +3866,7 @@ function isTabAllowed(tabName) {
                     const opt = document.createElement('option');
                     opt.value = `ext-local,vmu${e.extension},1`;
                     opt.textContent = `VM: ${e.extension} - ${e.name}`;
-                    if (currentDest === opt.value) opt.selected = true;
+                    if (currentDest === opt.value || currentDest === `ext-withvm,${e.extension},1`) opt.selected = true;
                     selectEl.appendChild(opt);
                 });
             } else if (type === 'announcements') {
@@ -3908,6 +3875,14 @@ function isTabAllowed(tabName) {
                     opt.value = `app-announcement-${a.announcement_id},s,1`;
                     opt.textContent = `Announcement: ${a.description}`;
                     if (currentDest === opt.value) opt.selected = true;
+                    selectEl.appendChild(opt);
+                });
+            } else if (type === 'timeconditions') {
+                loadedTimeConditionsList.forEach(tc => {
+                    const opt = document.createElement('option');
+                    opt.value = `timeconditions,${tc.timeconditions_id},1`;
+                    opt.textContent = `Time Condition: ${tc.displayname}`;
+                    if (currentDest === opt.value || currentDest === `ext-timeconditions,${tc.timeconditions_id},1`) opt.selected = true;
                     selectEl.appendChild(opt);
                 });
             }
@@ -3941,6 +3916,7 @@ function isTabAllowed(tabName) {
                         <option value="ivr">IVR Menu</option>
                         <option value="voicemail">Voicemail</option>
                         <option value="announcements">Announcements</option>
+                        <option value="timeconditions">Time Conditions</option>
                         <option value="terminate">Terminate Call</option>
                         <option value="custom">Custom</option>
                     </select>
@@ -3973,6 +3949,8 @@ function isTabAllowed(tabName) {
                 typeSelect.value = 'ivr';
             } else if (dest.startsWith('app-announcement-')) {
                 typeSelect.value = 'announcements';
+            } else if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
+                typeSelect.value = 'timeconditions';
             } else if (dest === 'app-blackhole,hangup,1') {
                 typeSelect.value = 'terminate';
             } else if (dest) {
@@ -3990,7 +3968,7 @@ function isTabAllowed(tabName) {
             const targetInput = row.querySelector('.ivr-entry-target-input');
             const hiddenDest = row.querySelector('.ivr-entry-dest-hidden');
 
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements'].includes(type)) {
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
                 targetSelect.classList.remove('hidden');
                 targetInput.classList.add('hidden');
                 populateIvrTargetSelect(targetSelect, type, hiddenDest.value);
@@ -4014,7 +3992,7 @@ function isTabAllowed(tabName) {
             const targetInput = row.querySelector('.ivr-entry-target-input');
             const hiddenDest = row.querySelector('.ivr-entry-dest-hidden');
 
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements'].includes(type)) {
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
                 hiddenDest.value = targetSelect.value;
             } else if (type === 'terminate') {
                 hiddenDest.value = 'app-blackhole,hangup,1';
@@ -4029,7 +4007,7 @@ function isTabAllowed(tabName) {
             const inp = document.getElementById('ivrTimeoutDestInput');
             const hidden = document.getElementById('ivrTimeoutDestination');
 
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements'].includes(type)) {
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
                 sel.classList.remove('hidden');
                 inp.classList.add('hidden');
                 populateIvrTargetSelect(sel, type, hidden.value);
@@ -4051,7 +4029,7 @@ function isTabAllowed(tabName) {
             const inp = document.getElementById('ivrTimeoutDestInput');
             const hidden = document.getElementById('ivrTimeoutDestination');
 
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements'].includes(type)) {
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
                 hidden.value = sel.value;
             } else if (type === 'terminate') {
                 hidden.value = 'app-blackhole,hangup,1';
@@ -4077,6 +4055,8 @@ function isTabAllowed(tabName) {
                 typeSelect.value = 'ivr';
             } else if (dest.startsWith('app-announcement-')) {
                 typeSelect.value = 'announcements';
+            } else if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
+                typeSelect.value = 'timeconditions';
             } else if (dest === 'app-blackhole,hangup,1') {
                 typeSelect.value = 'terminate';
             } else if (dest) {
@@ -4091,7 +4071,7 @@ function isTabAllowed(tabName) {
             const inp = document.getElementById('ivrInvalidDestInput');
             const hidden = document.getElementById('ivrInvalidDestination');
 
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements'].includes(type)) {
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
                 sel.classList.remove('hidden');
                 inp.classList.add('hidden');
                 populateIvrTargetSelect(sel, type, hidden.value);
@@ -4113,7 +4093,7 @@ function isTabAllowed(tabName) {
             const inp = document.getElementById('ivrInvalidDestInput');
             const hidden = document.getElementById('ivrInvalidDestination');
 
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements'].includes(type)) {
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
                 hidden.value = sel.value;
             } else if (type === 'terminate') {
                 hidden.value = 'app-blackhole,hangup,1';
@@ -4139,6 +4119,8 @@ function isTabAllowed(tabName) {
                 typeSelect.value = 'ivr';
             } else if (dest.startsWith('app-announcement-')) {
                 typeSelect.value = 'announcements';
+            } else if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
+                typeSelect.value = 'timeconditions';
             } else if (dest === 'app-blackhole,hangup,1') {
                 typeSelect.value = 'terminate';
             } else if (dest) {
@@ -4156,8 +4138,11 @@ function isTabAllowed(tabName) {
 
             form.reset();
             container.innerHTML = '';
+            await Promise.allSettled([
+                fetchExtensions(), fetchRingGroups(), fetchQueues(), fetchIvrs(),
+                fetchAnnouncements(), fetchTimeConditions(), fetchRecordings()
+            ]);
             populateIvrAnnouncementSelect(0);
-
             if (id) {
                 const ivr = loadedIvrsList.find(i => i.id == id);
                 if (!ivr) return;
@@ -6505,7 +6490,7 @@ function isTabAllowed(tabName) {
         // --- TIME GROUPS CLIENT LOGIC ---
 
         function fetchTimeGroups() {
-            fetch('/api/config/timegroups')
+            return fetch('/api/config/timegroups')
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success || !data.timegroups) return;
@@ -6896,7 +6881,7 @@ function isTabAllowed(tabName) {
         // --- TIME CONDITIONS CLIENT LOGIC ---
 
         function fetchTimeConditions() {
-            fetch('/api/config/timeconditions')
+            return fetch('/api/config/timeconditions')
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success || !data.timeconditions) return;
@@ -7191,7 +7176,7 @@ function isTabAllowed(tabName) {
         // --- ANNOUNCEMENTS CLIENT LOGIC ---
 
         function fetchAnnouncements() {
-            fetch('/api/config/announcements')
+            return fetch('/api/config/announcements')
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success || !data.announcements) return;
