@@ -2873,8 +2873,8 @@ function parseDongleConfGain() {
         if (sec.startsWith('dongle') || (sec !== 'general' && sec !== 'defaults')) {
             dongles[sec] = {
                 id: sec,
-                rxgain: Math.max(0, Math.min(20, parseInt(sections[sec].rxgain ?? defaults.rxgain, 10) || 0)),
-                txgain: Math.max(0, Math.min(20, parseInt(sections[sec].txgain ?? defaults.txgain, 10) || 0)),
+                rxgain: Math.max(-10, Math.min(10, parseInt(sections[sec].rxgain ?? defaults.rxgain, 10) || 0)),
+                txgain: Math.max(-10, Math.min(10, parseInt(sections[sec].txgain ?? defaults.txgain, 10) || 0)),
                 audio: sections[sec].audio || '',
                 data: sections[sec].data || '',
                 imei: sections[sec].imei || '',
@@ -2908,8 +2908,8 @@ function updateDongleGainsInConf(gainMap, isResetAll = false) {
     const targetDongles = isResetAll ? Object.keys(dongles) : Object.keys(gainMap);
 
     for (const dongleId of targetDongles) {
-        const rxVal = isResetAll ? 0 : Math.max(0, Math.min(20, parseInt(gainMap[dongleId]?.rxgain, 10) || 0));
-        const txVal = isResetAll ? 0 : Math.max(0, Math.min(20, parseInt(gainMap[dongleId]?.txgain, 10) || 0));
+        const rxVal = isResetAll ? 0 : Math.max(-10, Math.min(10, parseInt(gainMap[dongleId]?.rxgain, 10) || 0));
+        const txVal = isResetAll ? 0 : Math.max(-10, Math.min(10, parseInt(gainMap[dongleId]?.txgain, 10) || 0));
 
         if (sectionHeaderLineIdx.hasOwnProperty(dongleId)) {
             const headerIdx = sectionHeaderLineIdx[dongleId];
@@ -6777,8 +6777,8 @@ app.post('/api/config/modem/gain', async (req, res) => {
             const cleanId = String(id || '').trim();
             if (validDongleIds.has(cleanId) && /^[a-zA-Z0-9_-]+$/.test(cleanId)) {
                 safeGainMap[cleanId] = {
-                    rxgain: Math.max(0, Math.min(20, parseInt(rawGainMap[id]?.rxgain, 10) || 0)),
-                    txgain: Math.max(0, Math.min(20, parseInt(rawGainMap[id]?.txgain, 10) || 0))
+                    rxgain: Math.max(-10, Math.min(10, parseInt(rawGainMap[id]?.rxgain, 10) || 0)),
+                    txgain: Math.max(-10, Math.min(10, parseInt(rawGainMap[id]?.txgain, 10) || 0))
                 };
             }
         }

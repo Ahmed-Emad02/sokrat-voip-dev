@@ -1025,7 +1025,7 @@ function isTabAllowed(tabName) {
                         <span><%= isRtl ? 'إعدادات المودم وشرائح GSM' : 'Modem Conf (GSM Dongles)' %></span>
                     </h2>
                     <p class="text-xs text-[var(--text-muted)] mt-1">
-                        <%= isRtl ? 'التحكم بمستوى الصوت والكسب (Gain) لشرائح GSM ومستويات الإرسال والاستقبال في Asterisk (على مقياس من 0 إلى 20)' : 'Adjust volume gain (Tx & Rx) for each GSM dongle on scale 0-20 directly in dongle.conf' %>
+                        <%= isRtl ? 'التحكم بمستوى الصوت والكسب (Gain) لشرائح GSM ومستويات الإرسال والاستقبال في Asterisk (على مقياس من -10 إلى +10 dB)' : 'Adjust volume gain (Tx & Rx) for each GSM dongle on scale -10 to +10 dB directly in dongle.conf' %>
                     </p>
                 </div>
                 <div class="flex items-center gap-2.5">
@@ -7447,9 +7447,10 @@ function isTabAllowed(tabName) {
                 grid.innerHTML = '';
                 dongleIds.forEach(id => {
                     const d = data.dongles[id];
-                    const rxVal = Math.max(0, Math.min(20, parseInt(d.rxgain, 10) || 0));
-                    const txVal = Math.max(0, Math.min(20, parseInt(d.txgain, 10) || 0));
+                    const rxVal = Math.max(-10, Math.min(10, parseInt(d.rxgain, 10) || 0));
+                    const txVal = Math.max(-10, Math.min(10, parseInt(d.txgain, 10) || 0));
                     const phoneNum = d.phone_number ? escapeHtml(d.phone_number) : (isRtl ? 'غير محدد' : 'Not set');
+                    const formatDb = (v) => (v > 0 ? '+' + v : String(v)) + ' dB';
 
                     const card = document.createElement('div');
                     card.className = 'config-card p-5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] flex flex-col gap-4 shadow-sm';
@@ -7481,15 +7482,15 @@ function isTabAllowed(tabName) {
                                         <span>${isRtl ? 'كسب الاستقبال (Rx Gain - Receiving Volume)' : 'Rx Gain (Receiving Volume)'}</span>
                                     </label>
                                     <span id="rxValBadge_${id}" class="font-mono font-black text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                                        ${rxVal} / 20
+                                        ${formatDb(rxVal)}
                                     </span>
                                 </div>
                                 <div class="flex items-center gap-3">
-                                    <input type="range" id="rxRange_${id}" min="0" max="20" value="${rxVal}" step="1"
-                                        oninput="document.getElementById('rxValBadge_${id}').textContent = this.value + ' / 20'; document.getElementById('rxInput_${id}').value = this.value"
+                                    <input type="range" id="rxRange_${id}" min="-10" max="10" value="${rxVal}" step="1"
+                                        oninput="document.getElementById('rxValBadge_${id}').textContent = (this.value > 0 ? '+' + this.value : this.value) + ' dB'; document.getElementById('rxInput_${id}').value = this.value"
                                         class="w-full accent-emerald-500 bg-[var(--bg-primary)] h-2 rounded-lg cursor-pointer">
-                                    <input type="number" id="rxInput_${id}" min="0" max="20" value="${rxVal}"
-                                        oninput="let v = Math.max(0, Math.min(20, parseInt(this.value)||0)); this.value = v; document.getElementById('rxRange_${id}').value = v; document.getElementById('rxValBadge_${id}').textContent = v + ' / 20';"
+                                    <input type="number" id="rxInput_${id}" min="-10" max="10" value="${rxVal}"
+                                        oninput="let v = Math.max(-10, Math.min(10, parseInt(this.value)||0)); this.value = v; document.getElementById('rxRange_${id}').value = v; document.getElementById('rxValBadge_${id}').textContent = (v > 0 ? '+' + v : v) + ' dB';"
                                         class="config-input w-16 text-center font-mono font-bold text-xs py-1">
                                 </div>
                             </div>
@@ -7502,15 +7503,15 @@ function isTabAllowed(tabName) {
                                         <span>${isRtl ? 'كسب الإرسال (Tx Gain - Transmit Volume)' : 'Tx Gain (Transmit Volume)'}</span>
                                     </label>
                                     <span id="txValBadge_${id}" class="font-mono font-black text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                                        ${txVal} / 20
+                                        ${formatDb(txVal)}
                                     </span>
                                 </div>
                                 <div class="flex items-center gap-3">
-                                    <input type="range" id="txRange_${id}" min="0" max="20" value="${txVal}" step="1"
-                                        oninput="document.getElementById('txValBadge_${id}').textContent = this.value + ' / 20'; document.getElementById('txInput_${id}').value = this.value"
+                                    <input type="range" id="txRange_${id}" min="-10" max="10" value="${txVal}" step="1"
+                                        oninput="document.getElementById('txValBadge_${id}').textContent = (this.value > 0 ? '+' + this.value : this.value) + ' dB'; document.getElementById('txInput_${id}').value = this.value"
                                         class="w-full accent-blue-500 bg-[var(--bg-primary)] h-2 rounded-lg cursor-pointer">
-                                    <input type="number" id="txInput_${id}" min="0" max="20" value="${txVal}"
-                                        oninput="let v = Math.max(0, Math.min(20, parseInt(this.value)||0)); this.value = v; document.getElementById('txRange_${id}').value = v; document.getElementById('txValBadge_${id}').textContent = v + ' / 20';"
+                                    <input type="number" id="txInput_${id}" min="-10" max="10" value="${txVal}"
+                                        oninput="let v = Math.max(-10, Math.min(10, parseInt(this.value)||0)); this.value = v; document.getElementById('txRange_${id}').value = v; document.getElementById('txValBadge_${id}').textContent = (v > 0 ? '+' + v : v) + ' dB';"
                                         class="config-input w-16 text-center font-mono font-bold text-xs py-1">
                                 </div>
                             </div>
@@ -7536,8 +7537,8 @@ function isTabAllowed(tabName) {
             const txInput = document.getElementById(`txInput_${dongleId}`);
             if (!rxInput || !txInput) return;
 
-            const rxgain = Math.max(0, Math.min(20, parseInt(rxInput.value, 10) || 0));
-            const txgain = Math.max(0, Math.min(20, parseInt(txInput.value, 10) || 0));
+            const rxgain = Math.max(-10, Math.min(10, parseInt(rxInput.value, 10) || 0));
+            const txgain = Math.max(-10, Math.min(10, parseInt(txInput.value, 10) || 0));
 
             try {
                 const res = await fetch('/api/config/modem/gain', {
@@ -7568,8 +7569,8 @@ function isTabAllowed(tabName) {
                 const txInput = document.getElementById(`txInput_${dongleId}`);
                 if (dongleId && rxInput && txInput) {
                     gains[dongleId] = {
-                        rxgain: Math.max(0, Math.min(20, parseInt(rxInput.value, 10) || 0)),
-                        txgain: Math.max(0, Math.min(20, parseInt(txInput.value, 10) || 0))
+                        rxgain: Math.max(-10, Math.min(10, parseInt(rxInput.value, 10) || 0)),
+                        txgain: Math.max(-10, Math.min(10, parseInt(txInput.value, 10) || 0))
                     };
                 }
             });
