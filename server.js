@@ -7333,7 +7333,10 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
 
             let routeMatch = null;
             if (phoneNum) {
-                routeMatch = routeMap[phoneNum] || null;
+                const cleanNum = phoneNum.trim();
+                const alt1 = cleanNum.startsWith('+20') ? ('0' + cleanNum.substring(3)) : (cleanNum.startsWith('01') ? ('+20' + cleanNum.substring(1)) : cleanNum);
+                const alt2 = cleanNum.startsWith('+') ? cleanNum.substring(1) : ('+' + cleanNum);
+                routeMatch = routeMap[cleanNum] || routeMap[alt1] || routeMap[alt2] || null;
             }
 
             mappings.push({
