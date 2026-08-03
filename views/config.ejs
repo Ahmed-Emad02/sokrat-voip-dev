@@ -5209,7 +5209,7 @@ function isTabAllowed(tabName) {
 
         // Initialize on load
         document.addEventListener('DOMContentLoaded', () => {
-            const tabButtons = ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram'];
+            const tabButtons = ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram', 'announcements', 'modem', 'dongles'];
             let defaultTab = null;
             for (const t of tabButtons) {
                 if (document.getElementById('tab-btn-' + t)) {
