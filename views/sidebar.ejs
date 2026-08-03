@@ -104,15 +104,18 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         const overlay = document.getElementById('theme-loading-overlay');
         if (!overlay) return;
         overlay.style.opacity = '0';
+        overlay.style.pointerEvents = 'none';
         overlay.style.transform = 'translateY(-100%)';
         setTimeout(() => { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
     }
 
-    window.addEventListener('load', function() {
-        setTimeout(dismissLoadingOverlay, 100);
-    });
-    setTimeout(dismissLoadingOverlay, 600); // Fail-safe auto close
-</script>
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(dismissLoadingOverlay, 50);
+    } else {
+        document.addEventListener('DOMContentLoaded', dismissLoadingOverlay);
+    }
+    window.addEventListener('load', dismissLoadingOverlay);
+    setTimeout(dismissLoadingOverlay, 200);
 
 <!-- Google Fonts Import for Plus Jakarta Sans & Cairo -->
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
