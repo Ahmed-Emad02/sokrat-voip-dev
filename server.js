@@ -537,7 +537,10 @@ async function reconcileDongleMappings() {
 
         // Update live dongles and sync AstDB
         for (const [dongleName, live] of Object.entries(liveDongles)) {
-            let match = dbRows.find(r => r.dongle_name === dongleName);
+            // Prefer dongle_name match ONLY when it has a non-empty phone_number
+            let match = dbRows.find(r => r.dongle_name === dongleName && r.phone_number && r.phone_number.trim() !== '');
+
+            // Otherwise fall through to hardware IMSI owner
             if (!match && live.imsi) {
                 const imsiMatches = dbRows.filter(r => r.imsi === live.imsi && r.phone_number && r.phone_number.trim() !== '');
                 const distinctNumbers = [...new Set(imsiMatches.map(r => r.phone_number.trim()))];
@@ -548,6 +551,24 @@ async function reconcileDongleMappings() {
                 if (imsiMatches.length > 0) {
                     match = imsiMatches[0];
                 }
+            }
+
+            // Otherwise fall through to hardware IMEI owner
+            if (!match && live.imei) {
+                const imeiMatches = dbRows.filter(r => r.imei === live.imei && r.phone_number && r.phone_number.trim() !== '');
+                const distinctNumbers = [...new Set(imeiMatches.map(r => r.phone_number.trim()))];
+                if (distinctNumbers.length > 1) {
+                    console.error(`DONGLE-RECONCILE ERROR: Ambiguous IMEI match for ${dongleName} (IMEI: ${live.imei}) with conflicting phone numbers: [${distinctNumbers.join(', ')}]. Skipping AstDB alias synchronization.`);
+                    continue;
+                }
+                if (imeiMatches.length > 0) {
+                    match = imeiMatches[0];
+                }
+            }
+
+            // Fallback to existing row for dongleName if no numbered match found anywhere
+            if (!match) {
+                match = dbRows.find(r => r.dongle_name === dongleName);
             }
 
             const configuredNumber = match ? String(match.phone_number || '').trim() : '';
