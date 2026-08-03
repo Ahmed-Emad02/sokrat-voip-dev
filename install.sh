@@ -417,8 +417,7 @@ same => n,Goto(s,process)
 
 exten => s,1,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=))
 same => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)
-same => n,Set(DENOISE(rx)=on)
-same => n,Set(DENOISE(tx)=on)
+
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(dongle_map/${DONGLENAME})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMSI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=${DB(sim_map/${DONGLEIMSI})}))

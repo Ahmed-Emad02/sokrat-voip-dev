@@ -1011,10 +1011,7 @@ async function detectDonglesAndSetTrunkCID() {
             }
         }
 
-        const { execFile: rcExec } = require('child_process');
-        rcExec('/var/lib/asterisk/bin/retrieve_conf', [], (err) => {
-            if (!err) console.log('DONGLE-CID: retrieve_conf completed');
-        });
+
     } catch (e) {
         console.error('DONGLE-CID: Detection error:', e.message);
     }
@@ -3252,29 +3249,7 @@ function setDialplanDenoiseStatus({ rx, tx }) {
 
     lines = newLines;
 
-    if (rxState || txState) {
-        let updatedLines = [];
-        currentContext = null;
 
-        for (let i = 0; i < lines.length; i++) {
-            let line = lines[i];
-            updatedLines.push(line);
-            let trimmed = line.trim();
-            let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
-            if (ctxMatch) {
-                currentContext = ctxMatch[1].trim();
-            }
-
-            if (currentContext === 'from-dongle-custom' && trimmed.includes('same => n(process),NoOp')) {
-                if (rxState) updatedLines.push(SOKRAT_DENOISE_RX_LINE);
-                if (txState) updatedLines.push(SOKRAT_DENOISE_TX_LINE);
-            } else if (currentContext === 'macro-dialout-trunk-predial-hook' && trimmed.includes('exten => s,1,NoOp')) {
-                if (rxState) updatedLines.push(SOKRAT_DENOISE_RX_LINE);
-                if (txState) updatedLines.push(SOKRAT_DENOISE_TX_LINE);
-            }
-        }
-        lines = updatedLines;
-    }
 
     fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
 }
