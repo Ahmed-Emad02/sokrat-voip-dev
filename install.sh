@@ -415,7 +415,7 @@ exten => _X.,1,NoOp(Checking if extension ${EXTEN} exists in from-trunk context)
 same => n,ExecIf($[${DIALPLAN_EXISTS(from-trunk,${EXTEN},1)}]?Set(MY_SIM_NUMBER=${EXTEN}))
 same => n,Goto(s,process)
 
-exten => s,1,Set(MY_SIM_NUMBER=)
+exten => s,1,ExecIf($["${MY_SIM_NUMBER}" = ""]?Set(MY_SIM_NUMBER=))
 same => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)
 same => n,Set(DENOISE(rx)=on)
 same => n,Set(DENOISE(tx)=on)
