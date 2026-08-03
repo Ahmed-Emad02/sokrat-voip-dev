@@ -4,7 +4,8 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
 
 function isTabAllowed(tabName) {
     if (typeof allowedTabs === 'undefined') return true;
-    return allowedTabs.includes('config') || allowedTabs.includes('config-' + tabName);
+    if (!Array.isArray(allowedTabs)) return true;
+    return allowedTabs.includes('config') || allowedTabs.includes('gsm-dongles') || allowedTabs.includes('config-modem') || allowedTabs.includes('config-' + tabName) || allowedTabs.includes(tabName);
 }
 %>
 <!DOCTYPE html>
@@ -5213,38 +5214,38 @@ function isTabAllowed(tabName) {
             listContainer.innerHTML = '<span class="text-[11px] text-[var(--text-muted)]">Loading...</span>';
             const isRtl = '<%= isRtl %>' === 'true';
 
-            fetch('/api/gsm-dongles')
+            fetch('/api/config/dongle-mappings')
                 .then(res => res.json())
                 .then(data => {
-                    if (!data.success || !data.devices || data.devices.length === 0) {
+                    if (!data.success || !data.mappings || data.mappings.length === 0) {
                         listContainer.innerHTML = `<span class="text-[11px] text-[var(--text-muted)]">${isRtl ? 'لا توجد أجهزة متصلة' : 'No connected dongles found.'}</span>`;
                         return;
                     }
 
                     listContainer.innerHTML = '';
-                    data.devices.forEach(d => {
+                    data.mappings.forEach(d => {
                         const div = document.createElement('div');
                         div.className = 'flex flex-col sm:flex-row sm:items-center justify-between p-2.5 hover:bg-[var(--bg-hover)]/30 rounded-lg border border-[var(--border-primary)]/40 gap-2 font-mono text-[11px] flex-wrap whitespace-normal break-all';
 
-                        const stateStr = String(d.State || '').toLowerCase();
+                        const stateStr = String(d.state || '').toLowerCase();
                         const statusColor = stateStr === 'free' ? 'text-green-400' : 'text-amber-400';
-                        const num = (d.Number && d.Number !== 'Unknown' && d.Number !== '-') ? d.Number : '';
+                        const num = d.phoneNumber || (d.simNumber !== 'Unknown' && d.simNumber !== '-' ? d.simNumber : '');
 
                         const infoDiv = document.createElement('div');
                         infoDiv.className = 'flex flex-col text-left';
 
                         const titleSpan = document.createElement('span');
                         titleSpan.className = 'font-bold text-[var(--text-primary)]';
-                        titleSpan.textContent = d.ID + (num ? ' (' + num + ')' : ' ');
+                        titleSpan.textContent = d.dongleName + (num ? ' (' + num + ')' : ' ');
 
                         const stateSpan = document.createElement('span');
                         stateSpan.className = 'text-[10px] ' + statusColor + ' ml-1.5 font-semibold';
-                        stateSpan.textContent = d.State || 'Unknown';
+                        stateSpan.textContent = d.state || 'Unknown';
                         titleSpan.appendChild(stateSpan);
 
                         const providerSpan = document.createElement('span');
                         providerSpan.className = 'text-[10px] text-[var(--text-muted)]';
-                        providerSpan.textContent = 'Provider: ' + (d['Provider Name'] || 'None');
+                        providerSpan.textContent = 'Provider: ' + (d.provider || 'None');
 
                         infoDiv.appendChild(titleSpan);
                         infoDiv.appendChild(providerSpan);
@@ -5261,7 +5262,6 @@ function isTabAllowed(tabName) {
                             btnGroup.appendChild(btnNum);
                         }
 
-
                         div.appendChild(infoDiv);
                         div.appendChild(btnGroup);
                         listContainer.appendChild(div);
@@ -5274,7 +5274,6 @@ function isTabAllowed(tabName) {
                 });
         }
 
-        // Load dongle list for custom dial string pop-up helper
         // Load dongle list for custom dial string pop-up helper
         function loadDongleInfoPopup() {
             const listContainer = document.getElementById('dongleInfoList');
@@ -5343,51 +5342,12 @@ function isTabAllowed(tabName) {
             if (defaultTab) {
                 switchTab(defaultTab);
             }
-
-            function updateConfigSubSidebarIcon(isCollapsed) {
-                const icon = document.getElementById('configSubCollapseIcon');
-                const btn = document.getElementById('toggleConfigSubSidebarBtn');
-                if (!icon || !btn) return;
-                const isRtl = document.documentElement.dir === 'rtl';
-                btn.setAttribute('title', isCollapsed ? (isRtl ? 'توسيع القائمة' : 'Maximize Sub Sidebar') : (isRtl ? 'تصغير القائمة' : 'Minimize Sub Sidebar'));
-                if (isCollapsed) {
-                    icon.style.transform = 'rotate(180deg)';
-                } else {
-                    icon.style.transform = 'none';
-                }
-            }
-
-            window.toggleConfigSubSidebar = function() {
-                const sidebar = document.getElementById('configSubSidebar');
-                if (!sidebar) return;
-                const isCollapsed = sidebar.classList.toggle('subsidebar-collapsed');
-                document.documentElement.classList.toggle('config-subsidebar-collapsed', isCollapsed);
-                localStorage.setItem('config_subsidebar_collapsed', String(isCollapsed));
-                updateConfigSubSidebarIcon(isCollapsed);
-                window.dispatchEvent(new Event('resize'));
-            };
-
-            if (localStorage.getItem('config_subsidebar_collapsed') === 'true') {
-                const sidebar = document.getElementById('configSubSidebar');
-                if (sidebar) sidebar.classList.add('subsidebar-collapsed');
-                document.documentElement.classList.add('config-subsidebar-collapsed');
-                updateConfigSubSidebarIcon(true);
-            }
-
-            if (document.getElementById('tab-btn-extensions')) fetchExtensions();
-            if (document.getElementById('tab-btn-recordings')) fetchRecordings();
-            if (document.getElementById('tab-btn-trunks')) fetchTrunks();
-            if (document.getElementById('tab-btn-voicemail')) fetchVoicemailExtensions();
-            if (document.getElementById('tab-btn-ivr')) fetchIvrs();
-
-            // Dongle popup handlers (Portaled Fixed Positioning so it renders OVER popup menus)
             const dialInput = document.getElementById('trunkDialString');
             const popup = document.getElementById('dongleInfoPopup');
             if (dialInput && popup) {
                 if (popup.parentNode !== document.body) {
                     document.body.appendChild(popup);
                 }
-                
                 window.positionDonglePopup = function() {
                     if (popup.classList.contains('hidden')) return;
                     const rect = dialInput.getBoundingClientRect();
@@ -5398,18 +5358,14 @@ function isTabAllowed(tabName) {
                         left = window.innerWidth - width - 8;
                     }
                     if (left < 8) left = 8;
-                    
                     popup.style.position = 'fixed';
                     popup.style.left = left + 'px';
                     popup.style.zIndex = '999999';
-                    
                     const maxAvailHeight = Math.min(window.innerHeight - 30, 280);
                     popup.style.maxHeight = maxAvailHeight + 'px';
-                    
                     const spaceBelow = window.innerHeight - rect.bottom;
                     const spaceAbove = rect.top;
                     const popupEstHeight = Math.min(popup.offsetHeight || 220, maxAvailHeight);
-                    
                     if (spaceBelow < popupEstHeight && spaceAbove > spaceBelow) {
                         popup.style.top = 'auto';
                         popup.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
@@ -5428,13 +5384,11 @@ function isTabAllowed(tabName) {
                     popup.classList.remove('hidden');
                     window.positionDonglePopup();
                 });
-                
                 document.addEventListener('click', (e) => {
                     if (!dialInput.contains(e.target) && !popup.contains(e.target)) {
                         popup.classList.add('hidden');
                     }
                 });
-
                 window.addEventListener('scroll', () => {
                     if (!popup.classList.contains('hidden')) window.positionDonglePopup();
                 }, true);
