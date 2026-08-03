@@ -29,6 +29,10 @@ function isTabAllowed(tabName) {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
     <style>
         :root {
             --bg-primary: #09090b;
@@ -209,10 +213,36 @@ function isTabAllowed(tabName) {
     <!-- PBX Configuration Sub-Sidebar -->
     <aside id="configSubSidebar" class="config-sub-sidebar w-full md:w-[220px] h-auto md:h-screen md:sticky top-0 z-40 bg-[var(--bg-secondary)] flex flex-col justify-between p-4 shrink-0 transition-all duration-300 border-b md:border-b-0 <%= isRtl ? 'border-l border-[var(--border-primary)] md:border-l md:border-r-0' : 'border-r border-[var(--border-primary)] md:border-r md:border-l-0' %>">
         <script>
+            function updateConfigSubCollapseButtonIcon(isCollapsed) {
+                const icon = document.getElementById('configSubCollapseIcon');
+                const btn = document.getElementById('toggleConfigSubSidebarBtn');
+                if (!icon || !btn) return;
+                const isRtl = document.documentElement.dir === 'rtl';
+                btn.setAttribute('title', isCollapsed ? (isRtl ? 'توسيع القائمة' : 'Maximize Sub Sidebar') : (isRtl ? 'تصغير القائمة' : 'Minimize Sub Sidebar'));
+                if (isCollapsed) {
+                    icon.style.transform = 'rotate(180deg)';
+                } else {
+                    icon.style.transform = 'none';
+                }
+            }
+
+            window.toggleConfigSubSidebar = function() {
+                const sidebar = document.getElementById('configSubSidebar');
+                if (!sidebar) return;
+                const isCollapsed = sidebar.classList.toggle('subsidebar-collapsed');
+                document.documentElement.classList.toggle('config-subsidebar-collapsed', isCollapsed);
+                localStorage.setItem('config_subsidebar_collapsed', String(isCollapsed));
+                updateConfigSubCollapseButtonIcon(isCollapsed);
+                window.dispatchEvent(new Event('resize'));
+            };
+
             (function() {
                 if (localStorage.getItem('config_subsidebar_collapsed') === 'true') {
                     document.getElementById('configSubSidebar')?.classList.add('subsidebar-collapsed');
                     document.documentElement.classList.add('config-subsidebar-collapsed');
+                    document.addEventListener('DOMContentLoaded', function() {
+                        updateConfigSubCollapseButtonIcon(true);
+                    });
                 }
             })();
         </script>
@@ -366,13 +396,16 @@ function isTabAllowed(tabName) {
                     <span class="subsidebar-text truncate"><%= isRtl ? 'إعدادات المودم' : 'Modem Conf' %></span>
                 </button>
                 <% } %>
-                <!-- 15. dynamic dongle DID mappings -->
-                <button onclick="switchTab('dongles')" id="tab-btn-dongles" title="<%= isRtl ? 'خريطة الشرائح و DIDs' : 'GSM DID Mappings' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
+
+                <!-- 16. tty terminal (root super user only) -->
+                <% if (typeof isRoot !== 'undefined' && isRoot) { %>
+                <button onclick="switchTab('terminal')" id="tab-btn-terminal" title="<%= isRtl ? 'الطرفية (TTY Terminal)' : 'TTY Terminal' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
                     <svg class="w-4 h-4 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    <span class="subsidebar-text truncate"><%= isRtl ? 'خريطة الشرائح و DIDs' : 'GSM DID Mappings' %></span>
+                    <span class="subsidebar-text truncate"><%= isRtl ? 'الطرفية (TTY Terminal)' : 'TTY Terminal' %></span>
                 </button>
+                <% } %>
             </nav>
         </div>
 
@@ -649,7 +682,8 @@ function isTabAllowed(tabName) {
 
         <!-- TAB 5: INBOUND ROUTES -->
         <% if (isTabAllowed('inbound')) { %>
-        <div id="section-inbound" class="tab-section hidden">
+        <div id="section-inbound" class="tab-section hidden space-y-6">
+            <!-- 1. INBOUND ROUTES MANAGEMENT CARD -->
             <div class="config-card p-6">
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
@@ -674,6 +708,81 @@ function isTabAllowed(tabName) {
                         </thead>
                         <tbody id="inbound-table-body" class="divide-y divide-[var(--border-primary)] text-sm font-medium text-[var(--text-primary)]">
                             <tr><td colspan="4" class="py-8 text-center text-[var(--text-muted)]">Loading inbound routes...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 2. GSM DYNAMIC DID MAPPINGS PANEL -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4 pt-2">
+                <div>
+                    <h2 class="text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                        <span><%= isRtl ? 'خريطة الشرائح التلقائية (GSM Dynamic DIDs)' : 'GSM Dynamic DID Mappings' %></span>
+                    </h2>
+                    <p class="text-xs text-[var(--text-muted)] mt-1">
+                        <%= isRtl ? 'عرض مباشر ومطابقة ديناميكية لشرائح GSM وأرقام DIDs ومفاتيح AstDB ومسارات PBX الواردة' : 'Live status of logical slots (dongle0, dongle1), configured DIDs, hardware IMSI/IMEI aliases, AstDB keys, and FreePBX Inbound Routes.' %>
+                    </p>
+                </div>
+                <div class="flex items-center gap-2.5 flex-wrap">
+                    <button type="button" onclick="fetchDongleMappingsTab()" class="config-btn-secondary px-3.5 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        <span><%= isRtl ? 'تحديث البيانات' : 'Refresh Mappings' %></span>
+                    </button>
+                    <button type="button" onclick="reconcileDonglesNow()" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        <span><%= isRtl ? 'إعادة مطابقة AstDB الآن' : 'Re-Sync AstDB Now' %></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
+                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'إجمالي فتحات GSM' : 'Total Dongle Slots' %></span>
+                    <div id="dmCardTotal" class="text-xl font-extrabold font-mono text-[var(--text-primary)]">-</div>
+                </div>
+                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
+                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'الأجهزة المتصلة' : 'Connected Modems' %></span>
+                    <div id="dmCardConnected" class="text-xl font-extrabold font-mono text-emerald-400">-</div>
+                </div>
+                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
+                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'مفاتيح AstDB المطابقة' : 'AstDB Synced Keys' %></span>
+                    <div id="dmCardSynced" class="text-xl font-extrabold font-mono text-cyan-400">-</div>
+                </div>
+                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
+                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'المسارات الواردة المرتبطة' : 'Inbound Routes Linked' %></span>
+                    <div id="dmCardRoutes" class="text-xl font-extrabold font-mono text-purple-400">-</div>
+                </div>
+            </div>
+
+            <!-- Dynamic Mappings Table Card -->
+            <div class="config-card p-6 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-extrabold text-[var(--text-primary)] flex items-center gap-2">
+                        <span><%= isRtl ? 'جدول مطابقة DIDs والشرائح (Dynamic DID Table)' : 'Dynamic DID Mapping Roster' %></span>
+                    </h3>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-[var(--border-primary)]">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] text-[var(--text-muted)] uppercase font-mono font-bold">
+                                <th class="p-3"><%= isRtl ? 'اسم الفتحة (Dongle)' : 'Dongle Slot' %></th>
+                                <th class="p-3"><%= isRtl ? 'رقم DID المعرف' : 'Configured DID' %></th>
+                                <th class="p-3"><%= isRtl ? 'معرفات العتاد (IMSI / IMEI)' : 'Hardware IDs' %></th>
+                                <th class="p-3"><%= isRtl ? 'رقم الشريحة' : 'SIM Report' %></th>
+                                <th class="p-3"><%= isRtl ? 'مفاتيح AstDB' : 'AstDB Keys' %></th>
+                                <th class="p-3"><%= isRtl ? 'مسار PBX الوارد' : 'Inbound Route Link' %></th>
+                                <th class="p-3"><%= isRtl ? 'الحالة والشبكة' : 'Status & Network' %></th>
+                                <th class="p-3 text-right"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="dmTableBody" class="divide-y divide-[var(--border-primary)]">
+                            <tr>
+                                <td colspan="8" class="p-4 text-center text-[var(--text-muted)] italic">Loading GSM dynamic mappings...</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -868,7 +977,11 @@ function isTabAllowed(tabName) {
                         <button onclick="zoomDiagram(0.8)" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:bg-[var(--bg-hover)] text-xs font-bold rounded-lg cursor-pointer transition">
                             －
                         </button>
-                        <button onclick="resetDiagramZoom()" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:bg-[var(--bg-hover)] text-xs font-semibold rounded-lg cursor-pointer transition">
+                        <button onclick="fitDiagramToScreen()" title="<%= isRtl ? 'ملائمة الشاشة' : 'Fit View' %>" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:bg-[var(--bg-hover)] text-xs font-semibold rounded-lg cursor-pointer transition flex items-center gap-1 text-[var(--text-primary)]">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                            <span><%= isRtl ? 'ملائمة الشاشة' : 'Fit View' %></span>
+                        </button>
+                        <button onclick="resetDiagramZoom()" title="<%= isRtl ? 'إعادة ضبط' : 'Reset Zoom' %>" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:bg-[var(--bg-hover)] text-xs font-semibold rounded-lg cursor-pointer transition">
                             <%= isRtl ? 'إعادة ضبط' : 'Reset' %>
                         </button>
                     </div>
@@ -879,6 +992,7 @@ function isTabAllowed(tabName) {
                     <span class="text-[var(--text-muted)] uppercase text-[10px]"><%= isRtl ? 'دليل الألوان:' : 'Color Legend:' %></span>
                     <span class="flex items-center gap-1.5 text-emerald-400"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><%= isRtl ? 'مسارات واردة' : 'Inbound Routes' %></span>
                     <span class="flex items-center gap-1.5 text-yellow-400"><span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span><%= isRtl ? 'شروط الوقت' : 'Time Conditions' %></span>
+                    <span class="flex items-center gap-1.5 text-blue-400"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span><%= isRtl ? 'الرد الآلي (IVR)' : 'IVR Menus' %></span>
                     <span class="flex items-center gap-1.5 text-purple-400"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span><%= isRtl ? 'مجموعات الاتصال' : 'Ring Groups' %></span>
                     <span class="flex items-center gap-1.5 text-amber-400"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span><%= isRtl ? 'طوابير الانتظار (Queues)' : 'Call Queues' %></span>
                     <span class="flex items-center gap-1.5 text-red-400"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span><%= isRtl ? 'التحويلات' : 'Extensions' %></span>
@@ -887,7 +1001,7 @@ function isTabAllowed(tabName) {
                 </div>
 
                 <!-- Canvas Wrapper -->
-                <div id="diagramCanvasContainer" class="relative w-full border border-[var(--border-primary)] rounded-xl overflow-hidden bg-[#09090b]">
+                <div id="diagramCanvasContainer" class="relative w-full border border-[var(--border-primary)] rounded-xl overflow-auto bg-[#09090b]" style="height: calc(100vh - 280px); min-height: 700px;">
                     <svg id="diagramSvg" class="w-full h-full cursor-grab active:cursor-grabbing select-none">
                         <!-- Grid pattern definition -->
                         <defs>
@@ -1041,14 +1155,6 @@ function isTabAllowed(tabName) {
                         <span class="w-2 h-2 rounded-full bg-gray-400"></span>
                         <span><%= isRtl ? 'صاقل التلعثم (Jitter Buffer)' : 'Jitter Buffer' %></span>
                     </button>
-                    <button type="button" id="toggleDenoiseRxBtn" onclick="toggleDenoise('rx')" class="px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-gray-500/10 text-gray-400 border-gray-500/30">
-                        <span class="w-2 h-2 rounded-full bg-gray-400"></span>
-                        <span><%= isRtl ? 'عزل ضوضاء الاستقبال (Rx Denoise)' : 'Rx Denoise' %></span>
-                    </button>
-                    <button type="button" id="toggleDenoiseTxBtn" onclick="toggleDenoise('tx')" class="px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-gray-500/10 text-gray-400 border-gray-500/30">
-                        <span class="w-2 h-2 rounded-full bg-gray-400"></span>
-                        <span><%= isRtl ? 'عزل ضوضاء الإرسال (Tx Denoise)' : 'Tx Denoise' %></span>
-                    </button>
                     <button type="button" onclick="resetAllDongleGains()" class="config-btn-secondary px-4 py-2 text-xs flex items-center gap-1.5 text-red-400 hover:text-red-300 border-red-500/30 hover:bg-red-500/10 cursor-pointer">
                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         <span><%= isRtl ? 'إعادة ضبط الكل (txgain=0 & rxgain=0)' : 'Reset All (txgain=0 & rxgain=0)' %></span>
@@ -1099,80 +1205,62 @@ function isTabAllowed(tabName) {
             </div>
         </div>
         <% } %>
-        <!-- 15. DYNAMIC GSM DID MAPPINGS TAB PANEL -->
-        <div id="section-dongles" class="tab-section hidden space-y-6">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4">
-                    <h2 class="text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                        <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
-                        <span><%= isRtl ? 'خريطة الشرائح التلقائية (GSM Dynamic DIDs)' : 'GSM Dynamic DID Mappings' %></span>
-                    </h2>
-                    <p class="text-xs text-[var(--text-muted)] mt-1">
-                        <%= isRtl ? 'عرض مباشر ومطابقة ديناميكية لشرائح GSM وأرقام DIDs ومفاتيح AstDB ومسارات PBX الواردة' : 'Live status of logical slots (dongle0, dongle1), configured DIDs, hardware IMSI/IMEI aliases, AstDB keys, and FreePBX Inbound Routes.' %>
-                    </p>
-                </div>
-                <div class="flex items-center gap-2.5 flex-wrap">
-                    <button type="button" onclick="fetchDongleMappingsTab()" class="config-btn-secondary px-3.5 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                        <span><%= isRtl ? 'تحديث البيانات' : 'Refresh Mappings' %></span>
-                    </button>
-                    <button type="button" onclick="reconcileDonglesNow()" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        <span><%= isRtl ? 'إعادة مطابقة AstDB الآن' : 'Re-Sync AstDB Now' %></span>
-                    </button>
-                </div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
-                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'إجمالي فتحات GSM' : 'Total Dongle Slots' %></span>
-                    <div id="dmCardTotal" class="text-xl font-extrabold font-mono text-[var(--text-primary)]">-</div>
-                </div>
-                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
-                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'الأجهزة المتصلة' : 'Connected Modems' %></span>
-                    <div id="dmCardConnected" class="text-xl font-extrabold font-mono text-emerald-400">-</div>
-                </div>
-                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
-                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'مفاتيح AstDB المطابقة' : 'AstDB Synced Keys' %></span>
-                    <div id="dmCardSynced" class="text-xl font-extrabold font-mono text-cyan-400">-</div>
-                </div>
-                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
-                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'المسارات الواردة المرتبطة' : 'Inbound Routes Linked' %></span>
-                    <div id="dmCardRoutes" class="text-xl font-extrabold font-mono text-purple-400">-</div>
-                </div>
-            </div>
 
-            <!-- Dynamic Mappings Table Card -->
-            <div class="config-card p-6 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-4">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-sm font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                        <span><%= isRtl ? 'جدول مطابقة DIDs والشرائح (Dynamic DID Table)' : 'Dynamic DID Mapping Roster' %></span>
-                    </h3>
+        <!-- 16. TTY TERMINAL SHELL TAB SECTION (root super user only) -->
+        <% if (typeof isRoot !== 'undefined' && isRoot) { %>
+        <div id="section-terminal" class="tab-section hidden space-y-4">
+            <div class="config-card p-6 flex flex-col space-y-4">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
+                            <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span><%= isRtl ? 'طرفية النظام (TTY Shell Terminal)' : 'TTY Shell Terminal' %></span>
+                        </h2>
+                        <p class="text-xs text-[var(--text-muted)] mt-1">
+                            <%= isRtl ? 'نافذة طرفية تفاعلية مباشرة مع دعم كامل للصق من الحافظة وإدخال الأوامر' : 'Interactive real-time Linux PTY shell window with full clipboard paste support' %>
+                        </p>
+                    </div>
+                    <!-- Controls Toolbar -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Status Badge -->
+                        <span id="ttyStatusBadge" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
+                            <span id="ttyStatusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                            <span id="ttyStatusText">Disconnected</span>
+                        </span>
+                        <!-- Copy Selected Button -->
+                        <button onclick="copySelectedTextFromTerminal()" title="<%= isRtl ? 'نسخ النص المحدد' : 'Copy Selected Text' %>" class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-bold rounded-lg cursor-pointer transition flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            <span><%= isRtl ? 'نسخ المحدد' : 'Copy Selected' %></span>
+                        </button>
+                        <!-- Paste Clipboard Button -->
+                        <button onclick="pasteClipboardToTerminal()" title="<%= isRtl ? 'لصق من الحافظة' : 'Paste from Clipboard' %>" class="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-lg cursor-pointer transition flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                            <span><%= isRtl ? 'لصق الحافظة' : 'Paste Clipboard' %></span>
+                        </button>
+                        <!-- Run Last Command Button -->
+                        <button onclick="runLastTtyCommand()" title="<%= isRtl ? 'تشغيل آخر أمر (سهم للأعلى + إدخال)' : 'Run Last Command (Up + Enter)' %>" class="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold rounded-lg cursor-pointer transition flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                            <span><%= isRtl ? 'آخر أمر' : 'Run Last Cmd' %></span>
+                        </button>
+                        <button onclick="clearTerminalScreen()" class="px-3 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:bg-[var(--bg-hover)] text-xs font-semibold rounded-lg cursor-pointer transition text-[var(--text-primary)]">
+                            <%= isRtl ? 'مسح الشاشة' : 'Clear' %>
+                        </button>
+                        <!-- Restart Shell Button -->
+                        <button onclick="restartTtyShell()" class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold rounded-lg cursor-pointer transition">
+                            <%= isRtl ? 'إعادة تشغيل الطرفية' : 'Restart Shell' %>
+                        </button>
+                    </div>
                 </div>
 
-                <div class="overflow-x-auto rounded-xl border border-[var(--border-primary)]">
-                    <table class="w-full text-left border-collapse text-xs">
-                        <thead>
-                            <tr class="bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] text-[var(--text-muted)] uppercase font-mono font-bold">
-                                <th class="p-3"><%= isRtl ? 'اسم الفتحة (Dongle)' : 'Dongle Slot' %></th>
-                                <th class="p-3"><%= isRtl ? 'رقم DID المعرف' : 'Configured DID' %></th>
-                                <th class="p-3"><%= isRtl ? 'معرفات العتاد (IMSI / IMEI)' : 'Hardware IDs' %></th>
-                                <th class="p-3"><%= isRtl ? 'رقم الشريحة' : 'SIM Report' %></th>
-                                <th class="p-3"><%= isRtl ? 'مفاتيح AstDB' : 'AstDB Keys' %></th>
-                                <th class="p-3"><%= isRtl ? 'مسار PBX الوارد' : 'Inbound Route Link' %></th>
-                                <th class="p-3"><%= isRtl ? 'الحالة والشبكة' : 'Status & Network' %></th>
-                                <th class="p-3 text-right"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
-                            </tr>
-                        </thead>
-                        <tbody id="dmTableBody" class="divide-y divide-[var(--border-primary)]">
-                            <tr>
-                                <td colspan="8" class="p-4 text-center text-[var(--text-muted)] italic">Loading GSM dynamic mappings...</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <!-- Terminal Container Window -->
+                <div id="ttyTerminalWrapper" class="relative w-full border border-[var(--border-primary)] rounded-xl bg-[#09090b] p-3 overflow-hidden" style="height: calc(100vh - 280px); min-height: 550px;">
+                    <div id="terminalContainer" class="w-full h-full font-mono text-xs text-emerald-400 overflow-auto focus:outline-none select-text" tabindex="0"></div>
                 </div>
             </div>
         </div>
+        <% } %>
     <!-- MODAL 1: EXTENSION FORM -->
     <div id="extensionModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
         <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
@@ -3105,15 +3193,15 @@ function isTabAllowed(tabName) {
             if (tabId === 'ivr') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); }
             if (tabId === 'recordings') fetchRecordings();
             if (tabId === 'trunks') fetchTrunks();
-            if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchInboundRoutes(); }
-            if (tabId === 'outbound') fetchOutboundRoutes();
-            if (tabId === 'voicemail') { fetchRecordings(); fetchVoicemailExtensions(); }
-            if (tabId === 'diagram') fetchDiagramData();
+            if (tabId === 'outbound') { fetchOutboundRoutes(); fetchTrunks(); }
             if (tabId === 'timegroups') fetchTimeGroups();
-            if (tabId === 'timeconditions') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeGroups(); fetchTimeConditions(); fetchAnnouncements(); }
-            if (tabId === 'announcements') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); }
-            if (tabId === 'modem') { fetchModemConfig(); fetchRtcpDiagnostics(); startRtcpTimer(); }
-            if (tabId === 'dongles') fetchDongleMappingsTab();
+            if (tabId === 'timeconditions') { fetchTimeConditions(); fetchTimeGroups(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); }
+            if (tabId === 'announcements') { fetchAnnouncements(); fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); }
+            if (tabId === 'modem') fetchModemConfig();
+            if (tabId === 'terminal') initTtyTerminal();
+            if (tabId === 'diagram') fetchDiagramData();
+            if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchInboundRoutes(); fetchDongleMappingsTab(); }
+            if (tabId === 'dongles') { switchTab('inbound'); return; }
         }
         window.switchTab = switchTab;
 
@@ -3151,11 +3239,13 @@ function isTabAllowed(tabName) {
         function fetchExtensions() {
             const tbody = document.getElementById('extensions-table-body');
             return fetch('/api/config/extensions')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
                     if (!data || !data.success || !Array.isArray(data.extensions)) {
-                        if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="py-6 text-center text-rose-400 font-semibold">' + (data && data.error ? escapeHtml(data.error) : (isRtl ? 'تعذر تحميل التحويلات.' : 'Failed to load extensions.')) + '</td></tr>';
-                        return;
                     }
                     loadedExtensionsList = data.extensions;
                     renderQuickPickPills();
@@ -3542,9 +3632,12 @@ function isTabAllowed(tabName) {
         function fetchRingGroups() {
             const tbody = document.getElementById('ringgroups-table-body');
             return fetch('/api/config/ringgroups')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
-                    if (!data.success || !data.ringgroups) return;
                     loadedRingGroupsList = data.ringgroups;
                     if (!tbody) return;
                     tbody.innerHTML = '';
@@ -3770,9 +3863,12 @@ function isTabAllowed(tabName) {
         function fetchQueues() {
             const tbody = document.getElementById('queues-table-body');
             return fetch('/api/config/queues')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
-                    if (!data.success || !data.queues) return;
                     loadedQueuesList = data.queues;
                     if (!tbody) return;
                     tbody.innerHTML = '';
@@ -3938,9 +4034,12 @@ function isTabAllowed(tabName) {
         function fetchRecordings() {
             const tbody = document.getElementById('recordings-table-body');
             return fetch('/api/config/recordings')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
-                    if (!data.success || !data.recordings) return;
                     loadedRecordingsList = data.recordings;
                     populateAnnouncementsDropdown();
                     populateVmGreetingSelect();
@@ -4124,9 +4223,12 @@ function isTabAllowed(tabName) {
         function fetchIvrs() {
             const tbody = document.getElementById('ivrs-table-body');
             return fetch('/api/config/ivrs')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
-                    if (!data.success || !data.ivrs) return;
                     loadedIvrsList = data.ivrs;
                     if (!tbody) return;
                     tbody.innerHTML = '';
@@ -4354,6 +4456,19 @@ function isTabAllowed(tabName) {
             }
         }
 
+        function setIvrTimeoutDest(destVal) {
+            initDestinationSelectInstances();
+            if (ivrTimeoutDestSelectInstance) ivrTimeoutDestSelectInstance.setDialplan(destVal || 'app-blackhole,hangup,1');
+            const hidden = document.getElementById('ivrTimeoutDestination');
+            if (hidden) hidden.value = destVal || 'app-blackhole,hangup,1';
+        }
+
+        function setIvrInvalidDest(destVal) {
+            initDestinationSelectInstances();
+            if (ivrInvalidDestSelectInstance) ivrInvalidDestSelectInstance.setDialplan(destVal || 'app-blackhole,hangup,1');
+            const hidden = document.getElementById('ivrInvalidDestination');
+            if (hidden) hidden.value = destVal || 'app-blackhole,hangup,1';
+        }
 
         async function openIvrModal(id = null) {
             const modal = document.getElementById('ivrModal');
@@ -4362,11 +4477,17 @@ function isTabAllowed(tabName) {
             const editId = document.getElementById('ivrEditId');
             const container = document.getElementById('ivrEntriesContainer');
 
-            form.reset();
-            container.innerHTML = '';
+            if (form) form.reset();
+            if (container) container.innerHTML = '';
+
             await Promise.allSettled([
-                fetchExtensions(), fetchRingGroups(), fetchQueues(), fetchIvrs(),
-                fetchAnnouncements(), fetchTimeConditions(), fetchRecordings()
+                fetchExtensions().catch(() => {}),
+                fetchRingGroups().catch(() => {}),
+                fetchQueues().catch(() => {}),
+                fetchIvrs().catch(() => {}),
+                fetchAnnouncements().catch(() => {}),
+                fetchTimeConditions().catch(() => {}),
+                fetchRecordings().catch(() => {})
             ]);
             populateIvrAnnouncementSelect(0);
             if (id) {
@@ -4406,7 +4527,7 @@ function isTabAllowed(tabName) {
 
             modal.classList.remove('hidden');
         }
-
+        window.openIvrModal = openIvrModal;
         function saveIvr(e) {
             e.preventDefault();
             const editId = document.getElementById('ivrEditId').value;
@@ -4500,10 +4621,14 @@ function isTabAllowed(tabName) {
 
         function fetchTrunks() {
             const tbody = document.getElementById('trunks-table-body');
-            fetch('/api/config/trunks')
-                .then(res => res.json())
+            return fetch('/api/config/trunks')
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
-                    if (!data.success || !data.trunks) return;
+                    if (!data || !data.success || !data.trunks) return;
                     loadedTrunksList = data.trunks;
                     if (!tbody) return;
                     tbody.innerHTML = '';
@@ -4729,10 +4854,14 @@ function isTabAllowed(tabName) {
         // --- 5. INBOUND ROUTES ---
         function fetchInboundRoutes() {
             const tbody = document.getElementById('inbound-table-body');
-            fetch('/api/config/routes/inbound')
-                .then(res => res.json())
+            return fetch('/api/config/routes/inbound')
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
-                    if (!data.success || !data.routes) return;
+                    if (!data || !data.success || !data.routes) return;
                     loadedInboundRoutesList = data.routes;
                     if (!tbody) return;
                     tbody.innerHTML = '';
@@ -5009,11 +5138,16 @@ function isTabAllowed(tabName) {
 
         function fetchOutboundRoutes() {
             const tbody = document.getElementById('outbound-table-body');
-            fetch('/api/config/routes/outbound')
-                .then(res => res.json())
+            return fetch('/api/config/routes/outbound')
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
-                    if (!data.success || !data.routes) return;
+                    if (!data || !data.success || !data.routes) return;
                     loadedOutboundRoutesList = data.routes;
+                    if (!tbody) return;
                     tbody.innerHTML = '';
                     if (data.routes.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">No outbound routes found.</td></tr>';
@@ -5299,8 +5433,6 @@ function isTabAllowed(tabName) {
 
                         div.innerHTML = `
                             <div class="flex flex-col text-left">
-                                <span class="font-bold text-[var(--text-primary)]">
-                                    ${d.ID} (${d.Number || 'Unknown'}) 
                                     <span class="text-[10px] ${statusColor} ml-1.5 font-semibold">${d.State}</span>
                                 </span>
                                 <span class="text-[10px] text-[var(--text-muted)]">Provider: ${provider} | IMEI: ${cleanImei}</span>
@@ -5328,13 +5460,18 @@ function isTabAllowed(tabName) {
 
         // Initialize on load
         document.addEventListener('DOMContentLoaded', () => {
-            const tabButtons = ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram', 'announcements', 'modem', 'dongles'];
+            const tabButtons = ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram', 'announcements', 'modem', 'dongles', 'terminal'];
             let defaultTab = null;
             for (const t of tabButtons) {
                 if (document.getElementById('tab-btn-' + t)) {
                     defaultTab = t;
                     break;
                 }
+            }
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            if (tabParam && document.getElementById('tab-btn-' + tabParam)) {
+                defaultTab = tabParam;
             }
             if (defaultTab) {
                 switchTab(defaultTab);
@@ -5625,11 +5762,13 @@ function isTabAllowed(tabName) {
                         initPanZoom();
                         isPanZoomInitialized = true;
                     }
+                    setTimeout(fitDiagramToScreen, 50);
                 })
                 .catch(err => {
                     showToast(err.message, 'error');
                 });
         }
+        window.fetchDiagramData = fetchDiagramData;
 
         function renderDiagram() {
             const svgNodes = document.getElementById('diagramNodes');
@@ -5658,8 +5797,10 @@ function isTabAllowed(tabName) {
                 if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
                     return `${isRtl ? 'تحويلة:' : 'Extension:'} ${dest.split(',')[1]}`;
                 }
-                if (dest.startsWith('ivr-')) {
-                    return `IVR: ${dest.split(',')[0]}`;
+                if (dest.startsWith('ivr-') || dest.startsWith('ext-ivr,')) {
+                    const ivrId = dest.startsWith('ext-ivr,') ? dest.split(',')[1] : dest.split(',')[0].replace('ivr-', '');
+                    const ivrObj = (diagramRawData.ivrs || []).find(i => String(i.id) === String(ivrId));
+                    return `IVR: ${ivrObj ? ivrObj.name : ivrId}`;
                 }
                 if (dest.startsWith('ext-queues,')) {
                     return `${isRtl ? 'طابور:' : 'Queue:'} ${dest.split(',')[1]}`;
@@ -5673,6 +5814,19 @@ function isTabAllowed(tabName) {
                 return dest;
             }
 
+            function resolveTargetNodeId(dest) {
+                if (!dest) return null;
+                if (dest.startsWith('ext-group,')) return 'ringgroup-' + dest.split(',')[1];
+                if (dest.startsWith('ext-queues,')) return 'queue-' + dest.split(',')[1];
+                if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) return 'extension-' + dest.split(',')[1];
+                if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) return 'timecondition-' + dest.split(',')[1];
+                if (dest.startsWith('ivr-') || dest.startsWith('ext-ivr,')) {
+                    const ivrId = dest.startsWith('ext-ivr,') ? dest.split(',')[1] : dest.split(',')[0].replace('ivr-', '');
+                    return 'ivr-' + ivrId;
+                }
+                return null;
+            }
+
             const inbound = diagramRawData.inbound || [];
             const ringgroups = diagramRawData.ringgroups || [];
             const extensions = diagramRawData.extensions || [];
@@ -5680,16 +5834,19 @@ function isTabAllowed(tabName) {
             const trunks = diagramRawData.trunks || [];
             const timeconditions = diagramRawData.timeconditions || [];
             const queues = diagramRawData.queues || [];
+            const ivrs = diagramRawData.ivrs || [];
 
-            const columns = [inbound, timeconditions, ringgroups, queues, extensions, outbound, trunks];
+            const columns = [inbound, timeconditions, ivrs, ringgroups, queues, extensions, outbound, trunks];
             const maxCount = Math.max(...columns.map(column => column.length), 1);
-            const contentHeight = fixedTopMargin
+            const contentHeight = Math.max(550, fixedTopMargin
                 + maxCount * cardHeight
                 + Math.max(maxCount - 1, 0) * rowGap
-                + bottomPadding;
-            canvas.style.height = `${contentHeight}px`;
+                + bottomPadding);
+            const contentWidth = Math.max(1400, 50 + columns.length * 380 + 100);
             svg.style.height = `${contentHeight}px`;
+            svg.style.width = `${contentWidth}px`;
             svg.setAttribute('height', String(contentHeight));
+            svg.setAttribute('width', String(contentWidth));
 
             diagramNodesList = [];
             
@@ -5714,7 +5871,7 @@ function isTabAllowed(tabName) {
                 const startY = fixedTopMargin;
                 diagramNodesList.push({
                     id: 'ringgroup-' + rg.grpnum,
-                    x: 50 + colSpacing * 2,
+                    x: 50 + colSpacing * 3,
                     y: startY + i * ySpacing,
                     type: 'ringgroup',
                     title: `${isRtl ? 'مجموعة:' : 'Group:'} ${rg.grpnum}`,
@@ -5724,12 +5881,28 @@ function isTabAllowed(tabName) {
                 });
             });
 
+            // 2.5 IVR Nodes
+            ivrs.forEach((ivr, i) => {
+                const startY = fixedTopMargin;
+                const entriesCount = Array.isArray(ivr.entries) ? ivr.entries.length : 0;
+                diagramNodesList.push({
+                    id: 'ivr-' + ivr.id,
+                    x: 50 + colSpacing * 2,
+                    y: startY + i * ySpacing,
+                    type: 'ivr',
+                    title: `${isRtl ? 'الرد الآلي:' : 'IVR:'} ${ivr.name}`,
+                    subtitle: ivr.description || (isRtl ? 'قائمة الرد الآلي' : 'IVR Menu'),
+                    desc: `${isRtl ? 'خيارات:' : 'Options:'} ${entriesCount}`,
+                    data: ivr
+                });
+            });
+
             // 3. Queues Nodes
             queues.forEach((q, i) => {
                 const startY = fixedTopMargin;
                 diagramNodesList.push({
                     id: 'queue-' + q.extension,
-                    x: 50 + colSpacing * 3,
+                    x: 50 + colSpacing * 4,
                     y: startY + i * ySpacing,
                     type: 'queue',
                     title: `${isRtl ? 'طابور:' : 'Queue:'} ${q.extension}`,
@@ -5744,7 +5917,7 @@ function isTabAllowed(tabName) {
                 const startY = fixedTopMargin;
                 diagramNodesList.push({
                     id: 'extension-' + ext.extension,
-                    x: 50 + colSpacing * 4,
+                    x: 50 + colSpacing * 5,
                     y: startY + i * ySpacing,
                     type: 'extension',
                     title: `${isRtl ? 'تحويلة:' : 'Ext:'} ${ext.extension}`,
@@ -5760,7 +5933,7 @@ function isTabAllowed(tabName) {
                 const patternStr = route.patterns.map(p => p.pattern).filter(Boolean).slice(0, 2).join(', ');
                 diagramNodesList.push({
                     id: 'outbound-' + route.route_id,
-                    x: 50 + colSpacing * 5,
+                    x: 50 + colSpacing * 6,
                     y: startY + i * ySpacing,
                     type: 'outbound',
                     title: route.name,
@@ -5775,7 +5948,7 @@ function isTabAllowed(tabName) {
                 const startY = fixedTopMargin;
                 diagramNodesList.push({
                     id: 'trunk-' + tk.trunkid,
-                    x: 50 + colSpacing * 6,
+                    x: 50 + colSpacing * 7,
                     y: startY + i * ySpacing,
                     type: 'trunk',
                     title: tk.name,
@@ -5803,20 +5976,13 @@ function isTabAllowed(tabName) {
             diagramLinks = [];
 
             // Link 1: Inbound -> Ring Groups, Queues, or Extensions
+            // Link 1: Inbound -> Destinations
             inbound.forEach((route, idx) => {
                 const dest = route.destination || '';
-                let targetId = null;
+                const targetId = resolveTargetNodeId(dest);
                 let wireType = 'inbound-dest';
-                if (dest.startsWith('ext-group,')) {
-                    targetId = 'ringgroup-' + dest.split(',')[1];
-                } else if (dest.startsWith('ext-queues,')) {
-                    targetId = 'queue-' + dest.split(',')[1];
-                } else if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
-                    targetId = 'extension-' + dest.split(',')[1];
-                } else if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
-                    targetId = 'timecondition-' + dest.split(',')[1];
-                    wireType = 'inbound-tc';
-                }
+                if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) wireType = 'inbound-tc';
+                else if (dest.startsWith('ivr-') || dest.startsWith('ext-ivr,')) wireType = 'inbound-ivr';
                 if (targetId) {
                     diagramLinks.push({
                         id: `link-inbound-${idx}`,
@@ -5832,15 +5998,9 @@ function isTabAllowed(tabName) {
                 const trueDest = tc.truegoto || '';
                 const falseDest = tc.falsegoto || '';
                 [trueDest, falseDest].forEach((dest, isFalse) => {
-                    let targetId = null;
+                    const targetId = resolveTargetNodeId(dest);
                     let wireType = isFalse ? 'tc-false' : 'tc-true';
-                    if (dest.startsWith('ext-group,')) {
-                        targetId = 'ringgroup-' + dest.split(',')[1];
-                    } else if (dest.startsWith('ext-queues,')) {
-                        targetId = 'queue-' + dest.split(',')[1];
-                    } else if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
-                        targetId = 'extension-' + dest.split(',')[1];
-                    }
+                    if (dest.startsWith('ivr-') || dest.startsWith('ext-ivr,')) wireType = 'tc-ivr';
                     if (targetId) {
                         diagramLinks.push({
                             id: 'link-tc-' + tc.timeconditions_id + '-' + (isFalse ? 'false' : 'true') + '-' + targetId,
@@ -5850,6 +6010,44 @@ function isTabAllowed(tabName) {
                         });
                     }
                 });
+            });
+
+            // Link 2.5: IVR -> Options & Destinations
+            ivrs.forEach(ivr => {
+                const entries = Array.isArray(ivr.entries) ? ivr.entries : [];
+                entries.forEach((entry, idx) => {
+                    const targetId = resolveTargetNodeId(entry.dest);
+                    if (targetId) {
+                        diagramLinks.push({
+                            id: `link-ivr-${ivr.id}-entry-${entry.selection}-${idx}`,
+                            source: 'ivr-' + ivr.id,
+                            target: targetId,
+                            type: 'ivr-entry'
+                        });
+                    }
+                });
+                if (ivr.timeout_destination) {
+                    const targetId = resolveTargetNodeId(ivr.timeout_destination);
+                    if (targetId) {
+                        diagramLinks.push({
+                            id: `link-ivr-${ivr.id}-timeout-${targetId}`,
+                            source: 'ivr-' + ivr.id,
+                            target: targetId,
+                            type: 'ivr-timeout'
+                        });
+                    }
+                }
+                if (ivr.invalid_destination) {
+                    const targetId = resolveTargetNodeId(ivr.invalid_destination);
+                    if (targetId) {
+                        diagramLinks.push({
+                            id: `link-ivr-${ivr.id}-invalid-${targetId}`,
+                            source: 'ivr-' + ivr.id,
+                            target: targetId,
+                            type: 'ivr-invalid'
+                        });
+                    }
+                }
             });
 
             // Link 3: Ring Group -> Extensions
@@ -5958,15 +6156,19 @@ function isTabAllowed(tabName) {
                 let strokeColor = '#3f3f46';
                 if (link.type === 'inbound-dest') strokeColor = '#10b981';
                 else if (link.type === 'inbound-tc') strokeColor = '#eab308';
+                else if (link.type === 'inbound-ivr') strokeColor = '#3b82f6';
                 else if (link.type === 'tc-true') strokeColor = '#10b981';
                 else if (link.type === 'tc-false') strokeColor = '#ef4444';
+                else if (link.type === 'tc-ivr') strokeColor = '#3b82f6';
+                else if (link.type === 'ivr-entry') strokeColor = '#3b82f6';
+                else if (link.type === 'ivr-timeout') strokeColor = '#f59e0b';
+                else if (link.type === 'ivr-invalid') strokeColor = '#ef4444';
                 else if (link.type === 'rg-member') strokeColor = '#a855f7';
                 else if (link.type === 'queue-member') strokeColor = '#f59e0b';
                 else if (link.type === 'queue-dest') strokeColor = '#3b82f6';
                 else if (link.type === 'ext-route-restricted') strokeColor = '#f97316';
                 else if (link.type === 'ext-route-global') strokeColor = '#64748b';
                 else if (link.type === 'route-trunk') strokeColor = '#06b6d4';
-
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('id', link.id);
                 path.setAttribute('class', 'diagram-wire transition-all duration-200');
@@ -6007,6 +6209,10 @@ function isTabAllowed(tabName) {
                     accentColorClass = 'border-yellow-500/20 hover:border-yellow-500';
                     iconBgClass = 'bg-yellow-500/10 text-yellow-400';
                     svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+                } else if (node.type === 'ivr') {
+                    accentColorClass = 'border-blue-500/20 hover:border-blue-500';
+                    iconBgClass = 'bg-blue-500/10 text-blue-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>`;
                 } else if (node.type === 'trunk') {
                     accentColorClass = 'border-cyan-500/20 hover:border-cyan-500';
                     iconBgClass = 'bg-cyan-500/10 text-cyan-400';
@@ -6082,6 +6288,32 @@ function isTabAllowed(tabName) {
                             <div class="flex justify-between"><span>${isRtl ? 'الاستراتيجية:' : 'Strategy:'}</span> <span class="text-white">${q.strategy || 'rrmemory'}</span></div>
                             <div class="flex justify-between"><span>${isRtl ? 'الموسيقى:' : 'Music:'}</span> <span class="text-white">${q.musicclass || 'default'}</span></div>
                             <div class="flex justify-between"><span>${isRtl ? 'الانقطاع:' : 'Failover:'}</span> <span class="text-amber-400 truncate max-w-[170px]">${formatDestination(q.dest)}</span></div>
+                        </div>
+                    `;
+                } else if (node.type === 'ivr') {
+                    const ivr = node.data;
+                    const entriesCount = Array.isArray(ivr.entries) ? ivr.entries.length : 0;
+                    const entriesSummary = (ivr.entries || []).map(e => e.selection + ' -> ' + formatDestination(e.dest)).slice(0, 2).join(', ');
+                    const keysLabel = isRtl ? 'المفاتيح:' : 'Keys:';
+                    const keysLineHTML = entriesSummary ? '<div class="flex justify-between"><span>' + keysLabel + '</span> <span class="text-blue-300 truncate max-w-[170px]">' + entriesSummary + '</span></div>' : '';
+
+                    cardBodyHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">
+                                ${svgIcon}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-black text-white truncate">${node.title}</span>
+                                    <span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-blue-950/40 text-blue-400 border border-blue-500/10 ml-auto">${entriesCount} ${isRtl ? 'خيارات' : 'keys'}</span>
+                                </div>
+                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
+                            <div class="flex justify-between"><span>${isRtl ? 'المفتاح المباشر:' : 'Direct Dial:'}</span> <span class="text-white">${ivr.directdial || 'disabled'}</span></div>
+                            ${keysLineHTML}
+                            <div class="flex justify-between"><span>${isRtl ? 'مهلة:' : 'Timeout:'}</span> <span class="text-blue-400 truncate max-w-[170px]">${formatDestination(ivr.timeout_destination)}</span></div>
                         </div>
                     `;
                 } else if (node.type === 'extension') {
@@ -6224,6 +6456,7 @@ function isTabAllowed(tabName) {
                 });
             }
         }
+        window.renderDiagram = renderDiagram;
 
         function highlightNode(nodeId) {
             const connections = document.querySelectorAll('.diagram-wire');
@@ -6471,6 +6704,43 @@ function isTabAllowed(tabName) {
             updateTransform();
         }
 
+        function fitDiagramToScreen() {
+            const svg = document.getElementById('diagramSvg');
+            const canvas = document.getElementById('diagramCanvasContainer');
+            if (!svg || !canvas || !diagramNodesList || !diagramNodesList.length) {
+                resetDiagramZoom();
+                return;
+            }
+            const canvasWidth = canvas.clientWidth || 1000;
+            const canvasHeight = canvas.clientHeight || 700;
+
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            diagramNodesList.forEach(n => {
+                minX = Math.min(minX, n.x);
+                maxX = Math.max(maxX, n.x + 280);
+                minY = Math.min(minY, n.y);
+                maxY = Math.max(maxY, n.y + 135);
+            });
+
+            if (minX === Infinity) { resetDiagramZoom(); return; }
+
+            const bboxWidth = maxX - minX + 100;
+            const bboxHeight = maxY - minY + 100;
+
+            let scaleX = canvasWidth / bboxWidth;
+            let scaleY = canvasHeight / bboxHeight;
+            let scale = Math.min(scaleX, scaleY);
+
+            scale = Math.min(Math.max(scale, 0.55), 1.1);
+
+            zoomScale = scale;
+            panX = (canvasWidth - bboxWidth * zoomScale) / 2 - (minX - 50) * zoomScale;
+            panY = (canvasHeight - bboxHeight * zoomScale) / 2 - (minY - 50) * zoomScale;
+
+            updateTransform();
+        }
+        window.fitDiagramToScreen = fitDiagramToScreen;
+
         function resetDiagramZoom() {
             zoomScale = 1.0;
             panX = 0;
@@ -6491,15 +6761,17 @@ function isTabAllowed(tabName) {
 
         function fetchTimeGroups() {
             return fetch('/api/config/timegroups')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
-                    if (!data.success || !data.timegroups) return;
+                    if (!data || !data.success || !data.timegroups) return;
                     loadedTimeGroupsList = data.timegroups;
-                    
-                    // Populate time conditions modal select
-                    const select = document.getElementById('tcTimeGroup');
+                    const select = document.getElementById('tcTimeGroupId');
                     if (select) {
-                        select.innerHTML = '<option value="">-- Choose Time Group --</option>';
+                        select.innerHTML = '<option value="">' + (isRtl ? '-- اختر مجموعة الوقت --' : '-- Select Time Group --') + '</option>';
                         data.timegroups.forEach(tg => {
                             const opt = document.createElement('option');
                             opt.value = tg.id;
@@ -6882,16 +7154,19 @@ function isTabAllowed(tabName) {
 
         function fetchTimeConditions() {
             return fetch('/api/config/timeconditions')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
-                    if (!data.success || !data.timeconditions) return;
+                    if (!data || !data.success || !data.timeconditions) return;
                     loadedTimeConditionsList = data.timeconditions;
-                    
                     const tbody = document.getElementById('timeconditions-table-body');
                     if (!tbody) return;
                     tbody.innerHTML = '';
                     if (data.timeconditions.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-[var(--text-muted)]">No time conditions found.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-[var(--text-muted)]">No Time Conditions found.</td></tr>';
                         return;
                     }
 
@@ -7015,16 +7290,19 @@ function isTabAllowed(tabName) {
 
         function fetchAnnouncements() {
             return fetch('/api/config/announcements')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
-                    if (!data.success || !data.announcements) return;
+                    if (!data || !data.success || !data.announcements) return;
                     loadedAnnouncementsList = data.announcements;
-
                     const tbody = document.getElementById('announcements-table-body');
                     if (!tbody) return;
                     tbody.innerHTML = '';
                     if (data.announcements.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-[var(--text-muted)]">No announcements found.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-[var(--text-muted)]">No Announcements found.</td></tr>';
                         return;
                     }
 
@@ -7233,35 +7511,6 @@ function isTabAllowed(tabName) {
                     }
                 }
 
-                let denoiseStatus = { rx: false, tx: false };
-                try {
-                    const dnRes = await fetch('/api/config/modem/denoise');
-                    const dnData = await dnRes.json();
-                    if (dnData.success) denoiseStatus = { rx: Boolean(dnData.rx), tx: Boolean(dnData.tx) };
-                } catch (_) {}
-                window.currentDenoiseState = denoiseStatus;
-
-                const rxBtn = document.getElementById('toggleDenoiseRxBtn');
-                if (rxBtn) {
-                    if (denoiseStatus.rx) {
-                        rxBtn.className = 'px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30';
-                        rxBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>' + (isRtl ? 'عزل ضوضاء الاستقبال (Rx Denoise): مفعل' : 'Rx Denoise: ON') + '</span>';
-                    } else {
-                        rxBtn.className = 'px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-red-500/10 text-red-400 border-red-500/30 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/30';
-                        rxBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-400"></span><span>' + (isRtl ? 'عزل ضوضاء الاستقبال (Rx Denoise): معطل' : 'Rx Denoise: OFF') + '</span>';
-                    }
-                }
-
-                const txBtn = document.getElementById('toggleDenoiseTxBtn');
-                if (txBtn) {
-                    if (denoiseStatus.tx) {
-                        txBtn.className = 'px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-sky-500/10 text-sky-400 border-sky-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30';
-                        txBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span><span>' + (isRtl ? 'عزل ضوضاء الإرسال (Tx Denoise): مفعل' : 'Tx Denoise: ON') + '</span>';
-                    } else {
-                        txBtn.className = 'px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-red-500/10 text-red-400 border-red-500/30 hover:bg-sky-500/10 hover:text-sky-400 hover:border-sky-500/30';
-                        txBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-400"></span><span>' + (isRtl ? 'عزل ضوضاء الإرسال (Tx Denoise): معطل' : 'Tx Denoise: OFF') + '</span>';
-                    }
-                }
 
                 const res = await fetch('/api/config/modem');
                 const data = await res.json();
@@ -7466,31 +7715,6 @@ function isTabAllowed(tabName) {
             }
         }
         window.toggleJitterBuffer = toggleJitterBuffer;
-        async function toggleDenoise(direction) {
-            const currentState = window.currentDenoiseState || { rx: false, tx: false };
-            const nextRx = direction === 'rx' ? !currentState.rx : currentState.rx;
-            const nextTx = direction === 'tx' ? !currentState.tx : currentState.tx;
-
-            try {
-                const res = await fetch('/api/config/modem/denoise', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ rx: nextRx, tx: nextTx })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    window.currentDenoiseState = { rx: data.rx, tx: data.tx };
-                    showToast(data.message || 'DSP Noise Suppression settings updated!', 'success');
-                    fetchModemConfig();
-                } else {
-                    showToast(data.error || 'Failed to update noise suppression.', 'error');
-                }
-            } catch (e) {
-                showToast('Error updating noise suppression: ' + e.message, 'error');
-            }
-        }
-
-        window.toggleDenoise = toggleDenoise;
         async function fetchRtcpDiagnostics() {
             const container = document.getElementById('rtcpDiagnosticsContainer');
             const badge = document.getElementById('rtcpActiveBadge');
@@ -7581,6 +7805,236 @@ function isTabAllowed(tabName) {
             }
         }
         window.fetchRtcpDiagnostics = fetchRtcpDiagnostics;
+        // =========================================================================
+        // --- TTY TERMINAL SHELL MODULE WITH CLIPBOARD PASTE ---
+        // =========================================================================
+        let ttySocket = null;
+        let ttyXterm = null;
+        let ttyFitAddon = null;
+        let isTtyInitialized = false;
+
+        function initTtyTerminal() {
+            if (isTtyInitialized) {
+                if (ttyFitAddon) try { ttyFitAddon.fit(); } catch(_) {}
+                return;
+            }
+            isTtyInitialized = true;
+
+            const container = document.getElementById('terminalContainer');
+            if (!container) return;
+
+            if (typeof io !== 'undefined') {
+                ttySocket = io();
+                window.ttySocket = ttySocket;
+            } else {
+                updateTtyStatus(false, 'Socket.IO unavailable');
+                return;
+            }
+
+            if (typeof window.Terminal !== 'undefined') {
+                ttyXterm = new window.Terminal({
+                    cursorStyle: 'block',
+                    fontFamily: '"JetBrains Mono", "Courier New", monospace',
+                    fontSize: 13,
+                    theme: {
+                        background: '#09090b',
+                        foreground: '#34d399',
+                        cursor: '#10b981',
+                        selectionBackground: 'rgba(16, 185, 129, 0.3)',
+                        black: '#18181b',
+                        red: '#f87171',
+                        green: '#34d399',
+                        yellow: '#fbbf24',
+                        blue: '#60a5fa',
+                        magenta: '#c084fc',
+                        cyan: '#22d3ee',
+                        white: '#f4f4f5'
+                    }
+                });
+                window.ttyXterm = ttyXterm;
+                if (typeof window.FitAddon !== 'undefined' && window.FitAddon.FitAddon) {
+                    ttyFitAddon = new window.FitAddon.FitAddon();
+                    ttyXterm.loadAddon(ttyFitAddon);
+                }
+
+                ttyXterm.open(container);
+                if (ttyFitAddon) try { ttyFitAddon.fit(); } catch(_) {}
+
+                ttyXterm.attachCustomKeyEventHandler((arg) => {
+                    if ((arg.ctrlKey || arg.metaKey) && arg.code === 'KeyC' && arg.type === 'keydown') {
+                        if (ttyXterm.hasSelection()) {
+                            const selected = ttyXterm.getSelection();
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                navigator.clipboard.writeText(selected);
+                                showToast(isRtl ? 'تم نسخ النص إلى الحافظة' : 'Copied selected text to clipboard', 'success');
+                            }
+                            return false;
+                        }
+                    }
+                    if ((arg.ctrlKey || arg.metaKey) && arg.code === 'KeyV' && arg.type === 'keydown') {
+                        pasteClipboardToTerminal();
+                        return false;
+                    }
+                    return true;
+                });
+                ttyXterm.onSelectionChange(() => {
+                    const text = ttyXterm.getSelection();
+                    if (text && navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(text).catch(() => {});
+                    }
+                });
+
+                ttyXterm.onData(data => {
+                    if (ttySocket) ttySocket.emit('tty_input', data);
+                });
+                window.addEventListener('resize', () => {
+                    if (ttyFitAddon && ttyXterm) {
+                        try {
+                            ttyFitAddon.fit();
+                            ttySocket.emit('tty_resize', { cols: ttyXterm.cols, rows: ttyXterm.rows });
+                        } catch(_) {}
+                    }
+                });
+            } else {
+                container.innerHTML = '<div id="ttyOutput" class="whitespace-pre-wrap font-mono text-xs leading-relaxed text-emerald-400 p-2"></div>';
+                container.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        if (ttySocket) ttySocket.emit('tty_input', '\r');
+                    } else if (e.key === 'Backspace') {
+                        if (ttySocket) ttySocket.emit('tty_input', '\b');
+                    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+                        if (ttySocket) ttySocket.emit('tty_input', e.key);
+                    }
+                });
+            }
+
+            const handlePasteEvent = (e) => {
+                e.preventDefault();
+                const pasteText = (e.clipboardData || window.clipboardData).getData('text');
+                if (pasteText && ttySocket) {
+                    ttySocket.emit('tty_input', pasteText);
+                }
+            };
+            container.addEventListener('paste', handlePasteEvent);
+            if (ttyXterm && ttyXterm.element) {
+                ttyXterm.element.addEventListener('paste', handlePasteEvent);
+            }
+            ttySocket.on('tty_output', (data) => {
+                if (ttyXterm) {
+                    ttyXterm.write(data);
+                } else {
+                    const output = document.getElementById('ttyOutput');
+                    if (output) {
+                        output.textContent += data;
+                        container.scrollTop = container.scrollHeight;
+                    }
+                }
+            });
+
+            ttySocket.on('tty_status', (status) => {
+                if (status && status.connected) {
+                    updateTtyStatus(true, 'Connected (PID: ' + (status.pid || 'live') + ')');
+                } else {
+                    updateTtyStatus(false, 'Disconnected');
+                }
+            });
+
+            const cols = ttyXterm ? ttyXterm.cols : 100;
+            const rows = ttyXterm ? ttyXterm.rows : 30;
+            ttySocket.emit('tty_init', { cols, rows });
+        }
+
+        function updateTtyStatus(connected, text) {
+            const badge = document.getElementById('ttyStatusBadge');
+            const dot = document.getElementById('ttyStatusDot');
+            const txt = document.getElementById('ttyStatusText');
+            if (!badge || !dot || !txt) return;
+            txt.textContent = text;
+            if (connected) {
+                badge.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5';
+                dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+            } else {
+                badge.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 flex items-center gap-1.5';
+                dot.className = 'w-2 h-2 rounded-full bg-red-400';
+            }
+        }
+
+        async function copySelectedTextFromTerminal() {
+            try {
+                let selected = '';
+                if (ttyXterm && ttyXterm.hasSelection()) {
+                    selected = ttyXterm.getSelection();
+                } else if (window.getSelection) {
+                    selected = window.getSelection().toString();
+                }
+                if (!selected) {
+                    showToast(isRtl ? 'يرجى تحديد النص في الطرفية لنسخه' : 'Please select text in the terminal to copy', 'info');
+                    return;
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(selected);
+                    showToast(isRtl ? 'تم نسخ النص إلى الحافظة' : 'Copied selected text to clipboard', 'success');
+                } else {
+                    showToast(isRtl ? 'تعذر الوصول إلى الحافظة' : 'Clipboard access restricted', 'error');
+                }
+            } catch(err) {
+                showToast(isRtl ? 'تعذر النسخ' : 'Failed to copy text', 'error');
+            }
+        }
+        window.copySelectedTextFromTerminal = copySelectedTextFromTerminal;
+
+        async function pasteClipboardToTerminal() {
+            try {
+                let pasteText = '';
+                if (navigator.clipboard && navigator.clipboard.readText) {
+                    pasteText = await navigator.clipboard.readText();
+                }
+                if (!pasteText) {
+                    pasteText = prompt(isRtl ? 'قم بلصق النص هنا لإرساله إلى الطرفية:' : 'Paste text here to send to TTY terminal:');
+                }
+                if (pasteText && ttySocket) {
+                    ttySocket.emit('tty_input', pasteText);
+                    showToast(isRtl ? 'تم إرسال النص إلى الطرفية' : 'Pasted text sent to terminal', 'success');
+                }
+            } catch(err) {
+                const pasteText = prompt(isRtl ? 'قم بلصق النص هنا لإرساله إلى الطرفية:' : 'Paste text here to send to TTY terminal:');
+                if (pasteText && ttySocket) {
+                    ttySocket.emit('tty_input', pasteText);
+                    showToast(isRtl ? 'تم إرسال النص إلى الطرفية' : 'Pasted text sent to terminal', 'success');
+                }
+            }
+        }
+        window.pasteClipboardToTerminal = pasteClipboardToTerminal;
+
+        function clearTerminalScreen() {
+            if (ttyXterm) {
+                ttyXterm.clear();
+            } else {
+                const output = document.getElementById('ttyOutput');
+                if (output) output.textContent = '';
+            }
+            if (ttySocket) ttySocket.emit('tty_input', '\x0c');
+        }
+        window.clearTerminalScreen = clearTerminalScreen;
+
+        function restartTtyShell() {
+            if (ttyXterm) ttyXterm.clear();
+            const cols = ttyXterm ? ttyXterm.cols : 100;
+            const rows = ttyXterm ? ttyXterm.rows : 30;
+            if (ttySocket) ttySocket.emit('tty_restart', { cols, rows });
+        }
+        window.restartTtyShell = restartTtyShell;
+
+        function runLastTtyCommand() {
+            if (ttySocket) {
+                ttySocket.emit('tty_input', '\x1b[A\r');
+                showToast(isRtl ? 'تم إرسال الأمر السابق' : 'Executed last command (Up + Enter)', 'info');
+            } else {
+                showToast(isRtl ? 'الطرفية غير متصلة' : 'Terminal not connected', 'error');
+            }
+        }
+        window.runLastTtyCommand = runLastTtyCommand;
+        window.restartTtyShell = restartTtyShell;
     </script>
     </div>
 </body>

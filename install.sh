@@ -502,15 +502,23 @@ fi
 echo "  [10c] Configuring and applying dongle.conf..."
 NUM_DONGLES=1
 if [ -c /dev/tty ]; then
-    printf "Enter the number of GSM dongles to activate on this server (1-25) [default: 1]: " > /dev/tty 2>/dev/null || true
-    if read -t 15 -r user_val < /dev/tty 2>/dev/null; then
-        user_val=$(echo "$user_val" | tr -d '\r\n ')
-        if [[ "$user_val" =~ ^[0-9]+$ ]] && [ "$user_val" -ge 1 ] && [ "$user_val" -le 25 ]; then
-            NUM_DONGLES=$user_val
-        elif [ -z "$user_val" ]; then
-            NUM_DONGLES=1
+    while true; do
+        printf "Enter the number of GSM dongles to activate on this server (1-25) [default: 1]: " > /dev/tty 2>/dev/null || true
+        if read -r user_val < /dev/tty 2>/dev/null; then
+            user_val=$(echo "$user_val" | tr -d '\r\n ')
+            if [[ "$user_val" =~ ^[0-9]+$ ]] && [ "$user_val" -ge 1 ] && [ "$user_val" -le 25 ]; then
+                NUM_DONGLES=$user_val
+                break
+            elif [ -z "$user_val" ]; then
+                NUM_DONGLES=1
+                break
+            else
+                echo "Invalid input '$user_val'. Please enter a number between 1 and 25." > /dev/tty 2>/dev/null || true
+            fi
+        else
+            break
         fi
-    fi
+    done
 fi
 
 echo "  Configuring $NUM_DONGLES dongle(s)..."

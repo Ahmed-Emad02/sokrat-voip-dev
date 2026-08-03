@@ -129,20 +129,21 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/photos', express.static(path.join(__dirname, 'public', 'photos')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// --- SESSION CONFIGURATION ---
-app.use(session({
+const sessionMiddleware = session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     rolling: true,
     cookie: { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
-}));
+});
+app.use(sessionMiddleware);
+io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
 
 // --- DATABASE INIT & AUTO-PROVISION ---
 const ALL_TABS = [
     'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'softphone', 'contacts', 'users', 'config', 'storage',
     'config-extensions', 'config-ringgroups', 'config-queues', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram',
-    'config-timegroups', 'config-timeconditions', 'config-announcements', 'config-modem', 'config-dongles'
+    'config-timegroups', 'config-timeconditions', 'config-announcements', 'config-modem', 'config-dongles', 'config-terminal'
 ];
 
 async function initAuthDb() {
@@ -325,7 +326,7 @@ async function initAuthDb() {
     try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN auto_backup_schedule VARCHAR(50) DEFAULT \'daily\''); } catch (_) {}
     try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN last_backup_at DATETIME DEFAULT NULL'); } catch (_) {}
     try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN last_backup_status VARCHAR(50) DEFAULT NULL'); } catch (_) {}
-    // Seed default row if missing
+    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN queue_provisioned TINYINT(1) DEFAULT 0'); } catch (_) {}
     await conn.execute('INSERT IGNORE INTO storage_settings (id) VALUES (1)');
 
     // Default dispositions
@@ -415,60 +416,66 @@ async function initAuthDb() {
         console.log('AUTH: Dashboard users table ready, existing users found');
     }
 
-    // Auto-provision default ACD queue 300 (autodialer-queue) if no queues exist
+    // Auto-provision default ACD queue 300 (autodialer-queue) ONLY once on initial setup if no queues exist
     try {
-        const [qCount] = await conn.execute('SELECT COUNT(*) AS cnt FROM `asterisk`.`queues_config`');
-        if (qCount[0].cnt === 0) {
-            const queueExtension = '300';
-            const queueName = 'autodialer-queue';
-            const failDestination = 'app-blackhole,hangup,1';
+        const [sRows] = await conn.execute('SELECT queue_provisioned FROM storage_settings WHERE id = 1');
+        const isProvisioned = sRows.length > 0 && sRows[0].queue_provisioned === 1;
 
-            await conn.beginTransaction();
-            try {
-                await conn.execute(`
-                    INSERT INTO \`asterisk\`.\`queues_config\`
-                    (extension, descr, grppre, alertinfo, joinannounce_id, ringing, agentannounce_id, maxwait, password, ivr_id, callback_id, dest, destcontinue, cwignore, qregex, queuewait, use_queue_context, togglehint, qnoanswer, callconfirm, callconfirm_id, monitor_type, monitor_heard, monitor_spoken)
-                    VALUES (?, ?, '', '', 0, 0, 0, '0', '', 'none', 'none', ?, ?, 0, '', 0, 0, 0, 0, 0, 0, '', 0, 0)
-                `, [queueExtension, queueName, failDestination, failDestination]);
+        if (!isProvisioned) {
+            const [qCount] = await conn.execute('SELECT COUNT(*) AS cnt FROM `asterisk`.`queues_config`');
+            if (qCount[0].cnt === 0) {
+                const queueExtension = '300';
+                const queueName = 'autodialer-queue';
+                const failDestination = 'app-blackhole,hangup,1';
 
-                const [deviceRows] = await conn.execute(
-                    'SELECT dial FROM `asterisk`.`devices` WHERE id = ?',
-                    ['101']
-                );
-                const memberInterface = deviceRows[0]?.dial || 'SIP/101';
-                const queueDetails = [
-                    ['strategy', 'ringall'],
-                    ['autofill', 'yes'],
-                    ['ringinuse', 'yes'],
-                    ['musicclass', 'default'],
-                    ['music', 'default'],
-                    ['timeout', '15'],
-                    ['retry', '5'],
-                    ['maxwait', '0'],
-                    ['goto', failDestination],
-                    ['servicelevel', '30'],
-                    ['joinempty', 'yes'],
-                    ['leavewhenempty', 'no'],
-                    ['monitor-join', 'yes'],
-                    ['wrapuptime', '0'],
-                    ['maxlen', '0'],
-                    ['member', memberInterface]
-                ];
+                await conn.beginTransaction();
+                try {
+                    await conn.execute(`
+                        INSERT INTO \`asterisk\`.\`queues_config\`
+                        (extension, descr, grppre, alertinfo, joinannounce_id, ringing, agentannounce_id, maxwait, password, ivr_id, callback_id, dest, destcontinue, cwignore, qregex, queuewait, use_queue_context, togglehint, qnoanswer, callconfirm, callconfirm_id, monitor_type, monitor_heard, monitor_spoken)
+                        VALUES (?, ?, '', '', 0, 0, 0, '0', '', 'none', 'none', ?, ?, 0, '', 0, 0, 0, 0, 0, 0, '', 0, 0)
+                    `, [queueExtension, queueName, failDestination, failDestination]);
 
-                for (const [keyword, data] of queueDetails) {
-                    await conn.execute(
-                        'INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, 0)',
-                        [queueExtension, keyword, data]
+                    const [deviceRows] = await conn.execute(
+                        'SELECT dial FROM `asterisk`.`devices` WHERE id = ?',
+                        ['101']
                     );
-                }
+                    const memberInterface = deviceRows[0]?.dial || 'SIP/101';
+                    const queueDetails = [
+                        ['strategy', 'ringall'],
+                        ['autofill', 'yes'],
+                        ['ringinuse', 'yes'],
+                        ['musicclass', 'default'],
+                        ['music', 'default'],
+                        ['timeout', '15'],
+                        ['retry', '5'],
+                        ['maxwait', '0'],
+                        ['goto', failDestination],
+                        ['servicelevel', '30'],
+                        ['joinempty', 'yes'],
+                        ['leavewhenempty', 'no'],
+                        ['monitor-join', 'yes'],
+                        ['wrapuptime', '0'],
+                        ['maxlen', '0'],
+                        ['member', memberInterface]
+                    ];
 
-                await conn.commit();
-                reloadPbxConfig();
-                console.log(`QUEUE: Auto-provisioned default ACD queue ${queueExtension} (${queueName}) with member ${memberInterface}`);
-            } catch (error) {
-                await conn.rollback();
-                throw error;
+                    for (const [keyword, data] of queueDetails) {
+                        await conn.execute(
+                            'INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, 0)',
+                            [queueExtension, keyword, data]
+                        );
+                    }
+
+                    await conn.commit();
+                    reloadPbxConfig();
+                    console.log(`QUEUE: Auto-provisioned default ACD queue ${queueExtension} (${queueName}) with member ${memberInterface}`);
+                } catch (error) {
+                    await conn.rollback();
+                    throw error;
+                }
             }
+            await conn.execute('UPDATE storage_settings SET queue_provisioned = 1 WHERE id = 1');
         }
     } catch (qErr) {
         console.error('QUEUE auto-provision error:', qErr.message);
@@ -525,9 +532,16 @@ async function reconcileDongleMappings() {
 
         const [dbRows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles`');
 
-        // Conflict check / logging without deleting live database records
+        const confDongles = parseDongleConfGain().dongles;
+        const validSlotNames = new Set([...Object.keys(liveDongles), ...Object.keys(confDongles)]);
+
+        // Conflict check & automatic cleanup of stale/orphaned dongle entries
         for (const row of dbRows) {
-            if (!liveDongles[row.dongle_name] && row.imsi) {
+            if (!validSlotNames.has(row.dongle_name)) {
+                console.log(`DONGLE-RECONCILE: Removing stale dongle slot '${row.dongle_name}' (not in dongle.conf or live devices)`);
+                await pool.query('DELETE FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?', [row.dongle_name]);
+                await execFileAsync(ASTERISK_BIN, ['-rx', `database del dongle_map ${row.dongle_name}`]);
+            } else if (!liveDongles[row.dongle_name] && row.imsi) {
                 const activeWithSameImsi = Object.values(liveDongles).find(l => l.imsi === row.imsi);
                 if (activeWithSameImsi) {
                     console.warn(`DONGLE-RECONCILE: Inactive row '${row.dongle_name}' shares IMSI ${row.imsi} with active '${activeWithSameImsi.name}'. Active slot takes precedence.`);
@@ -1472,8 +1486,98 @@ io.on('connection', async (socket) => {
     socket.emit('peerStatus', peerStatus);
     socket.emit('peerIPs', peerIPs);
     socket.emit('initialTrunks', await getTrunkStatusMap());
-});
 
+    let ttyProcess = null;
+
+    function startTtyProcess(data) {
+        if (ttyProcess) {
+            try { ttyProcess.kill('SIGKILL'); } catch (_) {}
+            ttyProcess = null;
+        }
+
+        const cols = (data && Number.isInteger(data.cols) && data.cols > 10) ? data.cols : 100;
+        const rows = (data && Number.isInteger(data.rows) && data.rows > 5) ? data.rows : 30;
+
+        try {
+            ttyProcess = spawn('script', ['-q', '-c', 'bash -i', '/dev/null'], {
+                cwd: process.env.HOME || '/root',
+                env: {
+                    ...process.env,
+                    TERM: 'xterm-256color',
+                    HISTCONTROL: 'ignoreboth',
+                    COLUMNS: String(cols),
+                    LINES: String(rows)
+                }
+            });
+
+            socket.emit('tty_status', { connected: true, pid: ttyProcess.pid });
+
+            ttyProcess.stdout.on('data', (chunk) => {
+                socket.emit('tty_output', chunk.toString('utf8'));
+            });
+
+            ttyProcess.stderr.on('data', (chunk) => {
+                socket.emit('tty_output', chunk.toString('utf8'));
+            });
+
+            ttyProcess.on('exit', (code) => {
+                socket.emit('tty_output', `\r\n\x1b[33m[TTY Shell process exited with code ${code}]\x1b[0m\r\n`);
+                socket.emit('tty_status', { connected: false });
+                ttyProcess = null;
+            });
+
+            ttyProcess.on('error', (err) => {
+                socket.emit('tty_output', `\r\n\x1b[31m[TTY Shell spawn error: ${err.message}]\x1b[0m\r\n`);
+                socket.emit('tty_status', { connected: false });
+                ttyProcess = null;
+            });
+        } catch (err) {
+            socket.emit('tty_output', `\r\n\x1b[31m[Failed to launch TTY Shell: ${err.message}]\x1b[0m\r\n`);
+            socket.emit('tty_status', { connected: false });
+        }
+    }
+
+    socket.on('tty_init', (data) => {
+        const req = socket.request;
+        const session = req ? req.session : null;
+        const isRootUser = Boolean(session && (session.isRoot || session.username === 'root'));
+        if (!session || !isRootUser) {
+            socket.emit('tty_output', '\r\n\x1b[31m[ERROR] Unauthorized: TTY Terminal access is restricted strictly to root user only.\x1b[0m\r\n');
+            return;
+        }
+        startTtyProcess(data);
+    });
+    socket.on('tty_input', (inputData) => {
+        if (ttyProcess && ttyProcess.stdin && ttyProcess.stdin.writable) {
+            try {
+                ttyProcess.stdin.write(String(inputData));
+            } catch (_) {}
+        }
+    });
+
+    socket.on('tty_resize', (dim) => {
+        if (ttyProcess && ttyProcess.stdin && ttyProcess.stdin.writable && dim && dim.cols && dim.rows) {
+            try {
+                ttyProcess.stdin.write(` stty cols ${dim.cols} rows ${dim.rows} >/dev/null 2>&1\n`);
+            } catch (_) {}
+        }
+    });
+
+    socket.on('tty_restart', (data) => {
+        const req = socket.request;
+        const session = req ? req.session : null;
+        const isRootUser = Boolean(session && (session.isRoot || session.username === 'root'));
+        if (!session || !isRootUser) return;
+        socket.emit('tty_output', '\r\n\x1b[36m[Restarting TTY Shell...]\x1b[0m\r\n');
+        startTtyProcess(data);
+    });
+    socket.on('disconnect', () => {
+        if (ttyProcess) {
+            try { ttyProcess.kill('SIGKILL'); } catch (_) {}
+            ttyProcess = null;
+        }
+    });
+});
 
 // ── Dongle Auto-Heal: restart once if stuck in "Not Initialized" for >3s ──
 const dongleNotInitTimestamps = {};
@@ -4545,12 +4649,14 @@ app.post('/api/contacts/delete', async (req, res) => {
 // GET /config - render Configuration Management page
 app.get('/config', requireAuth, (req, res) => {
     const currentLang = res.locals.currentLang || 'en';
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === 'root'));
     res.render('config', {
         moment,
         currentPage: '/config',
         currentLang,
         isRtl: currentLang === 'ar',
-        isSuperAdmin: isSuperAdmin(req)
+        isSuperAdmin: isSuperAdmin(req),
+        isRoot
     });
 });
 // GET /dialer - render Auto-Dialer Center view
@@ -6745,12 +6851,25 @@ app.get('/api/config/diagram', async (req, res) => {
             ORDER BY tc.timeconditions_id ASC
         `);
 
-        // Query IVR Menus
-        const [ivrs] = await pool.query(`
+        // Query IVR Menus & Entries
+        const [ivrsRows] = await pool.query(`
             SELECT id, name, description, announcement, directdial, timeout_destination, invalid_destination
             FROM \`asterisk\`.\`ivr_details\`
             ORDER BY id ASC
         `);
+        const [ivrEntriesRows] = await pool.query(`
+            SELECT ivr_id, selection, dest FROM \`asterisk\`.\`ivr_entries\`
+            ORDER BY ivr_id ASC, selection ASC
+        `);
+        const ivrEntriesMap = {};
+        for (const row of ivrEntriesRows) {
+            if (!ivrEntriesMap[row.ivr_id]) ivrEntriesMap[row.ivr_id] = [];
+            ivrEntriesMap[row.ivr_id].push({ selection: row.selection, dest: row.dest });
+        }
+        const ivrs = ivrsRows.map(ivr => ({
+            ...ivr,
+            entries: ivrEntriesMap[ivr.id] || []
+        }));
 
         // Query Outbound Routes
         const [outboundRows] = await pool.query(`
@@ -7305,11 +7424,15 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
             if (r.extension) routeMap[r.extension.trim()] = r;
         }
 
-        const allDongleNames = new Set([
-            ...dbRows.map(r => r.dongle_name),
-            ...Object.keys(liveMap),
-            ...Object.keys(dongleMap)
-        ]);
+        const confDongles = parseDongleConfGain().dongles;
+        const validSlotNames = new Set([...Object.keys(liveMap), ...Object.keys(confDongles)]);
+        const allDongleNames = validSlotNames.size > 0
+            ? validSlotNames
+            : new Set([
+                ...dbRows.map(r => r.dongle_name),
+                ...Object.keys(liveMap),
+                ...Object.keys(dongleMap)
+            ]);
 
         const mappings = [];
         for (const dName of Array.from(allDongleNames)) {
