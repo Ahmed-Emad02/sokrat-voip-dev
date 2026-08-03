@@ -1097,6 +1097,8 @@ function isTabAllowed(tabName) {
                     <!-- Rendered dynamically by fetchRtcpDiagnostics() -->
                 </div>
             </div>
+        </div>
+        <% } %>
         <!-- 15. DYNAMIC GSM DID MAPPINGS TAB PANEL -->
         <div id="section-dongles" class="tab-section hidden space-y-6">
                 <div>
@@ -2936,6 +2938,7 @@ function isTabAllowed(tabName) {
         // --- GSM DYNAMIC DID MAPPINGS SUBTAB ---
         async function fetchDongleMappingsTab() {
             try {
+                const isRtl = document.documentElement.dir === 'rtl';
                 const res = await fetch('/api/config/dongle-mappings');
                 const data = await res.json();
                 if (!data.success) {
@@ -2960,19 +2963,18 @@ function isTabAllowed(tabName) {
                     const isConnected = m.state && !m.state.toLowerCase().includes('disconnected') && !m.state.toLowerCase().includes('not');
                     const stateBadge = isConnected
                         ? '<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">' + m.state + '</span>'
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-section').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.config-tab-btn').forEach(btn => {
-                btn.classList.remove('config-tab-active');
-                btn.classList.add('config-tab-inactive');
-            });
-            const sec = document.getElementById('section-' + tabId);
-            if (sec) sec.classList.remove('hidden');
-            const btn = document.getElementById('tab-btn-' + tabId);
-            if (btn) {
-                btn.classList.remove('config-tab-inactive');
-                btn.classList.add('config-tab-active');
-            }
+                        : '<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">' + m.state + '</span>';
+
+                    const configuredDidDisplay = m.phoneNumber
+                        ? '<div class="space-y-0.5"><span class="font-mono font-bold text-emerald-400 text-sm">' + m.phoneNumber + '</span><div class="text-[10px] text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>Dynamic AstDB Active</div></div>'
+                        : '<span class="text-zinc-500 italic text-[11px]">Unconfigured</span>';
+
+                    const simReportDisplay = (m.simNumber && m.simNumber !== 'Unknown' && m.simNumber !== '-')
+                        ? '<span class="font-mono text-white">' + m.simNumber + '</span>'
+                        : (m.phoneNumber
+                            ? '<span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20" title="SIM memory empty; Asterisk routes dynamically via AstDB dongle_map">SIM Unregistered (Dynamic Active)</span>'
+                            : '<span class="px-2 py-0.5 text-[10px] font-mono rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Unknown</span>');
+
                     const astdbDongleOk = m.astdb.dongle_map === m.phoneNumber && m.phoneNumber !== '';
                     const astdbBadge = astdbDongleOk
                         ? '<span class="px-2 py-0.5 text-[10px] font-mono rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">dongle_map: OK</span>'
@@ -3016,6 +3018,7 @@ function isTabAllowed(tabName) {
         window.fetchDongleMappingsTab = fetchDongleMappingsTab;
 
         async function editDongleTabDid(dongleId, imsi, currentVal) {
+            const isRtl = document.documentElement.dir === 'rtl';
             const newNum = prompt(isRtl ? `أدخل رقم DID المعرف لـ ${dongleId}:` : `Enter configured DID for ${dongleId}:`, currentVal);
             if (newNum === null) return;
             const trimmed = newNum.trim();
@@ -3043,6 +3046,7 @@ function isTabAllowed(tabName) {
         window.editDongleTabDid = editDongleTabDid;
 
         async function reconcileDonglesNow() {
+            const isRtl = document.documentElement.dir === 'rtl';
             showToast(isRtl ? 'جاري إعادة مطابقة AstDB...' : 'Reconciling AstDB dongle mappings...', 'info');
             try {
                 const res = await fetch('/api/gsm-dongles/redetect', { method: 'POST' });
@@ -3092,11 +3096,13 @@ function isTabAllowed(tabName) {
                 btn.classList.remove('config-tab-active');
                 btn.classList.add('config-tab-inactive');
             });
-            document.getElementById('section-' + tabId).classList.remove('hidden');
+            const sec = document.getElementById('section-' + tabId);
+            if (sec) sec.classList.remove('hidden');
             const btn = document.getElementById('tab-btn-' + tabId);
-            btn.classList.remove('config-tab-inactive');
-            btn.classList.add('config-tab-active');
-
+            if (btn) {
+                btn.classList.remove('config-tab-inactive');
+                btn.classList.add('config-tab-active');
+            }
             stopRtcpTimer();
             if (tabId === 'extensions') fetchExtensions();
             if (tabId === 'ringgroups') { fetchRecordings(); fetchRingGroups(); fetchExtensions(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); }
