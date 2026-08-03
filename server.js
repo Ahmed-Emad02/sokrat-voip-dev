@@ -3770,16 +3770,16 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
             await detectDonglesAndSetTrunkCID();
         } catch (_) {}
 
-        // 3. Program SIM card memory via AT commands with 2s delays between commands
+        // 3. Program SIM card memory via AT commands with 2s delays between commands & restart dongle
         const targetDongle = dId || 'dongle0';
         const cmdSteps = [
             `dongle cmd ${targetDongle} AT+CPBS=\\"ON\\"`,
-            `dongle cmd ${targetDongle} AT+CPBW=1,\\"${normNumber}\\",145`
+            `dongle cmd ${targetDongle} AT+CPBW=1,\\"${normNumber}\\",145`,
+            `dongle restart now ${targetDongle}`
         ];
 
         const results = [];
         let allSuccess = true;
-
         for (let i = 0; i < cmdSteps.length; i++) {
             const stepCmd = cmdSteps[i];
             try {
