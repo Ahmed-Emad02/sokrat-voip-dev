@@ -3491,7 +3491,7 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
             if (isNotConnected) {
                 row.Number = 'Unknown';
             } else {
-                const mapped = (row.IMSI && astDbMappings[row.IMSI]) || (row.IMEI && astDbMappings[row.IMEI]) || (row.ID && astDbMappings[row.ID]) || null;
+                const mapped = (row.ID && astDbMappings[row.ID]) || (row.IMSI && astDbMappings[row.IMSI]) || (row.IMEI && astDbMappings[row.IMEI]) || null;
                 if (mapped && (!row.Number || row.Number === 'Unknown' || row.Number === '-')) {
                     row.Number = mapped;
                 }
@@ -3560,9 +3560,9 @@ function getAstDbNumbers(callback) {
                 pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` WHERE phone_number IS NOT NULL AND phone_number != ""')
                     .then(([rows]) => {
                         rows.forEach(r => {
-                            if (r.imsi && !mappings[r.imsi]) mappings[r.imsi] = r.phone_number;
-                            if (r.imei && !mappings[r.imei]) mappings[r.imei] = r.phone_number;
-                            if (r.dongle_name && !mappings[r.dongle_name]) mappings[r.dongle_name] = r.phone_number;
+                            if (r.dongle_name && r.phone_number) mappings[r.dongle_name] = r.phone_number;
+                            if (r.imsi && r.phone_number) mappings[r.imsi] = r.phone_number;
+                            if (r.imei && r.phone_number) mappings[r.imei] = r.phone_number;
                         });
                         callback(mappings);
                     })

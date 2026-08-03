@@ -1534,12 +1534,17 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             // Edit SIM phone number mapping action
             window.editSimNumber = function(dongleId, imsi, currentVal) {
+                if ((!currentVal || currentVal === 'Unknown' || currentVal === '-') && dongleId) {
+                    const el = document.getElementById('display-num-' + dongleId);
+                    if (el && el.textContent && !el.textContent.includes('Unknown') && !el.textContent.includes('-')) {
+                        currentVal = el.textContent.trim();
+                    }
+                }
                 const promptMsg = isRtl 
                     ? `أدخل رقم الهاتف الجديد للشريحة (IMSI: ${imsi}):` 
                     : `Enter phone number for SIM card (IMSI: ${imsi}):`;
                 
-                const newNum = prompt(promptMsg, currentVal);
-                if (newNum === null) return;
+                const newNum = prompt(promptMsg, currentVal || '');
                 
                 const trimmed = newNum.trim().replace(/\s+/g, '');
                 if (!trimmed) return;
