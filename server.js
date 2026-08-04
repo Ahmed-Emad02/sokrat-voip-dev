@@ -5900,7 +5900,7 @@ app.post('/api/config/queues', async (req, res) => {
         const maxWaitVal = String(maxwait !== undefined && maxwait !== null ? maxwait : '0');
         const agentTimeoutVal = String(timeout || '15');
         const retryVal = String(retry || '5');
-        const failDest = (dest && dest.trim()) ? dest.trim() : 'app-blackhole,hangup,1';
+        const failDest = String(dest || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
 
         await pool.query(`
             INSERT INTO \`asterisk\`.\`queues_config\`
@@ -5992,7 +5992,7 @@ app.put('/api/config/queues/:extension', async (req, res) => {
         const maxWaitVal = String(maxwait !== undefined && maxwait !== null ? maxwait : '0');
         const agentTimeoutVal = String(timeout || '15');
         const retryVal = String(retry || '5');
-        const failDest = (dest && dest.trim()) ? dest.trim() : 'app-blackhole,hangup,1';
+        const failDest = String(dest || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
 
         await pool.query(`
             UPDATE \`asterisk\`.\`queues_config\`
@@ -6863,11 +6863,12 @@ app.post('/api/config/ivrs', async (req, res) => {
         // Insert IVR entries (digit options)
         if (Array.isArray(entries) && entries.length) {
             for (const entry of entries) {
-                if (entry.selection && entry.dest) {
+                const targetDest = String(entry.dest || entry.destination || '').trim();
+                if (entry.selection && targetDest) {
                     await pool.query(`
                         INSERT INTO \`asterisk\`.\`ivr_entries\` (ivr_id, selection, dest, ivr_ret)
                         VALUES (?, ?, ?, 0)
-                    `, [newIvrId, String(entry.selection).trim(), String(entry.dest).trim()]);
+                    `, [newIvrId, String(entry.selection).trim(), targetDest]);
                 }
             }
         }
@@ -6927,11 +6928,12 @@ app.put('/api/config/ivrs/:id', async (req, res) => {
         await pool.query('DELETE FROM `asterisk`.`ivr_entries` WHERE ivr_id = ?', [ivrId]);
         if (Array.isArray(entries) && entries.length) {
             for (const entry of entries) {
-                if (entry.selection && entry.dest) {
+                const targetDest = String(entry.dest || entry.destination || '').trim();
+                if (entry.selection && targetDest) {
                     await pool.query(`
                         INSERT INTO \`asterisk\`.\`ivr_entries\` (ivr_id, selection, dest, ivr_ret)
                         VALUES (?, ?, ?, 0)
-                    `, [ivrId, String(entry.selection).trim(), String(entry.dest).trim()]);
+                    `, [ivrId, String(entry.selection).trim(), targetDest]);
                 }
             }
         }
