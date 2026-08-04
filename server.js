@@ -1034,16 +1034,22 @@ async function getTrunkStatusMap() {
                 online = false;
                 statusText = 'Disabled';
             } else if (techLower === 'sip' || techLower === 'pjsip') {
-                const sipKey = `tr-trunk-${t.trunkid}`;
-                online = (sipPresence[sipKey] === true) || (sipPresence[t.name] === true) || (sipPresence[t.usercontext] === true);
+                online = (sipPresence[t.channelid] === true) ||
+                         (sipPresence[t.name] === true) ||
+                         (sipPresence[`tr-peer-${t.trunkid}`] === true) ||
+                         (sipPresence[`tr-trunk-${t.trunkid}`] === true) ||
+                         (sipPresence[t.usercontext] === true);
                 statusText = online ? 'OK' : 'Offline';
             } else if (techLower === 'iax2' || techLower === 'iax') {
-                const iaxKey = `tr-trunk-${t.trunkid}`;
-                online = (iaxPresence[iaxKey] === true) ||
+                online = (iaxPresence[t.channelid] === true) ||
                          (iaxPresence[t.name] === true) ||
+                         (iaxPresence[`tr-peer-${t.trunkid}`] === true) ||
+                         (iaxPresence[`tr-trunk-${t.trunkid}`] === true) ||
                          (iaxPresence[t.usercontext] === true) ||
-                         (iaxCliPresence[iaxKey] === true) ||
+                         (iaxCliPresence[t.channelid] === true) ||
                          (iaxCliPresence[t.name] === true) ||
+                         (iaxCliPresence[`tr-peer-${t.trunkid}`] === true) ||
+                         (iaxCliPresence[`tr-trunk-${t.trunkid}`] === true) ||
                          (iaxCliPresence[t.usercontext] === true);
                 statusText = online ? 'OK' : 'Offline';
             }
@@ -6292,25 +6298,217 @@ app.delete('/api/config/announcements/:id', async (req, res) => {
 
 // --- 3. TRUNKS MANAGEMENT APIs ---
 
-// Helper to parse key=value lines from PEER/USER details textarea
+// Parse Issabel-style key=value configuration. Repeated keys are joined with
+// "&", matching core_trunks_addSipOrIax() in Issabel's core module.
 function parseDetailsText(rawText) {
-    if (!rawText) return [];
-    const lines = String(rawText).split(/[\r\n]+/);
-    const result = [];
-    let seq = 0;
-    for (let line of lines) {
+    const details = new Map();
+    for (let line of String(rawText || '').split(/[\r\n]+/)) {
         line = line.trim();
         if (!line || line.startsWith(';') || line.startsWith('#')) continue;
-        const idx = line.indexOf('=');
-        if (idx > 0) {
-            const kw = line.substring(0, idx).trim();
-            const val = line.substring(idx + 1).trim();
-            if (kw && val) {
-                result.push([kw, val, seq++]);
-            }
-        }
+        const separator = line.indexOf('=');
+        if (separator <= 0) continue;
+        const keyword = line.slice(0, separator).trim().toLowerCase();
+        const value = line.slice(separator + 1).trim();
+        if (!keyword || !value) continue;
+        details.set(keyword, details.has(keyword) ? `${details.get(keyword)}&${value}` : value);
     }
-    return result;
+    return details;
+}
+
+function trunkProtocolTable(tech) {
+    if (tech === 'sip') return 'sip';
+    if (tech === 'iax2' || tech === 'iax') return 'iax';
+    return null;
+}
+
+function normalizeTrunkPayload(body) {
+    const requestedTech = String(body.tech || 'custom').trim().toLowerCase();
+    const tech = requestedTech === 'iax' ? 'iax2' : requestedTech;
+    const has = key => Object.prototype.hasOwnProperty.call(body, key);
+    return {
+        name: String(body.name || '').trim(),
+        tech,
+        channelid: String(body.channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:'),
+        host: has('host') ? String(body.host || '').trim() : undefined,
+        username: has('username') ? String(body.username || '').trim() : undefined,
+        secret: has('secret') ? String(body.secret || '').trim() : undefined,
+        context: has('context') ? String(body.context || '').trim() : undefined,
+        register: String(body.register || '').trim(),
+        usercontext: String(body.usercontext || '').trim(),
+        outcid: String(body.outcid || '').trim(),
+        keepcid: ['off', 'on', 'cnum', 'all'].includes(String(body.keepcid || '').trim())
+            ? String(body.keepcid).trim()
+            : 'off',
+        maxchans: String(body.maxchans || '').trim(),
+        dialoutprefix: String(body.dialoutprefix || '').trim(),
+        disabled: String(body.disabled || '').trim() === 'on' ? 'on' : 'off',
+        dialopts: String(body.dialopts || '').trim(),
+        continue: String(body.continue || '').trim() === 'on' ? 'on' : 'off',
+        failscript: String(body.failscript || '').trim(),
+        peerdetails: String(body.peerdetails || ''),
+        userdetails: String(body.userdetails || ''),
+        dialrules: normalizeTrunkDialRules(body.dialrules || body.dialpatterns)
+    };
+}
+
+function validateTrunkPayload(input) {
+    if (!input.name) return 'Trunk Name is required.';
+    if (!['custom', 'sip', 'iax2'].includes(input.tech)) return 'Unsupported trunk technology.';
+    if (!input.channelid) {
+        return input.tech === 'custom'
+            ? 'Custom Dial String is required for Custom trunks.'
+            : 'Outgoing Trunk Name is required for SIP/IAX2 trunks.';
+    }
+    return null;
+}
+
+function normalizeTrunkDialRules(rawRules) {
+    if (!Array.isArray(rawRules)) return [];
+    const rules = [];
+    const seen = new Set();
+    for (const rule of rawRules) {
+        const prefix = String(rule.prefix || rule.match_pattern_prefix || '')
+            .trim().toUpperCase().replace(/[^0-9*#+XNZ\-[\]]/g, '');
+        const pattern = String(rule.pattern || rule.match_pattern || rule.match_pattern_pass || '')
+            .trim().toUpperCase().replace(/[^0-9.*#+XNZ\-[\]]/g, '');
+        const prepend = String(rule.prepend || rule.prepend_digits || '')
+            .trim().toUpperCase().replace(/[^0-9+*#W]/g, '').replace(/W/g, 'w');
+        if (!prefix && !pattern) continue;
+        const identity = `${prefix}\0${pattern}`;
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+        rules.push({ prefix, pattern, prepend });
+    }
+    return rules;
+}
+
+function buildPeerDetails(input) {
+    const details = parseDetailsText(input.peerdetails);
+    const suppliedDetails = details.size > 0;
+    details.delete('account');
+    details.delete('register');
+    for (const [keyword, value] of [
+        ['host', input.host],
+        ['username', input.username],
+        ['secret', input.secret],
+        ['context', input.context]
+    ]) {
+        if (value === undefined) continue;
+        if (value) details.set(keyword, value);
+        else details.delete(keyword);
+    }
+    if (!suppliedDetails) {
+        if (!details.has('type')) details.set('type', 'peer');
+        if (!details.has('context')) details.set('context', 'from-trunk');
+        if (!details.has('qualify')) details.set('qualify', 'yes');
+        if (input.tech === 'sip' && !details.has('insecure')) details.set('insecure', 'port,invite');
+    }
+    return details;
+}
+
+function buildUserDetails(input) {
+    const details = parseDetailsText(input.userdetails);
+    const suppliedDetails = details.size > 0;
+    details.delete('account');
+    details.delete('register');
+    if (!suppliedDetails) {
+        if (input.secret) details.set('secret', input.secret);
+        details.set('type', 'user');
+        details.set('context', input.context || 'from-trunk');
+    }
+    return details;
+}
+
+async function insertTrunkProtocolRows(db, table, id, account, details, disableFlag) {
+    const items = [['account', account], ...details.entries()].filter(([, value]) => value !== '');
+    if (items.length === 0) return;
+    const placeholders = [];
+    const params = [];
+    let sequence = 1;
+    for (const [keyword, value] of items) {
+        sequence = disableFlag === 1 ? 1 : sequence + 1;
+        placeholders.push('(?, ?, ?, ?)');
+        params.push(id, keyword, value, sequence);
+    }
+    await db.query(
+        `INSERT INTO \`asterisk\`.\`${table}\` (id, keyword, data, flags) VALUES ${placeholders.join(', ')}`,
+        params
+    );
+}
+
+async function deleteTrunkProtocolRows(db, trunkId) {
+    const ids = [`tr-peer-${trunkId}`, `tr-user-${trunkId}`, `tr-reg-${trunkId}`, `tr-trunk-${trunkId}`];
+    for (const table of ['sip', 'iax']) {
+        await db.query(
+            `DELETE FROM \`asterisk\`.\`${table}\` WHERE id IN (?, ?, ?, ?)`,
+            ids
+        );
+    }
+}
+
+async function replaceTrunkProtocolRows(db, trunkId, input) {
+    await deleteTrunkProtocolRows(db, trunkId);
+    const table = trunkProtocolTable(input.tech);
+    if (!table) return;
+
+    const disableFlag = input.disabled === 'on' ? 1 : 0;
+    await insertTrunkProtocolRows(
+        db,
+        table,
+        `tr-peer-${trunkId}`,
+        input.channelid,
+        buildPeerDetails(input),
+        disableFlag
+    );
+    if (input.usercontext) {
+        await insertTrunkProtocolRows(
+            db,
+            table,
+            `tr-user-${trunkId}`,
+            input.usercontext,
+            buildUserDetails(input),
+            disableFlag
+        );
+    }
+    if (input.register) {
+        await db.query(
+            `INSERT INTO \`asterisk\`.\`${table}\` (id, keyword, data, flags) VALUES (?, 'register', ?, ?)`,
+            [`tr-reg-${trunkId}`, input.register, disableFlag]
+        );
+    }
+}
+
+async function replaceTrunkDialRules(db, trunkId, rules) {
+    await db.query('DELETE FROM `asterisk`.`trunk_dialpatterns` WHERE trunkid = ?', [trunkId]);
+    if (rules.length === 0) return;
+    const placeholders = [];
+    const params = [];
+    rules.forEach((rule, sequence) => {
+        placeholders.push('(?, ?, ?, ?, ?)');
+        params.push(trunkId, rule.prefix, rule.pattern, rule.prepend, sequence);
+    });
+    await db.query(
+        `INSERT INTO \`asterisk\`.\`trunk_dialpatterns\` (trunkid, match_pattern_prefix, match_pattern_pass, prepend_digits, seq) VALUES ${placeholders.join(', ')}`,
+        params
+    );
+}
+
+async function applyTrunkRuntimeConfig(trunkId, dialopts, remove = false) {
+    let runtimeError = '';
+    try {
+        if (remove || !dialopts) {
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database del TRUNK ${trunkId}/dialopts`]);
+        } else {
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put TRUNK ${trunkId}/dialopts ${dialopts}`]);
+        }
+    } catch (error) {
+        runtimeError = error.message;
+    }
+    const reloadResult = await reloadPbxConfigPromise();
+    return {
+        success: !runtimeError && reloadResult.success,
+        error: [runtimeError, reloadResult.error].filter(Boolean).join('; ') || undefined
+    };
 }
 
 // GET /api/config/trunks - List Trunks
@@ -6322,51 +6520,82 @@ app.get('/api/config/trunks', async (req, res) => {
             ORDER BY trunkid ASC
         `);
 
-        for (const t of trunks) {
-            t.host = '';
-            t.username = '';
-            t.secret = '';
-            t.context = 'from-trunk';
-            t.register = '';
-            t.dialopts = '';
-            t.peerdetails = '';
-            t.userdetails = '';
+        for (const trunk of trunks) {
+            const [ruleRows] = await pool.query(
+                'SELECT match_pattern_prefix, match_pattern_pass, prepend_digits FROM `asterisk`.`trunk_dialpatterns` WHERE trunkid = ? ORDER BY seq ASC',
+                [trunk.trunkid]
+            );
+            trunk.dialpatterns = ruleRows.map(row => ({
+                prepend: row.prepend_digits || '',
+                prefix: row.match_pattern_prefix || '',
+                pattern: row.match_pattern_pass || ''
+            }));
+            trunk.dialrules = trunk.dialpatterns;
+            trunk.host = '';
+            trunk.username = '';
+            trunk.secret = '';
+            trunk.context = 'from-trunk';
+            trunk.register = '';
+            trunk.dialopts = '';
+            trunk.peerdetails = '';
+            trunk.userdetails = '';
 
-            const trunkKey = `tr-trunk-${t.trunkid}`;
-            const targetTable = (t.tech === 'iax2' || t.tech === 'iax') ? 'iax' : 'sip';
+            const table = trunkProtocolTable(String(trunk.tech || '').toLowerCase());
+            if (table) {
+                const peerKey = `tr-peer-${trunk.trunkid}`;
+                let [peerRows] = await pool.query(
+                    `SELECT keyword, data FROM \`asterisk\`.\`${table}\` WHERE id = ? ORDER BY flags ASC, keyword DESC`,
+                    [peerKey]
+                );
+                // Compatibility read for trunks saved by older Sokrat releases.
+                if (peerRows.length === 0) {
+                    [peerRows] = await pool.query(
+                        `SELECT keyword, data FROM \`asterisk\`.\`${table}\` WHERE id = ? ORDER BY flags ASC, keyword DESC`,
+                        [`tr-trunk-${trunk.trunkid}`]
+                    );
+                }
+                const peerLines = [];
+                for (const row of peerRows) {
+                    if (row.keyword === 'host') trunk.host = row.data;
+                    if (row.keyword === 'username') trunk.username = row.data;
+                    if (row.keyword === 'secret') trunk.secret = row.data;
+                    if (row.keyword === 'context') trunk.context = row.data;
+                    if (row.keyword === 'register') trunk.register = row.data;
+                    if (row.keyword !== 'account' && row.keyword !== 'register') {
+                        peerLines.push(`${row.keyword}=${row.data}`);
+                    }
+                }
+                trunk.peerdetails = peerLines.join('\n');
 
-            // Read dialopts from AstDB
+                let [userRows] = await pool.query(
+                    `SELECT keyword, data FROM \`asterisk\`.\`${table}\` WHERE id = ? ORDER BY flags ASC, keyword DESC`,
+                    [`tr-user-${trunk.trunkid}`]
+                );
+                // Compatibility read for the former usercontext-as-row-id layout.
+                if (userRows.length === 0 && trunk.usercontext) {
+                    [userRows] = await pool.query(
+                        `SELECT keyword, data FROM \`asterisk\`.\`${table}\` WHERE id = ? ORDER BY flags ASC, keyword DESC`,
+                        [trunk.usercontext]
+                    );
+                }
+                trunk.userdetails = userRows
+                    .filter(row => row.keyword !== 'account')
+                    .map(row => `${row.keyword}=${row.data}`)
+                    .join('\n');
+
+                const [registerRows] = await pool.query(
+                    `SELECT data FROM \`asterisk\`.\`${table}\` WHERE id = ? AND keyword = 'register'`,
+                    [`tr-reg-${trunk.trunkid}`]
+                );
+                if (registerRows.length > 0) trunk.register = registerRows[0].data || '';
+            }
+
             try {
-                const { stdout: astOut } = await execPromise(`asterisk -rx "database get TRUNK ${t.trunkid}/dialopts"`);
-                if (astOut) {
-                    const m = astOut.match(/: (.+)$/m);
-                    if (m) t.dialopts = m[1].trim();
-                }
-            } catch (e) { /* key not found */ }
-
-            // Query PEER Details
-            const [peerRows] = await pool.query(`SELECT keyword, data FROM \`asterisk\`.\`${targetTable}\` WHERE id = ? OR id = ?`, [trunkKey, t.name]);
-            const peerLines = [];
-            peerRows.forEach(r => {
-                if (r.keyword === 'host') t.host = r.data;
-                if (r.keyword === 'username') t.username = r.data;
-                if (r.keyword === 'secret') t.secret = r.data;
-                if (r.keyword === 'context') t.context = r.data;
-                if (r.keyword === 'register') t.register = r.data;
-                if (r.keyword !== 'account') {
-                    peerLines.push(`${r.keyword}=${r.data}`);
-                }
-            });
-            t.peerdetails = peerLines.join('\n');
-
-            // Query USER Details (if usercontext provided)
-            if (t.usercontext) {
-                const [userRows] = await pool.query(`SELECT keyword, data FROM \`asterisk\`.\`${targetTable}\` WHERE id = ?`, [t.usercontext]);
-                const userLines = [];
-                userRows.forEach(r => {
-                    userLines.push(`${r.keyword}=${r.data}`);
-                });
-                t.userdetails = userLines.join('\n');
+                const output = await execFileAsync(ASTERISK_BIN, ['-rx', `database get TRUNK ${trunk.trunkid}/dialopts`]);
+                const value = output.match(/(?:Value|Result):\s*(.+)$/mi);
+                if (value) trunk.dialopts = value[1].trim();
+            } catch (_) {
+                // No per-trunk override: Issabel uses the global dial options.
             }
         }
         res.json({ success: true, trunks });
@@ -6377,251 +6606,167 @@ app.get('/api/config/trunks', async (req, res) => {
 
 // POST /api/config/trunks - Create Trunk (Custom, SIP, IAX2)
 app.post('/api/config/trunks', async (req, res) => {
+    const input = normalizeTrunkPayload(req.body);
+    const validationError = validateTrunkPayload(input);
+    if (validationError) return res.status(400).json({ success: false, error: validationError });
+
+    let warningMessage;
+    let connection;
+    let trunkId;
     try {
-        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid, keepcid, maxchans, dialoutprefix, disabled, dialopts, continue: contVal, failscript, peerdetails, userdetails } = req.body;
-        if (!name || !name.trim()) {
-            return res.status(400).json({ success: false, error: 'Trunk Name is required.' });
-        }
-
-        const trunkName = String(name).trim();
-        const trunkTech = String(tech || 'custom').trim().toLowerCase();
-        const dialString = String(channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:');
-        const cidVal = String(outcid || '').trim();
-        const userContextVal = String(usercontext || '').trim();
-        const keepCidVal = String(keepcid || 'off').trim();
-        const maxChansVal = String(maxchans || '').trim();
-        const dialPrefixVal = String(dialoutprefix || '').trim();
-        const disabledVal = String(disabled || 'off').trim();
-        const dialoptsVal = String(dialopts || '').trim();
-        const continueVal = String(contVal || 'off').trim();
-        const failscriptVal = String(failscript || '').trim();
-
-        if (trunkTech === 'custom' && !dialString) {
-            return res.status(400).json({ success: false, error: 'Custom Dial String is required for Custom trunks.' });
-        }
-
-        let warningMessage = null;
-        if (trunkTech === 'custom' && dialString) {
-            const [otherTrunk] = await pool.query(
+        if (input.tech === 'custom') {
+            const [duplicates] = await pool.query(
                 'SELECT trunkid, name FROM `asterisk`.`trunks` WHERE tech = "custom" AND channelid = ?',
-                [dialString]
+                [input.channelid]
             );
-            if (otherTrunk.length > 0) {
-                warningMessage = `Warning: Custom dial string '${dialString}' already exists in another trunk ('${otherTrunk[0].name || otherTrunk[0].trunkid}')`;
+            if (duplicates.length > 0) {
+                warningMessage = `Warning: Custom dial string '${input.channelid}' already exists in another trunk ('${duplicates[0].name || duplicates[0].trunkid}')`;
             }
         }
-        const [maxRow] = await pool.query('SELECT COALESCE(MAX(trunkid), 0) + 1 AS nextId FROM `asterisk`.`trunks`');
-        const nextTrunkId = maxRow[0].nextId;
-        const trunkKey = `tr-trunk-${nextTrunkId}`;
 
-        await pool.query(`
-            INSERT INTO \`asterisk\`.\`trunks\` (trunkid, name, tech, outcid, keepcid, maxchans, failscript, dialoutprefix, channelid, disabled, \`continue\`, usercontext)
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+        const [maxRows] = await connection.query(
+            'SELECT COALESCE(MAX(trunkid), 0) + 1 AS nextId FROM `asterisk`.`trunks` FOR UPDATE'
+        );
+        trunkId = Number(maxRows[0].nextId);
+        await connection.query(`
+            INSERT INTO \`asterisk\`.\`trunks\`
+                (trunkid, name, tech, outcid, keepcid, maxchans, failscript, dialoutprefix, channelid, disabled, \`continue\`, usercontext)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [nextTrunkId, trunkName, trunkTech, cidVal, keepCidVal, maxChansVal, failscriptVal, dialPrefixVal, dialString, disabledVal, continueVal, userContextVal]);
-
-        // Store dialopts in AstDB (Asterisk uses this at dialplan runtime)
-        if (dialoptsVal) {
-            try { await execPromise(`asterisk -rx "database put TRUNK ${nextTrunkId}/dialopts ${dialoptsVal}"`); } catch (e) {}
-        } else {
-            try { await execPromise(`asterisk -rx "database del TRUNK ${nextTrunkId}/dialopts"`); } catch (e) {}
-        }
-
-        const targetTable = (trunkTech === 'iax2' || trunkTech === 'iax') ? 'iax' : 'sip';
-
-        if (trunkTech === 'sip' || trunkTech === 'iax2' || trunkTech === 'iax') {
-            let peerParams = parseDetailsText(peerdetails);
-            if (peerParams.length === 0 && host) {
-                peerParams = [
-                    ['account', trunkName, 0],
-                    ['host', String(host || '').trim(), 1],
-                    ['username', String(username || '').trim(), 2],
-                    ['secret', String(secret || '').trim(), 3],
-                    ['type', 'peer', 4],
-                    ['context', String(context || 'from-trunk').trim(), 5],
-                    ['qualify', 'yes', 6]
-                ];
-                if (trunkTech === 'sip') peerParams.push(['insecure', 'port,invite', 7]);
-            } else {
-                peerParams.unshift(['account', trunkName, 0]);
-            }
-
-            if (register && String(register).trim()) {
-                peerParams.push(['register', String(register).trim(), 99]);
-            }
-
-            for (const [kw, val, seq] of peerParams) {
-                if (val !== undefined && val !== '') {
-                    await pool.query(`
-                        INSERT INTO \`asterisk\`.\`${targetTable}\` (id, keyword, data, flags)
-                        VALUES (?, ?, ?, ?)
-                        ON DUPLICATE KEY UPDATE data = VALUES(data)
-                    `, [trunkKey, kw, val, seq]);
-                }
-            }
-
-            if (userContextVal) {
-                const userParams = parseDetailsText(userdetails);
-                if (userParams.length === 0 && secret) {
-                    userParams.push(['secret', String(secret).trim(), 0]);
-                    userParams.push(['type', 'user', 1]);
-                    userParams.push(['context', String(context || 'from-trunk').trim(), 2]);
-                }
-                for (const [kw, val, seq] of userParams) {
-                    if (val !== undefined && val !== '') {
-                        await pool.query(`
-                            INSERT INTO \`asterisk\`.\`${targetTable}\` (id, keyword, data, flags)
-                            VALUES (?, ?, ?, ?)
-                            ON DUPLICATE KEY UPDATE data = VALUES(data)
-                        `, [userContextVal, kw, val, seq]);
-                    }
-                }
-            }
-        }
-        const reloadRes = await reloadPbxConfigPromise();
-        res.json({
-            success: true,
-            message: `Trunk '${trunkName}' (${trunkTech.toUpperCase()}) created successfully.`,
-            warningMessage: warningMessage || undefined,
-            applied: reloadRes.success,
-            reloadError: reloadRes.error
-        });
+        `, [
+            trunkId, input.name, input.tech, input.outcid, input.keepcid, input.maxchans,
+            input.failscript, input.dialoutprefix, input.channelid, input.disabled,
+            input.continue, input.usercontext
+        ]);
+        await replaceTrunkDialRules(connection, trunkId, input.dialrules);
+        await replaceTrunkProtocolRows(connection, trunkId, input);
+        await connection.commit();
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        return res.status(500).json({ success: false, error: error.message });
+    } finally {
+        if (connection) connection.release();
     }
+
+    const applyResult = await applyTrunkRuntimeConfig(trunkId, input.dialopts);
+    res.json({
+        success: true,
+        trunkid: trunkId,
+        message: `Trunk '${input.name}' (${input.tech.toUpperCase()}) created successfully.`,
+        warningMessage,
+        applied: applyResult.success,
+        reloadError: applyResult.error
+    });
 });
 
 // PUT /api/config/trunks/:trunkid - Modify Trunk (Custom, SIP, IAX2)
 app.put('/api/config/trunks/:trunkid', async (req, res) => {
-    try {
-        const trunkId = parseInt(req.params.trunkid, 10);
-        const { name, tech, channelid, host, username, secret, context, register, usercontext, outcid, keepcid, maxchans, dialoutprefix, disabled, dialopts, continue: contVal, failscript, peerdetails, userdetails } = req.body;
-        if (!name || !name.trim()) {
-            return res.status(400).json({ success: false, error: 'Trunk Name is required.' });
-        }
-
-        const trunkName = String(name).trim();
-        const trunkTech = String(tech || 'custom').trim().toLowerCase();
-        const dialString = String(channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:');
-        const cidVal = String(outcid || '').trim();
-        const userContextVal = String(usercontext || '').trim();
-        const keepCidVal = String(keepcid || 'off').trim();
-        const maxChansVal = String(maxchans || '').trim();
-        const dialPrefixVal = String(dialoutprefix || '').trim();
-        const disabledVal = String(disabled || 'off').trim();
-        const dialoptsVal = String(dialopts || '').trim();
-        const continueVal = String(contVal || 'off').trim();
-        const failscriptVal = String(failscript || '').trim();
-
-        let warningMessage = null;
-        if (trunkTech === 'custom' && dialString) {
-            const [otherTrunk] = await pool.query(
-                'SELECT trunkid, name FROM `asterisk`.`trunks` WHERE tech = "custom" AND channelid = ? AND trunkid != ?',
-                [dialString, trunkId]
-            );
-            if (otherTrunk.length > 0) {
-                warningMessage = `Warning: Custom dial string '${dialString}' already exists in another trunk ('${otherTrunk[0].name || otherTrunk[0].trunkid}')`;
-            }
-        }
-        const trunkKey = `tr-trunk-${trunkId}`;
-
-        await pool.query(`
-            UPDATE \`asterisk\`.\`trunks\`
-            SET name = ?, tech = ?, channelid = ?, outcid = ?, keepcid = ?, maxchans = ?, failscript = ?, dialoutprefix = ?, disabled = ?, \`continue\` = ?, usercontext = ?
-            WHERE trunkid = ?
-        `, [trunkName, trunkTech, dialString, cidVal, keepCidVal, maxChansVal, failscriptVal, dialPrefixVal, disabledVal, continueVal, userContextVal, trunkId]);
-
-        if (dialoptsVal) {
-            try { await execPromise(`asterisk -rx "database put TRUNK ${trunkId}/dialopts ${dialoptsVal}"`); } catch (e) {}
-        } else {
-            try { await execPromise(`asterisk -rx "database del TRUNK ${trunkId}/dialopts"`); } catch (e) {}
-        }
-
-        const targetTable = (trunkTech === 'iax2' || trunkTech === 'iax') ? 'iax' : 'sip';
-
-        if (trunkTech === 'sip' || trunkTech === 'iax2' || trunkTech === 'iax') {
-            let peerParams = parseDetailsText(peerdetails);
-            if (peerParams.length === 0 && host) {
-                peerParams = [
-                    ['account', trunkName, 0],
-                    ['host', String(host || '').trim(), 1],
-                    ['username', String(username || '').trim(), 2],
-                    ['secret', String(secret || '').trim(), 3],
-                    ['type', 'peer', 4],
-                    ['context', String(context || 'from-trunk').trim(), 5],
-                    ['qualify', 'yes', 6]
-                ];
-                if (trunkTech === 'sip') peerParams.push(['insecure', 'port,invite', 7]);
-            } else {
-                peerParams.unshift(['account', trunkName, 0]);
-            }
-
-            if (register && String(register).trim()) {
-                peerParams.push(['register', String(register).trim(), 99]);
-            }
-
-            for (const [kw, val, seq] of peerParams) {
-                if (val !== undefined && val !== '') {
-                    await pool.query(`
-                        INSERT INTO \`asterisk\`.\`${targetTable}\` (id, keyword, data, flags)
-                        VALUES (?, ?, ?, ?)
-                    `, [trunkKey, kw, val, seq]);
-                }
-            }
-
-            if (userContextVal) {
-                const userParams = parseDetailsText(userdetails);
-                if (userParams.length === 0 && secret) {
-                    userParams.push(['secret', String(secret).trim(), 0]);
-                    userParams.push(['type', 'user', 1]);
-                    userParams.push(['context', String(context || 'from-trunk').trim(), 2]);
-                }
-                for (const [kw, val, seq] of userParams) {
-                    if (val !== undefined && val !== '') {
-                        await pool.query(`
-                            INSERT INTO \`asterisk\`.\`${targetTable}\` (id, keyword, data, flags)
-                            VALUES (?, ?, ?, ?)
-                        `, [userContextVal, kw, val, seq]);
-                    }
-                }
-            }
-        }
-
-        const reloadRes = await reloadPbxConfigPromise();
-        res.json({
-            success: true,
-            message: `Trunk ID #${trunkId} updated successfully.`,
-            warningMessage: warningMessage || undefined,
-            applied: reloadRes.success,
-            reloadError: reloadRes.error
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+    const trunkId = Number.parseInt(req.params.trunkid, 10);
+    if (!Number.isInteger(trunkId) || trunkId <= 0) {
+        return res.status(400).json({ success: false, error: 'Invalid trunk ID.' });
     }
+    const input = normalizeTrunkPayload(req.body);
+    const validationError = validateTrunkPayload(input);
+    if (validationError) return res.status(400).json({ success: false, error: validationError });
+
+    let warningMessage;
+    let connection;
+    try {
+        if (input.tech === 'custom') {
+            const [duplicates] = await pool.query(
+                'SELECT trunkid, name FROM `asterisk`.`trunks` WHERE tech = "custom" AND channelid = ? AND trunkid != ?',
+                [input.channelid, trunkId]
+            );
+            if (duplicates.length > 0) {
+                warningMessage = `Warning: Custom dial string '${input.channelid}' already exists in another trunk ('${duplicates[0].name || duplicates[0].trunkid}')`;
+            }
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+        const [existingRows] = await connection.query(
+            'SELECT trunkid FROM `asterisk`.`trunks` WHERE trunkid = ? FOR UPDATE',
+            [trunkId]
+        );
+        if (existingRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, error: 'Trunk not found.' });
+        }
+        await connection.query(`
+            UPDATE \`asterisk\`.\`trunks\`
+            SET name = ?, tech = ?, channelid = ?, outcid = ?, keepcid = ?, maxchans = ?,
+                failscript = ?, dialoutprefix = ?, disabled = ?, \`continue\` = ?, usercontext = ?
+            WHERE trunkid = ?
+        `, [
+            input.name, input.tech, input.channelid, input.outcid, input.keepcid, input.maxchans,
+            input.failscript, input.dialoutprefix, input.disabled, input.continue,
+            input.usercontext, trunkId
+        ]);
+        await replaceTrunkDialRules(connection, trunkId, input.dialrules);
+        await replaceTrunkProtocolRows(connection, trunkId, input);
+        await connection.commit();
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        return res.status(500).json({ success: false, error: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+
+    const applyResult = await applyTrunkRuntimeConfig(trunkId, input.dialopts);
+    res.json({
+        success: true,
+        message: `Trunk ID #${trunkId} updated successfully.`,
+        warningMessage,
+        applied: applyResult.success,
+        reloadError: applyResult.error
+    });
 });
 
 // DELETE /api/config/trunks/:trunkid - Delete Trunk
 app.delete('/api/config/trunks/:trunkid', async (req, res) => {
-    try {
-        const trunkId = parseInt(req.params.trunkid, 10);
-        const [tRows] = await pool.query('SELECT name FROM `asterisk`.`trunks` WHERE trunkid = ?', [trunkId]);
-        const name = tRows[0] ? tRows[0].name : '';
-        const trunkKey = `tr-trunk-${trunkId}`;
-
-        await pool.query('DELETE FROM `asterisk`.`trunks` WHERE trunkid = ?', [trunkId]);
-        await pool.query('DELETE FROM `asterisk`.`sip` WHERE id = ?', [trunkKey]);
-        await pool.query('DELETE FROM `asterisk`.`iax` WHERE id = ?', [trunkKey]);
-        await pool.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE trunk_id = ?', [trunkId]);
-
-        const reloadRes = await reloadPbxConfigPromise();
-        res.json({
-            success: true,
-            message: `Trunk deleted successfully.`,
-            applied: reloadRes.success,
-            reloadError: reloadRes.error
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+    const trunkId = Number.parseInt(req.params.trunkid, 10);
+    if (!Number.isInteger(trunkId) || trunkId <= 0) {
+        return res.status(400).json({ success: false, error: 'Invalid trunk ID.' });
     }
+
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+        const [existingRows] = await connection.query(
+            'SELECT trunkid FROM `asterisk`.`trunks` WHERE trunkid = ? FOR UPDATE',
+            [trunkId]
+        );
+        if (existingRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, error: 'Trunk not found.' });
+        }
+        await deleteTrunkProtocolRows(connection, trunkId);
+        await connection.query('DELETE FROM `asterisk`.`trunk_dialpatterns` WHERE trunkid = ?', [trunkId]);
+        await connection.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE trunk_id = ?', [trunkId]);
+        await connection.query('DELETE FROM `asterisk`.`trunks` WHERE trunkid = ?', [trunkId]);
+        await connection.commit();
+    } catch (error) {
+        if (connection) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        return res.status(500).json({ success: false, error: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+
+    const applyResult = await applyTrunkRuntimeConfig(trunkId, '', true);
+    res.json({
+        success: true,
+        message: 'Trunk deleted successfully.',
+        applied: applyResult.success,
+        reloadError: applyResult.error
+    });
 });
 
 // Helper to sanitize values used in AMI headers to prevent CRLF injection

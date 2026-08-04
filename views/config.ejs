@@ -2042,6 +2042,7 @@ function isTabAllowed(tabName) {
                                 <select id="trunkKeepCid" class="config-input w-full text-xs">
                                     <option value="off"><%= isRtl ? 'السماح بأي هوية (Allow Any CID)' : 'Allow Any CID' %></option>
                                     <option value="on"><%= isRtl ? 'حظر الهويات الخارجية (Block Foreign CIDs)' : 'Block Foreign CIDs' %></option>
+                                    <option value="cnum"><%= isRtl ? 'إزالة اسم المتصل (Remove CNAM)' : 'Remove CNAM' %></option>
                                     <option value="all"><%= isRtl ? 'فرض هوية الخط (Force Trunk CID)' : 'Force Trunk CID' %></option>
                                 </select>
                             </div>
@@ -2072,6 +2073,22 @@ function isTabAllowed(tabName) {
                         <div>
                             <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سكربت مراقبة الأعطال (Monitor Failures)' : 'Monitor Trunk Failures Script' %></label>
                             <input type="text" id="trunkFailScript" placeholder="e.g. /usr/local/bin/failover.sh" class="config-input w-full font-mono text-xs">
+                        </div>
+
+                        <!-- Dialed Number Manipulation Rules Section -->
+                        <div class="pt-3 border-t border-amber-500/15 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase"><%= isRtl ? 'قواعد تعديل أرقام الاتصال (Dialed Number Manipulation Rules)' : 'Dialed Number Manipulation Rules' %></label>
+                                    <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'قواعد تعديل الأرقام قبل إرسالها إلى خط الربط (Prepend + Prefix | Match Pattern)' : 'Prepend, prefix, and match pattern rules applied to calls on this trunk' %></p>
+                                </div>
+                                <button type="button" onclick="addTrunkDialRuleRow()" class="px-2.5 py-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition cursor-pointer">
+                                    + <%= isRtl ? 'إضافة قاعدة' : 'Add Rule' %>
+                                </button>
+                            </div>
+                            <div id="trunkDialRulesContainer" class="space-y-2">
+                                <!-- Populated dynamically by renderTrunkDialRules() -->
+                            </div>
                         </div>
                     </div>
 
@@ -2118,7 +2135,11 @@ function isTabAllowed(tabName) {
                                 <span class="text-[10px] text-emerald-400/70 font-mono">PEER</span>
                             </div>
 
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم خط الربط الصادر *' : 'Outgoing Trunk Name *' %></label>
+                                    <input type="text" id="trunkChannelId" placeholder="e.g. issabel_provider" class="config-input w-full font-mono text-xs">
+                                </div>
                                 <div>
                                     <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'عنوان الخادم البعيد *' : 'Remote Host (IP / Domain) *' %></label>
                                     <input type="text" id="trunkHost" placeholder="e.g. 192.168.100.50" class="config-input w-full font-mono text-xs">
@@ -5146,6 +5167,7 @@ function isTabAllowed(tabName) {
             const cidSection = document.getElementById('trunkCidSection');
             const dialInput = document.getElementById('trunkDialString');
             const hostInput = document.getElementById('trunkHost');
+            const channelIdInput = document.getElementById('trunkChannelId');
 
             if (tech === 'custom') {
                 customDiv.classList.remove('hidden');
@@ -5153,12 +5175,14 @@ function isTabAllowed(tabName) {
                 if (cidSection) cidSection.classList.add('hidden');
                 if (dialInput) dialInput.required = true;
                 if (hostInput) hostInput.required = false;
+                if (channelIdInput) channelIdInput.required = false;
             } else {
                 customDiv.classList.add('hidden');
                 sipIaxDiv.classList.remove('hidden');
                 if (cidSection) cidSection.classList.remove('hidden');
                 if (dialInput) dialInput.required = false;
                 if (hostInput) hostInput.required = true;
+                if (channelIdInput) channelIdInput.required = true;
             }
         }
 
@@ -5214,6 +5238,51 @@ function isTabAllowed(tabName) {
             editTrunk(t);
         }
 
+        function renderTrunkDialRules(rules = []) {
+            const container = document.getElementById('trunkDialRulesContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            const list = Array.isArray(rules) && rules.length ? rules : [{ prepend: '', prefix: '', pattern: '' }];
+            list.forEach(r => addTrunkDialRuleRow(r.prepend || '', r.prefix || '', r.pattern || r.match_pattern || ''));
+        }
+
+        function addTrunkDialRuleRow(prepend = '', prefix = '', pattern = '') {
+            const container = document.getElementById('trunkDialRulesContainer');
+            if (!container) return;
+            const row = document.createElement('div');
+            row.className = 'trunk-dial-rule-row grid grid-cols-12 gap-2 items-center bg-black/20 p-2 rounded-lg border border-[var(--border-primary)]/40';
+            row.innerHTML = `
+                <div class="col-span-3">
+                    <input type="text" placeholder="( ${isRtl ? 'إضافة' : 'prepend'} )" value="${escapeHtml(prepend)}" class="trunk-rule-prepend config-input w-full font-mono text-[11px] px-2 py-1">
+                </div>
+                <div class="col-span-1 text-center font-bold text-amber-400 text-xs">+</div>
+                <div class="col-span-3">
+                    <input type="text" placeholder="prefix" value="${escapeHtml(prefix)}" class="trunk-rule-prefix config-input w-full font-mono text-[11px] px-2 py-1">
+                </div>
+                <div class="col-span-1 text-center font-bold text-amber-400 text-xs">|</div>
+                <div class="col-span-3">
+                    <input type="text" placeholder="[ ${isRtl ? 'نمط المطابقة' : 'match pattern'} ]" value="${escapeHtml(pattern)}" class="trunk-rule-pattern config-input w-full font-mono text-[11px] px-2 py-1">
+                </div>
+                <div class="col-span-1 text-center">
+                    <button type="button" onclick="this.closest('.trunk-dial-rule-row').remove()" class="text-red-400 hover:text-red-300 text-xs font-bold p-1 cursor-pointer" title="${isRtl ? 'حذف' : 'Remove'}">✕</button>
+                </div>
+            `;
+            container.appendChild(row);
+        }
+
+        function getTrunkDialRulesFromForm() {
+            const rows = document.querySelectorAll('.trunk-dial-rule-row');
+            const rules = [];
+            rows.forEach(row => {
+                const prepend = (row.querySelector('.trunk-rule-prepend')?.value || '').trim();
+                const prefix = (row.querySelector('.trunk-rule-prefix')?.value || '').trim();
+                const pattern = (row.querySelector('.trunk-rule-pattern')?.value || '').trim();
+                if (prepend || prefix || pattern) {
+                    rules.push({ prepend, prefix, pattern });
+                }
+            });
+            return rules;
+        }
         function openTrunkModal() {
             document.getElementById('trunkModalTitle').textContent = isRtl ? 'إضافة خط ربط جديد' : 'Add Trunk';
             document.getElementById('trunkEditId').value = "";
@@ -5227,6 +5296,7 @@ function isTabAllowed(tabName) {
             document.getElementById('trunkDialOpts').value = "";
             document.getElementById('trunkContinue').value = "off";
             document.getElementById('trunkFailScript').value = "";
+            renderTrunkDialRules([]);
             onTrunkTechChange();
             openModal('trunkModal');
         }
@@ -5236,7 +5306,8 @@ function isTabAllowed(tabName) {
             document.getElementById('trunkEditId').value = t.trunkid;
             document.getElementById('trunkName').value = t.name || '';
             document.getElementById('trunkTech').value = t.tech || 'custom';
-            document.getElementById('trunkDialString').value = t.channelid || '';
+            document.getElementById('trunkDialString').value = (t.tech || 'custom') === 'custom' ? (t.channelid || '') : '';
+            document.getElementById('trunkChannelId').value = (t.tech || 'custom') === 'custom' ? '' : (t.channelid || t.name || '');
             document.getElementById('trunkHost').value = t.host || '';
             document.getElementById('trunkUsername').value = t.username || '';
             document.getElementById('trunkSecret').value = t.secret || '';
@@ -5253,6 +5324,7 @@ function isTabAllowed(tabName) {
             document.getElementById('trunkUserContext').value = t.usercontext || '';
             document.getElementById('trunkPeerDetails').value = t.peerdetails || '';
             document.getElementById('trunkUserDetails').value = t.userdetails || '';
+            renderTrunkDialRules(t.dialpatterns || t.dialrules || []);
             onTrunkTechChange();
             openModal('trunkModal');
         }
@@ -5263,7 +5335,9 @@ function isTabAllowed(tabName) {
             const editId = document.getElementById('trunkEditId').value;
             const name = document.getElementById('trunkName').value.trim();
             const tech = document.getElementById('trunkTech').value;
-            const channelid = document.getElementById('trunkDialString').value.trim();
+            const channelid = tech === 'custom'
+                ? document.getElementById('trunkDialString').value.trim()
+                : document.getElementById('trunkChannelId').value.trim();
             const host = document.getElementById('trunkHost').value.trim();
             const username = document.getElementById('trunkUsername').value.trim();
             const secret = document.getElementById('trunkSecret').value.trim();
@@ -5280,6 +5354,7 @@ function isTabAllowed(tabName) {
             const usercontext = document.getElementById('trunkUserContext').value.trim();
             const peerdetails = document.getElementById('trunkPeerDetails').value.trim();
             const userdetails = document.getElementById('trunkUserDetails').value.trim();
+            const dialrules = getTrunkDialRulesFromForm();
             if (tech === 'custom' && channelid && Array.isArray(loadedTrunksList)) {
                 const existingTrunk = loadedTrunksList.find(t => String(t.trunkid) !== String(editId) && String(t.tech || '').toLowerCase() === 'custom' && String(t.channelid || '').trim() === channelid);
                 if (existingTrunk) {
@@ -5293,9 +5368,9 @@ function isTabAllowed(tabName) {
             const method = editId ? 'PUT' : 'POST';
 
             fetch(url, {
-                method,
+                method: method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, tech, channelid, host, username, secret, context, register, outcid, keepcid, maxchans, dialoutprefix, disabled, dialopts, continue: continueVal, failscript, usercontext, peerdetails, userdetails })
+                body: JSON.stringify({ name, tech, channelid, host, username, secret, context, register, outcid, keepcid, maxchans, dialoutprefix, disabled, dialopts, continue: continueVal, failscript, usercontext, peerdetails, userdetails, dialrules })
             })
             .then(res => res.json())
             .then(data => {
