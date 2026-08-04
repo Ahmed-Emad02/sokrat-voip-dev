@@ -436,6 +436,13 @@ same => n(no_route),NoOp(DONGLE-ERROR: No matching inbound route in from-trunk f
 same => n,Playtones(congestion)
 same => n,Congestion(10)
 same => n,Hangup()
+
+[ext-moh]
+exten => _!,1,NoOp(--- Class-Aware Music On Hold: ${EXTEN} ---)
+same => n,Answer()
+same => n,Set(CHANNEL(musicclass)=${EXTEN})
+same => n,MusicOnHold(${EXTEN})
+same => n,Hangup()
 DONGLE
 
 # Strip old [macro-dialout-trunk-predial-hook] before appending

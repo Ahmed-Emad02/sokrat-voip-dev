@@ -2998,7 +2998,7 @@ function isTabAllowed(tabName) {
                 const mohTargets = (typeof loadedMohCategories !== 'undefined' ? loadedMohCategories : []).map(cat => ({
                     id: String(cat.name),
                     label: `MoH Class: ${cat.name} (${cat.fileCount || 0} tracks)${cat.isDefault ? ' [System]' : ''}`,
-                    dialplanString: `musiconhold,${cat.name},1`
+                    dialplanString: `ext-moh,${cat.name},1`
                 }));
 
                 const trunkTargets = (typeof loadedTrunksList !== 'undefined' ? loadedTrunksList : []).map(t => ({
@@ -3059,7 +3059,7 @@ function isTabAllowed(tabName) {
                         id: 'musiconhold',
                         label: rtl ? 'الموسيقى أثناء الانتظار (Music on Hold - MoH)' : 'Music on Hold (MoH)',
                         targets: mohTargets.length ? mohTargets : [
-                            { id: 'default', label: 'Default MoH Class', dialplanString: 'musiconhold,default,1' },
+                            { id: 'default', label: 'Default MoH Class', dialplanString: 'ext-moh,default,1' },
                             { id: 'none', label: 'None (Silence)', dialplanString: 'app-blackhole,musiconhold,1' }
                         ]
                     },

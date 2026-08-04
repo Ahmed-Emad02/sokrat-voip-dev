@@ -233,6 +233,13 @@ same => n(no_route),NoOp(DONGLE-ERROR: No matching inbound route in from-trunk f
 same => n,Playtones(congestion)
 same => n,Congestion(10)
 same => n,Hangup()
+
+[ext-moh]
+exten => _!,1,NoOp(--- Class-Aware Music On Hold: ${EXTEN} ---)
+same => n,Answer()
+same => n,Set(CHANNEL(musicclass)=${EXTEN})
+same => n,MusicOnHold(${EXTEN})
+same => n,Hangup()
 [macro-dialout-trunk-predial-hook]
 exten => s,1,NoOp(--- Outbound call via Dongle ---)
 same => n,Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMEI})})
