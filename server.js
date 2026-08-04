@@ -197,10 +197,22 @@ async function initAuthDb() {
             imei VARCHAR(30) DEFAULT NULL,
             phone_number VARCHAR(30) DEFAULT NULL,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            dynamic_enabled TINYINT(1) DEFAULT 1,
             KEY idx_imsi (imsi),
             KEY idx_imei (imei)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    try { await conn.execute('ALTER TABLE gsm_dongles ADD COLUMN dynamic_enabled TINYINT(1) DEFAULT 1'); } catch (_) {}
+    try {
+        const [dRows] = await conn.execute('SELECT dongle_name, dynamic_enabled FROM gsm_dongles');
+        const { execFile: execFileCb } = require('child_process');
+        dRows.forEach(row => {
+            if (row.dongle_name) {
+                const val = row.dynamic_enabled !== 0 ? '1' : '0';
+                execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_SETTINGS ${row.dongle_name} ${val}`], () => {});
+            }
+        });
+    } catch (_) {}
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS ${tables.employeeExtras} (
             extension VARCHAR(50) NOT NULL PRIMARY KEY,
@@ -327,7 +339,14 @@ async function initAuthDb() {
     try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN last_backup_at DATETIME DEFAULT NULL'); } catch (_) {}
     try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN last_backup_status VARCHAR(50) DEFAULT NULL'); } catch (_) {}
     try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN queue_provisioned TINYINT(1) DEFAULT 0'); } catch (_) {}
+    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN dynamic_did_enabled TINYINT(1) DEFAULT 1'); } catch (_) {}
     await conn.execute('INSERT IGNORE INTO storage_settings (id) VALUES (1)');
+    try {
+        const [sRows] = await conn.execute('SELECT dynamic_did_enabled FROM storage_settings WHERE id = 1');
+        const isEnabled = sRows.length > 0 ? (sRows[0].dynamic_did_enabled === 1 ? '1' : '0') : '1';
+        const { execFile: execFileCb } = require('child_process');
+        execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_SETTINGS dynamic_did_enabled ${isEnabled}`], () => {});
+    } catch (_) {}
 
     // Default dispositions
     const defaultDispositions = [
@@ -876,25 +895,105 @@ function recomputePjsipPresence(name) {
 function recomputeAllPjsipPresence() {
     updateAllExtensionPresence();
 }
+function parseIax2PeersOutput(peersOut) {
+    const presence = {};
+    if (!peersOut) return presence;
+    const lines = peersOut.split('\n');
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('Name/Username') || trimmed.includes('iax2 peers') || trimmed.startsWith('Host')) continue;
+        const parts = trimmed.split(/\s+/);
+        if (parts.length >= 2) {
+            const rawName = parts[0];
+            const peerName = rawName.split('/')[0];
+            const lineUpper = trimmed.toUpperCase();
+            const isOnline = lineUpper.includes(' OK') || lineUpper.includes('REACHABLE') || lineUpper.includes('REGISTERED') || lineUpper.includes('UNMONITORED');
+            presence[peerName] = isOnline;
+            presence[rawName] = isOnline;
+        }
+    }
+    return presence;
+}
+
+function parseIax2RegistryOutput(regOut) {
+    const presence = {};
+    if (!regOut) return presence;
+    const lines = regOut.split('\n');
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('Host') || trimmed.includes('IAX2 registrations')) continue;
+        const parts = trimmed.split(/\s+/);
+        if (parts.length >= 5) {
+            const username = parts[2];
+            const lineUpper = trimmed.toUpperCase();
+            const isOnline = lineUpper.includes('REGISTERED') || lineUpper.includes('OK');
+            if (username && username !== 'Username') {
+                presence[username] = isOnline;
+            }
+        }
+    }
+    return presence;
+}
+
+async function getIax2StatusFromCliAsync() {
+    const presence = {};
+    try {
+        const { execFile: execFileCb } = require('child_process');
+        const execFilePromise = (cmd, args) => new Promise(resolve => execFileCb(cmd, args, (err, stdout) => resolve(err ? '' : stdout || '')));
+        const [peersOut, regOut] = await Promise.all([
+            execFilePromise(ASTERISK_BIN, ['-rx', 'iax2 show peers']),
+            execFilePromise(ASTERISK_BIN, ['-rx', 'iax2 show registry'])
+        ]);
+        Object.assign(presence, parseIax2PeersOutput(peersOut));
+        Object.assign(presence, parseIax2RegistryOutput(regOut));
+    } catch (_) {}
+    return presence;
+}
 
 async function getTrunkStatusMap() {
     try {
-        const [trunks] = await pool.query("SELECT trunkid, name, tech, channelid, disabled, usercontext FROM `asterisk`.`trunks` WHERE LOWER(tech) IN ('sip', 'iax2', 'iax') ORDER BY trunkid ASC");
+        const [trunks] = await pool.query("SELECT trunkid, name, tech, channelid, disabled, usercontext FROM `asterisk`.`trunks` ORDER BY trunkid ASC");
+        const iaxCliPresence = await getIax2StatusFromCliAsync();
         const statusMap = {};
         for (const t of trunks) {
             let online = false;
+            const techLower = String(t.tech || '').toLowerCase().trim();
             let statusText = t.disabled === 'on' ? 'Disabled' : 'Offline';
 
-            if (t.tech === 'custom') {
-                online = t.disabled !== 'on';
-                statusText = online ? 'Active' : 'Disabled';
-            } else if (t.tech === 'sip') {
+            if (t.disabled === 'on') {
+                online = false;
+                statusText = 'Disabled';
+            } else if (techLower === 'custom') {
+                const channelIdStr = String(t.channelid || '').trim();
+                const channelIdUpper = channelIdStr.toUpperCase();
+                if (channelIdUpper.startsWith('IAX2/') || channelIdUpper.startsWith('IAX/')) {
+                    const peerMatch = channelIdStr.match(/^IAX2?\/([^/$@:]+)/i);
+                    const peerName = peerMatch ? peerMatch[1] : '';
+                    const iaxKey = `tr-trunk-${t.trunkid}`;
+                    online = (iaxPresence[iaxKey] === true) || (iaxPresence[t.name] === true) || (peerName && iaxPresence[peerName] === true) || (iaxCliPresence[t.name] === true) || (peerName && iaxCliPresence[peerName] === true);
+                    statusText = online ? 'OK' : 'Offline';
+                } else if (channelIdUpper.startsWith('SIP/') || channelIdUpper.startsWith('PJSIP/')) {
+                    const peerMatch = channelIdStr.match(/^(?:SIP|PJSIP)\/([^/$@:]+)/i);
+                    const peerName = peerMatch ? peerMatch[1] : '';
+                    const sipKey = `tr-trunk-${t.trunkid}`;
+                    online = (sipPresence[sipKey] === true) || (sipPresence[t.name] === true) || (peerName && sipPresence[peerName] === true);
+                    statusText = online ? 'OK' : 'Offline';
+                } else {
+                    online = true;
+                    statusText = 'Active';
+                }
+            } else if (techLower === 'sip') {
                 const sipKey = `tr-trunk-${t.trunkid}`;
-                online = (sipPresence[sipKey] === true) || (sipPresence[t.name] === true);
+                online = (sipPresence[sipKey] === true) || (sipPresence[t.name] === true) || (sipPresence[t.usercontext] === true);
                 statusText = online ? 'OK' : 'Offline';
-            } else if (t.tech === 'iax2' || t.tech === 'iax') {
+            } else if (techLower === 'iax2' || techLower === 'iax') {
                 const iaxKey = `tr-trunk-${t.trunkid}`;
-                online = (iaxPresence[iaxKey] === true) || (iaxPresence[t.name] === true);
+                online = (iaxPresence[iaxKey] === true) ||
+                         (iaxPresence[t.name] === true) ||
+                         (iaxPresence[t.usercontext] === true) ||
+                         (iaxCliPresence[iaxKey] === true) ||
+                         (iaxCliPresence[t.name] === true) ||
+                         (iaxCliPresence[t.usercontext] === true);
                 statusText = online ? 'OK' : 'Offline';
             }
 
@@ -923,6 +1022,7 @@ async function getTrunkStatusMap() {
         }
         return statusMap;
     } catch(e) {
+        console.error('getTrunkStatusMap error:', e.message);
         return {};
     }
 }
@@ -1071,6 +1171,7 @@ function connectAMI() {
         client.write(`Action: PJSIPShowEndpoints\r\n\r\n`);
         client.write(`Action: PJSIPShowContacts\r\n\r\n`);
         client.write(`Action: IAXpeerlist\r\n\r\n`);
+        client.write(`Action: IAXregistry\r\n\r\n`);
     }
 
     let buffer = '';
@@ -1121,9 +1222,11 @@ function connectAMI() {
             if (event.Event === 'IAXPeerEntry') {
                 let rawName = event.ObjectName || '';
                 let name = rawName ? rawName.split('/')[0] : '';
-                let status = event.Status || '';
+                let status = String(event.Status || '').toUpperCase().trim();
                 if (name) {
-                    iaxPresence[name] = status.toUpperCase().startsWith('OK');
+                    let isOnline = status.startsWith('OK') || status === 'REACHABLE' || status === 'REGISTERED' || status === 'UNMONITORED';
+                    iaxPresence[name] = isOnline;
+                    iaxPresence[rawName] = isOnline;
                     getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
                 }
             }
@@ -1133,13 +1236,27 @@ function connectAMI() {
                 let rawPeer = event.Peer ? event.Peer.replace(/^(IAX2|IAX)\//i, '') : '';
                 let name = rawPeer ? rawPeer.split('/')[0] : '';
                 if (name) {
-                    let statusStr = String(event.PeerStatus || '').trim();
-                    let isOnline = statusStr === 'Registered' || statusStr === 'Reachable';
+                    let statusStr = String(event.PeerStatus || '').trim().toUpperCase();
+                    let isOnline = statusStr === 'REGISTERED' || statusStr === 'REACHABLE' || statusStr.startsWith('OK') || statusStr === 'UNMONITORED';
                     iaxPresence[name] = isOnline;
+                    iaxPresence[rawPeer] = isOnline;
                     getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
                 }
             }
 
+            // Parse IAXRegistry / Registry events
+            if (event.Event === 'Registry' || event.Event === 'IAXRegistry' || event.Event === 'IAXRegistryEntry') {
+                let channelType = String(event.ChannelType || event.Type || '').toUpperCase();
+                if (channelType === 'IAX2' || channelType === 'IAX' || (event.Event && event.Event.startsWith('IAX'))) {
+                    let username = event.Username || event.ObjectName || '';
+                    let state = String(event.Status || event.State || '').toUpperCase();
+                    let isOnline = state === 'REGISTERED' || state.startsWith('OK');
+                    if (username) {
+                        iaxPresence[username] = isOnline;
+                        getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
+                    }
+                }
+            }
             // Parse PJSIP ContactStatus events — real-time Reachable/Unreachable updates
             if (event.Event === 'ContactStatus') {
                 let name = event.EndpointName || '';
@@ -5994,6 +6111,16 @@ app.post('/api/config/trunks', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Custom Dial String is required for Custom trunks.' });
         }
 
+        let warningMessage = null;
+        if (trunkTech === 'custom' && dialString) {
+            const [otherTrunk] = await pool.query(
+                'SELECT trunkid, name FROM `asterisk`.`trunks` WHERE tech = "custom" AND channelid = ?',
+                [dialString]
+            );
+            if (otherTrunk.length > 0) {
+                warningMessage = `Warning: Custom dial string '${dialString}' already exists in another trunk ('${otherTrunk[0].name || otherTrunk[0].trunkid}')`;
+            }
+        }
         const [maxRow] = await pool.query('SELECT COALESCE(MAX(trunkid), 0) + 1 AS nextId FROM `asterisk`.`trunks`');
         const nextTrunkId = maxRow[0].nextId;
         const trunkKey = `tr-trunk-${nextTrunkId}`;
@@ -6061,11 +6188,11 @@ app.post('/api/config/trunks', async (req, res) => {
                 }
             }
         }
-
         const reloadRes = await reloadPbxConfigPromise();
         res.json({
             success: true,
             message: `Trunk '${trunkName}' (${trunkTech.toUpperCase()}) created successfully.`,
+            warningMessage: warningMessage || undefined,
             applied: reloadRes.success,
             reloadError: reloadRes.error
         });
@@ -6095,6 +6222,17 @@ app.put('/api/config/trunks/:trunkid', async (req, res) => {
         const dialoptsVal = String(dialopts || '').trim();
         const continueVal = String(contVal || 'off').trim();
         const failscriptVal = String(failscript || '').trim();
+
+        let warningMessage = null;
+        if (trunkTech === 'custom' && dialString) {
+            const [otherTrunk] = await pool.query(
+                'SELECT trunkid, name FROM `asterisk`.`trunks` WHERE tech = "custom" AND channelid = ? AND trunkid != ?',
+                [dialString, trunkId]
+            );
+            if (otherTrunk.length > 0) {
+                warningMessage = `Warning: Custom dial string '${dialString}' already exists in another trunk ('${otherTrunk[0].name || otherTrunk[0].trunkid}')`;
+            }
+        }
         const trunkKey = `tr-trunk-${trunkId}`;
 
         await pool.query(`
@@ -6103,7 +6241,6 @@ app.put('/api/config/trunks/:trunkid', async (req, res) => {
             WHERE trunkid = ?
         `, [trunkName, trunkTech, dialString, cidVal, keepCidVal, maxChansVal, failscriptVal, dialPrefixVal, disabledVal, continueVal, userContextVal, trunkId]);
 
-        // Store dialopts in AstDB
         if (dialoptsVal) {
             try { await execPromise(`asterisk -rx "database put TRUNK ${trunkId}/dialopts ${dialoptsVal}"`); } catch (e) {}
         } else {
@@ -6163,7 +6300,8 @@ app.put('/api/config/trunks/:trunkid', async (req, res) => {
         const reloadRes = await reloadPbxConfigPromise();
         res.json({
             success: true,
-            message: `Trunk '${trunkName}' updated successfully.`,
+            message: `Trunk ID #${trunkId} updated successfully.`,
+            warningMessage: warningMessage || undefined,
             applied: reloadRes.success,
             reloadError: reloadRes.error
         });
@@ -6242,12 +6380,21 @@ app.post('/api/config/routes/inbound', async (req, res) => {
         const cid = ''; // Default cidnum to empty string
         const dest = String(destination).trim();
 
-        // Check if route with exact same DID (extension) and Description already exists
+        let warningMessage = null;
+        if (ext) {
+            const [otherDid] = await pool.query(
+                'SELECT description, extension FROM `asterisk`.`incoming` WHERE extension = ? AND description != ?',
+                [ext, desc]
+            );
+            if (otherDid.length > 0) {
+                warningMessage = `Warning: DID number '${ext}' already exists in another inbound route ('${otherDid[0].description || otherDid[0].extension}')`;
+            }
+        }
+
         const [existing] = await pool.query(
             'SELECT extension FROM `asterisk`.`incoming` WHERE extension = ? AND description = ?',
             [ext, desc]
         );
-
         if (existing.length > 0) {
             await pool.query(`
                 UPDATE \`asterisk\`.\`incoming\`
@@ -6263,13 +6410,15 @@ app.post('/api/config/routes/inbound', async (req, res) => {
         }
 
         reloadPbxConfig();
-        res.json({ success: true, message: `Inbound Route '${desc}' saved successfully.` });
+        res.json({
+            success: true,
+            warningMessage: warningMessage || undefined,
+            message: `Inbound Route '${desc}' saved successfully.`
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
-// PUT /api/config/routes/inbound - Modify Inbound Route
 app.put('/api/config/routes/inbound', async (req, res) => {
     try {
         const { originalExtension, originalDescription, originalDestination, description, extension, destination } = req.body;
@@ -6288,6 +6437,17 @@ app.put('/api/config/routes/inbound', async (req, res) => {
         const origDesc = String(originalDescription || '').trim();
         const origDest = String(originalDestination || '').trim();
 
+        let warningMessage = null;
+        if (ext) {
+            const [otherDid] = await pool.query(
+                'SELECT description, extension FROM `asterisk`.`incoming` WHERE extension = ? AND description != ? AND extension != ?',
+                [ext, origDesc, origExt]
+            );
+            if (otherDid.length > 0) {
+                warningMessage = `Warning: DID number '${ext}' already exists in another inbound route ('${otherDid[0].description || otherDid[0].extension}')`;
+            }
+        }
+
         await pool.query(`
             UPDATE \`asterisk\`.\`incoming\`
             SET description = ?, extension = ?, destination = ?
@@ -6298,7 +6458,11 @@ app.put('/api/config/routes/inbound', async (req, res) => {
         `, [desc, ext, dest, origExt, rawOrigExt, origExt, origDesc, origDesc, origDest, origDest]);
 
         reloadPbxConfig();
-        res.json({ success: true, message: `Inbound Route '${desc}' updated successfully.` });
+        res.json({
+            success: true,
+            warningMessage: warningMessage || undefined,
+            message: `Inbound Route '${desc}' updated successfully.`
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -7388,9 +7552,10 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
         const execFileAsync = (cmd, args) => new Promise((resolve) => {
             execFileCb(cmd, args, (err, stdout) => resolve(err ? '' : stdout || ''));
         });
+        const [sRows] = await pool.query('SELECT dynamic_did_enabled FROM `asterisk`.`storage_settings` WHERE id = 1');
+        const dynamicDidEnabled = sRows.length > 0 ? (sRows[0].dynamic_did_enabled !== 0) : true;
 
-        const [dbRows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number, updated_at FROM `asterisk`.`gsm_dongles`');
-
+        const [dbRows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number, dynamic_enabled, updated_at FROM `asterisk`.`gsm_dongles`');
         const devicesOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
         const liveDevices = parseDevicesOutput(devicesOutput || '', true);
         const liveMap = {};
@@ -7473,6 +7638,7 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
                 state,
                 rssi,
                 provider,
+                dynamicEnabled: dbRow ? (dbRow.dynamic_enabled !== 0) : true,
                 astdb: astdbStatus,
                 inboundRoute: routeMatch ? {
                     found: true,
@@ -7488,6 +7654,7 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
 
         return res.json({
             success: true,
+            dynamicDidEnabled,
             mappings,
             summary: {
                 totalCount: mappings.length,
@@ -7500,7 +7667,83 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
         return res.status(500).json({ success: false, error: err.message });
     }
 });
-// ============================================================================
+// POST /api/config/dongle-mappings/global-toggle - Enable or disable GSM Dynamic DID mappings globally
+app.post('/api/config/dongle-mappings/global-toggle', requireAuth, async (req, res) => {
+    try {
+        const { enabled } = req.body;
+        const targetState = Boolean(enabled);
+        const val = targetState ? 1 : 0;
+
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`storage_settings\` (id, dynamic_did_enabled)
+            VALUES (1, ?)
+            ON DUPLICATE KEY UPDATE
+                dynamic_did_enabled = VALUES(dynamic_did_enabled)
+        `, [val]);
+
+        const { execFile: execFileCb } = require('child_process');
+        const execFileAsync = (cmd, args) => new Promise((resolve) => {
+            execFileCb(cmd, args, (err, stdout) => resolve(err ? '' : stdout || ''));
+        });
+
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_SETTINGS dynamic_did_enabled ${val}`]);
+        await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
+
+        return res.json({
+            success: true,
+            enabled: targetState,
+            message: targetState
+                ? 'GSM Dynamic DID mappings enabled globally in Asterisk dialplan.'
+                : 'GSM Dynamic DID mappings disabled globally. Only explicitly registered Inbound Routes will process incoming calls.'
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/config/dongle-mappings/:dongleName/toggle - Enable/Disable Dynamic DID mapping for a specific dongle
+app.post('/api/config/dongle-mappings/:dongleName/toggle', requireAuth, async (req, res) => {
+    try {
+        const dongleName = req.params.dongleName;
+        if (!dongleName || !/^[a-zA-Z0-9_-]+$/.test(dongleName)) {
+            return res.status(400).json({ success: false, error: 'Invalid dongle name' });
+        }
+
+        const [existing] = await pool.query('SELECT dynamic_enabled FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?', [dongleName]);
+        let currentState = true;
+        if (existing.length > 0) {
+            currentState = existing[0].dynamic_enabled !== 0;
+        }
+        const targetState = typeof req.body.enabled === 'boolean'
+            ? req.body.enabled
+            : (req.body.enabled === 'false' || req.body.enabled === 0 || req.body.enabled === '0' ? false : !currentState);
+        const val = targetState ? 1 : 0;
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, dynamic_enabled)
+            VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE dynamic_enabled = ?
+        `, [dongleName, val, val]);
+
+        const { execFile: execFileCb } = require('child_process');
+        const execFileAsync = (cmd, args) => new Promise((resolve) => {
+            execFileCb(cmd, args, (err, stdout) => resolve(err ? '' : stdout || ''));
+        });
+
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_SETTINGS ${dongleName} ${val}`]);
+        await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
+
+        return res.json({
+            success: true,
+            dongleName,
+            enabled: targetState,
+            message: targetState
+                ? `Dynamic DID mapping enabled for ${dongleName}.`
+                : `Dynamic DID mapping disabled for ${dongleName}. Only explicit Asterisk Inbound Routes will process calls for ${dongleName}.`
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
 // AUTO-DIALER & QUEUE CONTROL ENGINE MODULE
 // ============================================================================
 

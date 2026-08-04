@@ -673,14 +673,18 @@ const isRtl = currentLang === 'ar';
                 trunkIds.forEach(tid => {
                     const trunk = localTrunksData[tid];
                     const isOnline = trunk.online;
-                    const tech = String(trunk.tech || 'custom').toUpperCase();
-                    const activeCount = trunk.activeCalls || 0;
-                    
-                    let techBadgeClass = 'bg-slate-500/15 text-slate-300 border-slate-500/20';
-                    if (tech === 'SIP') techBadgeClass = 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20';
-                    else if (tech === 'IAX2' || tech === 'IAX') techBadgeClass = 'bg-purple-500/15 text-purple-400 border-purple-500/20';
-                    else if (tech === 'CUSTOM') techBadgeClass = 'bg-amber-500/15 text-amber-400 border-amber-500/20';
+                    const channelIdUpper = String(trunk.channelid || '').toUpperCase();
+                    let techDisplay = String(trunk.tech || 'custom').toUpperCase();
+                    if (channelIdUpper.startsWith('IAX2/') || channelIdUpper.startsWith('IAX/')) {
+                        techDisplay = 'IAX2';
+                    } else if (channelIdUpper.startsWith('SIP/') || channelIdUpper.startsWith('PJSIP/')) {
+                        techDisplay = 'SIP';
+                    }
 
+                    let techBadgeClass = 'bg-slate-500/15 text-slate-300 border-slate-500/20';
+                    if (techDisplay === 'SIP') techBadgeClass = 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20';
+                    else if (techDisplay === 'IAX2' || techDisplay === 'IAX') techBadgeClass = 'bg-purple-500/15 text-purple-400 border-purple-500/20';
+                    else if (techDisplay === 'CUSTOM') techBadgeClass = 'bg-amber-500/15 text-amber-400 border-amber-500/20';
                     const statusBadgeClass = isOnline
                         ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
                         : 'bg-rose-500/15 text-rose-400 border-rose-500/20';

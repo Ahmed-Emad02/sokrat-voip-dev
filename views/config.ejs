@@ -722,11 +722,13 @@ function isTabAllowed(tabName) {
                         </svg>
                         <span><%= isRtl ? 'خريطة الشرائح التلقائية (GSM Dynamic DIDs)' : 'GSM Dynamic DID Mappings' %></span>
                     </h2>
-                    <p class="text-xs text-[var(--text-muted)] mt-1">
-                        <%= isRtl ? 'عرض مباشر ومطابقة ديناميكية لشرائح GSM وأرقام DIDs ومفاتيح AstDB ومسارات PBX الواردة' : 'Live status of logical slots (dongle0, dongle1), configured DIDs, hardware IMSI/IMEI aliases, AstDB keys, and FreePBX Inbound Routes.' %>
-                    </p>
+                        <%= isRtl ? 'إعداد أرقام DIDs الديناميكية للشرائح غير المسجلة بمسارات واردة صريحة في المقسم (الأرقام المسجلة توجه طبيعياً)' : 'Dynamic DID mapping for GSM dongles/SIMs not explicitly registered in PBX Inbound Routes (Registered DIDs route normally via Asterisk).' %>
                 </div>
                 <div class="flex items-center gap-2.5 flex-wrap">
+                    <button type="button" id="toggleDynamicDidBtn" onclick="toggleDynamicDidMappings()" class="px-3.5 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20">
+                        <span id="toggleDynamicDidDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span id="toggleDynamicDidText"><%= isRtl ? 'الخريطة الديناميكية: مفعلة' : 'Dynamic Mappings: Enabled' %></span>
+                    </button>
                     <button type="button" onclick="fetchDongleMappingsTab()" class="config-btn-secondary px-3.5 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         <span><%= isRtl ? 'تحديث البيانات' : 'Refresh Mappings' %></span>
@@ -3028,7 +3030,9 @@ function isTabAllowed(tabName) {
                     showToast(isRtl ? 'فشل تحميل بيانات خريطة DIDs' : 'Failed to load DID mappings', 'error');
                     return;
                 }
-
+                if (typeof data.dynamicDidEnabled !== 'undefined') {
+                    updateDynamicDidBtnUI(data.dynamicDidEnabled !== false);
+                }
                 document.getElementById('dmCardTotal').textContent = data.summary.totalCount || 0;
                 document.getElementById('dmCardConnected').textContent = data.summary.connectedCount || 0;
                 document.getElementById('dmCardSynced').textContent = data.summary.syncedCount || 0;
@@ -3065,10 +3069,18 @@ function isTabAllowed(tabName) {
 
                     let routeBadge = '';
                     if (m.inboundRoute && m.inboundRoute.found) {
-                        routeBadge = '<div class="space-y-0.5"><span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">→ ' + (m.inboundRoute.description || m.inboundRoute.destination) + '</span><div class="text-[10px] font-mono text-[var(--text-muted)]">' + m.inboundRoute.destination + '</div></div>';
+                        routeBadge = '<div class="space-y-0.5"><span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">→ ' + (m.inboundRoute.description || m.inboundRoute.destination) + '</span><div class="text-[10px] font-mono text-emerald-400 font-bold">' + (isRtl ? 'مسجلة في المقسم (توجيه طبيعي)' : 'Registered Inbound Route (Normal Routing)') + '</div></div>';
                     } else {
-                        routeBadge = '<span class="px-2 py-0.5 text-[10px] font-mono rounded bg-red-500/10 text-red-400 border border-red-500/20">No Route for ' + (m.phoneNumber || 'DID') + '</span>';
+                        routeBadge = '<div class="space-y-0.5"><span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">' + (isRtl ? 'غير مسجلة - خريطة ديناميكية نشطة' : 'Unregistered - Dynamic DID Active') + '</span></div>';
                     }
+
+                    const perDongleEnabled = m.dynamicEnabled !== false;
+                    const perDongleBtnClass = perDongleEnabled
+                        ? 'px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-pointer transition'
+                        : 'px-2.5 py-1 text-[11px] font-bold rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 cursor-pointer transition';
+                    const perDongleBtnText = perDongleEnabled
+                        ? (isRtl ? 'الخريطة: مفعلة' : 'Dynamic: ON')
+                        : (isRtl ? 'الخريطة: معطلة' : 'Dynamic: OFF');
 
                     return `
                         <tr class="hover:bg-[var(--bg-hover)]/40 transition">
@@ -3085,7 +3097,10 @@ function isTabAllowed(tabName) {
                                 <div>${stateBadge}</div>
                                 <div class="text-[11px] text-[var(--text-muted)]">${m.provider} (${m.rssi} dBm)</div>
                             </td>
-                            <td class="p-3 text-right">
+                            <td class="p-3 text-right flex items-center justify-end gap-1.5">
+                                <button onclick="toggleSingleDongleDynamic('${m.dongleName}', ${perDongleEnabled})" class="${perDongleBtnClass}" title="${isRtl ? 'تفعيل/تعطيل الخريطة الديناميكية لـ ' + m.dongleName : 'Enable/Disable Dynamic DID mapping for ' + m.dongleName}">
+                                    ${perDongleBtnText}
+                                </button>
                                 <button onclick="editDongleTabDid('${m.dongleName}', '${m.imsi}', '${m.phoneNumber}')" class="config-btn-secondary px-2.5 py-1 text-[11px] cursor-pointer">
                                     ${isRtl ? 'تعديل DID' : 'Edit DID'}
                                 </button>
@@ -3093,12 +3108,73 @@ function isTabAllowed(tabName) {
                         </tr>
                     `;
                 }).join('');
-
             } catch (err) {
                 console.error('fetchDongleMappingsTab error:', err);
             }
         }
         window.fetchDongleMappingsTab = fetchDongleMappingsTab;
+
+        let isDynamicDidEnabledState = true;
+        function updateDynamicDidBtnUI(enabled) {
+            isDynamicDidEnabledState = Boolean(enabled);
+            const btn = document.getElementById('toggleDynamicDidBtn');
+            const dot = document.getElementById('toggleDynamicDidDot');
+            const txt = document.getElementById('toggleDynamicDidText');
+            if (!btn || !dot || !txt) return;
+
+            if (isDynamicDidEnabledState) {
+                btn.className = 'px-3.5 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20';
+                dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+                txt.textContent = isRtl ? 'الخريطة الديناميكية: مفعلة' : 'Dynamic Mappings: Enabled';
+            } else {
+                btn.className = 'px-3.5 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20';
+                dot.className = 'w-2 h-2 rounded-full bg-red-400';
+                txt.textContent = isRtl ? 'الخريطة الديناميكية: معطلة' : 'Dynamic Mappings: Disabled';
+            }
+        }
+
+        async function toggleDynamicDidMappings() {
+            try {
+                const targetState = !isDynamicDidEnabledState;
+                const res = await fetch('/api/config/dongle-mappings/global-toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: targetState })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    updateDynamicDidBtnUI(data.enabled);
+                    showToast(data.message, 'success');
+                    fetchDongleMappingsTab();
+                } else {
+                    showToast(data.error || 'Failed to update dynamic DID setting', 'error');
+                }
+            } catch(err) {
+                showToast('Network error: ' + err.message, 'error');
+            }
+        }
+        window.toggleDynamicDidMappings = toggleDynamicDidMappings;
+
+        async function toggleSingleDongleDynamic(dongleName, currentState) {
+            try {
+                const targetState = !currentState;
+                const res = await fetch(`/api/config/dongle-mappings/${encodeURIComponent(dongleName)}/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: targetState })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    fetchDongleMappingsTab();
+                } else {
+                    showToast(data.error || 'Failed to update dongle setting', 'error');
+                }
+            } catch(err) {
+                showToast('Network error: ' + err.message, 'error');
+            }
+        }
+        window.toggleSingleDongleDynamic = toggleSingleDongleDynamic;
 
         async function editDongleTabDid(dongleId, imsi, currentVal) {
             const isRtl = document.documentElement.dir === 'rtl';
@@ -4737,6 +4813,14 @@ function isTabAllowed(tabName) {
             const usercontext = document.getElementById('trunkUserContext').value.trim();
             const peerdetails = document.getElementById('trunkPeerDetails').value.trim();
             const userdetails = document.getElementById('trunkUserDetails').value.trim();
+            if (tech === 'custom' && channelid && Array.isArray(loadedTrunksList)) {
+                const existingTrunk = loadedTrunksList.find(t => String(t.trunkid) !== String(editId) && String(t.tech || '').toLowerCase() === 'custom' && String(t.channelid || '').trim() === channelid);
+                if (existingTrunk) {
+                    showToast(isRtl
+                        ? `تحذير: نص طلب الاتصال المخصص '${channelid}' مستخدم بالفعل في خط الربط '${existingTrunk.name || existingTrunk.trunkid}'`
+                        : `Warning: Custom dial string '${channelid}' already exists in another trunk ('${existingTrunk.name || existingTrunk.trunkid}')`, 'warning');
+                }
+            }
 
             const url = editId ? '/api/config/trunks/' + editId : '/api/config/trunks';
             const method = editId ? 'PUT' : 'POST';
@@ -4749,7 +4833,9 @@ function isTabAllowed(tabName) {
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    if (data.applied === false) {
+                    if (data.warningMessage) {
+                        showToast(data.warningMessage, 'warning');
+                    } else if (data.applied === false) {
                         showToast((data.message || 'Trunk saved') + ' (PBX Apply Warning: ' + (data.reloadError || '') + ')', 'warning');
                     } else {
                         showToast(data.message, 'success');
@@ -4946,6 +5032,29 @@ function isTabAllowed(tabName) {
                 showToast(isRtl ? 'يرجى اختيار الوجهة.' : 'Please select a destination.', 'error');
                 return;
             }
+            if (extension && Array.isArray(loadedInboundRoutesList)) {
+                const normExt = extension.trim();
+                const existingRoute = loadedInboundRoutesList.find(r => {
+                    const origExt = (editExt || '').trim();
+                    const origDesc = (editDesc || '').trim();
+                    if (origExt || origDesc) {
+                        if (String(r.extension || '').trim() === origExt && String(r.description || '').trim() === origDesc) {
+                            return false;
+                        }
+                    }
+                    const rExt = String(r.extension || '').trim();
+                    if (!rExt) return false;
+                    if (rExt === normExt) return true;
+                    const alt1 = normExt.startsWith('+20') ? ('0' + normExt.substring(3)) : (normExt.startsWith('01') ? ('+20' + normExt.substring(1)) : normExt);
+                    const alt2 = normExt.startsWith('+') ? normExt.substring(1) : ('+' + normExt);
+                    return rExt === alt1 || rExt === alt2;
+                });
+                if (existingRoute) {
+                    showToast(isRtl
+                        ? `تحذير: رقم DID '${extension}' مستخدم بالفعل في مسار وارد آخر ('${existingRoute.description || existingRoute.extension}')`
+                        : `Warning: DID number '${extension}' already exists in another inbound route ('${existingRoute.description || existingRoute.extension}')`, 'warning');
+                }
+            }
 
             const url = '/api/config/routes/inbound';
             const method = (editDesc || editExt || editDest) ? 'PUT' : 'POST';
@@ -4965,7 +5074,11 @@ function isTabAllowed(tabName) {
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    showToast(data.message, 'success');
+                    if (data.warningMessage) {
+                        showToast(data.warningMessage, 'warning');
+                    } else {
+                        showToast(data.message, 'success');
+                    }
                     closeModal('inboundModal');
                     fetchInboundRoutes();
                 } else showToast(data.error, 'error');

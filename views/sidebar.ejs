@@ -2641,8 +2641,9 @@ function enhanceSelectElements() {
         menu.addEventListener('click', (e) => {
             e.stopPropagation();
         });
+        menu._reposition = positionMenuFixed;
+        menu._trigger = trigger;
         document.body.appendChild(menu);
-        let searchInput = null;
         let searchContainer = null;
 
         const optionsContainer = document.createElement('div');
@@ -2821,12 +2822,29 @@ window.addEventListener('scroll', function(e) {
     if (e && e.target && (e.target.classList?.contains('custom-select-options') || e.target.classList?.contains('custom-select-menu') || (e.target.closest && e.target.closest('.custom-select-menu')))) {
         return;
     }
-    document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.add('hidden'));
-    document.querySelectorAll('.custom-select-trigger').forEach(t => t.setAttribute('aria-expanded', 'false'));
+    document.querySelectorAll('.custom-select-menu:not(.hidden)').forEach(m => {
+        if (typeof m._reposition === 'function' && m._trigger) {
+            const rect = m._trigger.getBoundingClientRect();
+            if (rect.bottom > 0 && rect.top < window.innerHeight && rect.left > 0 && rect.right < window.innerWidth) {
+                m._reposition();
+            } else {
+                m.classList.add('hidden');
+                if (m._trigger) m._trigger.setAttribute('aria-expanded', 'false');
+            }
+        } else {
+            m.classList.add('hidden');
+        }
+    });
 }, true);
 window.addEventListener('resize', function() {
-    document.querySelectorAll('.custom-select-menu').forEach(m => m.classList.add('hidden'));
-    document.querySelectorAll('.custom-select-trigger').forEach(t => t.setAttribute('aria-expanded', 'false'));
+    document.querySelectorAll('.custom-select-menu:not(.hidden)').forEach(m => {
+        if (typeof m._reposition === 'function' && m._trigger) {
+            m._reposition();
+        } else {
+            m.classList.add('hidden');
+            if (m._trigger) m._trigger.setAttribute('aria-expanded', 'false');
+        }
+    });
 });
 
 // ─── Floating Softphone Widget (Disabled / Commented out for later) ───
