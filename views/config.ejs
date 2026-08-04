@@ -7353,16 +7353,7 @@ function isTabAllowed(tabName) {
                 .then(data => {
                     if (!data || !data.success || !data.timegroups) return;
                     loadedTimeGroupsList = data.timegroups;
-                    const select = document.getElementById('tcTimeGroupId');
-                    if (select) {
-                        select.innerHTML = '<option value="">' + (isRtl ? '-- اختر مجموعة الوقت --' : '-- Select Time Group --') + '</option>';
-                        data.timegroups.forEach(tg => {
-                            const opt = document.createElement('option');
-                            opt.value = tg.id;
-                            opt.textContent = `${tg.description} (ID: ${tg.id})`;
-                            select.appendChild(opt);
-                        });
-                    }
+                    populateTcTimeGroupsSelect();
 
                     const tbody = document.getElementById('timegroups-table-body');
                     if (!tbody) return;
@@ -7774,6 +7765,21 @@ function isTabAllowed(tabName) {
                         tbody.appendChild(tr);
                     });
                 });
+        }
+        function populateTcTimeGroupsSelect() {
+            const select = document.getElementById('tcTimeGroup');
+            if (!select) return;
+            const currentVal = select.value;
+            select.innerHTML = '<option value="">' + (isRtl ? '-- اختر مجموعة الوقت --' : '-- Select Time Group --') + '</option>';
+            if (Array.isArray(loadedTimeGroupsList)) {
+                loadedTimeGroupsList.forEach(tg => {
+                    const opt = document.createElement('option');
+                    opt.value = tg.id;
+                    opt.textContent = `${tg.description || 'Time Group'} (ID: ${tg.id})`;
+                    select.appendChild(opt);
+                });
+            }
+            if (currentVal) select.value = currentVal;
         }
 
         async function openTimeConditionModal() {
