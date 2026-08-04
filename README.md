@@ -214,6 +214,7 @@ same => n,Goto(s,process)
 
 exten => s,1,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=))
 same => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)
+same => n,ExecIf($["${DB(DONGLE_SETTINGS/${DONGLENAME})}" != "1"]?Goto(skip_dynamic))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "s" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${DB(dongle_map/${DONGLENAME})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "s" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${DB(DONGLE_NUMBERS/${DONGLEIMSI})}))
 same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "s" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${DB(sim_map/${DONGLEIMSI})}))

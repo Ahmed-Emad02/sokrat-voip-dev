@@ -104,6 +104,136 @@ function isTabAllowed(tabName) {
             background-color: var(--bg-hover) !important;
             color: var(--text-primary) !important;
         }
+        /* Unified action hierarchy for configuration feature cards. */
+        .config-action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.45rem;
+            min-height: 2.25rem;
+            padding: 0.5rem 0.8rem;
+            color: var(--text-secondary);
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: 0.625rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            line-height: 1rem;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+        }
+        .config-action-btn:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+            border-color: var(--border-accent);
+            transform: translateY(-1px);
+        }
+        .config-action-btn:active {
+            transform: translateY(0);
+        }
+        .config-action-btn:focus-visible {
+            outline: 2px solid var(--accent-color);
+            outline-offset: 2px;
+        }
+        .config-action-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.45;
+            transform: none;
+        }
+        .config-action-btn svg {
+            width: 0.875rem;
+            height: 0.875rem;
+            flex-shrink: 0;
+        }
+        .config-action-btn--primary {
+            color: #ffffff;
+            background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%);
+            border-color: rgba(248, 113, 113, 0.55);
+            box-shadow: 0 6px 18px rgba(153, 27, 27, 0.3);
+        }
+        .config-action-btn--primary:hover {
+            color: #ffffff;
+            background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+            border-color: rgba(254, 202, 202, 0.7);
+        }
+        .config-action-btn--positive {
+            color: #34d399;
+            background: rgba(16, 185, 129, 0.09);
+            border-color: rgba(52, 211, 153, 0.28);
+        }
+        .config-action-btn--positive:hover {
+            color: #6ee7b7;
+            background: rgba(16, 185, 129, 0.16);
+            border-color: rgba(52, 211, 153, 0.45);
+        }
+        .config-action-btn--danger {
+            color: #f87171;
+            background: rgba(239, 68, 68, 0.08);
+            border-color: rgba(248, 113, 113, 0.25);
+        }
+        .config-action-btn--danger:hover {
+            color: #fca5a5;
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(248, 113, 113, 0.42);
+        }
+        .config-action-btn--state-on {
+            color: #34d399;
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(52, 211, 153, 0.3);
+        }
+        .config-action-btn--state-off {
+            color: #f87171;
+            background: rgba(239, 68, 68, 0.09);
+            border-color: rgba(248, 113, 113, 0.28);
+        }
+        .config-action-btn--compact {
+            min-height: 1.875rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: 0.5rem;
+            font-size: 0.6875rem;
+        }
+        .config-metric-tile {
+            min-width: 0;
+            padding: 1rem;
+            background: var(--bg-card);
+        }
+        .config-control-panel {
+            padding: 0.875rem;
+            background: color-mix(in srgb, var(--bg-primary) 68%, transparent);
+            border: 1px solid var(--border-primary);
+            border-radius: 0.75rem;
+        }
+        html.light-theme .config-action-btn {
+            background: #ffffff;
+            border-color: #cbd5e1;
+            color: #475569;
+        }
+        html.light-theme .config-action-btn:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+        html.light-theme .config-action-btn--primary {
+            color: #ffffff;
+            background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%);
+            border-color: #b91c1c;
+        }
+        html.light-theme .config-action-btn--positive {
+            color: #047857;
+            background: #ecfdf5;
+            border-color: #a7f3d0;
+        }
+        html.light-theme .config-action-btn--danger,
+        html.light-theme .config-action-btn--state-off {
+            color: #b91c1c;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+        html.light-theme .config-action-btn--state-on {
+            color: #047857;
+            background: #ecfdf5;
+            border-color: #a7f3d0;
+        }
         .config-tab-btn {
             font-weight: 700;
             font-size: 0.75rem;
@@ -714,79 +844,82 @@ function isTabAllowed(tabName) {
             </div>
 
             <!-- 2. GSM DYNAMIC DID MAPPINGS PANEL -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4 pt-2">
-                <div>
-                    <h2 class="text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                        <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
-                        <span><%= isRtl ? 'خريطة الشرائح التلقائية (GSM Dynamic DIDs)' : 'GSM Dynamic DID Mappings' %></span>
-                    </h2>
-                        <%= isRtl ? 'إعداد أرقام DIDs الديناميكية للشرائح غير المسجلة بمسارات واردة صريحة في المقسم (الأرقام المسجلة توجه طبيعياً)' : 'Dynamic DID mapping for GSM dongles/SIMs not explicitly registered in PBX Inbound Routes (Registered DIDs route normally via Asterisk).' %>
-                </div>
-                <div class="flex items-center gap-2.5 flex-wrap">
-                    <button type="button" id="toggleDynamicDidBtn" onclick="toggleDynamicDidMappings()" class="px-3.5 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20">
-                        <span id="toggleDynamicDidDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span id="toggleDynamicDidText"><%= isRtl ? 'الخريطة الديناميكية: مفعلة' : 'Dynamic Mappings: Enabled' %></span>
-                    </button>
-                    <button type="button" onclick="fetchDongleMappingsTab()" class="config-btn-secondary px-3.5 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                        <span><%= isRtl ? 'تحديث البيانات' : 'Refresh Mappings' %></span>
-                    </button>
-                    <button type="button" onclick="reconcileDonglesNow()" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        <span><%= isRtl ? 'إعادة مطابقة AstDB الآن' : 'Re-Sync AstDB Now' %></span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
-                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'إجمالي فتحات GSM' : 'Total Dongle Slots' %></span>
-                    <div id="dmCardTotal" class="text-xl font-extrabold font-mono text-[var(--text-primary)]">-</div>
-                </div>
-                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
-                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'الأجهزة المتصلة' : 'Connected Modems' %></span>
-                    <div id="dmCardConnected" class="text-xl font-extrabold font-mono text-emerald-400">-</div>
-                </div>
-                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
-                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'مفاتيح AstDB المطابقة' : 'AstDB Synced Keys' %></span>
-                    <div id="dmCardSynced" class="text-xl font-extrabold font-mono text-cyan-400">-</div>
-                </div>
-                <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-1">
-                    <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'المسارات الواردة المرتبطة' : 'Inbound Routes Linked' %></span>
-                    <div id="dmCardRoutes" class="text-xl font-extrabold font-mono text-purple-400">-</div>
-                </div>
-            </div>
-
-            <!-- Dynamic Mappings Table Card -->
-            <div class="config-card p-6 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-4">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-sm font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                        <span><%= isRtl ? 'جدول مطابقة DIDs والشرائح (Dynamic DID Table)' : 'Dynamic DID Mapping Roster' %></span>
-                    </h3>
+            <div class="config-card overflow-hidden">
+                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)]">
+                    <div class="flex flex-col xl:flex-row xl:items-start justify-between gap-5">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <div class="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                </svg>
+                            </div>
+                            <div class="min-w-0">
+                                <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'خريطة الشرائح التلقائية (GSM Dynamic DIDs)' : 'GSM Dynamic DID Mappings' %></h2>
+                                <p class="text-xs text-[var(--text-muted)] mt-1 max-w-3xl leading-relaxed">
+                                    <%= isRtl ? 'إدارة أرقام DIDs الديناميكية للشرائح غير المسجلة بمسارات واردة صريحة. الأرقام المسجلة تستمر بالتوجيه الطبيعي عبر Asterisk.' : 'Manage dynamic DIDs for GSM SIMs without explicit inbound routes. Registered DIDs continue through normal Asterisk routing.' %>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 xl:justify-end">
+                            <button type="button" onclick="fetchDongleMappingsTab()" class="config-action-btn">
+                                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                <span><%= isRtl ? 'تحديث' : 'Refresh' %></span>
+                            </button>
+                            <button type="button" onclick="reconcileDonglesNow()" class="config-action-btn config-action-btn--primary">
+                                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                <span><%= isRtl ? 'إعادة مطابقة AstDB' : 'Re-Sync AstDB' %></span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="overflow-x-auto rounded-xl border border-[var(--border-primary)]">
-                    <table class="w-full text-left border-collapse text-xs">
-                        <thead>
-                            <tr class="bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] text-[var(--text-muted)] uppercase font-mono font-bold">
-                                <th class="p-3"><%= isRtl ? 'اسم الفتحة (Dongle)' : 'Dongle Slot' %></th>
-                                <th class="p-3"><%= isRtl ? 'رقم DID المعرف' : 'Configured DID' %></th>
-                                <th class="p-3"><%= isRtl ? 'معرفات العتاد (IMSI / IMEI)' : 'Hardware IDs' %></th>
-                                <th class="p-3"><%= isRtl ? 'رقم الشريحة' : 'SIM Report' %></th>
-                                <th class="p-3"><%= isRtl ? 'مفاتيح AstDB' : 'AstDB Keys' %></th>
-                                <th class="p-3"><%= isRtl ? 'مسار PBX الوارد' : 'Inbound Route Link' %></th>
-                                <th class="p-3"><%= isRtl ? 'الحالة والشبكة' : 'Status & Network' %></th>
-                                <th class="p-3 text-right"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
-                            </tr>
-                        </thead>
-                        <tbody id="dmTableBody" class="divide-y divide-[var(--border-primary)]">
-                            <tr>
-                                <td colspan="8" class="p-4 text-center text-[var(--text-muted)] italic">Loading GSM dynamic mappings...</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="p-4 sm:p-5 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/25">
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-xl border border-[var(--border-primary)] bg-[var(--border-primary)]">
+                        <div class="config-metric-tile">
+                            <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'فتحات GSM' : 'Dongle Slots' %></span>
+                            <div id="dmCardTotal" class="text-2xl font-extrabold font-mono text-[var(--text-primary)] mt-1">-</div>
+                        </div>
+                        <div class="config-metric-tile">
+                            <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'الأجهزة المتصلة' : 'Connected' %></span>
+                            <div id="dmCardConnected" class="text-2xl font-extrabold font-mono text-emerald-400 mt-1">-</div>
+                        </div>
+                        <div class="config-metric-tile">
+                            <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'مفاتيح AstDB' : 'AstDB Synced' %></span>
+                            <div id="dmCardSynced" class="text-2xl font-extrabold font-mono text-cyan-400 mt-1">-</div>
+                        </div>
+                        <div class="config-metric-tile">
+                            <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block"><%= isRtl ? 'المسارات المرتبطة' : 'Routes Linked' %></span>
+                            <div id="dmCardRoutes" class="text-2xl font-extrabold font-mono text-purple-400 mt-1">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-5 sm:p-6">
+                    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-4">
+                        <div>
+                            <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'سجل مطابقة DIDs والشرائح' : 'Dynamic DID Mapping Roster' %></h3>
+                            <p class="text-[11px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'حالة الجهاز والهوية ومسار التوجيه في عرض واحد.' : 'Device identity, SIM assignment, and routing health in one view.' %></p>
+                        </div>
+                        <span id="dmRosterCount" class="self-start sm:self-auto px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border-primary)]">0 <%= isRtl ? 'أجهزة' : 'devices' %></span>
+                    </div>
+                    <div class="overflow-x-auto rounded-xl border border-[var(--border-primary)]">
+                        <table class="w-full min-w-[780px] text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-[var(--text-muted)] uppercase tracking-wider font-bold">
+                                    <th class="p-3.5 w-[18%]"><%= isRtl ? 'الجهاز' : 'Device' %></th>
+                                    <th class="p-3.5 w-[22%]"><%= isRtl ? 'رقم DID والشريحة' : 'DID & SIM' %></th>
+                                    <th class="p-3.5 w-[20%]"><%= isRtl ? 'معرفات العتاد' : 'Hardware' %></th>
+                                    <th class="p-3.5 w-[26%]"><%= isRtl ? 'حالة التوجيه' : 'Routing' %></th>
+                                    <th class="p-3.5 text-right w-[14%]"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
+                                </tr>
+                            </thead>
+                            <tbody id="dmTableBody" class="divide-y divide-[var(--border-primary)]">
+                                <tr>
+                                    <td colspan="5" class="p-6 text-center text-[var(--text-muted)] italic">Loading GSM dynamic mappings...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1134,74 +1267,173 @@ function isTabAllowed(tabName) {
                     </table>
                 </div>
             </div>
+
+            <!-- MUSIC ON HOLD (MOH) MANAGEMENT CARD -->
+            <div class="config-card p-6 mt-6">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 border-b border-[var(--border-primary)] pb-4">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
+                            <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
+                            </svg>
+                            <span><%= isRtl ? 'الموسيقى أثناء الانتظار (Music on Hold - MoH)' : 'Music on Hold (MoH)' %></span>
+                        </h2>
+                        <p class="text-xs text-[var(--text-muted)] mt-1">
+                            <%= isRtl ? 'إدارة فئات الموسيقى أثناء الانتظار، رفع مقاطع الصوت، والتحكم بخيارات Asterisk MoH' : 'Manage Music on Hold categories, upload audio tracks, and preview hold music classes' %>
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button onclick="openMohCategoryModal()" class="config-btn-secondary px-3.5 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                            <span><%= isRtl ? 'إضافة فئة جديدة' : 'Add MoH Category' %></span>
+                        </button>
+                        <button onclick="fetchMohData()" class="config-btn-secondary px-3.5 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                            <span><%= isRtl ? 'تحديث' : 'Refresh MoH' %></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MoH Category Selector & Upload Toolbar -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-[var(--bg-card)] p-4 rounded-xl border border-[var(--border-primary)]">
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'فئة الموسيقى (Category)' : 'Select MoH Category' %></label>
+                        <select id="mohCategorySelect" onchange="onMohCategoryChange()" class="config-input w-full text-xs font-mono font-bold">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'معلومات الفئة' : 'Category Info' %></label>
+                        <div id="mohCategoryInfo" class="text-xs text-[var(--text-muted)] space-y-1 font-mono pt-1">
+                            <div><span class="text-white"><%= isRtl ? 'المسار:' : 'Path:' %></span> <span id="mohPathDisplay" class="truncate font-mono text-[11px] text-amber-400">/var/lib/asterisk/moh/</span></div>
+                            <div><span class="text-white"><%= isRtl ? 'الفرز:' : 'Sort:' %></span> <span id="mohSortDisplay" class="font-bold text-emerald-400">alpha</span></div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col justify-end">
+                        <form id="mohUploadForm" onsubmit="uploadMohAudio(event)" class="flex items-center gap-2">
+                            <input type="file" id="mohAudioFile" accept=".wav,.mp3,.gsm,.ogg" class="hidden" onchange="updateMohFileLabel()">
+                            <button type="button" onclick="document.getElementById('mohAudioFile').click()" class="config-btn-secondary px-3 py-2 text-xs flex-1 truncate font-mono">
+                                <span id="mohFileLabel"><%= isRtl ? 'اختر ملف صوتی...' : 'Choose audio file...' %></span>
+                            </button>
+                            <button type="submit" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-1.5 font-bold cursor-pointer shrink-0">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                <span><%= isRtl ? 'رفع' : 'Upload' %></span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Audio Files List Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                                <th class="py-3 px-4"><%= isRtl ? 'اسم الملف' : 'File Name' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'الصيغة' : 'Format' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'الحجم' : 'Size' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'المعاينة والتشغيل' : 'Audio Preview' %></th>
+                                <th class="py-3 px-4 text-center w-28"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="moh-files-table-body" class="divide-y divide-[var(--border-primary)] text-sm font-medium text-[var(--text-primary)]">
+                            <tr><td colspan="5" class="py-8 text-center text-[var(--text-muted)]"><%= isRtl ? 'جاري تحميل ملفات الموسيقى...' : 'Loading MoH audio tracks...' %></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
         <% } %>
 
         <!-- 14. MODEM CONF TAB SECTION -->
         <% if (isTabAllowed('modem')) { %>
         <div id="section-modem" class="tab-section hidden space-y-6">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4">
-                <div>
-                    <h2 class="text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                        <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                        </svg>
-                        <span><%= isRtl ? 'إعدادات المودم وشرائح GSM' : 'Modem Conf (GSM Dongles)' %></span>
-                    </h2>
-                    <p class="text-xs text-[var(--text-muted)] mt-1">
-                        <%= isRtl ? 'التحكم بمستوى الصوت والكسب (Gain) لشرائح GSM ومستويات الإرسال والاستقبال في Asterisk (على مقياس من -10 إلى +10 dB)' : 'Adjust volume gain (Tx & Rx) for each GSM dongle on scale -10 to +10 dB directly in dongle.conf' %>
-                    </p>
-                </div>
-                <div class="flex items-center gap-2.5 flex-wrap">
-                    <button type="button" id="toggleJbBtn" onclick="toggleJitterBuffer()" class="px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-gray-500/10 text-gray-400 border-gray-500/30">
-                        <span class="w-2 h-2 rounded-full bg-gray-400"></span>
-                        <span><%= isRtl ? 'صاقل التلعثم (Jitter Buffer)' : 'Jitter Buffer' %></span>
-                    </button>
-                    <button type="button" onclick="resetAllDongleGains()" class="config-btn-secondary px-4 py-2 text-xs flex items-center gap-1.5 text-red-400 hover:text-red-300 border-red-500/30 hover:bg-red-500/10 cursor-pointer">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                        <span><%= isRtl ? 'إعادة ضبط الكل (txgain=0 & rxgain=0)' : 'Reset All (txgain=0 & rxgain=0)' %></span>
-                    </button>
-                    <button type="button" onclick="saveAllDongleGains()" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
-                        <span><%= isRtl ? 'حفظ جميع التغييرات' : 'Save All Dongle Gains' %></span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Dongles Volume Gain List Grid -->
-            <div id="modemDonglesGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Rendered dynamically by fetchModemConfig() -->
-            </div>
-
-            <!-- RTCP Real-Time Audio Diagnostics Panel -->
-            <div class="config-card p-6 rounded-2xl border border-[var(--border-primary)] bg-[var(--bg-card)] shadow-sm space-y-5">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center font-bold">
-                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
-                            </svg>
+            <div class="config-card overflow-hidden">
+                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)]">
+                    <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <div class="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                </svg>
+                            </div>
+                            <div class="min-w-0">
+                                <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إعدادات مودم GSM' : 'GSM Modem Configuration' %></h2>
+                                <p class="text-xs text-[var(--text-muted)] mt-1 max-w-2xl leading-relaxed">
+                                    <%= isRtl ? 'اضبط كسب الاستقبال والإرسال لكل مودم من -10 إلى +10 dB. احفظ جهازاً منفرداً أو طبّق جميع التغييرات دفعة واحدة.' : 'Tune receive and transmit gain for each modem from -10 to +10 dB. Save one device or apply every pending change together.' %>
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 class="text-sm font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                                <span><%= isRtl ? 'تشخيص الصوت المباشر (RTCP Diagnostics)' : 'RTCP Real-Time Audio Diagnostics' %></span>
-                                <span id="rtcpActiveBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">0 Active Streams</span>
-                            </h3>
-                            <p class="text-xs text-[var(--text-muted)] mt-0.5">
-                                <%= isRtl ? 'مراقبة فورية لجودة التدفق الصوتي، التلعثم (Jitter)، فقدان الحزم، وزمن الاستجابة (RTT)' : 'Real-time metrics for jitter, packet loss, round-trip latency, and audio codecs across active channels' %>
-                            </p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button type="button" onclick="fetchRtcpDiagnostics()" class="config-btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5 cursor-pointer">
-                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                            <span><%= isRtl ? 'تحديث الفحص' : 'Refresh Metrics' %></span>
+                        <button type="button" onclick="saveAllDongleGains()" class="config-action-btn config-action-btn--primary self-start lg:self-auto">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            <span><%= isRtl ? 'حفظ جميع التغييرات' : 'Save All Changes' %></span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Active RTCP Diagnostic Stream Cards Container -->
-                <div id="rtcpDiagnosticsContainer">
+                <div class="p-4 sm:px-6 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/25">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <span class="text-xs font-bold text-[var(--text-primary)] block"><%= isRtl ? 'إدارة فتحات المودم' : 'Dongle Slot Management' %></span>
+                            <span class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'إضافة أو إزالة تعريفات الأجهزة وإعادة ضبط مستويات الكسب.' : 'Add or remove device definitions, or reset all gain values.' %></span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <% if (currentUser === 'root') { %>
+                                <button type="button" onclick="openAddDongleSlotModal()" class="config-action-btn config-action-btn--positive">
+                                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                                    <span><%= isRtl ? 'إضافة فتحة' : 'Add Slot' %></span>
+                                </button>
+                                <button type="button" onclick="openRemoveDongleSlotModal()" class="config-action-btn config-action-btn--danger">
+                                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" /></svg>
+                                    <span><%= isRtl ? 'إزالة فتحة' : 'Remove Slot' %></span>
+                                </button>
+                            <% } %>
+                            <button type="button" onclick="resetAllDongleGains()" class="config-action-btn config-action-btn--danger">
+                                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                <span><%= isRtl ? 'إعادة ضبط الكسب' : 'Reset Gains' %></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-5 sm:p-6">
+                    <div class="flex items-center justify-between gap-3 mb-4">
+                        <div>
+                            <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'مستويات الكسب لكل جهاز' : 'Per-Device Gain Controls' %></h3>
+                            <p class="text-[11px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'Rx للصوت الوارد، وTx للصوت المرسل.' : 'Rx controls incoming audio; Tx controls transmitted audio.' %></p>
+                        </div>
+                        <span id="modemDongleCount" class="px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border-primary)]">0 <%= isRtl ? 'أجهزة' : 'devices' %></span>
+                    </div>
+                    <div id="modemDonglesGrid" class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <!-- Rendered dynamically by fetchModemConfig() -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- RTCP Real-Time Audio Diagnostics Panel -->
+            <div class="config-card overflow-hidden">
+                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)]">
+                    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'تشخيص الصوت المباشر' : 'RTCP Audio Diagnostics' %></h3>
+                                    <span id="rtcpActiveBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">0 Active Streams</span>
+                                </div>
+                                <p class="text-xs text-[var(--text-muted)] mt-1"><%= isRtl ? 'مراقبة جودة الصوت وفقدان الحزم وزمن الاستجابة للتدفقات النشطة.' : 'Monitor audio quality, packet loss, latency, and codecs for active channels.' %></p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="fetchRtcpDiagnostics()" class="config-action-btn self-start">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                            <span><%= isRtl ? 'تحديث المقاييس' : 'Refresh Metrics' %></span>
+                        </button>
+                    </div>
+                </div>
+                <div id="rtcpDiagnosticsContainer" class="p-5 sm:p-6">
                     <!-- Rendered dynamically by fetchRtcpDiagnostics() -->
                 </div>
             </div>
@@ -2573,6 +2805,116 @@ function isTabAllowed(tabName) {
         </div>
     </div>
 
+    <!-- MODAL: ADD MOH CATEGORY -->
+    <div id="mohCategoryModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إضافة فئة موسيقى جديدة' : 'Add MoH Category' %></h3>
+                <button type="button" onclick="closeModal('mohCategoryModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
+            </div>
+            <form onsubmit="saveMohCategory(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم الفئة *' : 'Category Name *' %></label>
+                    <input type="text" id="mohCatName" required placeholder="e.g. promo_music" class="config-input w-full font-mono text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'طريقة الفرز (Sort Order)' : 'Sort Order' %></label>
+                    <select id="mohCatSort" class="config-input w-full text-xs font-mono">
+                        <option value="alpha">alpha (Alphabetical)</option>
+                        <option value="rand">rand (Random order)</option>
+                        <option value="random_start">random_start (Random start position)</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('mohCategoryModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs font-bold"><%= isRtl ? 'إنشاء الفئة' : 'Create Category' %></button>
+                </div>
+            </form>
+    </div>
+    </div>
+
+    <!-- MODAL: ADD DONGLE SLOT (ROOT USER ONLY) -->
+    <div id="addDongleSlotModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إضافة شريحة/مودم جديد لـ Asterisk' : 'Add Dongle Slot(s) to Asterisk' %></h3>
+                <button type="button" onclick="closeModal('addDongleSlotModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
+            </div>
+            <form onsubmit="saveNewDongleSlot(event)" class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'عدد الشرائح (Quantity) *' : 'Quantity to Add *' %></label>
+                        <input type="number" id="newSlotCount" value="1" min="1" max="32" oninput="updateDongleSlotPreview()" class="config-input w-full font-mono text-xs font-bold text-emerald-400">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سابقة الاسم (Prefix)' : 'Name Prefix' %></label>
+                        <input type="text" id="newSlotPrefix" value="dongle" oninput="updateDongleSlotPreview()" class="config-input w-full font-mono text-xs">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم الفتحة الأولى (Custom Name if Qty=1)' : 'Custom Slot Name (Single Slot)' %></label>
+                    <input type="text" id="newSlotName" placeholder="e.g. dongle1" oninput="updateDongleSlotPreview()" class="config-input w-full font-mono text-xs">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'منفذ الصوت الأولي' : 'Base Audio TTY Port' %></label>
+                        <input type="text" id="newSlotAudio" placeholder="/dev/ttyUSB1" class="config-input w-full font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'منفذ البيانات الأولي' : 'Base Data TTY Port' %></label>
+                        <input type="text" id="newSlotData" placeholder="/dev/ttyUSB2" class="config-input w-full font-mono text-xs">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">Rx Gain (dB)</label>
+                        <input type="number" id="newSlotRxGain" value="0" min="-10" max="10" class="config-input w-full font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">Tx Gain (dB)</label>
+                        <input type="number" id="newSlotTxGain" value="0" min="-10" max="10" class="config-input w-full font-mono text-xs">
+                    </div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-mono text-emerald-400">
+                    <span class="block text-[10px] text-[var(--text-muted)] uppercase mb-0.5"><%= isRtl ? 'معاينة الفتحات المضافة' : 'Preview Slots To Create' %>:</span>
+                    <span id="newSlotPreviewText" class="font-bold">dongle0</span>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('addDongleSlotModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs font-bold"><%= isRtl ? 'إضافة الشرائح' : 'Add Slot(s)' %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: REMOVE DONGLE SLOT (ROOT USER ONLY) -->
+    <div id="removeDongleSlotModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'حذف شرائح/مودم من Asterisk' : 'Remove Dongle Slot(s) from Asterisk' %></h3>
+                <button type="button" onclick="closeModal('removeDongleSlotModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
+            </div>
+            <form onsubmit="executeRemoveDongleSlot(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'عدد الشرائح المراد حذفها (من الأخيرة)' : 'Quantity of Slots to Remove (From Last)' %></label>
+                    <input type="number" id="removeSlotCount" value="1" min="1" max="32" class="config-input w-full font-mono text-xs text-red-400 font-bold mb-2">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'أو اختر فتحات محددة لحذفها' : 'Or Select Specific Dongle Slots to Remove' %></label>
+                    <div id="removeSlotChecklist" class="space-y-1.5 max-h-40 overflow-y-auto p-2.5 bg-[var(--bg-card)] rounded-lg border border-[var(--border-primary)] font-mono text-xs custom-scrollbar">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+                <p class="text-xs text-amber-400 font-semibold leading-relaxed">
+                    <%= isRtl ? 'ملاحظة: سيتم حذف الفتحات المحددة من dongle.conf وتنظيف مطابقات AstDB وتحديث Asterisk.' : 'Notice: This will remove the selected dongle sections from dongle.conf and reload Asterisk.' %>
+                </p>
+                <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('removeDongleSlotModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs font-bold bg-red-600 hover:bg-red-700"><%= isRtl ? 'تأكيد الحذف' : 'Confirm Delete' %></button>
+                </div>
+            </form>
+        </div>
+    </div>
     <!-- CLIENT SCRIPT -->
     <script>
         const isRtl = <%= isRtl ? 'true' : 'false' %>;
@@ -2589,9 +2931,11 @@ function isTabAllowed(tabName) {
         let editingPatternIndex = -1;
 
         // --- DYNAMIC NESTED PBX DESTINATION SELECTOR COMPONENT (DestinationSelect) ---
+        let destinationSelectCounter = 0;
         class DestinationSelect {
             constructor(containerEl, options = {}) {
                 this.container = typeof containerEl === 'string' ? document.getElementById(containerEl) : containerEl;
+                this.instanceId = ++destinationSelectCounter;
                 this.initialDialplan = options.initialDialplan || 'app-blackhole,hangup,1';
                 this.onChangeCallback = options.onChange || null;
                 this.inputName = options.inputName || null;
@@ -2651,6 +2995,12 @@ function isTabAllowed(tabName) {
                     dialplanString: `timeconditions,${tc.timeconditions_id},1`
                 }));
 
+                const mohTargets = (typeof loadedMohCategories !== 'undefined' ? loadedMohCategories : []).map(cat => ({
+                    id: String(cat.name),
+                    label: `MoH Class: ${cat.name} (${cat.fileCount || 0} tracks)${cat.isDefault ? ' [System]' : ''}`,
+                    dialplanString: `musiconhold,${cat.name},1`
+                }));
+
                 const trunkTargets = (typeof loadedTrunksList !== 'undefined' ? loadedTrunksList : []).map(t => ({
                     id: String(t.trunkid),
                     label: `Trunk: ${t.name || ''} (${t.tech || ''})`,
@@ -2706,6 +3056,14 @@ function isTabAllowed(tabName) {
                         targets: tcTargets
                     },
                     {
+                        id: 'musiconhold',
+                        label: rtl ? 'الموسيقى أثناء الانتظار (Music on Hold - MoH)' : 'Music on Hold (MoH)',
+                        targets: mohTargets.length ? mohTargets : [
+                            { id: 'default', label: 'Default MoH Class', dialplanString: 'musiconhold,default,1' },
+                            { id: 'none', label: 'None (Silence)', dialplanString: 'app-blackhole,musiconhold,1' }
+                        ]
+                    },
+                    {
                         id: 'trunks',
                         label: rtl ? 'خطوط الربط (Trunks)' : 'Trunks',
                         targets: trunkTargets
@@ -2726,7 +3084,10 @@ function isTabAllowed(tabName) {
                 if (dest === 'app-blackhole,zapateller,1') return { category: 'terminate', target: 'zapateller', dialplan: 'app-blackhole,zapateller,1' };
                 if (dest === 'app-blackhole,musiconhold,1') return { category: 'terminate', target: 'musiconhold', dialplan: 'app-blackhole,musiconhold,1' };
                 if (dest === 'app-blackhole,ringing,1') return { category: 'terminate', target: 'ringback', dialplan: 'app-blackhole,ringing,1' };
-
+                if (dest.startsWith('musiconhold,') || dest.startsWith('ext-moh,')) {
+                    const catName = dest.split(',')[1] || 'default';
+                    return { category: 'musiconhold', target: catName, dialplan: dest };
+                }
                 if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) {
                     const ext = dest.split(',')[1];
                     if (ext && ext.startsWith('vmu')) {
@@ -2784,14 +3145,17 @@ function isTabAllowed(tabName) {
 
             render() {
                 if (!this.container) return;
+                if (this.currentMenu && this.currentMenu.parentNode) {
+                    try { this.currentMenu.parentNode.removeChild(this.currentMenu); } catch(_) {}
+                    this.currentMenu = null;
+                }
                 const categories = DestinationSelect.getCategories();
                 const currentCatObj = categories.find(c => c.id === this.selectedCategory) || categories[0];
-                
-                let filteredTargets = currentCatObj.targets || [];
+                let filteredTargets = currentCatObj ? (currentCatObj.targets || []) : [];
                 if (this.searchTerm.trim()) {
                     const term = this.searchTerm.toLowerCase().trim();
-                    filteredTargets = filteredTargets.filter(t => 
-                        t.label.toLowerCase().includes(term) || 
+                    filteredTargets = filteredTargets.filter(t =>
+                        t.label.toLowerCase().includes(term) ||
                         t.id.toLowerCase().includes(term) ||
                         t.dialplanString.toLowerCase().includes(term)
                     );
@@ -2821,29 +3185,25 @@ function isTabAllowed(tabName) {
                                     <input type="text" value="${escapeHtml(this.customDialplanString)}" placeholder="e.g. custom-app,s,1" class="dest-custom-input config-input w-full font-mono text-xs py-1.5">
                                 ` : `
                                     <div class="relative dest-combobox-wrapper">
-                                        <div class="dest-combobox-trigger config-input w-full py-1.5 px-3 flex items-center justify-between cursor-pointer bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg font-semibold text-xs">
-                                            <span class="truncate text-[var(--text-primary)]">
+                                        <button type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="destination-dropdown-${this.instanceId}" class="dest-combobox-trigger custom-select-trigger config-dropdown-trigger w-full border rounded-lg px-3 py-2 flex items-center justify-between gap-2 cursor-pointer select-none transition">
+                                            <span class="config-dropdown-label flex-1 text-[var(--text-primary)]">
                                                 ${escapeHtml((currentCatObj.targets.find(t => t.id === this.selectedTarget) || currentCatObj.targets[0])?.label || 'Choose Target')}
                                             </span>
                                             <svg class="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-                                        </div>
-
+                                        </button>
                                         <!-- Searchable Combobox Dropdown -->
-                                        <div class="dest-dropdown-menu hidden absolute left-0 right-0 top-full mt-1 z-50 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-xl p-2 space-y-2 max-h-56 flex flex-col">
-                                            <!-- Search Filter Input -->
-                                            <div class="relative shrink-0">
-                                                <svg class="w-3.5 h-3.5 absolute left-2.5 top-2 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                                <input type="text" value="${escapeHtml(this.searchTerm)}" placeholder="${this.isRtl ? 'بحث في الخيارات...' : 'Search targets...'}" class="dest-search-input config-input w-full pl-8 pr-2 py-1 text-xs font-medium">
+                                        <div id="destination-dropdown-${this.instanceId}" class="dest-dropdown-menu config-dropdown-menu hidden">
+                                            <div class="p-1 shrink-0">
+                                                <input type="text" value="${escapeHtml(this.searchTerm)}" placeholder="${this.isRtl ? 'بحث في الخيارات...' : 'Search targets...'}" class="dest-search-input config-dropdown-search">
                                             </div>
-                                            <!-- Options List -->
-                                            <div class="options-list overflow-y-auto space-y-1 custom-scrollbar flex-1">
+                                            <div class="options-list config-dropdown-options space-y-1 custom-scrollbar flex-1" role="listbox">
                                                 ${filteredTargets.length === 0 ? `
                                                     <div class="px-3 py-2 text-center text-[var(--text-muted)] text-[11px] italic">${this.isRtl ? 'لا توجد نتائج مطابقة' : 'No matching targets'}</div>
                                                 ` : filteredTargets.map(t => `
-                                                    <div data-target-id="${t.id}" data-dialplan="${t.dialplanString}" class="dest-option-item px-3 py-1.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between text-xs ${t.id === this.selectedTarget ? 'bg-[var(--accent-color)]/15 text-[var(--accent-color)] font-bold' : 'hover:bg-[var(--bg-hover)] text-[var(--text-primary)]'}">
-                                                        <span class="truncate">${escapeHtml(t.label)}</span>
-                                                        <span class="font-mono text-[10px] opacity-60 ml-2 shrink-0">${escapeHtml(t.dialplanString.split(',')[0])}</span>
-                                                    </div>
+                                                    <button type="button" role="option" aria-selected="${String(t.id === this.selectedTarget)}" data-target-id="${escapeHtml(t.id)}" data-dialplan="${escapeHtml(t.dialplanString)}" class="dest-option-item custom-select-option config-dropdown-option flex items-start justify-between gap-2 transition-colors ${t.id === this.selectedTarget ? 'is-selected font-bold' : ''}">
+                                                        <span class="flex-1 min-w-0 whitespace-normal break-words">${escapeHtml(t.label)}</span>
+                                                        <span class="font-mono text-[10px] opacity-60 shrink-0">${escapeHtml(t.dialplanString.split(',')[0])}</span>
+                                                    </button>
                                                 `).join('')}
                                             </div>
                                         </div>
@@ -2864,15 +3224,20 @@ function isTabAllowed(tabName) {
                 const trigger = this.container.querySelector('.dest-combobox-trigger');
                 const menu = this.container.querySelector('.dest-dropdown-menu');
                 const searchInput = this.container.querySelector('.dest-search-input');
-                const optionItems = this.container.querySelectorAll('.dest-option-item');
+
+                if (menu && menu.parentNode !== document.body) {
+                    document.body.appendChild(menu);
+                    this.currentMenu = menu;
+                }
 
                 if (primarySelect) {
-                    primarySelect.addEventListener('change', (e) => {
-                        this.selectedCategory = e.target.value;
+                    primarySelect.addEventListener('change', event => {
+                        this.selectedCategory = event.target.value;
                         const categories = DestinationSelect.getCategories();
-                        const catObj = categories.find(c => c.id === this.selectedCategory);
-                        this.selectedTarget = catObj && catObj.targets.length ? catObj.targets[0].id : (this.selectedCategory === 'custom' ? 'custom' : '');
-                        this.dialplanString = catObj && catObj.targets.length ? catObj.targets[0].dialplanString : (this.selectedCategory === 'custom' ? this.customDialplanString : '');
+                        const category = categories.find(item => item.id === this.selectedCategory);
+                        this.selectedTarget = category && category.targets.length
+                            ? category.targets[0].id
+                            : (this.selectedCategory === 'custom' ? 'custom' : '');
                         this.searchTerm = '';
                         this.render();
                         this.emitChange();
@@ -2880,76 +3245,112 @@ function isTabAllowed(tabName) {
                 }
 
                 if (customInput) {
-                    customInput.addEventListener('input', (e) => {
-                        this.customDialplanString = e.target.value.trim();
+                    customInput.addEventListener('input', event => {
+                        this.customDialplanString = event.target.value.trim();
                         this.dialplanString = this.customDialplanString;
                         this.emitChange();
                     });
                 }
 
+                const positionMenu = () => {
+                    if (!trigger || !menu) return;
+                    if (typeof window.positionConfigDropdown === 'function') {
+                        window.positionConfigDropdown(trigger, menu);
+                    }
+                };
+                const hideMenu = () => {
+                    if (!menu) return;
+                    if (typeof window.closeConfigDropdownMenu === 'function') {
+                        window.closeConfigDropdownMenu(menu);
+                    } else {
+                        menu.classList.add('hidden');
+                        trigger?.setAttribute('aria-expanded', 'false');
+                    }
+                };
+                const chooseTarget = item => {
+                    this.selectedTarget = item.getAttribute('data-target-id');
+                    this.dialplanString = item.getAttribute('data-dialplan');
+                    this.searchTerm = '';
+                    hideMenu();
+                    this.render();
+                    this.emitChange();
+                };
+                const bindTargetItems = root => {
+                    if (!root) return;
+                    root.querySelectorAll('.dest-option-item').forEach(item => {
+                        item.addEventListener('click', () => chooseTarget(item));
+                    });
+                };
+
                 if (trigger && menu) {
-                    trigger.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const isHidden = menu.classList.contains('hidden');
-                        document.querySelectorAll('.dest-dropdown-menu').forEach(m => m.classList.add('hidden'));
-                        if (isHidden) {
-                            menu.classList.remove('hidden');
-                            if (searchInput) searchInput.focus();
+                    menu._reposition = positionMenu;
+                    menu._trigger = trigger;
+                    trigger.addEventListener('click', event => {
+                        event.stopPropagation();
+                        const isOpening = menu.classList.contains('hidden');
+                        if (!isOpening) {
+                            hideMenu();
+                            return;
                         }
-                    });
 
-                    document.addEventListener('click', () => {
-                        if (menu) menu.classList.add('hidden');
+                        if (typeof window.closeConfigDropdowns === 'function') {
+                            window.closeConfigDropdowns(menu);
+                        }
+                        if (searchInput) {
+                            this.searchTerm = '';
+                            searchInput.value = '';
+                            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                        menu.classList.remove('hidden');
+                        trigger.setAttribute('aria-expanded', 'true');
+                        positionMenu();
+                        if (searchInput) setTimeout(() => searchInput.focus(), 0);
                     });
-
-                    menu.addEventListener('click', (e) => e.stopPropagation());
+                    menu.addEventListener('click', event => event.stopPropagation());
                 }
 
-                if (searchInput) {
-                    searchInput.addEventListener('input', (e) => {
-                        this.searchTerm = e.target.value;
+                if (searchInput && menu) {
+                    searchInput.addEventListener('input', event => {
+                        this.searchTerm = event.target.value;
                         const categories = DestinationSelect.getCategories();
-                        const catObj = categories.find(c => c.id === this.selectedCategory) || categories[0];
-                        let filtered = catObj.targets || [];
+                        const category = categories.find(item => item.id === this.selectedCategory) || categories[0];
+                        let filtered = category.targets || [];
                         if (this.searchTerm.trim()) {
                             const term = this.searchTerm.toLowerCase().trim();
-                            filtered = filtered.filter(t => t.label.toLowerCase().includes(term) || t.id.toLowerCase().includes(term) || t.dialplanString.toLowerCase().includes(term));
+                            filtered = filtered.filter(target =>
+                                target.label.toLowerCase().includes(term) ||
+                                target.id.toLowerCase().includes(term) ||
+                                target.dialplanString.toLowerCase().includes(term)
+                            );
                         }
-                        const optionsList = this.container.querySelector('.options-list');
-                        if (optionsList) {
-                            optionsList.innerHTML = filtered.length === 0 ? `
-                                <div class="px-3 py-2 text-center text-[var(--text-muted)] text-[11px] italic">${this.isRtl ? 'لا توجد نتائج مطابقة' : 'No matching targets'}</div>
-                            ` : filtered.map(t => `
-                                <div data-target-id="${t.id}" data-dialplan="${t.dialplanString}" class="dest-option-item px-3 py-1.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between text-xs ${t.id === this.selectedTarget ? 'bg-[var(--accent-color)]/15 text-[var(--accent-color)] font-bold' : 'hover:bg-[var(--bg-hover)] text-[var(--text-primary)]'}">
-                                    <span class="truncate">${escapeHtml(t.label)}</span>
-                                    <span class="font-mono text-[10px] opacity-60 ml-2 shrink-0">${escapeHtml(t.dialplanString.split(',')[0])}</span>
-                                </div>
-                            `).join('');
 
-                            optionsList.querySelectorAll('.dest-option-item').forEach(item => {
-                                item.addEventListener('click', () => {
-                                    this.selectedTarget = item.getAttribute('data-target-id');
-                                    this.dialplanString = item.getAttribute('data-dialplan');
-                                    if (menu) menu.classList.add('hidden');
-                                    this.render();
-                                    this.emitChange();
-                                });
-                            });
+                        const optionsList = menu.querySelector('.options-list');
+                        if (!optionsList) return;
+                        optionsList.innerHTML = filtered.length === 0 ? `
+                            <div class="px-3 py-2 text-center text-[var(--text-muted)] text-[11px] italic">${this.isRtl ? 'لا توجد نتائج مطابقة' : 'No matching targets'}</div>
+                        ` : filtered.map(target => `
+                            <button type="button" role="option" aria-selected="${String(target.id === this.selectedTarget)}" data-target-id="${escapeHtml(target.id)}" data-dialplan="${escapeHtml(target.dialplanString)}" class="dest-option-item custom-select-option config-dropdown-option flex items-start justify-between gap-2 transition-colors ${target.id === this.selectedTarget ? 'is-selected font-bold' : ''}">
+                                <span class="flex-1 min-w-0 whitespace-normal break-words">${escapeHtml(target.label)}</span>
+                                <span class="font-mono text-[10px] opacity-60 shrink-0">${escapeHtml(target.dialplanString.split(',')[0])}</span>
+                            </button>
+                        `).join('');
+                        bindTargetItems(optionsList);
+                        if (!menu.classList.contains('hidden')) positionMenu();
+                    });
+                    searchInput.addEventListener('keydown', event => {
+                        if (event.key === 'Escape') {
+                            event.stopPropagation();
+                            hideMenu();
+                            trigger?.focus();
+                        } else if (event.key === 'Enter') {
+                            event.preventDefault();
+                            const firstMatch = menu.querySelector('.dest-option-item');
+                            if (firstMatch) firstMatch.click();
                         }
                     });
                 }
 
-                if (optionItems) {
-                    optionItems.forEach(item => {
-                        item.addEventListener('click', () => {
-                            this.selectedTarget = item.getAttribute('data-target-id');
-                            this.dialplanString = item.getAttribute('data-dialplan');
-                            if (menu) menu.classList.add('hidden');
-                            this.render();
-                            this.emitChange();
-                        });
-                    });
-                }
+                bindTargetItems(menu);
             }
         }
         window.DestinationSelect = DestinationSelect;
@@ -3030,80 +3431,148 @@ function isTabAllowed(tabName) {
                     showToast(isRtl ? 'فشل تحميل بيانات خريطة DIDs' : 'Failed to load DID mappings', 'error');
                     return;
                 }
-                if (typeof data.dynamicDidEnabled !== 'undefined') {
-                    updateDynamicDidBtnUI(data.dynamicDidEnabled !== false);
-                }
+                const mappings = Array.isArray(data.mappings) ? data.mappings : [];
                 document.getElementById('dmCardTotal').textContent = data.summary.totalCount || 0;
                 document.getElementById('dmCardConnected').textContent = data.summary.connectedCount || 0;
                 document.getElementById('dmCardSynced').textContent = data.summary.syncedCount || 0;
                 document.getElementById('dmCardRoutes').textContent = data.summary.routeFoundCount || 0;
 
+                const rosterCount = document.getElementById('dmRosterCount');
+                if (rosterCount) {
+                    rosterCount.textContent = `${mappings.length} ${isRtl ? 'أجهزة' : (mappings.length === 1 ? 'device' : 'devices')}`;
+                }
+
                 const tbody = document.getElementById('dmTableBody');
                 if (!tbody) return;
-
-                if (!data.mappings || data.mappings.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-[var(--text-muted)] italic">' + (isRtl ? 'لا توجد فتحات شرائح معرفة' : 'No GSM dongle slots found.') + '</td></tr>';
+                if (mappings.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-[var(--text-muted)] italic">' + (isRtl ? 'لا توجد فتحات شرائح معرفة' : 'No GSM dongle slots found.') + '</td></tr>';
                     return;
                 }
 
-                tbody.innerHTML = data.mappings.map(m => {
-                    const isConnected = m.state && !m.state.toLowerCase().includes('disconnected') && !m.state.toLowerCase().includes('not');
-                    const stateBadge = isConnected
-                        ? '<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">' + m.state + '</span>'
-                        : '<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">' + m.state + '</span>';
+                tbody.innerHTML = mappings.map(m => {
+                    const rawState = m.state || 'Not Connected';
+                    const normalizedState = rawState.toLowerCase();
+                    let stateColor = 'red';
+                    let stateLabel = rawState;
+                    let animate = false;
 
-                    const configuredDidDisplay = m.phoneNumber
-                        ? '<div class="space-y-0.5"><span class="font-mono font-bold text-emerald-400 text-sm">' + m.phoneNumber + '</span><div class="text-[10px] text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>Dynamic AstDB Active</div></div>'
-                        : '<span class="text-zinc-500 italic text-[11px]">Unconfigured</span>';
-
-                    const simReportDisplay = (m.simNumber && m.simNumber !== 'Unknown' && m.simNumber !== '-')
-                        ? '<span class="font-mono text-white">' + m.simNumber + '</span>'
-                        : (m.phoneNumber
-                            ? '<span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20" title="SIM memory empty; Asterisk routes dynamically via AstDB dongle_map">SIM Unregistered (Dynamic Active)</span>'
-                            : '<span class="px-2 py-0.5 text-[10px] font-mono rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Unknown</span>');
-
-                    const astdbDongleOk = m.astdb.dongle_map === m.phoneNumber && m.phoneNumber !== '';
-                    const astdbBadge = astdbDongleOk
-                        ? '<span class="px-2 py-0.5 text-[10px] font-mono rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">dongle_map: OK</span>'
-                        : '<span class="px-2 py-0.5 text-[10px] font-mono rounded bg-red-500/10 text-red-400 border border-red-500/20">dongle_map: Missing</span>';
-
-                    let routeBadge = '';
-                    if (m.inboundRoute && m.inboundRoute.found) {
-                        routeBadge = '<div class="space-y-0.5"><span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">→ ' + (m.inboundRoute.description || m.inboundRoute.destination) + '</span><div class="text-[10px] font-mono text-emerald-400 font-bold">' + (isRtl ? 'مسجلة في المقسم (توجيه طبيعي)' : 'Registered Inbound Route (Normal Routing)') + '</div></div>';
-                    } else {
-                        routeBadge = '<div class="space-y-0.5"><span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">' + (isRtl ? 'غير مسجلة - خريطة ديناميكية نشطة' : 'Unregistered - Dynamic DID Active') + '</span></div>';
+                    if (normalizedState.includes('not init')) {
+                        stateColor = 'yellow';
+                        stateLabel = isRtl ? 'لم يتم التهيئة' : 'Not Initialized';
+                    } else if (normalizedState.includes('not connect') || normalizedState === 'not_connected' || normalizedState.includes('disconnected') || normalizedState.includes('not responding')) {
+                        stateColor = 'red';
+                        stateLabel = isRtl ? 'غير متصل' : (normalizedState === 'not_connected' || normalizedState.includes('disconnected') ? 'Not Connected' : rawState);
+                    } else if (normalizedState === 'free' || normalizedState === 'idle') {
+                        stateColor = 'purple';
+                        stateLabel = isRtl ? 'شريحة نشطة (Free)' : 'Free';
+                    } else if (normalizedState.includes('outgoing') || normalizedState.includes('incoming') || normalizedState.includes('active') || normalizedState.includes('busy')) {
+                        stateColor = 'green';
+                        stateLabel = normalizedState.includes('outgoing')
+                            ? (isRtl ? 'مكالمة صادرة' : 'Outgoing Call')
+                            : (normalizedState.includes('incoming') ? (isRtl ? 'مكالمة واردة' : 'Incoming Call') : (isRtl ? 'مكالمة نشطة' : 'Active Call'));
+                        animate = true;
+                    } else if (normalizedState.includes('not reg') || normalizedState.includes('searching') || normalizedState.includes('no signal') || normalizedState.includes('gsm')) {
+                        stateColor = 'yellow';
+                        stateLabel = isRtl ? 'غير مسجل بالشريحة' : 'GSM Not Registered';
+                    } else if (normalizedState.includes('dial') || normalizedState.includes('ring') || normalizedState.includes('calling')) {
+                        stateColor = 'blue';
+                        stateLabel = normalizedState.includes('dial') ? (isRtl ? 'جاري الاتصال' : 'Dialing') : (isRtl ? 'جاري الرنين' : 'Ringing');
+                        animate = true;
                     }
 
-                    const perDongleEnabled = m.dynamicEnabled !== false;
+                    const badgeClasses = {
+                        red: { bg: 'bg-red-500/15', text: 'text-red-400', border: 'border-red-500/30', dot: 'bg-red-500' },
+                        purple: { bg: 'bg-purple-500/15', text: 'text-purple-400', border: 'border-purple-500/30', dot: 'bg-purple-400' },
+                        green: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', dot: 'bg-emerald-400' },
+                        yellow: { bg: 'bg-yellow-500/15', text: 'text-yellow-400', border: 'border-yellow-500/30', dot: 'bg-yellow-400' },
+                        blue: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30', dot: 'bg-blue-400' }
+                    }[stateColor];
+
+                    const safeDongleName = escapeHtml(m.dongleName || '-');
+                    const safePhoneNumber = escapeHtml(m.phoneNumber || '');
+                    const safeSimNumber = escapeHtml(m.simNumber || '');
+                    const safeImsi = escapeHtml(m.imsi || '-');
+                    const safeImei = escapeHtml(m.imei || '-');
+                    const safeProvider = escapeHtml(m.provider || (isRtl ? 'غير معروف' : 'Unknown network'));
+                    const safeRssi = escapeHtml(m.rssi === undefined || m.rssi === null ? '-' : String(m.rssi));
+                    const astdb = m.astdb || {};
+                    const stateBadge = `<span class="inline-flex items-center gap-1.5 ${badgeClasses.bg} ${badgeClasses.text} rounded-full px-2 py-0.5 text-[10px] font-bold border ${badgeClasses.border}">
+                        <span class="h-1.5 w-1.5 rounded-full ${badgeClasses.dot}${animate ? ' animate-pulse' : ''} shrink-0"></span>
+                        <span>${escapeHtml(stateLabel)}</span>
+                    </span>`;
+
+                    const perDongleEnabled = m.dynamicEnabled === true;
+                    const configuredDidDisplay = safePhoneNumber
+                        ? `<div class="font-mono font-bold text-emerald-400 text-sm">${safePhoneNumber}</div>
+                           <div class="text-[10px] ${perDongleEnabled ? 'text-cyan-400' : 'text-amber-400'} font-bold uppercase tracking-wider">${perDongleEnabled
+                               ? (isRtl ? 'الخريطة الديناميكية مفعلة' : 'Dynamic mapping enabled')
+                               : (isRtl ? 'الخريطة الديناميكية معطلة' : 'Dynamic mapping disabled')}</div>`
+                        : `<span class="text-[var(--text-muted)] italic text-[11px]">${isRtl ? 'غير مهيأ' : 'Unconfigured'}</span>`;
+                    const simReportDisplay = (m.simNumber && m.simNumber !== 'Unknown' && m.simNumber !== '-')
+                        ? `<span class="font-mono text-[var(--text-primary)]">${safeSimNumber}</span>`
+                        : (m.phoneNumber
+                            ? `<span class="text-[10px] font-mono ${perDongleEnabled ? 'text-cyan-300' : 'text-amber-400'}">${perDongleEnabled
+                                ? (isRtl ? 'غير مسجلة؛ الخريطة المهيأة مفعلة' : 'Unregistered; configured mapping enabled')
+                                : (isRtl ? 'غير مسجلة؛ الخريطة معطلة' : 'Unregistered; mapping off')}</span>`
+                            : `<span class="text-[10px] font-mono text-amber-400">${isRtl ? 'غير معروف' : 'Unknown'}</span>`);
+
+                    const astdbDongleOk = Boolean(m.phoneNumber) && astdb.dongle_map === m.phoneNumber;
+                    const astdbBadge = astdbDongleOk
+                        ? `<span class="inline-flex px-2 py-0.5 text-[10px] font-mono rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">${isRtl ? 'AstDB متزامن' : 'AstDB synced'}</span>`
+                        : `<span class="inline-flex px-2 py-0.5 text-[10px] font-mono rounded bg-red-500/10 text-red-400 border border-red-500/20">${isRtl ? 'AstDB يحتاج مزامنة' : 'AstDB needs sync'}</span>`;
+                    const routeBadge = m.inboundRoute && m.inboundRoute.found
+                        ? `<div class="space-y-1">
+                               <div class="text-[11px] font-semibold text-purple-300 break-words">→ ${escapeHtml(m.inboundRoute.description || m.inboundRoute.destination || '-')}</div>
+                               <div class="text-[10px] text-emerald-400">${isRtl ? 'مسار وارد مسجل' : 'Registered inbound route'}</div>
+                           </div>`
+                        : `<div class="text-[11px] font-semibold ${perDongleEnabled ? 'text-amber-400' : 'text-[var(--text-muted)]'}">${perDongleEnabled
+                            ? (isRtl ? 'توجيه DID ديناميكي' : 'Dynamic DID routing')
+                            : (isRtl ? 'الخريطة الديناميكية معطلة' : 'Dynamic mapping disabled')}</div>`;
+
                     const perDongleBtnClass = perDongleEnabled
-                        ? 'px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-pointer transition'
-                        : 'px-2.5 py-1 text-[11px] font-bold rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 cursor-pointer transition';
+                        ? 'config-action-btn config-action-btn--compact config-action-btn--state-on'
+                        : 'config-action-btn config-action-btn--compact config-action-btn--state-off';
                     const perDongleBtnText = perDongleEnabled
-                        ? (isRtl ? 'الخريطة: مفعلة' : 'Dynamic: ON')
-                        : (isRtl ? 'الخريطة: معطلة' : 'Dynamic: OFF');
+                        ? (isRtl ? 'الخريطة مفعلة' : 'Mapping On')
+                        : (isRtl ? 'الخريطة معطلة' : 'Mapping Off');
 
                     return `
-                        <tr class="hover:bg-[var(--bg-hover)]/40 transition">
-                            <td class="p-3 font-mono font-bold text-white">${m.dongleName}</td>
-                            <td class="p-3">${configuredDidDisplay}</td>
-                            <td class="p-3 space-y-0.5 font-mono text-[11px]">
-                                <div><span class="text-[var(--text-muted)]">IMSI:</span> ${m.imsi || '-'}</div>
-                                <div><span class="text-[var(--text-muted)]">IMEI:</span> ${m.imei || '-'}</div>
+                        <tr class="hover:bg-[var(--bg-hover)]/35 transition-colors">
+                            <td class="p-3.5 align-top">
+                                <div class="font-mono font-black text-[var(--text-primary)]">${safeDongleName}</div>
+                                <div class="mt-1.5">${stateBadge}</div>
+                                <div class="mt-1.5 text-[10px] text-[var(--text-muted)]">${safeProvider} · ${safeRssi} dBm</div>
                             </td>
-                            <td class="p-3">${simReportDisplay}</td>
-                            <td class="p-3">${astdbBadge}</td>
-                            <td class="p-3">${routeBadge}</td>
-                            <td class="p-3 space-y-1">
-                                <div>${stateBadge}</div>
-                                <div class="text-[11px] text-[var(--text-muted)]">${m.provider} (${m.rssi} dBm)</div>
+                            <td class="p-3.5 align-top">
+                                <div class="space-y-2">
+                                    <div>${configuredDidDisplay}</div>
+                                    <div class="pt-2 border-t border-[var(--border-primary)]">
+                                        <span class="text-[9px] uppercase tracking-wider text-[var(--text-muted)] block mb-0.5">SIM</span>
+                                        ${simReportDisplay}
+                                    </div>
+                                </div>
                             </td>
-                            <td class="p-3 text-right flex items-center justify-end gap-1.5">
-                                <button onclick="toggleSingleDongleDynamic('${m.dongleName}', ${perDongleEnabled})" class="${perDongleBtnClass}" title="${isRtl ? 'تفعيل/تعطيل الخريطة الديناميكية لـ ' + m.dongleName : 'Enable/Disable Dynamic DID mapping for ' + m.dongleName}">
-                                    ${perDongleBtnText}
-                                </button>
-                                <button onclick="editDongleTabDid('${m.dongleName}', '${m.imsi}', '${m.phoneNumber}')" class="config-btn-secondary px-2.5 py-1 text-[11px] cursor-pointer">
-                                    ${isRtl ? 'تعديل DID' : 'Edit DID'}
-                                </button>
+                            <td class="p-3.5 align-top font-mono text-[10px]">
+                                <div class="space-y-2">
+                                    <div><span class="text-[var(--text-muted)] block">IMSI</span><span class="text-[var(--text-secondary)] whitespace-nowrap">${safeImsi}</span></div>
+                                    <div><span class="text-[var(--text-muted)] block">IMEI</span><span class="text-[var(--text-secondary)] whitespace-nowrap">${safeImei}</span></div>
+                                </div>
+                            </td>
+                            <td class="p-3.5 align-top">
+                                <div class="space-y-2">
+                                    <div>${astdbBadge}</div>
+                                    <div>${routeBadge}</div>
+                                </div>
+                            </td>
+                            <td class="p-3.5 align-top text-right">
+                                <div class="inline-flex flex-col items-stretch gap-1.5">
+                                    <button type="button" onclick="toggleSingleDongleDynamic('${m.dongleName}', ${perDongleEnabled})" class="${perDongleBtnClass}">
+                                        ${perDongleBtnText}
+                                    </button>
+                                    <button type="button" onclick="editDongleTabDid('${m.dongleName}', '${m.imsi || ''}', '${m.phoneNumber || ''}')" class="config-action-btn config-action-btn--compact">
+                                        ${isRtl ? 'تعديل DID' : 'Edit DID'}
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     `;
@@ -3114,46 +3583,6 @@ function isTabAllowed(tabName) {
         }
         window.fetchDongleMappingsTab = fetchDongleMappingsTab;
 
-        let isDynamicDidEnabledState = true;
-        function updateDynamicDidBtnUI(enabled) {
-            isDynamicDidEnabledState = Boolean(enabled);
-            const btn = document.getElementById('toggleDynamicDidBtn');
-            const dot = document.getElementById('toggleDynamicDidDot');
-            const txt = document.getElementById('toggleDynamicDidText');
-            if (!btn || !dot || !txt) return;
-
-            if (isDynamicDidEnabledState) {
-                btn.className = 'px-3.5 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20';
-                dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
-                txt.textContent = isRtl ? 'الخريطة الديناميكية: مفعلة' : 'Dynamic Mappings: Enabled';
-            } else {
-                btn.className = 'px-3.5 py-2 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20';
-                dot.className = 'w-2 h-2 rounded-full bg-red-400';
-                txt.textContent = isRtl ? 'الخريطة الديناميكية: معطلة' : 'Dynamic Mappings: Disabled';
-            }
-        }
-
-        async function toggleDynamicDidMappings() {
-            try {
-                const targetState = !isDynamicDidEnabledState;
-                const res = await fetch('/api/config/dongle-mappings/global-toggle', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled: targetState })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    updateDynamicDidBtnUI(data.enabled);
-                    showToast(data.message, 'success');
-                    fetchDongleMappingsTab();
-                } else {
-                    showToast(data.error || 'Failed to update dynamic DID setting', 'error');
-                }
-            } catch(err) {
-                showToast('Network error: ' + err.message, 'error');
-            }
-        }
-        window.toggleDynamicDidMappings = toggleDynamicDidMappings;
 
         async function toggleSingleDongleDynamic(dongleName, currentState) {
             try {
@@ -3230,8 +3659,11 @@ function isTabAllowed(tabName) {
                 fetchIvrs(),
                 fetchAnnouncements(),
                 fetchTimeConditions(),
-                fetchRecordings()
-            ]);
+                fetchRecordings(),
+                fetchMohData()
+            ]).then(() => {
+                if (typeof enhanceSelectElements === 'function') setTimeout(enhanceSelectElements, 50);
+            });
         }
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
@@ -3273,16 +3705,28 @@ function isTabAllowed(tabName) {
             if (tabId === 'timegroups') fetchTimeGroups();
             if (tabId === 'timeconditions') { fetchTimeConditions(); fetchTimeGroups(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); }
             if (tabId === 'announcements') { fetchAnnouncements(); fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); }
+            if (tabId === 'voicemail') fetchVoicemailExtensions();
             if (tabId === 'modem') fetchModemConfig();
             if (tabId === 'terminal') initTtyTerminal();
             if (tabId === 'diagram') fetchDiagramData();
             if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchInboundRoutes(); fetchDongleMappingsTab(); }
             if (tabId === 'dongles') { switchTab('inbound'); return; }
+            if (typeof enhanceSelectElements === 'function') setTimeout(enhanceSelectElements, 100);
         }
         window.switchTab = switchTab;
 
-        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
-        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.classList.remove('hidden');
+            if (typeof enhanceSelectElements === 'function') setTimeout(enhanceSelectElements, 50);
+        }
+        window.openModal = openModal;
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.classList.add('hidden');
+        }
+        window.closeModal = closeModal;
 
         // --- RELOAD PBX CONFIG ---
         function reloadPbxConfig() {
@@ -4410,6 +4854,28 @@ function isTabAllowed(tabName) {
                     if (currentDest === opt.value || currentDest === `ext-timeconditions,${tc.timeconditions_id},1`) opt.selected = true;
                     selectEl.appendChild(opt);
                 });
+            } else if (type === 'musiconhold') {
+                const mohList = typeof loadedMohCategories !== 'undefined' ? loadedMohCategories : [];
+                if (mohList.length === 0) {
+                    const optDef = document.createElement('option');
+                    optDef.value = 'musiconhold,default,1';
+                    optDef.textContent = 'Default MoH Class';
+                    if (currentDest === optDef.value || currentDest === 'app-blackhole,musiconhold,1') optDef.selected = true;
+                    selectEl.appendChild(optDef);
+                } else {
+                    mohList.forEach(cat => {
+                        const opt = document.createElement('option');
+                        opt.value = `musiconhold,${cat.name},1`;
+                        opt.textContent = `MoH: ${cat.name} (${cat.fileCount || 0} tracks)${cat.isDefault ? ' [System]' : ''}`;
+                        if (currentDest === opt.value) opt.selected = true;
+                        selectEl.appendChild(opt);
+                    });
+                }
+                const optHold = document.createElement('option');
+                optHold.value = 'app-blackhole,musiconhold,1';
+                optHold.textContent = isRtl ? 'وضع المتصل في الانتظار الدائم (Hold Forever)' : 'Hold Forever (Blackhole MoH)';
+                if (currentDest === optHold.value) optHold.selected = true;
+                selectEl.appendChild(optHold);
             } else if (type === 'terminate') {
                 const opt = document.createElement('option');
                 opt.value = 'app-blackhole,hangup,1';
@@ -4448,6 +4914,7 @@ function isTabAllowed(tabName) {
                         <option value="voicemail">Voicemail</option>
                         <option value="announcements">Announcements</option>
                         <option value="timeconditions">Time Conditions</option>
+                        <option value="musiconhold">Music on Hold (MoH)</option>
                         <option value="terminate">Terminate Call (Hangup)</option>
                         <option value="custom">Custom</option>
                     </select>
@@ -4482,6 +4949,8 @@ function isTabAllowed(tabName) {
                 typeSelect.value = 'announcements';
             } else if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
                 typeSelect.value = 'timeconditions';
+            } else if (dest.startsWith('musiconhold,') || dest.startsWith('ext-moh,') || dest === 'app-blackhole,musiconhold,1') {
+                typeSelect.value = 'musiconhold';
             } else if (dest === 'app-blackhole,hangup,1') {
                 typeSelect.value = 'terminate';
             } else if (dest) {
@@ -4499,8 +4968,7 @@ function isTabAllowed(tabName) {
             const targetInput = row.querySelector('.ivr-entry-target-input');
             const hiddenDest = row.querySelector('.ivr-entry-dest-hidden');
 
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
-                targetSelect.classList.remove('hidden');
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions', 'musiconhold'].includes(type)) {
                 targetInput.classList.add('hidden');
                 populateIvrTargetSelect(targetSelect, type, hiddenDest.value);
             } else if (type === 'terminate') {
@@ -4523,8 +4991,7 @@ function isTabAllowed(tabName) {
             const targetInput = row.querySelector('.ivr-entry-target-input');
             const hiddenDest = row.querySelector('.ivr-entry-dest-hidden');
 
-            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions'].includes(type)) {
-                hiddenDest.value = targetSelect.value;
+            if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions', 'musiconhold'].includes(type)) {
             } else if (type === 'terminate') {
                 hiddenDest.value = 'app-blackhole,hangup,1';
             } else if (type === 'custom') {
@@ -4928,11 +5395,15 @@ function isTabAllowed(tabName) {
                 return `Voicemail: ${ext}`;
             }
 
+            if (dest.startsWith('musiconhold,') || dest.startsWith('ext-moh,')) {
+                const parts = dest.split(',');
+                const catName = parts[1] || 'default';
+                return `Music on Hold: ${catName}`;
+            }
             if (dest.startsWith('app-blackhole,hangup') || dest === 'app-blackhole,hangup,1') return isRtl ? 'إنهاء المكالمة (Hangup)' : 'Terminate Call (Hangup)';
             if (dest.startsWith('app-blackhole,congestion')) return isRtl ? 'نغمة ازدحام' : 'Play Congestion';
             if (dest.startsWith('app-blackhole,busy')) return isRtl ? 'نغمة مشغول' : 'Play Busy';
-
-            return dest; // Fallback to raw string
+            if (dest.startsWith('app-blackhole,musiconhold')) return isRtl ? 'الموسيقى في الانتظار (MoH)' : 'Hold Forever (MoH)';
         }
 
         let loadedInboundRoutesList = [];
@@ -7399,9 +7870,362 @@ function isTabAllowed(tabName) {
         }
 
 
-        // --- ANNOUNCEMENTS CLIENT LOGIC ---
+        // --- MUSIC ON HOLD (MOH) CLIENT MODULE ---
+        let loadedMohCategories = [];
+        let activeMohCategoryName = 'default';
 
+        function fetchMohData() {
+            return fetch('/api/config/moh')
+                .then(res => {
+                    if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
+                .then(data => {
+                    if (!data || !data.success || !Array.isArray(data.categories)) return;
+                    loadedMohCategories = data.categories;
+                    populateMohCategorySelect();
+                    renderMohFilesTable();
+                })
+                .catch(err => {
+                    showToast('Failed to load Music on Hold data: ' + err.message, 'error');
+                });
+        }
+        window.fetchMohData = fetchMohData;
+
+        function populateMohCategorySelect() {
+            const sel = document.getElementById('mohCategorySelect');
+            if (!sel) return;
+            sel.innerHTML = '';
+            loadedMohCategories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat.name;
+                opt.textContent = `${cat.name} (${cat.fileCount} tracks)${cat.isDefault ? ' [System]' : ''}`;
+                if (cat.name === activeMohCategoryName) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            if (!loadedMohCategories.some(c => c.name === activeMohCategoryName) && loadedMohCategories.length > 0) {
+                activeMohCategoryName = loadedMohCategories[0].name;
+                sel.value = activeMohCategoryName;
+            }
+            updateMohCategoryInfo();
+        }
+
+        function updateMohCategoryInfo() {
+            const cat = loadedMohCategories.find(c => c.name === activeMohCategoryName);
+            const pathEl = document.getElementById('mohPathDisplay');
+            const sortEl = document.getElementById('mohSortDisplay');
+            if (cat) {
+                if (pathEl) pathEl.textContent = cat.directory || `/var/lib/asterisk/moh/${cat.name}/`;
+                if (sortEl) sortEl.textContent = cat.sort || 'alpha';
+            }
+        }
+
+        function onMohCategoryChange() {
+            const sel = document.getElementById('mohCategorySelect');
+            if (sel) {
+                activeMohCategoryName = sel.value;
+                updateMohCategoryInfo();
+                renderMohFilesTable();
+            }
+        }
+        window.onMohCategoryChange = onMohCategoryChange;
+
+        function renderMohFilesTable() {
+            const tbody = document.getElementById('moh-files-table-body');
+            if (!tbody) return;
+            const cat = loadedMohCategories.find(c => c.name === activeMohCategoryName);
+            tbody.innerHTML = '';
+
+            if (!cat || !cat.files || cat.files.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)] italic">' + (isRtl ? 'لا توجد مقاطع صوتية في هذه الفئة حالياً' : 'No audio tracks in this MoH category yet.') + '</td></tr>';
+                return;
+            }
+
+            cat.files.forEach(f => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-[var(--bg-hover)] transition-colors border-b border-[var(--border-primary)]/40 text-xs';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-mono font-bold text-white">${escapeHtml(f.filename)}</td>
+                    <td class="py-3 px-4"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">${f.format}</span></td>
+                    <td class="py-3 px-4 font-mono text-[var(--text-secondary)]">${f.sizeFormatted}</td>
+                    <td class="py-3 px-4">
+                        <audio controls preload="none" class="h-8 max-w-xs rounded border border-[var(--border-primary)] bg-[var(--bg-card)]">
+                            <source src="${f.streamUrl}" type="audio/wav">
+                            Your browser does not support audio preview.
+                        </audio>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="deleteMohFile('${escapeHtml(cat.name)}', '${escapeHtml(f.filename)}')" class="px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded border border-red-500/30">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateMohFileLabel() {
+            const input = document.getElementById('mohAudioFile');
+            const label = document.getElementById('mohFileLabel');
+            if (input && label && input.files && input.files[0]) {
+                label.textContent = input.files[0].name;
+            }
+        }
+        window.updateMohFileLabel = updateMohFileLabel;
+
+        async function uploadMohAudio(e) {
+            e.preventDefault();
+            const input = document.getElementById('mohAudioFile');
+            if (!input || !input.files || !input.files[0]) {
+                showToast(isRtl ? 'يرجى اختيار ملف صوتي أولاً' : 'Please select an audio file first', 'error');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('category', activeMohCategoryName);
+            formData.append('audio', input.files[0]);
+
+            showToast(isRtl ? 'جاري رفع الملف الصوتي...' : 'Uploading MoH audio track...', 'info');
+
+            try {
+                const res = await fetch('/api/config/moh/upload?category=' + encodeURIComponent(activeMohCategoryName), {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    input.value = '';
+                    document.getElementById('mohFileLabel').textContent = isRtl ? 'اختر ملف صوتی...' : 'Choose audio file...';
+                    fetchMohData();
+                } else {
+                    showToast(data.error || 'Failed to upload MoH audio file', 'error');
+                }
+            } catch(err) {
+                showToast('Upload error: ' + err.message, 'error');
+            }
+        }
+        window.uploadMohAudio = uploadMohAudio;
+
+        async function deleteMohFile(catName, filename) {
+            if (!confirm(isRtl ? `حذف المقطع الصوتي '${filename}' من الفئة '${catName}'؟` : `Delete audio track '${filename}' from category '${catName}'?`)) return;
+            try {
+                const res = await fetch('/api/config/moh/file', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category: catName, filename })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    fetchMohData();
+                } else {
+                    showToast(data.error || 'Failed to delete audio file', 'error');
+                }
+            } catch(err) {
+                showToast('Error: ' + err.message, 'error');
+            }
+        }
+        window.deleteMohFile = deleteMohFile;
+
+        function openMohCategoryModal() {
+            document.getElementById('mohCatName').value = '';
+            openModal('mohCategoryModal');
+        }
+        window.openMohCategoryModal = openMohCategoryModal;
+
+        async function saveMohCategory(e) {
+            e.preventDefault();
+            const name = document.getElementById('mohCatName').value.trim();
+            const sort = document.getElementById('mohCatSort').value;
+            if (!name) return;
+
+            try {
+                const res = await fetch('/api/config/moh/category', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, sort })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    activeMohCategoryName = name.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+                    closeModal('mohCategoryModal');
+                    fetchMohData();
+                } else {
+                    showToast(data.error || 'Failed to create MoH category', 'error');
+                }
+            } catch(err) {
+                showToast('Error: ' + err.message, 'error');
+            }
+        }
+        window.saveMohCategory = saveMohCategory;
+
+        async function deleteMohCategory(catName) {
+            if (!confirm(isRtl ? `حذف فئة الموسيقى '${catName}' بالكامل مع جميع ملفاتها؟` : `Delete MoH Category '${catName}' and all its audio files?`)) return;
+            try {
+                const res = await fetch(`/api/config/moh/category/${encodeURIComponent(catName)}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    activeMohCategoryName = 'default';
+                    fetchMohData();
+                } else {
+                    showToast(data.error || 'Failed to delete MoH Category', 'error');
+                }
+            } catch(err) {
+                showToast('Error: ' + err.message, 'error');
+            }
+        }
+        function openAddDongleSlotModal() {
+            const cards = document.querySelectorAll('#modemDonglesGrid [data-dongle-id]');
+            const existingNames = Array.from(cards).map(c => c.getAttribute('data-dongle-id'));
+            let nextIndex = 0;
+            while (existingNames.includes(`dongle${nextIndex}`)) {
+                nextIndex++;
+            }
+            const countEl = document.getElementById('newSlotCount');
+            if (countEl) countEl.value = '1';
+            const prefixEl = document.getElementById('newSlotPrefix');
+            if (prefixEl) prefixEl.value = 'dongle';
+            const nameEl = document.getElementById('newSlotName');
+            if (nameEl) nameEl.value = `dongle${nextIndex}`;
+            const audioEl = document.getElementById('newSlotAudio');
+            if (audioEl) audioEl.value = `/dev/ttyUSB${nextIndex * 3 + 1}`;
+            const dataEl = document.getElementById('newSlotData');
+            if (dataEl) dataEl.value = `/dev/ttyUSB${nextIndex * 3 + 2}`;
+            updateDongleSlotPreview();
+            openModal('addDongleSlotModal');
+        }
+        window.openAddDongleSlotModal = openAddDongleSlotModal;
+
+        function updateDongleSlotPreview() {
+            const count = Math.max(1, parseInt(document.getElementById('newSlotCount')?.value, 10) || 1);
+            const prefix = (document.getElementById('newSlotPrefix')?.value || 'dongle').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'dongle';
+            const customName = document.getElementById('newSlotName')?.value.trim().toLowerCase();
+            const cards = document.querySelectorAll('#modemDonglesGrid [data-dongle-id]');
+            const existingSlotNames = new Set(Array.from(cards).map(c => c.getAttribute('data-dongle-id')));
+
+            const previews = [];
+            let nextIndex = 0;
+            for (let i = 0; i < count; i++) {
+                let targetName = '';
+                if (count === 1 && customName) {
+                    targetName = customName;
+                } else {
+                    while (existingSlotNames.has(`${prefix}${nextIndex}`)) {
+                        nextIndex++;
+                    }
+                    targetName = `${prefix}${nextIndex}`;
+                    existingSlotNames.add(targetName);
+                }
+                previews.push(targetName);
+            }
+            const previewEl = document.getElementById('newSlotPreviewText');
+            if (previewEl) previewEl.textContent = previews.join(', ');
+        }
+        window.updateDongleSlotPreview = updateDongleSlotPreview;
+
+        async function saveNewDongleSlot(e) {
+            e.preventDefault();
+            const count = Math.max(1, parseInt(document.getElementById('newSlotCount').value, 10) || 1);
+            const prefix = document.getElementById('newSlotPrefix').value.trim();
+            const dongleName = document.getElementById('newSlotName').value.trim().toLowerCase();
+            const audio = document.getElementById('newSlotAudio').value.trim();
+            const dataPort = document.getElementById('newSlotData').value.trim();
+            const rxgain = parseInt(document.getElementById('newSlotRxGain').value, 10) || 0;
+            const txgain = parseInt(document.getElementById('newSlotTxGain').value, 10) || 0;
+
+            showToast(isRtl ? `جاري إضافة ${count} فتحة مودم جديدة...` : `Adding ${count} new dongle slot(s) to dongle.conf...`, 'info');
+
+            try {
+                const res = await fetch('/api/config/modem/dongle-slot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ count, prefix, dongleName, audio, data: dataPort, rxgain, txgain })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    closeModal('addDongleSlotModal');
+                    fetchModemConfig();
+                    fetchDongleMappingsTab();
+                } else {
+                    showToast(data.error || 'Failed to add dongle slot(s)', 'error');
+                }
+            } catch(err) {
+                showToast('Error: ' + err.message, 'error');
+            }
+        }
+        window.saveNewDongleSlot = saveNewDongleSlot;
+
+        async function openRemoveDongleSlotModal() {
+            const container = document.getElementById('removeSlotChecklist');
+            if (!container) return;
+            container.innerHTML = '<div class="text-center text-xs text-[var(--text-muted)] py-2">Loading slots...</div>';
+            document.getElementById('removeSlotCount').value = '1';
+
+            try {
+                const res = await fetch('/api/config/modem');
+                const data = await res.json();
+                const dongles = data && data.dongles ? Object.keys(data.dongles) : [];
+                container.innerHTML = '';
+                if (dongles.length === 0) {
+                    container.innerHTML = '<div class="text-center text-xs text-[var(--text-muted)] py-2">No dongle slots found in dongle.conf</div>';
+                } else {
+                    dongles.forEach(dId => {
+                        const label = document.createElement('label');
+                        label.className = 'flex items-center gap-2 text-xs cursor-pointer hover:text-white';
+                        label.innerHTML = `<input type="checkbox" name="removeDongleSlot" value="${dId}" class="rounded border-[var(--border-primary)] text-red-500 focus:ring-red-500"> <span>${dId}</span>`;
+                        container.appendChild(label);
+                    });
+                }
+            } catch(_) {
+                container.innerHTML = '<div class="text-center text-xs text-red-400 py-2">Failed to load slots</div>';
+            }
+            openModal('removeDongleSlotModal');
+        }
+        window.openRemoveDongleSlotModal = openRemoveDongleSlotModal;
+
+        async function executeRemoveDongleSlot(e) {
+            e.preventDefault();
+            const checked = Array.from(document.querySelectorAll('input[name="removeDongleSlot"]:checked')).map(cb => cb.value);
+            const count = Math.max(1, parseInt(document.getElementById('removeSlotCount').value, 10) || 1);
+
+            const payload = {};
+            if (checked.length > 0) {
+                payload.dongleNames = checked;
+            } else {
+                payload.count = count;
+            }
+
+            const targetText = checked.length > 0 ? checked.join(', ') : `${count} last slot(s)`;
+            if (!confirm(isRtl ? `حذف الفتحات '${targetText}' نهائياً من dongle.conf؟` : `Remove dongle slot(s) '${targetText}' permanently from dongle.conf?`)) return;
+
+            showToast(isRtl ? 'جاري حذف الشرائح...' : 'Removing dongle slot(s)...', 'info');
+
+            try {
+                const res = await fetch('/api/config/modem/dongle-slot', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    closeModal('removeDongleSlotModal');
+                    fetchModemConfig();
+                    fetchDongleMappingsTab();
+                } else {
+                    showToast(data.error || 'Failed to remove dongle slot(s)', 'error');
+                }
+            } catch(err) {
+                showToast('Error: ' + err.message, 'error');
+            }
+        }
+        window.executeRemoveDongleSlot = executeRemoveDongleSlot;
         function fetchAnnouncements() {
+            fetchMohData();
             return fetch('/api/config/announcements')
                 .then(res => {
                     if (res.status === 401) { window.location.href = '/login'; throw new Error('Unauthorized'); }
@@ -7601,127 +8425,121 @@ function isTabAllowed(tabName) {
 
         async function fetchModemConfig() {
             const grid = document.getElementById('modemDonglesGrid');
+            const countBadge = document.getElementById('modemDongleCount');
             if (!grid) return;
-            grid.innerHTML = `<div class="col-span-2 text-center text-xs text-[var(--text-muted)] py-8">${isRtl ? 'جاري تحميل إعدادات المودم...' : 'Loading modem configurations...'}</div>`;
+
+            grid.innerHTML = `<div class="col-span-full text-center text-xs text-[var(--text-muted)] py-8">${isRtl ? 'جاري تحميل إعدادات المودم...' : 'Loading modem configurations...'}</div>`;
+            if (countBadge) countBadge.textContent = isRtl ? 'جار التحميل...' : 'Loading...';
 
             try {
-                let jbEnabled = false;
-                try {
-                    const jbRes = await fetch('/api/config/modem/jitterbuffer');
-                    const jbData = await jbRes.json();
-                    if (jbData.success) jbEnabled = Boolean(jbData.enabled);
-                } catch (_) {}
-                window.currentJitterBufferState = jbEnabled;
-
-                const jbBtn = document.getElementById('toggleJbBtn');
-                if (jbBtn) {
-                    if (jbEnabled) {
-                        jbBtn.className = 'px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30';
-                        jbBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>' + (isRtl ? 'صاقل التلعثم: مفعل (انقر للتعطيل)' : 'Jitter Buffer: Enabled (Click to Disable)') + '</span>';
-                    } else {
-                        jbBtn.className = 'px-3.5 py-2 text-xs font-extrabold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer bg-red-500/10 text-red-400 border-red-500/30 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/30';
-                        jbBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-400"></span><span>' + (isRtl ? 'صاقل التلعثم: معطل (انقر للتفعيل)' : 'Jitter Buffer: Disabled (Click to Enable)') + '</span>';
-                    }
-                }
-
-
                 const res = await fetch('/api/config/modem');
                 const data = await res.json();
                 if (!data.success || !data.dongles) {
-                    grid.innerHTML = `<div class="col-span-2 text-center text-xs text-red-400 py-8">${data.error || 'Failed to load modem configurations.'}</div>`;
+                    if (countBadge) countBadge.textContent = isRtl ? '0 أجهزة' : '0 devices';
+                    grid.innerHTML = `<div class="col-span-full text-center text-xs text-red-400 py-8">${escapeHtml(data.error || 'Failed to load modem configurations.')}</div>`;
                     return;
                 }
 
                 const dongleIds = Object.keys(data.dongles);
+                if (countBadge) {
+                    countBadge.textContent = `${dongleIds.length} ${isRtl ? 'أجهزة' : (dongleIds.length === 1 ? 'device' : 'devices')}`;
+                }
                 if (dongleIds.length === 0) {
-                    grid.innerHTML = `<div class="col-span-2 text-center text-xs text-[var(--text-muted)] py-8">${isRtl ? 'لا توجد شرائح GSM معرفة في dongle.conf' : 'No GSM dongles found in dongle.conf'}</div>`;
+                    grid.innerHTML = `<div class="col-span-full text-center text-xs text-[var(--text-muted)] py-8">${isRtl ? 'لا توجد شرائح GSM معرفة في dongle.conf' : 'No GSM dongles found in dongle.conf'}</div>`;
                     return;
                 }
 
                 grid.innerHTML = '';
                 dongleIds.forEach(id => {
-                    const d = data.dongles[id];
-                    const rxVal = Math.max(-10, Math.min(10, parseInt(d.rxgain, 10) || 0));
-                    const txVal = Math.max(-10, Math.min(10, parseInt(d.txgain, 10) || 0));
-                    const phoneNum = d.phone_number ? escapeHtml(d.phone_number) : (isRtl ? 'غير محدد' : 'Not set');
-                    const formatDb = (v) => (v > 0 ? '+' + v : String(v)) + ' dB';
+                    const dongle = data.dongles[id];
+                    const rxValue = Math.max(-10, Math.min(10, parseInt(dongle.rxgain, 10) || 0));
+                    const txValue = Math.max(-10, Math.min(10, parseInt(dongle.txgain, 10) || 0));
+                    const safeId = escapeHtml(id);
+                    const phoneNumber = dongle.phone_number ? escapeHtml(dongle.phone_number) : (isRtl ? 'غير محدد' : 'No DID assigned');
+                    const formatDb = value => `${value > 0 ? '+' : ''}${value} dB`;
 
                     const card = document.createElement('div');
-                    card.className = 'config-card p-5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] flex flex-col gap-4 shadow-sm';
+                    card.className = 'rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] overflow-hidden';
                     card.setAttribute('data-dongle-id', id);
-
                     card.innerHTML = `
-                        <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
-                            <div class="flex items-center gap-2.5">
-                                <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs font-mono">
+                        <div class="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/25">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs font-mono shrink-0">
                                     ${escapeHtml(id.replace('dongle', 'D'))}
                                 </div>
-                                <div>
-                                    <h3 class="text-sm font-black text-[var(--text-primary)] font-mono">${escapeHtml(id)}</h3>
-                                    <span class="text-[11px] text-[var(--text-muted)] block font-mono">${phoneNum}</span>
+                                <div class="min-w-0">
+                                    <h3 class="text-sm font-black text-[var(--text-primary)] font-mono truncate">${safeId}</h3>
+                                    <span class="text-[10px] text-[var(--text-muted)] block font-mono truncate">${phoneNumber}</span>
                                 </div>
                             </div>
-                            <span class="px-2.5 py-1 text-[10px] font-extrabold rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                                Active
+                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                ${isRtl ? 'مهيأ' : 'Configured'}
                             </span>
                         </div>
 
-                        <!-- Volume Controls Grid -->
-                        <div class="space-y-4 pt-1">
-                            <!-- Rx Gain (Receive Volume) -->
-                            <div class="space-y-1.5">
-                                <div class="flex items-center justify-between text-xs">
-                                    <label class="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                                        <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                                        <span>${isRtl ? 'كسب الاستقبال (Rx Gain - Receiving Volume)' : 'Rx Gain (Receiving Volume)'}</span>
-                                    </label>
-                                    <span id="rxValBadge_${id}" class="font-mono font-black text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                                        ${formatDb(rxVal)}
-                                    </span>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4">
+                            <div class="config-control-panel space-y-3">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-start gap-2 min-w-0">
+                                        <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                                        </div>
+                                        <div>
+                                            <label for="rxRange_${id}" class="text-xs font-bold text-[var(--text-primary)] block">${isRtl ? 'الاستقبال (Rx)' : 'Receive (Rx)'}</label>
+                                            <span class="text-[9px] text-[var(--text-muted)]">${isRtl ? 'الصوت الوارد' : 'Incoming audio'}</span>
+                                        </div>
+                                    </div>
+                                    <span id="rxValBadge_${id}" class="font-mono font-black text-[11px] text-emerald-400">${formatDb(rxValue)}</span>
                                 </div>
-                                <div class="flex items-center gap-3">
-                                    <input type="range" id="rxRange_${id}" min="-10" max="10" value="${rxVal}" step="1"
+                                <div class="flex items-center gap-2.5">
+                                    <input type="range" id="rxRange_${id}" min="-10" max="10" value="${rxValue}" step="1"
                                         oninput="document.getElementById('rxValBadge_${id}').textContent = (this.value > 0 ? '+' + this.value : this.value) + ' dB'; document.getElementById('rxInput_${id}').value = this.value"
                                         class="w-full accent-emerald-500 bg-[var(--bg-primary)] h-2 rounded-lg cursor-pointer">
-                                    <input type="number" id="rxInput_${id}" min="-10" max="10" value="${rxVal}"
+                                    <input type="number" id="rxInput_${id}" min="-10" max="10" value="${rxValue}"
                                         oninput="let v = Math.max(-10, Math.min(10, parseInt(this.value)||0)); this.value = v; document.getElementById('rxRange_${id}').value = v; document.getElementById('rxValBadge_${id}').textContent = (v > 0 ? '+' + v : v) + ' dB';"
                                         class="config-input w-16 text-center font-mono font-bold text-xs py-1">
                                 </div>
+                                <div class="flex justify-between text-[9px] font-mono text-[var(--text-muted)]"><span>-10</span><span>0</span><span>+10</span></div>
                             </div>
 
-                            <!-- Tx Gain (Transmit Volume) -->
-                            <div class="space-y-1.5">
-                                <div class="flex items-center justify-between text-xs">
-                                    <label class="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                                        <svg class="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-                                        <span>${isRtl ? 'كسب الإرسال (Tx Gain - Transmit Volume)' : 'Tx Gain (Transmit Volume)'}</span>
-                                    </label>
-                                    <span id="txValBadge_${id}" class="font-mono font-black text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                                        ${formatDb(txVal)}
-                                    </span>
+                            <div class="config-control-panel space-y-3">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-start gap-2 min-w-0">
+                                        <div class="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                                        </div>
+                                        <div>
+                                            <label for="txRange_${id}" class="text-xs font-bold text-[var(--text-primary)] block">${isRtl ? 'الإرسال (Tx)' : 'Transmit (Tx)'}</label>
+                                            <span class="text-[9px] text-[var(--text-muted)]">${isRtl ? 'الصوت الصادر' : 'Outgoing audio'}</span>
+                                        </div>
+                                    </div>
+                                    <span id="txValBadge_${id}" class="font-mono font-black text-[11px] text-blue-400">${formatDb(txValue)}</span>
                                 </div>
-                                <div class="flex items-center gap-3">
-                                    <input type="range" id="txRange_${id}" min="-10" max="10" value="${txVal}" step="1"
+                                <div class="flex items-center gap-2.5">
+                                    <input type="range" id="txRange_${id}" min="-10" max="10" value="${txValue}" step="1"
                                         oninput="document.getElementById('txValBadge_${id}').textContent = (this.value > 0 ? '+' + this.value : this.value) + ' dB'; document.getElementById('txInput_${id}').value = this.value"
                                         class="w-full accent-blue-500 bg-[var(--bg-primary)] h-2 rounded-lg cursor-pointer">
-                                    <input type="number" id="txInput_${id}" min="-10" max="10" value="${txVal}"
+                                    <input type="number" id="txInput_${id}" min="-10" max="10" value="${txValue}"
                                         oninput="let v = Math.max(-10, Math.min(10, parseInt(this.value)||0)); this.value = v; document.getElementById('txRange_${id}').value = v; document.getElementById('txValBadge_${id}').textContent = (v > 0 ? '+' + v : v) + ' dB';"
                                         class="config-input w-16 text-center font-mono font-bold text-xs py-1">
                                 </div>
+                                <div class="flex justify-between text-[9px] font-mono text-[var(--text-muted)]"><span>-10</span><span>0</span><span>+10</span></div>
                             </div>
                         </div>
 
-                        <div class="flex justify-end pt-2 border-t border-[var(--border-primary)] mt-1">
-                            <button type="button" onclick="saveSingleDongleGain('${id}')" class="config-btn-secondary px-3 py-1.5 text-xs flex items-center gap-1 cursor-pointer">
-                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                <span>${isRtl ? 'حفظ' : 'Save'} ${escapeHtml(id)}</span>
+                        <div class="flex items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-primary)] bg-[var(--bg-primary)]/20">
+                            <span class="text-[10px] text-[var(--text-muted)]">${isRtl ? 'النطاق المسموح: -10 إلى +10 dB' : 'Allowed range: -10 to +10 dB'}</span>
+                            <button type="button" onclick="saveSingleDongleGain('${id}')" class="config-action-btn config-action-btn--compact">
+                                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                <span>${isRtl ? 'حفظ الجهاز' : 'Save Device'}</span>
                             </button>
                         </div>
                     `;
                     grid.appendChild(card);
                 });
-            } catch (e) {
-                grid.innerHTML = `<div class="col-span-2 text-center text-xs text-red-400 py-8">Error loading modem config: ${escapeHtml(e.message)}</div>`;
+            } catch (error) {
+                if (countBadge) countBadge.textContent = isRtl ? '0 أجهزة' : '0 devices';
+                grid.innerHTML = `<div class="col-span-full text-center text-xs text-red-400 py-8">Error loading modem config: ${escapeHtml(error.message)}</div>`;
             }
         }
         window.fetchModemConfig = fetchModemConfig;
@@ -7807,27 +8625,6 @@ function isTabAllowed(tabName) {
             }
         }
         window.resetAllDongleGains = resetAllDongleGains;
-        async function toggleJitterBuffer() {
-            const targetState = !window.currentJitterBufferState;
-            try {
-                const res = await fetch('/api/config/modem/jitterbuffer', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled: targetState })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    window.currentJitterBufferState = data.enabled;
-                    showToast(data.message || (data.enabled ? 'Jitter buffer enabled in dialplan!' : 'Jitter buffer disabled in dialplan!'), 'success');
-                    fetchModemConfig();
-                } else {
-                    showToast(data.error || 'Failed to toggle Jitter Buffer.', 'error');
-                }
-            } catch (e) {
-                showToast('Error toggling Jitter Buffer: ' + e.message, 'error');
-            }
-        }
-        window.toggleJitterBuffer = toggleJitterBuffer;
         async function fetchRtcpDiagnostics() {
             const container = document.getElementById('rtcpDiagnosticsContainer');
             const badge = document.getElementById('rtcpActiveBadge');
