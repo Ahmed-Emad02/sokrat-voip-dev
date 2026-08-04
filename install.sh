@@ -389,9 +389,9 @@ chmod +x /var/lib/asterisk/agi-bin/hijack_call.py
 chown asterisk:asterisk /var/lib/asterisk/agi-bin/hijack_call.py
 echo "  hijack_call.py installed."
 
-# Strip old [from-dongle-custom] before appending (ensures upgrades get the latest version)
-echo "  Stripping old [from-dongle-custom]..."
-python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\\[from-dongle-custom\\].*?(?=\\n\\[|\\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
+# Strip old [from-dongle-custom] and [ext-moh] before appending (ensures upgrades get the latest version)
+echo "  Stripping old [from-dongle-custom] and [ext-moh]..."
+python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\[from-dongle-custom\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);f=re.sub(r'\[ext-moh\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
 echo "  Stripped."
 
 # Append updated from-dongle-custom
