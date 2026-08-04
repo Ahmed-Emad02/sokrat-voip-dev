@@ -6209,7 +6209,7 @@ app.post('/api/config/announcements', async (req, res) => {
         const ttsLangVal = recId === 0 ? (SUPPORTED_TTS_LANGS.includes(rawTtsLang) ? rawTtsLang : 'en-US') : 'en-US';
         const ttsTextVal = recId === 0 ? String(tts_text || '').trim() : '';
 
-        await pool.query(`
+        const [r] = await pool.query(`
             INSERT INTO \`asterisk\`.\`announcement\`
             (description, recording_id, allow_skip, post_dest, return_ivr, noanswer, repeat_msg, tts_lang, tts_text)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -6218,6 +6218,8 @@ app.post('/api/config/announcements', async (req, res) => {
         const reloadRes = await reloadPbxConfigPromise();
         res.json({
             success: true,
+            id: r.insertId,
+            announcement_id: r.insertId,
             message: `Announcement '${name}' created successfully.`,
             applied: reloadRes.success,
             reloadError: reloadRes.error
