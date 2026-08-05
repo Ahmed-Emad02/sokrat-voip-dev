@@ -2298,32 +2298,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     .finally(() => { if (btn) btn.disabled = false; });
             };
 
-            // 4. Reset USB Port / Module Reload
-            // 4. Reset USB Port / Module Reload
-            window.resetUsbPort = function(id) {
-                if (!confirm((isRtl ? 'هل أنت متأكد من إعادة تعيين منفذ USB لـ ' : 'Are you sure you want to reset USB port for ') + id + '?')) return;
-                const btn = document.getElementById('resetUsbBtn-' + id);
-                if (btn) btn.disabled = true;
-                showToast(isRtl ? 'إعادة تعيين USB' : 'Resetting USB', (isRtl ? 'جاري إعادة تعيين منفذ USB لـ ' : 'Resetting USB port for ') + id + '...', 'warning');
-
-                fetch('/api/gsm-dongles/reset-usb-port', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ dongleId: id })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast(isRtl ? 'نجاح' : 'Success', (isRtl ? 'تمت إعادة تعيين منفذ USB لـ ' : 'USB port reset successfully for ') + id, 'success');
-                        refreshDevicesList();
-                    } else {
-                        showToast(isRtl ? 'خطأ' : 'Error', data.error || 'USB reset failed', 'error');
-                    }
-                })
-                .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
-                .finally(() => { if (btn) btn.disabled = false; });
-            };
-
             window.toggleLegendBlock = function() {
                 const block = document.getElementById('legend-content-block');
                 const text = document.getElementById('legend-toggle-text');
@@ -2510,6 +2484,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 });
             }
             setInterval(refreshDevicesList, 1000);
+        });
     </script>
 </body>
 </html>
