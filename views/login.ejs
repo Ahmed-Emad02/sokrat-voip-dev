@@ -222,25 +222,6 @@
                 btn.textContent = uiLabels.send;
             }
         }
-        document.addEventListener('DOMContentLoaded', () => {
-            const form = document.getElementById('loginForm');
-            if (form) {
-                form.addEventListener('submit', async function(e) {
-                    if (this.dataset.micDone) return;
-                    e.preventDefault();
-                    const isSecure = window.isSecureContext === true
-                        && typeof navigator.mediaDevices !== 'undefined'
-                        && typeof navigator.mediaDevices.getUserMedia === 'function';
-                    if (isSecure) {
-                        try {
-                            await navigator.mediaDevices.getUserMedia({ audio: true });
-                        } catch (_) {}
-                    }
-                    this.dataset.micDone = 'true';
-                    this.submit();
-                });
-            }
-        });
     </script>
 </body>
 </html>
