@@ -1815,28 +1815,60 @@ async function applyDongleHotplugMappingDefaults() {
 }
 
 
+let dongleStuckCallTimestamps = {};
+
 function autoHealDongles() {
     applyDongleHotplugMappingDefaults();
-    getDevicesOutputCached((err, stdout) => {
-        if (err || !stdout) return;
-        const devices = parseDevicesOutput(stdout, true);
-        const now = Date.now();
-        for (const dev of devices) {
-            const id = dev.ID;
-            const state = (dev.State || '').toLowerCase();
-            if (state.includes('not initia')) {
-                if (!dongleNotInitTimestamps[id]) {
-                    dongleNotInitTimestamps[id] = now;
-                } else if (now - dongleNotInitTimestamps[id] >= 3000 && !dongleRestartedOnce[id]) {
-                    dongleRestartedOnce[id] = true;
-                    console.log(`AUTO-HEAL: ${id} stuck in "Not Initialized" for 3s. Restarting once...`);
-                    execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${id}`]);
+    execFile(ASTERISK_BIN, ['-rx', 'core show channels concise'], (errChan, channelsStdout) => {
+        const activeChannelsOutput = (channelsStdout || '').toLowerCase();
+        
+        getDevicesOutputCached((errDev, stdoutDev) => {
+            if (errDev || !stdoutDev) return;
+            const devices = parseDevicesOutput(stdoutDev, true);
+            const now = Date.now();
+            
+            for (const dev of devices) {
+                const id = dev.ID;
+                if (!id) continue;
+                const state = (dev.State || '').toLowerCase();
+                const imei = (dev.IMEI || '').trim();
+
+                // 1. Recover from "Not Initialized" stuck state
+                if (state.includes('not initia')) {
+                    if (!dongleNotInitTimestamps[id]) {
+                        dongleNotInitTimestamps[id] = now;
+                    } else if (now - dongleNotInitTimestamps[id] >= 3000 && !dongleRestartedOnce[id]) {
+                        dongleRestartedOnce[id] = true;
+                        console.log(`AUTO-HEAL: ${id} stuck in "Not Initialized" for 3s. Restarting once...`);
+                        execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${id}`]);
+                    }
+                } else {
+                    delete dongleNotInitTimestamps[id];
+                    delete dongleRestartedOnce[id];
                 }
-            } else {
-                delete dongleNotInitTimestamps[id];
-                delete dongleRestartedOnce[id];
+
+                // 2. Recover from stuck Dialing / Calling / Ringing / Active call state with NO active Asterisk channel
+                const isCallState = state.includes('dial') || state.includes('ring') || state.includes('call') || state.includes('busy') || state.includes('active') || state.includes('outgoing') || state.includes('incoming');
+                if (isCallState) {
+                    const hasActiveChannel = activeChannelsOutput.includes(id.toLowerCase()) || (imei && imei !== '-' && activeChannelsOutput.includes(imei.toLowerCase()));
+                    if (!hasActiveChannel) {
+                        if (!dongleStuckCallTimestamps[id]) {
+                            dongleStuckCallTimestamps[id] = now;
+                        } else if (now - dongleStuckCallTimestamps[id] >= 2000) {
+                            delete dongleStuckCallTimestamps[id];
+                            console.log(`AUTO-HEAL: ${id} stuck in phantom call state "${dev.State}" with no active channel. Auto-restarting dongle...`);
+                            execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${id}`], () => {
+                                io.emit('usbDevicesUpdated');
+                            });
+                        }
+                    } else {
+                        delete dongleStuckCallTimestamps[id];
+                    }
+                } else {
+                    delete dongleStuckCallTimestamps[id];
+                }
             }
-        }
+        });
     });
 }
 setInterval(autoHealDongles, 3000);

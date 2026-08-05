@@ -456,7 +456,15 @@ append_context '[macro-dialout-trunk-predial-hook]' '[macro-dialout-trunk-predia
 [macro-dialout-trunk-predial-hook]
 exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid) ---)
 same => n,Set(JITTERBUFFER(adaptive)=default)
+same => n,Set(CHANNEL(hangup_handler_push)=dongle-hangup-cleanup,s,1)
 same => n,MacroExit()
+
+[dongle-hangup-cleanup]
+exten => s,1,NoOp(--- Dongle Call Hangup Cleanup ---)
+same => n,Set(D_NAME=${CUT(CHANNEL,-,1)})
+same => n,Set(D_NAME=${CUT(D_NAME,/,2)})
+same => n,Verbose(1, [DONGLE-HANGUP-CLEANUP] Channel: ${CHANNEL}, Dongle: ${D_NAME}, Cause: ${HANGUPCAUSE})
+same => n,Return()
 
 MACRO
 # Strip old [macro-dialout-one-predial-hook] before appending
