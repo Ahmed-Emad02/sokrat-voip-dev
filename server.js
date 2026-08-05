@@ -1181,8 +1181,17 @@ async function detectDonglesAndSetTrunkCID() {
                 }
             }
         }
-
-
+        for (const row of dongleRows) {
+            const dongleName = row.dongle_name;
+            const imei = row.imei;
+            if (dongleName) {
+                await execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP ${dongleName} ${dongleName}`]);
+                if (imei) {
+                    await execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP i:${imei} ${dongleName}`]);
+                    await execFileAsync(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP ${imei} ${dongleName}`]);
+                }
+            }
+        }
     } catch (e) {
         console.error('DONGLE-CID: Detection error:', e.message);
     }
