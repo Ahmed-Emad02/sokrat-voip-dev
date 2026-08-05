@@ -41,7 +41,16 @@ const words = {
         usbDevices: "USB Serial Devices",
         usbDesc: "/dev/ttyUSB* ports visible to the OS",
         usbNone: "No ttyUSB devices detected",
-        usbNoneHint: "Check physical connection or run: ls /dev/ | grep -i ttyusb"
+        usbNoneHint: "Check physical connection or run: ls /dev/ | grep -i ttyusb",
+        btnRestartDongle: "Restart",
+        btnRebootModem: "Reboot Modem",
+        btnVirtualReplug: "Virtual Re-plug",
+        btnResetUsb: "Reset USB",
+        legendTitle: "Action Buttons & State Guide",
+        legendRestartDesc: "Restarts the dongle channel in Asterisk without touching hardware.",
+        legendRebootDesc: "Reboots modem internal firmware & SIM module via AT command.",
+        legendReplugDesc: "Simulates physically pulling & replugging USB cable (sysfs).",
+        legendResetUsbDesc: "Resets the USB port and reloads the Asterisk module driver."
     },
     ar: {
         title: "شرائح الاتصال", subtitle: "GSM",
@@ -84,7 +93,16 @@ const words = {
         usbDevices: "أجهزة USB التسلسلية",
         usbDesc: "منافذ /dev/ttyUSB* المرئية لنظام التشغيل",
         usbNone: "لم يتم اكتشاف أجهزة ttyUSB",
-        usbNoneHint: "تحقق من الاتصال الفعلي أو نفذ: ls /dev/ | grep -i ttyusb"
+        usbNoneHint: "تحقق من الاتصال الفعلي أو نفذ: ls /dev/ | grep -i ttyusb",
+        btnRestartDongle: "تحديث الشريحة",
+        btnRebootModem: "إعادة تشغيل المودم",
+        btnVirtualReplug: "إعادة توصيل USB",
+        btnResetUsb: "إعادة تعيين USB",
+        legendTitle: "دليل أزرار الإجراءات والحالات",
+        legendRestartDesc: "إعادة تشغيل قناة الشريحة داخل Asterisk دون مساس بالجهاز.",
+        legendRebootDesc: "إعادة تشغيل نظام المودم الداخلي ووحدة الشريحة عبر أمر AT.",
+        legendReplugDesc: "محاكاة فصل وإعادة توصيل كابل الـ USB في النواة (Sysfs).",
+        legendResetUsbDesc: "إعادة تعيين منفذ USB وإعادة تحميل تعريف chan_dongle."
     }
 };
 const t = words[currentLang] || words['en'];
@@ -203,23 +221,425 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .dongle-device-card {
             background: var(--bg-card);
-            border: 1px solid var(--border-primary);
+            border: 2px solid var(--border-primary);
             min-width: 0;
             overflow: hidden;
-            transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+            transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background-color 180ms ease;
         }
         .dongle-device-card:hover {
             border-color: var(--border-accent);
-            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
-            transform: translateY(-1px);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+            transform: translateY(-2px);
         }
+        
+        /* State-driven card color themes — Matte background surfaces and bolder state accents */
+        
+        /* 1. FREE / READY (Purple) */
+        .dongle-device-card.dongle-state-purple {
+            background-color: #23153c !important;
+            border-color: #a855f7 !important;
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.25);
+        }
+        .dongle-device-card.dongle-state-purple:hover {
+            border-color: #c084fc !important;
+            box-shadow: 0 10px 30px rgba(192, 132, 252, 0.4);
+        }
+        .dongle-device-card.dongle-state-purple .dongle-icon-box {
+            background-color: #581c87 !important;
+            border: 1px solid #a855f7 !important;
+            color: #e9d5ff !important;
+        }
+        .dongle-device-card.dongle-state-purple .dongle-status-pill {
+            background-color: #9333ea !important;
+            border: 1px solid #c084fc !important;
+            color: #ffffff !important;
+        }
+        .dongle-device-card.dongle-state-purple .dongle-status-dot {
+            background-color: #f3e8ff !important;
+        }
+        .dongle-device-card.dongle-state-purple .dongle-metric,
+        .dongle-device-card.dongle-state-purple .dongle-priority-metric {
+            background: #1a0f30 !important;
+            border: 1px solid rgba(168, 85, 247, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-purple .dongle-hardware-summary,
+        .dongle-device-card.dongle-state-purple .dongle-routing-panel {
+            background: #1c1130 !important;
+            border: 1px solid rgba(168, 85, 247, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-purple .dongle-routing-trunk {
+            background: #160d26 !important;
+            border: 1px solid rgba(168, 85, 247, 0.3) !important;
+        }
+        .dongle-device-card.dongle-state-purple .dongle-card-footer {
+            background-color: #160d26 !important;
+            border-top: 1px solid rgba(168, 85, 247, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-purple .dongle-action-button.dongle-action-primary {
+            background-color: #9333ea !important;
+            border-color: #c084fc !important;
+            color: #ffffff !important;
+        }
+        .dongle-device-card.dongle-state-purple .dongle-action-button.dongle-action-primary:hover {
+            background-color: #7e22ce !important;
+        }
+        .dongle-device-card.selected-row.dongle-state-purple {
+            border-color: #e9d5ff !important;
+            outline: 3px solid #c084fc !important;
+            outline-offset: 1px;
+            box-shadow: 0 0 32px rgba(192, 132, 252, 0.6) !important;
+        }
+
+        /* 2. ACTIVE / IN CALL (Green / Emerald) */
+        .dongle-device-card.dongle-state-green {
+            background-color: #0d2d22 !important;
+            border-color: #10b981 !important;
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.25);
+        }
+        .dongle-device-card.dongle-state-green:hover {
+            border-color: #34d399 !important;
+            box-shadow: 0 10px 30px rgba(52, 211, 153, 0.4);
+        }
+        .dongle-device-card.dongle-state-green .dongle-icon-box {
+            background-color: #065f46 !important;
+            border: 1px solid #10b981 !important;
+            color: #a7f3d0 !important;
+        }
+        .dongle-device-card.dongle-state-green .dongle-status-pill {
+            background-color: #059669 !important;
+            border: 1px solid #34d399 !important;
+            color: #ffffff !important;
+        }
+        .dongle-device-card.dongle-state-green .dongle-status-dot {
+            background-color: #ecfdf5 !important;
+        }
+        .dongle-device-card.dongle-state-green .dongle-metric,
+        .dongle-device-card.dongle-state-green .dongle-priority-metric {
+            background: #092219 !important;
+            border: 1px solid rgba(16, 185, 129, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-green .dongle-hardware-summary,
+        .dongle-device-card.dongle-state-green .dongle-routing-panel {
+            background: #08261c !important;
+            border: 1px solid rgba(16, 185, 129, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-green .dongle-routing-trunk {
+            background: #051d15 !important;
+            border: 1px solid rgba(16, 185, 129, 0.3) !important;
+        }
+        .dongle-device-card.dongle-state-green .dongle-card-footer {
+            background-color: #051d15 !important;
+            border-top: 1px solid rgba(16, 185, 129, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-green .dongle-action-button.dongle-action-primary {
+            background-color: #059669 !important;
+            border-color: #34d399 !important;
+            color: #ffffff !important;
+        }
+        .dongle-device-card.dongle-state-green .dongle-action-button.dongle-action-primary:hover {
+            background-color: #047857 !important;
+        }
+        .dongle-device-card.selected-row.dongle-state-green {
+            border-color: #a7f3d0 !important;
+            outline: 3px solid #34d399 !important;
+            outline-offset: 1px;
+            box-shadow: 0 0 32px rgba(52, 211, 153, 0.6) !important;
+        }
+
+        /* 3. DIALING / RINGING (Blue) */
+        .dongle-device-card.dongle-state-blue {
+            background-color: #112347 !important;
+            border-color: #3b82f6 !important;
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.25);
+        }
+        .dongle-device-card.dongle-state-blue:hover {
+            border-color: #60a5fa !important;
+            box-shadow: 0 10px 30px rgba(96, 165, 250, 0.4);
+        }
+        .dongle-device-card.dongle-state-blue .dongle-icon-box {
+            background-color: #1e40af !important;
+            border: 1px solid #3b82f6 !important;
+            color: #bfdbfe !important;
+        }
+        .dongle-device-card.dongle-state-blue .dongle-status-pill {
+            background-color: #2563eb !important;
+            border: 1px solid #60a5fa !important;
+            color: #ffffff !important;
+        }
+        .dongle-device-card.dongle-state-blue .dongle-status-dot {
+            background-color: #eff6ff !important;
+        }
+        .dongle-device-card.dongle-state-blue .dongle-metric,
+        .dongle-device-card.dongle-state-blue .dongle-priority-metric {
+            background: #0c1f3d !important;
+            border: 1px solid rgba(59, 130, 246, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-blue .dongle-hardware-summary,
+        .dongle-device-card.dongle-state-blue .dongle-routing-panel {
+            background: #0a1a33 !important;
+            border: 1px solid rgba(59, 130, 246, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-blue .dongle-routing-trunk {
+            background: #071329 !important;
+            border: 1px solid rgba(59, 130, 246, 0.3) !important;
+        }
+        .dongle-device-card.dongle-state-blue .dongle-card-footer {
+            background-color: #071329 !important;
+            border-top: 1px solid rgba(59, 130, 246, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-blue .dongle-action-button.dongle-action-primary {
+            background-color: #2563eb !important;
+            border-color: #60a5fa !important;
+            color: #ffffff !important;
+        }
+        .dongle-device-card.dongle-state-blue .dongle-action-button.dongle-action-primary:hover {
+            background-color: #1d4ed8 !important;
+        }
+        .dongle-device-card.selected-row.dongle-state-blue {
+            border-color: #bfdbfe !important;
+            outline: 3px solid #60a5fa !important;
+            outline-offset: 1px;
+            box-shadow: 0 0 32px rgba(96, 165, 250, 0.6) !important;
+        }
+
+        /* 4. NOT INITIALIZED / SEARCHING (Yellow / Amber) */
+        .dongle-device-card.dongle-state-yellow {
+            background-color: #331b08 !important;
+            border-color: #f59e0b !important;
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.25);
+        }
+        .dongle-device-card.dongle-state-yellow:hover {
+            border-color: #fbbf24 !important;
+            box-shadow: 0 10px 30px rgba(251, 191, 36, 0.4);
+        }
+        .dongle-device-card.dongle-state-yellow .dongle-icon-box {
+            background-color: #92400e !important;
+            border: 1px solid #f59e0b !important;
+            color: #fde68a !important;
+        }
+        .dongle-device-card.dongle-state-yellow .dongle-status-pill {
+            background-color: #d97706 !important;
+            border: 1px solid #fbbf24 !important;
+            color: #ffffff !important;
+        }
+        .dongle-device-card.dongle-state-yellow .dongle-status-dot {
+            background-color: #fffbeb !important;
+        }
+        .dongle-device-card.dongle-state-yellow .dongle-metric,
+        .dongle-device-card.dongle-state-yellow .dongle-priority-metric {
+            background: #261406 !important;
+            border: 1px solid rgba(245, 158, 11, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-yellow .dongle-hardware-summary,
+        .dongle-device-card.dongle-state-yellow .dongle-routing-panel {
+            background: #291706 !important;
+            border: 1px solid rgba(245, 158, 11, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-yellow .dongle-routing-trunk {
+            background: #211204 !important;
+            border: 1px solid rgba(245, 158, 11, 0.3) !important;
+        }
+        .dongle-device-card.dongle-state-yellow .dongle-card-footer {
+            background-color: #211204 !important;
+            border-top: 1px solid rgba(245, 158, 11, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-yellow .dongle-action-button.dongle-action-primary {
+            background-color: #d97706 !important;
+            border-color: #fbbf24 !important;
+            color: #ffffff !important;
+        }
+        .dongle-device-card.dongle-state-yellow .dongle-action-button.dongle-action-primary:hover {
+            background-color: #b45309 !important;
+        }
+        .dongle-device-card.selected-row.dongle-state-yellow {
+            border-color: #fde68a !important;
+            outline: 3px solid #fbbf24 !important;
+            outline-offset: 1px;
+            box-shadow: 0 0 32px rgba(251, 191, 36, 0.6) !important;
+        }
+
+        /* 5. DISCONNECTED / NOT RESPONDING (Red / Rose) */
+        .dongle-device-card.dongle-state-red {
+            background-color: #380c16 !important;
+            border-color: #f43f5e !important;
+            box-shadow: 0 6px 20px rgba(244, 63, 94, 0.25);
+        }
+        .dongle-device-card.dongle-state-red:hover {
+            border-color: #fb7185 !important;
+            box-shadow: 0 10px 30px rgba(251, 113, 133, 0.4);
+        }
+        .dongle-device-card.dongle-state-red .dongle-icon-box {
+            background-color: #9f1239 !important;
+            border: 1px solid #f43f5e !important;
+            color: #fecdd3 !important;
+        }
+        .dongle-device-card.dongle-state-red .dongle-status-pill {
+            background-color: #e11d48 !important;
+            border: 1px solid #fb7185 !important;
+            color: #ffffff !important;
+        }
+        .dongle-device-card.dongle-state-red .dongle-status-dot {
+            background-color: #fff1f2 !important;
+        }
+        .dongle-device-card.dongle-state-red .dongle-metric,
+        .dongle-device-card.dongle-state-red .dongle-priority-metric {
+            background: #290910 !important;
+            border: 1px solid rgba(244, 63, 94, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-red .dongle-hardware-summary,
+        .dongle-device-card.dongle-state-red .dongle-routing-panel {
+            background: #2d0a11 !important;
+            border: 1px solid rgba(244, 63, 94, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-red .dongle-routing-trunk {
+            background: #24070d !important;
+            border: 1px solid rgba(244, 63, 94, 0.3) !important;
+        }
+        .dongle-device-card.dongle-state-red .dongle-card-footer {
+            background-color: #24070d !important;
+            border-top: 1px solid rgba(244, 63, 94, 0.4) !important;
+        }
+        .dongle-device-card.dongle-state-red .dongle-action-button.dongle-action-primary {
+            background-color: #e11d48 !important;
+            border-color: #fb7185 !important;
+            color: #ffffff !important;
+        }
+        .dongle-device-card.dongle-state-red .dongle-action-button.dongle-action-primary:hover {
+            background-color: #be123c !important;
+        }
+        .dongle-device-card.selected-row.dongle-state-red {
+            border-color: #fecdd3 !important;
+            outline: 3px solid #fb7185 !important;
+            outline-offset: 1px;
+            box-shadow: 0 0 32px rgba(251, 113, 133, 0.6) !important;
+        }
+
+        /* Common Card High-Contrast Typography & Accents */
+        .dongle-device-card .dongle-metric-label {
+            color: rgba(255, 255, 255, 0.75) !important;
+            font-weight: 800 !important;
+        }
+        .dongle-device-card .dongle-metric-value,
+        .dongle-device-card .dongle-priority-value {
+            color: #ffffff !important;
+            font-weight: 900 !important;
+            font-size: 1rem !important;
+        }
+        .dongle-device-card .dongle-hardware-summary {
+            color: rgba(255, 255, 255, 0.85) !important;
+        }
+        .dongle-device-card .dongle-dial-string {
+            color: #ffffff !important;
+            background: rgba(0, 0, 0, 0.35) !important;
+        }
+
+        /* Light Theme Dongle State Overrides */
+        .light-theme .dongle-device-card.dongle-state-purple {
+            background-color: #f3e8ff !important;
+            border-color: #a855f7 !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-purple .dongle-metric,
+        .light-theme .dongle-device-card.dongle-state-purple .dongle-priority-metric,
+        .light-theme .dongle-device-card.dongle-state-purple .dongle-routing-panel,
+        .light-theme .dongle-device-card.dongle-state-purple .dongle-hardware-summary {
+            background: #e9d5ff !important;
+            border-color: #c084fc !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-purple .dongle-routing-trunk {
+            background: #ffffff !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-purple .dongle-card-footer {
+            background-color: #e9d5ff !important;
+            border-top-color: #c084fc !important;
+        }
+
+        .light-theme .dongle-device-card.dongle-state-green {
+            background-color: #dcfce7 !important;
+            border-color: #10b981 !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-green .dongle-metric,
+        .light-theme .dongle-device-card.dongle-state-green .dongle-priority-metric,
+        .light-theme .dongle-device-card.dongle-state-green .dongle-routing-panel,
+        .light-theme .dongle-device-card.dongle-state-green .dongle-hardware-summary {
+            background: #bbf7d0 !important;
+            border-color: #34d399 !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-green .dongle-routing-trunk {
+            background: #ffffff !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-green .dongle-card-footer {
+            background-color: #bbf7d0 !important;
+            border-top-color: #34d399 !important;
+        }
+
+        .light-theme .dongle-device-card.dongle-state-blue {
+            background-color: #dbeafe !important;
+            border-color: #3b82f6 !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-metric,
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-priority-metric,
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-routing-panel,
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-hardware-summary {
+            background: #bfdbfe !important;
+            border-color: #60a5fa !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-routing-trunk {
+            background: #ffffff !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-card-footer {
+            background-color: #bfdbfe !important;
+            border-top-color: #60a5fa !important;
+        }
+
+        .light-theme .dongle-device-card.dongle-state-yellow {
+            background-color: #fef3c7 !important;
+            border-color: #f59e0b !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-yellow .dongle-metric,
+        .light-theme .dongle-device-card.dongle-state-yellow .dongle-priority-metric,
+        .light-theme .dongle-device-card.dongle-state-yellow .dongle-routing-panel,
+        .light-theme .dongle-device-card.dongle-state-yellow .dongle-hardware-summary {
+            background: #fde68a !important;
+            border-color: #fbbf24 !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-yellow .dongle-routing-trunk {
+            background: #ffffff !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-yellow .dongle-card-footer {
+            background-color: #fde68a !important;
+            border-top-color: #fbbf24 !important;
+        }
+
+        .light-theme .dongle-device-card.dongle-state-red {
+            background-color: #ffe4e6 !important;
+            border-color: #f43f5e !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-red .dongle-metric,
+        .light-theme .dongle-device-card.dongle-state-red .dongle-priority-metric,
+        .light-theme .dongle-device-card.dongle-state-red .dongle-routing-panel,
+        .light-theme .dongle-device-card.dongle-state-red .dongle-hardware-summary {
+            background: #fecdd3 !important;
+            border-color: #fb7185 !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-red .dongle-routing-trunk {
+            background: #ffffff !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-red .dongle-card-footer {
+            background-color: #fecdd3 !important;
+            border-top-color: #fb7185 !important;
+        }
+        .light-theme .dongle-device-card .dongle-metric-label {
+            color: #374151 !important;
+        }
+        .light-theme .dongle-device-card .dongle-metric-value,
+        .light-theme .dongle-device-card .dongle-priority-value {
+            color: #111827 !important;
+        }
+
         .selected-row {
-            background: linear-gradient(135deg, var(--bg-selected) 0%, var(--bg-card) 48%, var(--bg-card) 100%) !important;
-            border-color: var(--accent-border) !important;
-            box-shadow: inset 4px 0 0 var(--accent-color), 0 10px 28px rgba(185, 28, 28, 0.12);
-        }
-        .light-theme .selected-row {
-            background: linear-gradient(135deg, rgba(254, 226, 226, 0.78) 0%, #ffffff 50%, #ffffff 100%) !important;
+            outline: 3px solid var(--accent-color) !important;
+            outline-offset: 1px;
+            box-shadow: 0 0 24px rgba(229, 62, 62, 0.4) !important;
         }
         .dongle-status-pill {
             white-space: nowrap;
@@ -236,9 +656,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .dongle-priority-value {
             color: var(--text-primary);
-            font-size: 0.72rem;
-            font-weight: 800;
-            letter-spacing: -0.01em;
+            font-size: 1rem !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.01em;
             line-height: 1.25;
             overflow-wrap: anywhere;
         }
@@ -307,8 +727,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         .gsm-detail-value {
             color: var(--text-primary);
             display: block;
-            font-size: 0.75rem;
-            font-weight: 700;
+            font-size: 1rem !important;
+            font-weight: 800 !important;
             line-height: 1.3;
             min-width: 0;
             overflow-wrap: anywhere;
@@ -340,6 +760,24 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         .dongle-action-primary:hover {
             background: var(--accent-hover);
             border-color: var(--accent-hover);
+        }
+        .dongle-action-secondary {
+            background: rgba(0, 0, 0, 0.4);
+            border-color: rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+        }
+        .dongle-action-secondary:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.45);
+        }
+        .light-theme .dongle-action-secondary {
+            background: rgba(255, 255, 255, 0.85);
+            border-color: rgba(0, 0, 0, 0.2);
+            color: #111827;
+        }
+        .light-theme .dongle-action-secondary:hover {
+            background: #ffffff;
+            border-color: rgba(0, 0, 0, 0.4);
         }
         .lower-console-grid > * {
             min-width: 0;
@@ -502,6 +940,86 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <%= isRtl ? 'تحديث مباشر' : 'Live status' %>
                     </span>
                 </div>
+
+                <!-- Action Buttons & Dongle State Legend -->
+                <div class="px-5 sm:px-6 py-3 bg-[var(--bg-card)]/80 border-b border-[var(--border-primary)]">
+                    <div class="flex items-center justify-between gap-2 cursor-pointer select-none" onclick="toggleLegendBlock()">
+                        <div class="flex items-center gap-2">
+                            <div class="w-6 h-6 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            </div>
+                            <span class="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]"><%= t.legendTitle %></span>
+                        </div>
+                        <button type="button" class="text-[10px] font-bold text-blue-400 hover:underline flex items-center gap-1">
+                            <span id="legend-toggle-text"><%= isRtl ? 'عرض الدليل' : 'Show Guide' %></span>
+                            <svg id="legend-toggle-icon" class="w-3.5 h-3.5 transition-transform duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                    </div>
+
+                    <div id="legend-content-block" class="mt-3 pt-3 border-t border-[var(--border-primary)] space-y-4 hidden">
+                        <!-- 1. Action Buttons Guide -->
+                        <div>
+                            <span class="text-[10px] font-black uppercase tracking-wider text-[var(--text-secondary)] block mb-2"><%= isRtl ? 'أزرار الإجراءات عن بُعد:' : 'Remote Action Buttons:' %></span>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                                <div class="p-2.5 rounded-xl bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] flex items-start gap-2.5">
+                                    <span class="px-2 py-1 rounded bg-[var(--accent-color)] text-white text-[9px] font-bold shrink-0 flex items-center gap-1">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
+                                        <%= t.btnRestartDongle %>
+                                    </span>
+                                    <p class="text-[10px] text-[var(--text-muted)] leading-relaxed"><%= t.legendRestartDesc %></p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] flex items-start gap-2.5">
+                                    <span class="px-2 py-1 rounded bg-black/40 border border-white/20 text-white text-[9px] font-bold shrink-0 flex items-center gap-1">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                                        <%= t.btnRebootModem %>
+                                    </span>
+                                    <p class="text-[10px] text-[var(--text-muted)] leading-relaxed"><%= t.legendRebootDesc %></p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] flex items-start gap-2.5">
+                                    <span class="px-2 py-1 rounded bg-black/40 border border-white/20 text-white text-[9px] font-bold shrink-0 flex items-center gap-1">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22v-5"/><path d="M9 8V2h6v6"/><path d="M6 13V8h12v5a6 6 0 0 1-12 0z"/></svg>
+                                        <%= t.btnVirtualReplug %>
+                                    </span>
+                                    <p class="text-[10px] text-[var(--text-muted)] leading-relaxed"><%= t.legendReplugDesc %></p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] flex items-start gap-2.5">
+                                    <span class="px-2 py-1 rounded bg-black/40 border border-white/20 text-white text-[9px] font-bold shrink-0 flex items-center gap-1">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                                        <%= t.btnResetUsb %>
+                                    </span>
+                                    <p class="text-[10px] text-[var(--text-muted)] leading-relaxed"><%= t.legendResetUsbDesc %></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Dongle State Colors Guide -->
+                        <div>
+                            <span class="text-[10px] font-black uppercase tracking-wider text-[var(--text-secondary)] block mb-2"><%= isRtl ? 'ألوان حالات الشريحة:' : 'Dongle State Colors:' %></span>
+                            <div class="flex flex-wrap items-center gap-2 text-[10px]">
+                                <span class="px-2.5 py-1 rounded-lg bg-purple-600 text-white font-black border border-purple-400 flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                                    <%= isRtl ? 'جاهز (Free)' : 'Free / Ready' %>
+                                </span>
+                                <span class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-black border border-emerald-400 flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                                    <%= isRtl ? 'مكالمة نشطة' : 'Active Call' %>
+                                </span>
+                                <span class="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-black border border-blue-400 flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                                    <%= isRtl ? 'اتصال / رنين' : 'Dialing / Ringing' %>
+                                </span>
+                                <span class="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-black border border-amber-400 flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                                    <%= isRtl ? 'جاري التهيئة' : 'Initializing' %>
+                                </span>
+                                <span class="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-black border border-rose-400 flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                                    <%= isRtl ? 'غير متصل' : 'Disconnected' %>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div id="dongles-grid" class="grid grid-cols-1 md:grid-cols-2 items-start gap-3 p-3 sm:p-4">
                     <div class="col-span-full py-8 text-center text-xs text-[var(--text-muted)]"><%= isRtl ? 'جاري تحميل أجهزة GSM...' : 'Loading GSM dongles...' %></div>
                 </div>
@@ -523,7 +1041,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             </h4>
                             <p class="text-[10px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'الهوية ومعلومات المودم المحدد' : 'Identity and modem information' %></p>
                         </div>
-                        <span id="info-id" class="px-2.5 py-1 rounded-lg bg-red-500/10 text-[var(--accent-color)] border border-red-500/20 font-mono text-xs font-black">-</span>
+                        <span id="info-id" class="px-3 py-1 rounded-lg bg-red-500/10 text-[var(--accent-color)] border border-red-500/20 font-mono text-sm sm:text-base font-black">-</span>
                     </div>
 
                     <div class="grid grid-cols-2 gap-2.5">
@@ -795,7 +1313,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 usbNone: "<%= t.usbNone %>",
                 usbNoneHint: "<%= t.usbNoneHint %>",
                 usbMapped: "<%= isRtl ? 'مسجل في dongle' : 'Mapped' %>",
-                usbUnmapped: "<%= isRtl ? 'غير مسجل' : 'Unmapped' %>"
+                usbUnmapped: "<%= isRtl ? 'غير مسجل' : 'Unmapped' %>",
+                btnRestartDongle: "<%= t.btnRestartDongle %>",
+                btnRebootModem: "<%= t.btnRebootModem %>",
+                btnVirtualReplug: "<%= t.btnVirtualReplug %>",
+                btnResetUsb: "<%= t.btnResetUsb %>"
             };
 
             // Socket.io initialization with safety check to prevent halts if blocked/undefined
@@ -1019,7 +1541,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     const signal = getDongleSignalView(dev);
                     const card = document.createElement('article');
 
-                    card.className = 'dongle-device-card rounded-2xl cursor-pointer flex flex-col';
+                    card.className = `dongle-device-card dongle-state-${state.color} rounded-2xl cursor-pointer flex flex-col`;
                     card.id = 'row-' + id;
                     card.dataset.dongleId = id;
                     card.dataset.number = phoneNumber === 'Unknown' ? '' : phoneNumber;
@@ -1031,11 +1553,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <div class="p-3 sm:p-4 flex-1">
                             <div class="flex items-start justify-between gap-2.5 mb-3">
                                 <div class="flex items-center gap-3 min-w-0">
-                                    <div class="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-[var(--accent-color)] shrink-0">
+                                    <div class="w-9 h-9 rounded-xl dongle-icon-box flex items-center justify-center shrink-0">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 18h6M9 6h.01M12 6h.01M15 6h.01"/></svg>
                                     </div>
                                     <div class="min-w-0">
-                                        <h4 class="text-sm font-black text-[var(--text-primary)] font-mono truncate">${escapeHtml(id)}</h4>
+                                        <h4 class="text-base sm:text-lg font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(id)}</h4>
                                         <p class="text-[10px] text-[var(--text-muted)] truncate">${escapeHtml(provider)}</p>
                                     </div>
                                 </div>
@@ -1052,8 +1574,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                 </div>
                                 <div class="dongle-priority-metric">
                                     <span class="dongle-metric-label">${isRtl ? 'الحالة الحالية' : 'Current State'}</span>
-                                    <span class="dongle-status-pill w-full inline-flex items-center justify-center gap-2 ${state.badge.bg} ${state.badge.text} rounded-lg px-3 py-1.5 text-xs font-black border ${state.badge.border}">
-                                        <span class="h-2 w-2 rounded-full ${state.badge.dot}${state.animate ? ' animate-pulse' : ''} shrink-0"></span>
+                                    <span class="dongle-status-pill w-full inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-black border uppercase tracking-wider">
+                                        <span class="dongle-status-dot h-2 w-2 rounded-full ${state.badge.dot}${state.animate ? ' animate-pulse' : ''} shrink-0"></span>
                                         ${escapeHtml(state.label)}
                                     </span>
                                 </div>
@@ -1087,12 +1609,25 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                             ${renderDongleRouting(dev)}
                         </div>
-                        <div class="px-3 sm:px-4 py-2.5 bg-black/15 border-t border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <span class="text-[10px] text-[var(--text-muted)]"><span style="color:${signal.activeColor}">●</span> ${escapeHtml(signal.level)} · ${signal.rssi}/31</span>
-                            <div class="flex items-center gap-2">
-                                <button type="button" id="reloadBtn-${escapeHtml(id)}" data-dongle-action="reload" class="dongle-action-button dongle-action-primary cursor-pointer">
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
-                                    ${escapeHtml(words.refreshBtn)}
+                        <div class="dongle-card-footer px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
+                            <span class="text-[10px] font-extrabold text-[var(--text-muted)] flex items-center gap-1.5 shrink-0">
+                                <span style="color:${signal.activeColor}">●</span> ${escapeHtml(signal.level)} · ${signal.rssi}/31
+                            </span>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <button type="button" id="reloadBtn-${escapeHtml(id)}" data-dongle-action="reload" class="dongle-action-button dongle-action-primary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnRestartDongle)}">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
+                                </button>
+
+                                <button type="button" id="rebootBtn-${escapeHtml(id)}" data-dongle-action="reboot-modem" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnRebootModem)}">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                                </button>
+
+                                <button type="button" id="virtualReplugBtn-${escapeHtml(id)}" data-dongle-action="virtual-replug" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnVirtualReplug)}">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22v-5"/><path d="M9 8V2h6v6"/><path d="M6 13V8h12v5a6 6 0 0 1-12 0z"/></svg>
+                                </button>
+
+                                <button type="button" id="resetUsbBtn-${escapeHtml(id)}" data-dongle-action="reset-usb" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnResetUsb)}">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
                                 </button>
                             </div>
                         </div>`;
@@ -1118,6 +1653,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     if (action === 'copy-number') copyToClipboard(card.dataset.number, actionButton);
                     if (action === 'edit-number') editSimNumber(id, card.dataset.imsi, card.dataset.number);
                     if (action === 'reload') reloadDongle(id);
+                    if (action === 'reboot-modem') rebootModem(id);
+                    if (action === 'virtual-replug') virtualReplug(id);
+                    if (action === 'reset-usb') resetUsbPort(id);
                 });
             }
 
@@ -1708,26 +2246,112 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             };
 
             // Reload single dongle action
+            // 1. Reload / Restart single dongle action
             window.reloadDongle = function(id) {
-                if (!confirm((isRtl ? 'هل أنت متأكد من إعادة تشغيل الشريحة ' : 'Are you sure you want to reload ') + id + '?')) return;
-                
+                if (!confirm((isRtl ? 'هل أنت متأكد من إعادة تشغيل الشريحة ' : 'Are you sure you want to restart ') + id + '?')) return;
                 const btn = document.getElementById('reloadBtn-' + id);
                 if (btn) btn.disabled = true;
-                
+                showToast(isRtl ? 'إعادة تشغيل' : 'Restarting', (isRtl ? 'جاري إعادة تشغيل الشريحة ' : 'Restarting dongle ') + id + '...', 'info');
+
                 fetch('/api/gsm-dongles/reload/' + id, { method: 'POST' })
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
-                            alert(words.reloadedSuccess + ' (' + id + ')');
+                            showToast(isRtl ? 'نجاح' : 'Success', words.reloadedSuccess + ' (' + id + ')', 'success');
                             refreshDevicesList();
                         } else {
-                            alert('Error: ' + (data.error || 'Unknown server error'));
+                            showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Unknown server error', 'error');
                         }
                     })
-                    .catch(err => alert('Network error: ' + err.message))
+                    .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
                     .finally(() => { if (btn) btn.disabled = false; });
             };
 
+            // 2. Reboot modem firmware via AT command (AT+CFUN=1,1)
+            window.rebootModem = function(id) {
+                if (!confirm((isRtl ? 'هل أنت متأكد من إعادة تشغيل مودم الجهاز ' : 'Are you sure you want to reboot modem ') + id + '?')) return;
+                const btn = document.getElementById('rebootBtn-' + id);
+                if (btn) btn.disabled = true;
+                showToast(isRtl ? 'إعادة تشغيل المودم' : 'Modem Reboot', (isRtl ? 'جاري إرسال أمر إعادة تشغيل المودم ' : 'Sending modem reboot command to ') + id + '...', 'warning');
+
+                fetch('/api/gsm-dongles/reboot-modem/' + id, { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast(isRtl ? 'نجاح' : 'Success', (isRtl ? 'تم إرسال أمر إعادة تشغيل المودم لـ ' : 'Modem reboot command sent to ') + id, 'success');
+                            setTimeout(refreshDevicesList, 3000);
+                        } else {
+                            showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Modem reboot failed', 'error');
+                        }
+                    })
+                    .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
+                    .finally(() => { if (btn) btn.disabled = false; });
+            };
+
+            // 3. Virtual USB Unplug & Re-plug (Kernel sysfs unbind/bind)
+            window.virtualReplug = function(id) {
+                if (!confirm((isRtl ? 'هل أنت متأكد من محاكاة إعادة توصيل USB لـ ' : 'Are you sure you want to simulate virtual USB re-plug for ') + id + '?')) return;
+                const btn = document.getElementById('virtualReplugBtn-' + id);
+                if (btn) btn.disabled = true;
+                showToast(isRtl ? 'إعادة توصيل USB' : 'Virtual USB Re-plug', (isRtl ? 'جاري فصل وإعادة توصيل USB لـ ' : 'Simulating virtual USB re-plug for ') + id + '...', 'warning');
+
+                fetch('/api/gsm-dongles/virtual-replug/' + id, { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast(isRtl ? 'نجاح' : 'Success', (isRtl ? 'تمت محاكاة إعادة توصيل USB بنجاح لـ ' : 'Virtual USB re-plug executed for ') + id, 'success');
+                            setTimeout(refreshDevicesList, 4000);
+                        } else {
+                            showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Virtual re-plug failed', 'error');
+                        }
+                    })
+                    .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
+                    .finally(() => { if (btn) btn.disabled = false; });
+            };
+
+            // 4. Reset USB Port / Module Reload
+            // 4. Reset USB Port / Module Reload
+            window.resetUsbPort = function(id) {
+                if (!confirm((isRtl ? 'هل أنت متأكد من إعادة تعيين منفذ USB لـ ' : 'Are you sure you want to reset USB port for ') + id + '?')) return;
+                const btn = document.getElementById('resetUsbBtn-' + id);
+                if (btn) btn.disabled = true;
+                showToast(isRtl ? 'إعادة تعيين USB' : 'Resetting USB', (isRtl ? 'جاري إعادة تعيين منفذ USB لـ ' : 'Resetting USB port for ') + id + '...', 'warning');
+
+                fetch('/api/gsm-dongles/reset-usb-port', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dongleId: id })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(isRtl ? 'نجاح' : 'Success', (isRtl ? 'تمت إعادة تعيين منفذ USB لـ ' : 'USB port reset successfully for ') + id, 'success');
+                        refreshDevicesList();
+                    } else {
+                        showToast(isRtl ? 'خطأ' : 'Error', data.error || 'USB reset failed', 'error');
+                    }
+                })
+                .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
+                .finally(() => { if (btn) btn.disabled = false; });
+            };
+
+            window.toggleLegendBlock = function() {
+                const block = document.getElementById('legend-content-block');
+                const text = document.getElementById('legend-toggle-text');
+                const icon = document.getElementById('legend-toggle-icon');
+                if (!block) return;
+
+                const isHidden = block.classList.contains('hidden');
+                if (isHidden) {
+                    block.classList.remove('hidden');
+                    if (text) text.textContent = isRtl ? 'إخفاء الدليل' : 'Hide Guide';
+                    if (icon) icon.classList.add('rotate-180');
+                } else {
+                    block.classList.add('hidden');
+                    if (text) text.textContent = isRtl ? 'عرض الدليل' : 'Show Guide';
+                    if (icon) icon.classList.remove('rotate-180');
+                }
+            };
 
             // Send USSD request action
             ussdForm.addEventListener('submit', (e) => {

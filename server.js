@@ -4420,6 +4420,86 @@ app.post('/api/gsm-dongles/reload/:dongleId', (req, res) => {
     });
 });
 
+function getUsbBusIdForDongle(dongleId) {
+    try {
+        const fs = require('fs');
+        const { execSync } = require('child_process');
+        const conf = fs.readFileSync('/etc/asterisk/dongle.conf', 'utf8');
+        const lines = conf.split('\n');
+        let currentSec = null;
+        let audioPort = null;
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            const matchSec = trimmed.match(/^\[([a-zA-Z0-9_]+)\]$/);
+            if (matchSec) {
+                currentSec = matchSec[1];
+                continue;
+            }
+            if (currentSec === dongleId && trimmed.startsWith('audio=')) {
+                audioPort = trimmed.split('=')[1].trim();
+                break;
+            }
+        }
+
+        if (!audioPort) return null;
+        const ttyName = audioPort.replace('/dev/', '');
+        const sysPath = `/sys/class/tty/${ttyName}/device`;
+
+        if (!fs.existsSync(sysPath)) return null;
+        const realPath = execSync(`readlink -f "${sysPath}"`, { encoding: 'utf8' }).trim();
+        const parts = realPath.split('/');
+        for (const part of parts) {
+            if (/^\d+-\d+(\.\d+)*$/.test(part) && !part.includes(':')) {
+                return part;
+            }
+        }
+    } catch (_) {}
+    return null;
+}
+
+// API Endpoint to reboot modem firmware via AT command (AT+CFUN=1,1)
+app.post('/api/gsm-dongles/reboot-modem/:dongleId', (req, res) => {
+    const { dongleId } = req.params;
+    if (!/^dongle[0-9]+$/.test(dongleId)) {
+        return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
+    }
+    execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} AT+CFUN=1,1`], (error, stdout, stderr) => {
+        if (error) {
+            return res.status(500).json({ success: false, error: stderr || error.message });
+        }
+        setTimeout(() => io.emit('usbDevicesUpdated'), 3000);
+        res.json({ success: true, message: `Modem reboot command sent to ${dongleId}`, output: (stdout || '').trim() });
+    });
+});
+
+// API Endpoint to simulate virtual USB unplug and re-plug (Kernel sysfs unbind/bind)
+app.post('/api/gsm-dongles/virtual-replug/:dongleId', (req, res) => {
+    const { dongleId } = req.params;
+    if (!/^dongle[0-9]+$/.test(dongleId)) {
+        return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
+    }
+    const busId = getUsbBusIdForDongle(dongleId);
+    if (!busId) {
+        // Fallback if USB bus ID is not found: restart dongle via Asterisk
+        execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], (err, stdout) => {
+            io.emit('usbDevicesUpdated');
+            return res.json({ success: true, message: `Fallback restart executed for ${dongleId}`, output: (stdout || '').trim() });
+        });
+        return;
+    }
+
+    const { exec } = require('child_process');
+    const cmd = `echo "${busId}" > /sys/bus/usb/drivers/usb/unbind && sleep 2 && echo "${busId}" > /sys/bus/usb/drivers/usb/bind`;
+    exec(cmd, (error, stdout, stderr) => {
+        setTimeout(() => io.emit('usbDevicesUpdated'), 4000);
+        if (error) {
+            return res.status(500).json({ success: false, error: `Virtual re-plug failed for ${busId}: ${stderr || error.message}` });
+        }
+        res.json({ success: true, message: `Virtual USB re-plug executed for ${dongleId} (${busId})` });
+    });
+});
+
 // API Endpoint to re-detect dongle SIM numbers and update trunk caller IDs
 app.post('/api/gsm-dongles/redetect', async (req, res) => {
     try {
