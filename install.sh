@@ -106,16 +106,29 @@ npm ci --omit=dev
 
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
 if ! command -v ffmpeg &>/dev/null; then
-    yum install -y wget
-    cd /usr/local/bin
-    wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
-    tar xJf ffmpeg-release-amd64-static.tar.xz
-    cp ffmpeg-*-static/ffmpeg .
-    cp ffmpeg-*-static/ffprobe .
-    rm -rf ffmpeg-*-static ffmpeg-release-amd64-static.tar.xz
-    echo "  ffmpeg installed: $(ffmpeg -version 2>&1 | head -1)"
+    if yum install -y ffmpeg &>/dev/null; then
+        echo "  ffmpeg installed via package manager"
+    else
+        echo "  Downloading static ffmpeg build with timeout..."
+        cd /tmp
+        rm -rf ffmpeg-*-static ffmpeg-release-amd64-static.tar.xz
+        if curl -fsSL --connect-timeout 15 --max-time 120 -o ffmpeg-release-amd64-static.tar.xz "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" 2>/dev/null; then
+            tar xJf ffmpeg-release-amd64-static.tar.xz 2>/dev/null || true
+            cp ffmpeg-*-static/ffmpeg /usr/local/bin/ 2>/dev/null || true
+            cp ffmpeg-*-static/ffprobe /usr/local/bin/ 2>/dev/null || true
+            chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe 2>/dev/null || true
+            rm -rf ffmpeg-*-static ffmpeg-release-amd64-static.tar.xz
+        elif curl -fsSL --connect-timeout 15 --max-time 60 -o /usr/local/bin/ffmpeg "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-linux-x64" 2>/dev/null; then
+            chmod +x /usr/local/bin/ffmpeg 2>/dev/null || true
+        fi
+        cd "$INSTALL_DIR"
+    fi
+fi
+
+if command -v ffmpeg &>/dev/null; then
+    echo "  ffmpeg verified: $(ffmpeg -version 2>&1 | head -1)"
 else
-    echo "  ffmpeg already installed: $(ffmpeg -version 2>&1 | head -1)"
+    echo "  Warning: ffmpeg download timed out; system audio fallback will be used"
 fi
 # ──────────────────────────────────────────────
 # Step 5 — Create the Environment File
