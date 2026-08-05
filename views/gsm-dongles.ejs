@@ -46,11 +46,12 @@ const words = {
         btnRebootModem: "Reboot Modem",
         btnVirtualReplug: "Virtual Re-plug",
         btnResetUsb: "Reset USB",
+        btnResetAllUsb: "Reset All USB Ports on the Server",
         legendTitle: "Action Buttons & State Guide",
+        legendTopHeaderDesc: "Resets all USB ports & reloads Asterisk chan_dongle module server-wide.",
         legendRestartDesc: "Restarts the dongle channel in Asterisk without touching hardware.",
         legendRebootDesc: "Reboots modem internal firmware & SIM module via AT command.",
-        legendReplugDesc: "Simulates physically pulling & replugging USB cable (sysfs).",
-        legendResetUsbDesc: "Resets the USB port and reloads the Asterisk module driver."
+        legendReplugDesc: "Simulates physically pulling & replugging USB cable (sysfs)."
     },
     ar: {
         title: "شرائح الاتصال", subtitle: "GSM",
@@ -91,18 +92,14 @@ const words = {
         submode: "الوضع الفرعي",
         running: "نشط",
         usbDevices: "أجهزة USB التسلسلية",
-        usbDesc: "منافذ /dev/ttyUSB* المرئية لنظام التشغيل",
-        usbNone: "لم يتم اكتشاف أجهزة ttyUSB",
-        usbNoneHint: "تحقق من الاتصال الفعلي أو نفذ: ls /dev/ | grep -i ttyusb",
-        btnRestartDongle: "تحديث الشريحة",
-        btnRebootModem: "إعادة تشغيل المودم",
         btnVirtualReplug: "إعادة توصيل USB",
         btnResetUsb: "إعادة تعيين USB",
+        btnResetAllUsb: "إعادة تعيين كافة منافذ USB في السيرفر",
         legendTitle: "دليل أزرار الإجراءات والحالات",
+        legendTopHeaderDesc: "إعادة تعيين كافة منافذ USB وإعادة تحميل تعريف chan_dongle على مستوى السيرفر.",
         legendRestartDesc: "إعادة تشغيل قناة الشريحة داخل Asterisk دون مساس بالجهاز.",
         legendRebootDesc: "إعادة تشغيل نظام المودم الداخلي ووحدة الشريحة عبر أمر AT.",
-        legendReplugDesc: "محاكاة فصل وإعادة توصيل كابل الـ USB في النواة (Sysfs).",
-        legendResetUsbDesc: "إعادة تعيين منفذ USB وإعادة تحميل تعريف chan_dongle."
+        legendReplugDesc: "محاكاة فصل وإعادة توصيل كابل الـ USB في النواة (Sysfs)."
     }
 };
 const t = words[currentLang] || words['en'];
@@ -910,13 +907,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <span class="text-[9px] uppercase tracking-wider text-emerald-400/80 block"><%= isRtl ? 'جاهز' : 'Ready' %></span>
                     <span id="gsm-device-ready" class="text-sm font-black text-emerald-400 font-mono">0</span>
                 </div>
-                <button id="global-refresh-btn" class="dongle-action-button dongle-action-primary cursor-pointer">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M23 4v6h-6"></path>
-                        <path d="M1 20v-6h6"></path>
-                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                    </svg>
-                    <%= t.refreshBtn %>
+                <button id="global-reset-usb-btn" class="dongle-action-button dongle-action-primary cursor-pointer px-3.5 py-2 font-bold text-xs flex items-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                    <span><%= t.btnResetAllUsb %></span>
                 </button>
             </div>
         </div>
@@ -959,10 +952,17 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <div id="legend-content-block" class="mt-3 pt-3 border-t border-[var(--border-primary)] space-y-4 hidden">
                         <!-- 1. Action Buttons Guide -->
                         <div>
-                            <span class="text-[10px] font-black uppercase tracking-wider text-[var(--text-secondary)] block mb-2"><%= isRtl ? 'أزرار الإجراءات عن بُعد:' : 'Remote Action Buttons:' %></span>
+                            <span class="text-[10px] font-black uppercase tracking-wider text-[var(--text-secondary)] block mb-2"><%= isRtl ? 'أزرار الإجراءات والتحكم:' : 'Action & Control Buttons:' %></span>
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                                 <div class="p-2.5 rounded-xl bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] flex items-start gap-2.5">
                                     <span class="px-2 py-1 rounded bg-[var(--accent-color)] text-white text-[9px] font-bold shrink-0 flex items-center gap-1">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                                        <%= isRtl ? 'أعلى الصفحة' : 'Header' %>
+                                    </span>
+                                    <p class="text-[10px] text-[var(--text-muted)] leading-relaxed"><%= t.legendTopHeaderDesc %></p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] flex items-start gap-2.5">
+                                    <span class="px-2 py-1 rounded bg-black/40 border border-white/20 text-white text-[9px] font-bold shrink-0 flex items-center gap-1">
                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
                                         <%= t.btnRestartDongle %>
                                     </span>
@@ -981,13 +981,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                         <%= t.btnVirtualReplug %>
                                     </span>
                                     <p class="text-[10px] text-[var(--text-muted)] leading-relaxed"><%= t.legendReplugDesc %></p>
-                                </div>
-                                <div class="p-2.5 rounded-xl bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] flex items-start gap-2.5">
-                                    <span class="px-2 py-1 rounded bg-black/40 border border-white/20 text-white text-[9px] font-bold shrink-0 flex items-center gap-1">
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
-                                        <%= t.btnResetUsb %>
-                                    </span>
-                                    <p class="text-[10px] text-[var(--text-muted)] leading-relaxed"><%= t.legendResetUsbDesc %></p>
                                 </div>
                             </div>
                         </div>
@@ -1350,8 +1343,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             
             // Detail display elements
             const elId = document.getElementById('info-id');
-            const elNum = document.getElementById('info-number');
-            const elProv = document.getElementById('info-provider');
+            const globalResetUsbBtn = document.getElementById('global-reset-usb-btn');
             const elImei = document.getElementById('info-imei');
             const elImsi = document.getElementById('info-imsi');
             const elGroup = document.getElementById('info-group');
@@ -1626,9 +1618,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22v-5"/><path d="M9 8V2h6v6"/><path d="M6 13V8h12v5a6 6 0 0 1-12 0z"/></svg>
                                 </button>
 
-                                <button type="button" id="resetUsbBtn-${escapeHtml(id)}" data-dongle-action="reset-usb" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnResetUsb)}">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
-                                </button>
                             </div>
                         </div>`;
 
@@ -2492,9 +2481,35 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     });
             }
 
-            globalRefreshBtn.addEventListener('click', refreshDevicesList);
+            window.resetServerUsbPorts = function(btn) {
+                if (!confirm(isRtl ? 'هل أنت متأكد من إعادة تعيين كافة منافذ USB في السيرفر؟' : 'Are you sure you want to reset all USB ports on the server?')) return;
+                if (btn) btn.disabled = true;
+                showToast(isRtl ? 'إعادة تعيين USB' : 'Resetting USB', isRtl ? 'جاري إعادة تعيين كافة منافذ USB في السيرفر...' : 'Resetting all USB ports on the server...', 'warning');
+
+                fetch('/api/gsm-dongles/reset-usb-port', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dongleId: 'all' })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(isRtl ? 'نجاح' : 'Success', isRtl ? 'تمت إعادة تعيين كافة منافذ USB بنجاح.' : 'All USB ports reset successfully.', 'success');
+                        refreshDevicesList();
+                    } else {
+                        showToast(isRtl ? 'خطأ' : 'Error', data.error || 'USB reset failed', 'error');
+                    }
+                })
+                .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
+                .finally(() => { if (btn) btn.disabled = false; });
+            };
+
+            if (globalResetUsbBtn) {
+                globalResetUsbBtn.addEventListener('click', () => {
+                    resetServerUsbPorts(globalResetUsbBtn);
+                });
+            }
             setInterval(refreshDevicesList, 1000);
-        });
     </script>
 </body>
 </html>
