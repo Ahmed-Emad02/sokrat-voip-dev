@@ -460,11 +460,13 @@ same => n,Set(CHANNEL(hangup_handler_push)=dongle-hangup-cleanup,s,1)
 same => n,MacroExit()
 
 [dongle-hangup-cleanup]
-exten => s,1,NoOp(--- Dongle Call Hangup Cleanup ---)
+exten => s,1,NoOp(--- Pure Dialplan Dongle Hangup Cleanup ---)
 same => n,Set(D_NAME=${CUT(CHANNEL,-,1)})
 same => n,Set(D_NAME=${CUT(D_NAME,/,2)})
-same => n,Verbose(1, [DONGLE-HANGUP-CLEANUP] Channel: ${CHANNEL}, Dongle: ${D_NAME}, Cause: ${HANGUPCAUSE})
-same => n,Return()
+same => n,GotoIf($["${D_NAME}" = "" | "${D_NAME:0:6}" != "dongle"]?done)
+same => n,Verbose(1, [DONGLE-DIALPLAN-CLEANUP] Resetting dongle ${D_NAME} via dialplan System call (Cause: ${HANGUPCAUSE}, DialStatus: ${DIALSTATUS}))
+same => n,System(/usr/sbin/asterisk -rx "dongle restart now ${D_NAME}" &)
+same => n(done),Return()
 
 MACRO
 # Strip old [macro-dialout-one-predial-hook] before appending
