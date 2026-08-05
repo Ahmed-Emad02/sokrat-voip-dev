@@ -77,14 +77,24 @@ fi
 echo "[3/14] Cloning repository..."
 systemctl stop sokrat-voip 2>/dev/null || true
 yum install -y git net-tools
+
+# Optimize git HTTP settings to prevent SSL_ERROR_SYSCALL on slow/unstable networks
+git config --global http.postBuffer 524288000 2>/dev/null || true
+git config --global http.lowSpeedLimit 1000 2>/dev/null || true
+git config --global http.lowSpeedTime 300 2>/dev/null || true
+
 if [ -d "$INSTALL_DIR" ]; then
     echo "  Directory $INSTALL_DIR exists, pulling latest..."
     cd "$INSTALL_DIR"
+    git config http.postBuffer 524288000 2>/dev/null || true
     git remote set-url origin "$REPO_URL"
-    git fetch origin "$REPO_BRANCH"
+    git fetch --depth 1 origin "$REPO_BRANCH" || git fetch origin "$REPO_BRANCH"
     git checkout -B "$REPO_BRANCH" "origin/$REPO_BRANCH"
 else
-    git clone --branch "$REPO_BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR"
+    if ! git clone --depth 1 --branch "$REPO_BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR"; then
+        echo "  Shallow clone failed, retrying git clone..."
+        git clone --branch "$REPO_BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR"
+    fi
     cd "$INSTALL_DIR"
 fi
 
