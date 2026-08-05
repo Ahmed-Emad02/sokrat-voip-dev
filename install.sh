@@ -5,11 +5,13 @@
 
 set -euo pipefail
 
+export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:${PATH:-}"
+
 INSTALL_DIR=/opt/sokrat-voip
 REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voip-dev.git
 REPO_BRANCH=main
 NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
-MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf | cut -d= -f2- | xargs)
+MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf 2>/dev/null | cut -d= -f2- | xargs || true)
 
 echo "============================================"
 echo " Issabel Dashboard Installer v1.7.0"
@@ -105,30 +107,30 @@ echo "[4/14] Installing npm dependencies from package-lock.json..."
 npm ci --omit=dev
 
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
-if ! command -v ffmpeg &>/dev/null; then
+if ! command -v ffmpeg &>/dev/null && [ ! -x /usr/local/bin/ffmpeg ]; then
     if yum install -y ffmpeg &>/dev/null; then
         echo "  ffmpeg installed via package manager"
     else
-        echo "  Downloading static ffmpeg build with timeout..."
+        echo "  Checking static ffmpeg mirrors (5s timeout)..."
         cd /tmp
         rm -rf ffmpeg-*-static ffmpeg-release-amd64-static.tar.xz
-        if curl -fsSL --connect-timeout 15 --max-time 120 -o ffmpeg-release-amd64-static.tar.xz "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" 2>/dev/null; then
+        if curl -fsSL --connect-timeout 5 --max-time 15 -o /usr/local/bin/ffmpeg "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-linux-x64" 2>/dev/null; then
+            chmod +x /usr/local/bin/ffmpeg 2>/dev/null || true
+        elif curl -fsSL --connect-timeout 5 --max-time 20 -o ffmpeg-release-amd64-static.tar.xz "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" 2>/dev/null; then
             tar xJf ffmpeg-release-amd64-static.tar.xz 2>/dev/null || true
             cp ffmpeg-*-static/ffmpeg /usr/local/bin/ 2>/dev/null || true
             cp ffmpeg-*-static/ffprobe /usr/local/bin/ 2>/dev/null || true
             chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe 2>/dev/null || true
             rm -rf ffmpeg-*-static ffmpeg-release-amd64-static.tar.xz
-        elif curl -fsSL --connect-timeout 15 --max-time 60 -o /usr/local/bin/ffmpeg "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-linux-x64" 2>/dev/null; then
-            chmod +x /usr/local/bin/ffmpeg 2>/dev/null || true
         fi
         cd "$INSTALL_DIR"
     fi
 fi
 
-if command -v ffmpeg &>/dev/null; then
-    echo "  ffmpeg verified: $(ffmpeg -version 2>&1 | head -1)"
+if command -v ffmpeg &>/dev/null || [ -x /usr/local/bin/ffmpeg ]; then
+    echo "  ffmpeg verified: $(/usr/local/bin/ffmpeg -version 2>&1 | head -1 || ffmpeg -version 2>&1 | head -1)"
 else
-    echo "  Warning: ffmpeg download timed out; system audio fallback will be used"
+    echo "  Notice: ffmpeg binary skipped; audio conversion will use sox/issabel fallback"
 fi
 # ──────────────────────────────────────────────
 # Step 5 — Create the Environment File
