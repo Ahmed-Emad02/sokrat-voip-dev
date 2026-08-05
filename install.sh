@@ -18,6 +18,70 @@ echo " Issabel Dashboard Installer v1.7.0"
 echo " Target: Issabel 5 / Asterisk 18"
 echo "============================================"
 
+# Collect required interactive input BEFORE any system checks or package installations.
+# When the installer is piped to Bash, stdin contains the script, so read from the
+# controlling terminal (or another terminal-backed descriptor) instead.
+collect_dongle_count() {
+    local input_fd
+    local user_val=""
+    local default_count=1
+
+    if [[ -n "${NUM_DONGLES:-}" ]]; then
+        if [[ "$NUM_DONGLES" =~ ^([1-9]|1[0-9]|2[0-5])$ ]]; then
+            return 0
+        fi
+        echo "Error: NUM_DONGLES must be a number between 1 and 25." >&2
+        return 1
+    fi
+
+    if [[ -t 0 ]]; then
+        input_fd=0
+    elif { exec 3<>/dev/tty; } 2>/dev/null; then
+        input_fd=3
+    elif [[ -t 1 ]] && { exec 3<>/proc/self/fd/1; } 2>/dev/null; then
+        input_fd=3
+    elif [[ -t 2 ]] && { exec 3<>/proc/self/fd/2; } 2>/dev/null; then
+        input_fd=3
+    else
+        echo "Error: no interactive terminal is available for the dongle count prompt." >&2
+        echo "Download install.sh and run 'bash install.sh', or set NUM_DONGLES to a value from 1 to 25." >&2
+        return 1
+    fi
+
+    while true; do
+        printf "Enter the number of GSM dongles to activate on this server (1-25) [default: %s]: " "$default_count"
+        if ! IFS= read -r -u "$input_fd" user_val; then
+            if [[ "$input_fd" -eq 3 ]]; then
+                exec 3>&-
+            fi
+            echo >&2
+            echo "Error: could not read the GSM dongle count; installation stopped." >&2
+            return 1
+        fi
+
+        user_val="${user_val//[[:space:]]/}"
+        if [[ -z "$user_val" ]]; then
+            NUM_DONGLES=$default_count
+            break
+        fi
+        if [[ "$user_val" =~ ^([1-9]|1[0-9]|2[0-5])$ ]]; then
+            NUM_DONGLES=$user_val
+            break
+        fi
+
+        echo "Invalid input '$user_val'. Please enter a number between 1 and 25."
+    done
+
+    if [[ "$input_fd" -eq 3 ]]; then
+        exec 3>&-
+    fi
+}
+
+collect_dongle_count
+echo " GSM dongles selected: $NUM_DONGLES"
+echo "============================================"
+echo ""
+
 # ──────────────────────────────────────────────
 # Step 1 — System Packages + Disable Fail2Ban
 # ──────────────────────────────────────────────
@@ -548,25 +612,6 @@ fi
 
 # 10c — Configure and apply dongle.conf
 echo "  [10c] Configuring and applying dongle.conf..."
-NUM_DONGLES=${NUM_DONGLES:-1}
-if [ -c /dev/tty ] && [ -t 0 ]; then
-    while true; do
-        printf "Enter the number of GSM dongles to activate on this server (1-25) [default: %s]: " "$NUM_DONGLES" > /dev/tty 2>/dev/null || true
-        if read -r user_val < /dev/tty 2>/dev/null; then
-            user_val=$(echo "$user_val" | tr -d '\r\n ')
-            if [[ "$user_val" =~ ^[0-9]+$ ]] && [ "$user_val" -ge 1 ] && [ "$user_val" -le 25 ]; then
-                NUM_DONGLES=$user_val
-                break
-            elif [ -z "$user_val" ]; then
-                break
-            else
-                echo "Invalid input '$user_val'. Please enter a number between 1 and 25." > /dev/tty 2>/dev/null || true
-            fi
-        else
-            break
-        fi
-    done
-fi
 
 echo "  Configuring $NUM_DONGLES dongle(s)..."
 
