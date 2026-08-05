@@ -3981,6 +3981,15 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
             }
         }
         if (row.ID && row.ID.startsWith("dongle")) {
+            const dId = row.ID;
+            const dImei = (row.IMEI || '').trim();
+            const { execFile: execFileCb } = require('child_process');
+            execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP ${dId} ${dId}`], () => {});
+            if (dImei && dImei !== '-' && dImei !== 'Unknown') {
+                execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP i:${dImei} ${dId}`], () => {});
+                execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP ${dImei} ${dId}`], () => {});
+            }
+
             // Fallback for transpositions where the firmware reports IMEI in the IMSI field
             if ((!row.IMEI || row.IMEI === '-' || row.IMEI === 'Unknown') && row.IMSI && (row.IMSI.startsWith('86') || row.IMSI.startsWith('35'))) {
                 row.IMEI = row.IMSI;
