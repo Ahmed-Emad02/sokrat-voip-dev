@@ -6090,18 +6090,22 @@ function isTabAllowed(tabName) {
                         const hasImei = cleanImei && cleanImei !== '-';
                         const provider = d['Provider Name'] || 'None';
 
+                        const dongleIdName = escapeHtml(d.ID || d.dongleName || '');
+                        const numStr = d.Number && d.Number !== 'Unknown' && d.Number !== '-' ? ` (${escapeHtml(d.Number)})` : '';
                         div.innerHTML = `
                             <div class="flex flex-col text-left">
-                                    <span class="text-[10px] ${statusColor} ml-1.5 font-semibold">${d.State}</span>
+                                <span class="font-bold text-[var(--text-primary)]">
+                                    ${dongleIdName}${numStr}
+                                    <span class="text-[10px] ${statusColor} ml-1.5 font-semibold">${escapeHtml(d.State || '')}</span>
                                 </span>
-                                <span class="text-[10px] text-[var(--text-muted)]">Provider: ${provider} | IMEI: ${cleanImei}</span>
+                                <span class="text-[10px] text-[var(--text-muted)]">Provider: ${escapeHtml(provider)} | IMEI: ${escapeHtml(cleanImei)}</span>
                             </div>
                             <div class="flex items-center gap-1.5 shrink-0">
-                                <button type="button" onclick="selectDialFormat('dongle/${d.ID}/$OUTNUM$')" class="px-2 py-0.5 text-[9px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded cursor-pointer transition-colors">
-                                    Use ID
+                                <button type="button" onclick="selectDialFormat('dongle/${dongleIdName}/$OUTNUM$')" class="px-2 py-0.5 text-[9px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded cursor-pointer transition-colors">
+                                    Use ID (${dongleIdName})
                                 </button>
                                 ${hasImei ? `
-                                <button type="button" onclick="selectDialFormat('dongle/i:${cleanImei}/$OUTNUM$')" class="px-2 py-0.5 text-[9px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded cursor-pointer transition-colors">
+                                <button type="button" onclick="selectDialFormat('dongle/i:${escapeHtml(cleanImei)}/$OUTNUM$')" class="px-2 py-0.5 text-[9px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded cursor-pointer transition-colors">
                                     Use IMEI
                                 </button>
                                 ` : ''}
