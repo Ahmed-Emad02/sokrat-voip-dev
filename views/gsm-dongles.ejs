@@ -288,114 +288,116 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
 
         /* 2. ACTIVE / IN CALL (Green / Emerald) */
+        /* 2. ACTIVE / IN CALL (Deep Dark Green) */
         .dongle-device-card.dongle-state-green {
-            background-color: #0d2d22 !important;
-            border-color: #10b981 !important;
-            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.25);
+            background-color: #06261b !important;
+            border-color: #047857 !important;
+            box-shadow: 0 6px 20px rgba(4, 120, 87, 0.25);
         }
         .dongle-device-card.dongle-state-green:hover {
-            border-color: #34d399 !important;
-            box-shadow: 0 10px 30px rgba(52, 211, 153, 0.4);
+            border-color: #059669 !important;
+            box-shadow: 0 10px 30px rgba(5, 150, 105, 0.4);
         }
         .dongle-device-card.dongle-state-green .dongle-icon-box {
-            background-color: #065f46 !important;
-            border: 1px solid #10b981 !important;
-            color: #a7f3d0 !important;
+            background-color: #064e3b !important;
+            border: 1px solid #047857 !important;
+            color: #6ee7b7 !important;
         }
         .dongle-device-card.dongle-state-green .dongle-status-pill {
-            background-color: #059669 !important;
-            border: 1px solid #34d399 !important;
+            background-color: #047857 !important;
+            border: 1px solid #059669 !important;
             color: #ffffff !important;
         }
         .dongle-device-card.dongle-state-green .dongle-status-dot {
-            background-color: #ecfdf5 !important;
+            background-color: #a7f3d0 !important;
         }
         .dongle-device-card.dongle-state-green .dongle-metric,
         .dongle-device-card.dongle-state-green .dongle-priority-metric {
-            background: #092219 !important;
-            border: 1px solid rgba(16, 185, 129, 0.4) !important;
+            background: #041c14 !important;
+            border: 1px solid rgba(4, 120, 87, 0.4) !important;
         }
         .dongle-device-card.dongle-state-green .dongle-hardware-summary,
         .dongle-device-card.dongle-state-green .dongle-routing-panel {
-            background: #08261c !important;
-            border: 1px solid rgba(16, 185, 129, 0.4) !important;
+            background: #03160f !important;
+            border: 1px solid rgba(4, 120, 87, 0.4) !important;
         }
         .dongle-device-card.dongle-state-green .dongle-routing-trunk {
-            background: #051d15 !important;
-            border: 1px solid rgba(16, 185, 129, 0.3) !important;
+            background: #02100b !important;
+            border: 1px solid rgba(4, 120, 87, 0.3) !important;
         }
         .dongle-device-card.dongle-state-green .dongle-card-footer {
-            background-color: #051d15 !important;
-            border-top: 1px solid rgba(16, 185, 129, 0.4) !important;
+            background-color: #02100b !important;
+            border-top: 1px solid rgba(4, 120, 87, 0.4) !important;
         }
         .dongle-device-card.dongle-state-green .dongle-action-button.dongle-action-primary {
-            background-color: #059669 !important;
-            border-color: #34d399 !important;
+            background-color: #047857 !important;
+            border-color: #059669 !important;
             color: #ffffff !important;
         }
         .dongle-device-card.dongle-state-green .dongle-action-button.dongle-action-primary:hover {
-            background-color: #047857 !important;
+            background-color: #064e3b !important;
         }
         .dongle-device-card.selected-row.dongle-state-green {
-            border-color: #a7f3d0 !important;
-            outline: 3px solid #34d399 !important;
+            border-color: #6ee7b7 !important;
+            outline: 3px solid #059669 !important;
             outline-offset: 1px;
-            box-shadow: 0 0 32px rgba(52, 211, 153, 0.6) !important;
+            box-shadow: 0 0 32px rgba(5, 150, 105, 0.6) !important;
         }
-        /* 2b. SMS PROCESSING (Light Green / Lime-Emerald) */
-        .dongle-device-card.dongle-state-lightgreen {
-            background-color: #113222 !important;
-            border-color: #22c55e !important;
-            box-shadow: 0 6px 20px rgba(34, 197, 94, 0.25);
+
+        /* 2b. SMS PROCESSING (Vibrant Pink) */
+        .dongle-device-card.dongle-state-pink {
+            background-color: #340d25 !important;
+            border-color: #ec4899 !important;
+            box-shadow: 0 6px 20px rgba(236, 72, 153, 0.25);
         }
-        .dongle-device-card.dongle-state-lightgreen:hover {
-            border-color: #4ade80 !important;
-            box-shadow: 0 10px 30px rgba(74, 222, 128, 0.4);
+        .dongle-device-card.dongle-state-pink:hover {
+            border-color: #f472b6 !important;
+            box-shadow: 0 10px 30px rgba(244, 114, 182, 0.4);
         }
-        .dongle-device-card.dongle-state-lightgreen .dongle-icon-box {
-            background-color: #15803d !important;
-            border: 1px solid #22c55e !important;
-            color: #86efac !important;
+        .dongle-device-card.dongle-state-pink .dongle-icon-box {
+            background-color: #9d174d !important;
+            border: 1px solid #ec4899 !important;
+            color: #fbcfe8 !important;
         }
-        .dongle-device-card.dongle-state-lightgreen .dongle-status-pill {
-            background-color: #16a34a !important;
-            border: 1px solid #4ade80 !important;
+        .dongle-device-card.dongle-state-pink .dongle-status-pill {
+            background-color: #db2777 !important;
+            border: 1px solid #f472b6 !important;
             color: #ffffff !important;
         }
-        .dongle-device-card.dongle-state-lightgreen .dongle-status-dot {
-            background-color: #dcfce7 !important;
+        .dongle-device-card.dongle-state-pink .dongle-status-dot {
+            background-color: #fce7f3 !important;
         }
-        .dongle-device-card.dongle-state-lightgreen .dongle-metric,
-        .dongle-device-card.dongle-state-lightgreen .dongle-priority-metric {
-            background: #0e291c !important;
-            border: 1px solid rgba(34, 197, 94, 0.4) !important;
+        .dongle-device-card.dongle-state-pink .dongle-metric,
+        .dongle-device-card.dongle-state-pink .dongle-priority-metric {
+            background: #280a1c !important;
+            border: 1px solid rgba(236, 72, 153, 0.4) !important;
         }
-        .dongle-device-card.dongle-state-lightgreen .dongle-hardware-summary,
-        .dongle-device-card.dongle-state-lightgreen .dongle-routing-panel {
-            background: #0c2419 !important;
-            border: 1px solid rgba(34, 197, 94, 0.4) !important;
+        .dongle-device-card.dongle-state-pink .dongle-hardware-summary,
+        .dongle-device-card.dongle-state-pink .dongle-routing-panel {
+            background: #220817 !important;
+            border: 1px solid rgba(236, 72, 153, 0.4) !important;
         }
-        .dongle-device-card.dongle-state-lightgreen .dongle-routing-trunk {
-            background: #081a12 !important;
-            border: 1px solid rgba(34, 197, 94, 0.3) !important;
+        .dongle-device-card.dongle-state-pink .dongle-routing-trunk {
+            background: #190511 !important;
+            border: 1px solid rgba(236, 72, 153, 0.3) !important;
         }
-        .dongle-device-card.dongle-state-lightgreen .dongle-card-footer {
-            background-color: #081a12 !important;
-            border-top: 1px solid rgba(34, 197, 94, 0.4) !important;
+        .dongle-device-card.dongle-state-pink .dongle-card-footer {
+            background-color: #190511 !important;
+            border-top: 1px solid rgba(236, 72, 153, 0.4) !important;
         }
-        .dongle-device-card.dongle-state-lightgreen .dongle-action-button.dongle-action-primary {
-            background-color: #16a34a !important;
-            border-color: #4ade80 !important;
+        .dongle-device-card.dongle-state-pink .dongle-action-button.dongle-action-primary {
+            background-color: #db2777 !important;
+            border-color: #f472b6 !important;
             color: #ffffff !important;
         }
-        .dongle-device-card.dongle-state-lightgreen .dongle-action-button.dongle-action-primary:hover {
-            background-color: #15803d !important;
+        .dongle-device-card.dongle-state-pink .dongle-action-button.dongle-action-primary:hover {
+            background-color: #be185d !important;
         }
-        .dongle-device-card.selected-row.dongle-state-lightgreen {
-            border-color: #86efac !important;
-            outline: 3px solid #4ade80 !important;
+        .dongle-device-card.selected-row.dongle-state-pink {
+            border-color: #fbcfe8 !important;
+            outline: 3px solid #f472b6 !important;
             outline-offset: 1px;
-            box-shadow: 0 0 32px rgba(74, 222, 128, 0.6) !important;
+            box-shadow: 0 0 32px rgba(244, 114, 182, 0.6) !important;
         }
         /* 3. DIALING / RINGING (Blue) */
         .dongle-device-card.dongle-state-blue {
@@ -622,23 +624,42 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             background-color: #bbf7d0 !important;
             border-top-color: #34d399 !important;
         }
-        .light-theme .dongle-device-card.dongle-state-lightgreen {
-            background-color: #f0fdf4 !important;
-            border-color: #22c55e !important;
+        .light-theme .dongle-device-card.dongle-state-green {
+            background-color: #d1fae5 !important;
+            border-color: #047857 !important;
         }
-        .light-theme .dongle-device-card.dongle-state-lightgreen .dongle-metric,
-        .light-theme .dongle-device-card.dongle-state-lightgreen .dongle-priority-metric,
-        .light-theme .dongle-device-card.dongle-state-lightgreen .dongle-routing-panel,
-        .light-theme .dongle-device-card.dongle-state-lightgreen .dongle-hardware-summary {
-            background: #dcfce7 !important;
-            border-color: #86efac !important;
+        .light-theme .dongle-device-card.dongle-state-green .dongle-metric,
+        .light-theme .dongle-device-card.dongle-state-green .dongle-priority-metric,
+        .light-theme .dongle-device-card.dongle-state-green .dongle-routing-panel,
+        .light-theme .dongle-device-card.dongle-state-green .dongle-hardware-summary {
+            background: #a7f3d0 !important;
+            border-color: #34d399 !important;
         }
-        .light-theme .dongle-device-card.dongle-state-lightgreen .dongle-routing-trunk {
+        .light-theme .dongle-device-card.dongle-state-green .dongle-routing-trunk {
             background: #ffffff !important;
         }
-        .light-theme .dongle-device-card.dongle-state-lightgreen .dongle-card-footer {
-            background-color: #dcfce7 !important;
-            border-top-color: #86efac !important;
+        .light-theme .dongle-device-card.dongle-state-green .dongle-card-footer {
+            background-color: #a7f3d0 !important;
+            border-top-color: #34d399 !important;
+        }
+
+        .light-theme .dongle-device-card.dongle-state-pink {
+            background-color: #fce7f3 !important;
+            border-color: #ec4899 !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-pink .dongle-metric,
+        .light-theme .dongle-device-card.dongle-state-pink .dongle-priority-metric,
+        .light-theme .dongle-device-card.dongle-state-pink .dongle-routing-panel,
+        .light-theme .dongle-device-card.dongle-state-pink .dongle-hardware-summary {
+            background: #fbcfe8 !important;
+            border-color: #f472b6 !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-pink .dongle-routing-trunk {
+            background: #ffffff !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-pink .dongle-card-footer {
+            background-color: #fbcfe8 !important;
+            border-top-color: #f472b6 !important;
         }
         .light-theme .dongle-device-card.dongle-state-blue {
             background-color: #dbeafe !important;
@@ -1060,30 +1081,30 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <div>
                             <span class="text-[10px] font-black uppercase tracking-wider text-[var(--text-secondary)] block mb-2"><%= isRtl ? 'ألوان حالات الشريحة:' : 'Dongle State Colors:' %></span>
                             <div class="flex flex-wrap items-center gap-2 text-[10px]">
-                                <span class="px-2.5 py-1 rounded-lg bg-purple-600 text-white font-black border border-purple-400 flex items-center gap-1.5">
+                                <span class="px-2.5 py-1 rounded-lg bg-purple-600 text-white font-black border border-purple-400 flex items-center gap-1.5 shadow-sm">
                                     <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
                                     <%= isRtl ? 'جاهز (Free)' : 'Free / Ready' %>
                                 </span>
-                                <span class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-black border border-emerald-400 flex items-center gap-1.5">
+                                <span class="px-2.5 py-1 rounded-lg bg-[#047857] text-white font-black border border-emerald-400 flex items-center gap-1.5 shadow-sm">
                                     <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
                                     <%= isRtl ? 'مكالمة نشطة' : 'Active Call' %>
                                 </span>
-                                <span class="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-black border border-blue-400 flex items-center gap-1.5">
+                                <span class="px-2.5 py-1 rounded-lg bg-pink-600 text-white font-black border border-pink-400 flex items-center gap-1.5 shadow-sm">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                                    <%= isRtl ? 'رسالة SMS' : 'SMS' %>
+                                </span>
+                                <span class="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-black border border-blue-400 flex items-center gap-1.5 shadow-sm">
                                     <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
                                     <%= isRtl ? 'اتصال / رنين' : 'Dialing / Ringing' %>
-                                <span class="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-black border border-emerald-400 flex items-center gap-1.5">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-                                    <%= isRtl ? 'مكالمة نشطة' : 'Active Call' %>
                                 </span>
-                                <span class="px-2.5 py-1 rounded-lg bg-green-600 text-white font-black border border-green-400 flex items-center gap-1.5">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-                                    <%= isRtl ? 'رسائل SMS' : 'SMS' %>
+                                <span class="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-black border border-amber-400 flex items-center gap-1.5 shadow-sm">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                                    <%= isRtl ? 'جاري التهيئة' : 'Initializing' %>
                                 </span>
-                                <span class="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-black border border-rose-400 flex items-center gap-1.5">
+                                <span class="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-black border border-rose-400 flex items-center gap-1.5 shadow-sm">
                                     <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
                                     <%= isRtl ? 'غير متصل' : 'Disconnected' %>
                                 </span>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1452,7 +1473,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     color = 'purple';
                     label = isRtl ? 'جاهز' : 'Free';
                 } else if (normalized.includes('sms')) {
-                    color = 'lightgreen';
+                    color = 'pink';
                     label = isRtl ? 'رسالة SMS' : 'SMS';
                     animate = true;
                 } else if (normalized.includes('outgoing') || normalized.includes('incoming') || normalized.includes('active') || normalized.includes('busy')) {
@@ -1478,7 +1499,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     red: { bg: 'bg-red-500/15', text: 'text-red-400', border: 'border-red-500/30', dot: 'bg-red-500' },
                     purple: { bg: 'bg-purple-500/15', text: 'text-purple-400', border: 'border-purple-500/30', dot: 'bg-purple-400' },
                     green: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', dot: 'bg-emerald-400' },
-                    lightgreen: { bg: 'bg-green-500/15', text: 'text-green-400', border: 'border-green-500/30', dot: 'bg-green-400' },
+                    pink: { bg: 'bg-pink-500/20', text: 'text-pink-300', border: 'border-pink-500/40', dot: 'bg-pink-400' },
                     yellow: { bg: 'bg-yellow-500/15', text: 'text-yellow-400', border: 'border-yellow-500/30', dot: 'bg-yellow-400' },
                     blue: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30', dot: 'bg-blue-400' }
                 }[color];
