@@ -7655,27 +7655,75 @@ app.get('/api/config/diagram', async (req, res) => {
 
 // --- TIME GROUPS API ---
 
+function formatIssabelTimeRule(rule) {
+    if (!rule) return '|||';
+    if (typeof rule === 'string') return rule;
+    
+    let timeStr = rule.time || '';
+    if (!timeStr && rule.start_time && rule.finish_time) {
+        timeStr = `${rule.start_time}-${rule.finish_time}`;
+    } else if (!timeStr && rule.start_time) {
+        timeStr = rule.start_time;
+    }
+    
+    let weekdayStr = rule.weekday || '';
+    if (!weekdayStr && rule.start_weekday && rule.finish_weekday) {
+        weekdayStr = rule.start_weekday === rule.finish_weekday ? rule.start_weekday : `${rule.start_weekday}-${rule.finish_weekday}`;
+    } else if (!weekdayStr && rule.start_weekday) {
+        weekdayStr = rule.start_weekday;
+    }
+
+    let monthdayStr = rule.monthday || '';
+    if (!monthdayStr && rule.start_monthday && rule.finish_monthday) {
+        monthdayStr = rule.start_monthday === rule.finish_monthday ? rule.start_monthday : `${rule.start_monthday}-${rule.finish_monthday}`;
+    } else if (!monthdayStr && rule.start_monthday) {
+        monthdayStr = rule.start_monthday;
+    }
+
+    let monthStr = rule.month || '';
+    if (!monthStr && rule.start_month && rule.finish_month) {
+        monthStr = rule.start_month === rule.finish_month ? rule.start_month : `${rule.start_month}-${rule.finish_month}`;
+    } else if (!monthStr && rule.start_month) {
+        monthStr = rule.start_month;
+    }
+
+    const cleanTime = (timeStr === '*' || timeStr === '*-*') ? '' : timeStr.trim();
+    const cleanWkday = (weekdayStr === '*' || weekdayStr === '*-*') ? '' : weekdayStr.trim().toLowerCase();
+    const cleanMthday = (monthdayStr === '*' || monthdayStr === '*-*') ? '' : monthdayStr.trim();
+    const cleanMonth = (monthStr === '*' || monthStr === '*-*') ? '' : monthStr.trim().toLowerCase();
+
+    return `${cleanTime}|${cleanWkday}|${cleanMthday}|${cleanMonth}`;
+}
+
 // GET /api/config/timegroups - Retrieve all time groups and their details
 app.get('/api/config/timegroups', async (req, res) => {
     try {
         const [groups] = await pool.query('SELECT id, description FROM `asterisk`.`timegroups_groups` ORDER BY id ASC');
         const [details] = await pool.query('SELECT id, timegroupid, time, name FROM `asterisk`.`timegroups_details` ORDER BY id ASC');
+        const [conditions] = await pool.query('SELECT `time` AS timegroup_id, COUNT(*) AS count FROM `asterisk`.`timeconditions` GROUP BY `time`');
         
+        const condCountMap = {};
+        for (const c of conditions) {
+            condCountMap[c.timegroup_id] = c.count;
+        }
+
         const groupsWithDetails = groups.map(g => {
             const rules = details.filter(d => d.timegroupid === g.id).map(d => {
-                const parts = d.time.split('|');
+                const parts = (d.time || '').split('|');
                 return {
                     id: d.id,
-                    time: parts[0] || '',
-                    weekday: parts[1] || '',
-                    monthday: parts[2] || '',
-                    month: parts[3] || '',
+                    raw: d.time || '',
+                    time: parts[0] || '*',
+                    weekday: parts[1] || '*',
+                    monthday: parts[2] || '*',
+                    month: parts[3] || '*',
                     name: d.name || ''
                 };
             });
             return {
                 id: g.id,
                 description: g.description,
+                linked_conditions_count: condCountMap[g.id] || 0,
                 rules
             };
         });
@@ -7696,12 +7744,17 @@ app.post('/api/config/timegroups', async (req, res) => {
         const [r] = await pool.query('INSERT INTO `asterisk`.`timegroups_groups` (description) VALUES (?)', [description.trim()]);
         const groupid = r.insertId;
         
-        if (rules && Array.isArray(rules)) {
+        if (rules && Array.isArray(rules) && rules.length > 0) {
             for (const rule of rules) {
-                const timeStr = `${rule.time || ''}|${rule.weekday || ''}|${rule.monthday || ''}|${rule.month || ''}`;
+                const timeStr = formatIssabelTimeRule(rule);
                 await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, '']);
             }
+        } else {
+            // Default blank rule (matches always)
+            await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, '|||', '']);
         }
+        
+        reloadPbxConfig();
         res.json({ success: true, message: 'Time Group created successfully', id: groupid });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -7720,12 +7773,16 @@ app.put('/api/config/timegroups/:id', async (req, res) => {
         await pool.query('UPDATE `asterisk`.`timegroups_groups` SET description = ? WHERE id = ?', [description.trim(), id]);
         await pool.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [id]);
         
-        if (rules && Array.isArray(rules)) {
+        if (rules && Array.isArray(rules) && rules.length > 0) {
             for (const rule of rules) {
-                const timeStr = `${rule.time || ''}|${rule.weekday || ''}|${rule.monthday || ''}|${rule.month || ''}`;
+                const timeStr = formatIssabelTimeRule(rule);
                 await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [id, timeStr, '']);
             }
+        } else {
+            await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [id, '|||', '']);
         }
+
+        reloadPbxConfig();
         res.json({ success: true, message: 'Time Group updated successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -7743,6 +7800,8 @@ app.delete('/api/config/timegroups/:id', async (req, res) => {
         
         await pool.query('DELETE FROM `asterisk`.`timegroups_groups` WHERE id = ?', [id]);
         await pool.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [id]);
+
+        reloadPbxConfig();
         res.json({ success: true, message: 'Time Group deleted successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -7786,6 +7845,7 @@ app.post('/api/config/timeconditions', async (req, res) => {
             VALUES (?, ?, ?, ?, '', 0, NULL)
         `, [displayname.trim(), timegroup_id, truegoto, falsegoto]);
         
+        reloadPbxConfig();
         res.json({ success: true, message: 'Time Condition created successfully', id: r.insertId });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -7813,6 +7873,7 @@ app.put('/api/config/timeconditions/:id', async (req, res) => {
             WHERE timeconditions_id = ?
         `, [displayname.trim(), timegroup_id, truegoto, falsegoto, id]);
         
+        reloadPbxConfig();
         res.json({ success: true, message: 'Time Condition updated successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -7824,6 +7885,8 @@ app.delete('/api/config/timeconditions/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         await pool.query('DELETE FROM `asterisk`.`timeconditions` WHERE timeconditions_id = ?', [id]);
+        
+        reloadPbxConfig();
         res.json({ success: true, message: 'Time Condition deleted successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
