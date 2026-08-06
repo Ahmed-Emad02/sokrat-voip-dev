@@ -7655,7 +7655,43 @@ app.get('/api/config/diagram', async (req, res) => {
 
 // --- TIME GROUPS API ---
 
-function formatIssabelTimeRule(rule) {
+function decomposeWeekdaysToAsterisk(days) {
+    if (!days || !Array.isArray(days) || days.length === 0 || days.includes('*')) {
+        return ['*'];
+    }
+    const validDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    const active = days.map(d => String(d).toLowerCase().trim()).filter(d => validDays.includes(d));
+    if (active.length === 0 || active.length === 7) return ['*'];
+
+    const ranges = [];
+    let currentRange = [];
+
+    for (let i = 0; i < validDays.length; i++) {
+        const day = validDays[i];
+        if (active.includes(day)) {
+            currentRange.push(day);
+        } else {
+            if (currentRange.length > 0) {
+                if (currentRange.length === 1) {
+                    ranges.push(currentRange[0]);
+                } else {
+                    ranges.push(`${currentRange[0]}-${currentRange[currentRange.length - 1]}`);
+                }
+                currentRange = [];
+            }
+        }
+    }
+    if (currentRange.length > 0) {
+        if (currentRange.length === 1) {
+            ranges.push(currentRange[0]);
+        } else {
+            ranges.push(`${currentRange[0]}-${currentRange[currentRange.length - 1]}`);
+        }
+    }
+    return ranges;
+}
+
+function formatIssabelTimeRule(rule, overrideWkday = null) {
     if (!rule) return '|||';
     if (typeof rule === 'string') return rule;
     
@@ -7666,7 +7702,7 @@ function formatIssabelTimeRule(rule) {
         timeStr = rule.start_time;
     }
     
-    let weekdayStr = rule.weekday || '';
+    let weekdayStr = overrideWkday !== null ? overrideWkday : (rule.weekday || '');
     if (!weekdayStr && rule.start_weekday && rule.finish_weekday) {
         weekdayStr = rule.start_weekday === rule.finish_weekday ? rule.start_weekday : `${rule.start_weekday}-${rule.finish_weekday}`;
     } else if (!weekdayStr && rule.start_weekday) {
@@ -7693,6 +7729,25 @@ function formatIssabelTimeRule(rule) {
     const cleanMonth = (monthStr === '*' || monthStr === '*-*') ? '' : monthStr.trim().toLowerCase();
 
     return `${cleanTime}|${cleanWkday}|${cleanMthday}|${cleanMonth}`;
+}
+
+async function insertTimeGroupRules(groupid, rules) {
+    if (rules && Array.isArray(rules) && rules.length > 0) {
+        for (const rule of rules) {
+            if (rule.active_days && Array.isArray(rule.active_days)) {
+                const wkRanges = decomposeWeekdaysToAsterisk(rule.active_days);
+                for (const wkRange of wkRanges) {
+                    const timeStr = formatIssabelTimeRule(rule, wkRange);
+                    await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, '']);
+                }
+            } else {
+                const timeStr = formatIssabelTimeRule(rule);
+                await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, '']);
+            }
+        }
+    } else {
+        await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, '|||', '']);
+    }
 }
 
 // GET /api/config/timegroups - Retrieve all time groups and their details
@@ -7744,15 +7799,7 @@ app.post('/api/config/timegroups', async (req, res) => {
         const [r] = await pool.query('INSERT INTO `asterisk`.`timegroups_groups` (description) VALUES (?)', [description.trim()]);
         const groupid = r.insertId;
         
-        if (rules && Array.isArray(rules) && rules.length > 0) {
-            for (const rule of rules) {
-                const timeStr = formatIssabelTimeRule(rule);
-                await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, '']);
-            }
-        } else {
-            // Default blank rule (matches always)
-            await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, '|||', '']);
-        }
+        await insertTimeGroupRules(groupid, rules);
         
         reloadPbxConfig();
         res.json({ success: true, message: 'Time Group created successfully', id: groupid });
@@ -7773,14 +7820,7 @@ app.put('/api/config/timegroups/:id', async (req, res) => {
         await pool.query('UPDATE `asterisk`.`timegroups_groups` SET description = ? WHERE id = ?', [description.trim(), id]);
         await pool.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [id]);
         
-        if (rules && Array.isArray(rules) && rules.length > 0) {
-            for (const rule of rules) {
-                const timeStr = formatIssabelTimeRule(rule);
-                await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [id, timeStr, '']);
-            }
-        } else {
-            await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [id, '|||', '']);
-        }
+        await insertTimeGroupRules(id, rules);
 
         reloadPbxConfig();
         res.json({ success: true, message: 'Time Group updated successfully' });

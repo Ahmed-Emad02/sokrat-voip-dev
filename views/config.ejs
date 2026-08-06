@@ -7616,23 +7616,45 @@ function isTabAllowed(tabName) {
             const card = document.createElement('div');
             card.className = 'rule-card p-4 border border-sky-500/20 rounded-xl bg-sky-950/20 relative flex flex-col gap-3.5 transition-all hover:border-sky-500/40';
             
-            // Build weekday options
-            const weekdays = [
-                { val: '*', label: 'All Days (Mon-Sun)' },
-                { val: 'mon', label: 'Monday' },
-                { val: 'tue', label: 'Tuesday' },
-                { val: 'wed', label: 'Wednesday' },
-                { val: 'thu', label: 'Thursday' },
-                { val: 'fri', label: 'Friday' },
-                { val: 'sat', label: 'Saturday' },
-                { val: 'sun', label: 'Sunday' }
+            const daysList = [
+                { id: 'sat', labelEn: 'Sat', labelAr: 'السبت' },
+                { id: 'sun', labelEn: 'Sun', labelAr: 'الأحد' },
+                { id: 'mon', labelEn: 'Mon', labelAr: 'الإثنين' },
+                { id: 'tue', labelEn: 'Tue', labelAr: 'الثلاثاء' },
+                { id: 'wed', labelEn: 'Wed', labelAr: 'الأربعاء' },
+                { id: 'thu', labelEn: 'Thu', labelAr: 'الخميس' },
+                { id: 'fri', labelEn: 'Fri', labelAr: 'الجمعة' }
             ];
 
-            let startWkOptions = '';
-            let finishWkOptions = '';
-            weekdays.forEach(w => {
-                startWkOptions += `<option value="${w.val}">${w.label}</option>`;
-                finishWkOptions += `<option value="${w.val}">${w.label}</option>`;
+            // Determine active days from data.weekday
+            let activeDaysSet = new Set(['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri']);
+            if (data && data.weekday && data.weekday !== '*') {
+                activeDaysSet = new Set();
+                const wkStr = data.weekday.toLowerCase();
+                const allDaysOrder = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+                if (wkStr.includes('-')) {
+                    const [s, e] = wkStr.split('-');
+                    const sIdx = allDaysOrder.indexOf(s);
+                    const eIdx = allDaysOrder.indexOf(e);
+                    if (sIdx !== -1 && eIdx !== -1) {
+                        for (let i = sIdx; i <= eIdx; i++) {
+                            activeDaysSet.add(allDaysOrder[i]);
+                        }
+                    }
+                } else {
+                    wkStr.split(',').forEach(d => activeDaysSet.add(d.trim()));
+                }
+            }
+
+            let dayTogglesHTML = '';
+            daysList.forEach(d => {
+                const isActive = activeDaysSet.has(d.id);
+                const activeClass = isActive ? 'bg-blue-600 text-white font-black shadow-sm shadow-blue-500/30' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] font-bold';
+                dayTogglesHTML += `
+                    <button type="button" data-day="${d.id}" onclick="toggleDayPill(this)" class="day-toggle-btn px-3 py-1.5 text-xs rounded-lg border border-[var(--border-primary)] ${activeClass} hover:text-white cursor-pointer transition-all">
+                        ${isRtl ? d.labelAr : d.labelEn}
+                    </button>
+                `;
             });
 
             // Build monthday options
@@ -7673,14 +7695,6 @@ function isTabAllowed(tabName) {
                 finishTime = parts[1] || '';
             }
 
-            let startWk = '*';
-            let finishWk = '*';
-            if (data && data.weekday && data.weekday !== '*') {
-                const parts = data.weekday.split('-');
-                startWk = parts[0] || '*';
-                finishWk = parts[1] || parts[0] || '*';
-            }
-
             let startMthday = '*';
             let finishMthday = '*';
             if (data && data.monthday && data.monthday !== '*') {
@@ -7701,7 +7715,7 @@ function isTabAllowed(tabName) {
                 <div class="flex items-center justify-between border-b border-sky-500/15 pb-2.5">
                     <div class="flex items-center gap-2">
                         <span class="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30 text-[10px] font-black flex items-center justify-center">${ruleIndex}</span>
-                        <span class="text-xs font-extrabold text-sky-300">${isRtl ? 'قاعدة الفترة الزمنية' : 'Time Interval Rule'}</span>
+                        <span class="text-xs font-extrabold text-sky-300">${isRtl ? 'قاعدة الجدول الزمني' : 'Schedule Interval Rule'}</span>
                         <span class="rule-chip-preview text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-sky-950 text-sky-400 border border-sky-500/30"></span>
                     </div>
                     <button type="button" onclick="removeTimeGroupRuleFromModal(this)" class="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer">
@@ -7712,37 +7726,31 @@ function isTabAllowed(tabName) {
 
                 <!-- Presets -->
                 <div class="flex items-center gap-2 flex-wrap text-[10px]">
-                    <span class="text-[var(--text-muted)] font-bold uppercase tracking-wider">${isRtl ? 'نماذج جاهزة:' : 'Quick Presets:'}</span>
-                    <button type="button" onclick="applyRulePreset(this, 'workhours')" class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 font-bold transition cursor-pointer">Mon-Fri 09:00-17:00</button>
-                    <button type="button" onclick="applyRulePreset(this, 'allday')" class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 font-bold transition cursor-pointer">24/7 All Day</button>
-                    <button type="button" onclick="applyRulePreset(this, 'weekend')" class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 font-bold transition cursor-pointer">Sat-Sun Weekend</button>
+                    <span class="text-[var(--text-muted)] font-bold uppercase tracking-wider">${isRtl ? 'نماذج سريعة:' : 'Schedule Presets:'}</span>
+                    <button type="button" onclick="applyRulePreset(this, 'satthu_work')" class="px-2.5 py-1 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/30 font-bold transition cursor-pointer flex items-center gap-1">
+                        <span>⭐ Sat - Thu 09:00 - 17:00 (${isRtl ? 'الجمعة عطلة' : 'Fri Off'})</span>
+                    </button>
+                    <button type="button" onclick="applyRulePreset(this, 'monfri_work')" class="px-2.5 py-1 rounded-lg bg-sky-500/15 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 font-bold transition cursor-pointer">Mon - Fri 09:00 - 17:00</button>
+                    <button type="button" onclick="applyRulePreset(this, 'allday')" class="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 font-bold transition cursor-pointer">24/7 Always Open</button>
                 </div>
                 
                 <!-- Time Range -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">${isRtl ? 'وقت البداية' : 'Start Time'}</label>
+                        <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">${isRtl ? 'وقت بداية العمل *' : 'Start Working Hour'}</label>
                         <input type="time" value="${startTime}" onchange="updateRulePreviewChip(this)" class="rule-start-time config-input w-full py-1.5 text-xs font-mono">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">${isRtl ? 'وقت النهاية' : 'Finish Time'}</label>
+                        <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">${isRtl ? 'وقت نهاية العمل *' : 'Finish Working Hour'}</label>
                         <input type="time" value="${finishTime}" onchange="updateRulePreviewChip(this)" class="rule-finish-time config-input w-full py-1.5 text-xs font-mono">
                     </div>
                 </div>
 
-                <!-- Weekday Range -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">${isRtl ? 'يوم بداية الأسبوع' : 'Start Day of Week'}</label>
-                        <select onchange="updateRulePreviewChip(this)" class="rule-start-weekday config-input w-full py-1.5 text-xs font-semibold">
-                            ${startWkOptions}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">${isRtl ? 'يوم نهاية الأسبوع' : 'Finish Day of Week'}</label>
-                        <select onchange="updateRulePreviewChip(this)" class="rule-finish-weekday config-input w-full py-1.5 text-xs font-semibold">
-                            ${finishWkOptions}
-                        </select>
+                <!-- Days of Week Toggles -->
+                <div>
+                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1.5">${isRtl ? 'أيام العمل الفعالة (انقر للتفعيل/الإلغاء):' : 'Active Working Days (Click to Toggle):'}</label>
+                    <div class="flex flex-wrap gap-1.5">
+                        ${dayTogglesHTML}
                     </div>
                 </div>
 
@@ -7782,8 +7790,6 @@ function isTabAllowed(tabName) {
             container.appendChild(card);
             
             // Set initial select values
-            card.querySelector('.rule-start-weekday').value = startWk;
-            card.querySelector('.rule-finish-weekday').value = finishWk;
             card.querySelector('.rule-start-monthday').value = startMthday;
             card.querySelector('.rule-finish-monthday').value = finishMthday;
             card.querySelector('.rule-start-month').value = startMth;
@@ -7792,27 +7798,42 @@ function isTabAllowed(tabName) {
             updateRulePreviewChip(card);
         }
 
+        function toggleDayPill(btn) {
+            btn.classList.toggle('bg-blue-600');
+            btn.classList.toggle('text-white');
+            btn.classList.toggle('font-black');
+            btn.classList.toggle('shadow-sm');
+            btn.classList.toggle('shadow-blue-500/30');
+            btn.classList.toggle('bg-[var(--bg-secondary)]');
+            btn.classList.toggle('text-[var(--text-secondary)]');
+            btn.classList.toggle('font-bold');
+
+            updateRulePreviewChip(btn);
+        }
+
         function updateRulePreviewChip(elem) {
             const card = elem.closest ? elem.closest('.rule-card') : elem;
             if (!card) return;
 
             const startTime = card.querySelector('.rule-start-time').value;
             const finishTime = card.querySelector('.rule-finish-time').value;
-            const startWk = card.querySelector('.rule-start-weekday').value;
-            const finishWk = card.querySelector('.rule-finish-weekday').value;
+            
+            const activeButtons = Array.from(card.querySelectorAll('.day-toggle-btn.bg-blue-600'));
+            const activeDays = activeButtons.map(b => b.getAttribute('data-day'));
+
             const startMthday = card.querySelector('.rule-start-monthday').value;
             const finishMthday = card.querySelector('.rule-finish-monthday').value;
             const startMth = card.querySelector('.rule-start-month').value;
             const finishMth = card.querySelector('.rule-finish-month').value;
 
-            let timeText = '*';
+            let timeText = isRtl ? 'طوال اليوم' : 'All Day';
             if (startTime && finishTime) timeText = `${startTime}-${finishTime}`;
             else if (startTime) timeText = startTime;
 
-            let wkText = '*';
-            if (startWk !== '*' && finishWk !== '*') {
-                wkText = startWk === finishWk ? startWk : `${startWk}-${finishWk}`;
-            } else if (startWk !== '*') wkText = startWk;
+            let wkText = isRtl ? 'كل الأيام' : 'All Weekdays';
+            if (activeDays.length > 0 && activeDays.length < 7) {
+                wkText = activeDays.map(d => d.toUpperCase()).join(',');
+            }
 
             let mthdayText = '*';
             if (startMthday !== '*' && finishMthday !== '*') {
@@ -7834,11 +7855,32 @@ function isTabAllowed(tabName) {
             const card = btn.closest('.rule-card');
             if (!card) return;
 
-            if (preset === 'workhours') {
+            const dayBtns = card.querySelectorAll('.day-toggle-btn');
+            
+            function setDaysActive(targetDays) {
+                dayBtns.forEach(b => {
+                    const day = b.getAttribute('data-day');
+                    const isActive = targetDays.includes(day);
+                    if (isActive) {
+                        b.className = 'day-toggle-btn px-3 py-1.5 text-xs rounded-lg border border-[var(--border-primary)] bg-blue-600 text-white font-black shadow-sm shadow-blue-500/30 hover:text-white cursor-pointer transition-all';
+                    } else {
+                        b.className = 'day-toggle-btn px-3 py-1.5 text-xs rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] font-bold hover:text-white cursor-pointer transition-all';
+                    }
+                });
+            }
+
+            if (preset === 'satthu_work') {
                 card.querySelector('.rule-start-time').value = '09:00';
                 card.querySelector('.rule-finish-time').value = '17:00';
-                card.querySelector('.rule-start-weekday').value = 'mon';
-                card.querySelector('.rule-finish-weekday').value = 'fri';
+                setDaysActive(['sat', 'sun', 'mon', 'tue', 'wed', 'thu']);
+                card.querySelector('.rule-start-monthday').value = '*';
+                card.querySelector('.rule-finish-monthday').value = '*';
+                card.querySelector('.rule-start-month').value = '*';
+                card.querySelector('.rule-finish-month').value = '*';
+            } else if (preset === 'monfri_work') {
+                card.querySelector('.rule-start-time').value = '09:00';
+                card.querySelector('.rule-finish-time').value = '17:00';
+                setDaysActive(['mon', 'tue', 'wed', 'thu', 'fri']);
                 card.querySelector('.rule-start-monthday').value = '*';
                 card.querySelector('.rule-finish-monthday').value = '*';
                 card.querySelector('.rule-start-month').value = '*';
@@ -7846,17 +7888,7 @@ function isTabAllowed(tabName) {
             } else if (preset === 'allday') {
                 card.querySelector('.rule-start-time').value = '';
                 card.querySelector('.rule-finish-time').value = '';
-                card.querySelector('.rule-start-weekday').value = '*';
-                card.querySelector('.rule-finish-weekday').value = '*';
-                card.querySelector('.rule-start-monthday').value = '*';
-                card.querySelector('.rule-finish-monthday').value = '*';
-                card.querySelector('.rule-start-month').value = '*';
-                card.querySelector('.rule-finish-month').value = '*';
-            } else if (preset === 'weekend') {
-                card.querySelector('.rule-start-time').value = '';
-                card.querySelector('.rule-finish-time').value = '';
-                card.querySelector('.rule-start-weekday').value = 'sat';
-                card.querySelector('.rule-finish-weekday').value = 'sun';
+                setDaysActive(['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri']);
                 card.querySelector('.rule-start-monthday').value = '*';
                 card.querySelector('.rule-finish-monthday').value = '*';
                 card.querySelector('.rule-start-month').value = '*';
@@ -7906,8 +7938,10 @@ function isTabAllowed(tabName) {
             ruleCards.forEach(card => {
                 const startTime = card.querySelector('.rule-start-time').value;
                 const finishTime = card.querySelector('.rule-finish-time').value;
-                const startWk = card.querySelector('.rule-start-weekday').value;
-                const finishWk = card.querySelector('.rule-finish-weekday').value;
+
+                const activeButtons = Array.from(card.querySelectorAll('.day-toggle-btn.bg-blue-600'));
+                const activeDays = activeButtons.map(b => b.getAttribute('data-day'));
+
                 const startMthday = card.querySelector('.rule-start-monthday').value;
                 const finishMthday = card.querySelector('.rule-finish-monthday').value;
                 const startMth = card.querySelector('.rule-start-month').value;
@@ -7916,8 +7950,7 @@ function isTabAllowed(tabName) {
                 rules.push({
                     start_time: startTime,
                     finish_time: finishTime,
-                    start_weekday: startWk,
-                    finish_weekday: finishWk,
+                    active_days: activeDays,
                     start_monthday: startMthday,
                     finish_monthday: finishMthday,
                     start_month: startMth,
