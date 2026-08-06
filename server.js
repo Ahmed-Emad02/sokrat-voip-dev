@@ -5321,35 +5321,21 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create')
     const startMarker = `; BEGIN WEBRTC EXTENSION ${extNum}`;
     const endMarker = `; END WEBRTC EXTENSION ${extNum}`;
 
-    const regex = new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g');
-    content = content.replace(regex, '').trim();
+    const markerRegex = new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g');
+    content = content.replace(markerRegex, '');
+
+    const sectionRegex = new RegExp(`\\[${extNum}\\]\\(\\+[^)]*\\)[\\s\\S]*?(?=\\n\\[|\\n\\n|$)`, 'g');
+    content = content.replace(sectionRegex, '');
+
+    content = content.trim();
 
     if (action !== 'delete') {
-        const newBlock = `
-\n${startMarker}
-[${extNum}](+)
-transport=transport-wss
-webrtc=yes
-ice_support=yes
-use_avpf=yes
-media_use_received_transport=yes
-direct_media=no\nrtcp_mux=yes
-media_encryption=dtls
-dtls_cert_file=/etc/asterisk/keys/asterisk.pem
-dtls_private_key=/etc/asterisk/keys/asterisk.pem
-dtls_ca_file=/etc/asterisk/keys/asterisk.pem
-dtls_verify=fingerprint
-dtls_setup=actpass
-
-[${extNum}](+type=aor)
-max_contacts=5
-remove_existing=yes
-${endMarker}`;
-        content += newBlock;
+        const newBlock = `\n${startMarker}\n[${extNum}](+)\ntransport=transport-wss\nwebrtc=yes\nice_support=yes\nuse_avpf=yes\nmedia_use_received_transport=yes\ndirect_media=no\nrtcp_mux=yes\nmedia_encryption=dtls\ndtls_cert_file=/etc/asterisk/keys/asterisk.pem\ndtls_private_key=/etc/asterisk/keys/asterisk.pem\ndtls_ca_file=/etc/asterisk/keys/asterisk.pem\ndtls_verify=fingerprint\ndtls_setup=actpass\n\n[${extNum}](+type=aor)\nmax_contacts=5\nremove_existing=yes\n${endMarker}`;
+        content += (content ? '\n' : '') + newBlock;
     }
 
     try {
-        fs.writeFileSync(pjsipPath, content.trim() + '\n', 'utf8');
+        fs.writeFileSync(pjsipPath, (content ? content.trim() + '\n' : ''), 'utf8');
     } catch (e) {
         console.error('Error writing pjsip_custom_post.conf:', e.message);
     }
@@ -5369,7 +5355,7 @@ app.get('/api/webrtc/config', requireAuth, async (req, res) => {
             SELECT u.extension, u.name, d.tech
             FROM ${tables.users} u
             LEFT JOIN ${tables.devices} d ON d.id = u.extension
-            WHERE (d.tech = 'pjsip' OR u.extension = '101' OR u.extension = '200')
+            WHERE d.tech = 'pjsip'
         `;
         let params = [];
 
@@ -5498,9 +5484,11 @@ app.post('/api/config/extensions', async (req, res) => {
             `, [id, kw, data, flags]);
         }
 
-        // Write PJSIP custom endpoint config if WebRTC
         if (isWebRTC) {
             updatePjsipCustomConfig(extNum, extSecret, displayName, 'create');
+            reloadPjsip();
+        } else {
+            updatePjsipCustomConfig(extNum, '', '', 'delete');
             reloadPjsip();
         }
 
@@ -5530,33 +5518,52 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
 
         const [devRows] = await pool.query('SELECT tech FROM `asterisk`.`devices` WHERE id = ?', [extNum]);
         const currentTech = devRows[0]?.tech || 'sip';
-        const isWebRTC = tech === 'webrtc' || tech === 'pjsip' || currentTech === 'pjsip';
+
+        const targetTech = tech ? (tech === 'webrtc' || tech === 'pjsip' ? 'pjsip' : 'sip') : (currentTech === 'pjsip' ? 'pjsip' : 'sip');
+        const isWebRTC = targetTech === 'pjsip';
         const devTech = isWebRTC ? 'pjsip' : 'sip';
         const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
 
-        if (tech) {
-            await pool.query('UPDATE `asterisk`.`devices` SET tech = ?, dial = ? WHERE id = ?', [devTech, devDial, extNum]);
-        }
-
+        await pool.query('UPDATE `asterisk`.`devices` SET tech = ?, dial = ? WHERE id = ?', [devTech, devDial, extNum]);
         if (displayName) {
-            await pool.query('UPDATE `asterisk`.`users` SET name = ? WHERE extension = ?', [displayName, extNum]);
             await pool.query('UPDATE `asterisk`.`devices` SET description = ? WHERE id = ?', [displayName, extNum]);
-            await pool.query('UPDATE `asterisk`.`sip` SET data = ? WHERE id = ? AND keyword = "callerid"', [`${displayName} <${extNum}>`, extNum]);
+            await pool.query('UPDATE `asterisk`.`users` SET name = ? WHERE extension = ?', [displayName, extNum]);
+        }
+        await pool.query('UPDATE `asterisk`.`users` SET voicemail = ?, recording = "out=always|in=always" WHERE extension = ?', [vmVal, extNum]);
+
+        const sipUpdates = [
+            ['dial', devDial, 27],
+            ['transport', isWebRTC ? 'wss' : 'udp', 14],
+            ['avpf', isWebRTC ? 'yes' : 'no', 15],
+            ['encryption', isWebRTC ? 'yes' : 'no', 22],
+            ['nat', 'yes', 10]
+        ];
+        if (displayName) {
+            sipUpdates.push(['callerid', `${displayName} <${extNum}>`, 33]);
         }
         if (extSecret) {
-            await pool.query('UPDATE `asterisk`.`sip` SET data = ? WHERE id = ? AND keyword = "secret"', [extSecret, extNum]);
+            sipUpdates.push(['secret', extSecret, 2]);
         }
 
-        // Update voicemail & nat in users and sip table
-        await pool.query('UPDATE `asterisk`.`users` SET voicemail = ?, recording = "out=always|in=always" WHERE extension = ?', [vmVal, extNum]);
-        await pool.query('UPDATE `asterisk`.`sip` SET data = "yes" WHERE id = ? AND keyword = "nat"', [extNum]);
+        for (const [kw, data, flags] of sipUpdates) {
+            await pool.query(`
+                INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE data = VALUES(data), flags = VALUES(flags)
+            `, [extNum, kw, data, flags]);
+        }
 
         if (isWebRTC) {
-            // Only update pjsip config secret if a new one was provided
             const pjsipSecret = extSecret || (await getCurrentPjsipSecret(extNum));
             updatePjsipCustomConfig(extNum, pjsipSecret, displayName || extNum, 'create');
-            reloadPjsip();
+        } else {
+            updatePjsipCustomConfig(extNum, '', '', 'delete');
         }
+        reloadPjsip();
+
+        sipPresence[extNum] = false;
+        pjsipPresence[extNum] = false;
+        delete pendingOffline[extNum];
 
         await setExtensionAstdbDefaults(extNum, displayName || extNum, vmVal, devTech);
         reloadPbxConfig();
