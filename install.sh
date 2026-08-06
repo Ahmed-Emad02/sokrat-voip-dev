@@ -792,8 +792,13 @@ echo "  Service enabled and started"
 echo ""
 echo "[13/14] Setting timezone to Africa/Cairo..."
 timedatectl set-timezone Africa/Cairo 2>/dev/null && echo "  Timezone set to Africa/Cairo" || echo "  Warning: Could not set timezone (timedatectl may not be available)"
+if [ -f /etc/php.ini ]; then
+    sed -i 's@^;\?date\.timezone =.*@date.timezone = "Africa/Cairo"@' /etc/php.ini
+    systemctl restart httpd 2>/dev/null || true
+    systemctl restart php-fpm 2>/dev/null || true
+    echo "  PHP timezone set to Africa/Cairo in /etc/php.ini"
+fi
 echo "  Current timezone: $(timedatectl 2>/dev/null | grep 'Time zone' || echo 'N/A')"
-
 # ──────────────────────────────────────────────
 # Step 14 — Verify
 # ──────────────────────────────────────────────
