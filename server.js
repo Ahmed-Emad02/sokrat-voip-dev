@@ -3751,6 +3751,76 @@ app.post('/api/hijack', (req, res) => {
     }
 });
 
+// POST /api/intercom/call - Originate instant intercom meeting call to selected available extensions
+app.post('/api/intercom/call', requireAuth, async (req, res) => {
+    try {
+        const { callerExtension, targetExtensions } = req.body;
+        const caller = String(callerExtension || '').trim();
+        const rawTargets = Array.isArray(targetExtensions) ? targetExtensions : [];
+
+        if (!caller || !/^\d{2,5}$/.test(caller)) {
+            return res.status(400).json({ success: false, error: 'Valid caller extension is required.' });
+        }
+        if (rawTargets.length === 0) {
+            return res.status(400).json({ success: false, error: 'At least one target extension must be selected.' });
+        }
+
+        // Filter targets: must be online, NOT in active call, NOT ringing
+        const validTargets = [];
+        for (const tExt of rawTargets) {
+            const extStr = String(tExt || '').trim();
+            if (!/^\d{2,5}$/.test(extStr)) continue;
+            if (extStr === caller) continue;
+
+            const isOnline = Boolean(peerStatus[extStr]);
+            const liveCall = activeCalls[extStr];
+            const isBusy = liveCall && (liveCall.state === 'In Call' || liveCall.state === 'Ringing');
+
+            if (isOnline && !isBusy) {
+                validTargets.push(extStr);
+            }
+        }
+
+        if (validTargets.length === 0) {
+            return res.status(400).json({ success: false, error: 'No available target extensions selected (must be online and not in call/ringing).' });
+        }
+
+        // Generate dynamic 8-digit numeric room ID (matches _X. in from-intercom-conf)
+        const roomId = '88' + String(Date.now()).slice(-6);
+
+        // Originate Host Caller to join conference room
+        const hostChan = `Local/${caller}@from-intercom-autoanswer`;
+        if (amiClient) {
+            amiClient.write(`Action: Originate\r\nChannel: ${hostChan}\r\nContext: from-intercom-conf\r\nExten: ${roomId}\r\nPriority: 1\r\nVariable: INTERCOM_CALLER=${caller}\r\nCallerID: "Intercom Host" <${caller}>\r\nAsync: true\r\n\r\n`);
+        } else {
+            exec(`${ASTERISK_BIN} -rx "channel originate ${hostChan} extension ${roomId}@from-intercom-conf"`, () => {});
+        }
+
+        // Originate each target extension to join conference room
+        const originatedList = [];
+        for (const targetExt of validTargets) {
+            const targetChan = `Local/${targetExt}@from-intercom-autoanswer`;
+            if (amiClient) {
+                amiClient.write(`Action: Originate\r\nChannel: ${targetChan}\r\nContext: from-intercom-conf\r\nExten: ${roomId}\r\nPriority: 1\r\nVariable: INTERCOM_CALLER=${caller}\r\nCallerID: "Intercom ${caller}" <${caller}>\r\nAsync: true\r\n\r\n`);
+            } else {
+                exec(`${ASTERISK_BIN} -rx "channel originate ${targetChan} extension ${roomId}@from-intercom-conf"`, () => {});
+            }
+            originatedList.push(targetExt);
+        }
+
+        res.json({
+            success: true,
+            roomId: roomId,
+            caller: caller,
+            invitedCount: originatedList.length,
+            targets: originatedList,
+            message: `Intercom meeting started in room ${roomId} with ${originatedList.length} extension(s).`
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // --- ROUTE 3: DEDICATED LIVE OPERATOR PANEL VIEW ---
 app.get('/operator', (req, res) => {
     try {
