@@ -9319,6 +9319,8 @@ function isTabAllowed(tabName) {
 
             const startDate = startInput ? startInput.value : '';
             const endDate = endInput ? endInput.value : '';
+            const dongleId = dongleSelect ? dongleSelect.value : 'ALL';
+            const simNumber = simSelect ? simSelect.value : 'ALL';
 
             summaryContainer.innerHTML = `<div class="col-span-full text-center text-xs text-[var(--text-muted)] py-4">${isRtl ? 'جاري تحميل تفاصيل التقرير...' : 'Loading state duration report metrics...'}</div>`;
             tablesContainer.innerHTML = '';
