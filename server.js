@@ -2533,7 +2533,18 @@ app.get('/', async (req, res) => {
 
         const [rows] = await pool.query(`SELECT src, dst, billsec, REPLACE(disposition, 'CONGESTION', 'FAILED') as disposition, channel, dstchannel, calldate FROM ${tables.cdr} WHERE calldate BETWEEN ? AND ? AND dst NOT IN ('ussd','sms','report','s')`, [startDate, endDate]);
 
-        const stats = { totalCalls: 0, inboundCount: 0, outboundCount: 0, inboundMin: 0, outboundMin: 0, answeredCalls: 0 };
+        const stats = {
+            totalCalls: 0,
+            inboundCount: 0,
+            outboundCount: 0,
+            inboundMin: 0,
+            outboundMin: 0,
+            answeredCalls: 0,
+            noAnswerCalls: 0,
+            busyCalls: 0,
+            failedCalls: 0,
+            totalTalkSec: 0
+        };
         const employeeMetrics = {};
         res.locals.roster.forEach(emp => {
             employeeMetrics[emp.extension] = { extension: emp.extension, name: emp.name, totalCalls: 0, totalTalkSec: 0, uniqueNumbers: new Set() };
@@ -2544,7 +2555,17 @@ app.get('/', async (req, res) => {
             const sec = parseInt(row.billsec) || 0;
             const isOutbound = isOutboundCdr(row);
 
-            if (row.disposition === 'ANSWERED') stats.answeredCalls++;
+            const disp = row.disposition;
+            if (disp === 'ANSWERED') {
+                stats.answeredCalls++;
+                stats.totalTalkSec += sec;
+            } else if (disp === 'NO ANSWER') {
+                stats.noAnswerCalls++;
+            } else if (disp === 'BUSY') {
+                stats.busyCalls++;
+            } else if (disp === 'FAILED' || disp === 'CONGESTION') {
+                stats.failedCalls++;
+            }
 
             let counted = false;
             [row.src, row.dst].forEach((ext, idx) => {
@@ -2567,7 +2588,8 @@ app.get('/', async (req, res) => {
 
         stats.inboundMin = Math.round(stats.inboundMin / 60);
         stats.outboundMin = Math.round(stats.outboundMin / 60);
-
+        stats.totalTalkMin = Math.round(stats.totalTalkSec / 60);
+        stats.avgTalkSec = stats.answeredCalls ? Math.round(stats.totalTalkSec / stats.answeredCalls) : 0;
         // --- Chart Data ---
         const trendMap = {};
         const dispCounts = {};

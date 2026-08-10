@@ -8,7 +8,10 @@ const words = {
         totalCalls: "Total Calls", answeredCalls: "Answered",
         inbound: "Inbound", outbound: "Outbound",
         answerRate: "Answer Rate", airMinutes: "air minutes",
-        min: "min",
+        min: "min", sec: "s",
+        noAnswer: "No Answer / Missed", busy: "Busy Calls",
+        failed: "Failed / Congestion", totalAirtime: "Total Talk Time",
+        avgDuration: "Avg Call Duration",
         chartTrend: "Call Volume Trend",
         chartDisposition: "Call Disposition",
         chartHourly: "Hourly Call Distribution",
@@ -34,7 +37,10 @@ const words = {
         totalCalls: "إجمالي المكالمات", answeredCalls: "تم الرد",
         inbound: "وارد", outbound: "صادر",
         answerRate: "نسبة الرد", airMinutes: "دقيقة اتصال",
-        min: "د",
+        min: "د", sec: "ث",
+        noAnswer: "لم يتم الرد / فائتة", busy: "مشغول",
+        failed: "فاشلة / ازدحام", totalAirtime: "إجمالي زمن المحادثات",
+        avgDuration: "متوسط مدة المكالمة",
         chartTrend: "اتجاه حجم المكالمات",
         chartDisposition: "تصنيف المكالمات",
         chartHourly: "توزيع المكالمات بالساعة",
@@ -397,6 +403,91 @@ const isRtl = currentLang === 'ar';
                     </div>
                     <span class="text-[10px] font-bold text-zinc-500"><%= Math.round(stats.inboundMin + stats.outboundMin) %> <%= t.min %></span>
                 </div>
+            </a>
+        </div>
+
+        <!-- Additional Metrics Row: Dispositions & Durations -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 shrink-0">
+            <!-- Card 6: No Answer / Missed Calls -->
+            <a href="<%= baseUrl %>&statusFilter=NO ANSWER&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات الفائتة في سجل الاتصالات' : 'View missed / no answer calls in Call History' %>"
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-rose-500 hover:shadow-lg hover:shadow-rose-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.noAnswer %></p>
+                    <svg class="w-3.5 h-3.5 text-zinc-600 group-hover:text-rose-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
+                    </svg>
+                </div>
+                <p class="text-3xl font-black text-white mt-1"><%= stats.noAnswerCalls %></p>
+                <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
+                    <div class="h-full bg-rose-500 rounded-full transition-all duration-500" style="width: <%= stats.totalCalls ? (stats.noAnswerCalls / stats.totalCalls) * 100 : 0 %>%"></div>
+                </div>
+            </a>
+
+            <!-- Card 7: Busy Calls -->
+            <a href="<%= baseUrl %>&statusFilter=BUSY&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات المشغولة في سجل الاتصالات' : 'View busy calls in Call History' %>"
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.busy %></p>
+                    <svg class="w-3.5 h-3.5 text-zinc-600 group-hover:text-amber-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
+                    </svg>
+                </div>
+                <p class="text-3xl font-black text-white mt-1"><%= stats.busyCalls %></p>
+                <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
+                    <div class="h-full bg-amber-500 rounded-full transition-all duration-500" style="width: <%= stats.totalCalls ? (stats.busyCalls / stats.totalCalls) * 100 : 0 %>%"></div>
+                </div>
+            </a>
+
+            <!-- Card 8: Failed Calls -->
+            <a href="<%= baseUrl %>&statusFilter=FAILED&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات الفاشلة في سجل الاتصالات' : 'View failed calls in Call History' %>"
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-red-600 hover:shadow-lg hover:shadow-red-600/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.failed %></p>
+                    <svg class="w-3.5 h-3.5 text-zinc-600 group-hover:text-red-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
+                    </svg>
+                </div>
+                <p class="text-3xl font-black text-white mt-1"><%= stats.failedCalls %></p>
+                <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
+                    <div class="h-full bg-red-600 rounded-full transition-all duration-500" style="width: <%= stats.totalCalls ? (stats.failedCalls / stats.totalCalls) * 100 : 0 %>%"></div>
+                </div>
+            </a>
+
+            <!-- Card 9: Total Talk Time -->
+            <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض تفاصيل أوقات المكالمات في سجل الاتصالات' : 'View total talk time details in Call History' %>"
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-cyan-500 hover:shadow-lg hover:shadow-cyan-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.totalAirtime %></p>
+                    <svg class="w-3.5 h-3.5 text-zinc-600 group-hover:text-cyan-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
+                    </svg>
+                </div>
+                <p class="text-3xl font-black text-white mt-1"><%= stats.totalTalkMin %> <span class="text-xs font-bold text-cyan-400"><%= t.min %></span></p>
+                <p class="text-xs font-bold text-cyan-400/80 mt-1"><%= Math.round(stats.totalTalkSec) %> <%= t.sec %> <%= isRtl ? 'إجمالي المحادثات' : 'total duration' %></p>
+            </a>
+
+            <!-- Card 10: Avg Call Duration -->
+            <%
+                const avgSec = stats.avgTalkSec || 0;
+                const avgFormatted = avgSec >= 60 
+                    ? `${Math.floor(avgSec / 60)} ${t.min} ${avgSec % 60} ${t.sec}` 
+                    : `${avgSec} ${t.sec}`;
+            %>
+            <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض تفاصيل مدة المكالمات في سجل الاتصالات' : 'View average call duration details in Call History' %>"
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.avgDuration %></p>
+                    <svg class="w-3.5 h-3.5 text-zinc-600 group-hover:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
+                    </svg>
+                </div>
+                <p class="text-2xl sm:text-3xl font-black text-white mt-1"><%= avgFormatted %></p>
+                <p class="text-xs font-bold text-indigo-400/80 mt-1"><%= isRtl ? 'لكل مكالمة مجابة' : 'per answered call' %></p>
             </a>
         </div>
 
