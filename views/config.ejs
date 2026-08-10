@@ -9144,6 +9144,35 @@ function isTabAllowed(tabName) {
                     const isDongle = String(ch.channel || '').startsWith('Dongle/');
                     const naText = isDongle ? 'N/A (GSM Direct)' : 'N/A (Non-RTP)';
 
+                    const jitterText = hasJitter ? `${ch.jitterMs} ms` : naText;
+                    const lossText = hasLoss ? `${ch.packetLoss}%` : naText;
+                    const rttText = hasRtt ? `${ch.rttMs} ms` : naText;
+
+                    const neutralClass = 'text-[var(--text-muted)] bg-[var(--bg-card)] border-[var(--border-primary)]';
+                    const jitterClass = !hasJitter ? neutralClass : (ch.jitterMs < 20 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : (ch.jitterMs < 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'));
+                    const lossClass = !hasLoss ? neutralClass : (ch.packetLoss === 0 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : (ch.packetLoss < 3 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'));
+                    const rttClass = !hasRtt ? neutralClass : (ch.rttMs < 100 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : (ch.rttMs < 200 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'));
+
+                    html += `
+                        <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-primary)]/40 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono font-black text-sm text-[var(--text-primary)]">${escapeHtml(ch.extension)}</span>
+                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">${escapeHtml(ch.state)}</span>
+                                </div>
+                                <div class="font-mono text-[11px] text-[var(--text-muted)] truncate max-w-md">${escapeHtml(ch.channel)} • Duration: ${escapeHtml(ch.duration)}</div>
+                            </div>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono">
+                                <div class="px-3 py-1.5 rounded-lg border ${jitterClass}"><span class="text-[10px] block opacity-70">JITTER</span><span class="font-bold">${jitterText}</span></div>
+                                <div class="px-3 py-1.5 rounded-lg border ${lossClass}"><span class="text-[10px] block opacity-70">LOSS</span><span class="font-bold">${lossText}</span></div>
+                                <div class="px-3 py-1.5 rounded-lg border ${rttClass}"><span class="text-[10px] block opacity-70">RTT</span><span class="font-bold">${rttText}</span></div>
+                                <div class="px-3 py-1.5 rounded-lg border text-sky-400 bg-sky-500/10 border-sky-500/20"><span class="text-[10px] block opacity-70">FORMAT</span><span class="font-bold">${escapeHtml(ch.format)}</span></div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
             } catch (e) {
                 container.innerHTML = `<div class="text-center py-6 text-xs text-red-400">Error fetching RTCP diagnostics: ${escapeHtml(e.message)}</div>`;
             }
