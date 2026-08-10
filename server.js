@@ -202,6 +202,22 @@ async function initAuthDb() {
             KEY idx_imei (imei)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS dongle_state_logs (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            dongle_name VARCHAR(50) NOT NULL,
+            sim_number VARCHAR(50) DEFAULT NULL,
+            imsi VARCHAR(30) DEFAULT NULL,
+            imei VARCHAR(30) DEFAULT NULL,
+            state VARCHAR(50) NOT NULL,
+            started_at DATETIME NOT NULL,
+            ended_at DATETIME DEFAULT NULL,
+            duration_sec INT DEFAULT 0,
+            KEY idx_dongle_start (dongle_name, started_at),
+            KEY idx_sim_start (sim_number, started_at),
+            KEY idx_state (state)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
     try { await conn.execute('ALTER TABLE gsm_dongles ADD COLUMN dynamic_enabled TINYINT(1) NOT NULL DEFAULT 0'); } catch (_) {}
     try { await conn.execute('UPDATE gsm_dongles SET dynamic_enabled = 0 WHERE dynamic_enabled IS NULL'); } catch (_) {}
     try { await conn.execute('ALTER TABLE gsm_dongles MODIFY dynamic_enabled TINYINT(1) NOT NULL DEFAULT 0'); } catch (_) {}
@@ -1824,16 +1840,57 @@ async function applyDongleHotplugMappingDefaults() {
 }
 
 
+const lastKnownDongleStates = {};
+
+async function recordDongleStateLog(dongleName, state, simNumber = null, imsi = null, imei = null) {
+    if (!dongleName || !state) return;
+    const safeName = String(dongleName).trim().toLowerCase();
+    const safeState = String(state).trim();
+
+    if (lastKnownDongleStates[safeName] === safeState) return;
+    lastKnownDongleStates[safeName] = safeState;
+
+    try {
+        await pool.query(
+            `UPDATE \`asterisk\`.\`dongle_state_logs\`
+             SET ended_at = NOW(),
+                 duration_sec = GREATEST(0, TIMESTAMPDIFF(SECOND, started_at, NOW()))
+             WHERE dongle_name = ? AND ended_at IS NULL`,
+            [safeName]
+        );
+        await pool.query(
+            `INSERT INTO \`asterisk\`.\`dongle_state_logs\`
+             (dongle_name, sim_number, imsi, imei, state, started_at)
+             VALUES (?, ?, ?, ?, ?, NOW())`,
+            [safeName, simNumber || null, imsi || null, imei || null, safeState]
+        );
+    } catch (err) {
+        console.error(`DONGLE-STATE-LOG: Error recording state for ${safeName}:`, err.message);
+    }
+}
+
 function autoHealDongles() {
     applyDongleHotplugMappingDefaults();
     getDevicesOutputCached((err, stdout) => {
         if (err || !stdout) return;
         const devices = parseDevicesOutput(stdout, true);
         const now = Date.now();
+
+        const activeDongleIds = new Set();
         for (const dev of devices) {
-            const id = dev.ID;
-            const state = (dev.State || '').toLowerCase();
-            if (state.includes('not initia')) {
+            const id = (dev.ID || '').toLowerCase();
+            if (!id || !id.startsWith('dongle')) continue;
+            activeDongleIds.add(id);
+
+            const rawState = String(dev.State || 'Unknown').trim();
+            const number = String(dev.Number || '').trim();
+            const imsi = String(dev.IMSI || '').trim();
+            const imei = String(dev.IMEI || '').trim();
+
+            recordDongleStateLog(id, rawState, number || null, imsi || null, imei || null);
+
+            const stateLower = rawState.toLowerCase();
+            if (stateLower.includes('not initia')) {
                 if (!dongleNotInitTimestamps[id]) {
                     dongleNotInitTimestamps[id] = now;
                 } else if (now - dongleNotInitTimestamps[id] >= 3000 && !dongleRestartedOnce[id]) {
@@ -1846,11 +1903,20 @@ function autoHealDongles() {
                 delete dongleRestartedOnce[id];
             }
         }
+
+        try {
+            const configuredDongles = parseDongleConfGain().dongles;
+            for (const dName of Object.keys(configuredDongles)) {
+                const safeName = dName.toLowerCase();
+                if (!activeDongleIds.has(safeName)) {
+                    recordDongleStateLog(safeName, 'Not connected');
+                }
+            }
+        } catch (_) {}
     });
 }
 setInterval(autoHealDongles, 3000);
 applyDongleHotplugMappingDefaults();
-
 
 
 app.use(async (req, res, next) => {
@@ -8048,6 +8114,173 @@ app.get('/api/config/modem', async (req, res) => {
             }
         } catch (_) {}
         res.json({ success: true, defaults, dongles });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET /api/config/modem/reports - Detailed Dongle & SIM state duration reports
+app.get('/api/config/modem/reports', async (req, res) => {
+    try {
+        const startStr = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+        const endStr = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+        const filterDongle = (req.query.dongleId && req.query.dongleId !== 'ALL') ? String(req.query.dongleId).trim().toLowerCase() : null;
+        const filterSim = (req.query.simNumber && req.query.simNumber !== 'ALL') ? String(req.query.simNumber).trim() : null;
+
+        const winStartMs = moment(startStr).valueOf();
+        const winEndMs = moment(endStr).valueOf();
+        const totalWinSec = Math.max(1, Math.floor((winEndMs - winStartMs) / 1000));
+
+        let sql = `
+            SELECT dongle_name, sim_number, imsi, imei, state,
+                   started_at, COALESCE(ended_at, NOW()) as ended_at
+            FROM \`asterisk\`.\`dongle_state_logs\`
+            WHERE started_at <= ? AND (ended_at IS NULL OR ended_at >= ?)
+        `;
+        const queryParams = [endStr, startStr];
+
+        if (filterDongle) {
+            sql += ` AND LOWER(dongle_name) = ?`;
+            queryParams.push(filterDongle);
+        }
+        if (filterSim) {
+            sql += ` AND (sim_number = ? OR imsi = ? OR imei = ?)`;
+            queryParams.push(filterSim, filterSim, filterSim);
+        }
+
+        sql += ` ORDER BY started_at ASC`;
+        const [logs] = await pool.query(sql, queryParams);
+
+        // Fetch CDR statistics for dongles in timeframe
+        const [cdrRows] = await pool.query(`
+            SELECT channel, dstchannel, billsec, disposition, calldate
+            FROM ${tables.cdr}
+            WHERE calldate BETWEEN ? AND ?
+              AND (channel LIKE 'Dongle/%' OR dstchannel LIKE 'Dongle/%')
+        `, [startStr, endStr]);
+
+        const dongleCdrMap = {};
+        cdrRows.forEach(row => {
+            const mSrc = (row.channel || '').match(/dongle\/(dongle\d+)/i);
+            const mDst = (row.dstchannel || '').match(/dongle\/(dongle\d+)/i);
+            const dId = (mSrc && mSrc[1] ? mSrc[1] : (mDst && mDst[1] ? mDst[1] : '')).toLowerCase();
+            if (dId) {
+                dongleCdrMap[dId] = dongleCdrMap[dId] || { totalCalls: 0, answeredCalls: 0, talkSec: 0 };
+                dongleCdrMap[dId].totalCalls++;
+                if (row.disposition === 'ANSWERED') {
+                    dongleCdrMap[dId].answeredCalls++;
+                    dongleCdrMap[dId].talkSec += (parseInt(row.billsec) || 0);
+                }
+            }
+        });
+
+        // Group State Durations by Dongle & SIM
+        const dongleStats = {};
+        const simStats = {};
+        const globalStateSec = { Free: 0, Busy: 0, 'Not Initialized': 0, 'Not connected': 0, Other: 0 };
+
+        logs.forEach(log => {
+            const dName = (log.dongle_name || 'unknown').toLowerCase();
+            const simNum = log.sim_number || log.imsi || 'Unknown SIM';
+            const stateRaw = String(log.state || 'Unknown').trim();
+
+            let stateKey = 'Other';
+            if (/free|ready|idle/i.test(stateRaw)) stateKey = 'Free';
+            else if (/busy|dial|ring|active|held|call/i.test(stateRaw)) stateKey = 'Busy';
+            else if (/not init|init|error/i.test(stateRaw)) stateKey = 'Not Initialized';
+            else if (/not conn|disconnect|removed/i.test(stateRaw)) stateKey = 'Not connected';
+
+            const logStartMs = Math.max(winStartMs, moment(log.started_at).valueOf());
+            const logEndMs = Math.min(winEndMs, moment(log.ended_at).valueOf());
+            const durSec = Math.max(0, Math.floor((logEndMs - logStartMs) / 1000));
+
+            globalStateSec[stateKey] = (globalStateSec[stateKey] || 0) + durSec;
+
+            if (!dongleStats[dName]) {
+                dongleStats[dName] = {
+                    dongle_name: dName,
+                    sim_number: log.sim_number || 'Unknown',
+                    imsi: log.imsi || '',
+                    imei: log.imei || '',
+                    statesSec: { Free: 0, Busy: 0, 'Not Initialized': 0, 'Not connected': 0, Other: 0 },
+                    totalLoggedSec: 0
+                };
+            }
+            if (log.sim_number && dongleStats[dName].sim_number === 'Unknown') {
+                dongleStats[dName].sim_number = log.sim_number;
+            }
+            if (log.imsi && !dongleStats[dName].imsi) dongleStats[dName].imsi = log.imsi;
+            if (log.imei && !dongleStats[dName].imei) dongleStats[dName].imei = log.imei;
+
+            dongleStats[dName].statesSec[stateKey] = (dongleStats[dName].statesSec[stateKey] || 0) + durSec;
+            dongleStats[dName].totalLoggedSec += durSec;
+
+            if (!simStats[simNum]) {
+                simStats[simNum] = {
+                    sim_number: simNum,
+                    dongle_name: dName,
+                    imsi: log.imsi || '',
+                    statesSec: { Free: 0, Busy: 0, 'Not Initialized': 0, 'Not connected': 0, Other: 0 },
+                    totalLoggedSec: 0
+                };
+            }
+            simStats[simNum].statesSec[stateKey] = (simStats[simNum].statesSec[stateKey] || 0) + durSec;
+            simStats[simNum].totalLoggedSec += durSec;
+        });
+
+        const formatDuration = (sec) => {
+            if (!sec || sec <= 0) return '0s';
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const s = sec % 60;
+            const parts = [];
+            if (h > 0) parts.push(`${h}h`);
+            if (m > 0 || h > 0) parts.push(`${m}m`);
+            parts.push(`${s}s`);
+            return parts.join(' ');
+        };
+
+        const formatReportList = (mapObj, isDongle = true) => {
+            return Object.values(mapObj).map(item => {
+                const totalSec = Math.max(1, item.totalLoggedSec || totalWinSec);
+                const cdr = isDongle ? (dongleCdrMap[item.dongle_name] || { totalCalls: 0, answeredCalls: 0, talkSec: 0 }) : { totalCalls: 0, answeredCalls: 0, talkSec: 0 };
+                const statesFormatted = {};
+                for (const [sKey, sSec] of Object.entries(item.statesSec)) {
+                    statesFormatted[sKey] = {
+                        sec: sSec,
+                        formatted: formatDuration(sSec),
+                        pct: Math.round((sSec / totalSec) * 1000) / 10
+                    };
+                }
+                const readySec = (item.statesSec.Free || 0) + (item.statesSec.Busy || 0);
+                const uptimePct = Math.round((readySec / totalSec) * 1000) / 10;
+                return {
+                    ...item,
+                    states: statesFormatted,
+                    totalCalls: cdr.totalCalls,
+                    answeredCalls: cdr.answeredCalls,
+                    talkSec: cdr.talkSec,
+                    talkMin: Math.round(cdr.talkSec / 60),
+                    uptimePct
+                };
+            });
+        };
+
+        const dongleReportsList = formatReportList(dongleStats, true);
+        const simReportsList = formatReportList(simStats, false);
+
+        res.json({
+            success: true,
+            timeframe: { startDate: startStr, endDate: endStr, totalWindowSec: totalWinSec, formattedWindow: formatDuration(totalWinSec) },
+            globalSummary: {
+                Free: { sec: globalStateSec.Free, formatted: formatDuration(globalStateSec.Free), pct: Math.round((globalStateSec.Free / (totalWinSec * Math.max(1, Object.keys(dongleStats).length))) * 1000) / 10 },
+                Busy: { sec: globalStateSec.Busy, formatted: formatDuration(globalStateSec.Busy), pct: Math.round((globalStateSec.Busy / (totalWinSec * Math.max(1, Object.keys(dongleStats).length))) * 1000) / 10 },
+                'Not Initialized': { sec: globalStateSec['Not Initialized'], formatted: formatDuration(globalStateSec['Not Initialized']), pct: Math.round((globalStateSec['Not Initialized'] / (totalWinSec * Math.max(1, Object.keys(dongleStats).length))) * 1000) / 10 },
+                'Not connected': { sec: globalStateSec['Not connected'], formatted: formatDuration(globalStateSec['Not connected']), pct: Math.round((globalStateSec['Not connected'] / (totalWinSec * Math.max(1, Object.keys(dongleStats).length))) * 1000) / 10 }
+            },
+            dongleReports: dongleReportsList,
+            simReports: simReportsList
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

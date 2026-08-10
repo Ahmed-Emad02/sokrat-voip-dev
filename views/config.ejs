@@ -1478,6 +1478,77 @@ function isTabAllowed(tabName) {
                     <!-- Rendered dynamically by fetchRtcpDiagnostics() -->
                 </div>
             </div>
+
+            <!-- Dongle & SIM State Duration Reports Panel -->
+            <div class="config-card overflow-hidden">
+                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)]">
+                    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'تقارير مدة حالات المودم والشرائح' : 'Dongle & SIM State Duration Reports' %></h3>
+                                <p class="text-xs text-[var(--text-muted)] mt-1"><%= isRtl ? 'تحليل الزمن المستغرق لكل مودم وشريحة في كل حالة (جاهز، في مكالمة، غير مهيأ، غير متصل).' : 'Track exact duration spent in each state (Free, Busy, Not Initialized, Disconnected) per Dongle and SIM Number.' %></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters Bar -->
+                <div class="p-4 sm:px-6 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/25 space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1"><%= isRtl ? 'من تاريخ/وقت' : 'Start Time' %></label>
+                            <input type="datetime-local" id="dongleReportStartDate" class="config-input w-full text-xs font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1"><%= isRtl ? 'إلى تاريخ/وقت' : 'End Time' %></label>
+                            <input type="datetime-local" id="dongleReportEndDate" class="config-input w-full text-xs font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1"><%= isRtl ? 'المودم' : 'Dongle' %></label>
+                            <select id="dongleReportDongleSelect" class="config-input w-full text-xs font-mono">
+                                <option value="ALL"><%= isRtl ? 'جميع الأجهزة (ALL)' : 'All Dongles (ALL)' %></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1"><%= isRtl ? 'رقم الشريحة (DID)' : 'SIM Number (DID)' %></label>
+                            <select id="dongleReportSimSelect" class="config-input w-full text-xs font-mono">
+                                <option value="ALL"><%= isRtl ? 'جميع الشرائح (ALL)' : 'All SIM Numbers (ALL)' %></option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="text-[11px] font-bold text-[var(--text-secondary)] me-1"><%= isRtl ? 'فترات سريعة:' : 'Quick Presets:' %></span>
+                            <button type="button" onclick="setDongleReportPreset('today')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= isRtl ? 'اليوم' : 'Today' %></button>
+                            <button type="button" onclick="setDongleReportPreset('yesterday')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= isRtl ? 'الأمس' : 'Yesterday' %></button>
+                            <button type="button" onclick="setDongleReportPreset('7days')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= isRtl ? 'آخر 7 أيام' : 'Last 7 Days' %></button>
+                            <button type="button" onclick="setDongleReportPreset('30days')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= isRtl ? 'آخر 30 يوماً' : 'Last 30 Days' %></button>
+                        </div>
+
+                        <button type="button" onclick="fetchDongleStateReports()" class="config-action-btn config-action-btn--primary px-4 py-2 text-xs cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <span><%= isRtl ? 'توليد التقرير' : 'Generate Report' %></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Report Summary Cards & Detailed Tables -->
+                <div class="p-5 sm:p-6 space-y-6">
+                    <div id="dongleReportSummaryContainer" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <!-- Summary metrics populated dynamically -->
+                    </div>
+
+                    <div id="dongleReportTablesContainer" class="space-y-6">
+                        <!-- Reports tables populated dynamically -->
+                    </div>
+                </div>
+            </div>
         </div>
         <% } %>
 
@@ -8838,6 +8909,10 @@ function isTabAllowed(tabName) {
                     return;
                 }
 
+                // Populate Dongle and SIM selects for reports
+                populateDongleReportFilterSelects(data.dongles);
+
+                grid.innerHTML = '';
                 const dongleIds = Object.keys(data.dongles);
                 if (countBadge) {
                     countBadge.textContent = `${dongleIds.length} ${isRtl ? 'أجهزة' : (dongleIds.length === 1 ? 'device' : 'devices')}`;
@@ -9036,6 +9111,8 @@ function isTabAllowed(tabName) {
                     return;
                 }
 
+                fetchDongleStateReports();
+
                 if (badge) badge.textContent = `${data.activeCount || 0} Active Streams`;
 
                 if (!data.channels || data.channels.length === 0) {
@@ -9067,40 +9144,229 @@ function isTabAllowed(tabName) {
                     const isDongle = String(ch.channel || '').startsWith('Dongle/');
                     const naText = isDongle ? 'N/A (GSM Direct)' : 'N/A (Non-RTP)';
 
-                    const jitterText = hasJitter ? `${ch.jitterMs} ms` : naText;
-                    const lossText = hasLoss ? `${ch.packetLoss}%` : naText;
-                    const rttText = hasRtt ? `${ch.rttMs} ms` : naText;
-
-                    const neutralClass = 'text-[var(--text-muted)] bg-[var(--bg-card)] border-[var(--border-primary)]';
-                    const jitterClass = !hasJitter ? neutralClass : (ch.jitterMs < 20 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : (ch.jitterMs < 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'));
-
-                    const lossClass = !hasLoss ? neutralClass : (ch.packetLoss === 0 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : (ch.packetLoss < 3 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'));
-
-                    const rttClass = !hasRtt ? neutralClass : (ch.rttMs < 100 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : (ch.rttMs < 200 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'));
-                    html += `
-                        <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-primary)]/40 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-                            <div class="space-y-1">
-                                <div class="flex items-center gap-2">
-                                    <span class="font-mono font-black text-sm text-[var(--text-primary)]">${escapeHtml(ch.extension)}</span>
-                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">${escapeHtml(ch.state)}</span>
-                                </div>
-                                <div class="font-mono text-[11px] text-[var(--text-muted)] truncate max-w-md">${escapeHtml(ch.channel)} • Duration: ${escapeHtml(ch.duration)}</div>
-                            </div>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono">
-                                <div class="px-3 py-1.5 rounded-lg border ${jitterClass}"><span class="text-[10px] block opacity-70">JITTER</span><span class="font-bold">${jitterText}</span></div>
-                                <div class="px-3 py-1.5 rounded-lg border ${lossClass}"><span class="text-[10px] block opacity-70">LOSS</span><span class="font-bold">${lossText}</span></div>
-                                <div class="px-3 py-1.5 rounded-lg border ${rttClass}"><span class="text-[10px] block opacity-70">RTT</span><span class="font-bold">${rttText}</span></div>
-                                <div class="px-3 py-1.5 rounded-lg border text-sky-400 bg-sky-500/10 border-sky-500/20"><span class="text-[10px] block opacity-70">FORMAT</span><span class="font-bold">${escapeHtml(ch.format)}</span></div>
-                            </div>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-                container.innerHTML = html;
             } catch (e) {
-                container.innerHTML = `<div class="text-center py-6 text-xs text-red-400">Error rendering RTCP diagnostics: ${escapeHtml(e.message)}</div>`;
+                container.innerHTML = `<div class="text-center py-6 text-xs text-red-400">Error fetching RTCP diagnostics: ${escapeHtml(e.message)}</div>`;
             }
         }
+        window.fetchRtcpDiagnostics = fetchRtcpDiagnostics;
+
+        function populateDongleReportFilterSelects(donglesObj) {
+            const dSelect = document.getElementById('dongleReportDongleSelect');
+            const sSelect = document.getElementById('dongleReportSimSelect');
+            if (!dSelect || !sSelect) return;
+
+            const currD = dSelect.value || 'ALL';
+            const currS = sSelect.value || 'ALL';
+
+            dSelect.innerHTML = `<option value="ALL">${isRtl ? 'جميع الأجهزة (ALL)' : 'All Dongles (ALL)'}</option>`;
+            sSelect.innerHTML = `<option value="ALL">${isRtl ? 'جميع الشرائح (ALL)' : 'All SIM Numbers (ALL)'}</option>`;
+
+            const simSet = new Set();
+            if (donglesObj) {
+                Object.keys(donglesObj).sort().forEach(dId => {
+                    const opt = document.createElement('option');
+                    opt.value = dId;
+                    opt.textContent = dId;
+                    dSelect.appendChild(opt);
+
+                    const dInfo = donglesObj[dId];
+                    if (dInfo && dInfo.phone_number) simSet.add(dInfo.phone_number);
+                });
+            }
+
+            simSet.forEach(num => {
+                const opt = document.createElement('option');
+                opt.value = num;
+                opt.textContent = num;
+                sSelect.appendChild(opt);
+            });
+
+            dSelect.value = currD;
+            sSelect.value = currS;
+        }
+
+        function setDongleReportPreset(preset) {
+            const startInput = document.getElementById('dongleReportStartDate');
+            const endInput = document.getElementById('dongleReportEndDate');
+            if (!startInput || !endInput) return;
+
+            const formatLocal = (m) => m.format('YYYY-MM-DDTHH:mm');
+
+            if (preset === 'today') {
+                startInput.value = formatLocal(moment().startOf('day'));
+                endInput.value = formatLocal(moment().endOf('day'));
+            } else if (preset === 'yesterday') {
+                startInput.value = formatLocal(moment().subtract(1, 'day').startOf('day'));
+                endInput.value = formatLocal(moment().subtract(1, 'day').endOf('day'));
+            } else if (preset === '7days') {
+                startInput.value = formatLocal(moment().subtract(6, 'days').startOf('day'));
+                endInput.value = formatLocal(moment().endOf('day'));
+            } else if (preset === '30days') {
+                startInput.value = formatLocal(moment().subtract(29, 'days').startOf('day'));
+                endInput.value = formatLocal(moment().endOf('day'));
+            }
+            fetchDongleStateReports();
+        }
+        window.setDongleReportPreset = setDongleReportPreset;
+
+        async function fetchDongleStateReports() {
+            const startInput = document.getElementById('dongleReportStartDate');
+            const endInput = document.getElementById('dongleReportEndDate');
+            const dongleSelect = document.getElementById('dongleReportDongleSelect');
+            const simSelect = document.getElementById('dongleReportSimSelect');
+
+            const summaryContainer = document.getElementById('dongleReportSummaryContainer');
+            const tablesContainer = document.getElementById('dongleReportTablesContainer');
+            if (!summaryContainer || !tablesContainer) return;
+
+            if (startInput && !startInput.value) startInput.value = moment().startOf('day').format('YYYY-MM-DDTHH:mm');
+            if (endInput && !endInput.value) endInput.value = moment().endOf('day').format('YYYY-MM-DDTHH:mm');
+
+            const startDate = startInput ? startInput.value : '';
+            const endDate = endInput ? endInput.value : '';
+            const dongleId = dongleSelect ? dongleSelect.value : 'ALL';
+            const simNumber = simSelect ? simSelect.value : 'ALL';
+
+            summaryContainer.innerHTML = `<div class="col-span-full text-center text-xs text-[var(--text-muted)] py-4">${isRtl ? 'جاري تحميل تفاصيل التقرير...' : 'Loading state duration report metrics...'}</div>`;
+            tablesContainer.innerHTML = '';
+
+            try {
+                const url = `/api/config/modem/reports?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&dongleId=${encodeURIComponent(dongleId)}&simNumber=${encodeURIComponent(simNumber)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (!data.success) {
+                    summaryContainer.innerHTML = `<div class="col-span-full text-center text-xs text-red-400 py-4">Error: ${escapeHtml(data.error)}</div>`;
+                    return;
+                }
+
+                const g = data.globalSummary || {};
+                summaryContainer.innerHTML = `
+                    <div class="panel-surface rounded-xl p-4 border border-[var(--border-primary)] bg-emerald-500/5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400">${isRtl ? 'جاهز / متاح' : 'Ready (Free)'}</span>
+                            <span class="text-xs font-mono font-bold text-emerald-400">${g.Free?.pct || 0}%</span>
+                        </div>
+                        <p class="text-xl font-black text-white mt-1 font-mono">${g.Free?.formatted || '0s'}</p>
+                        <p class="text-[11px] text-[var(--text-muted)] mt-0.5">${isRtl ? 'زمن الجاهزية لاستقبال واتصال المكالمات' : 'Ready to place & receive calls'}</p>
+                    </div>
+
+                    <div class="panel-surface rounded-xl p-4 border border-[var(--border-primary)] bg-blue-500/5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-400">${isRtl ? 'في مكالمة (مشغول)' : 'In Call (Busy)'}</span>
+                            <span class="text-xs font-mono font-bold text-blue-400">${g.Busy?.pct || 0}%</span>
+                        </div>
+                        <p class="text-xl font-black text-white mt-1 font-mono">${g.Busy?.formatted || '0s'}</p>
+                        <p class="text-[11px] text-[var(--text-muted)] mt-0.5">${isRtl ? 'زمن المحادثات النشطة' : 'Active talk / call duration'}</p>
+                    </div>
+
+                    <div class="panel-surface rounded-xl p-4 border border-[var(--border-primary)] bg-rose-500/5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-rose-400">${isRtl ? 'غير مهيأ / متوقف' : 'Not Initialized'}</span>
+                            <span class="text-xs font-mono font-bold text-rose-400">${g['Not Initialized']?.pct || 0}%</span>
+                        </div>
+                        <p class="text-xl font-black text-white mt-1 font-mono">${g['Not Initialized']?.formatted || '0s'}</p>
+                        <p class="text-[11px] text-[var(--text-muted)] mt-0.5">${isRtl ? 'زمن التوقف أو الخطأ' : 'Initializing/error status'}</p>
+                    </div>
+
+                    <div class="panel-surface rounded-xl p-4 border border-[var(--border-primary)] bg-amber-500/5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400">${isRtl ? 'غير متصل' : 'Disconnected'}</span>
+                            <span class="text-xs font-mono font-bold text-amber-400">${g['Not connected']?.pct || 0}%</span>
+                        </div>
+                        <p class="text-xl font-black text-white mt-1 font-mono">${g['Not connected']?.formatted || '0s'}</p>
+                        <p class="text-[11px] text-[var(--text-muted)] mt-0.5">${isRtl ? 'زمن عدم الاتصال بالسنترال' : 'Unattached USB device status'}</p>
+                    </div>
+                `;
+
+                let donglesHTML = `
+                    <div class="panel-surface rounded-2xl border border-[var(--border-primary)] overflow-hidden">
+                        <div class="px-5 py-3 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">${isRtl ? 'تقرير مدة حالات أجهزة المودم' : 'Per-Dongle State Duration Breakdown'}</h4>
+                            <span class="text-[10px] font-mono text-[var(--text-muted)]">${isRtl ? 'إجمالي النطاق الزمني:' : 'Window:'} ${escapeHtml(data.timeframe?.formattedWindow || '')}</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-[11px] font-bold text-[var(--text-secondary)] uppercase">
+                                        <th class="py-2.5 px-4">${isRtl ? 'الجهاز' : 'Dongle'}</th>
+                                        <th class="py-2.5 px-4">${isRtl ? 'رقم الشريحة' : 'SIM Number'}</th>
+                                        <th class="py-2.5 px-4">${isRtl ? 'جاهز (Free)' : 'Free (Ready)'}</th>
+                                        <th class="py-2.5 px-4">${isRtl ? 'مشغول (Busy)' : 'Busy (In Call)'}</th>
+                                        <th class="py-2.5 px-4">${isRtl ? 'غير مهيأ' : 'Not Initialized'}</th>
+                                        <th class="py-2.5 px-4">${isRtl ? 'غير متصل' : 'Disconnected'}</th>
+                                        <th class="py-2.5 px-4">${isRtl ? 'المكالمات / المحادثة' : 'Calls / Talk Time'}</th>
+                                        <th class="py-2.5 px-4 text-center">${isRtl ? 'نسبة الجاهزية' : 'Readiness Uptime'}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-[var(--border-primary)] text-xs font-mono">
+                `;
+
+                if (!data.dongleReports || data.dongleReports.length === 0) {
+                    donglesHTML += `<tr><td colspan="8" class="py-6 text-center text-[var(--text-muted)]">${isRtl ? 'لا توجد بيانات مسجلة في هذه الفترة الزمانية.' : 'No dongle state logs recorded in this timeframe.'}</td></tr>`;
+                } else {
+                    data.dongleReports.forEach(d => {
+                        const free = d.states?.Free || { formatted: '0s', pct: 0 };
+                        const busy = d.states?.Busy || { formatted: '0s', pct: 0 };
+                        const notInit = d.states?.['Not Initialized'] || { formatted: '0s', pct: 0 };
+                        const notConn = d.states?.['Not connected'] || { formatted: '0s', pct: 0 };
+                        const uptime = d.uptimePct || 0;
+
+                        donglesHTML += `
+                            <tr class="hover:bg-[var(--bg-hover)] transition-colors">
+                                <td class="py-3 px-4 font-bold text-white">${escapeHtml(d.dongle_name)}</td>
+                                <td class="py-3 px-4 text-blue-400 font-bold">${escapeHtml(d.sim_number || '-')}</td>
+                                <td class="py-3 px-4">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-emerald-400 font-bold">${free.formatted}</span>
+                                        <span class="text-[10px] text-zinc-500">(${free.pct}%)</span>
+                                    </div>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-blue-400 font-bold">${busy.formatted}</span>
+                                        <span class="text-[10px] text-zinc-500">(${busy.pct}%)</span>
+                                    </div>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-rose-400 font-bold">${notInit.formatted}</span>
+                                        <span class="text-[10px] text-zinc-500">(${notInit.pct}%)</span>
+                                    </div>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-amber-400 font-bold">${notConn.formatted}</span>
+                                        <span class="text-[10px] text-zinc-500">(${notConn.pct}%)</span>
+                                    </div>
+                                </td>
+                                <td class="py-3 px-4 text-zinc-300">
+                                    ${d.totalCalls || 0} ${isRtl ? 'مكالمة' : 'calls'} (${d.talkMin || 0} ${isRtl ? 'د' : 'min'})
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    <span class="px-2 py-0.5 text-[11px] font-bold rounded ${uptime >= 90 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' : uptime >= 60 ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20' : 'bg-rose-500/15 text-rose-400 border border-rose-500/20'}">
+                                        ${uptime}%
+                                    </span>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                donglesHTML += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+
+                tablesContainer.innerHTML = donglesHTML;
+
+            } catch (err) {
+                summaryContainer.innerHTML = `<div class="col-span-full text-center text-xs text-red-400 py-4">Failed to fetch dongle reports: ${escapeHtml(err.message)}</div>`;
+            }
+        }
+        window.fetchDongleStateReports = fetchDongleStateReports;
         let rtcpTimer = null;
         function startRtcpTimer() {
             stopRtcpTimer();
