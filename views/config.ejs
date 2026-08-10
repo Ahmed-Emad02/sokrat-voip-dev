@@ -4287,20 +4287,34 @@ function isTabAllowed(tabName) {
                 .catch(err => console.error(err));
         }
 
+        function getNextAvailableRingGroupNum() {
+            const existingNums = new Set((loadedRingGroupsList || []).map(rg => String(rg.grpnum)));
+            let candidate = 600;
+            while (existingNums.has(String(candidate))) {
+                candidate++;
+            }
+            return String(candidate);
+        }
+
         async function openRingGroupModal() {
             await ensureAllConfigListsLoaded();
             document.getElementById('rgModalTitle').textContent = isRtl ? 'إضافة مجموعة جديدة' : 'Add Ring Group';
             document.getElementById('rgEditMode').value = "false";
             document.getElementById('rgNum').disabled = false;
             document.getElementById('ringGroupForm').reset();
+
+            const num = getNextAvailableRingGroupNum();
+            document.getElementById('rgNum').value = num;
+
             populateAnnouncementsDropdown();
             populateMohRingGroupDropdown();
             document.getElementById('rgRinging').value = 'Ring';
             renderQuickPickPills();
 
-            const num = document.getElementById('rgNum').value.trim() || '600';
             const destVal = `ext-group,${num},1`;
             document.getElementById('rgPostDestination').value = destVal;
+            const noticeNumEl = document.getElementById('rgPostDestCreateNoticeNum');
+            if (noticeNumEl) noticeNumEl.textContent = destVal;
 
             initDestinationSelectInstances();
             if (rgPostDestSelectInstance) rgPostDestSelectInstance.setDialplan(destVal);
@@ -4347,6 +4361,24 @@ function isTabAllowed(tabName) {
             const grplist = document.getElementById('rgList').value.trim();
             const annmsg_id = document.getElementById('rgAnnMsg').value;
             const ringing = document.getElementById('rgRinging').value;
+
+            if (!grpnum || !/^\d+$/.test(grpnum)) {
+                showToast(isRtl ? 'يرجى إدخال رقم مجموعة اتصال صحيح' : 'Please enter a valid numeric Ring Group number.', 'error');
+                return;
+            }
+            if (!description) {
+                showToast(isRtl ? 'يرجى إدخال وصف للمجموعة' : 'Please enter a Group Description.', 'error');
+                return;
+            }
+            if (!grplist) {
+                showToast(isRtl ? 'يرجى تحديد أو كتابة رقم تحويلة واحد على الأقل' : 'Please enter or select at least one Extension.', 'error');
+                return;
+            }
+            if (!isEdit && loadedRingGroupsList && loadedRingGroupsList.some(rg => String(rg.grpnum) === String(grpnum))) {
+                showToast((isRtl ? 'رقم مجموعة الاتصال ' : 'Ring Group ') + grpnum + (isRtl ? ' موجود بالفعل. يرجى اختيار رقم آخر.' : ' already exists. Please choose a different number.'), 'error');
+                return;
+            }
+
             const postdest = isEdit ? document.getElementById('rgPostDestination').value.trim() : (`ext-group,${grpnum},1`);
 
             const url = isEdit ? '/api/config/ringgroups/' + grpnum : '/api/config/ringgroups';
@@ -4364,6 +4396,9 @@ function isTabAllowed(tabName) {
                     closeModal('ringGroupModal');
                     fetchRingGroups();
                 } else showToast(data.error, 'error');
+            })
+            .catch(err => {
+                showToast(err.message || 'Request failed', 'error');
             });
         }
         function deleteRingGroup(grpnum) {
