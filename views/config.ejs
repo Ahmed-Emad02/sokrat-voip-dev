@@ -9214,31 +9214,89 @@ function isTabAllowed(tabName) {
             sSelect.value = currS;
         }
 
-        function setDongleReportPreset(preset) {
-            const startInput = document.getElementById('dongleReportStartDate');
-            const endInput = document.getElementById('dongleReportEndDate');
-            if (!startInput || !endInput) return;
+        let dongleReportStartPicker = null;
+        let dongleReportEndPicker = null;
 
-            const formatLocal = (m) => m.format('YYYY-MM-DDTHH:mm');
+        function initDongleReportPickers() {
+            if (typeof flatpickr !== 'undefined') {
+                const startEl = document.getElementById('dongleReportStartDate');
+                const endEl = document.getElementById('dongleReportEndDate');
+                if (startEl && !dongleReportStartPicker) {
+                    dongleReportStartPicker = flatpickr(startEl, {
+                        enableTime: true,
+                        dateFormat: "Y-m-d H:i:S",
+                        altInput: true,
+                        altFormat: "m/d/Y h:i K",
+                        time_24hr: false,
+                        allowInput: true,
+                        monthSelectorType: "dropdown"
+                    });
+                }
+                if (endEl && !dongleReportEndPicker) {
+                    dongleReportEndPicker = flatpickr(endEl, {
+                        enableTime: true,
+                        dateFormat: "Y-m-d H:i:S",
+                        altInput: true,
+                        altFormat: "m/d/Y h:i K",
+                        time_24hr: false,
+                        allowInput: true,
+                        monthSelectorType: "dropdown"
+                    });
+                }
+            }
+        }
+
+        function formatDateTimeStr(d) {
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
+        function setDongleReportPreset(preset) {
+            initDongleReportPickers();
+
+            const startD = new Date();
+            const endD = new Date();
 
             if (preset === 'today') {
-                startInput.value = formatLocal(moment().startOf('day'));
-                endInput.value = formatLocal(moment().endOf('day'));
+                startD.setHours(0, 0, 0, 0);
+                endD.setHours(23, 59, 59, 999);
             } else if (preset === 'yesterday') {
-                startInput.value = formatLocal(moment().subtract(1, 'day').startOf('day'));
-                endInput.value = formatLocal(moment().subtract(1, 'day').endOf('day'));
+                startD.setDate(startD.getDate() - 1);
+                startD.setHours(0, 0, 0, 0);
+                endD.setDate(endD.getDate() - 1);
+                endD.setHours(23, 59, 59, 999);
             } else if (preset === '7days') {
-                startInput.value = formatLocal(moment().subtract(6, 'days').startOf('day'));
-                endInput.value = formatLocal(moment().endOf('day'));
+                startD.setDate(startD.getDate() - 6);
+                startD.setHours(0, 0, 0, 0);
+                endD.setHours(23, 59, 59, 999);
             } else if (preset === '30days') {
-                startInput.value = formatLocal(moment().subtract(29, 'days').startOf('day'));
-                endInput.value = formatLocal(moment().endOf('day'));
+                startD.setDate(startD.getDate() - 29);
+                startD.setHours(0, 0, 0, 0);
+                endD.setHours(23, 59, 59, 999);
             }
+
+            const startStr = formatDateTimeStr(startD);
+            const endStr = formatDateTimeStr(endD);
+
+            if (dongleReportStartPicker) dongleReportStartPicker.setDate(startD, true);
+            else {
+                const el = document.getElementById('dongleReportStartDate');
+                if (el) el.value = startStr;
+            }
+
+            if (dongleReportEndPicker) dongleReportEndPicker.setDate(endD, true);
+            else {
+                const el = document.getElementById('dongleReportEndDate');
+                if (el) el.value = endStr;
+            }
+
             fetchDongleStateReports();
         }
         window.setDongleReportPreset = setDongleReportPreset;
 
         async function fetchDongleStateReports() {
+            initDongleReportPickers();
+
             const startInput = document.getElementById('dongleReportStartDate');
             const endInput = document.getElementById('dongleReportEndDate');
             const dongleSelect = document.getElementById('dongleReportDongleSelect');
@@ -9248,13 +9306,19 @@ function isTabAllowed(tabName) {
             const tablesContainer = document.getElementById('dongleReportTablesContainer');
             if (!summaryContainer || !tablesContainer) return;
 
-            if (startInput && !startInput.value) startInput.value = moment().startOf('day').format('YYYY-MM-DDTHH:mm');
-            if (endInput && !endInput.value) endInput.value = moment().endOf('day').format('YYYY-MM-DDTHH:mm');
+            if (startInput && !startInput.value) {
+                const d = new Date(); d.setHours(0, 0, 0, 0);
+                if (dongleReportStartPicker) dongleReportStartPicker.setDate(d, true);
+                else startInput.value = formatDateTimeStr(d);
+            }
+            if (endInput && !endInput.value) {
+                const d = new Date(); d.setHours(23, 59, 59, 999);
+                if (dongleReportEndPicker) dongleReportEndPicker.setDate(d, true);
+                else endInput.value = formatDateTimeStr(d);
+            }
 
             const startDate = startInput ? startInput.value : '';
             const endDate = endInput ? endInput.value : '';
-            const dongleId = dongleSelect ? dongleSelect.value : 'ALL';
-            const simNumber = simSelect ? simSelect.value : 'ALL';
 
             summaryContainer.innerHTML = `<div class="col-span-full text-center text-xs text-[var(--text-muted)] py-4">${isRtl ? 'جاري تحميل تفاصيل التقرير...' : 'Loading state duration report metrics...'}</div>`;
             tablesContainer.innerHTML = '';
