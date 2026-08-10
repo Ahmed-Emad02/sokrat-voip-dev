@@ -314,33 +314,82 @@ const isRtl = currentLang === 'ar';
             </div>
         </form>
 
+        <%
+            const formattedStart = encodeURIComponent(moment(filters.startDate).format('YYYY-MM-DDTHH:mm'));
+            const formattedEnd = encodeURIComponent(moment(filters.endDate).format('YYYY-MM-DDTHH:mm'));
+            const baseUrl = '/cdr?startDate=' + formattedStart + '&endDate=' + formattedEnd + '&lang=' + currentLang;
+        %>
         <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 shrink-0">
-            <div class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30">
-                <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.totalCalls %></p>
+            <!-- Card 1: Total Calls -->
+            <a href="<%= baseUrl %>&statusFilter=ALL&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض إجمالي المكالمات في سجل الاتصالات' : 'View total calls in Call History' %>"
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-[var(--accent-color)] hover:shadow-lg hover:shadow-[var(--accent-color)]/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.totalCalls %></p>
+                    <svg class="w-3.5 h-3.5 text-zinc-600 group-hover:text-[var(--accent-color)] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
+                    </svg>
+                </div>
                 <p class="text-3xl font-black text-white mt-1"><%= stats.totalCalls %></p>
                 <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
                     <div class="h-full bg-[var(--accent-color)] rounded-full transition-all duration-500" style="width: 100%"></div>
                 </div>
-            </div>
-            <div class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30">
-                <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.answeredCalls %></p>
+            </a>
+
+            <!-- Card 2: Answered Calls -->
+            <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات التي تم الرد عليها في سجل الاتصالات' : 'View answered calls in Call History' %>"
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-emerald-500 hover:shadow-lg hover:shadow-emerald-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.answeredCalls %></p>
+                    <svg class="w-3.5 h-3.5 text-zinc-600 group-hover:text-emerald-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
+                    </svg>
+                </div>
                 <p class="text-3xl font-black text-white mt-1"><%= stats.answeredCalls %></p>
                 <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
                     <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: <%= stats.totalCalls ? (stats.answeredCalls / stats.totalCalls) * 100 : 0 %>%"></div>
                 </div>
-            </div>
-            <div class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30">
-                <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.inbound %></p>
+            </a>
+
+            <!-- Card 3: Total Inbound Calls -->
+            <a href="<%= baseUrl %>&directionFilter=INBOUND&statusFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات الواردة في سجل الاتصالات' : 'View inbound calls in Call History' %>"
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-[var(--accent-color)] hover:shadow-lg hover:shadow-[var(--accent-color)]/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.inbound %></p>
+                    <svg class="w-3.5 h-3.5 text-zinc-600 group-hover:text-[var(--accent-color)] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
+                    </svg>
+                </div>
                 <p class="text-3xl font-black text-white mt-1"><%= stats.inboundCount %></p>
                 <p class="text-xs font-bold text-[var(--accent-color)] mt-1"><%= stats.inboundMin %> <%= t.min %> <%= t.airMinutes %></p>
-            </div>
-            <div class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30">
-                <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.outbound %></p>
+            </a>
+
+            <!-- Card 4: Total Outbound Calls -->
+            <a href="<%= baseUrl %>&directionFilter=OUTBOUND&statusFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات الصادرة في سجل الاتصالات' : 'View outbound calls in Call History' %>"
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-sky-500 hover:shadow-lg hover:shadow-sky-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.outbound %></p>
+                    <svg class="w-3.5 h-3.5 text-zinc-600 group-hover:text-sky-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
+                    </svg>
+                </div>
                 <p class="text-3xl font-black text-white mt-1"><%= stats.outboundCount %></p>
                 <p class="text-xs font-bold text-zinc-400 mt-1"><%= stats.outboundMin %> <%= t.min %> <%= t.airMinutes %></p>
-            </div>
-            <div class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30">
-                <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.answerRate %></p>
+            </a>
+
+            <!-- Card 5: Answer Rate -->
+            <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات المجابة في سجل الاتصالات' : 'View answered calls in Call History' %>"
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-[var(--accent-color)] hover:shadow-lg hover:shadow-[var(--accent-color)]/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase text-zinc-500 tracking-wider"><%= t.answerRate %></p>
+                    <svg class="w-3.5 h-3.5 text-zinc-600 group-hover:text-[var(--accent-color)] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
+                    </svg>
+                </div>
                 <p class="text-3xl font-black text-white mt-1"><%= stats.totalCalls ? Math.round((stats.answeredCalls / stats.totalCalls) * 100) : 0 %>%</p>
                 <div class="mt-2 flex items-center gap-2">
                     <div class="flex-1 h-1 bg-zinc-800/50 rounded-full overflow-hidden">
@@ -348,7 +397,7 @@ const isRtl = currentLang === 'ar';
                     </div>
                     <span class="text-[10px] font-bold text-zinc-500"><%= Math.round(stats.inboundMin + stats.outboundMin) %> <%= t.min %></span>
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- Charts Row 1: Call Volume Trend + Disposition Breakdown -->
