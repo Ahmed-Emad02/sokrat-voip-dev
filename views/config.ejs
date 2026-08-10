@@ -615,6 +615,7 @@ function isTabAllowed(tabName) {
                                 <th class="py-3 px-4"><%= isRtl ? 'الوصف' : 'Description' %></th>
                                 <th class="py-3 px-4"><%= isRtl ? 'استراتيجية الاتصال' : 'Strategy' %></th>
                                 <th class="py-3 px-4"><%= isRtl ? 'الإعلان' : 'Announcement' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'الموسيقى أثناء الانتظار' : 'Music On Hold' %></th>
                                 <th class="py-3 px-4"><%= isRtl ? 'قائمة التحويلات' : 'Extension List' %></th>
                                 <th class="py-3 px-4"><%= isRtl ? 'تخطي المشغول' : 'Skip Busy' %></th>
                                 <th class="py-3 px-4"><%= isRtl ? 'التسجيل' : 'Recording' %></th>
@@ -623,7 +624,7 @@ function isTabAllowed(tabName) {
                             </tr>
                         </thead>
                         <tbody id="ringgroups-table-body" class="divide-y divide-[var(--border-primary)] text-sm font-medium text-[var(--text-primary)]">
-                            <tr><td colspan="9" class="py-8 text-center text-[var(--text-muted)]">Loading ring groups...</td></tr>
+                            <tr><td colspan="10" class="py-8 text-center text-[var(--text-muted)]">Loading ring groups...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1781,17 +1782,30 @@ function isTabAllowed(tabName) {
                                                 <div id="rgQuickPickContainer" class="flex flex-wrap gap-1.5"></div>
                     </div>
 
-                    <!-- SECTION 4: ANNOUNCEMENT -->
-                    <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
-                        <div class="flex items-center justify-between pb-2 border-b border-amber-500/15">
-                            <span class="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
-                                <%= isRtl ? 'الإعلان الصوتي' : 'Announcement' %>
-                            </span>
+                    <!-- SECTION 4: ANNOUNCEMENT & MUSIC ON HOLD -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+                            <div class="flex items-center justify-between pb-2 border-b border-amber-500/15">
+                                <span class="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                                    <%= isRtl ? 'الإعلان الصوتي' : 'Announcement' %>
+                                </span>
+                            </div>
+                            <select id="rgAnnMsg" class="config-input w-full text-xs">
+                                <option value="0"><%= isRtl ? 'بدون إعلان' : 'None / No Announcement' %></option>
+                            </select>
                         </div>
-                        <select id="rgAnnMsg" class="config-input w-full text-xs">
-                            <option value="0"><%= isRtl ? 'بدون إعلان' : 'None / No Announcement' %></option>
-                        </select>
+                        <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
+                            <div class="flex items-center justify-between pb-2 border-b border-emerald-500/15">
+                                <span class="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-2v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-2" /></svg>
+                                    <%= isRtl ? 'الموسيقى أثناء الانتظار' : 'Play Music On Hold' %>
+                                </span>
+                            </div>
+                            <select id="rgRinging" class="config-input w-full text-xs font-mono font-bold">
+                                <option value="Ring"><%= isRtl ? 'نغمة الرنين (افتراضي)' : 'Ring (Default Ringtone)' %></option>
+                            </select>
+                        </div>
                     </div>
 
                     <!-- SECTION 5: DESTINATION IF NO ANSWER (Post Destination) -->
@@ -3757,7 +3771,7 @@ function isTabAllowed(tabName) {
             }
             stopRtcpTimer();
             if (tabId === 'extensions') fetchExtensions();
-            if (tabId === 'ringgroups') { fetchRecordings(); fetchRingGroups(); fetchExtensions(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); }
+            if (tabId === 'ringgroups') { fetchRecordings(); fetchRingGroups(); fetchExtensions(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchMohData(); }
             if (tabId === 'queues') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchAnnouncements(); }
             if (tabId === 'ivr') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); }
             if (tabId === 'recordings') fetchRecordings();
@@ -4210,6 +4224,21 @@ function isTabAllowed(tabName) {
             });
         }
 
+        function populateMohRingGroupDropdown() {
+            const sel = document.getElementById('rgRinging');
+            if (!sel) return;
+            const currentVal = sel.value || 'Ring';
+            sel.innerHTML = `<option value="Ring">${isRtl ? 'نغمة الرنين (افتراضي)' : 'Ring (Default Ringtone)'}</option>`;
+            const mohList = typeof loadedMohCategories !== 'undefined' ? loadedMohCategories : [];
+            mohList.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat.name;
+                opt.textContent = `${isRtl ? 'موسيقى الانتظار:' : 'Music on Hold:'} ${cat.name}${cat.fileCount !== undefined ? ` (${cat.fileCount} ${isRtl ? 'مقاطع' : 'tracks'})` : ''}`;
+                sel.appendChild(opt);
+            });
+            sel.value = currentVal;
+        }
+
         function fetchRingGroups() {
             const tbody = document.getElementById('ringgroups-table-body');
             return fetch('/api/config/ringgroups')
@@ -4223,7 +4252,7 @@ function isTabAllowed(tabName) {
                     if (!tbody) return;
                     tbody.innerHTML = '';
                     if (data.ringgroups.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="9" class="py-6 text-center text-[var(--text-muted)]">No ring groups found.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="10" class="py-6 text-center text-[var(--text-muted)]">No ring groups found.</td></tr>';
                         return;
                     }
                     data.ringgroups.forEach(rg => {
@@ -4231,12 +4260,16 @@ function isTabAllowed(tabName) {
                         tr.className = 'hover:bg-[var(--bg-hover)] transition-colors';
                         const recMatch = loadedRecordingsList.find(r => r.id == rg.annmsg_id);
                         const annText = recMatch ? recMatch.displayname : (rg.annmsg_id ? 'ID #' + rg.annmsg_id : 'None');
+                        const mohDisplay = (!rg.ringing || rg.ringing === 'Ring')
+                            ? `<span class="px-2 py-0.5 text-[11px] font-bold rounded bg-slate-500/15 text-slate-400 border border-slate-500/20">Ring</span>`
+                            : `<span class="px-2 py-0.5 text-[11px] font-bold rounded bg-amber-500/15 text-amber-300 border border-amber-500/20 truncate max-w-[120px] inline-block align-middle" title="MoH: ${rg.ringing}">MoH: ${rg.ringing}</span>`;
 
                         tr.innerHTML = `
                             <td class="py-3 px-4 font-mono font-bold text-[var(--text-primary)]">${rg.grpnum}</td>
                             <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${rg.description || '-'}</td>
                             <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">${rg.strategy || 'ringall'}</td>
                             <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">${annText}</td>
+                            <td class="py-3 px-4">${mohDisplay}</td>
                             <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">${rg.grplist}</td>
                             <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">Yes</span></td>
                             <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded bg-purple-500/15 text-purple-400 border border-purple-500/20">Always</span></td>
@@ -4261,6 +4294,8 @@ function isTabAllowed(tabName) {
             document.getElementById('rgNum').disabled = false;
             document.getElementById('ringGroupForm').reset();
             populateAnnouncementsDropdown();
+            populateMohRingGroupDropdown();
+            document.getElementById('rgRinging').value = 'Ring';
             renderQuickPickPills();
 
             const num = document.getElementById('rgNum').value.trim() || '600';
@@ -4287,7 +4322,9 @@ function isTabAllowed(tabName) {
             document.getElementById('rgTime').value = rg.grptime || 20;
             document.getElementById('rgList').value = rg.grplist || '';
             populateAnnouncementsDropdown();
+            populateMohRingGroupDropdown();
             document.getElementById('rgAnnMsg').value = rg.annmsg_id || 0;
+            document.getElementById('rgRinging').value = rg.ringing || 'Ring';
             renderQuickPickPills();
 
             const destVal = rg.postdest || `ext-group,${grpnum},1`;
@@ -4309,6 +4346,7 @@ function isTabAllowed(tabName) {
             const grptime = document.getElementById('rgTime').value;
             const grplist = document.getElementById('rgList').value.trim();
             const annmsg_id = document.getElementById('rgAnnMsg').value;
+            const ringing = document.getElementById('rgRinging').value;
             const postdest = isEdit ? document.getElementById('rgPostDestination').value.trim() : (`ext-group,${grpnum},1`);
 
             const url = isEdit ? '/api/config/ringgroups/' + grpnum : '/api/config/ringgroups';
@@ -4317,7 +4355,7 @@ function isTabAllowed(tabName) {
             fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ grpnum, description, strategy, grptime, grplist, annmsg_id, postdest })
+                body: JSON.stringify({ grpnum, description, strategy, grptime, grplist, annmsg_id, ringing, postdest })
             })
             .then(res => res.json())
             .then(data => {
@@ -8210,6 +8248,7 @@ function isTabAllowed(tabName) {
                     loadedMohCategories = data.categories;
                     populateMohCategorySelect();
                     renderMohFilesTable();
+                    if (typeof populateMohRingGroupDropdown === 'function') populateMohRingGroupDropdown();
                 })
                 .catch(err => {
                     showToast('Failed to load Music on Hold data: ' + err.message, 'error');

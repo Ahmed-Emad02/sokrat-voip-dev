@@ -5875,7 +5875,7 @@ app.put('/api/employee/extras/:extension', requireAuth, async (req, res) => {
 app.get('/api/config/ringgroups', async (req, res) => {
     try {
         const [ringgroups] = await pool.query(`
-            SELECT grpnum, strategy, grptime, grplist, description, annmsg_id, postdest, cwignore, recording
+            SELECT grpnum, strategy, grptime, grplist, description, annmsg_id, postdest, cwignore, recording, ringing
             FROM \`asterisk\`.\`ringgroups\`
             ORDER BY CAST(grpnum AS UNSIGNED) ASC
         `);
@@ -5888,7 +5888,7 @@ app.get('/api/config/ringgroups', async (req, res) => {
 // POST /api/config/ringgroups - Create Ring Group
 app.post('/api/config/ringgroups', async (req, res) => {
     try {
-        const { grpnum, description, grplist, strategy, grptime, annmsg_id, postdest } = req.body;
+        const { grpnum, description, grplist, strategy, grptime, annmsg_id, ringing, postdest } = req.body;
         if (!grpnum || !/^\d+$/.test(grpnum)) {
             return res.status(400).json({ success: false, error: 'Valid numeric Ring Group number is required.' });
         }
@@ -5908,6 +5908,7 @@ app.post('/api/config/ringgroups', async (req, res) => {
         const ringTime = parseInt(grptime, 10) || 20;
         const annMsgId = parseInt(annmsg_id, 10) || 0;
         const postDest = (postdest && postdest.trim()) ? postdest.trim() : `ext-group,${num},1`;
+        const mohRinging = (ringing && String(ringing).trim()) ? String(ringing).trim() : 'Ring';
 
         const [existing] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
         if (existing.length > 0) {
@@ -5918,8 +5919,8 @@ app.post('/api/config/ringgroups', async (req, res) => {
         await pool.query(`
             INSERT INTO \`asterisk\`.\`ringgroups\` 
             (grpnum, strategy, grptime, grppre, grplist, annmsg_id, postdest, description, alertinfo, remotealert_id, needsconf, toolate_id, ringing, cwignore, cfignore, cpickup, recording)
-            VALUES (?, ?, ?, '', ?, ?, ?, ?, '', 0, '', 0, 'Ring', 'CHECKED', '', '', 'always')
-        `, [num, ringStrategy, ringTime, extListFormatted, annMsgId, postDest, desc]);
+            VALUES (?, ?, ?, '', ?, ?, ?, ?, '', 0, '', 0, ?, 'CHECKED', '', '', 'always')
+        `, [num, ringStrategy, ringTime, extListFormatted, annMsgId, postDest, desc, mohRinging]);
 
         reloadPbxConfig();
         res.json({ success: true, message: `Ring Group ${num} created with Skip Busy=Yes & Record=Always successfully.` });
@@ -5932,7 +5933,7 @@ app.post('/api/config/ringgroups', async (req, res) => {
 app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
     try {
         const num = String(req.params.grpnum).trim();
-        const { description, grplist, strategy, grptime, annmsg_id, postdest } = req.body;
+        const { description, grplist, strategy, grptime, annmsg_id, ringing, postdest } = req.body;
 
         const desc = String(description || '').trim();
         const extListFormatted = String(grplist || '').replace(/[\r\n, ]+/g, '-').replace(/^-+|-+$/g, '');
@@ -5940,12 +5941,13 @@ app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
         const ringTime = parseInt(grptime, 10) || 20;
         const annMsgId = parseInt(annmsg_id, 10) || 0;
         const postDest = (postdest && postdest.trim()) ? postdest.trim() : `ext-group,${num},1`;
+        const mohRinging = (ringing && String(ringing).trim()) ? String(ringing).trim() : 'Ring';
 
         await pool.query(`
             UPDATE \`asterisk\`.\`ringgroups\`
-            SET description = ?, grplist = ?, strategy = ?, grptime = ?, annmsg_id = ?, cwignore = 'CHECKED', recording = 'always', postdest = ?
+            SET description = ?, grplist = ?, strategy = ?, grptime = ?, annmsg_id = ?, cwignore = 'CHECKED', recording = 'always', postdest = ?, ringing = ?
             WHERE grpnum = ?
-        `, [desc, extListFormatted, ringStrategy, ringTime, annMsgId, postDest, num]);
+        `, [desc, extListFormatted, ringStrategy, ringTime, annMsgId, postDest, mohRinging, num]);
 
         reloadPbxConfig();
         res.json({ success: true, message: `Ring Group ${num} updated successfully.` });
@@ -7602,7 +7604,7 @@ app.get('/api/config/diagram', async (req, res) => {
 
         // Query Ring Groups
         const [ringgroups] = await pool.query(`
-            SELECT grpnum, strategy, grptime, grplist, description, postdest FROM \`asterisk\`.\`ringgroups\`
+            SELECT grpnum, strategy, grptime, grplist, description, postdest, ringing FROM \`asterisk\`.\`ringgroups\`
             ORDER BY CAST(grpnum AS UNSIGNED) ASC
         `);
 
