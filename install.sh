@@ -698,8 +698,8 @@ if grep -q '^full\s*=>' /etc/asterisk/logger.conf; then
     fi
 fi
 
-# 10d — Permissions & udev
-echo "  [10d] Configuring permissions and udev..."
+# 10d — Permissions, udev & USB Autosuspend Disable
+echo "  [10d] Configuring permissions, udev, and disabling USB autosuspend..."
 usermod -a -G lock,dialout asterisk
 chgrp asterisk /run/lock 2>/dev/null || true
 chmod 775 /run/lock 2>/dev/null || true
@@ -722,7 +722,35 @@ echo "  99-huawei-dongle.rules installed"
 cp "$INSTALL_DIR/rules/99-dongle-auto-restart.rules" /etc/udev/rules.d/99-dongle-auto-restart.rules
 chmod 644 /etc/udev/rules.d/99-dongle-auto-restart.rules
 echo "  99-dongle-auto-restart.rules installed"
+# Disable USB autosuspend in GRUB kernel command line
+if [ -f /etc/default/grub ]; then
+    if ! grep -q 'usbcore.autosuspend=-1' /etc/default/grub; then
+        echo "  Configuring GRUB to disable USB autosuspend..."
+        sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="\1 usbcore.autosuspend=-1"/' /etc/default/grub
+        if [ -f /boot/grub2/grub.cfg ]; then
+            grub2-mkconfig -o /boot/grub2/grub.cfg 2>/dev/null || true
+        fi
+        if [ -f /boot/efi/EFI/centos/grub.cfg ]; then
+            grub2-mkconfig -o /boot/efi/EFI/centos/grub.cfg 2>/dev/null || true
+        fi
+        if [ -f /boot/efi/EFI/redhat/grub.cfg ]; then
+            grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg 2>/dev/null || true
+        fi
+        echo "  GRUB updated with usbcore.autosuspend=-1"
+    else
+        echo "  GRUB already configured with usbcore.autosuspend=-1"
+    fi
+fi
 
+# Disable USB autosuspend via modprobe & udev rules
+echo "options usbcore autosuspend=-1" > /etc/modprobe.d/usbcore.conf
+echo 'ACTION=="add", SUBSYSTEM=="usb", ATTR{power/control}="on"' > /etc/udev/rules.d/99-disable-usb-autosuspend.rules
+
+# Live apply USB autosuspend disable immediately
+echo -1 > /sys/module/usbcore/parameters/autosuspend 2>/dev/null || true
+for dev in /sys/bus/usb/devices/*/power/control; do
+    echo "on" > "$dev" 2>/dev/null || true
+done
 # Remove old dongle-auto-reload.service if it exists
 systemctl stop dongle-auto-reload.service 2>/dev/null || true
 systemctl disable dongle-auto-reload.service 2>/dev/null || true
