@@ -521,7 +521,7 @@ const isRtl = currentLang === 'ar';
                         <span><%= t.viewMinimal %></span>
                     </button>
                 </div>
-                <button onclick="openIntercomModal()" class="px-3 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all">
+                <button onclick="openIntercomModal()" class="btn-primary shrink-0 px-3 py-2 text-xs cursor-pointer flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.684A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.316z"/></svg>
                     <span><%= t.intercomBtn %></span>
                 </button>
@@ -686,13 +686,13 @@ const isRtl = currentLang === 'ar';
             switchboardGrid.classList.remove('view-mode-grid', 'view-mode-compact', 'view-mode-minimal');
 
             if (currentOpViewMode === 'minimal') {
-                btnMinimal.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white shadow-sm';
+                btnMinimal.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer btn-primary shadow-sm';
                 switchboardGrid.classList.add('view-mode-minimal');
             } else if (currentOpViewMode === 'compact') {
-                btnCompact.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white shadow-sm';
+                btnCompact.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer btn-primary shadow-sm';
                 switchboardGrid.classList.add('view-mode-compact');
             } else {
-                btnGrid.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white shadow-sm';
+                btnGrid.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer btn-primary shadow-sm';
                 switchboardGrid.classList.add('view-mode-grid');
             }
         }
@@ -773,35 +773,63 @@ const isRtl = currentLang === 'ar';
                 });
             });
 
+            let rafPeerScheduled = false;
             socket.on('peerStatus', (statusMap) => {
                 for (let ext in statusMap) {
                     localPeerStatus[ext] = statusMap[ext];
-                    const online = statusMap[ext];
-                    const label = document.getElementById('sipLabel-' + ext);
-                    if (label) label.textContent = online ? '<%= t.online %>' : '<%= t.offline %>';
-                    
-                    const callState = localCallStatus[ext]?.state || 'Idle';
-                    updateCardStateClass(ext, online, callState);
                 }
-                if (window.refreshIntercomRosterIfOpen) window.refreshIntercomRosterIfOpen();
+                if (!rafPeerScheduled) {
+                    rafPeerScheduled = true;
+                    requestAnimationFrame(() => {
+                        rafPeerScheduled = false;
+                        for (let ext in localPeerStatus) {
+                            const online = localPeerStatus[ext];
+                            const label = document.getElementById('sipLabel-' + ext);
+                            if (label) label.textContent = online ? '<%= t.online %>' : '<%= t.offline %>';
+                            const callState = localCallStatus[ext]?.state || 'Idle';
+                            updateCardStateClass(ext, online, callState);
+                        }
+                        if (window.refreshIntercomRosterIfOpen) window.refreshIntercomRosterIfOpen();
+                    });
+                }
             });
 
+            let rafIPsScheduled = false;
+            let pendingIPs = {};
             socket.on('peerIPs', (ipMap) => {
-                for (let ext in ipMap) {
-                    const ipText = document.getElementById('ipText-' + ext);
-                    if (ipText) ipText.textContent = ipMap[ext];
+                Object.assign(pendingIPs, ipMap);
+                if (!rafIPsScheduled) {
+                    rafIPsScheduled = true;
+                    requestAnimationFrame(() => {
+                        rafIPsScheduled = false;
+                        for (let ext in pendingIPs) {
+                            const ipText = document.getElementById('ipText-' + ext);
+                            if (ipText) ipText.textContent = pendingIPs[ext];
+                        }
+                    });
                 }
             });
             let localTrunksData = {};
 
+            let rafTrunksScheduled = false;
+            function scheduleRenderTrunksBoard() {
+                if (!rafTrunksScheduled) {
+                    rafTrunksScheduled = true;
+                    requestAnimationFrame(() => {
+                        rafTrunksScheduled = false;
+                        renderTrunksBoard();
+                    });
+                }
+            }
+
             socket.on('initialTrunks', (trunksMap) => {
                 localTrunksData = trunksMap || {};
-                renderTrunksBoard();
+                scheduleRenderTrunksBoard();
             });
 
             socket.on('trunkStatus', (trunksMap) => {
                 localTrunksData = trunksMap || {};
-                renderTrunksBoard();
+                scheduleRenderTrunksBoard();
             });
 
             socket.on('trunkCalls', (callsMap) => {
@@ -810,9 +838,8 @@ const isRtl = currentLang === 'ar';
                         localTrunksData[tid].activeCalls = callsMap[tid];
                     }
                 }
-                renderTrunksBoard();
+                scheduleRenderTrunksBoard();
             });
-
             function renderTrunksBoard() {
                 const grid = document.getElementById('trunksLiveGrid');
                 const countEl = document.getElementById('trunksTotalCount');

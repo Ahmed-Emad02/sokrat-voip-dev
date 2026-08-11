@@ -309,6 +309,33 @@ function fmtDur(s) {
             font-size: 0.875rem !important;
             padding: 0.5rem 0.75rem !important;
         }
+        /* Light Theme Overrides for Voicemails Filter Form & Reset Button */
+        html.light-theme .reset-filter-btn {
+            background-color: #f1f5f9 !important;
+            color: #475569 !important;
+            border: 1px solid #cbd5e1 !important;
+        }
+        html.light-theme .reset-filter-btn:hover {
+            background-color: #f87171 !important;
+            color: #ffffff !important;
+            border-color: #ef4444 !important;
+        }
+        html.light-theme #vmFilterForm {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+        }
+        html.light-theme #vmFilterForm label {
+            color: #475569 !important;
+        }
+        html.light-theme #vmFilterForm input,
+        html.light-theme #vmFilterForm select {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            border-color: #cbd5e1 !important;
+        }
+        html.light-theme #vmFilterForm input::placeholder {
+            color: #94a3b8 !important;
+        }
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
@@ -354,7 +381,7 @@ function fmtDur(s) {
             </div>
             <div class="flex items-center gap-2">
                 <button type="submit" class="btn-primary flex-1 py-1.5 text-xs uppercase tracking-wider h-[34px] flex items-center justify-center cursor-pointer"><%= t.btn %></button>
-                <a href="/voicemails?lang=<%= currentLang %>" class="px-3 py-1.5 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg h-[34px] flex items-center justify-center transition cursor-pointer" title="<%= t.clearBtn %>">✕</a>
+                <a href="/voicemails?lang=<%= currentLang %>" class="reset-filter-btn px-3 py-1.5 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg h-[34px] flex items-center justify-center transition cursor-pointer" title="<%= t.clearBtn %>">✕</a>
             </div>
         </form>
 
