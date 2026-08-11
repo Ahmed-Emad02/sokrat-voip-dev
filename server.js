@@ -6087,10 +6087,8 @@ app.get('/api/config/queues', async (req, res) => {
         const queues = configRows.map(q => {
             const d = detailsMap[q.extension] || {};
             const staticMembers = (d.members || []).map(m => {
-                const match = m.match(/Local\/(\d+)@/);
-                if (match) return match[1];
-                const matchSimple = m.match(/^(\d+)/);
-                return matchSimple ? matchSimple[1] : m;
+                const match = String(m).match(/(\d+)/);
+                return match ? match[1] : String(m).trim();
             });
 
             return {
@@ -6194,17 +6192,26 @@ app.post('/api/config/queues', async (req, res) => {
         else if (typeof static_members === 'string') staticArr = static_members.split(/[\r\n, ]+/).filter(Boolean);
 
         for (let idx = 0; idx < staticArr.length; idx++) {
-            const cleanExt = String(staticArr[idx]).trim();
-            if (!cleanExt) continue;
-            // Resolve member interface from devices.dial: "SIP/101" or "PJSIP/200"
-            const [devRows] = await pool.query('SELECT dial FROM `asterisk`.`devices` WHERE id = ?', [cleanExt]);
-            const memberIf = devRows[0]?.dial || `SIP/${cleanExt}`;
-            details.push([num, 'member', `${memberIf}`, idx]);
+            const rawExt = String(staticArr[idx]).trim().replace(/^[A-Za-z]+\//, '').replace(/@.*/, '');
+            const match = rawExt.match(/(\d+)/);
+            const extNum = match ? match[1] : rawExt;
+            if (!extNum) continue;
+            details.push([num, 'member', `Local/${extNum}@from-queue/n,0`, idx]);
         }
 
-        let dynStr = '';
-        if (Array.isArray(dynmembers)) dynStr = dynmembers.join('\n');
-        else if (typeof dynmembers === 'string') dynStr = dynmembers.trim();
+        let dynArr = [];
+        if (Array.isArray(dynmembers)) dynArr = dynmembers;
+        else if (typeof dynmembers === 'string') dynArr = dynmembers.split(/[\r\n, ]+/).filter(Boolean);
+
+        const cleanDynArr = dynArr.map(s => {
+            const clean = String(s).trim().replace(/^[A-Za-z]+\//, '').replace(/@.*/, '');
+            const match = clean.match(/(\d+)/);
+            return match ? `${match[1]},0` : clean;
+        }).filter(Boolean);
+
+        if (cleanDynArr.length > 0) {
+            details.push([num, 'dynmembers', cleanDynArr.join('\n'), 0]);
+        }
         for (const row of details) {
             await pool.query('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', row);
         }
@@ -6288,18 +6295,25 @@ app.put('/api/config/queues/:extension', async (req, res) => {
         else if (typeof static_members === 'string') staticArr = static_members.split(/[\r\n, ]+/).filter(Boolean);
 
         for (let idx = 0; idx < staticArr.length; idx++) {
-            const cleanExt = String(staticArr[idx]).trim();
-            if (!cleanExt) continue;
-            const [devRows] = await pool.query('SELECT dial FROM `asterisk`.`devices` WHERE id = ?', [cleanExt]);
-            const memberIf = devRows[0]?.dial || `SIP/${cleanExt}`;
-            details.push([num, 'member', `${memberIf}`, idx]);
+            const rawExt = String(staticArr[idx]).trim().replace(/^[A-Za-z]+\//, '').replace(/@.*/, '');
+            const match = rawExt.match(/(\d+)/);
+            const extNum = match ? match[1] : rawExt;
+            if (!extNum) continue;
+            details.push([num, 'member', `Local/${extNum}@from-queue/n,0`, idx]);
         }
 
-        let dynStr = '';
-        if (Array.isArray(dynmembers)) dynStr = dynmembers.join('\n');
-        else if (typeof dynmembers === 'string') dynStr = dynmembers.trim();
-        if (dynStr) {
-            details.push([num, 'dynmembers', dynStr, 0]);
+        let dynArr = [];
+        if (Array.isArray(dynmembers)) dynArr = dynmembers;
+        else if (typeof dynmembers === 'string') dynArr = dynmembers.split(/[\r\n, ]+/).filter(Boolean);
+
+        const cleanDynArr = dynArr.map(s => {
+            const clean = String(s).trim().replace(/^[A-Za-z]+\//, '').replace(/@.*/, '');
+            const match = clean.match(/(\d+)/);
+            return match ? `${match[1]},0` : clean;
+        }).filter(Boolean);
+
+        if (cleanDynArr.length > 0) {
+            details.push([num, 'dynmembers', cleanDynArr.join('\n'), 0]);
         }
 
         for (const row of details) {
@@ -7839,18 +7853,47 @@ function decomposeWeekdaysToAsterisk(days) {
     }
     return ranges;
 }
+function normalizeIssabelDestination(dest) {
+    if (!dest) return '';
+    const trimmed = String(dest).trim();
+    if (/^\d{3,4}$/.test(trimmed)) {
+        return `from-did-direct,${trimmed},1`;
+    }
+    return trimmed;
+}
+
+function normalizeTimeRange(str) {
+    if (!str || str === '*' || str === '*-*') return '*';
+    const trimmed = String(str).trim();
+    const match = trimmed.match(/^(\d{1,2}):(\d{1,2})\s*-\s*(\d{1,2}):(\d{1,2})$/);
+    if (match) {
+        const sh = String(match[1]).padStart(2, '0');
+        const sm = String(match[2]).padStart(2, '0');
+        const fh = String(match[3]).padStart(2, '0');
+        const fm = String(match[4]).padStart(2, '0');
+        return `${sh}:${sm}-${fh}:${fm}`;
+    }
+    return trimmed;
+}
 
 function formatIssabelTimeRule(rule, overrideWkday = null) {
-    if (!rule) return '|||';
-    if (typeof rule === 'string') return rule;
-    
+    if (!rule) return '*|*|*|*';
+    if (typeof rule === 'string') {
+        const parts = rule.split('|');
+        const t = normalizeTimeRange(parts[0]);
+        const w = (!parts[1] || parts[1] === '*' || parts[1] === '*-*') ? '*' : parts[1].trim().toLowerCase();
+        const md = (!parts[2] || parts[2] === '*' || parts[2] === '*-*') ? '*' : parts[2].trim();
+        const m = (!parts[3] || parts[3] === '*' || parts[3] === '*-*') ? '*' : parts[3].trim().toLowerCase();
+        return `${t}|${w}|${md}|${m}`;
+    }
+
     let timeStr = rule.time || '';
     if (!timeStr && rule.start_time && rule.finish_time) {
         timeStr = `${rule.start_time}-${rule.finish_time}`;
     } else if (!timeStr && rule.start_time) {
         timeStr = rule.start_time;
     }
-    
+
     let weekdayStr = overrideWkday !== null ? overrideWkday : (rule.weekday || '');
     if (!weekdayStr && rule.start_weekday && rule.finish_weekday) {
         weekdayStr = rule.start_weekday === rule.finish_weekday ? rule.start_weekday : `${rule.start_weekday}-${rule.finish_weekday}`;
@@ -7872,10 +7915,10 @@ function formatIssabelTimeRule(rule, overrideWkday = null) {
         monthStr = rule.start_month;
     }
 
-    const cleanTime = (timeStr === '*' || timeStr === '*-*') ? '' : timeStr.trim();
-    const cleanWkday = (weekdayStr === '*' || weekdayStr === '*-*') ? '' : weekdayStr.trim().toLowerCase();
-    const cleanMthday = (monthdayStr === '*' || monthdayStr === '*-*') ? '' : monthdayStr.trim();
-    const cleanMonth = (monthStr === '*' || monthStr === '*-*') ? '' : monthStr.trim().toLowerCase();
+    const cleanTime = normalizeTimeRange(timeStr);
+    const cleanWkday = (!weekdayStr || weekdayStr === '*' || weekdayStr === '*-*') ? '*' : weekdayStr.trim().toLowerCase();
+    const cleanMthday = (!monthdayStr || monthdayStr === '*' || monthdayStr === '*-*') ? '*' : monthdayStr.trim();
+    const cleanMonth = (!monthStr || monthStr === '*' || monthStr === '*-*') ? '*' : monthStr.trim().toLowerCase();
 
     return `${cleanTime}|${cleanWkday}|${cleanMthday}|${cleanMonth}`;
 }
@@ -7883,19 +7926,20 @@ function formatIssabelTimeRule(rule, overrideWkday = null) {
 async function insertTimeGroupRules(groupid, rules) {
     if (rules && Array.isArray(rules) && rules.length > 0) {
         for (const rule of rules) {
+            const ruleName = String(rule.name || rule.display_name || '').trim();
             if (rule.active_days && Array.isArray(rule.active_days)) {
                 const wkRanges = decomposeWeekdaysToAsterisk(rule.active_days);
                 for (const wkRange of wkRanges) {
                     const timeStr = formatIssabelTimeRule(rule, wkRange);
-                    await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, '']);
+                    await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, ruleName]);
                 }
             } else {
                 const timeStr = formatIssabelTimeRule(rule);
-                await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, '']);
+                await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, ruleName]);
             }
         }
     } else {
-        await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, '|||', '']);
+        await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, '*|*|*|*', '']);
     }
 }
 
@@ -8029,10 +8073,13 @@ app.post('/api/config/timeconditions', async (req, res) => {
             return res.status(400).json({ success: false, error: 'True and False destinations are required' });
         }
         
+        const normTrue = normalizeIssabelDestination(truegoto);
+        const normFalse = normalizeIssabelDestination(falsegoto);
+
         const [r] = await pool.query(`
             INSERT INTO \`asterisk\`.\`timeconditions\` (displayname, \`time\`, truegoto, falsegoto, deptname, generate_hint, priority)
             VALUES (?, ?, ?, ?, '', 0, NULL)
-        `, [displayname.trim(), timegroup_id, truegoto, falsegoto]);
+        `, [displayname.trim(), timegroup_id, normTrue, normFalse]);
         
         reloadPbxConfig();
         res.json({ success: true, message: 'Time Condition created successfully', id: r.insertId });
@@ -8056,11 +8103,14 @@ app.put('/api/config/timeconditions/:id', async (req, res) => {
             return res.status(400).json({ success: false, error: 'True and False destinations are required' });
         }
         
+        const normTrue = normalizeIssabelDestination(truegoto);
+        const normFalse = normalizeIssabelDestination(falsegoto);
+
         await pool.query(`
             UPDATE \`asterisk\`.\`timeconditions\`
             SET displayname = ?, \`time\` = ?, truegoto = ?, falsegoto = ?
             WHERE timeconditions_id = ?
-        `, [displayname.trim(), timegroup_id, truegoto, falsegoto, id]);
+        `, [displayname.trim(), timegroup_id, normTrue, normFalse, id]);
         
         reloadPbxConfig();
         res.json({ success: true, message: 'Time Condition updated successfully' });

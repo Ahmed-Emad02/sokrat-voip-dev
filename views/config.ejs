@@ -4564,7 +4564,11 @@ function isTabAllowed(tabName) {
             const el = document.getElementById(inputId);
             if (!el) return [];
             const val = el.value || '';
-            return val.split(/[\r\n\s\-,]+/).map(s => s.trim()).filter(Boolean);
+            return val.split(/[\r\n\s\-,]+/).map(s => {
+                const clean = s.trim().replace(/^[A-Za-z]+\//, '').replace(/@.*/, '');
+                const match = clean.match(/(\d+)/);
+                return match ? match[1] : clean;
+            }).filter(Boolean);
         }
 
         function clearAllQueueAgents() {
