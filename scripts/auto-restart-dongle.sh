@@ -80,9 +80,8 @@ fi
 
 # Run the targeted restart
 log_msg "RESTARTING: $DONGLE_ID"
-$ASTERISK_BIN -rx "dongle restart now $DONGLE_ID" 2>&1 | while IFS= read -r line; do
-    log_msg "  asterisk: $line"
-done
+# $ASTERISK_BIN -rx "dongle restart now $DONGLE_ID" disabled
+log_msg "SKIPPED: dongle restart disabled for $DONGLE_ID"
 
 EXIT_CODE=${PIPESTATUS[0]}
 if [ "$EXIT_CODE" -eq 0 ]; then

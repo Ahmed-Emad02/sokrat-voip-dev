@@ -1890,18 +1890,8 @@ function autoHealDongles() {
             recordDongleStateLog(id, rawState, number || null, imsi || null, imei || null);
 
             const stateLower = rawState.toLowerCase();
-            if (stateLower.includes('not initia')) {
-                if (!dongleNotInitTimestamps[id]) {
-                    dongleNotInitTimestamps[id] = now;
-                } else if (now - dongleNotInitTimestamps[id] >= 3000 && !dongleRestartedOnce[id]) {
-                    dongleRestartedOnce[id] = true;
-                    console.log(`AUTO-HEAL: ${id} stuck in "Not Initialized" for 3s. Restarting once...`);
-                    execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${id}`]);
-                }
-            } else {
-                delete dongleNotInitTimestamps[id];
-                delete dongleRestartedOnce[id];
-            }
+            delete dongleNotInitTimestamps[id];
+            delete dongleRestartedOnce[id];
         }
 
         try {
@@ -4462,12 +4452,14 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
             await detectDonglesAndSetTrunkCID();
         } catch (_) {}
 
-        // 3. Program SIM card memory via AT commands with 2s delays between commands & restart dongle
+        // 3. Program SIM card memory via AT commands, cycle chan_dongle.so & refresh status with 3s delays
         const targetDongle = dId || 'dongle0';
         const cmdSteps = [
-            `dongle cmd ${targetDongle} AT+CPBS=\\"ON\\"`,
-            `dongle cmd ${targetDongle} AT+CPBW=1,\\"${normNumber}\\",145`,
-            `dongle restart now ${targetDongle}`
+            `dongle cmd ${targetDongle} AT+CPBS="ON"`,
+            `dongle cmd ${targetDongle} AT+CPBW=1,"${normNumber}",145`,
+            `module unload chan_dongle.so`,
+            `module load chan_dongle.so`,
+            `dongle show devices`
         ];
 
         const results = [];
@@ -4482,10 +4474,9 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
                 results.push({ step: stepCmd, success: false, error: err ? err.message : 'Command failed' });
             }
             if (i < cmdSteps.length - 1) {
-                await new Promise(r => setTimeout(r, 2000));
+                await new Promise(r => setTimeout(r, 3000));
             }
         }
-
         // 4. Verify dialplan route existence for configured DID
         const dpCheck = await execFileAsync(ASTERISK_BIN, ['-rx', `dialplan show ${normNumber}@from-trunk`]);
         const routeExists = dpCheck && dpCheck.includes(normNumber);
@@ -4587,13 +4578,8 @@ app.post('/api/gsm-dongles/reload/:dongleId', (req, res) => {
     if (!/^dongle[0-9]+$/.test(dongleId)) {
         return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
     }
-    execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], (error, stdout, stderr) => {
-        if (error) {
-            return res.status(500).json({ success: false, error: stderr || error.message });
-        }
-        io.emit('usbDevicesUpdated');
-        res.json({ success: true, output: stdout.trim() });
-    });
+    io.emit('usbDevicesUpdated');
+    res.json({ success: true, message: `Reload called for ${dongleId}` });
 });
 
 function getUsbBusIdForDongle(dongleId) {
@@ -4657,12 +4643,8 @@ app.post('/api/gsm-dongles/virtual-replug/:dongleId', (req, res) => {
     }
     const busId = getUsbBusIdForDongle(dongleId);
     if (!busId) {
-        // Fallback if USB bus ID is not found: restart dongle via Asterisk
-        execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], (err, stdout) => {
-            io.emit('usbDevicesUpdated');
-            return res.json({ success: true, message: `Fallback restart executed for ${dongleId}`, output: (stdout || '').trim() });
-        });
-        return;
+        io.emit('usbDevicesUpdated');
+        return res.json({ success: false, error: `USB bus ID not found for ${dongleId}` });
     }
 
     const { exec } = require('child_process');
@@ -8420,11 +8402,7 @@ app.post('/api/config/modem/gain', async (req, res) => {
             await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so']);
         } catch (_) {}
 
-        for (const id in safeGainMap) {
-            try {
-                await execFileAsync(ASTERISK_BIN, ['-rx', `dongle restart now ${id}`]);
-            } catch (_) {}
-        }
+        // dongle restart disabled
 
         res.json({ success: true, message: 'Dongle volume gain updated successfully and reloaded in Asterisk.' });
     } catch (error) {
@@ -8442,13 +8420,7 @@ app.post('/api/config/modem/reset', async (req, res) => {
             await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so']);
         } catch (_) {}
 
-        for (const id in dongles) {
-            if (/^[a-zA-Z0-9_-]+$/.test(id)) {
-                try {
-                    await execFileAsync(ASTERISK_BIN, ['-rx', `dongle restart now ${id}`]);
-                } catch (_) {}
-            }
-        }
+        // dongle restart disabled
 
         res.json({ success: true, message: 'All dongle gains reset to txgain=0 and rxgain=0 in dongle.conf and reloaded.' });
     } catch (error) {
@@ -8535,7 +8507,7 @@ app.post('/api/config/modem/dongle-slot', requireAuth, async (req, res) => {
             for (const sName of addedSlots) {
                 await syncDongleDynamicSetting(sName, false);
                 await deleteAstDbKey('dongle_map', sName);
-                await execFileAsync(ASTERISK_BIN, ['-rx', `dongle restart now ${sName}`]);
+                // dongle restart disabled
             }
         } catch (_) {}
 

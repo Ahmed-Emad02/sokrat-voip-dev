@@ -10,6 +10,8 @@ const words = {
         thRSSI: "Signal (RSSI)",
         thState: "State",
         thActions: "Actions",
+        viewGrid: "Card View",
+        viewMinimal: "Minimal View",
         refreshBtn: "Refresh Dongle",
         sending: "Executing...",
         sendBtn: "Send USSD Request",
@@ -63,6 +65,8 @@ const words = {
         thRSSI: "قوة الإشارة",
         thState: "الحالة",
         thActions: "الإجراءات",
+        viewGrid: "عرض البطاقات",
+        viewMinimal: "عرض مصغر",
         refreshBtn: "تحديث الشريحة",
         sending: "جاري التنفيذ...",
         sendBtn: "تنفيذ طلب USSD",
@@ -1024,10 +1028,22 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         </h3>
                         <p class="text-[11px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'اختر جهازاً لعرض تفاصيله ورسائله وحالة الخدمة.' : 'Select a device to inspect hardware, messages, and live service health.' %></p>
                     </div>
-                    <span class="inline-flex self-start sm:self-auto items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold">
-                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                        <%= isRtl ? 'تحديث مباشر' : 'Live status' %>
-                    </span>
+                    <div class="flex items-center gap-2.5 flex-wrap">
+                        <div class="inline-flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1">
+                            <button type="button" id="btn-view-grid" onclick="setDongleViewMode('grid')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white shadow-sm">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                                <span><%= t.viewGrid %></span>
+                            </button>
+                            <button type="button" id="btn-view-minimal" onclick="setDongleViewMode('minimal')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                                <span><%= t.viewMinimal %></span>
+                            </button>
+                        </div>
+                        <span class="inline-flex self-start sm:self-auto items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold">
+                            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                            <%= isRtl ? 'تحديث مباشر' : 'Live status' %>
+                        </span>
+                    </div>
                 </div>
 
                 <!-- Action Buttons & Dongle State Legend -->
@@ -1413,6 +1429,32 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         window.escapeHtml = escapeHtml;
 
         document.addEventListener('DOMContentLoaded', () => {
+            let currentViewMode = localStorage.getItem('dongle_view_mode') || 'grid';
+            window.currentViewMode = currentViewMode;
+
+            function updateViewButtons() {
+                const btnGrid = document.getElementById('btn-view-grid');
+                const btnMinimal = document.getElementById('btn-view-minimal');
+                if (!btnGrid || !btnMinimal) return;
+                if (currentViewMode === 'minimal') {
+                    btnMinimal.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white shadow-sm';
+                    btnGrid.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]';
+                } else {
+                    btnGrid.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white shadow-sm';
+                    btnMinimal.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]';
+                }
+            }
+            window.updateViewButtons = updateViewButtons;
+
+            window.setDongleViewMode = function(mode) {
+                currentViewMode = mode;
+                window.currentViewMode = mode;
+                localStorage.setItem('dongle_view_mode', mode);
+                updateViewButtons();
+                if (typeof renderDongleCards === 'function') {
+                    renderDongleCards();
+                }
+            };
             const words = {
                 stateFree: "<%= t.stateFree %>",
                 stateDisconnected: "<%= t.stateDisconnected %>",
@@ -1634,10 +1676,17 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             function renderDongleCards() {
                 if (!donglesGrid) return;
 
+                updateViewButtons();
                 const states = loadedDevices.map(getDongleStateView);
                 if (deviceTotalEl) deviceTotalEl.textContent = String(loadedDevices.length);
                 if (deviceReadyEl) deviceReadyEl.textContent = String(states.filter(state => state.isReady).length);
                 donglesGrid.innerHTML = '';
+
+                if (currentViewMode === 'minimal') {
+                    donglesGrid.className = 'flex flex-col gap-2 p-3 sm:p-4';
+                } else {
+                    donglesGrid.className = 'grid grid-cols-1 md:grid-cols-2 items-start gap-3 p-3 sm:p-4';
+                }
 
                 if (loadedDevices.length === 0) {
                     donglesGrid.innerHTML = `
@@ -1663,94 +1712,139 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     const signal = getDongleSignalView(dev);
                     const card = document.createElement('article');
 
-                    card.className = `dongle-device-card dongle-state-${state.color} rounded-2xl cursor-pointer flex flex-col`;
                     card.id = 'row-' + id;
                     card.dataset.dongleId = id;
                     card.dataset.number = phoneNumber === 'Unknown' ? '' : phoneNumber;
                     card.dataset.imsi = imsi;
                     card.dataset.imei = imei;
-                    if (id === selectedDongleId) card.classList.add('selected-row');
 
-                    card.innerHTML = `
-                        <div class="p-3 sm:p-4 flex-1">
-                            <div class="flex items-start justify-between gap-2.5 mb-3">
-                                <div class="flex items-center gap-3 min-w-0">
-                                    <div class="w-9 h-9 rounded-xl dongle-icon-box flex items-center justify-center shrink-0">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 18h6M9 6h.01M12 6h.01M15 6h.01"/></svg>
-                                    </div>
-                                    <div class="min-w-0">
-                                        <h4 class="text-base sm:text-lg font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(id)}</h4>
-                                        <p class="text-[10px] text-[var(--text-muted)] truncate">${escapeHtml(provider)}</p>
-                                    </div>
-                                </div>
-                                <span class="px-2 py-1 rounded-lg bg-[var(--bg-primary)]/50 border border-[var(--border-primary)] text-[9px] font-bold text-[var(--text-muted)] shrink-0">${isRtl ? 'المجموعة' : 'Group'} ${escapeHtml(dev.Group || '0')}</span>
-                            </div>
+                    if (currentViewMode === 'minimal') {
+                        card.className = `dongle-device-card dongle-state-${state.color} rounded-xl cursor-pointer p-3 sm:px-4 py-2.5 flex items-center justify-between gap-3 text-xs flex-wrap md:flex-nowrap transition-all`;
+                        if (id === selectedDongleId) card.classList.add('selected-row');
 
-                            <div class="dongle-priority-grid grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <div class="dongle-priority-metric">
-                                    <span class="dongle-metric-label">IMEI · ${isRtl ? 'هوية الجهاز' : 'Device Identity'}</span>
-                                    <div class="flex items-center gap-2 min-w-0">
-                                        <span class="dongle-priority-value font-mono flex-1">${escapeHtml(imei)}</span>
-                                        ${imei !== '-' && imei !== 'Unknown' ? `<button type="button" data-dongle-action="copy-imei" class="w-6 h-6 rounded-md bg-[var(--bg-primary)]/40 border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer shrink-0" title="${isRtl ? 'نسخ IMEI' : 'Copy IMEI'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
-                                    </div>
+                        card.innerHTML = `
+                            <div class="flex items-center gap-2.5 min-w-0 shrink-0">
+                                <div class="w-7 h-7 rounded-lg dongle-icon-box flex items-center justify-center shrink-0">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 18h6M9 6h.01M12 6h.01M15 6h.01"/></svg>
                                 </div>
-                                <div class="dongle-priority-metric">
-                                    <span class="dongle-metric-label">${isRtl ? 'الحالة الحالية' : 'Current State'}</span>
-                                    <span class="dongle-status-pill w-full inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-black border uppercase tracking-wider">
-                                        <span class="dongle-status-dot h-2 w-2 rounded-full ${state.badge.dot}${state.animate ? ' animate-pulse' : ''} shrink-0"></span>
-                                        ${escapeHtml(state.label)}
-                                    </span>
+                                <div class="min-w-0">
+                                    <h4 class="text-sm font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(id)}</h4>
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-2">
-                                <div class="dongle-metric">
-                                    <span class="dongle-metric-label">${isRtl ? 'رقم الشريحة' : 'DID / SIM'}</span>
-                                    <div class="flex items-center gap-1 min-w-0">
-                                        <span id="display-num-${escapeHtml(id)}" class="dongle-metric-value font-mono flex-1 truncate">${escapeHtml(phoneNumber)}</span>
-                                        ${phoneNumber !== 'Unknown' ? `<button type="button" data-dongle-action="copy-number" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
-                                        <button type="button" data-dongle-action="edit-number" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'تعديل الرقم' : 'Edit number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4z"/></svg></button>
-                                    </div>
-                                </div>
-                                <div class="dongle-metric">
-                                    <span class="dongle-metric-label">${isRtl ? 'الإشارة' : 'Signal'}</span>
-                                    <div class="flex items-end justify-between gap-2">
-                                        <span class="dongle-metric-value font-mono" style="color:${signal.activeColor}">${signal.percent}%</span>
-                                        <div class="flex items-end gap-0.5 h-[24px]">${signal.barsHtml}</div>
-                                    </div>
-                                </div>
-                                <div class="dongle-metric col-span-2">
-                                    <span class="dongle-metric-label">IMSI · ${isRtl ? 'هوية الشريحة' : 'SIM Identity'}</span>
-                                    <span class="dongle-metric-value font-mono truncate" title="${escapeHtml(imsi)}">${escapeHtml(imsi)}</span>
-                                </div>
-                                <div class="dongle-hardware-summary col-span-2 flex items-center justify-between gap-2 min-w-0">
-                                    <span class="font-black uppercase tracking-wider shrink-0">${isRtl ? 'الجهاز' : 'Hardware'}</span>
-                                    <span class="font-mono truncate text-end" title="${escapeHtml(`${model} · ${mode} · ${firmware}`)}">${escapeHtml(model)} · ${escapeHtml(mode)} · ${escapeHtml(firmware)}</span>
-                                </div>
+                            <div class="flex items-center gap-1.5 min-w-0 shrink-0">
+                                <span class="text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-wider">IMEI:</span>
+                                <span class="font-mono text-xs text-[var(--text-primary)] font-semibold truncate max-w-[140px]" title="${escapeHtml(imei)}">${escapeHtml(imei)}</span>
+                                ${imei !== '-' && imei !== 'Unknown' ? `<button type="button" data-dongle-action="copy-imei" class="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ IMEI' : 'Copy IMEI'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
                             </div>
 
-                            ${renderDongleRouting(dev)}
-                        </div>
-                        <div class="dongle-card-footer px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
-                            <span class="text-[10px] font-extrabold text-[var(--text-muted)] flex items-center gap-1.5 shrink-0">
-                                <span style="color:${signal.activeColor}">●</span> ${escapeHtml(signal.level)} · ${signal.rssi}/31
-                            </span>
-                            <div class="flex items-center gap-1.5 shrink-0">
-                                <button type="button" id="reloadBtn-${escapeHtml(id)}" data-dongle-action="reload" class="dongle-action-button dongle-action-primary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnRestartDongle)}">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
+                            <div class="flex items-center gap-1.5 min-w-0 shrink-0">
+                                <span class="text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-wider">${isRtl ? 'الشريحة:' : 'SIM:'}</span>
+                                <span id="display-num-${escapeHtml(id)}" class="font-mono text-xs text-[var(--text-primary)] font-bold truncate max-w-[130px]">${escapeHtml(phoneNumber)}</span>
+                                ${phoneNumber !== 'Unknown' ? `<button type="button" data-dongle-action="copy-number" class="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
+                            </div>
+
+                            <div class="shrink-0">
+                                <span class="dongle-status-pill inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider">
+                                    <span class="dongle-status-dot h-1.5 w-1.5 rounded-full ${state.badge.dot}${state.animate ? ' animate-pulse' : ''} shrink-0"></span>
+                                    ${escapeHtml(state.label)}
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span class="font-mono text-xs font-bold" style="color:${signal.activeColor}">${signal.percent}%</span>
+                                <div class="flex items-end gap-0.5 h-[16px]">${signal.barsHtml}</div>
+                            </div>
+
+                            <div class="flex items-center gap-1.5 shrink-0 ms-auto md:ms-0">
+                                <button type="button" id="reloadBtn-${escapeHtml(id)}" data-dongle-action="reload" class="dongle-action-button dongle-action-primary cursor-pointer px-2.5 py-1.5 h-8 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm" title="${escapeHtml(words.refreshBtn)}">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
+                                    <span>${escapeHtml(words.refreshBtn)}</span>
                                 </button>
+                            </div>`;
+                    } else {
+                        card.className = `dongle-device-card dongle-state-${state.color} rounded-2xl cursor-pointer flex flex-col`;
+                        if (id === selectedDongleId) card.classList.add('selected-row');
 
-                                <button type="button" id="rebootBtn-${escapeHtml(id)}" data-dongle-action="reboot-modem" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnRebootModem)}">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
-                                </button>
+                        card.innerHTML = `
+                            <div class="p-3 sm:p-4 flex-1">
+                                <div class="flex items-start justify-between gap-2.5 mb-3">
+                                    <div class="flex items-center gap-3 min-w-0">
+                                        <div class="w-9 h-9 rounded-xl dongle-icon-box flex items-center justify-center shrink-0">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 18h6M9 6h.01M12 6h.01M15 6h.01"/></svg>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <h4 class="text-base sm:text-lg font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(id)}</h4>
+                                            <p class="text-[10px] text-[var(--text-muted)] truncate">${escapeHtml(provider)}</p>
+                                        </div>
+                                    </div>
+                                    <span class="px-2 py-1 rounded-lg bg-[var(--bg-primary)]/50 border border-[var(--border-primary)] text-[9px] font-bold text-[var(--text-muted)] shrink-0">${isRtl ? 'المجموعة' : 'Group'} ${escapeHtml(dev.Group || '0')}</span>
+                                </div>
 
-                                <button type="button" id="virtualReplugBtn-${escapeHtml(id)}" data-dongle-action="virtual-replug" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnVirtualReplug)}">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22v-5"/><path d="M9 8V2h6v6"/><path d="M6 13V8h12v5a6 6 0 0 1-12 0z"/></svg>
-                                </button>
+                                <div class="dongle-priority-grid grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div class="dongle-priority-metric">
+                                        <span class="dongle-metric-label">IMEI · ${isRtl ? 'هوية الجهاز' : 'Device Identity'}</span>
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <span class="dongle-priority-value font-mono flex-1">${escapeHtml(imei)}</span>
+                                            ${imei !== '-' && imei !== 'Unknown' ? `<button type="button" data-dongle-action="copy-imei" class="w-6 h-6 rounded-md bg-[var(--bg-primary)]/40 border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer shrink-0" title="${isRtl ? 'نسخ IMEI' : 'Copy IMEI'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
+                                        </div>
+                                    </div>
+                                    <div class="dongle-priority-metric">
+                                        <span class="dongle-metric-label">${isRtl ? 'الحالة الحالية' : 'Current State'}</span>
+                                        <span class="dongle-status-pill w-full inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-black border uppercase tracking-wider">
+                                            <span class="dongle-status-dot h-2 w-2 rounded-full ${state.badge.dot}${state.animate ? ' animate-pulse' : ''} shrink-0"></span>
+                                            ${escapeHtml(state.label)}
+                                        </span>
+                                    </div>
+                                </div>
 
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="dongle-metric">
+                                        <span class="dongle-metric-label">${isRtl ? 'رقم الشريحة' : 'DID / SIM'}</span>
+                                        <div class="flex items-center gap-1 min-w-0">
+                                            <span id="display-num-${escapeHtml(id)}" class="dongle-metric-value font-mono flex-1 truncate">${escapeHtml(phoneNumber)}</span>
+                                            ${phoneNumber !== 'Unknown' ? `<button type="button" data-dongle-action="copy-number" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
+                                            <button type="button" data-dongle-action="edit-number" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'تعديل الرقم' : 'Edit number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4z"/></svg></button>
+                                        </div>
+                                    </div>
+                                    <div class="dongle-metric">
+                                        <span class="dongle-metric-label">${isRtl ? 'الإشارة' : 'Signal'}</span>
+                                        <div class="flex items-end justify-between gap-2">
+                                            <span class="dongle-metric-value font-mono" style="color:${signal.activeColor}">${signal.percent}%</span>
+                                            <div class="flex items-end gap-0.5 h-[24px]">${signal.barsHtml}</div>
+                                        </div>
+                                    </div>
+                                    <div class="dongle-metric col-span-2">
+                                        <span class="dongle-metric-label">IMSI · ${isRtl ? 'هوية الشريحة' : 'SIM Identity'}</span>
+                                        <span class="dongle-metric-value font-mono truncate" title="${escapeHtml(imsi)}">${escapeHtml(imsi)}</span>
+                                    </div>
+                                    <div class="dongle-hardware-summary col-span-2 flex items-center justify-between gap-2 min-w-0">
+                                        <span class="font-black uppercase tracking-wider shrink-0">${isRtl ? 'الجهاز' : 'Hardware'}</span>
+                                        <span class="font-mono truncate text-end" title="${escapeHtml(`${model} · ${mode} · ${firmware}`)}">${escapeHtml(model)} · ${escapeHtml(mode)} · ${escapeHtml(firmware)}</span>
+                                    </div>
+                                </div>
+
+                                ${renderDongleRouting(dev)}
                             </div>
-                        </div>`;
+                            <div class="dongle-card-footer px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
+                                <span class="text-[10px] font-extrabold text-[var(--text-muted)] flex items-center gap-1.5 shrink-0">
+                                    <span style="color:${signal.activeColor}">●</span> ${escapeHtml(signal.level)} · ${signal.rssi}/31
+                                </span>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <button type="button" id="reloadBtn-${escapeHtml(id)}" data-dongle-action="reload" class="dongle-action-button dongle-action-primary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnRestartDongle)}">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
+                                    </button>
 
+                                    <button type="button" id="rebootBtn-${escapeHtml(id)}" data-dongle-action="reboot-modem" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnRebootModem)}">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                                    </button>
+
+                                    <button type="button" id="virtualReplugBtn-${escapeHtml(id)}" data-dongle-action="virtual-replug" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnVirtualReplug)}">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22v-5"/><path d="M9 8V2h6v6"/><path d="M6 13V8h12v5a6 6 0 0 1-12 0z"/></svg>
+                                    </button>
+                                </div>
+                            </div>`;
+                    }
                     donglesGrid.appendChild(card);
                 });
             }

@@ -148,12 +148,14 @@ git config --global http.lowSpeedLimit 1000 2>/dev/null || true
 git config --global http.lowSpeedTime 300 2>/dev/null || true
 
 if [ -d "$INSTALL_DIR" ]; then
-    echo "  Directory $INSTALL_DIR exists, pulling latest..."
+    echo "  Directory $INSTALL_DIR exists, maintaining local modifications..."
     cd "$INSTALL_DIR"
     git config http.postBuffer 524288000 2>/dev/null || true
-    git remote set-url origin "$REPO_URL"
-    git fetch --depth 1 origin "$REPO_BRANCH" || git fetch origin "$REPO_BRANCH"
-    git checkout -B "$REPO_BRANCH" "origin/$REPO_BRANCH"
+    git remote set-url origin "$REPO_URL" 2>/dev/null || true
+    git fetch --depth 1 origin "$REPO_BRANCH" 2>/dev/null || true
+    if git diff-index --quiet HEAD -- 2>/dev/null; then
+        git checkout -B "$REPO_BRANCH" "origin/$REPO_BRANCH" 2>/dev/null || true
+    fi
 else
     if ! git clone --depth 1 --branch "$REPO_BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR"; then
         echo "  Shallow clone failed, retrying git clone..."
@@ -607,7 +609,7 @@ same => n,ExecIf($["${DONGLE_TARGET:0:7}"="Dongle/"]?Set(DONGLE_TARGET=${DONGLE_
 same => n,ExecIf($["${DB_EXISTS(DONGLE_DEVICE_MAP/${DONGLE_TARGET})}"="1"]?Set(DONGLE_TARGET=${DB(DONGLE_DEVICE_MAP/${DONGLE_TARGET})}))
 same => n,GotoIf($["${DONGLE_TARGET}"="" | "${DONGLE_TARGET:0:6}"!="dongle"]?done)
 same => n,Verbose(1, [DONGLE-DIALPLAN-CLEANUP] Resetting dongle ${DONGLE_TARGET} via dialplan System call (Cause: ${HANGUPCAUSE}, DialStatus: ${DIALSTATUS}))
-same => n,System(/usr/sbin/asterisk -rx "dongle restart now ${DONGLE_TARGET}" &)
+same => n,NoOp([DONGLE-DIALPLAN-CLEANUP] Restart disabled for ${DONGLE_TARGET})
 same => n(done),Return()
 MACRO
 # Strip old [macro-dialout-one-predial-hook] before appending
