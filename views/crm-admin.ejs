@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="<%= currentLang %>" dir="<%= currentLang === 'ar' ? 'rtl' : 'ltr' %>" class="h-full">
+<head>
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            if (theme === 'light') { document.documentElement.classList.add('light-theme'); }
+            else { document.documentElement.classList.remove('light-theme'); }
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - <%= currentLang === 'ar' ? 'تكامل CRM' : 'CRM Integration' %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/moment.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #09090b;
+            --bg-secondary: #18181b;
+            --bg-card: #121215;
+            --bg-hover: #27272a;
+            --text-primary: #f4f4f5;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --border-primary: #27272a;
+            --accent-color: #dc2626;
+            --accent-hover: #b91c1c;
+        }
+
+        html.light-theme, body.light-theme {
+            --bg-primary: #f8fafc !important;
+            --bg-secondary: #ffffff !important;
+            --bg-card: #ffffff !important;
+            --bg-hover: #f1f5f9 !important;
+            --text-primary: #0f172a !important;
+            --text-secondary: #334155 !important;
+            --text-muted: #64748b !important;
+            --border-primary: #e2e8f0 !important;
+        }
+
+        body { font-family: '<%= currentLang === "ar" ? "Cairo" : "Plus Jakarta Sans" %>', sans-serif; background-color: var(--bg-primary); color: var(--text-primary); }
+
+        .panel-surface {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+        }
+
+        /* Light Mode Overrides */
+        html.light-theme .panel-surface {
+            background-color: #ffffff !important;
+            border-color: #e2e8f0 !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
+        }
+        html.light-theme .text-white {
+            color: #0f172a !important;
+        }
+        html.light-theme .text-zinc-400 {
+            color: #475569 !important;
+        }
+        html.light-theme .text-zinc-300 {
+            color: #334155 !important;
+        }
+        html.light-theme .text-zinc-200 {
+            color: #1e293b !important;
+        }
+        html.light-theme .bg-black\/40,
+        html.light-theme .bg-black\/30 {
+            background-color: #f1f5f9 !important;
+            border-color: #cbd5e1 !important;
+            color: #0f172a !important;
+        }
+        html.light-theme .bg-zinc-800 {
+            background-color: #e2e8f0 !important;
+            color: #1e293b !important;
+        }
+        html.light-theme .bg-zinc-800:hover {
+            background-color: #cbd5e1 !important;
+        }
+        html.light-theme .bg-emerald-950\/60 {
+            background-color: #ecfdf5 !important;
+            border-color: #6ee7b7 !important;
+            color: #065f46 !important;
+        }
+        html.light-theme .bg-emerald-950\/60 h3,
+        html.light-theme .bg-emerald-950\/60 p,
+        html.light-theme .bg-emerald-950\/60 span {
+            color: #047857 !important;
+        }
+        html.light-theme .bg-amber-950\/60 {
+            background-color: #fffbeb !important;
+            border-color: #fcd34d !important;
+            color: #92400e !important;
+        }
+        html.light-theme .bg-amber-950\/60 h3,
+        html.light-theme .bg-amber-950\/60 p {
+            color: #b45309 !important;
+        }
+        html.light-theme #configModal {
+            background-color: rgba(15, 23, 42, 0.5) !important;
+        }
+        html.light-theme #configModal > div {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #0f172a !important;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15) !important;
+        }
+        html.light-theme input[type="url"],
+        html.light-theme input[type="text"] {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            border-color: #cbd5e1 !important;
+        }
+        html.light-theme input[type="url"]:focus,
+        html.light-theme input[type="text"]:focus {
+            border-color: var(--accent-color) !important;
+        }
+        html.light-theme table tbody tr:hover {
+            background-color: #f8fafc !important;
+        }
+        html.light-theme .btn-primary {
+            background-color: var(--accent-color) !important;
+            color: #ffffff !important;
+        }
+    </style>
+</head>
+<body class="h-full flex overflow-hidden">
+    <%- include('sidebar') %>
+
+    <main class="flex-1 overflow-y-auto p-6 bg-[var(--bg-primary)]">
+        <div class="max-w-7xl mx-auto space-y-6">
+
+            <!-- Page Header -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-black text-[var(--text-primary)]"><%= currentLang === 'ar' ? 'تكامل CRM' : 'Laravel CRM Integration' %></h1>
+                    <p class="text-xs text-[var(--text-secondary)] mt-1"><%= currentLang === 'ar' ? 'إدارة الاقتران والتراخيص والتحكم في الوصول لـ CRM' : 'Manage paired CRM clients, single-use pairing codes, and access permissions' %></p>
+                </div>
+                <button id="btnGeneratePairingCode" class="btn-primary px-4 py-2.5 text-xs uppercase font-bold tracking-wider flex items-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                    <span><%= currentLang === 'ar' ? 'إنشاء كود اقتران' : 'Generate Pairing Code' %></span>
+                </button>
+            </div>
+
+            <!-- Pairing Code Banner -->
+            <div id="pairingCodeBanner" class="hidden bg-emerald-950/60 border border-emerald-500/40 rounded-2xl p-5 text-emerald-200">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-1"><%= currentLang === 'ar' ? 'كود الاقتران الجديد (صالح لمدة 10 دقائق)' : 'One-Time Pairing Code (Valid for 10 Minutes)' %></h3>
+                        <p class="text-xs text-emerald-300/80"><%= currentLang === 'ar' ? 'أدخل هذا الكود في مثبت CRM لإكمال الاقتران الآمن:' : 'Enter this code in your CRM installer to complete secure pairing:' %></p>
+                    </div>
+                    <button id="btnClosePairingBanner" class="text-emerald-400 hover:text-white">✕</button>
+                </div>
+                <div class="mt-4 flex items-center gap-4">
+                    <div id="pairingCodeValue" class="font-mono text-3xl font-black tracking-widest bg-black/40 px-5 py-2.5 rounded-xl border border-emerald-500/30 text-white"></div>
+                    <span class="text-xs text-emerald-400 font-mono" id="pairingCodeExpires"></span>
+                </div>
+            </div>
+
+            <!-- Credentials Rotation Banner -->
+            <div id="rotationBanner" class="hidden bg-amber-950/60 border border-amber-500/40 rounded-2xl p-5 text-amber-200">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-amber-400 uppercase tracking-wider mb-1"><%= currentLang === 'ar' ? 'تم تدوير المفتاح السري' : 'New Secret Key Generated' %></h3>
+                        <p class="text-xs text-amber-300/80"><%= currentLang === 'ar' ? 'انسخ هذا المفتاح الآن. لن يتم إظهاره مرة أخرى:' : 'Copy this secret key now. It will NOT be displayed again:' %></p>
+                    </div>
+                    <button id="btnCloseRotationBanner" class="text-amber-400 hover:text-white">✕</button>
+                </div>
+                <div class="mt-3">
+                    <input type="text" id="rotationSecretValue" readonly class="w-full font-mono text-xs bg-black/40 border border-amber-500/30 rounded-lg p-2.5 text-white select-all">
+                </div>
+            </div>
+
+            <!-- Paired Clients Section -->
+            <div class="panel-surface border border-[var(--border-primary)] rounded-2xl p-6 shadow-xl">
+                <h2 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-4"><%= currentLang === 'ar' ? 'تطبيقات CRM المقترنة' : 'Paired CRM Integration Clients' %></h2>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-start border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-[var(--border-primary)] text-[var(--text-secondary)] font-bold uppercase tracking-wider text-start">
+                                <th class="pb-3 text-start">Client Name</th>
+                                <th class="pb-3 text-start">Client ID</th>
+                                <th class="pb-3 text-start">Allowed Origin</th>
+                                <th class="pb-3 text-start">Country Code</th>
+                                <th class="pb-3 text-start">Last Used</th>
+                                <th class="pb-3 text-start">Status</th>
+                                <th class="pb-3 text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--border-primary)]/40 text-[var(--text-primary)] font-mono">
+                            <% if (clients.length === 0) { %>
+                                <tr>
+                                    <td colspan="7" class="py-8 text-center text-[var(--text-muted)] font-sans">
+                                        No CRM integrations paired yet. Generate a pairing code above to link your CRM.
+                                    </td>
+                                </tr>
+                            <% } %>
+                            <% clients.forEach(client => { %>
+                                <tr>
+                                    <td class="py-3.5 font-sans font-bold text-[var(--text-primary)]"><%= client.name %></td>
+                                    <td class="py-3.5 text-[var(--text-muted)]"><%= client.client_id %></td>
+                                    <td class="py-3.5 text-emerald-600 font-bold"><%= client.allowed_origin %></td>
+                                    <td class="py-3.5 text-[var(--text-muted)]">+<%= client.default_country_code %></td>
+                                    <td class="py-3.5 text-[var(--text-muted)]"><%= client.last_used_at ? moment(client.last_used_at).fromNow() : 'Never' %></td>
+                                    <td class="py-3.5">
+                                        <% if (client.revoked_at) { %>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950 text-rose-300 border border-rose-800">REVOKED</span>
+                                        <% } else { %>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">ACTIVE</span>
+                                        <% } %>
+                                    </td>
+                                    <td class="py-3.5 text-end font-sans">
+                                        <% if (!client.revoked_at) { %>
+                                            <button type="button"
+                                                    class="btn-configure px-2.5 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg transition mr-1"
+                                                    data-id="<%= client.id %>"
+                                                    data-name="<%= client.name %>"
+                                                    data-origin="<%= client.allowed_origin %>"
+                                                    data-country="<%= client.default_country_code %>"
+                                                    data-scopes="<%= typeof client.allowed_scopes === 'string' ? client.allowed_scopes : JSON.stringify(client.allowed_scopes || []) %>">
+                                                Configure
+                                            </button>
+                                            <button type="button" class="btn-rotate px-2.5 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg transition mr-1" data-id="<%= client.id %>">Rotate Secret</button>
+                                            <button type="button" class="btn-revoke px-2.5 py-1 text-[11px] bg-rose-950 hover:bg-rose-900 text-rose-300 rounded-lg transition" data-id="<%= client.id %>">Revoke</button>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Client Configuration Modal -->
+            <div id="configModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-lg w-full p-6 space-y-4">
+                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
+                        <h3 id="modalTitle" class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">Configure Integration Client</h3>
+                        <button type="button" id="btnCloseConfigModal" class="text-zinc-400 hover:text-[var(--text-primary)]">✕</button>
+                    </div>
+
+                    <form id="configForm" class="space-y-4 text-xs">
+                        <input type="hidden" id="editClientId">
+                        <div>
+                            <label class="block text-[var(--text-secondary)] mb-1 font-bold">Allowed CRM Origin (http:// or https://)</label>
+                            <input type="url" id="editOrigin" required class="w-full bg-black/40 border border-[var(--border-primary)] rounded-lg p-2.5 text-[var(--text-primary)] font-mono text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[var(--text-secondary)] mb-1 font-bold">Default Country Code (e.g. 20)</label>
+                            <input type="text" id="editCountryCode" required class="w-full bg-black/40 border border-[var(--border-primary)] rounded-lg p-2.5 text-[var(--text-primary)] font-mono text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[var(--text-secondary)] mb-2 font-bold">Granted Scopes</label>
+                            <div class="grid grid-cols-2 gap-2 bg-black/30 p-3 rounded-lg border border-[var(--border-primary)] font-mono">
+                                <label class="flex items-center gap-2 text-[var(--text-primary)]"><input type="checkbox" name="scope" value="extensions:read"> extensions:read</label>
+                                <label class="flex items-center gap-2 text-[var(--text-primary)]"><input type="checkbox" name="scope" value="calls:read"> calls:read</label>
+                                <label class="flex items-center gap-2 text-[var(--text-primary)]"><input type="checkbox" name="scope" value="recordings:read"> recordings:read</label>
+                                <label class="flex items-center gap-2 text-[var(--text-primary)]"><input type="checkbox" name="scope" value="stats:read"> stats:read</label>
+                                <label class="flex items-center gap-2 text-[var(--text-primary)]"><input type="checkbox" name="scope" value="live:read"> live:read</label>
+                                <label class="flex items-center gap-2 text-amber-500 font-bold"><input type="checkbox" name="scope" value="live:listen"> live:listen ⚡</label>
+                                <label class="flex items-center gap-2 text-amber-500 font-bold"><input type="checkbox" name="scope" value="live:whisper"> live:whisper ⚡</label>
+                                <label class="flex items-center gap-2 text-amber-500 font-bold"><input type="checkbox" name="scope" value="live:barge"> live:barge ⚡</label>
+                                <label class="flex items-center gap-2 text-rose-500 font-bold"><input type="checkbox" name="scope" value="live:hangup"> live:hangup ⚡</label>
+                                <label class="flex items-center gap-2 text-rose-500 font-bold"><input type="checkbox" name="scope" value="live:hijack"> live:hijack ⚡</label>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end gap-2 pt-3 border-t border-[var(--border-primary)]">
+                            <button type="button" id="btnCancelConfig" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg">Cancel</button>
+                            <button type="submit" class="btn-primary px-4 py-2 rounded-lg font-bold">Save Configuration</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Audit Log Section -->
+            <div class="panel-surface border border-[var(--border-primary)] rounded-2xl p-6 shadow-xl">
+                <h2 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-4"><%= currentLang === 'ar' ? 'سجل العمليات المباشرة (CRM Audit Log)' : 'Live Control Audit Log' %></h2>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-start border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-[var(--border-primary)] text-[var(--text-secondary)] font-bold uppercase tracking-wider text-start">
+                                <th class="pb-3 text-start">Timestamp</th>
+                                <th class="pb-3 text-start">Client ID</th>
+                                <th class="pb-3 text-start">CRM User</th>
+                                <th class="pb-3 text-start">Supervisor Ext</th>
+                                <th class="pb-3 text-start">Target Ext</th>
+                                <th class="pb-3 text-start">Action</th>
+                                <th class="pb-3 text-start">Result</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--border-primary)]/40 text-[var(--text-primary)] font-mono">
+                            <% if (auditLogs.length === 0) { %>
+                                <tr>
+                                    <td colspan="7" class="py-6 text-center text-[var(--text-muted)] font-sans">No live control audit records found</td>
+                                </tr>
+                            <% } %>
+                            <% auditLogs.forEach(log => { %>
+                                <tr>
+                                    <td class="py-2.5 text-[var(--text-muted)]"><%= moment(log.created_at).format('YYYY-MM-DD HH:mm:ss') %></td>
+                                    <td class="py-2.5 text-[var(--text-primary)]"><%= log.client_id %></td>
+                                    <td class="py-2.5 text-[var(--text-primary)]"><%= log.crm_user_id || '-' %></td>
+                                    <td class="py-2.5 text-emerald-600 font-bold"><%= log.supervisor_extension || '-' %></td>
+                                    <td class="py-2.5 text-amber-600 font-bold"><%= log.target_extension || '-' %></td>
+                                    <td class="py-2.5 uppercase text-[var(--text-primary)] font-bold"><%= log.action %></td>
+                                    <td class="py-2.5">
+                                        <% if (log.success) { %>
+                                            <span class="text-emerald-600 font-bold">SUCCESS</span>
+                                        <% } else { %>
+                                            <span class="text-rose-600 font-bold">FAILED</span>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        (function() {
+            const defaultHeaders = {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            };
+
+            async function fetchJson(url, options = {}) {
+                options.headers = Object.assign({}, defaultHeaders, options.headers || {});
+                const res = await fetch(url, options);
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {}
+                if (!res.ok || data.success === false) {
+                    throw new Error(data.error || ('Request failed with status ' + res.status));
+                }
+                return data;
+            }
+
+            const btnGenerate = document.getElementById('btnGeneratePairingCode');
+            if (btnGenerate) {
+                btnGenerate.addEventListener('click', async () => {
+                    try {
+                        const data = await fetchJson('/integrations/crm/pairing-code', { method: 'POST' });
+                        document.getElementById('pairingCodeValue').textContent = data.pairing_code;
+                        const expDate = new Date(data.expires_at);
+                        const timeStr = (typeof moment !== 'undefined') ? moment(data.expires_at).fromNow() : expDate.toLocaleTimeString();
+                        document.getElementById('pairingCodeExpires').textContent = 'Expires ' + timeStr;
+                        document.getElementById('pairingCodeBanner').classList.remove('hidden');
+                    } catch (e) {
+                        alert(e.message || 'Failed to generate pairing code');
+                    }
+                });
+            }
+
+            const btnClosePairing = document.getElementById('btnClosePairingBanner');
+            if (btnClosePairing) {
+                btnClosePairing.addEventListener('click', () => {
+                    document.getElementById('pairingCodeBanner').classList.add('hidden');
+                });
+            }
+
+            const btnCloseRotation = document.getElementById('btnCloseRotationBanner');
+            if (btnCloseRotation) {
+                btnCloseRotation.addEventListener('click', () => {
+                    document.getElementById('rotationBanner').classList.add('hidden');
+                });
+            }
+
+            const btnCloseConfig = document.getElementById('btnCloseConfigModal');
+            if (btnCloseConfig) {
+                btnCloseConfig.addEventListener('click', closeConfigModal);
+            }
+
+            const btnCancelConfig = document.getElementById('btnCancelConfig');
+            if (btnCancelConfig) {
+                btnCancelConfig.addEventListener('click', closeConfigModal);
+            }
+
+            function closeConfigModal() {
+                document.getElementById('configModal').classList.add('hidden');
+            }
+
+            document.querySelectorAll('.btn-configure').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-id');
+                    const name = btn.getAttribute('data-name');
+                    const origin = btn.getAttribute('data-origin');
+                    const country = btn.getAttribute('data-country');
+                    const scopesRaw = btn.getAttribute('data-scopes');
+
+                    document.getElementById('editClientId').value = id;
+                    document.getElementById('modalTitle').textContent = 'Configure Integration: ' + name;
+                    document.getElementById('editOrigin').value = origin;
+                    document.getElementById('editCountryCode').value = country;
+
+                    let scopeList = [];
+                    try {
+                        scopeList = typeof scopesRaw === 'string' ? JSON.parse(scopesRaw) : (scopesRaw || []);
+                    } catch (e) {}
+
+                    document.querySelectorAll('#configForm input[name="scope"]').forEach(cb => {
+                        cb.checked = scopeList.includes(cb.value);
+                    });
+
+                    document.getElementById('configModal').classList.remove('hidden');
+                });
+            });
+
+            document.querySelectorAll('.btn-rotate').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.getAttribute('data-id');
+                    if (!confirm('Are you sure you want to rotate the secret for this client? The old secret will stop working immediately.')) return;
+                    try {
+                        const data = await fetchJson('/integrations/crm/clients/' + id + '/rotate', { method: 'POST' });
+                        document.getElementById('rotationSecretValue').value = data.new_secret;
+                        document.getElementById('rotationBanner').classList.remove('hidden');
+                    } catch (e) {
+                        alert(e.message || 'Failed to rotate secret');
+                    }
+                });
+            });
+
+            document.querySelectorAll('.btn-revoke').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.getAttribute('data-id');
+                    if (!confirm('Are you sure you want to revoke this CRM integration client?')) return;
+                    try {
+                        await fetchJson('/integrations/crm/clients/' + id + '/revoke', { method: 'POST' });
+                        window.location.reload();
+                    } catch (e) {
+                        alert(e.message || 'Failed to revoke client');
+                    }
+                });
+            });
+
+            const configForm = document.getElementById('configForm');
+            if (configForm) {
+                configForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const id = document.getElementById('editClientId').value;
+                    const origin = document.getElementById('editOrigin').value;
+                    const countryCode = document.getElementById('editCountryCode').value;
+
+                    const selectedScopes = [];
+                    document.querySelectorAll('#configForm input[name="scope"]:checked').forEach(cb => {
+                        selectedScopes.push(cb.value);
+                    });
+
+                    try {
+                        await fetchJson('/integrations/crm/clients/' + id + '/update', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                allowed_origin: origin,
+                                default_country_code: countryCode,
+                                allowed_scopes: selectedScopes
+                            })
+                        });
+                        window.location.reload();
+                    } catch (e) {
+                        alert(e.message || 'Failed to update client configuration');
+                    }
+                });
+            }
+        })();
+    </script>
+</body>
+</html>

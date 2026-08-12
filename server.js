@@ -24,10 +24,21 @@ const ffmpeg = require('fluent-ffmpeg');
 const axios = require('axios');
 const crypto = require('crypto');
 
+const createCrmRouter = require('./routes/crm-integration');
+const registerCrmLiveSocket = require('./socket/crm-live');
+const {
+    initCrmTables,
+    createPairingCode,
+    consumeEmbedTicket,
+    hashSecret
+} = require('./lib/integration-auth');
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'issabel-dashboard-encryption-key-32c'; // Must be 32 bytes
-const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest();
+let rawEncryptionKey = process.env.ENCRYPTION_KEY;
+if (!rawEncryptionKey || rawEncryptionKey.length < 32 || rawEncryptionKey.includes('change-me')) {
+    rawEncryptionKey = crypto.randomBytes(32).toString('hex');
+}
+const key = crypto.createHash('sha256').update(String(rawEncryptionKey)).digest();
 
 function encrypt(text) {
     const iv = crypto.randomBytes(16);
@@ -53,7 +64,8 @@ function decrypt(text) {
 }
 
 const app = express();
-app.set('trust proxy', true);
+const TRUST_PROXY = process.env.TRUST_PROXY || false;
+app.set('trust proxy', TRUST_PROXY === 'true' ? 1 : (TRUST_PROXY || false));
 const SSL_CERT = process.env.SSL_CERT || '/etc/asterisk/keys/asterisk.pem';
 const SSL_KEY = process.env.SSL_KEY || '/etc/asterisk/keys/asterisk.pem';
 let server;
@@ -75,11 +87,13 @@ if ((process.env.USE_HTTPS === 'true' || process.env.SSL_PORT) && fs.existsSync(
 const io = new Server(server);
 ffmpeg.setFfmpegPath('/usr/local/bin/ffmpeg');
 const PORT = (process.env.USE_HTTPS === 'true' && process.env.SSL_PORT) ? parseInt(process.env.SSL_PORT, 10) : (parseInt(process.env.PORT, 10) || 3000);
-const SESSION_SECRET = process.env.SESSION_SECRET || 'issabel-dashboard-secret-change-me';
+let SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET || SESSION_SECRET === 'issabel-dashboard-secret-change-me') {
+    SESSION_SECRET = crypto.randomBytes(32).toString('hex');
+}
 
 const ROOT_USER = 'root';
-const ROOT_PASS = 'Admin@123';
-let rootHash = null;
+const ROOT_PASSWORD_HASH = process.env.ROOT_PASSWORD_HASH;
 
 function safeIdentifier(name, value) {
     if (!/^[A-Za-z0-9_]+$/.test(value)) {
@@ -149,13 +163,22 @@ const sessionMiddleware = session({
     cookie: { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 }
 });
 app.use(sessionMiddleware);
-io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
+io.use((socket, next) => {
+    sessionMiddleware(socket.request, {}, () => {
+        const sess = socket.request.session;
+        if (sess && (sess.userId || sess.isRoot)) {
+            return next();
+        }
+        next(new Error('Unauthorized Socket.io connection'));
+    });
+});
 
 // --- DATABASE INIT & AUTO-PROVISION ---
 const ALL_TABS = [
     'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'softphone', 'contacts', 'users', 'config', 'storage',
     'config-extensions', 'config-ringgroups', 'config-queues', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram',
-    'config-timegroups', 'config-timeconditions', 'config-announcements', 'config-modem', 'config-dongles', 'config-terminal'
+    'config-timegroups', 'config-timeconditions', 'config-announcements', 'config-modem', 'config-dongles', 'config-terminal',
+    'operator-listen', 'operator-whisper', 'operator-barge', 'operator-hangup', 'operator-hijack'
 ];
 
 async function initAuthDb() {
@@ -441,13 +464,10 @@ async function initAuthDb() {
         } catch (_) {}
     }
 
-    // Auto-provision default admin user
-    rootHash = await bcrypt.hash(ROOT_PASS, 10);
+    // User accounts setup
     const [rows] = await conn.execute('SELECT COUNT(*) AS cnt FROM dashboard_users');
     if (rows[0].cnt === 0) {
-        const hash = await bcrypt.hash('admin', 10);
-        await conn.execute('INSERT INTO dashboard_users (username, password_hash, group_id) VALUES (?, ?, ?)', ['admin', hash, superAdminGroupId]);
-        console.log('AUTH: Default admin user provisioned (admin / admin) in super admins group');
+        console.log('AUTH: Fresh install detected. No user accounts exist in database.');
     } else {
         // Assign existing users without a group to the super admins group
         const [orphans] = await conn.execute('SELECT COUNT(*) AS cnt FROM dashboard_users WHERE group_id IS NULL');
@@ -522,6 +542,11 @@ async function initAuthDb() {
     } catch (qErr) {
         console.error('QUEUE auto-provision error:', qErr.message);
     }
+    try {
+        await initCrmTables(conn);
+    } catch (crmErr) {
+        console.error('CRM DB init error:', crmErr.message);
+    }
     await conn.end();
     await syncAllExtensionsAstdb();
     await acquireDialerLeaderLock();
@@ -531,9 +556,9 @@ initAuthDb().catch(err => console.error('AUTH DB init error:', err));
 // --- SESSION HELPERS ---
 function isSuperAdmin(req) {
     if (!req || !req.session) return false;
-    if (req.session.isRoot || req.session.username === 'admin' || req.session.username === ROOT_USER) return true;
+    if (req.session.isRoot || req.session.username === ROOT_USER) return true;
     const g = String(req.session.userGroup || '').toLowerCase().trim();
-    return g === 'super admins' || g === 'super admin' || g === 'admin' || g === 'administrator' || g === 'administrators';
+    return g === 'super admins' || g === 'super admin' || g === 'administrator' || g === 'administrators';
 }
 
 async function getUserPermissions(userId) {
@@ -751,11 +776,21 @@ function requireAuth(req, res, next) {
         res.locals.currentUser = req.session.username;
         return next();
     }
-    if (req.path.startsWith('/api/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/integrations/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
         return res.status(401).json({ success: false, error: 'Unauthorized. Please log in.' });
     }
     const loginUrl = '/login' + (req.originalUrl !== '/' ? '?redirect=' + encodeURIComponent(req.originalUrl) : '');
     res.redirect(loginUrl);
+}
+function requireActionPermission(actionPermission) {
+    return (req, res, next) => {
+        if (isSuperAdmin(req)) return next();
+        const perms = req.session.userPermissions || [];
+        if (perms.includes(actionPermission) || perms.includes('operator')) {
+            return next();
+        }
+        return res.status(403).json({ success: false, error: `Forbidden. Missing permission: ${actionPermission}` });
+    };
 }
 
 function requireConfigPermission(subTab) {
@@ -774,9 +809,9 @@ app.use((req, res, next) => {
     const publicPaths = [
         '/login', '/logout', '/forgot-password', '/reset-password',
         '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info',
-        '/favicon.ico', '/favicon.png', '/robots.txt'
+        '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live'
     ];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/')) {
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/integrations/crm/v1/')) {
         return next();
     }
     requireAuth(req, res, next);
@@ -869,9 +904,32 @@ app.use('/api/config', (req, res, next) => {
     return res.status(403).json({ success: false, error: 'Unauthorized: Permission denied for ' + subTab });
 });
 
+function sanitizeLogPayload(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const sensitiveKeys = new Set(['password', 'password_confirmation', 'secret', 'token', 'authorization', 'pairing_code', 'client_secret', 'reset_token', 'sip_secret', 'secret_hash', 'credentials']);
+    const copy = Array.isArray(obj) ? [] : {};
+    for (const [k, v] of Object.entries(obj)) {
+        if (sensitiveKeys.has(k.toLowerCase())) {
+            copy[k] = '[REDACTED]';
+        } else if (v && typeof v === 'object') {
+            copy[k] = sanitizeLogPayload(v);
+        } else {
+            copy[k] = v;
+        }
+    }
+    return copy;
+}
+
 app.use((req, res, next) => {
+    const sensitiveEndpoints = ['/pair', '/token', '/login', '/reset-password', '/embed-tickets'];
+    const isSensitive = sensitiveEndpoints.some(p => req.path.includes(p));
+
     if (req.path.startsWith('/api/') || req.path === '/gsm-dongles') {
-        console.log(`HTTP [${new Date().toISOString()}] ${req.method} ${req.url} - Body: ${JSON.stringify(req.body)}`);
+        if (isSensitive) {
+            console.log(`HTTP [${new Date().toISOString()}] ${req.method} ${req.url} - Body: [REDACTED SENSITIVE ENDPOINT]`);
+        } else {
+            console.log(`HTTP [${new Date().toISOString()}] ${req.method} ${req.url} - Body: ${JSON.stringify(sanitizeLogPayload(req.body))}`);
+        }
     }
     next();
 });
@@ -894,6 +952,24 @@ let peerStatus = {};
 let peerIPs = {};
 let pjsipContactState = {};
 let sipSnapshotStartTime = 0;
+// Mount CRM Integration REST API Router
+app.use('/api/integrations/crm/v1', createCrmRouter(pool, { getPeerStatus: () => peerStatus }));
+
+// Register /crm-live Socket.io namespace
+
+function notifyCrmLiveBroadcaster() {
+    if (typeof crmLiveBroadcaster === 'object' && crmLiveBroadcaster && typeof crmLiveBroadcaster.broadcastStateUpdate === 'function') {
+        crmLiveBroadcaster.broadcastStateUpdate();
+    }
+}
+
+const crmLiveBroadcaster = registerCrmLiveSocket(io, pool, {
+    getPeerStatus: () => peerStatus,
+    getActiveCalls: () => activeCalls,
+    getAmiClient: () => amiClient,
+    ASTERISK_BIN,
+    execFileAsync
+});
 let pjsipSnapshotStartTime = 0;
 let pjsipBatchContactIds = new Set();
 let pendingOffline = {};
@@ -912,7 +988,7 @@ function updateExtensionPresence(name) {
     let isOnline = (sipPresence[name] === true) || (pjsipPresence[name] === true) || hasPjsipContactOnline;
     if (peerStatus[name] !== isOnline) {
         peerStatus[name] = isOnline;
-        io.emit('peerStatus', peerStatus);
+        io.emit('peerStatus', peerStatus); notifyCrmLiveBroadcaster();
         getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
     }
 }
@@ -933,7 +1009,7 @@ function updateAllExtensionPresence() {
         let isOnline = (sipPresence[ext] === true) || (pjsipPresence[ext] === true) || hasPjsipContactOnline;
         peerStatus[ext] = isOnline;
     }
-    io.emit('peerStatus', peerStatus);
+    io.emit('peerStatus', peerStatus); notifyCrmLiveBroadcaster();
     getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
 }
 
@@ -1516,7 +1592,7 @@ function connectAMI() {
                     // Clear call from activeCalls if extension status reports Idle (0) or unavailable/unregistered
                     if ((statusStr === '0' || !isOnline) && activeCalls[name]) {
                         delete activeCalls[name];
-                        io.emit('callUpdate', { extension: name, callData: null });
+                        notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: name, callData: null });
                     }
                 }
             }
@@ -1542,7 +1618,7 @@ function connectAMI() {
                         start: Date.now(),
                         channel: event.Channel
                     };
-                    io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
+                    notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
                 }
             }
 
@@ -1550,12 +1626,11 @@ function connectAMI() {
             if (event.Event === 'Newstate') {
                 let exten = getExtensionFromChannel(event.Channel);
                 if (exten) {
-                    let calculatedState = 'Ringing';
-                    if (event.ChannelStateDesc === 'Up' || event.ChannelState === '6') {
-                        calculatedState = 'In Call';
-                    } else if (activeCalls[exten]?.state === 'In Call') {
-                        calculatedState = 'In Call';
-                    }
+                    let desc = String(event.ChannelStateDesc || event.State || '').toLowerCase();
+                    let stateNum = String(event.ChannelState || '');
+                    let isUp = desc === 'up' || stateNum === '6';
+
+                    let calculatedState = isUp ? 'In Call' : (activeCalls[exten]?.state === 'In Call' ? 'In Call' : 'Ringing');
                     let existing = activeCalls[exten];
                     let partner = existing?.partner || 'Connecting...';
                     if (event.CallerIDNum && event.CallerIDNum !== exten) {
@@ -1571,32 +1646,42 @@ function connectAMI() {
                         start = age < 14400000 && age >= 0 ? existing.start : Date.now();
                     }
                     activeCalls[exten] = { state: calculatedState, partner, start, channel: event.Channel || existing?.channel };
+                    
+                    if (isUp && partner && partner !== 'Connecting...' && activeCalls[partner]) {
+                        activeCalls[partner].state = 'In Call';
+                    }
+
+                    notifyCrmLiveBroadcaster();
                     io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
                 }
             }
 
             // Fallback catching: Ensure bridge entrances catch linked channel audio paths
-            if (event.Event === 'BridgeEnter') {
-                let exten = getExtensionFromChannel(event.Channel);
-                if (exten) {
-                    let existing = activeCalls[exten];
-                    let partner = existing?.partner || 'Connecting...';
-                    if (event.CallerIDNum && event.CallerIDNum !== exten) {
-                        partner = event.CallerIDNum;
-                    } else if (event.ConnectedLineNum && event.ConnectedLineNum !== exten && event.ConnectedLineNum !== '<unknown>') {
-                        partner = event.ConnectedLineNum;
+            if (event.Event === 'BridgeEnter' || event.Event === 'Bridge' || event.Event === 'Link') {
+                let channels = [event.Channel, event.Channel1, event.Channel2, event.DestinationChannel].filter(Boolean);
+                channels.forEach(ch => {
+                    let exten = getExtensionFromChannel(ch);
+                    if (exten) {
+                        let existing = activeCalls[exten];
+                        let partner = existing?.partner || 'Connecting...';
+                        if (event.CallerIDNum && event.CallerIDNum !== exten) {
+                            partner = event.CallerIDNum;
+                        } else if (event.ConnectedLineNum && event.ConnectedLineNum !== exten && event.ConnectedLineNum !== '<unknown>') {
+                            partner = event.ConnectedLineNum;
+                        }
+                        let start = existing?.start || Date.now();
+                        let age = Date.now() - start;
+                        if (age >= 14400000 || age < 0) start = Date.now();
+                        activeCalls[exten] = {
+                            state: 'In Call',
+                            partner: partner,
+                            start: start,
+                            channel: ch
+                        };
+                        io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
                     }
-                    let start = existing?.start || Date.now();
-                    let age = Date.now() - start;
-                    if (age >= 14400000 || age < 0) start = Date.now();
-                    activeCalls[exten] = {
-                        state: 'In Call',
-                        partner: partner,
-                        start: start,
-                        channel: event.Channel
-                    };
-                    io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
-                }
+                });
+                notifyCrmLiveBroadcaster();
             }
 
             // Clean tear down when either party terminates the tracked call channel
@@ -1620,7 +1705,7 @@ function connectAMI() {
                 extsToClear.forEach(e => {
                     if (activeCalls[e]) {
                         delete activeCalls[e];
-                        io.emit('callUpdate', { extension: e, callData: null });
+                        notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: e, callData: null });
                     }
                 });
             }
@@ -1642,7 +1727,7 @@ setInterval(() => {
         let age = now - (activeCalls[ext].start || 0);
         if (age >= 14400000 || age < 0) {
             delete activeCalls[ext];
-            io.emit('callUpdate', { extension: ext, callData: null });
+            notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: ext, callData: null });
         }
     }
 }, 60000);
@@ -1674,7 +1759,7 @@ async function reconcileActiveCallsWithAsterisk() {
 
             if (!isChanLive && !isExtLive) {
                 delete activeCalls[ext];
-                io.emit('callUpdate', { extension: ext, callData: null });
+                notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: ext, callData: null });
             }
         }
     } catch (_) {}
@@ -2063,9 +2148,12 @@ app.post('/login', async (req, res) => {
         if (!username || !password) {
             return res.render('login', { redirect: req.body.redirect || '/', error: 'Username and password are required', currentLang: req.query.lang || 'en' });
         }
-        // Hardcoded root user — bypasses DB, super admin, not visible in user list
+        // Hardcoded root user — authenticated via process.env.ROOT_PASSWORD_HASH
         if (username === ROOT_USER) {
-            const match = await bcrypt.compare(password, rootHash);
+            if (!ROOT_PASSWORD_HASH) {
+                return res.render('login', { redirect: req.body.redirect || '/', error: 'Root user login disabled. ROOT_PASSWORD_HASH environment variable not set.', currentLang: req.query.lang || 'en' });
+            }
+            const match = await bcrypt.compare(password, ROOT_PASSWORD_HASH);
             if (!match) {
                 return res.render('login', { redirect: req.body.redirect || '/', error: 'Invalid credentials', currentLang: req.query.lang || 'en' });
             }
@@ -3355,24 +3443,14 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
 });
 
 // Hangup endpoint to end call on a specific extension
-app.post('/api/hangup/:extension', (req, res) => {
+app.post('/api/hangup/:extension', requireAuth, requireActionPermission('operator-hangup'), async (req, res) => {
     try {
         const { extension } = req.params;
-        const call = activeCalls[extension];
-        if (!call || !call.channel) {
-            return res.status(404).json({ success: false, error: 'No active channel found for extension.' });
-        }
-        if (amiClient) {
-            amiClient.write(`Action: Hangup\r\nChannel: ${call.channel}\r\n\r\n`);
-            return res.json({ success: true });
-        } else {
-            exec(`${ASTERISK_BIN} -rx "channel request hangup ${call.channel}"`, (err) => {
-                if (err) return res.status(500).json({ success: false, error: err.message });
-                res.json({ success: true });
-            });
-        }
+        const { executeCallHangup } = require('./lib/call-control');
+        await executeCallHangup(amiClient, ASTERISK_BIN, activeCalls, extension);
+        res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(400).json({ success: false, error: error.message });
     }
 });
 
@@ -3738,107 +3816,93 @@ function setDialplanDenoiseStatus({ rx, tx }) {
         let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
         if (ctxMatch) {
             currentContext = ctxMatch[1].trim();
+            newLines.push(line);
+            continue;
         }
+
         if (currentContext && SOKRAT_DENOISE_CONTEXTS.includes(currentContext)) {
-            const compact = trimmed.replace(/\s+/g, '');
-            if (compact === 'same=>n,Set(DENOISE(rx)=on)' || compact === 'same=>n,Set(DENOISE(tx)=on)') {
+            if (trimmed.includes('DENOISE(rx)=on') || trimmed.includes('DENOISE(tx)=on')) {
                 continue;
             }
         }
         newLines.push(line);
     }
 
-    lines = newLines;
+    if (rxState || txState) {
+        let finalLines = [];
+        let inTargetCtx = false;
 
+        for (let i = 0; i < newLines.length; i++) {
+            let line = newLines[i];
+            let trimmed = line.trim();
+            let ctxMatch = trimmed.match(/^\[([^\]]+)\]/);
 
+            if (ctxMatch) {
+                inTargetCtx = SOKRAT_DENOISE_CONTEXTS.includes(ctxMatch[1].trim());
+            }
 
-    fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
+            finalLines.push(line);
+
+            if (inTargetCtx && (trimmed.startsWith('exten =>') || trimmed.startsWith('same =>'))) {
+                if (rxState) finalLines.push(`same => n,Set(DENOISE(rx)=on)`);
+                if (txState) finalLines.push(`same => n,Set(DENOISE(tx)=on)`);
+                inTargetCtx = false;
+            }
+        }
+        newLines = finalLines;
+    }
+
+    fs.writeFileSync(filePath, newLines.join('\n'), 'utf8');
 }
-app.post('/api/spy', async (req, res) => {
+
+app.post('/api/spy', requireAuth, (req, res, next) => {
+    const mode = String(req.body.mode || 'listen').toLowerCase();
+    const perm = `operator-${mode}`;
+    requireActionPermission(perm)(req, res, next);
+}, async (req, res) => {
     try {
         const { targetExtension, supervisorExtension, mode } = req.body;
-        const target = String(targetExtension || '').trim();
-        const supervisor = String(supervisorExtension || '').trim();
-        const spyMode = mode || 'listen';
-
-        if (!target || !supervisor) {
-            return res.status(400).json({ success: false, error: 'Target and Supervisor extensions are required.' });
-        }
-        if (!/^\d{2,5}$/.test(target) || !/^\d{2,5}$/.test(supervisor)) {
-            return res.status(400).json({ success: false, error: 'Invalid extension format.' });
-        }
-
-        const prefix = spyMode === 'whisper' ? '223' : (spyMode === 'barge' ? '224' : '222');
-        const spyExten = `${prefix}${target}`;
-        const supervisorChan = await resolveDeviceChannel(supervisor);
-
-        if (amiClient) {
-            amiClient.write(`Action: Originate\r\nChannel: ${supervisorChan}\r\nContext: from-internal\r\nExten: ${spyExten}\r\nPriority: 1\r\nCallerID: "Call Spy" <${spyExten}>\r\nVariable: __SIPADDHEADER=X-Call-Purpose: Monitoring\r\nAsync: true\r\n\r\n`);
-            return res.json({ success: true, message: `Calling supervisor extension ${supervisor} for ${spyMode} mode on ${target}.` });
-        } else {
-            exec(`${ASTERISK_BIN} -rx "channel originate ${supervisorChan} extension ${spyExten}@from-internal"`, (err) => {
-                if (err) return res.status(500).json({ success: false, error: err.message });
-                res.json({ success: true, message: `Calling supervisor extension ${supervisor} for ${spyMode} mode on ${target}.` });
-            });
-        }
+        const { executeCallSpy } = require('./lib/call-control');
+        await executeCallSpy(pool, amiClient, ASTERISK_BIN, {
+            supervisorExt: supervisorExtension,
+            targetExt: targetExtension,
+            mode: mode || 'listen'
+        });
+        res.json({ success: true, message: `Calling supervisor extension ${supervisorExtension} for ${mode || 'listen'} mode on ${targetExtension}.` });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(400).json({ success: false, error: error.message });
     }
 });
 
-// POST /api/hijack - Hijack call (Transfer client to supervisor and kick out employee)
-app.post('/api/hijack', (req, res) => {
+app.post('/api/hijack', requireAuth, requireActionPermission('operator-hijack'), async (req, res) => {
     try {
         const { targetExtension, supervisorExtension } = req.body;
         const target = String(targetExtension || '').trim();
         const supervisor = String(supervisorExtension || '').trim();
 
-        if (!target) {
-            return res.status(400).json({ success: false, error: 'Target extension is required.' });
-        }
-        if (!supervisor) {
-            return res.status(400).json({ success: false, error: 'Supervisor extension is required.' });
-        }
-        if (!/^\d{2,5}$/.test(target) || !/^\d{2,5}$/.test(supervisor)) {
-            return res.status(400).json({ success: false, error: 'Invalid extension format.' });
+        if (!target || !supervisor) {
+            return res.status(400).json({ success: false, error: 'Target and Supervisor extensions are required.' });
         }
 
         const call = activeCalls[target];
         if (!call || !call.channel) {
-            return res.status(404).json({ success: false, error: `No active call found for extension ${target}.` });
+            return res.status(404).json({ success: false, error: `No active call found for extension ${target}` });
         }
 
-        const empChan = call.channel;
+        const { resolveDeviceChannel } = require('./lib/call-control');
+        const supervisorChan = await resolveDeviceChannel(pool, supervisor);
 
-        // Query Asterisk channel details to find the client/peer channel
-        exec(`${ASTERISK_BIN} -rx "core show channel ${empChan}"`, (err, stdout, stderr) => {
-            let peerChan = null;
-
-            if (stdout) {
-                const match = stdout.match(/Bridgepeer:\s*([^\s\r\n]+)/i) || 
-                              stdout.match(/BRIDGED_TO\s*=\s*([^\s\r\n]+)/i);
-                if (match) {
-                    peerChan = match[1];
-                }
-            }
-
-            if (peerChan) {
-                // Redirect client to supervisor and disconnect employee
-                exec(`${ASTERISK_BIN} -rx "channel redirect ${peerChan} from-internal,${supervisor},1"`, () => {
-                    exec(`${ASTERISK_BIN} -rx "channel request hangup ${empChan}"`, () => {});
-                });
-            } else {
-                // Redirect employee channel directly to supervisor
-                exec(`${ASTERISK_BIN} -rx "channel redirect ${empChan} from-internal,${supervisor},1"`, () => {});
-            }
-
-            res.json({ 
-                success: true, 
-                message: `Call hijacked: Client redirected to extension ${supervisor}, employee ${target} disconnected.` 
+        if (amiClient) {
+            amiClient.write(`Action: Redirect\r\nChannel: ${call.channel}\r\nContext: from-internal\r\nExten: ${supervisor}\r\nPriority: 1\r\n\r\n`);
+            res.json({ success: true, message: `Redirecting call on extension ${target} to supervisor ${supervisor}.` });
+        } else {
+            exec(`${ASTERISK_BIN} -rx "channel redirect ${call.channel} from-internal,${supervisor},1"`, (err) => {
+                if (err) return res.status(500).json({ success: false, error: err.message });
+                res.json({ success: true, message: `Redirecting call on extension ${target} to supervisor ${supervisor}.` });
             });
-        });
+        }
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(400).json({ success: false, error: error.message });
     }
 });
 
@@ -10473,5 +10537,191 @@ app.post('/log_error', (req, res) => {
     console.error('[BROWSER-ERROR]', req.body.error);
     res.json({ success: true });
 });
+// --- SOKRAT SUPER ADMIN CRM INTEGRATION MANAGEMENT ROUTES ---
+app.get('/integrations/crm', requireAuth, async (req, res) => {
+    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) return res.redirect('/');
+    try {
+        const [clients] = await pool.query('SELECT id, client_id, name, allowed_origin, default_country_code, allowed_scopes, created_at, last_used_at, revoked_at FROM `asterisk`.`dashboard_crm_clients` ORDER BY id DESC');
+        const [auditLogs] = await pool.query('SELECT id, client_id, crm_user_id, supervisor_extension, target_extension, action, success, details, created_at FROM `asterisk`.`dashboard_crm_audit_logs` ORDER BY id DESC LIMIT 100');
+        res.render('crm-admin', { clients, auditLogs, moment, currentLang: req.session.lang || 'en' });
+    } catch (err) {
+        res.status(500).send('CRM Admin Error: ' + err.message);
+    }
+});
 
+app.post('/integrations/crm/pairing-code', requireAuth, async (req, res) => {
+    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can generate pairing codes.' });
+    }
+    try {
+        const codeData = await createPairingCode(pool, req.session.username || 'root');
+        res.json({
+            success: true,
+            pairing_code: codeData.rawCode,
+            expires_at: codeData.expiresAt.toISOString()
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/integrations/crm/clients/:id/revoke', requireAuth, async (req, res) => {
+    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can revoke integration clients.' });
+    }
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id < 1) return res.status(400).json({ success: false, error: 'Invalid client ID' });
+
+        const [clientRows] = await pool.query('SELECT client_id FROM `asterisk`.`dashboard_crm_clients` WHERE id = ? AND revoked_at IS NULL', [id]);
+        if (clientRows.length === 0) return res.status(404).json({ success: false, error: 'Client not found or already revoked' });
+
+        const clientId = clientRows[0].client_id;
+        await pool.query('UPDATE `asterisk`.`dashboard_crm_clients` SET revoked_at = NOW() WHERE id = ?', [id]);
+
+        if (crmLiveBroadcaster && typeof crmLiveBroadcaster.disconnectClient === 'function') {
+            crmLiveBroadcaster.disconnectClient(clientId);
+        }
+
+        const { logCrmAudit } = require('./lib/integration-auth');
+        await logCrmAudit(pool, {
+            clientId,
+            crmUserId: req.session.username,
+            supervisorExtension: null,
+            targetExtension: null,
+            action: 'client_revoked',
+            success: true,
+            details: 'Client revoked by Root User'
+        });
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/integrations/crm/clients/:id/rotate', requireAuth, async (req, res) => {
+    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can rotate client secrets.' });
+    }
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id < 1) return res.status(400).json({ success: false, error: 'Invalid client ID' });
+
+        const [clientRows] = await pool.query('SELECT client_id FROM `asterisk`.`dashboard_crm_clients` WHERE id = ? AND revoked_at IS NULL', [id]);
+        if (clientRows.length === 0) return res.status(404).json({ success: false, error: 'Active client not found' });
+
+        const clientId = clientRows[0].client_id;
+        const newRawSecret = crypto.randomBytes(32).toString('hex');
+        const secretHash = hashSecret(newRawSecret);
+
+        await pool.query('UPDATE `asterisk`.`dashboard_crm_clients` SET secret_hash = ? WHERE id = ?', [secretHash, id]);
+
+        if (crmLiveBroadcaster && typeof crmLiveBroadcaster.disconnectClient === 'function') {
+            crmLiveBroadcaster.disconnectClient(clientId);
+        }
+
+        const { logCrmAudit } = require('./lib/integration-auth');
+        await logCrmAudit(pool, {
+            clientId,
+            crmUserId: req.session.username,
+            supervisorExtension: null,
+            targetExtension: null,
+            action: 'client_secret_rotated',
+            success: true,
+            details: 'Secret rotated by Root User'
+        });
+
+        const newBearerToken = `${clientId}.${newRawSecret}`;
+        res.json({ success: true, new_secret: newBearerToken });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/integrations/crm/clients/:id/update', requireAuth, async (req, res) => {
+    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can update integration configuration.' });
+    }
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id < 1) return res.status(400).json({ success: false, error: 'Invalid client ID' });
+
+        const { allowed_origin, default_country_code, allowed_scopes } = req.body || {};
+        const { validateOriginUrl, SUPPORTED_SCOPES, logCrmAudit } = require('./lib/integration-auth');
+
+        const validOrigin = validateOriginUrl(allowed_origin);
+        if (!validOrigin) {
+            return res.status(400).json({ success: false, error: 'Invalid origin URL. Must be http:// or https:// without path/query/wildcards.' });
+        }
+
+        const [clientRows] = await pool.query('SELECT client_id FROM `asterisk`.`dashboard_crm_clients` WHERE id = ? AND revoked_at IS NULL', [id]);
+        if (clientRows.length === 0) return res.status(404).json({ success: false, error: 'Active client not found' });
+
+        const clientId = clientRows[0].client_id;
+        const cc = String(default_country_code || '20').replace(/\D/g, '') || '20';
+        const rawScopes = Array.isArray(allowed_scopes) ? allowed_scopes : [];
+        const validatedScopes = rawScopes.filter(s => SUPPORTED_SCOPES.has(s));
+
+        await pool.query(
+            'UPDATE `asterisk`.`dashboard_crm_clients` SET allowed_origin = ?, default_country_code = ?, allowed_scopes = ? WHERE id = ?',
+            [validOrigin, cc, JSON.stringify(validatedScopes), id]
+        );
+
+        if (crmLiveBroadcaster && typeof crmLiveBroadcaster.disconnectClient === 'function') {
+            crmLiveBroadcaster.disconnectClient(clientId);
+        }
+
+        await logCrmAudit(pool, {
+            clientId,
+            crmUserId: req.session.username,
+            supervisorExtension: null,
+            targetExtension: null,
+            action: 'client_configuration_update',
+            success: true,
+            details: { origin: validOrigin, country_code: cc, scopes: validatedScopes }
+        });
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// --- EMBEDDED CRM LIVE PANEL VIEW ---
+app.get('/embed/crm/live', async (req, res) => {
+    const { ticket } = req.query;
+    if (!ticket) {
+        return res.status(400).send('Embed ticket is required');
+    }
+
+    try {
+        const result = await consumeEmbedTicket(pool, ticket);
+        if (!result) {
+            return res.status(403).send('Invalid, expired, or already consumed embed ticket');
+        }
+
+        const { sessionToken, ticket: embedSession } = result;
+
+        const { validateOriginUrl, safeJsonSerialize } = require('./lib/integration-auth');
+        const allowedOrigin = validateOriginUrl(embedSession.allowed_origin);
+        if (!allowedOrigin) {
+            return res.status(403).send('Invalid or untrusted parent client allowed origin');
+        }
+
+        res.setHeader('Content-Security-Policy', `frame-ancestors 'self' ${allowedOrigin}`);
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Referrer-Policy', 'no-referrer');
+
+        res.render('embed-live', {
+            sessionToken,
+            session: embedSession,
+            moment,
+            currentLang: req.query.lang || 'en',
+            safeJsonSerialize
+        });
+    } catch (err) {
+        res.status(500).send('Embed Error: ' + err.message);
+    }
+});
 server.listen(PORT, () => console.log(`Real-Time Enterprise Engine active on port ${PORT}`));

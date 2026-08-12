@@ -173,3 +173,52 @@ UPDATE `asterisk`.`pjsipsettings` SET `data` = '2', `seq` = 1 WHERE `keyword` = 
 UPDATE `asterisk`.`pjsipsettings` SET `data` = '3', `seq` = 2 WHERE `keyword` = 'ulaw';
 UPDATE `asterisk`.`pjsipsettings` SET `data` = '4', `seq` = 3 WHERE `keyword` = 'alaw';
 UPDATE `asterisk`.`pjsipsettings` SET `data` = '5', `seq` = 4 WHERE `keyword` = 'gsm';
+CREATE TABLE IF NOT EXISTS `dashboard_crm_clients` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `client_id` VARCHAR(64) NOT NULL UNIQUE,
+  `name` VARCHAR(100) NOT NULL,
+  `secret_hash` VARCHAR(255) NOT NULL,
+  `allowed_origin` VARCHAR(255) NOT NULL,
+  `default_country_code` VARCHAR(10) NOT NULL DEFAULT '20',
+  `allowed_scopes` TEXT NOT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `last_used_at` DATETIME DEFAULT NULL,
+  `revoked_at` DATETIME DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `dashboard_crm_pairing_codes` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `code_hash` VARCHAR(255) NOT NULL UNIQUE,
+  `expires_at` DATETIME NOT NULL,
+  `used_at` DATETIME DEFAULT NULL,
+  `created_by` VARCHAR(100) NOT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `dashboard_crm_embed_tickets` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `ticket_hash` VARCHAR(255) NOT NULL UNIQUE,
+  `session_token_hash` VARCHAR(255) DEFAULT NULL UNIQUE,
+  `client_id` VARCHAR(64) NOT NULL,
+  `crm_user_id` VARCHAR(100) NOT NULL,
+  `crm_user_name` VARCHAR(100) NOT NULL,
+  `supervisor_extension` VARCHAR(20) DEFAULT NULL,
+  `effective_scopes` TEXT NOT NULL,
+  `expires_at` DATETIME NOT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `consumed_at` DATETIME DEFAULT NULL,
+  `session_expires_at` DATETIME DEFAULT NULL,
+  KEY `idx_session_hash` (`session_token_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `dashboard_crm_audit_logs` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `client_id` VARCHAR(64) NOT NULL,
+  `crm_user_id` VARCHAR(100) DEFAULT NULL,
+  `supervisor_extension` VARCHAR(20) DEFAULT NULL,
+  `target_extension` VARCHAR(20) DEFAULT NULL,
+  `action` VARCHAR(50) NOT NULL,
+  `success` TINYINT(1) NOT NULL DEFAULT 1,
+  `details` TEXT DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

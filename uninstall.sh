@@ -12,7 +12,7 @@ echo " Issabel Dashboard Uninstaller"
 echo "============================================"
 
 # 1. Stop and disable sokrat-voip service
-echo "[1/4] Stopping and removing sokrat-voip systemd service..."
+echo "[1/5] Stopping and removing sokrat-voip systemd service..."
 if systemctl is-active sokrat-voip &>/dev/null || systemctl is-enabled sokrat-voip &>/dev/null; then
     systemctl stop sokrat-voip 2>/dev/null || true
     systemctl disable sokrat-voip 2>/dev/null || true
@@ -24,9 +24,16 @@ fi
 echo "  Service stopped and unit file removed."
 
 # 2. Restore Apache configuration to default Issabel behavior
-echo "[2/4] Restoring Apache web server configuration..."
+echo "[2/5] Restoring Apache web server configuration..."
 
 # Remove dashboard reverse proxy config for port 80
+if [ -f /etc/httpd/conf.d/dashboard.conf ]; then
+    rm -f /etc/httpd/conf.d/dashboard.conf
+    echo "  Removed /etc/httpd/conf.d/dashboard.conf"
+fi
+
+# Remove proxy directives inserted into ssl.conf
+if [ -f /etc/httpd/conf.d/ssl.conf ]; then
     sed -i '/ProxyPreserveHost On/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
     sed -i '/RewriteEngine On/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
     sed -i '/RewriteCond %{HTTP:Upgrade}/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
@@ -53,10 +60,14 @@ if systemctl is-active httpd &>/dev/null; then
 fi
 
 # 3. Preserving database (explicit notice)
-echo "[3/4] Database notice: Database tables were NOT touched or altered."
+echo "[3/5] Database notice: Database tables were NOT touched or altered."
 
-# 4. Remove dashboard directory
-echo "[4/4] Removing dashboard installation directory..."
+# 4. Remove root credential file if present
+echo "[4/5] Cleaning up root credential file..."
+rm -f /etc/sokrat-root-credential.txt
+
+# 5. Remove dashboard directory
+echo "[5/5] Removing dashboard installation directory..."
 cd /tmp
 if [ -d "$INSTALL_DIR" ]; then
     rm -rf "$INSTALL_DIR"

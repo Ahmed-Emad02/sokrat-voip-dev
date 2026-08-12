@@ -221,8 +221,18 @@ if [ -f "$INSTALL_DIR/.env" ]; then
     echo "  .env already exists, updating AMI credentials..."
     sed -i "s/^AMI_USER=.*/AMI_USER=${AMPMGR_USER}/" "$INSTALL_DIR/.env"
     sed -i "s/^AMI_PASS=.*/AMI_PASS=${AMPMGR_PASS}/" "$INSTALL_DIR/.env"
+    if ! grep -q '^ROOT_PASSWORD_HASH=' "$INSTALL_DIR/.env"; then
+        GEN_ROOT_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9')
+        GEN_ROOT_HASH=$(node -e "console.log(require('bcrypt').hashSync('$GEN_ROOT_PASS', 10))")
+        echo "ROOT_PASSWORD_HASH=${GEN_ROOT_HASH}" >> "$INSTALL_DIR/.env"
+        echo "ROOT_USER=root" > /etc/sokrat-root-credential.txt
+        echo "ROOT_PASSWORD=${GEN_ROOT_PASS}" >> /etc/sokrat-root-credential.txt
+        chmod 600 /etc/sokrat-root-credential.txt
+    fi
     echo "  .env AMI credentials updated ($AMPMGR_USER)"
 else
+    GEN_ROOT_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9')
+    GEN_ROOT_HASH=$(node -e "console.log(require('bcrypt').hashSync('$GEN_ROOT_PASS', 10))")
     cat > "$INSTALL_DIR/.env" << EOF
 PORT=8080
 DB_HOST=localhost
@@ -240,7 +250,11 @@ ENCRYPTION_KEY=$(openssl rand -hex 32)
 SMTP_HOST=localhost
 SMTP_PORT=25
 SMTP_FROM=noreply@sokrat-voip.local
+ROOT_PASSWORD_HASH=${GEN_ROOT_HASH}
 EOF
+    echo "ROOT_USER=root" > /etc/sokrat-root-credential.txt
+    echo "ROOT_PASSWORD=${GEN_ROOT_PASS}" >> /etc/sokrat-root-credential.txt
+    chmod 600 /etc/sokrat-root-credential.txt
     echo "  .env created"
 fi
 
