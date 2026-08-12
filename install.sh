@@ -825,6 +825,7 @@ echo "  dashboard.conf created (port 80 -> :8080 with WebSocket support)"
 
 # Add ProxyPass & WebSocket rewrite to SSL vhost (port 443 -> :8080)
 if ! grep -q 'ProxyPass.*8080' /etc/httpd/conf.d/ssl.conf; then
+    sed -i '/ProxyPreserveHost On/d; /RewriteEngine On/d; /RewriteCond %{HTTP:Upgrade}/d; /RewriteCond %{REQUEST_URI}/d; /RewriteRule.*ws:\/\/127\.0\.0\.1:8080/d; /ProxyPass.*8080/d; /ProxyPassReverse.*8080/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
     sed -i '/^SSLEngine on$/a\    ProxyPreserveHost On\n    RewriteEngine On\n    RewriteCond %{HTTP:Upgrade} =websocket [NC]\n    RewriteCond %{REQUEST_URI} ^/socket.io [NC]\n    RewriteRule /(.*) ws://127.0.0.1:8080/\$1 [P,L]\n    ProxyPass /socket.io http://127.0.0.1:8080/socket.io\n    ProxyPassReverse /socket.io http://127.0.0.1:8080/socket.io\n    ProxyPass / http://127.0.0.1:8080/\n    ProxyPassReverse / http://127.0.0.1:8080/' /etc/httpd/conf.d/ssl.conf
     echo "  SSL vhost proxied (port 443 -> :8080 with WebSocket support)"
 else

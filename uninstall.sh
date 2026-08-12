@@ -27,22 +27,13 @@ echo "  Service stopped and unit file removed."
 echo "[2/4] Restoring Apache web server configuration..."
 
 # Remove dashboard reverse proxy config for port 80
-if [ -f /etc/httpd/conf.d/dashboard.conf ]; then
-    rm -f /etc/httpd/conf.d/dashboard.conf
-    echo "  Removed /etc/httpd/conf.d/dashboard.conf"
-fi
-
-# Remove proxy directives inserted into ssl.conf
-if [ -f /etc/httpd/conf.d/ssl.conf ]; then
     sed -i '/ProxyPreserveHost On/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
     sed -i '/RewriteEngine On/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
-    sed -i '/RewriteCond %{HTTP:Upgrade} =websocket/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
-    sed -i '/RewriteCond %{REQUEST_URI} \^\/socket\.io/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
-    sed -i '/RewriteRule \/\(\.\*\) ws:\/\/127\.0\.0\.1:8080/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
-    sed -i '/ProxyPass \/socket\.io http:\/\/127\.0\.0\.1:8080/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
-    sed -i '/ProxyPassReverse \/socket\.io http:\/\/127\.0\.0\.1:8080/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
-    sed -i '/ProxyPass \/ http:\/\/127\.0\.0\.1:8080/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
-    sed -i '/ProxyPassReverse \/ http:\/\/127\.0\.0\.1:8080/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
+    sed -i '/RewriteCond %{HTTP:Upgrade}/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
+    sed -i '/RewriteCond %{REQUEST_URI}/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
+    sed -i '/RewriteRule.*ws:\/\/127\.0\.0\.1:8080/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
+    sed -i '/ProxyPass.*8080/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
+    sed -i '/ProxyPassReverse.*8080/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
     echo "  Cleaned proxy settings from /etc/httpd/conf.d/ssl.conf"
 fi
 
