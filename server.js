@@ -761,7 +761,8 @@ function requireConfigPermission(subTab) {
 app.use((req, res, next) => {
     const publicPaths = [
         '/login', '/logout', '/forgot-password', '/reset-password',
-        '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info'
+        '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info',
+        '/favicon.ico', '/favicon.png', '/robots.txt'
     ];
     if (publicPaths.includes(req.path) || req.path.startsWith('/public/')) {
         return next();
