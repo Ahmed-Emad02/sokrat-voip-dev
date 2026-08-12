@@ -2338,7 +2338,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </button>
             <button type="button" onclick="triggerDashboardUpdate()" id="updateDashboardBtn" class="settings-action cursor-pointer text-emerald-400 hover:text-emerald-300">
                 <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></span>
-                <span class="settings-action-label"><%= currentLang === 'ar' ? 'تحديث النظام (Update Dashboard)' : 'Update Dashboard' %></span>
+                <span class="settings-action-label"><%= currentLang === 'ar' ? 'تحديث النظام (Update Sokrat VoIP)' : 'Update Sokrat VoIP' %></span>
                 <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
             </button>
             <% } %>
@@ -2937,29 +2937,60 @@ function closeNetworkModal() {
     document.getElementById('networkModal').style.pointerEvents = 'none';
 }
 function triggerDashboardUpdate() {
-    if (!confirm('<%= currentLang === "ar" ? "هل أنت متأكد من تحديث النظام لأحدث إصدار؟" : "Are you sure you want to update Sokrat VoIP to the latest version?" %>')) return;
+    if (!confirm('<%= currentLang === "ar" ? "هل أنت متأكد من تحديث Sokrat VoIP لأحدث إصدار؟" : "Are you sure you want to update Sokrat VoIP to the latest version?" %>')) return;
     
     document.getElementById('settingsMenu').classList.remove('visible', 'opacity-100', 'scale-100');
     document.getElementById('settingsMenu').classList.add('invisible', 'opacity-0', 'scale-95');
     document.getElementById('settingsMenu').style.pointerEvents = 'none';
 
+    let overlay = document.getElementById('updateOverlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'updateOverlay';
+        overlay.className = 'fixed inset-0 bg-black/85 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-6 text-white font-sans text-center transition-opacity duration-300';
+        overlay.innerHTML = `
+            <div class="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <h3 class="text-xl font-bold mb-2"><%= currentLang === 'ar' ? 'جاري تحديث Sokrat VoIP...' : 'Updating Sokrat VoIP...' %></h3>
+            <p class="text-sm text-zinc-400 max-w-md"><%= currentLang === 'ar' ? 'جاري سحب التحديثات وإعادة تشغيل الخدمات. يرجى الانتظار...' : 'Pulling latest version and restarting services. Please wait...' %></p>
+        `;
+        document.body.appendChild(overlay);
+    }
+
+    const pollAndReload = () => {
+        let attempts = 0;
+        const maxAttempts = 35;
+        setTimeout(() => {
+            const interval = setInterval(async () => {
+                attempts++;
+                try {
+                    const res = await fetch('/api/network-info', { cache: 'no-store' });
+                    if (res.ok) {
+                        clearInterval(interval);
+                        window.location.reload();
+                    }
+                } catch (e) {
+                    // Server restarting
+                }
+                if (attempts >= maxAttempts) {
+                    clearInterval(interval);
+                    window.location.reload();
+                }
+            }, 2000);
+        }, 3000);
+    };
+
     fetch('/api/system/update', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                alert(data.message || 'Update initiated successfully. Reloading page in 5 seconds...');
-                setTimeout(() => {
-                    window.location.reload();
-                }, 5000);
+                pollAndReload();
             } else {
+                if (overlay) overlay.remove();
                 alert(data.error || 'Failed to trigger update');
             }
         })
         .catch(err => {
-            alert('Update started. Reloading page in 5 seconds...');
-            setTimeout(() => {
-                window.location.reload();
-            }, 5000);
+            pollAndReload();
         });
 }
 
