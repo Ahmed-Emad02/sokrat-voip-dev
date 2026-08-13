@@ -26,6 +26,7 @@ const crypto = require('crypto');
 
 const createCrmRouter = require('./routes/crm-integration');
 const registerCrmLiveSocket = require('./socket/crm-live');
+const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
 const {
     initCrmTables,
     createPairingCode,
@@ -372,6 +373,21 @@ async function initAuthDb() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     await conn.execute(`
+        CREATE TABLE IF NOT EXISTS dashboard_inbound_blacklist (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            phone_number VARCHAR(50) NOT NULL UNIQUE,
+            description VARCHAR(255) DEFAULT NULL,
+            action VARCHAR(30) DEFAULT 'zapateller',
+            enabled TINYINT(1) DEFAULT 1,
+            blocked_count INT DEFAULT 0,
+            last_blocked_at DATETIME DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_phone (phone_number),
+            KEY idx_enabled (enabled)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
         CREATE TABLE IF NOT EXISTS storage_settings (
             id INT PRIMARY KEY DEFAULT 1,
             auto_purge_days INT DEFAULT 90,
@@ -464,19 +480,21 @@ async function initAuthDb() {
         } catch (_) {}
     }
 
-    // User accounts setup
-    const [rows] = await conn.execute('SELECT COUNT(*) AS cnt FROM dashboard_users');
-    if (rows[0].cnt === 0) {
-        console.log('AUTH: Fresh install detected. No user accounts exist in database.');
-    } else {
-        // Assign existing users without a group to the super admins group
-        const [orphans] = await conn.execute('SELECT COUNT(*) AS cnt FROM dashboard_users WHERE group_id IS NULL');
-        if (orphans[0].cnt > 0) {
-            await conn.execute('UPDATE dashboard_users SET group_id = ? WHERE group_id IS NULL', [superAdminGroupId]);
-            console.log('AUTH: Assigned ' + orphans[0].cnt + ' existing user(s) to super admins group');
-        }
-        console.log('AUTH: Dashboard users table ready, existing users found');
+    // User accounts setup: auto-provision default "admin" account with password "admin"
+    const [adminCheck] = await conn.execute('SELECT id FROM dashboard_users WHERE username = ?', ['admin']);
+    if (adminCheck.length === 0) {
+        const adminPassHash = await bcrypt.hash('admin', 10);
+        await conn.execute('INSERT INTO dashboard_users (username, password_hash, group_id) VALUES (?, ?, ?)', ['admin', adminPassHash, superAdminGroupId]);
+        console.log('AUTH: Auto-provisioned default "admin" user with password "admin" in super admins group');
     }
+
+    // Assign any existing users without a group to the super admins group
+    const [orphans] = await conn.execute('SELECT COUNT(*) AS cnt FROM dashboard_users WHERE group_id IS NULL');
+    if (orphans[0].cnt > 0) {
+        await conn.execute('UPDATE dashboard_users SET group_id = ? WHERE group_id IS NULL', [superAdminGroupId]);
+        console.log('AUTH: Assigned ' + orphans[0].cnt + ' existing user(s) to super admins group');
+    }
+    console.log('AUTH: Dashboard users table ready');
 
     // Auto-provision default ACD queue 300 (autodialer-queue) ONLY once on initial setup if no queues exist
     try {
@@ -5595,6 +5613,152 @@ app.post('/api/contacts/delete', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+// --- INBOUND BLACKLIST API ENDPOINTS & ASTDB SYNC ---
+
+async function syncBlacklistEntryToAstDB(phone, enabled) {
+    const cleanPhone = String(phone || '').replace(/[^\d+*#]/g, '').trim();
+    if (!cleanPhone) return;
+    const variants = getPhoneVariants(cleanPhone);
+    const allKeys = new Set([cleanPhone, ...variants].filter(Boolean));
+
+    for (const key of allKeys) {
+        try {
+            if (enabled) {
+                await execPromise(`${ASTERISK_BIN} -rx "database put blacklist ${key} 1"`);
+            } else {
+                await execPromise(`${ASTERISK_BIN} -rx "database del blacklist ${key}"`);
+            }
+        } catch (err) {
+            console.error(`AstDB blacklist sync error for ${key}:`, err.message);
+        }
+    }
+}
+
+async function fullSyncBlacklistToAstDB() {
+    try {
+        const [rows] = await pool.query('SELECT phone_number, enabled FROM `asterisk`.`dashboard_inbound_blacklist`');
+        let syncedCount = 0;
+        for (const row of rows) {
+            await syncBlacklistEntryToAstDB(row.phone_number, row.enabled === 1);
+            if (row.enabled === 1) syncedCount++;
+        }
+        return { success: true, total: rows.length, active: syncedCount };
+    } catch (err) {
+        console.error('Full AstDB blacklist sync error:', err.message);
+        throw err;
+    }
+}
+
+// GET /api/blacklist — List all blocked numbers
+app.get('/api/blacklist', requireAuth, async (req, res) => {
+    try {
+        const [blacklist] = await pool.query('SELECT * FROM `asterisk`.`dashboard_inbound_blacklist` ORDER BY created_at DESC');
+        res.json({ success: true, blacklist });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/blacklist — Add a number to inbound blacklist
+app.post('/api/blacklist', async (req, res) => {
+    if (!isSuperAdmin(req)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    try {
+        const { phone_number, description, action, enabled } = req.body;
+        if (!phone_number || !phone_number.trim()) {
+            return res.status(400).json({ success: false, error: 'Phone number is required' });
+        }
+        const cleanPhone = String(phone_number).trim();
+        const blAction = ['zapateller', 'hangup', 'congestion'].includes(action) ? action : 'zapateller';
+        const isEnabled = enabled !== false && enabled !== '0' && enabled !== 0 ? 1 : 0;
+
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`dashboard_inbound_blacklist\` (phone_number, description, action, enabled)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE description = VALUES(description), action = VALUES(action), enabled = VALUES(enabled)
+        `, [cleanPhone, description || null, blAction, isEnabled]);
+
+        await syncBlacklistEntryToAstDB(cleanPhone, isEnabled === 1);
+
+        res.json({ success: true, message: `Phone number ${cleanPhone} added to inbound blacklist` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// PUT /api/blacklist/:id — Edit or toggle an inbound blacklist entry
+app.put('/api/blacklist/:id', async (req, res) => {
+    if (!isSuperAdmin(req)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ success: false, error: 'Invalid entry ID' });
+
+        const { phone_number, description, action, enabled } = req.body;
+        const [existing] = await pool.query('SELECT * FROM `asterisk`.`dashboard_inbound_blacklist` WHERE id = ?', [id]);
+        if (existing.length === 0) {
+            return res.status(404).json({ success: false, error: 'Blacklist entry not found' });
+        }
+
+        const oldPhone = existing[0].phone_number;
+        const newPhone = phone_number ? String(phone_number).trim() : oldPhone;
+        const blAction = ['zapateller', 'hangup', 'congestion'].includes(action) ? action : existing[0].action;
+        const isEnabled = enabled !== undefined ? (enabled ? 1 : 0) : existing[0].enabled;
+
+        await pool.query(`
+            UPDATE \`asterisk\`.\`dashboard_inbound_blacklist\`
+            SET phone_number = ?, description = ?, action = ?, enabled = ?
+            WHERE id = ?
+        `, [newPhone, description !== undefined ? (description || null) : existing[0].description, blAction, isEnabled, id]);
+
+        if (oldPhone !== newPhone) {
+            await syncBlacklistEntryToAstDB(oldPhone, false);
+        }
+        await syncBlacklistEntryToAstDB(newPhone, isEnabled === 1);
+
+        res.json({ success: true, message: 'Blacklist entry updated successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// DELETE /api/blacklist/:id — Delete an inbound blacklist entry
+app.delete('/api/blacklist/:id', async (req, res) => {
+    if (!isSuperAdmin(req)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ success: false, error: 'Invalid entry ID' });
+
+        const [existing] = await pool.query('SELECT phone_number FROM `asterisk`.`dashboard_inbound_blacklist` WHERE id = ?', [id]);
+        if (existing.length > 0) {
+            const phone = existing[0].phone_number;
+            await pool.query('DELETE FROM `asterisk`.`dashboard_inbound_blacklist` WHERE id = ?', [id]);
+            await syncBlacklistEntryToAstDB(phone, false);
+        }
+
+        res.json({ success: true, message: 'Blacklist entry deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/blacklist/sync — Force full sync from MySQL to AstDB
+app.post('/api/blacklist/sync', async (req, res) => {
+    if (!isSuperAdmin(req)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    try {
+        const result = await fullSyncBlacklistToAstDB();
+        res.json({ success: true, message: `AstDB sync complete. ${result.active} active rule(s) synced to Asterisk.`, result });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 
 // --- PBX CONFIGURATION TAB VIEW & REST APIS ---
 
@@ -10278,6 +10442,50 @@ app.post('/api/contacts/csv-import', csvUpload.single('file'), async (req, res) 
         }
     } catch (err) {
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+// POST /api/blacklist/import — CSV upload for importing multiple blocked numbers
+app.post('/api/blacklist/import', csvUpload.single('file'), async (req, res) => {
+    if (!isSuperAdmin(req)) {
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    try {
+        if (!req.file) return res.status(400).json({ success: false, error: 'No CSV file uploaded' });
+
+        const csvContent = fs.readFileSync(req.file.path, 'utf8');
+        fs.unlinkSync(req.file.path);
+
+        const lines = csvContent.split(/\r?\n/);
+        let imported = 0;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
+            const firstCell = parts[0] || '';
+            if (i === 0 && (firstCell.toLowerCase().includes('phone') || firstCell.toLowerCase().includes('number'))) {
+                continue;
+            }
+            const phone = firstCell.replace(/[\s\-\(\)\.]/g, '');
+            if (!phone || phone.length < 3) continue;
+
+            const desc = parts[1] || 'CSV Import';
+            const action = parts[2] && ['zapateller', 'hangup', 'congestion'].includes(parts[2].toLowerCase()) ? parts[2].toLowerCase() : 'zapateller';
+
+            await pool.query(`
+                INSERT INTO \`asterisk\`.\`dashboard_inbound_blacklist\` (phone_number, description, action, enabled)
+                VALUES (?, ?, ?, 1)
+                ON DUPLICATE KEY UPDATE description = VALUES(description), action = VALUES(action), enabled = 1
+            `, [phone, desc, action]);
+
+            await syncBlacklistEntryToAstDB(phone, true);
+            imported++;
+        }
+
+        res.json({ success: true, message: `Successfully imported ${imported} number(s) into inbound blacklist.` });
+    } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });

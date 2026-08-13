@@ -85,6 +85,175 @@ const isRtl = currentLang === 'ar';
         }
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
+
+        /* Light Theme Overrides & High Contrast Button Styles */
+        html.light-theme {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-card: #f1f5f9;
+            --bg-hover: #e2e8f0;
+            --border-primary: #cbd5e1;
+            --border-accent: #94a3b8;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+        }
+        html.light-theme body::before {
+            background:
+                radial-gradient(circle at 10% 20%, rgba(225, 29, 72, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 0, 0, 0.02) 0%, transparent 45%) !important;
+        }
+        .blacklist-trigger-btn {
+            background-color: rgba(225, 29, 72, 0.25) !important;
+            color: #fecdd3 !important;
+            border: 1px solid rgba(244, 63, 94, 0.5) !important;
+        }
+        .blacklist-trigger-btn:hover {
+            background-color: rgba(225, 29, 72, 0.4) !important;
+            color: #ffffff !important;
+            border-color: rgba(244, 63, 94, 0.8) !important;
+        }
+        html.light-theme .blacklist-trigger-btn {
+            background-color: #ffe4e6 !important;
+            color: #881337 !important;
+            border: 1px solid #f43f5e !important;
+        }
+        html.light-theme .blacklist-trigger-btn:hover {
+            background-color: #fecdd3 !important;
+            color: #4c0519 !important;
+            border-color: #e11d48 !important;
+        }
+        .btn-sync-astdb {
+            background-color: rgba(245, 158, 11, 0.22) !important;
+            color: #fef08a !important;
+            border: 1px solid rgba(245, 158, 11, 0.5) !important;
+        }
+        .btn-sync-astdb:hover {
+            background-color: rgba(245, 158, 11, 0.38) !important;
+            color: #ffffff !important;
+            border-color: rgba(245, 158, 11, 0.8) !important;
+        }
+        html.light-theme .btn-sync-astdb {
+            background-color: #fef3c7 !important;
+            color: #78350f !important;
+            border: 1px solid #f59e0b !important;
+        }
+        html.light-theme .btn-sync-astdb:hover {
+            background-color: #fde68a !important;
+            color: #451a03 !important;
+            border-color: #d97706 !important;
+        }
+        .btn-cancel-action {
+            background-color: #27272a !important;
+            color: #f4f4f5 !important;
+            border: 1px solid #3f3f46 !important;
+        }
+        .btn-cancel-action:hover {
+            background-color: #3f3f46 !important;
+            color: #ffffff !important;
+            border-color: #52525b !important;
+        }
+        html.light-theme .btn-cancel-action {
+            background-color: #e2e8f0 !important;
+            color: #0f172a !important;
+            border: 1px solid #94a3b8 !important;
+        }
+        html.light-theme .btn-cancel-action:hover {
+            background-color: #cbd5e1 !important;
+            color: #020617 !important;
+            border-color: #64748b !important;
+        }
+        .modal-close-icon {
+            color: #a1a1aa !important;
+            background-color: transparent;
+        }
+        .modal-close-icon:hover {
+            color: #ffffff !important;
+            background-color: #27272a !important;
+        }
+        html.light-theme .modal-close-icon {
+            color: #475569 !important;
+            background-color: transparent;
+        }
+        html.light-theme .modal-close-icon:hover {
+            color: #0f172a !important;
+            background-color: #cbd5e1 !important;
+        }
+        .table-action-icon {
+            color: #d4d4d8 !important;
+            background-color: #27272a !important;
+            border: 1px solid #3f3f46 !important;
+        }
+        .table-action-icon:hover {
+            color: #ffffff !important;
+            background-color: #3f3f46 !important;
+            border-color: #52525b !important;
+        }
+        html.light-theme .table-action-icon {
+            color: #0f172a !important;
+            background-color: #e2e8f0 !important;
+            border: 1px solid #94a3b8 !important;
+        }
+        html.light-theme .table-action-icon:hover {
+            color: #020617 !important;
+            background-color: #cbd5e1 !important;
+            border-color: #64748b !important;
+        }
+        html.light-theme #blacklistModalContainer,
+        html.light-theme #addBlacklistModalContainer {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+        }
+        html.light-theme #blacklistModalContainer .bg-\[\#18181b\],
+        html.light-theme #blacklistModalContainer .bg-\[\#09090b\] {
+            background-color: #f8fafc !important;
+            border-color: #cbd5e1 !important;
+        }
+        html.light-theme #blacklistModalContainer input,
+        html.light-theme #addBlacklistModalContainer input,
+        html.light-theme #addBlacklistModalContainer select {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border-color: #cbd5e1 !important;
+        }
+        html.light-theme #blacklistModalContainer input::placeholder,
+        html.light-theme #addBlacklistModalContainer input::placeholder {
+            color: #94a3b8 !important;
+        }
+        html.light-theme #blacklistModalContainer .text-white,
+        html.light-theme #addBlacklistModalContainer .text-white {
+            color: #0f172a !important;
+        }
+        html.light-theme #blacklistModalContainer .text-zinc-400,
+        html.light-theme #addBlacklistModalContainer .text-zinc-400 {
+            color: #475569 !important;
+        }
+        html.light-theme #blacklistModalContainer .text-zinc-300,
+        html.light-theme #addBlacklistModalContainer .text-zinc-300 {
+            color: #334155 !important;
+        }
+        html.light-theme #blacklistModalContainer tr:hover {
+            background-color: #f1f5f9 !important;
+        }
+        html.light-theme #blacklistModalContainer .bg-black\/40 {
+            background-color: #f1f5f9 !important;
+            color: #475569 !important;
+            border-color: #cbd5e1 !important;
+        }
+        html.light-theme #addBlacklistModalContainer .bg-\[\#09090b\] {
+            background-color: #f8fafc !important;
+            border-color: #cbd5e1 !important;
+        }
+        html.light-theme #blTotalCount {
+            background-color: #e2e8f0 !important;
+            color: #0f172a !important;
+        }
+        html.light-theme #blActiveCount {
+            background-color: #ffe4e6 !important;
+            color: #9f1239 !important;
+            border-color: #fecdd3 !important;
+        }
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
@@ -98,6 +267,12 @@ const isRtl = currentLang === 'ar';
             </div>
             <% if (isSuperAdmin) { %>
             <div class="flex items-center gap-3">
+                <button onclick="openBlacklistModal()" class="blacklist-trigger-btn font-extrabold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer shadow-md">
+                    <svg class="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                    <span><%= isRtl ? 'القائمة السوداء (الحظر الوارد)' : 'Inbound Blacklist' %></span>
+                </button>
                 <button onclick="openImportCsvModal()" class="config-btn-secondary font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -315,7 +490,7 @@ const isRtl = currentLang === 'ar';
                     const tbody = document.getElementById('contactsTableBody');
                     const tr = document.createElement('tr');
                     tr.id = 'noContactsRow';
-                    tr.innerHTML = `<td colspan="<%= isSuperAdmin ? 4 : 3 %>" class="p-8 text-center text-zinc-500 font-sans">${'<%= t.noData %>' }</td>`;
+                    tr.innerHTML = '<td colspan="' + <%- isSuperAdmin ? 4 : 3 %> + '" class="p-8 text-center text-zinc-500 font-sans">' + <%- JSON.stringify(t.noData) %> + '</td>';
                     tbody.appendChild(tr);
                 }
             } else {
@@ -541,6 +716,363 @@ const isRtl = currentLang === 'ar';
             }
         }
         <% } %>
+    </script>
+    <!-- INBOUND BLACKLIST MANAGEMENT MODAL -->
+    <div id="blacklistModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300">
+        <div id="blacklistModalContainer" class="bg-[#121212] border border-[#27272a] rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl scale-95 transition-all duration-300 overflow-hidden">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-[#27272a] bg-[#18181b] flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black text-white"><%= isRtl ? 'القائمة السوداء للمكالمات الواردة' : 'Inbound Call Blacklist' %></h3>
+                        <p class="text-xs text-zinc-400 font-semibold mt-0.5"><%= isRtl ? 'إدارة الأرقام المحظورة وقواعد حظر الاتصالات الواردة عبر AstDB' : 'Manage blocked numbers and inbound call rejection rules via Asterisk AstDB' %></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="syncBlacklistToAstDB()" class="btn-sync-astdb font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition shadow-sm">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span><%= isRtl ? 'مزامنة محرك AstDB' : 'Sync AstDB Engine' %></span>
+                    </button>
+                    <button type="button" onclick="openAddBlacklistModal()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition shadow-md">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                        <span><%= isRtl ? 'إضافة رقم محظور' : 'Add Blocked Number' %></span>
+                    </button>
+                    <button type="button" onclick="closeBlacklistModal()" class="modal-close-icon p-1.5 rounded-lg transition cursor-pointer">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary & Controls Bar -->
+            <div class="px-6 py-3 bg-[#09090b] border-b border-[#27272a] flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-4 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="text-zinc-500 font-bold uppercase tracking-wider text-[10px]"><%= isRtl ? 'إجمالي المحظور:' : 'Total Blocked:' %></span>
+                        <span id="blTotalCount" class="font-mono font-extrabold text-white bg-zinc-800 px-2 py-0.5 rounded">0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-zinc-500 font-bold uppercase tracking-wider text-[10px]"><%= isRtl ? 'القواعد النشطة:' : 'Active Rules:' %></span>
+                        <span id="blActiveCount" class="font-mono font-extrabold text-rose-400 bg-rose-950/40 border border-rose-800/40 px-2 py-0.5 rounded">0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-zinc-500 font-bold uppercase tracking-wider text-[10px]"><%= isRtl ? 'حالة المزامنة:' : 'AstDB Status:' %></span>
+                        <span id="blSyncBadge" class="font-mono font-bold text-[10px] text-emerald-400 flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <%= isRtl ? 'متزامن تلقائياً' : 'Auto-Synced' %>
+                        </span>
+                    </div>
+                </div>
+                <!-- Modal Search -->
+                <div class="relative min-w-[240px]">
+                    <input type="text" id="blacklistSearchInput" oninput="filterBlacklistRows()" placeholder="<%= isRtl ? 'البحث برقم الهاتف أو السبب...' : 'Search by phone or reason...' %>" class="w-full bg-[#18181b] border border-[#27272a] rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-rose-500 font-sans">
+                </div>
+            </div>
+
+            <!-- Blacklist Table -->
+            <div class="flex-1 overflow-y-auto p-6">
+                <table class="w-full text-start border-collapse">
+                    <thead>
+                        <tr class="bg-black/40 text-zinc-400 text-[11px] font-bold uppercase border-b border-[#27272a]">
+                            <th class="p-3 text-start"><%= isRtl ? 'رقم الهاتف' : 'Phone Number' %></th>
+                            <th class="p-3 text-start"><%= isRtl ? 'السبب / الوصف' : 'Reason / Description' %></th>
+                            <th class="p-3 text-start"><%= isRtl ? 'إجراء الحظر' : 'Block Action' %></th>
+                            <th class="p-3 text-start"><%= isRtl ? 'الحالة' : 'Status' %></th>
+                            <th class="p-3 text-start"><%= isRtl ? 'تاريخ الإضافة' : 'Date Added' %></th>
+                            <th class="p-3 text-end"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
+                        </tr>
+                    </thead>
+                    <tbody id="blacklistTableBody" class="divide-y divide-zinc-800/40 text-xs font-sans">
+                        <tr><td colspan="6" class="p-8 text-center text-zinc-500"><%= isRtl ? 'جاري تحميل قائمة الحظر...' : 'Loading blacklist registry...' %></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD / EDIT BLACKLIST ENTRY MODAL -->
+    <div id="addBlacklistModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300">
+        <div id="addBlacklistModalContainer" class="bg-[#121212] border border-[#27272a] rounded-2xl w-full max-w-md p-6 shadow-2xl scale-95 transition-all duration-300">
+            <div class="flex items-center justify-between mb-5">
+                <h3 id="blacklistModalTitle" class="text-base font-black text-white"><%= isRtl ? 'إضافة رقم للقائمة السوداء' : 'Add Blocked Number' %></h3>
+                <button type="button" onclick="closeAddBlacklistModal()" class="modal-close-icon p-1 rounded-lg transition cursor-pointer">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <form id="blacklistForm" onsubmit="submitBlacklistForm(event)" class="space-y-4">
+                <input type="hidden" id="blEditId" value="">
+                <div>
+                    <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'رقم الهاتف / النمط *' : 'Phone Number / Pattern *' %></label>
+                    <input type="text" id="blPhone" required placeholder="e.g. 01012345678 or +2010..." class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-rose-500">
+                    <p class="text-[10px] text-zinc-500 mt-1"><%= isRtl ? 'أدخل الرقم بالتنسيق المحلي أو الدولي.' : 'Enter phone number in local or E.164 format.' %></p>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'السبب / اسم المتصل' : 'Caller Name / Reason' %></label>
+                    <input type="text" id="blDesc" placeholder="e.g. Spam / Telemarketer / Harassment" class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'إجراء استجابة الحظر' : 'Block Response Action' %></label>
+                    <select id="blAction" class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500">
+                        <option value="zapateller"><%= isRtl ? 'لهجة Zapateller + رسالة غير مستعمل (Default)' : 'Zapateller Tone + Disconnected Prompt (Default)' %></option>
+                        <option value="hangup"><%= isRtl ? 'إنهاء المكالمة فوراً (Immediate Hangup)' : 'Immediate Hangup' %></option>
+                        <option value="congestion"><%= isRtl ? 'نغمة الازدحام (Congestion Signal)' : 'Congestion Signal' %></option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-between p-3 rounded-xl bg-[#09090b] border border-[#27272a]">
+                    <span class="text-xs font-bold text-zinc-300"><%= isRtl ? 'تفعيل القاعدة' : 'Enable Block Rule' %></span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="blEnabled" checked class="sr-only peer">
+                        <div class="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
+                    </label>
+                </div>
+
+                <div id="blFormMsg" class="hidden text-xs text-center"></div>
+
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeAddBlacklistModal()" class="btn-cancel-action px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shadow-md"><%= isRtl ? 'حفظ القاعده' : 'Save Rule' %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let blacklistData = [];
+
+        function openBlacklistModal() {
+            const modal = document.getElementById('blacklistModal');
+            const container = document.getElementById('blacklistModalContainer');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100', 'pointer-events-auto');
+            container.classList.remove('scale-95');
+            container.classList.add('scale-100');
+            loadBlacklist();
+        }
+
+        function closeBlacklistModal() {
+            const modal = document.getElementById('blacklistModal');
+            const container = document.getElementById('blacklistModalContainer');
+            modal.classList.remove('opacity-100', 'pointer-events-auto');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            container.classList.remove('scale-100');
+            container.classList.add('scale-95');
+        }
+
+        function openAddBlacklistModal(id = null) {
+            const modal = document.getElementById('addBlacklistModal');
+            const container = document.getElementById('addBlacklistModalContainer');
+            const titleEl = document.getElementById('blacklistModalTitle');
+            const form = document.getElementById('blacklistForm');
+            const msgEl = document.getElementById('blFormMsg');
+
+            form.reset();
+            msgEl.classList.add('hidden');
+            document.getElementById('blEditId').value = id || '';
+
+            if (id) {
+                const entry = blacklistData.find(item => item.id === id);
+                if (entry) {
+                    titleEl.textContent = <%- JSON.stringify(isRtl ? 'تعديل قاعدة الحظر' : 'Edit Block Rule') %>;
+                    document.getElementById('blPhone').value = entry.phone_number || '';
+                    document.getElementById('blDesc').value = entry.description || '';
+                    document.getElementById('blAction').value = entry.action || 'zapateller';
+                    document.getElementById('blEnabled').checked = entry.enabled === 1 || entry.enabled === true;
+                }
+            } else {
+                titleEl.textContent = <%- JSON.stringify(isRtl ? 'إضافة رقم للقائمة السوداء' : 'Add Blocked Number') %>;
+                document.getElementById('blEnabled').checked = true;
+            }
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100', 'pointer-events-auto');
+            container.classList.remove('scale-95');
+            container.classList.add('scale-100');
+        }
+
+        function closeAddBlacklistModal() {
+            const modal = document.getElementById('addBlacklistModal');
+            const container = document.getElementById('addBlacklistModalContainer');
+            modal.classList.remove('opacity-100', 'pointer-events-auto');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            container.classList.remove('scale-100');
+            container.classList.add('scale-95');
+        }
+
+        async function loadBlacklist() {
+            const tbody = document.getElementById('blacklistTableBody');
+            try {
+                const resp = await fetch('/api/blacklist');
+                const data = await resp.json();
+                if (data.success) {
+                    blacklistData = data.blacklist || [];
+                    renderBlacklistTable(blacklistData);
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-rose-400 font-bold">${data.error || 'Failed to load blacklist'}</td></tr>`;
+                }
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-rose-400 font-bold">Network error loading blacklist</td></tr>`;
+            }
+        }
+
+        function renderBlacklistTable(list) {
+            const tbody = document.getElementById('blacklistTableBody');
+            const totalCountEl = document.getElementById('blTotalCount');
+            const activeCountEl = document.getElementById('blActiveCount');
+
+            totalCountEl.textContent = list.length;
+            activeCountEl.textContent = list.filter(item => item.enabled === 1 || item.enabled === true).length;
+
+            if (!list || list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-zinc-500 font-sans"><%= isRtl ? 'لا توجد أرقام محظورة حالياً في القائمة السوداء.' : 'No blocked numbers currently in the blacklist.' %></td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = list.map(item => {
+                const isLight = document.documentElement.classList.contains('light-theme');
+                const isEnabled = item.enabled === 1 || item.enabled === true;
+                const statusBadge = isEnabled
+                    ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isLight ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}"><%= isRtl ? 'نشط (محظور)' : 'Active (Blocked)' %></span>`
+                    : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isLight ? 'bg-slate-200 text-slate-700 border border-slate-300' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}"><%= isRtl ? 'معطل' : 'Disabled' %></span>`;
+                
+                const actionBadge = item.action === 'hangup'
+                    ? `<span class="${isLight ? 'text-rose-700' : 'text-rose-400'} font-bold">Hangup</span>`
+                    : (item.action === 'congestion' ? `<span class="${isLight ? 'text-amber-700' : 'text-amber-400'} font-bold">Congestion</span>` : `<span class="${isLight ? 'text-sky-700' : 'text-sky-400'} font-bold">Zapateller Prompt</span>`);
+
+                const dateStr = item.created_at ? new Date(item.created_at).toLocaleString('<%= currentLang === "ar" ? "ar-EG" : "en-US" %>') : '-';
+
+                return `
+                    <tr class="hover:bg-zinc-900/60 transition" data-phone="${(item.phone_number || '').toLowerCase()}" data-desc="${(item.description || '').toLowerCase()}">
+                        <td class="p-3 font-mono font-bold text-white">${escapeHtml(item.phone_number)}</td>
+                        <td class="p-3 text-zinc-300">${escapeHtml(item.description || '-')}</td>
+                        <td class="p-3 font-mono">${actionBadge}</td>
+                        <td class="p-3">${statusBadge}</td>
+                        <td class="p-3 text-zinc-400 font-mono text-[11px]">${dateStr}</td>
+                        <td class="p-3 text-end select-none">
+                            <div class="flex items-center justify-end gap-2">
+                                <button type="button" onclick="toggleBlacklistRule(${item.id}, ${!isEnabled})" class="table-action-icon p-1.5 rounded-lg transition cursor-pointer" title="<%= isRtl ? 'تبديل تفعيل القاعدة' : 'Toggle Rule' %>">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728M12 3v9"/></svg>
+                                </button>
+                                <button type="button" onclick="openAddBlacklistModal(${item.id})" class="table-action-icon p-1.5 rounded-lg transition cursor-pointer" title="<%= isRtl ? 'تعديل' : 'Edit' %>">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                </button>
+                                <button type="button" onclick="deleteBlacklistRule(${item.id})" class="table-action-icon p-1.5 rounded-lg transition cursor-pointer" title="<%= isRtl ? 'حذف' : 'Delete' %>">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filterBlacklistRows() {
+            const query = (document.getElementById('blacklistSearchInput').value || '').toLowerCase().trim();
+            const rows = document.querySelectorAll('#blacklistTableBody tr[data-phone]');
+            rows.forEach(row => {
+                const phone = row.getAttribute('data-phone') || '';
+                const desc = row.getAttribute('data-desc') || '';
+                if (!query || phone.includes(query) || desc.includes(query)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        async function submitBlacklistForm(e) {
+            e.preventDefault();
+            const id = document.getElementById('blEditId').value;
+            const phone_number = document.getElementById('blPhone').value;
+            const description = document.getElementById('blDesc').value;
+            const action = document.getElementById('blAction').value;
+            const enabled = document.getElementById('blEnabled').checked;
+            const msgEl = document.getElementById('blFormMsg');
+
+            msgEl.className = 'text-xs text-center text-zinc-400';
+            msgEl.textContent = 'Saving rule...';
+            msgEl.classList.remove('hidden');
+
+            try {
+                const url = id ? `/api/blacklist/${id}` : '/api/blacklist';
+                const method = id ? 'PUT' : 'POST';
+                const resp = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number, description, action, enabled })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    msgEl.className = 'text-xs text-center text-emerald-400 font-bold';
+                    msgEl.textContent = data.message || 'Rule saved successfully!';
+                    setTimeout(() => {
+                        closeAddBlacklistModal();
+                        loadBlacklist();
+                    }, 800);
+                } else {
+                    msgEl.className = 'text-xs text-center text-rose-400 font-bold';
+                    msgEl.textContent = data.error || 'Failed to save rule';
+                }
+            } catch (err) {
+                msgEl.className = 'text-xs text-center text-rose-400 font-bold';
+                msgEl.textContent = 'Network error saving blacklist rule';
+            }
+        }
+
+        async function toggleBlacklistRule(id, newEnabledState) {
+            try {
+                const resp = await fetch(`/api/blacklist/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: newEnabledState })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    loadBlacklist();
+                } else {
+                    alert(data.error || 'Failed to update rule state');
+                }
+            } catch (err) {
+                alert('Network error updating blacklist rule');
+            }
+        }
+
+        async function deleteBlacklistRule(id) {
+            if (!confirm(<%- JSON.stringify(isRtl ? 'هل أنت متأكد من حذف هذا الرقم من القائمة السوداء؟' : 'Are you sure you want to remove this number from the blacklist?') %>)) return;
+            try {
+                const resp = await fetch(`/api/blacklist/${id}`, { method: 'DELETE' });
+                const data = await resp.json();
+                if (data.success) {
+                    loadBlacklist();
+                } else {
+                    alert(data.error || 'Failed to delete rule');
+                }
+            } catch (err) {
+                alert('Network error deleting rule');
+            }
+        }
+
+        async function syncBlacklistToAstDB() {
+            try {
+                const resp = await fetch('/api/blacklist/sync', { method: 'POST' });
+                const data = await resp.json();
+                if (data.success) {
+                    alert(data.message || 'AstDB synced successfully!');
+                } else {
+                    alert(data.error || 'Failed to sync AstDB');
+                }
+            } catch (err) {
+                alert('Network error syncing AstDB');
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
     </script>
 </body>
 </html>

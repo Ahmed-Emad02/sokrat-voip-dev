@@ -151,6 +151,20 @@ CREATE TABLE IF NOT EXISTS `dialer_dnc` (
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `dashboard_inbound_blacklist` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `phone_number` VARCHAR(50) NOT NULL UNIQUE,
+  `description` VARCHAR(255) DEFAULT NULL,
+  `action` VARCHAR(30) DEFAULT 'zapateller',
+  `enabled` TINYINT(1) DEFAULT 1,
+  `blocked_count` INT DEFAULT 0,
+  `last_blocked_at` DATETIME DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY `idx_phone` (`phone_number`),
+  KEY `idx_enabled` (`enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `storage_settings` (
   `id` INT PRIMARY KEY DEFAULT 1,
   `auto_purge_days` INT DEFAULT 90,

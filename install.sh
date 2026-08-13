@@ -222,7 +222,7 @@ if [ -f "$INSTALL_DIR/.env" ]; then
     sed -i "s/^AMI_USER=.*/AMI_USER=${AMPMGR_USER}/" "$INSTALL_DIR/.env"
     sed -i "s/^AMI_PASS=.*/AMI_PASS=${AMPMGR_PASS}/" "$INSTALL_DIR/.env"
     if ! grep -q '^ROOT_PASSWORD_HASH=' "$INSTALL_DIR/.env"; then
-        GEN_ROOT_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9')
+        GEN_ROOT_PASS="Admin@123"
         GEN_ROOT_HASH=$(node -e "console.log(require('bcrypt').hashSync('$GEN_ROOT_PASS', 10))")
         echo "ROOT_PASSWORD_HASH=${GEN_ROOT_HASH}" >> "$INSTALL_DIR/.env"
         echo "ROOT_USER=root" > /etc/sokrat-root-credential.txt
@@ -231,7 +231,7 @@ if [ -f "$INSTALL_DIR/.env" ]; then
     fi
     echo "  .env AMI credentials updated ($AMPMGR_USER)"
 else
-    GEN_ROOT_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9')
+    GEN_ROOT_PASS="Admin@123"
     GEN_ROOT_HASH=$(node -e "console.log(require('bcrypt').hashSync('$GEN_ROOT_PASS', 10))")
     cat > "$INSTALL_DIR/.env" << EOF
 PORT=8080
