@@ -4773,8 +4773,8 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
         // Exact command sequence with verbatim raw number and 3s sleep between commands
         const targetDongle = dId || 'dongle0';
         const cmdSteps = [
-            `dongle cmd ${targetDongle} AT+CPBS="ON"`,
-            `dongle cmd ${targetDongle} AT+CPBW=1,"${rawNum}",145`,
+            `dongle cmd ${targetDongle} AT+CPBS=\\"ON\\"`,
+            `dongle cmd ${targetDongle} AT+CPBW=1,\\"${rawNum}\\",145`,
             `module unload chan_dongle.so`,
             `module load chan_dongle.so`
         ];
