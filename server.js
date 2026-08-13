@@ -4470,13 +4470,11 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
             const st = (row.State || '').toLowerCase();
             const isNotConnected = st.includes('not connec') || st.includes('not_conn') || st.includes('not init') || st.includes('not reg') || st.includes('not respond');
 
-            if (isNotConnected) {
+            const mapped = (row.ID && astDbMappings[row.ID]) || (row.IMSI && astDbMappings[row.IMSI]) || (row.IMEI && astDbMappings[row.IMEI]) || null;
+            if (mapped) {
+                row.Number = mapped;
+            } else if (isNotConnected) {
                 row.Number = 'Unknown';
-            } else {
-                const mapped = (row.ID && astDbMappings[row.ID]) || (row.IMSI && astDbMappings[row.IMSI]) || (row.IMEI && astDbMappings[row.IMEI]) || null;
-                if (mapped && (!row.Number || row.Number === 'Unknown' || row.Number === '-')) {
-                    row.Number = mapped;
-                }
             }
             devices.push(row);
         }
@@ -4714,18 +4712,18 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
 
         const rawDongleId = String(dongleId || '').trim();
         const rawImsi = String(imsi || '').trim();
-        const normNumber = normalizeConfiguredDid(number);
+        const rawNum = String(number || '').trim();
         const dId = normalizeDongleMappingKey(rawDongleId);
         const dImsi = normalizeDongleIdentity(rawImsi);
-        if (!normNumber) {
-            return res.status(400).json({ success: false, error: 'Phone number must contain 3 to 30 digits with an optional leading +.' });
+        if (!rawNum) {
+            return res.status(400).json({ success: false, error: 'Phone number is required.' });
         }
         if ((rawDongleId && !dId) || (rawImsi && !dImsi)) {
             return res.status(400).json({ success: false, error: 'Invalid dongle ID or IMSI.' });
         }
 
         const simMappings = readSimMappings();
-        if (dImsi) simMappings[dImsi] = normNumber;
+        if (dImsi) simMappings[dImsi] = rawNum;
         saveSimMappings(simMappings);
 
         let imei = '';
@@ -4742,8 +4740,6 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
             }
         } catch (_) {}
 
-        // Save the configured DID first, then write every usable alias directly.
-        // This path intentionally does not require Asterisk to report a SIM phone number.
         if (dId || foundImsi) {
             const mappingDongleName = dId || 'unknown';
             await pool.query(`
@@ -4753,7 +4749,7 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
                     imsi = COALESCE(NULLIF(VALUES(imsi), ''), imsi),
                     imei = COALESCE(NULLIF(VALUES(imei), ''), imei),
                     phone_number = VALUES(phone_number)
-            `, [mappingDongleName, foundImsi || null, imei || null, normNumber]);
+            `, [mappingDongleName, foundImsi || null, imei || null, rawNum]);
 
             const [savedRows] = await pool.query(
                 'SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?',
@@ -4774,14 +4770,13 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
             await detectDonglesAndSetTrunkCID();
         } catch (_) {}
 
-        // 3. Program SIM card memory via AT commands, cycle chan_dongle.so & refresh status with 3s delays
+        // Exact command sequence with verbatim raw number and 3s sleep between commands
         const targetDongle = dId || 'dongle0';
         const cmdSteps = [
             `dongle cmd ${targetDongle} AT+CPBS="ON"`,
-            `dongle cmd ${targetDongle} AT+CPBW=1,"${normNumber}",145`,
+            `dongle cmd ${targetDongle} AT+CPBW=1,"${rawNum}",145`,
             `module unload chan_dongle.so`,
-            `module load chan_dongle.so`,
-            `dongle show devices`
+            `module load chan_dongle.so`
         ];
 
         const results = [];
@@ -4799,11 +4794,12 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
                 await new Promise(r => setTimeout(r, 3000));
             }
         }
-        // 4. Verify dialplan route existence for configured DID
-        const dpCheck = await execFileAsync(ASTERISK_BIN, ['-rx', `dialplan show ${normNumber}@from-trunk`]);
-        const routeExists = dpCheck && dpCheck.includes(normNumber);
 
-        io.emit('dongleNumberUpdated', { dongleId: dId, imsi: foundImsi, number: normNumber });
+        const dpCheck = await execFileAsync(ASTERISK_BIN, ['-rx', `dialplan show ${rawNum}@from-trunk`]);
+        const routeExists = dpCheck && dpCheck.includes(rawNum);
+
+        cachedDevicesOutput = null;
+        io.emit('dongleNumberUpdated', { dongleId: dId, imsi: foundImsi, number: rawNum });
         io.emit('usbDevicesUpdated');
 
         return res.json({
@@ -4813,8 +4809,8 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
             results: results,
             routeExists: !!routeExists,
             message: routeExists
-                ? 'SIM phone number saved to Dashboard, AstDB & SIM card memory successfully.'
-                : 'SIM phone number saved, but no Inbound Route for ' + normNumber + ' was found in Asterisk.'
+                ? 'SIM phone number saved successfully.'
+                : 'SIM phone number saved, but no Inbound Route for ' + rawNum + ' was found in Asterisk.'
         });
     } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
