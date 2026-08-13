@@ -101,22 +101,32 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         }
     })();
 
-    function dismissLoadingOverlay() {
-        const overlay = document.getElementById('theme-loading-overlay');
-        if (!overlay) return;
-        overlay.style.opacity = '0';
-        overlay.style.pointerEvents = 'none';
-        overlay.style.transform = 'translateY(-100%)';
-        setTimeout(() => { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
-    }
+    const overlayStartTime = Date.now();
+    let overlayDismissed = false;
 
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        setTimeout(dismissLoadingOverlay, 50);
+    window.dismissLoadingOverlay = function() {
+        if (overlayDismissed) return;
+        overlayDismissed = true;
+        const elapsed = Date.now() - overlayStartTime;
+        const remaining = Math.max(0, 250 - elapsed);
+        setTimeout(() => {
+            const overlay = document.getElementById('theme-loading-overlay');
+            if (!overlay) return;
+            overlay.style.opacity = '0';
+            overlay.style.pointerEvents = 'none';
+            overlay.style.transform = 'translateY(-100%)';
+            setTimeout(() => { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
+        }, remaining);
+    };
+
+    if (document.readyState === 'complete') {
+        window.dismissLoadingOverlay();
     } else {
-        document.addEventListener('DOMContentLoaded', dismissLoadingOverlay);
+        window.addEventListener('load', window.dismissLoadingOverlay);
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(window.dismissLoadingOverlay, 300);
+        });
     }
-    window.addEventListener('load', dismissLoadingOverlay);
-    setTimeout(dismissLoadingOverlay, 200);
 </script>
 <!-- Google Fonts Import for Plus Jakarta Sans & Cairo -->
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">

@@ -257,7 +257,7 @@ const isRtl = currentLang === 'ar';
                 object-fit: contain !important;
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
-                margin: 0 auto !important;
+            margin: 0 auto !important;
             }
             #dispositionChart, #dailyChart, #hourlyChart, #durationChart {
                 break-inside: avoid !important;
@@ -275,9 +275,9 @@ const isRtl = currentLang === 'ar';
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
-    <div id="mainContentWrapper" class="flex-1 p-8 flex flex-col min-h-0">
+    <div id="mainContentWrapper" class="flex-1 p-5 md:p-6 flex flex-col min-h-0">
         
-        <div class="mb-6 shrink-0 flex items-center justify-between <%= isRtl ? 'flex-row-reverse' : '' %>">
+        <div class="mb-3 shrink-0 flex items-center justify-between <%= isRtl ? 'flex-row-reverse' : '' %>">
             <div>
                 <h2 class="text-3xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
@@ -297,30 +297,30 @@ const isRtl = currentLang === 'ar';
         </div>
 
         <!-- Filter Form -->
-        <form id="filterForm" class="panel-surface p-5 rounded-2xl mb-6 shrink-0 grid grid-cols-1 md:grid-cols-5 gap-4 items-end shadow-2xl">
+        <form id="filterForm" class="panel-surface p-3 px-4 rounded-xl mb-4 shadow-lg flex flex-col gap-2.5 relative z-30">
             <input type="hidden" name="lang" value="<%= currentLang %>">
-            <div>
-                <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-2 tracking-wider"><%= t.startTime %></label>
-                <input type="datetime-local" id="startDate" name="startDate" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-            </div>
-            <div>
-                <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-2 tracking-wider"><%= t.endTime %></label>
-                <input type="datetime-local" id="endDate" name="endDate" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-            </div>
-            <div id="dirFilterCol">
-                <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-2 tracking-wider"><%= t.direction %></label>
-                <select id="direction" name="direction" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                    <option value="all"><%= t.allDir %></option>
-                    <option value="inbound"><%= t.inbound %></option>
-                    <option value="outbound"><%= t.outbound %></option>
-                </select>
-            </div>
-            <div class="md:col-span-2 flex items-end gap-2">
-                <button type="submit" class="btn-primary flex-1 py-2.5 text-xs uppercase tracking-wider"><%= t.apply %></button>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-2.5 items-end">
+                <div>
+                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.startTime %></label>
+                    <input type="datetime-local" id="startDate" name="startDate" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                </div>
+                <div>
+                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.endTime %></label>
+                    <input type="datetime-local" id="endDate" name="endDate" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                </div>
+                <div id="dirFilterCol">
+                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
+                    <select id="direction" name="direction" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="all"><%= t.allDir %></option>
+                        <option value="inbound"><%= t.inbound %></option>
+                        <option value="outbound"><%= t.outbound %></option>
+                    </select>
+                </div>
+                <div class="md:col-span-2 flex items-end gap-2">
+                    <button type="submit" class="btn-primary flex-1 py-1.5 text-xs uppercase tracking-wider"><%= t.apply %></button>
+                </div>
             </div>
         </form>
-
-        <!-- Main Content Area -->
         <div class="flex gap-6 flex-1 min-h-0">
             <!-- Left Extensions List -->
             <div id="extListCol" class="panel-surface rounded-2xl shadow-2xl w-60 shrink-0 flex flex-col min-h-0">
@@ -571,8 +571,8 @@ const isRtl = currentLang === 'ar';
             }
 
             html += `</div>`;
-
             panel.innerHTML = html;
+            if (typeof window.dismissLoadingOverlay === 'function') window.dismissLoadingOverlay();
         }
 
         function loadStats(ext) {
@@ -772,6 +772,7 @@ const isRtl = currentLang === 'ar';
                     if (dailyChart) dailyChart.resize();
                     if (hourlyChart) hourlyChart.resize();
                     if (durationChart) durationChart.resize();
+                    if (typeof window.dismissLoadingOverlay === 'function') window.dismissLoadingOverlay();
                 });
             }, 50);
         }
