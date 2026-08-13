@@ -4,9 +4,10 @@ const words = {
         title: "Call", subtitle: "History", desc: "Searchable call records and recording playback",
         startTime: "Start Time", endTime: "End Time", roster: "Extension Roster", allExt: "All Extensions",
         status: "Call Status", allDisp: "All Dispositions", direction: "Direction", allDir: "All Directions", dirIn: "Inbound", dirOut: "Outbound",
+        scope: "Call Scope", allScope: "All Scopes", scopeInternal: "Internal Only", scopeExternal: "External Only",
         src: "Source", dst: "Destination", did: "DID Number", uid: "Unique ID",
         btn: "Apply Filters", thTime: "Timestamp", thId: "UniqueID", thSrc: "Source", thDst: "Destination", thDid: "DID",
-        thName: "Name", thAir: "Airtime", thState: "State", thDir: "Dir", thRec: "Recording", thActions: "Actions", noData: "No matching call records.",
+        thName: "Name", thAir: "Airtime", thState: "State", thDir: "Dir", thScope: "Scope", thRec: "Recording", thActions: "Actions", noData: "No matching call records.",
         play: "Play", download: "Download", noAudio: "No Audio", footerLeft: "Call records", footerRight: "Total records:",
         pagPrev: "Prev", pagNext: "Next", pagShowing: "Showing", pagOf: "of", pagResults: "results",
         deleteBtn: "Delete", confirmDelete: "Are you sure you want to delete this call record?"
@@ -15,9 +16,10 @@ const words = {
         title: "سجل", subtitle: "المكالمات", desc: "نظام القياس عن بعد الشامل وسجلات الأنشطة الصوتية",
         startTime: "وقت البدء", endTime: "وقت الانتهاء", roster: "قائمة الموظفين", allExt: "جميع التحويلات",
         status: "حالة المكالمة", allDisp: "جميع الحالات", direction: "الاتجاه", allDir: "كل الاتجاهات", dirIn: "وارد", dirOut: "صادر",
+        scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط",
         src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
         btn: "تطبيق فلاتر البحث", thTime: "التوقيت", thId: "المعرف", thSrc: "المصدر", thDst: "الوجهة", thDid: "DID",
-        thName: "الاسم", thAir: "مدة المكالمة", thState: "الحالة", thDir: "اتجاه", thRec: "التسجيل", thActions: "الإجراءات", noData: "لم يتم العثور على سجلات مكالمات مطابقة.",
+        thName: "الاسم", thAir: "مدة المكالمة", thState: "الحالة", thDir: "اتجاه", thScope: "النطاق", thRec: "التسجيل", thActions: "الإجراءات", noData: "لم يتم العثور على سجلات مكالمات مطابقة.",
         play: "تشغيل", download: "تحميل", noAudio: "لا يوجد صوت", footerLeft: "نشاط تدفق البيانات", footerRight: "إجمالي السجلات المحسوبة:",
         pagPrev: "السابق", pagNext: "التالي", pagShowing: "عرض", pagOf: "من", pagResults: "نتيجة",
         deleteBtn: "حذف", confirmDelete: "هل أنت متأكد من حذف سجل المكالمة هذا؟"
@@ -190,10 +192,10 @@ function fmtDur(s) {
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
-    <div class="flex-1 p-8 relative">
+    <div class="flex-1 p-5 md:p-6 relative">
         
         <!-- Header Bar with Integrated Action -->
-        <div class="mb-4 flex items-center justify-between gap-4">
+        <div class="mb-3 flex items-center justify-between gap-4">
             <div>
                 <h2 class="text-2xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
@@ -206,12 +208,12 @@ function fmtDur(s) {
         </div>
 
         <!-- Compact Balanced Filter Form -->
-        <form id="cdrFilterForm" action="/cdr" method="GET" class="panel-surface p-4 rounded-xl mb-4 shadow-lg flex flex-col gap-3">
+        <form id="cdrFilterForm" action="/cdr" method="GET" class="panel-surface p-3 px-3.5 rounded-xl mb-4 shadow-lg flex flex-col gap-2.5 relative z-30">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <input type="hidden" name="page" value="<%= filters.page %>">
             <input type="hidden" name="perPage" value="<%= filters.perPage %>">
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
                 <div>
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.startTime %></label>
                     <input type="datetime-local" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -220,31 +222,83 @@ function fmtDur(s) {
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.endTime %></label>
                     <input type="datetime-local" name="endDate" value="<%= moment(filters.endDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                 </div>
-                <div>
+                <div class="relative">
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.roster %></label>
-                    <select name="targetExtension" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL"><%= t.allExt %></option>
+                    <select name="targetExtension" id="targetExtensionSelect" multiple class="hidden no-enhance">
                         <% 
-                          let targetFound = false;
-                          roster.forEach(emp => { 
-                              if (filters.targetExtension === emp.extension) targetFound = true;
+                          let selectedExts = Array.isArray(filters.targetExtension) ? filters.targetExtension : (filters.targetExtension && filters.targetExtension !== 'ALL' ? [filters.targetExtension] : ['ALL']);
+                          let isAllExt = selectedExts.includes('ALL') || selectedExts.length === 0;
                         %>
-                            <option value="<%= emp.extension %>" <%= filters.targetExtension === emp.extension ? 'selected' : '' %>><%= emp.extension %> - <%= emp.name %></option>
+                        <option value="ALL" <%= isAllExt ? 'selected' : '' %>><%= t.allExt %></option>
+                        <% roster.forEach(emp => { 
+                            let isSel = !isAllExt && selectedExts.includes(emp.extension);
+                        %>
+                            <option value="<%= emp.extension %>" <%= isSel ? 'selected' : '' %>><%= emp.extension %> - <%= emp.name %></option>
                         <% }) %>
-                        <% if (filters.targetExtension && filters.targetExtension !== 'ALL' && !targetFound) { %>
-                            <option value="<%= filters.targetExtension %>" selected><%= filters.targetExtension %> - Extension <%= filters.targetExtension %></option>
-                        <% } %>
                     </select>
+
+                    <button type="button" id="extChecklistBtn" onclick="toggleChecklistMenu('extChecklistMenu', event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] flex items-center justify-between gap-2 cursor-pointer text-start">
+                        <span id="extChecklistLabel" class="truncate font-semibold"><%= t.allExt %></span>
+                        <svg class="w-3.5 h-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+
+                    <div id="extChecklistMenu" class="checklist-menu hidden absolute left-0 right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-2 z-[9999] max-h-56 overflow-y-auto space-y-1" style="scrollbar-width:thin">
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none">
+                            <input type="checkbox" value="ALL" <%= isAllExt ? 'checked' : '' %> onchange="onExtChecklistChange(this)" class="ext-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-bold text-[var(--text-primary)]"><%= t.allExt %></span>
+                        </label>
+                        <% roster.forEach(emp => { 
+                            let isSel = !isAllExt && selectedExts.includes(emp.extension);
+                        %>
+                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none">
+                                <input type="checkbox" value="<%= emp.extension %>" <%= isSel ? 'checked' : '' %> onchange="onExtChecklistChange(this)" class="ext-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                                <span class="text-zinc-300 font-mono"><%= emp.extension %></span>
+                                <span class="text-zinc-400 truncate"><%= emp.name %></span>
+                            </label>
+                        <% }) %>
+                    </div>
                 </div>
-                <div>
+                <div class="relative">
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.status %></label>
-                    <select name="statusFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL" <%= filters.statusFilter === 'ALL' ? 'selected' : '' %>><%= t.allDisp %></option>
-                        <option value="ANSWERED" <%= filters.statusFilter === 'ANSWERED' ? 'selected' : '' %>>ANSWERED</option>
-                        <option value="NO ANSWER" <%= filters.statusFilter === 'NO ANSWER' ? 'selected' : '' %>>NO ANSWER</option>
-                        <option value="BUSY" <%= filters.statusFilter === 'BUSY' ? 'selected' : '' %>>BUSY</option>
-                        <option value="FAILED" <%= filters.statusFilter === 'FAILED' ? 'selected' : '' %>>FAILED</option>
+                    <select name="statusFilter" id="statusFilterSelect" multiple class="hidden no-enhance">
+                        <% 
+                          let selectedSt = Array.isArray(filters.statusFilter) ? filters.statusFilter : (filters.statusFilter && filters.statusFilter !== 'ALL' ? [filters.statusFilter] : ['ALL']);
+                          let isAllSt = selectedSt.includes('ALL') || selectedSt.length === 0;
+                        %>
+                        <option value="ALL" <%= isAllSt ? 'selected' : '' %>><%= t.allDisp %></option>
+                        <option value="ANSWERED" <%= (!isAllSt && selectedSt.includes('ANSWERED')) ? 'selected' : '' %>>ANSWERED</option>
+                        <option value="NO ANSWER" <%= (!isAllSt && selectedSt.includes('NO ANSWER')) ? 'selected' : '' %>>NO ANSWER</option>
+                        <option value="BUSY" <%= (!isAllSt && selectedSt.includes('BUSY')) ? 'selected' : '' %>>BUSY</option>
+                        <option value="FAILED" <%= (!isAllSt && selectedSt.includes('FAILED')) ? 'selected' : '' %>>FAILED</option>
                     </select>
+
+                    <button type="button" id="statusChecklistBtn" onclick="toggleChecklistMenu('statusChecklistMenu', event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] flex items-center justify-between gap-2 cursor-pointer text-start">
+                        <span id="statusChecklistLabel" class="truncate font-semibold"><%= t.allDisp %></span>
+                        <svg class="w-3.5 h-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+
+                    <div id="statusChecklistMenu" class="checklist-menu hidden absolute left-0 right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-2 z-[9999] max-h-56 overflow-y-auto space-y-1" style="scrollbar-width:thin">
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none">
+                            <input type="checkbox" value="ALL" <%= isAllSt ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-bold text-[var(--text-primary)]"><%= t.allDisp %></span>
+                        </label>
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none">
+                            <input type="checkbox" value="ANSWERED" <%= (!isAllSt && selectedSt.includes('ANSWERED')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-mono text-emerald-400 font-bold">ANSWERED</span>
+                        </label>
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none">
+                            <input type="checkbox" value="NO ANSWER" <%= (!isAllSt && selectedSt.includes('NO ANSWER')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-mono text-teal-400 font-bold">NO ANSWER</span>
+                        </label>
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none">
+                            <input type="checkbox" value="BUSY" <%= (!isAllSt && selectedSt.includes('BUSY')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-mono text-amber-400 font-bold">BUSY</span>
+                        </label>
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none">
+                            <input type="checkbox" value="FAILED" <%= (!isAllSt && selectedSt.includes('FAILED')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-mono text-purple-400 font-bold">FAILED</span>
+                        </label>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
@@ -252,6 +306,14 @@ function fmtDur(s) {
                         <option value="ALL" <%= filters.directionFilter === 'ALL' ? 'selected' : '' %>><%= t.allDir %></option>
                         <option value="OUTBOUND" <%= filters.directionFilter === 'OUTBOUND' ? 'selected' : '' %>><%= t.dirOut %></option>
                         <option value="INBOUND" <%= filters.directionFilter === 'INBOUND' ? 'selected' : '' %>><%= t.dirIn %></option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
+                    <select name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
+                        <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
+                        <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
                     </select>
                 </div>
                 <div>
@@ -272,9 +334,9 @@ function fmtDur(s) {
                 </div>
             </div>
 
-            <div class="flex items-center justify-between gap-3 pt-2 border-t border-[var(--border-primary)]/50">
+            <div class="flex items-center justify-between gap-3 pt-1.5 border-t border-[var(--border-primary)]/50">
                 <a href="/cdr?lang=<%= currentLang %>" class="text-xs text-zinc-400 hover:text-white transition font-mono"><%= isRtl ? 'إعادة ضبط' : 'Reset Filters' %></a>
-                <button type="submit" class="btn-primary px-6 py-1.5 text-xs uppercase tracking-wider"><%= t.btn %></button>
+                <button type="submit" class="btn-primary px-5 py-1 text-xs uppercase tracking-wider"><%= t.btn %></button>
             </div>
         </form>
 
@@ -308,7 +370,7 @@ function fmtDur(s) {
                             <th class="p-4 tracking-wider text-start"><%= t.thAir %></th>
                             <th class="p-4 tracking-wider text-start"><%= t.thState %></th>
                             <th class="p-4 tracking-wider text-start"><%= t.thDir %></th>
-                            <th class="p-4 tracking-wider text-end min-w-[340px]"><%= t.thRec %></th>
+                            <th class="p-4 tracking-wider text-start"><%= t.thScope %></th>
                             <% if (isSuper) { %>
                                 <th class="p-4 tracking-wider text-center"><%= t.thActions %></th>
                             <% } %>
@@ -316,7 +378,7 @@ function fmtDur(s) {
                     </thead>
                     <tbody class="divide-y divide-zinc-800/30 text-sm font-sans">
                         <% if(calls.length === 0) { %>
-                            <tr><td colspan="<%= isSuper ? 11 : 10 %>" class="p-8 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>
+                            <tr><td colspan="<%= isSuper ? 12 : 11 %>" class="p-8 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>
                         <% } else { %>
                             <% calls.forEach(call => { %>
                                 <tr class="hover:bg-zinc-900/60 transition">
@@ -337,6 +399,13 @@ function fmtDur(s) {
                                             <span class="text-[10px] font-black tracking-wider text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20"><%= t.dirOut %></span>
                                         <% } else { %>
                                             <span class="text-[10px] font-black tracking-wider text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20"><%= t.dirIn %></span>
+                                        <% } %>
+                                    </td>
+                                    <td class="p-4">
+                                        <% if (call.call_scope === 'INTERNAL') { %>
+                                            <span class="text-[10px] font-black tracking-wider text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded border border-purple-400/20"><%= isRtl ? 'داخلي' : 'Internal' %></span>
+                                        <% } else { %>
+                                            <span class="text-[10px] font-black tracking-wider text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded border border-indigo-400/20"><%= isRtl ? 'خارجي' : 'External' %></span>
                                         <% } %>
                                     </td>
                                     <td class="p-4 text-end min-w-[340px]">
@@ -729,6 +798,107 @@ function fmtDur(s) {
             });
             obs.observe(document.body, { childList: true, subtree: true });
         })();
+    </script>
+    <script>
+        function toggleChecklistMenu(menuId, event) {
+            if (event) event.stopPropagation();
+            const menu = document.getElementById(menuId);
+            if (!menu) return;
+            const isHidden = menu.classList.contains('hidden');
+            document.querySelectorAll('.checklist-menu').forEach(m => m.classList.add('hidden'));
+            if (isHidden) menu.classList.remove('hidden');
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.checklist-menu') && !e.target.closest('button[onclick*="toggleChecklistMenu"]')) {
+                document.querySelectorAll('.checklist-menu').forEach(m => m.classList.add('hidden'));
+            }
+        });
+
+        function syncExtChecklistUI() {
+            const chks = Array.from(document.querySelectorAll('.ext-chk'));
+            const select = document.getElementById('targetExtensionSelect');
+            const labelSpan = document.getElementById('extChecklistLabel');
+            if (!select || !labelSpan) return;
+
+            const selectedVals = chks.filter(c => c.checked).map(c => c.value);
+            Array.from(select.options).forEach(opt => {
+                opt.selected = selectedVals.includes(opt.value);
+            });
+
+            const nonAllSelected = selectedVals.filter(v => v !== 'ALL');
+            if (selectedVals.includes('ALL') || nonAllSelected.length === 0) {
+                labelSpan.textContent = <%- JSON.stringify(t.allExt) %>;
+            } else if (nonAllSelected.length === 1) {
+                labelSpan.textContent = nonAllSelected[0];
+            } else {
+                const isRtl = <%= isRtl ? 'true' : 'false' %>;
+                const countText = isRtl ? ('محدد (' + nonAllSelected.length + ')') : (nonAllSelected.length + ' Selected');
+                labelSpan.textContent = countText;
+            }
+        }
+
+        function onExtChecklistChange(chk) {
+            const chks = Array.from(document.querySelectorAll('.ext-chk'));
+            const allChk = chks.find(c => c.value === 'ALL');
+            if (chk.value === 'ALL') {
+                if (chk.checked) {
+                    chks.forEach(c => { if (c !== chk) c.checked = false; });
+                } else {
+                    chk.checked = true;
+                }
+            } else {
+                if (allChk) allChk.checked = false;
+                const checkedCount = chks.filter(c => c.checked && c.value !== 'ALL').length;
+                if (checkedCount === 0 && allChk) allChk.checked = true;
+            }
+            syncExtChecklistUI();
+        }
+
+        function syncStatusChecklistUI() {
+            const chks = Array.from(document.querySelectorAll('.status-chk'));
+            const select = document.getElementById('statusFilterSelect');
+            const labelSpan = document.getElementById('statusChecklistLabel');
+            if (!select || !labelSpan) return;
+
+            const selectedVals = chks.filter(c => c.checked).map(c => c.value);
+            Array.from(select.options).forEach(opt => {
+                opt.selected = selectedVals.includes(opt.value);
+            });
+
+            const nonAllSelected = selectedVals.filter(v => v !== 'ALL');
+            if (selectedVals.includes('ALL') || nonAllSelected.length === 0) {
+                labelSpan.textContent = <%- JSON.stringify(t.allDisp) %>;
+            } else if (nonAllSelected.length === 1) {
+                labelSpan.textContent = nonAllSelected[0];
+            } else {
+                const isRtl = <%= isRtl ? 'true' : 'false' %>;
+                const countText = isRtl ? ('محدد (' + nonAllSelected.length + ')') : (nonAllSelected.length + ' Selected');
+                labelSpan.textContent = countText;
+            }
+        }
+
+        function onStatusChecklistChange(chk) {
+            const chks = Array.from(document.querySelectorAll('.status-chk'));
+            const allChk = chks.find(c => c.value === 'ALL');
+            if (chk.value === 'ALL') {
+                if (chk.checked) {
+                    chks.forEach(c => { if (c !== chk) c.checked = false; });
+                } else {
+                    chk.checked = true;
+                }
+            } else {
+                if (allChk) allChk.checked = false;
+                const checkedCount = chks.filter(c => c.checked && c.value !== 'ALL').length;
+                if (checkedCount === 0 && allChk) allChk.checked = true;
+            }
+            syncStatusChecklistUI();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            syncExtChecklistUI();
+            syncStatusChecklistUI();
+        });
     </script>
 </body>
 </html>

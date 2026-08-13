@@ -12,6 +12,7 @@ const words = {
         inboundLabel: "Inbound", outboundLabel: "Outbound",
         talkTime: "Talk Time", sec: "s", min: "min",
         disposition: "Call Disposition", daily: "Daily Call Volume",
+        hourly: "Peak Hours Distribution", duration: "Call Duration Breakdown", exportPdf: "Save PDF",
         recentCalls: "Recent Calls", noData: "No data found",
         src: "Source", dst: "Destination", duration: "Duration", status: "Status",
         footerLeft: "Agent Analytics Engine", footerRight: "Monitored Extensions:",
@@ -38,6 +39,7 @@ const words = {
         inboundLabel: "وارد", outboundLabel: "صادر",
         talkTime: "وقت التحدث", sec: "ث", min: "د",
         disposition: "حالة المكالمة", daily: "حجم المكالمات اليومي",
+        hourly: "توزيع المكالمات بالساعات", duration: "تصنيف مدة المكالمات", exportPdf: "حفظ PDF",
         recentCalls: "آخر المكالمات", noData: "لا توجد بيانات",
         src: "المصدر", dst: "الوجهة", duration: "المدة", status: "الحالة",
         footerLeft: "محرك تحليلات الوكلاء", footerRight: "الوكلاء المراقبة:",
@@ -151,21 +153,147 @@ const isRtl = currentLang === 'ar';
         input, select, button { 
             transition: all 150ms ease; 
         }
+
+        @media print {
+            html, body {
+                background-color: #ffffff !important;
+                color: #0f172a !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                overflow: visible !important;
+            }
+            body > *:not(#mainContentWrapper) {
+                display: none !important;
+            }
+            #mainContentWrapper {
+                display: block !important;
+                padding: 0.25in !important;
+                margin: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            #mainContentWrapper > div.mb-6,
+            #mainContentWrapper > form#filterForm,
+            #extListCol,
+            .app-sidebar, #sidebarOverlay, .mobile-topbar, #overviewHeaderBtn, #exportPdfBtn, .no-print {
+                display: none !important;
+                height: 0 !important;
+                width: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                visibility: hidden !important;
+            }
+            #mainContentWrapper > div.flex {
+                display: block !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            .print-header-banner {
+                display: flex !important;
+                border-bottom: 2px solid #cbd5e1 !important;
+                padding-bottom: 0.75rem !important;
+                margin-bottom: 1.25rem !important;
+                page-break-before: avoid !important;
+                break-before: avoid !important;
+                break-after: avoid !important;
+            }
+            #detailPanel {
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: transparent !important;
+                overflow: visible !important;
+                width: 100% !important;
+                display: block !important;
+                page-break-before: avoid !important;
+                break-before: avoid !important;
+            }
+            #detailPanel div,
+            #detailPanel form,
+            #detailPanel section {
+                display: block !important;
+                flex: none !important;
+                float: none !important;
+                position: static !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+            }
+            .panel-surface {
+                background-color: #ffffff !important;
+                border: 1px solid #e2e8f0 !important;
+                color: #0f172a !important;
+                box-shadow: none !important;
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+                margin-bottom: 1rem !important;
+            }
+            .text-white, .text-zinc-300, .text-zinc-400 {
+                color: #0f172a !important;
+            }
+            .grid {
+                display: grid !important;
+                grid-template-columns: 1fr !important;
+                gap: 1.5rem !important;
+            }
+            /* Hide canvas during print and display static high-DPI chart images */
+            #dispositionChart canvas, #dailyChart canvas, #hourlyChart canvas, #durationChart canvas {
+                display: none !important;
+            }
+            .print-chart-img {
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                height: auto !important;
+                object-fit: contain !important;
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+                margin: 0 auto !important;
+            }
+            #dispositionChart, #dailyChart, #hourlyChart, #durationChart {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+                height: auto !important;
+                min-height: 0 !important;
+            }
+            /* Prevent tables and table rows from being split across page breaks */
+            table, tr, tbody, thead {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+        }
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
-    <div class="flex-1 p-8 flex flex-col min-h-0">
+    <div id="mainContentWrapper" class="flex-1 p-8 flex flex-col min-h-0">
         
         <div class="mb-6 shrink-0 flex items-center justify-between <%= isRtl ? 'flex-row-reverse' : '' %>">
             <div>
                 <h2 class="text-3xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
-            <!-- Back to Overview Button in Title Bar -->
-            <button id="overviewHeaderBtn" onclick="selectOverview()" class="hidden bg-[#18181b] hover:bg-[#27272a] border border-[#27272a] text-[var(--accent-color)] hover:text-[var(--accent-hover)] px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
-                <%= t.overview %>
-            </button>
+            <!-- Header Actions -->
+            <div class="flex items-center gap-3">
+                <button id="exportPdfBtn" onclick="exportReportPdf()" class="hidden bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] text-[var(--text-primary)] px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer flex items-center gap-2" title="<%= isRtl ? 'حفظ التقارير بتنسيق PDF' : 'Save PDF Report' %>">
+                    <svg class="w-4 h-4 text-[var(--accent-color)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <span><%= t.exportPdf %></span>
+                </button>
+
+                <!-- Back to Overview Button in Title Bar -->
+                <button id="overviewHeaderBtn" onclick="selectOverview()" class="hidden bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] text-[var(--accent-color)] hover:text-[var(--accent-hover)] px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
+                    <%= t.overview %>
+                </button>
+            </div>
         </div>
 
         <!-- Filter Form -->
@@ -195,7 +323,7 @@ const isRtl = currentLang === 'ar';
         <!-- Main Content Area -->
         <div class="flex gap-6 flex-1 min-h-0">
             <!-- Left Extensions List -->
-            <div class="panel-surface rounded-2xl shadow-2xl w-60 shrink-0 flex flex-col min-h-0">
+            <div id="extListCol" class="panel-surface rounded-2xl shadow-2xl w-60 shrink-0 flex flex-col min-h-0">
                 <div class="px-4 py-3.5 border-b border-[#27272a] bg-black/30 shrink-0 flex items-center justify-between <%= isRtl ? 'flex-row-reverse' : '' %>">
                     <span class="text-xs font-bold uppercase tracking-widest text-zinc-400"><%= t.extList %></span>
                 </div>
@@ -236,6 +364,8 @@ const isRtl = currentLang === 'ar';
         let currentExtension = null;
         let dispositionChart = null;
         let dailyChart = null;
+        let hourlyChart = null;
+        let durationChart = null;
         let overviewData = [];
         let sortColumn = 'extension';
         let sortDirection = 'asc';
@@ -290,6 +420,7 @@ const isRtl = currentLang === 'ar';
             document.querySelectorAll('.ext-card').forEach(c => c.classList.remove('active'));
             document.getElementById('btnOverview').classList.add('active');
             document.getElementById('overviewHeaderBtn').classList.add('hidden');
+            document.getElementById('exportPdfBtn')?.classList.add('hidden');
             document.getElementById('dirFilterCol').classList.add('hidden'); // Hide direction filter since overview spans all
             loadOverview();
         }
@@ -301,6 +432,7 @@ const isRtl = currentLang === 'ar';
             const card = document.querySelector(`.ext-card[data-ext="${ext}"]`);
             if (card) card.classList.add('active');
             document.getElementById('overviewHeaderBtn').classList.remove('hidden');
+            document.getElementById('exportPdfBtn')?.classList.remove('hidden');
             document.getElementById('dirFilterCol').classList.remove('hidden');
             loadStats(ext);
         }
@@ -478,15 +610,22 @@ const isRtl = currentLang === 'ar';
             data.contacts = data.uniqueContacts || [];
             data.recentCalls = (data.recentCalls || []).slice(0, 20);
 
-            let html = '<div class="w-full flex flex-col h-full">';
-            
-            // Header
-            html += `<div class="flex items-center justify-between mb-5 shrink-0 ${rtl ? 'flex-row-reverse' : ''}">
-                <div>
-                    <h3 class="text-xl font-bold text-white flex items-center gap-2 ${rtl ? 'flex-row-reverse' : ''}">
-                        <span class="accent-orange font-mono bg-[#18181b] border border-[#27272a] px-2.5 py-1 rounded-lg text-base">${data.extension}</span>
-                        <span class="text-zinc-300 font-sans">${data.name}</span>
-                    </h3>
+            let html = '<div class="w-full flex flex-col min-h-0 print-block">';
+            const startDateVal = document.getElementById('startDate')?.value || '';
+            const endDateVal = document.getElementById('endDate')?.value || '';
+
+            // Printable Header Banner with Employee Name & ID
+            html += `<div class="print-header-banner flex items-center justify-between pb-4 mb-6 border-b border-[var(--border-primary)] ${rtl ? 'flex-row-reverse' : ''}">
+                <div class="flex items-center gap-3 ${rtl ? 'flex-row-reverse' : ''}">
+                    <span class="accent-orange font-mono bg-[var(--bg-primary)] border border-[var(--border-primary)] px-3 py-1.5 rounded-xl text-lg font-black">${data.extension}</span>
+                    <div>
+                        <h3 class="text-2xl font-bold text-[var(--text-primary)] font-sans flex items-center gap-2 ${rtl ? 'flex-row-reverse' : ''}">${data.name}</h3>
+                        <p class="text-xs font-semibold text-[var(--text-muted)] tracking-wider uppercase mt-0.5"><%= isRtl ? 'تقرير تحليلات أداء الموظف' : 'Employee Performance Analytics Report' %></p>
+                    </div>
+                </div>
+                <div class="text-end ${rtl ? 'text-start' : 'text-end'} text-xs text-[var(--text-muted)] font-mono">
+                    <p class="font-bold text-[var(--text-primary)]">SOKRAT VOIP ANALYTICS</p>
+                    <p class="mt-0.5">${startDateVal} &mdash; ${endDateVal}</p>
                 </div>
             </div>`;
 
@@ -542,13 +681,21 @@ const isRtl = currentLang === 'ar';
 
             // Charts Grid
             html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 shrink-0">';
-            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-5 border border-[#27272a]/30">
                 <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider mb-4"><%= t.disposition %></h4>
-                <div id="dispositionChart" class="w-full h-64"></div>
+                <div id="dispositionChart" class="w-full h-72 min-h-[280px]"></div>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-5 border border-[#27272a]/30">
                 <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider mb-4"><%= t.daily %></h4>
-                <div id="dailyChart" class="w-full h-64"></div>
+                <div id="dailyChart" class="w-full h-72 min-h-[280px]"></div>
+            </div>`;
+            html += `<div class="panel-surface rounded-xl p-5 border border-[#27272a]/30">
+                <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider mb-4"><%= t.hourly %></h4>
+                <div id="hourlyChart" class="w-full h-72 min-h-[280px]"></div>
+            </div>`;
+            html += `<div class="panel-surface rounded-xl p-5 border border-[#27272a]/30">
+                <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider mb-4"><%= t.duration %></h4>
+                <div id="durationChart" class="w-full h-72 min-h-[280px]"></div>
             </div>`;
             html += '</div>';
 
@@ -558,7 +705,7 @@ const isRtl = currentLang === 'ar';
                     <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider mb-3"><%= t.uniqueContacts %> (${data.uniqueContactCount})</h4>
                     <div class="flex flex-wrap gap-1.5">`;
                 data.contacts.forEach(c => {
-                    html += `<span class="bg-[#09090b] border border-[#27272a] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--accent-color)] hover:border-[var(--accent-color)]/50 transition">${c}</span>`;
+                    html += `<span class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--accent-color)] hover:border-[var(--accent-color)]/50 transition">${c}</span>`;
                 });
                 html += '</div></div>';
             }
@@ -602,53 +749,96 @@ const isRtl = currentLang === 'ar';
                 });
                 html += '</tbody></table></div></div>';
             }
-
             html += '</div>';
             panel.className = 'flex-1 panel-surface rounded-2xl shadow-2xl overflow-y-auto min-h-0 p-6 flex flex-col';
             panel.innerHTML = html;
 
             // Trigger ECharts rendering
-            if (data.dispositionData && data.dispositionData.length) {
-                initDispositionChart(data.dispositionData);
+            setTimeout(() => {
+                if (data.dispositionData && data.dispositionData.length) {
+                    initDispositionChart(data.dispositionData);
+                }
+                if (data.dailyData && data.dailyData.length) {
+                    initDailyChart(data.dailyData);
+                }
+                if (data.hourlyData && data.hourlyData.length) {
+                    initHourlyChart(data.hourlyData);
+                }
+                if (data.durationData && data.durationData.length) {
+                    initDurationChart(data.durationData);
+                }
+                requestAnimationFrame(() => {
+                    if (dispositionChart) dispositionChart.resize();
+                    if (dailyChart) dailyChart.resize();
+                    if (hourlyChart) hourlyChart.resize();
+                    if (durationChart) durationChart.resize();
+                });
+            }, 50);
+        }
+        function renderPrintChartImages() {
+            const chartList = [
+                { id: 'dispositionChart', chart: dispositionChart },
+                { id: 'dailyChart', chart: dailyChart },
+                { id: 'hourlyChart', chart: hourlyChart },
+                { id: 'durationChart', chart: durationChart }
+            ];
+            chartList.forEach(({ id, chart }) => {
+                if (!chart) return;
+                const container = document.getElementById(id);
+                if (!container) return;
+                const oldImg = container.querySelector('.print-chart-img');
+                if (oldImg) oldImg.remove();
+                try {
+                    const dataUrl = chart.getDataURL({
+                        type: 'png',
+                        pixelRatio: 2,
+                        backgroundColor: '#ffffff'
+                    });
+                    const img = document.createElement('img');
+                    img.className = 'print-chart-img hidden';
+                    img.src = dataUrl;
+                    container.appendChild(img);
+                } catch (e) {
+                    console.error('Error exporting chart image:', e);
+                }
+            });
+        }
+
+        function exportReportPdf() {
+            if (!currentExtension) {
+                const firstExtCard = document.querySelector('.ext-card[data-ext]');
+                if (firstExtCard) {
+                    const firstExt = firstExtCard.getAttribute('data-ext');
+                    selectExtension(firstExt);
+                    setTimeout(() => exportReportPdf(), 400);
+                    return;
+                } else {
+                    alert(<%- JSON.stringify(isRtl ? 'يرجى اختيار موظف لتصدير التقرير الخاص به' : 'Please select an employee to export their report') %>);
+                    return;
+                }
             }
-            if (data.dailyData && data.dailyData.length) {
-                initDailyChart(data.dailyData);
-            }
+
+            renderPrintChartImages();
+
+            setTimeout(() => {
+                window.print();
+            }, 150);
         }
 
         function initDispositionChart(data) {
             if (dispositionChart) dispositionChart.dispose();
-            const isLight = document.body.classList.contains('light-theme');
+            const isLight = document.documentElement.classList.contains('light-theme');
             dispositionChart = echarts.init(document.getElementById('dispositionChart'), isLight ? null : 'dark');
-            const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#dc2626';
-            
-            // Build rich vibrant gradient mapping - rebranded in Red, White, and Black/Silver
-            const colorGradients = {
-                ANSWERED: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: accent },
-                    { offset: 1, color: '#991b1b' }
-                ]),
-                BUSY: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: '#fbbf24' },
-                    { offset: 1, color: '#d97706' }
-                ]),
-                'NO ANSWER': new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: '#2dd4bf' },
-                    { offset: 1, color: '#0d9488' }
-                ]),
-                FAILED: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: '#a855f7' },
-                    { offset: 1, color: '#7e22ce' }
-                ]),
-                CANCEL: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: '#78716c' },
-                    { offset: 1, color: '#44403c' }
-                ])
+
+            // Matte Solid Palette
+            const matteColors = {
+                ANSWERED: '#e11d48',
+                BUSY: '#d97706',
+                'NO ANSWER': '#0284c7',
+                FAILED: '#9333ea',
+                CANCEL: '#52525b'
             };
-            const defaultGradient = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: isLight ? '#27272a' : '#a1a1aa' },
-                { offset: 1, color: isLight ? '#71717a' : '#71717a' }
-            ]);
+            const defaultMatte = isLight ? '#3f3f46' : '#71717a';
 
             dispositionChart.setOption({
                 backgroundColor: 'transparent',
@@ -666,21 +856,19 @@ const isRtl = currentLang === 'ar';
                 series: [{
                     name: 'Disposition',
                     type: 'pie',
-                    radius: ['45%', '70%'],
+                    center: ['50%', '42%'],
+                    radius: ['38%', '62%'],
                     itemStyle: { 
-                        borderRadius: 10, 
-                        borderColor: isLight ? '#ffffff' : '#121212', 
-                        borderWidth: 2.5,
-                        shadowBlur: 15,
-                        shadowColor: 'rgba(0, 0, 0, 0.2)'
+                        borderRadius: 8, 
+                        borderColor: isLight ? '#ffffff' : '#1e1e24', 
+                        borderWidth: 2
                     },
                     label: { show: false },
                     data: data.map(d => ({
                         value: d.value,
                         name: d.name,
-                        itemStyle: { color: colorGradients[d.name] || defaultGradient }
+                        itemStyle: { color: matteColors[d.name] || defaultMatte }
                     })),
-                    // Short chart reveal keeps data readable without delaying the task.
                     animationType: 'expansion',
                     animationEasing: 'cubicOut',
                     animationDuration: 650
@@ -691,19 +879,8 @@ const isRtl = currentLang === 'ar';
 
         function initDailyChart(data) {
             if (dailyChart) dailyChart.dispose();
-            const isLight = document.body.classList.contains('light-theme');
+            const isLight = document.documentElement.classList.contains('light-theme');
             dailyChart = echarts.init(document.getElementById('dailyChart'), isLight ? null : 'dark');
-            const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#dc2626';
-            
-            // Rebranded gradients
-            const totalGradient = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: accent },
-                { offset: 1, color: '#991b1b' }
-            ]);
-            const answeredGradient = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: '#00b4d8' },
-                { offset: 1, color: '#0077b6' }
-            ]);
 
             dailyChart.setOption({
                 backgroundColor: 'transparent',
@@ -717,7 +894,7 @@ const isRtl = currentLang === 'ar';
                     bottom: '0%', 
                     textStyle: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 10, fontWeight: 'bold' } 
                 },
-                grid: { left: '8%', right: '4%', top: '8%', bottom: '18%' },
+                grid: { left: '3%', right: '3%', top: '14%', bottom: '12%', containLabel: true },
                 xAxis: {
                     type: 'category',
                     data: data.map(d => d.date.slice(5)),
@@ -735,32 +912,138 @@ const isRtl = currentLang === 'ar';
                         type: 'bar', 
                         data: data.map(d => d.total), 
                         itemStyle: { 
-                            color: totalGradient, 
-                            borderRadius: [5,5,0,0],
-                            shadowBlur: 10,
-                            shadowColor: 'rgba(255, 59, 48, 0.3)'
+                            color: '#e11d48', 
+                            borderRadius: [4, 4, 0, 0]
                         }, 
                         barWidth: '35%',
                         animationEasing: 'cubicOut',
-                        animationDuration: 1200
+                        animationDuration: 1000
                     },
                     { 
                         name: 'Answered', 
                         type: 'bar', 
                         data: data.map(d => d.answered), 
                         itemStyle: { 
-                            color: answeredGradient, 
-                            borderRadius: [5,5,0,0],
-                            shadowBlur: 10,
-                            shadowColor: 'rgba(0, 0, 0, 0.1)'
+                            color: '#0284c7', 
+                            borderRadius: [4, 4, 0, 0]
                         }, 
                         barWidth: '35%',
                         animationEasing: 'cubicOut',
-                        animationDuration: 1400
+                        animationDuration: 1200
                     }
                 ]
             });
             window.addEventListener('resize', () => dailyChart && dailyChart.resize());
+        }
+
+        function initHourlyChart(data) {
+            if (hourlyChart) hourlyChart.dispose();
+            const isLight = document.documentElement.classList.contains('light-theme');
+            hourlyChart = echarts.init(document.getElementById('hourlyChart'), isLight ? null : 'dark');
+
+            hourlyChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { 
+                    trigger: 'axis',
+                    backgroundColor: isLight ? '#ffffff' : '#18181b',
+                    borderColor: isLight ? '#e4e4e7' : '#27272a',
+                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 }
+                },
+                grid: { left: '3%', right: '3%', top: '14%', bottom: '12%', containLabel: true },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(d => d.hour),
+                    axisLabel: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 8, interval: 2 },
+                    axisLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a' } }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 9 },
+                    splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } }
+                },
+                series: [{
+                    name: 'Calls',
+                    type: 'bar',
+                    data: data.map(d => d.count),
+                    itemStyle: { 
+                        color: '#0d9488', 
+                        borderRadius: [4, 4, 0, 0]
+                    },
+                    barWidth: '50%',
+                    animationEasing: 'cubicOut',
+                    animationDuration: 1100
+                }]
+            });
+            window.addEventListener('resize', () => hourlyChart && hourlyChart.resize());
+        }
+
+        function initDurationChart(data) {
+            if (durationChart) durationChart.dispose();
+            const isLight = document.documentElement.classList.contains('light-theme');
+            durationChart = echarts.init(document.getElementById('durationChart'), isLight ? null : 'dark');
+
+            const durationColors = {
+                'Short (<30s)': '#38bdf8',
+                'Medium (30s-3m)': '#f59e0b',
+                'Long (>3m)': '#e11d48'
+            };
+            const totalDurVal = data.reduce((acc, curr) => acc + (curr.value || 0), 0) || 1;
+
+            durationChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { 
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    backgroundColor: isLight ? '#ffffff' : '#18181b',
+                    borderColor: isLight ? '#e4e4e7' : '#27272a',
+                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 },
+                    formatter: function(params) {
+                        const p = params[0];
+                        const pct = Math.round((p.value / totalDurVal) * 100);
+                        return p.name + ': ' + p.value + ' (' + pct + '%)';
+                    }
+                },
+                grid: { left: 110, right: 60, top: 20, bottom: 20, containLabel: true },
+                xAxis: {
+                    type: 'value',
+                    splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } },
+                    axisLabel: { color: isLight ? '#52525b' : '#71717a', fontSize: 9 }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: data.map(d => d.name),
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    axisLabel: { color: isLight ? '#27272a' : '#ffffff', fontSize: 10, fontWeight: 'bold' }
+                },
+                series: [{
+                    name: 'Duration',
+                    type: 'bar',
+                    barWidth: '45%',
+                    itemStyle: {
+                        borderRadius: [0, 6, 6, 0]
+                    },
+                    data: data.map(d => ({
+                        value: d.value,
+                        name: d.name,
+                        itemStyle: { color: durationColors[d.name] || '#64748b' }
+                    })),
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: function(params) {
+                            const pct = Math.round((params.value / totalDurVal) * 100);
+                            return params.value + ' (' + pct + '%)';
+                        },
+                        fontSize: 10,
+                        fontWeight: 'bold',
+                        color: isLight ? '#52525b' : '#a1a1aa'
+                    },
+                    animationEasing: 'cubicOut',
+                    animationDuration: 650
+                }]
+            });
+            window.addEventListener('resize', () => durationChart && durationChart.resize());
         }
     </script>
     <script>

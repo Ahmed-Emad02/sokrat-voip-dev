@@ -145,9 +145,9 @@
                         <div class="flex flex-wrap gap-4">
                             <% var visibleTabs = allTabs.filter(function(t) { return t !== 'dashboard'; }); %>
                             <% visibleTabs.forEach(function(tab) { %>
-                                <label class="flex items-center gap-2 cursor-pointer">
+                                <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] text-xs text-[var(--text-primary)] cursor-pointer transition">
                                     <input type="checkbox" name="tabs" value="<%= tab %>" class="tab-checkbox" <%= g.permissions.includes(tab) ? 'checked' : '' %>>
-                                    <span class="text-sm capitalize"><%= tab.replace(/-/g, ' ') %></span>
+                                    <span class="capitalize"><%= tab.replace(/-/g, ' ') %></span>
                                 </label>
                             <% }); %>
                             <span class="text-xs text-[var(--text-muted)] self-center ml-2">Dashboard is accessible to all users</span>

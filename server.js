@@ -2687,15 +2687,111 @@ app.get('/', async (req, res) => {
     try {
         const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
         const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+        const selectedExtension = req.query.targetExtension || 'ALL';
+        const statusFilter = req.query.statusFilter || 'ALL';
+        const searchSrc = req.query.searchSrc || '';
+        const searchDst = req.query.searchDst || '';
+        const searchDid = req.query.searchDid || '';
+        const searchUniqueId = req.query.searchUniqueId || '';
+        const directionFilter = req.query.directionFilter || 'ALL';
+        const callScopeFilter = req.query.callScopeFilter || 'ALL';
 
-        const [rows] = await pool.query(`SELECT src, dst, billsec, REPLACE(disposition, 'CONGESTION', 'FAILED') as disposition, channel, dstchannel, calldate FROM ${tables.cdr} WHERE calldate BETWEEN ? AND ? AND dst NOT IN ('ussd','sms','report','s')`, [startDate, endDate]);
+        let selectedExtensions = req.query.targetExtension;
+        if (!selectedExtensions) selectedExtensions = ['ALL'];
+        else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
+        if (selectedExtensions.length > 1 && selectedExtensions.includes('ALL')) {
+            selectedExtensions = selectedExtensions.filter(e => e !== 'ALL');
+        }
+        const targetExtensionFilter = selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions;
+
+        let selectedStatuses = req.query.statusFilter;
+        if (!selectedStatuses) selectedStatuses = ['ALL'];
+        else if (!Array.isArray(selectedStatuses)) selectedStatuses = [selectedStatuses];
+        if (selectedStatuses.length > 1 && selectedStatuses.includes('ALL')) {
+            selectedStatuses = selectedStatuses.filter(s => s !== 'ALL');
+        }
+        const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
+
+        const directionCase = `
+            CASE
+                WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
+                 AND (UPPER(c.dstchannel) NOT LIKE 'SIP/%' AND UPPER(c.dstchannel) NOT LIKE 'PJSIP/%' AND UPPER(c.dstchannel) NOT LIKE 'IAX2/%')
+                THEN 'OUTBOUND'
+                ELSE 'INBOUND'
+            END
+        `;
+        const callScopeCase = `
+            CASE
+                WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
+                 AND (UPPER(c.dstchannel) LIKE 'SIP/%' OR UPPER(c.dstchannel) LIKE 'PJSIP/%' OR UPPER(c.dstchannel) LIKE 'IAX2/%')
+                THEN 'INTERNAL'
+                ELSE 'EXTERNAL'
+            END
+        `;
+
+        let query = `
+            SELECT c.src, c.dst, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.channel, c.dstchannel, c.calldate, c.did, c.uniqueid, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name
+            FROM ${tables.cdr} c
+            LEFT JOIN ${tables.users} u ON c.src = u.extension
+            WHERE c.calldate BETWEEN ? AND ?
+            AND c.dst NOT IN ('ussd','sms','report','s')
+        `;
+        let queryParams = [startDate, endDate];
+
+        if (targetExtensionFilter !== 'ALL') {
+            const exts = targetExtensionFilter;
+            const regexpPattern = exts.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+            const clause = " AND (c.src IN (?) OR c.dst IN (?) OR c.cnum IN (?) OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)'))";
+            query += clause;
+            queryParams.push(exts, exts, exts, regexpPattern, regexpPattern);
+        }
+        if (searchSrc) {
+            query += " AND c.src LIKE ?";
+            queryParams.push(`%${searchSrc}%`);
+        }
+        if (searchDst) {
+            query += " AND c.dst LIKE ?";
+            queryParams.push(`%${searchDst}%`);
+        }
+        if (searchDid) {
+            query += " AND c.did LIKE ?";
+            queryParams.push(`%${searchDid}%`);
+        }
+        if (searchUniqueId) {
+            query += " AND c.uniqueid LIKE ?";
+            queryParams.push(`%${searchUniqueId}%`);
+        }
+        if (statusFilterList !== 'ALL') {
+            let statusesToMatch = [...statusFilterList];
+            if (statusesToMatch.includes('FAILED') && !statusesToMatch.includes('CONGESTION')) {
+                statusesToMatch.push('CONGESTION');
+            }
+            query += " AND (TRIM(UPPER(c.disposition)) IN (?) OR ('FAILED' IN (?) AND TRIM(UPPER(c.disposition)) = 'CONGESTION'))";
+            queryParams.push(statusesToMatch, statusFilterList);
+        }
+        if (directionFilter !== 'ALL') {
+            query += ` AND ${directionCase} = ?`;
+            queryParams.push(directionFilter);
+        }
+        if (callScopeFilter !== 'ALL') {
+            query += ` AND ${callScopeCase} = ?`;
+            queryParams.push(callScopeFilter);
+        }
+
+        const [rows] = await pool.query(query, queryParams);
 
         const stats = {
             totalCalls: 0,
             inboundCount: 0,
             outboundCount: 0,
+            internalCount: 0,
+            externalCount: 0,
             inboundMin: 0,
             outboundMin: 0,
+            internalTalkSec: 0,
+            externalTalkSec: 0,
+            internalMin: 0,
+            externalMin: 0,
             answeredCalls: 0,
             noAnswerCalls: 0,
             busyCalls: 0,
@@ -2711,7 +2807,14 @@ app.get('/', async (req, res) => {
             stats.totalCalls++;
             const sec = parseInt(row.billsec) || 0;
             const isOutbound = isOutboundCdr(row);
-
+            const isInternalCall = isInternalChannel(row.channel) && isInternalChannel(row.dstchannel);
+            if (isInternalCall) {
+                stats.internalCount++;
+                if (row.disposition === 'ANSWERED') stats.internalTalkSec += sec;
+            } else {
+                stats.externalCount++;
+                if (row.disposition === 'ANSWERED') stats.externalTalkSec += sec;
+            }
             const disp = row.disposition;
             if (disp === 'ANSWERED') {
                 stats.answeredCalls++;
@@ -2745,12 +2848,14 @@ app.get('/', async (req, res) => {
 
         stats.inboundMin = Math.round(stats.inboundMin / 60);
         stats.outboundMin = Math.round(stats.outboundMin / 60);
+        stats.internalMin = Math.round(stats.internalTalkSec / 60);
+        stats.externalMin = Math.round(stats.externalTalkSec / 60);
         stats.totalTalkMin = Math.round(stats.totalTalkSec / 60);
         stats.avgTalkSec = stats.answeredCalls ? Math.round(stats.totalTalkSec / stats.answeredCalls) : 0;
-        // --- Chart Data ---
         const trendMap = {};
         const dispCounts = {};
         const hourlyMap = {};
+        const durationCounts = { short: 0, medium: 0, long: 0 };
         rows.forEach(row => {
             const day = moment(row.calldate).format('YYYY-MM-DD');
             trendMap[day] = trendMap[day] || { total: 0, inbound: 0, outbound: 0 };
@@ -2764,6 +2869,13 @@ app.get('/', async (req, res) => {
 
             const hour = moment(row.calldate).format('H');
             hourlyMap[hour] = (hourlyMap[hour] || 0) + 1;
+
+            if (row.disposition === 'ANSWERED') {
+                const sec = parseInt(row.billsec) || 0;
+                if (sec < 30) durationCounts.short++;
+                else if (sec <= 180) durationCounts.medium++;
+                else durationCounts.long++;
+            }
         });
 
         const trendData = Object.entries(trendMap)
@@ -2782,14 +2894,38 @@ app.get('/', async (req, res) => {
             .slice(0, 10)
             .map(e => ({ name: e.name + ' (' + e.extension + ')', talkSec: e.totalTalkSec, calls: e.totalCalls }));
 
+        const durationData = [
+            { name: 'Short (<30s)', value: durationCounts.short },
+            { name: 'Medium (30s-3m)', value: durationCounts.medium },
+            { name: 'Long (>3m)', value: durationCounts.long }
+        ];
+
+        const scopeData = [
+            { name: 'Internal', value: stats.internalCount },
+            { name: 'External', value: stats.externalCount }
+        ];
+
         res.render('dashboard', {
             stats,
-            filters: { startDate, endDate },
+            filters: {
+                startDate,
+                endDate,
+                targetExtension: targetExtensionFilter,
+                statusFilter: statusFilterList,
+                searchSrc,
+                searchDst,
+                searchDid,
+                searchUniqueId,
+                directionFilter,
+                callScopeFilter
+            },
             moment,
             trendData: JSON.stringify(trendData),
             dispositionData: JSON.stringify(dispositionData),
             hourlyData: JSON.stringify(hourlyData),
-            topTalkers: JSON.stringify(topTalkers)
+            topTalkers: JSON.stringify(topTalkers),
+            durationData: JSON.stringify(durationData),
+            scopeData: JSON.stringify(scopeData)
         });
     } catch (error) { res.status(500).send("Dashboard Error: " + error.message); }
 });
@@ -2824,13 +2960,27 @@ app.get('/cdr', async (req, res) => {
     try {
         const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
         const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
-        const selectedExtension = req.query.targetExtension || 'ALL';
-        const statusFilter = req.query.statusFilter || 'ALL';
+        let selectedExtensions = req.query.targetExtension;
+        if (!selectedExtensions) selectedExtensions = ['ALL'];
+        else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
+        if (selectedExtensions.length > 1 && selectedExtensions.includes('ALL')) {
+            selectedExtensions = selectedExtensions.filter(e => e !== 'ALL');
+        }
+        const targetExtensionFilter = selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions;
+
+        let selectedStatuses = req.query.statusFilter;
+        if (!selectedStatuses) selectedStatuses = ['ALL'];
+        else if (!Array.isArray(selectedStatuses)) selectedStatuses = [selectedStatuses];
+        if (selectedStatuses.length > 1 && selectedStatuses.includes('ALL')) {
+            selectedStatuses = selectedStatuses.filter(s => s !== 'ALL');
+        }
+        const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
         const searchDid = req.query.searchDid || '';
         const searchUniqueId = req.query.searchUniqueId || '';
         const directionFilter = req.query.directionFilter || 'ALL';
+        const callScopeFilter = req.query.callScopeFilter || 'ALL';
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const perPage = Math.min(200, Math.max(1, parseInt(req.query.perPage) || 25));
         const offset = (page - 1) * perPage;
@@ -2840,6 +2990,14 @@ app.get('/cdr', async (req, res) => {
                  AND (UPPER(c.dstchannel) NOT LIKE 'SIP/%' AND UPPER(c.dstchannel) NOT LIKE 'PJSIP/%' AND UPPER(c.dstchannel) NOT LIKE 'IAX2/%')
                 THEN 'OUTBOUND'
                 ELSE 'INBOUND'
+            END
+        `;
+        const callScopeCase = `
+            CASE
+                WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
+                 AND (UPPER(c.dstchannel) LIKE 'SIP/%' OR UPPER(c.dstchannel) LIKE 'PJSIP/%' OR UPPER(c.dstchannel) LIKE 'IAX2/%')
+                THEN 'INTERNAL'
+                ELSE 'EXTERNAL'
             END
         `;
 
@@ -2854,7 +3012,8 @@ app.get('/cdr', async (req, res) => {
 
         let query = `
             SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
-            ${directionCase} as direction
+            ${directionCase} as direction,
+            ${callScopeCase} as call_scope
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             WHERE c.calldate BETWEEN ? AND ?
@@ -2862,11 +3021,13 @@ app.get('/cdr', async (req, res) => {
         `;
         let queryParams = [startDate, endDate];
 
-        if (selectedExtension !== 'ALL') {
-            const clause = " AND (c.src = ? OR c.dst = ? OR c.cnum = ? OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)'))";
+        if (targetExtensionFilter !== 'ALL') {
+            const exts = targetExtensionFilter;
+            const regexpPattern = exts.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+            const clause = " AND (c.src IN (?) OR c.dst IN (?) OR c.cnum IN (?) OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)'))";
             query += clause; countQuery += clause;
-            queryParams.push(selectedExtension, selectedExtension, selectedExtension, selectedExtension, selectedExtension);
-            countParams.push(selectedExtension, selectedExtension, selectedExtension, selectedExtension, selectedExtension);
+            queryParams.push(exts, exts, exts, regexpPattern, regexpPattern);
+            countParams.push(exts, exts, exts, regexpPattern, regexpPattern);
         }
         if (searchSrc) {
             const clause = " AND c.src LIKE ?";
@@ -2892,17 +3053,27 @@ app.get('/cdr', async (req, res) => {
             queryParams.push(`%${searchUniqueId}%`);
             countParams.push(`%${searchUniqueId}%`);
         }
-        if (statusFilter !== 'ALL') {
-            const clause = " AND (TRIM(UPPER(c.disposition)) = TRIM(UPPER(?)) OR (TRIM(UPPER(?)) = 'FAILED' AND TRIM(UPPER(c.disposition)) = 'CONGESTION'))";
+        if (statusFilterList !== 'ALL') {
+            let statusesToMatch = [...statusFilterList];
+            if (statusesToMatch.includes('FAILED') && !statusesToMatch.includes('CONGESTION')) {
+                statusesToMatch.push('CONGESTION');
+            }
+            const clause = " AND (TRIM(UPPER(c.disposition)) IN (?) OR ('FAILED' IN (?) AND TRIM(UPPER(c.disposition)) = 'CONGESTION'))";
             query += clause; countQuery += clause;
-            queryParams.push(statusFilter, statusFilter);
-            countParams.push(statusFilter, statusFilter);
+            queryParams.push(statusesToMatch, statusFilterList);
+            countParams.push(statusesToMatch, statusFilterList);
         }
         if (directionFilter !== 'ALL') {
             const clause = ` AND ${directionCase} = ?`;
             query += clause; countQuery += clause;
             queryParams.push(directionFilter);
             countParams.push(directionFilter);
+        }
+        if (callScopeFilter !== 'ALL') {
+            const clause = ` AND ${callScopeCase} = ?`;
+            query += clause; countQuery += clause;
+            queryParams.push(callScopeFilter);
+            countParams.push(callScopeFilter);
         }
 
         query += " ORDER BY c.calldate DESC LIMIT ? OFFSET ?";
@@ -2921,7 +3092,7 @@ app.get('/cdr', async (req, res) => {
 
         res.render('cdr', {
             calls: formattedRows,
-            filters: { startDate, endDate, targetExtension: selectedExtension, statusFilter, searchSrc, searchDst, searchDid, searchUniqueId, directionFilter, page, perPage },
+            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, directionFilter, callScopeFilter, page, perPage },
             pagination: { total, totalPages, page, perPage },
             moment
         });
@@ -2937,9 +3108,23 @@ app.get('/cdr/export', async (req, res) => {
         const statusFilter = req.query.statusFilter || 'ALL';
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
-        const searchDid = req.query.searchDid || '';
-        const searchUniqueId = req.query.searchUniqueId || '';
+        let selectedExtensions = req.query.targetExtension;
+        if (!selectedExtensions) selectedExtensions = ['ALL'];
+        else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
+        if (selectedExtensions.length > 1 && selectedExtensions.includes('ALL')) {
+            selectedExtensions = selectedExtensions.filter(e => e !== 'ALL');
+        }
+        const targetExtensionFilter = selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions;
+
+        let selectedStatuses = req.query.statusFilter;
+        if (!selectedStatuses) selectedStatuses = ['ALL'];
+        else if (!Array.isArray(selectedStatuses)) selectedStatuses = [selectedStatuses];
+        if (selectedStatuses.length > 1 && selectedStatuses.includes('ALL')) {
+            selectedStatuses = selectedStatuses.filter(s => s !== 'ALL');
+        }
+        const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
         const directionFilter = req.query.directionFilter || 'ALL';
+        const callScopeFilter = req.query.callScopeFilter || 'ALL';
         const directionCase = `
             CASE
                 WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
@@ -2948,9 +3133,18 @@ app.get('/cdr/export', async (req, res) => {
                 ELSE 'INBOUND'
             END
         `;
+        const callScopeCase = `
+            CASE
+                WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
+                 AND (UPPER(c.dstchannel) LIKE 'SIP/%' OR UPPER(c.dstchannel) LIKE 'PJSIP/%' OR UPPER(c.dstchannel) LIKE 'IAX2/%')
+                THEN 'INTERNAL'
+                ELSE 'EXTERNAL'
+            END
+        `;
         let query = `
             SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
-            ${directionCase} as direction
+            ${directionCase} as direction,
+            ${callScopeCase} as call_scope
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             WHERE c.calldate BETWEEN ? AND ?
@@ -2958,10 +3152,12 @@ app.get('/cdr/export', async (req, res) => {
         `;
         let queryParams = [startDate, endDate];
 
-        if (selectedExtension !== 'ALL') {
-            const clause = " AND (c.src = ? OR c.dst = ? OR c.cnum = ? OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)'))";
+        if (targetExtensionFilter !== 'ALL') {
+            const exts = targetExtensionFilter;
+            const regexpPattern = exts.map(e => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+            const clause = " AND (c.src IN (?) OR c.dst IN (?) OR c.cnum IN (?) OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)'))";
             query += clause;
-            queryParams.push(selectedExtension, selectedExtension, selectedExtension, selectedExtension, selectedExtension);
+            queryParams.push(exts, exts, exts, regexpPattern, regexpPattern);
         }
         if (searchSrc) {
             const clause = " AND c.src LIKE ?";
@@ -2983,15 +3179,24 @@ app.get('/cdr/export', async (req, res) => {
             query += clause;
             queryParams.push(`%${searchUniqueId}%`);
         }
-        if (statusFilter !== 'ALL') {
-            const clause = " AND (TRIM(UPPER(c.disposition)) = TRIM(UPPER(?)) OR (TRIM(UPPER(?)) = 'FAILED' AND TRIM(UPPER(c.disposition)) = 'CONGESTION'))";
+        if (statusFilterList !== 'ALL') {
+            let statusesToMatch = [...statusFilterList];
+            if (statusesToMatch.includes('FAILED') && !statusesToMatch.includes('CONGESTION')) {
+                statusesToMatch.push('CONGESTION');
+            }
+            const clause = " AND (TRIM(UPPER(c.disposition)) IN (?) OR ('FAILED' IN (?) AND TRIM(UPPER(c.disposition)) = 'CONGESTION'))";
             query += clause;
-            queryParams.push(statusFilter, statusFilter);
+            queryParams.push(statusesToMatch, statusFilterList);
         }
         if (directionFilter !== 'ALL') {
             const clause = ` AND ${directionCase} = ?`;
             query += clause;
             queryParams.push(directionFilter);
+        }
+        if (callScopeFilter !== 'ALL') {
+            const clause = ` AND ${callScopeCase} = ?`;
+            query += clause;
+            queryParams.push(callScopeFilter);
         }
 
         query += " ORDER BY c.calldate DESC";
@@ -2999,7 +3204,7 @@ app.get('/cdr/export', async (req, res) => {
         const [rows] = await pool.query(query, queryParams);
 
         // Build CSV string
-        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Channel", "Destination Channel", "Unique ID"];
+        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
         
         let csvContent = "\ufeff"; // BOM for UTF-8 Excel support
         csvContent += csvHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n";
@@ -3010,7 +3215,7 @@ app.get('/cdr/export', async (req, res) => {
                 `"${moment(row.calldate).format('YYYY-MM-DD HH:mm:ss')}"`,
                 /^\+?\d+$/.test(String(row.src || '')) ? `="` + String(row.src || '').trim() + `"` : `"${String(row.src || '').replace(/"/g, '""')}"`,
                 `"${String(row.src_name || '').replace(/"/g, '""')}"`,
-                /^\+?\d+$/.test(formattedDst) ? `="` + formattedDst + `"` : `"${formattedDst.replace(/"/g, '""')}"`,
+            row.call_scope || "EXTERNAL",
                 /^\+?\d+$/.test(String(row.did || '')) ? `="` + String(row.did || '').trim() + `"` : `"${String(row.did || '').replace(/"/g, '""')}"`,
                 row.duration || 0,
                 row.billsec || 0,
@@ -3359,7 +3564,9 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
             totalTalkSec: 0, avgTalkSec: 0,
             uniqueContacts: new Set(),
             dispositionCounts: {},
-            dailyBreakdown: {}
+            dailyBreakdown: {},
+            hourlyBreakdown: {},
+            durationCounts: { short: 0, medium: 0, long: 0 }
         };
 
         rows.forEach(row => {
@@ -3404,6 +3611,15 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
             if (row.disposition === 'ANSWERED') stats.dailyBreakdown[day].answered++;
             if (callDirection === 'inbound') stats.dailyBreakdown[day].inbound++;
             if (callDirection === 'outbound') stats.dailyBreakdown[day].outbound++;
+
+            const hour = moment(row.calldate).format('HH');
+            stats.hourlyBreakdown[hour] = (stats.hourlyBreakdown[hour] || 0) + 1;
+
+            if (row.disposition === 'ANSWERED') {
+                if (sec < 30) stats.durationCounts.short++;
+                else if (sec <= 180) stats.durationCounts.medium++;
+                else stats.durationCounts.long++;
+            }
         });
 
         stats.totalTalkSec = stats.inboundTalkSec + stats.outboundTalkSec;
@@ -3414,6 +3630,17 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
         stats.dailyData = Object.entries(stats.dailyBreakdown)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([date, data]) => ({ date, ...data }));
+
+        stats.hourlyData = Array.from({ length: 24 }, (_, i) => {
+            const h = String(i).padStart(2, '0');
+            return { hour: `${h}:00`, count: stats.hourlyBreakdown[h] || 0 };
+        });
+
+        stats.durationData = [
+            { name: 'Short (<30s)', value: stats.durationCounts.short },
+            { name: 'Medium (30s-3m)', value: stats.durationCounts.medium },
+            { name: 'Long (>3m)', value: stats.durationCounts.long }
+        ];
 
         stats.recentCalls = [];
         for (const row of rows) {

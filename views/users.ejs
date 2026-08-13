@@ -390,7 +390,7 @@
                                             <div class="flex flex-wrap gap-3 opacity-60">
                                                 <% var visibleTabs = (typeof allTabs !== 'undefined' ? allTabs : []).filter(function(t) { return t !== 'dashboard' && t !== 'users'; }); %>
                                                 <% visibleTabs.forEach(function(tab) { %>
-                                                    <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 border border-[#27272a] text-xs text-zinc-400 cursor-not-allowed">
+                                                    <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-xs text-[var(--text-muted)] opacity-60 cursor-not-allowed">
                                                         <input type="checkbox" name="tabs" value="<%= tab %>" class="tab-checkbox" <%= (g.permissions || []).includes(tab) ? 'checked' : '' %> disabled>
                                                         <span class="capitalize"><%= tab.replace(/-/g, ' ') %></span>
                                                     </label>
@@ -406,7 +406,7 @@
                                                 <div class="flex flex-wrap gap-3">
                                                     <% var visibleTabs = (typeof allTabs !== 'undefined' ? allTabs : []).filter(function(t) { return t !== 'dashboard' && t !== 'users'; }); %>
                                                     <% visibleTabs.forEach(function(tab) { %>
-                                                        <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#09090b] border border-[#27272a] hover:border-zinc-700 text-xs text-zinc-200 cursor-pointer transition">
+                                                        <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] hover:bg-[var(--bg-hover)] text-xs text-[var(--text-primary)] cursor-pointer transition">
                                                             <input type="checkbox" name="tabs" value="<%= tab %>" class="tab-checkbox" <%= (g.permissions || []).includes(tab) ? 'checked' : '' %>>
                                                             <span class="capitalize"><%= tab.replace(/-/g, ' ') %></span>
                                                         </label>
