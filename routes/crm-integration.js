@@ -41,7 +41,7 @@ function createCrmRouter(pool, options = {}) {
             service: 'sokrat-voip',
             status: 'ok',
             api_version: '1.0',
-            application_version: pkg.version || '1.1.0',
+            application_version: pkg.version || '1.0.0',
             server_time: moment().format(),
             timezone: 'Africa/Cairo'
         });
@@ -142,7 +142,7 @@ function createCrmRouter(pool, options = {}) {
 
         res.json({
             api_version: '1.0',
-            application_version: pkg.version || '1.1.0',
+            application_version: pkg.version || '1.0.0',
             supported: {
                 call_history: true,
                 recordings: true,

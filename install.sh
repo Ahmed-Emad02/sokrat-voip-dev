@@ -14,7 +14,7 @@ NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf 2>/dev/null | cut -d= -f2- | xargs || true)
 
 echo "============================================"
-echo " Issabel Dashboard Installer v1.8.0"
+echo " Issabel Dashboard Installer v1.0.0"
 echo " Target: Issabel 5 / Asterisk 18"
 echo "============================================"
 
