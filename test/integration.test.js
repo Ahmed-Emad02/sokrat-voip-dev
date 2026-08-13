@@ -206,6 +206,11 @@ test('CRM REST Router health and pairing endpoints work correctly', async () => 
         assert.equal(callData.data[0].disposition, 'ANSWERED');
         assert.ok(callData.data[0].recording.media_id);
 
+        // 7. Test Customer Call History API without phone format validation (e.g. short extension/custom number)
+        const shortCallRes = await fetch(`${baseUrl}/calls?phone=123`, {
+            headers: { 'Authorization': `Bearer ${pairData.client_secret}` }
+        });
+        assert.equal(shortCallRes.status, 200);
     } finally {
         server.close();
     }

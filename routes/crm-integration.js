@@ -206,7 +206,7 @@ function createCrmRouter(pool, options = {}) {
             const history = await getCustomerCallHistory(pool, req.query, countryCode);
             res.json(history);
         } catch (err) {
-            if (err.message.includes('Invalid phone') || err.message.includes('required') || err.message.includes('End date')) {
+            if (err.message.includes('required') || err.message.includes('End date')) {
                 return res.status(400).json({ success: false, error: err.message });
             }
             console.error('CRM Call History error:', err.message);
