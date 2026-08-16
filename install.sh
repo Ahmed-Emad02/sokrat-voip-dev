@@ -14,7 +14,7 @@ NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf 2>/dev/null | cut -d= -f2- | xargs || true)
 
 echo "============================================"
-echo " Issabel Dashboard Installer v1.0.0"
+echo " Issabel Dashboard Installer v1.0.2"
 echo " Target: Issabel 5 / Asterisk 18"
 echo "============================================"
 
@@ -643,6 +643,27 @@ ONEHOOK
 
 asterisk -rx "dialplan reload" 2>/dev/null || true
 echo "  Dialplan reloaded"
+
+# 9b — Configure Asterisk Voicemail Storage Limits (maxmsg=1000, maxsecs=300)
+echo "  Configuring Asterisk voicemail storage limits (maxmsg=1000, maxsecs=300)..."
+if [ -f /etc/asterisk/vm_general.inc ]; then
+    sed -i '/^maxmsg=/d' /etc/asterisk/vm_general.inc
+    sed -i '/^maxsecs=/d' /etc/asterisk/vm_general.inc
+    sed -i '/^minsecs=/d' /etc/asterisk/vm_general.inc
+    echo "maxmsg=1000" >> /etc/asterisk/vm_general.inc
+    echo "maxsecs=300" >> /etc/asterisk/vm_general.inc
+    echo "minsecs=3" >> /etc/asterisk/vm_general.inc
+fi
+if [ -f /etc/asterisk/voicemail.conf ]; then
+    sed -i '/^maxmsg=/d' /etc/asterisk/voicemail.conf
+    sed -i '/^maxsecs=/d' /etc/asterisk/voicemail.conf
+    sed -i '/^minsecs=/d' /etc/asterisk/voicemail.conf
+    if grep -q '^\[general\]' /etc/asterisk/voicemail.conf; then
+        sed -i '/^\[general\]/a maxmsg=1000\nmaxsecs=300\nminsecs=3' /etc/asterisk/voicemail.conf
+    fi
+fi
+asterisk -rx "voicemail reload" 2>/dev/null || true
+echo "  Voicemail storage limit set to 1000 messages per mailbox"
 
 # ──────────────────────────────────────────────
 # Step 10 — GSM Dongle Setup

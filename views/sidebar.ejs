@@ -68,7 +68,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         background: linear-gradient(90deg, transparent 0%, #dc2626 30%, #ef4444 50%, #dc2626 70%, transparent 100%);
         border-radius: 9999px;
         animation: smoothBarMove 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-        box-shadow: 0 0 12px rgba(220, 38, 38, 0.8);
     }
 </style>
 <div id="theme-loading-overlay" class="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-[#050507] transition-all duration-300 pointer-events-none overflow-hidden">
@@ -137,6 +136,10 @@ function can(tab) { return isSuper || allowed.includes(tab); }
 <script src="/js/jssip.min.js"></script>
 <!-- Global Theme Override Styles -->
 <style>
+    *, *::before, *::after {
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
     :root {
         --bg-primary: #050507; /* OLED black background */
         --bg-secondary: #0a0a0d; /* Dark-tech surface */
@@ -373,27 +376,23 @@ function can(tab) { return isSuper || allowed.includes(tab); }
     .panel-surface, .config-card {
         background: rgba(10, 10, 13, 0.88) !important;
         border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 12px 40px -12px rgba(0, 0, 0, 0.6) !important;
         backdrop-filter: blur(16px) !important;
         -webkit-backdrop-filter: blur(16px) !important;
         border-radius: 0.75rem !important; /* 12px rounded-xl */
-        transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease !important;
+        transition: border-color 200ms ease, transform 200ms ease !important;
     }
     .panel-surface:hover, .config-card:hover {
         border-color: rgba(255, 255, 255, 0.16) !important;
-        box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1), 0 16px 48px -12px rgba(239, 68, 68, 0.12) !important;
     }
     .card-stat {
         background: linear-gradient(135deg, rgba(16, 16, 20, 0.9) 0%, rgba(10, 10, 13, 0.95) 100%) !important;
         border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08), 0 8px 32px -8px rgba(0, 0, 0, 0.5) !important;
         border-radius: 0.75rem !important;
         transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
     .card-stat:hover {
         transform: translateY(-3px) !important;
         border-color: rgba(239, 68, 68, 0.3) !important;
-        box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), 0 16px 40px -10px rgba(239, 68, 68, 0.18) !important;
     }
     /* ==========================================================================
        GPU HARDWARE ACCELERATION & COMPONENT LAYOUT CONTAINMENT
@@ -472,8 +471,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         border: 1px solid rgba(239, 68, 68, 0.4) !important;
         color: #ffffff !important;
         font-weight: 800 !important;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4) !important;
-        box-shadow: 0 4px 14px rgba(153, 27, 27, 0.45) !important;
     }
     .btn-primary::before, .config-btn-primary::before {
         /* Resting cover: darker red */
@@ -481,10 +478,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
     }
     .btn-primary:hover, .config-btn-primary:hover {
         border-color: rgba(255, 255, 255, 0.35) !important;
-        box-shadow: 0 8px 24px rgba(220, 38, 38, 0.55) !important;
-    }
-    .btn-primary:active, .config-btn-primary:active {
-        box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6) !important;
     }
     .btn-primary:active::before, .config-btn-primary:active::before {
         background: #7f1d1d !important;
@@ -559,7 +552,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         background: #b91c1c !important;
         color: #ffffff !important;
         border: 1px solid rgba(239, 68, 68, 0.4) !important;
-        box-shadow: 0 4px 14px rgba(127, 29, 29, 0.3) !important;
     }
     .config-tab-btn.config-tab-active::before {
         /* Resting cover: darker red */
@@ -589,9 +581,7 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         background: #b91c1c !important;
         border: 1px solid #991b1b !important;
         border-left: 4px solid #ef4444 !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 5px 16px rgba(127, 29, 29, 0.3) !important;
         color: #ffffff !important;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) !important;
     }
     .nav-item.bg-\[var\(--accent-color\)\]::before {
         /* Resting cover: darker red */
@@ -628,23 +618,19 @@ function can(tab) { return isSuper || allowed.includes(tab); }
     .light-theme .config-card {
         background: #ffffff !important;
         border-color: #dfe3e8 !important;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08) !important;
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
     }
     .light-theme .panel-surface:hover,
     .light-theme .config-card:hover {
         border-color: #cbd5e1 !important;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12) !important;
     }
     .light-theme .card-stat {
         background: #ffffff !important;
         border-color: #dfe3e8 !important;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08) !important;
     }
     .light-theme .card-stat:hover {
         border-color: rgba(185, 28, 28, 0.35) !important;
-        box-shadow: 0 2px 8px rgba(127, 29, 29, 0.12) !important;
     }
 
     .light-theme .config-btn-secondary,
@@ -797,7 +783,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         background: var(--bg-secondary) !important;
         border: 1px solid var(--border-accent) !important;
         border-radius: 0.75rem;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
     }
     .config-dropdown-menu.hidden {
         display: none !important;
@@ -899,7 +884,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
     }
     select:focus {
         border-color: #ef4444 !important;
-        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25) !important;
     }
     select option {
         background-color: #0d0d12 !important;
@@ -1052,11 +1036,9 @@ function can(tab) { return isSuper || allowed.includes(tab); }
 
     /* Sidebar Custom Styles */
     .app-sidebar {
-        box-shadow: 1px 0 0 rgba(255, 255, 255, 0.02), 4px 0 25px rgba(0, 0, 0, 0.15) !important;
         transition: width 200ms ease-in-out, padding 200ms ease-in-out !important;
     }
     [dir="rtl"] .app-sidebar {
-        box-shadow: -1px 0 0 rgba(255, 255, 255, 0.02), -4px 0 25px rgba(0, 0, 0, 0.15) !important;
     }
     /* Toast Notification Positioning: Bottom Right (LTR/English) & Bottom Left (RTL/Arabic) */
     #toastContainer, #toast-container {
@@ -1172,7 +1154,7 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         gap: 0.65rem;
         height: 2.5rem;
         padding: 0 0.7rem;
-        transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+        transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
         width: 100%;
     }
     .settings-launcher:hover,
@@ -1180,7 +1162,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         background: var(--bg-hover) !important;
         border-color: var(--border-accent) !important;
         color: var(--text-primary) !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
     }
     .settings-launcher-icon {
         align-items: center;
@@ -1222,7 +1203,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         overflow-y: auto !important;
         transform-origin: bottom left;
         width: min(18rem, calc(100vw - 1rem));
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.18) !important;
     }
     [dir="rtl"] .settings-menu {
         transform-origin: bottom right;
@@ -1351,7 +1331,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
     .settings-switch-thumb {
         background: var(--text-primary);
         border-radius: 999px;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
         height: 1rem;
         left: 0.12rem;
         position: absolute;
@@ -1388,7 +1367,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
     .settings-segment-btn.is-active:hover {
         background: var(--selection-bg) !important;
         color: #ffffff !important;
-        box-shadow: 0 2px 7px rgba(127, 29, 29, 0.25);
     }
     .settings-range-head {
         justify-content: space-between;
@@ -1422,7 +1400,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         background: var(--accent-color);
         border: 2px solid var(--bg-secondary);
         border-radius: 999px;
-        box-shadow: 0 1px 5px rgba(127, 29, 29, 0.4);
         height: 1rem;
         width: 1rem;
     }
@@ -1430,7 +1407,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         background: var(--accent-color);
         border: 2px solid var(--bg-secondary);
         border-radius: 999px;
-        box-shadow: 0 1px 5px rgba(127, 29, 29, 0.4);
         height: 0.8rem;
         width: 0.8rem;
     }
@@ -1492,14 +1468,12 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         background: #f9fafb;
     }
     .light-theme .settings-menu {
-        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.08) !important;
     }
     .light-theme .settings-signout {
         background: #fff1f2;
     }
     .mobile-topbar {
         height: 64px;
-        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 10px rgba(0, 0, 0, 0.1) !important;
     }
     @media (max-width: 900px) {
         body > .flex-1 {
@@ -1557,13 +1531,11 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         background: var(--bg-secondary) !important;
         border: 1px solid var(--border-primary) !important;
         border-radius: 1rem !important;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
         font-family: inherit !important;
         padding: 0.5rem !important;
         width: 310px !important;
     }
     .light-theme .flatpickr-calendar {
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1) !important;
     }
     .flatpickr-calendar.arrowTop:before,
     .flatpickr-calendar.arrowTop:after,
@@ -1667,7 +1639,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         border-color: var(--accent-color) !important;
         color: #ffffff !important;
         font-weight: 800 !important;
-        box-shadow: 0 4px 14px rgba(229, 62, 62, 0.4) !important;
     }
     .light-theme .flatpickr-day.selected,
     .light-theme .flatpickr-day.startRange,
@@ -1675,7 +1646,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
     .light-theme .flatpickr-day.selected:hover,
     .light-theme .flatpickr-day.startRange:hover,
     .light-theme .flatpickr-day.endRange:hover {
-        box-shadow: 0 4px 14px rgba(185, 28, 28, 0.3) !important;
     }
     .flatpickr-day.flatpickr-disabled,
     .flatpickr-day.flatpickr-disabled:hover {
@@ -2094,7 +2064,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
         <div class="sidebar-header-box relative flex flex-col items-center justify-center py-2.5 border-b border-[var(--border-primary)] pb-4">
 
             <div class="flex flex-col items-center gap-2.5">
-                <img id="brandLogo" src="/logo_light_text.png" alt="Sokrat VOIP" class="w-28 h-28 object-contain rounded-xl shadow-lg transition-all duration-300">
+                <img id="brandLogo" src="/logo_light_text.png" alt="Sokrat VOIP" class="w-28 h-28 object-contain rounded-xl transition-all duration-300">
                 <script>
                     (function() {
                         const theme = localStorage.getItem('theme') || 'dark';
@@ -2118,7 +2088,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <!-- 1. Dashboard -->
             <a href="/?lang=<%= currentLang %>" title="<%= sbT.dashLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= currentPage === '/' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span class="sidebar-text"><%= sbT.dashLink %></span>
             </a>
@@ -2127,7 +2097,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('cdr')) { %>
             <a href="/cdr?lang=<%= currentLang %>" title="<%= sbT.cdrLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/cdr' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= currentPage === '/cdr' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                 <span class="sidebar-text"><%= sbT.cdrLink %></span>
             </a>
@@ -2137,7 +2107,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('operator')) { %>
             <a href="/operator?lang=<%= currentLang %>" title="<%= sbT.opLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/operator' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= currentPage === '/operator' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
                     <line x1="8" y1="21" x2="16" y2="21"/>
@@ -2151,7 +2121,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('ext-stats')) { %>
             <a href="/ext-stats?lang=<%= currentLang %>" title="<%= sbT.extLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/ext-stats' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= currentPage === '/ext-stats' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                 <span class="sidebar-text"><%= sbT.extLink %></span>
             </a>
@@ -2160,7 +2130,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <!-- 5. Address Book -->
             <a href="/contacts?lang=<%= currentLang %>" title="<%= sbT.contactsLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/contacts' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= currentPage === '/contacts' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                     <circle cx="12" cy="10" r="3"/>
@@ -2173,7 +2143,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('voicemails')) { %>
             <a href="/voicemails?lang=<%= currentLang %>" title="<%= sbT.vmLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/voicemails' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= currentPage === '/voicemails' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
                     <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
@@ -2187,13 +2157,13 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('gsm-dongles')) { %>
             <a href="/gsm-dongles?lang=<%= currentLang %>" title="<%= sbT.dongleLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/gsm-dongles' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= currentPage === '/gsm-dongles' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="10" y="2" width="4" height="5" rx="0.5" />
-                    <rect x="7" y="7" width="10" height="14" rx="2" />
-                    <circle cx="12" cy="18" r="1.5" />
-                    <line x1="11" y1="4" x2="11.01" y2="4" stroke-width="2.5" />
-                    <line x1="13" y1="4" x2="13.01" y2="4" stroke-width="2.5" />
+                    <rect x="10" y="2" width="4" height="4" rx="0.5" />
+                    <line x1="11" y1="3.5" x2="11.01" y2="3.5" stroke-width="2" />
+                    <line x1="13" y1="3.5" x2="13.01" y2="3.5" stroke-width="2" />
+                    <rect x="7" y="6" width="10" height="15" rx="2" />
+                    <circle cx="12" cy="17" r="1" fill="currentColor" />
                 </svg>
                 <span class="sidebar-text"><%= sbT.dongleLink %></span>
             </a>
@@ -2203,7 +2173,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (isSuper) { %>
             <a href="/users?lang=<%= currentLang %>" title="<%= sbT.usersLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/users' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= currentPage === '/users' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span class="sidebar-text"><%= sbT.usersLink %></span>
             </a>
@@ -2212,7 +2182,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <!-- 9. Back up -->
             <a href="/storage?lang=<%= currentLang %>" title="<%= sbT.storageLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/storage' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= currentPage === '/storage' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="7 10 12 15 17 10"/>
@@ -2225,7 +2195,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('config') || allowed.some(function(p) { return p.startsWith('config-'); })) { %>
             <a href="/config?lang=<%= currentLang %>" title="<%= sbT.configLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/config' ? 'bg-[var(--accent-color)] text-white shadow-md shadow-[var(--accent-color)]/15 border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= currentPage === '/config' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
                     <circle cx="12" cy="12" r="3"/>
@@ -2233,7 +2203,6 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 <span class="sidebar-text"><%= sbT.configLink %></span>
             </a>
             <% } %>
-        </nav>
     </div>
 
     <!-- Sidebar Footer Action Panel -->
@@ -2257,7 +2226,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </div>
             <div class="flex items-center justify-between text-[11px] font-semibold text-[var(--text-muted)] mt-1">
                 <span><%= sbT.versionLabel %></span>
-                <span class="text-[var(--text-secondary)] font-mono">v1.0.0</span>
+                <span class="text-[var(--text-secondary)] font-mono">v1.0.2</span>
             </div>
         </div>
 
@@ -2405,7 +2374,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 
 <!-- Recording Upload Modal -->
 <div id="recordingModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 invisible transition-all duration-200" style="pointer-events:none">
-    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl shadow-2xl shadow-black/50 w-full max-w-md mx-4 overflow-hidden">
+    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md mx-4 overflow-hidden">
         <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-primary)]">
             <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]"><%= sbT.recTitle %></h3>
             <button onclick="closeRecordingModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1">
@@ -2446,7 +2415,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 
 <!-- SMTP Settings Modal -->
 <div id="smtpModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 invisible transition-all duration-200" style="pointer-events:none">
-    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl shadow-2xl shadow-black/50 w-full max-w-md mx-4 overflow-hidden">
+    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md mx-4 overflow-hidden">
         <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-primary)]">
             <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]">Password Reset Email</h3>
             <button onclick="closeSmtpModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1">
@@ -2475,7 +2444,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 
 <!-- Network Info Modal -->
 <div id="networkModal" onclick="if(event.target===this) closeNetworkModal()" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 invisible transition-all duration-200 p-4" style="pointer-events:none">
-    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl shadow-2xl shadow-black/50 w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden">
+    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden">
         <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-primary)] shrink-0">
             <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]">Network Interfaces</h3>
             <button onclick="closeNetworkModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1 cursor-pointer">
@@ -2498,7 +2467,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 
 <!-- Time Settings Modal -->
 <div id="timeModal" onclick="if(event.target===this) closeTimeModal()" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 invisible transition-all duration-200 p-4" style="pointer-events:none">
-    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl shadow-2xl shadow-black/50 w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden">
+    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden">
         <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-primary)] shrink-0">
             <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]"><%= sbT.timeModalTitle %></h3>
             <button onclick="closeTimeModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1 cursor-pointer">
@@ -2548,7 +2517,7 @@ function showToast(msg, type) {
     var toastContainer = document.getElementById('toastContainer') || document.getElementById('toast-container');
     if (!toastContainer) return;
     var el = document.createElement('div');
-    el.className = 'pointer-events-auto px-5 py-3 rounded-xl text-sm font-semibold shadow-2xl shadow-black/40';
+    el.className = 'pointer-events-auto px-5 py-3 rounded-xl text-sm font-semibold';
     var isRtl = document.documentElement.dir === 'rtl';
     var initialX = isRtl ? 'translateX(-120%)' : 'translateX(120%)';
     el.style.transform = initialX;
@@ -2668,7 +2637,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showToast(msg, type) {
         var el = document.createElement('div');
-        el.className = 'pointer-events-auto px-5 py-3 rounded-xl text-sm font-semibold shadow-2xl shadow-black/40';
+        el.className = 'pointer-events-auto px-5 py-3 rounded-xl text-sm font-semibold';
         el.style.transform = 'translateX(120%)';
         el.style.opacity = '0';
         el.style.transition = 'all 0.3s';
@@ -3404,10 +3373,10 @@ window.addEventListener('resize', () => {
     // Collapsed dot (shows status color)
     // Expanded panel with dialpad + call controls
     root.innerHTML = ''
-        + '<div id="spwDotBtn" onclick="spwToggle()" class="fixed bottom-6 right-6 z-[9999] w-14 h-14 rounded-full shadow-xl flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 border-2" style="background:var(--bg-card,#1e293b);border-color:var(--border-primary,#334155)">'
+        + '<div id="spwDotBtn" onclick="spwToggle()" class="fixed bottom-6 right-6 z-[9999] w-14 h-14 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 border-2" style="background:var(--bg-card,#1e293b);border-color:var(--border-primary,#334155)">'
         + '<span id="spwDot" class="w-4 h-4 rounded-full bg-zinc-500 transition-colors"></span>'
         + '</div>'
-        + '<div id="spwPanel" class="fixed bottom-24 right-6 z-[9999] hidden rounded-2xl shadow-2xl overflow-hidden border" style="background:var(--bg-secondary,#0f172a);border-color:var(--border-primary,#334155);width:280px">'
+        + '<div id="spwPanel" class="fixed bottom-24 right-6 z-[9999] hidden rounded-2xl overflow-hidden border" style="background:var(--bg-secondary,#0f172a);border-color:var(--border-primary,#334155);width:280px">'
         /* Header */
         + '<div class="flex items-center justify-between px-4 py-3 border-b" style="border-color:var(--border-primary,#334155)">'
         + '<div class="flex items-center gap-2">'
@@ -3596,7 +3565,7 @@ window.addEventListener('resize', () => {
 </script>
 <!-- Full-Screen Incoming Call Overlay Modal -->
 <div id="fullScreenCallModal" class="fixed inset-0 z-[999999] flex items-center justify-center bg-black/85 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300">
-    <div class="relative w-full max-w-md mx-4 p-8 rounded-3xl bg-[#121215] border border-white/10 shadow-2xl text-center flex flex-col items-center overflow-hidden">
+    <div class="relative w-full max-w-md mx-4 p-8 rounded-3xl bg-[#121215] border border-white/10 text-center flex flex-col items-center overflow-hidden">
         <!-- Animated Ringing Aura -->
         <div class="absolute -top-24 -left-24 w-72 h-72 bg-emerald-500/15 rounded-full blur-3xl animate-pulse"></div>
         <div class="absolute -bottom-24 -right-24 w-72 h-72 bg-purple-500/15 rounded-full blur-3xl animate-pulse"></div>
@@ -3610,7 +3579,7 @@ window.addEventListener('resize', () => {
         <!-- Large Ringing Icon Avatar -->
         <div class="relative mb-6">
             <div class="absolute -inset-4 rounded-full bg-emerald-500/20 animate-ping opacity-75"></div>
-            <div class="relative w-24 h-24 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-2xl shadow-emerald-500/40 border-2 border-white/20">
+            <div class="relative w-24 h-24 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center border-2 border-white/20">
                 <svg class="w-12 h-12 text-white animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                 </svg>
@@ -3623,7 +3592,7 @@ window.addEventListener('resize', () => {
         <!-- Action Buttons -->
         <div class="flex items-center justify-center gap-4 w-full">
             <!-- Decline Button -->
-            <button type="button" onclick="handleCallModalDecline(event)" class="flex-1 py-4 px-6 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-rose-600/30 active:scale-95">
+            <button type="button" onclick="handleCallModalDecline(event)" class="flex-1 py-4 px-6 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-sm flex items-center justify-center gap-2 transition cursor-pointer active:scale-95">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -3631,7 +3600,7 @@ window.addEventListener('resize', () => {
             </button>
 
             <!-- Answer Button -->
-            <button type="button" onclick="handleCallModalAnswer(event)" class="flex-1 py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-600/30 active:scale-95">
+            <button type="button" onclick="handleCallModalAnswer(event)" class="flex-1 py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm flex items-center justify-center gap-2 transition cursor-pointer active:scale-95">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                 </svg>

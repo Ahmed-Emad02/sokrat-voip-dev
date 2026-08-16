@@ -67,7 +67,6 @@ function isTabAllowed(tabName) {
         .config-card {
             background-color: var(--bg-secondary) !important;
             border: 1px solid var(--border-primary) !important;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
             border-radius: 1rem !important;
         }
         .config-input {
@@ -119,7 +118,7 @@ function isTabAllowed(tabName) {
             line-height: 1rem;
             white-space: nowrap;
             cursor: pointer;
-            transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+            transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease;
         }
         .config-action-btn:hover {
             color: #ffffff;
@@ -147,7 +146,6 @@ function isTabAllowed(tabName) {
             color: #ffffff;
             background: #991b1b;
             border-color: rgba(248, 113, 113, 0.55);
-            box-shadow: 0 6px 18px rgba(153, 27, 27, 0.3);
         }
         .config-action-btn--primary:hover {
             color: #ffffff;
@@ -265,7 +263,7 @@ function isTabAllowed(tabName) {
             font-size: 0.75rem;
             padding: 0.45rem 0.75rem;
             border-radius: 0.6rem !important;
-            transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), background 220ms ease, border-color 220ms ease, box-shadow 220ms ease !important;
+            transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), background 220ms ease, border-color 220ms ease !important;
             cursor: pointer;
             white-space: nowrap;
         }
@@ -279,14 +277,11 @@ function isTabAllowed(tabName) {
             background: #991b1b !important;
             color: #ffffff !important;
             border: 1px solid rgba(239, 68, 68, 0.4) !important;
-            box-shadow: 0 4px 14px rgba(88, 10, 10, 0.5) !important;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
         }
         html.light-theme .config-tab-active {
             background: #b91c1c !important;
             border-color: rgba(239, 68, 68, 0.4) !important;
             color: #ffffff !important;
-            box-shadow: 0 4px 14px rgba(127, 29, 29, 0.35) !important;
         }
         .config-tab-inactive {
             color: #ffffff !important;
@@ -314,7 +309,6 @@ function isTabAllowed(tabName) {
             color: #0f172a !important;
         }
         html.light-theme .config-card {
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
         }
 
         /* Sub-Sidebar Custom Styles */
@@ -717,7 +711,7 @@ function isTabAllowed(tabName) {
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'الرد الآلي (IVR Menu)' : 'IVR Menus (Interactive Voice Response)' %></h2>
                         <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'إنشاء وتعديل قوائم الرد الآلي وتوجيه خيارات المفاتيح' : 'Create and manage IVR menus and keypress routing options' %></p>
                     </div>
-                    <button onclick="openIvrModal()" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-blue-500/10">
+                    <button onclick="openIvrModal()" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-2 cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
                         <span><%= isRtl ? 'إضافة قائمة رد آلي جديدة' : 'Add IVR Menu' %></span>
                     </button>
@@ -1070,10 +1064,8 @@ function isTabAllowed(tabName) {
                 .light-theme .diagram-card {
                     background-color: rgba(255, 255, 255, 0.95) !important;
                     border-color: #cbd5e1 !important;
-                    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.03) !important;
                 }
                 .light-theme .diagram-card:hover {
-                    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08) !important;
                 }
                 
                 /* Text colors overrides inside card */
@@ -1181,10 +1173,6 @@ function isTabAllowed(tabName) {
                             <pattern id="grid-pattern" width="30" height="30" patternUnits="userSpaceOnUse">
                                 <circle cx="2" cy="2" r="1.5" fill="#222" />
                             </pattern>
-                            <!-- Drop shadow filter for highlights -->
-                            <filter id="glow-filter" x="-40%" y="-40%" width="180%" height="180%" filterUnits="userSpaceOnUse">
-                                <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#ffffff" flood-opacity="0.8" />
-                            </filter>
                         </defs>
                         <!-- Grid rect -->
                         <rect width="100%" height="100%" fill="url(#grid-pattern)" />
@@ -1208,7 +1196,7 @@ function isTabAllowed(tabName) {
                 <!-- Header Card with Search & Action -->
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-[var(--border-primary)]">
                     <div class="flex items-start gap-3.5">
-                        <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/5">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
@@ -1228,7 +1216,7 @@ function isTabAllowed(tabName) {
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
                         </div>
-                        <button onclick="openTimeGroupModal()" class="config-btn-primary px-4 py-2 flex items-center justify-center gap-2 text-xs cursor-pointer shrink-0 shadow-md">
+                        <button onclick="openTimeGroupModal()" class="config-btn-primary px-4 py-2 flex items-center justify-center gap-2 text-xs cursor-pointer shrink-0">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
                             <span><%= isRtl ? 'إضافة مجموعة وقت' : 'Add Time Group' %></span>
                         </button>
@@ -1263,7 +1251,7 @@ function isTabAllowed(tabName) {
                 <!-- Header Card with Search & Action -->
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-[var(--border-primary)]">
                     <div class="flex items-start gap-3.5">
-                        <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 shadow-lg shadow-cyan-500/5">
+                        <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
@@ -1283,7 +1271,7 @@ function isTabAllowed(tabName) {
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
                         </div>
-                        <button onclick="openTimeConditionModal()" class="config-btn-primary px-4 py-2 flex items-center justify-center gap-2 text-xs cursor-pointer shrink-0 shadow-md">
+                        <button onclick="openTimeConditionModal()" class="config-btn-primary px-4 py-2 flex items-center justify-center gap-2 text-xs cursor-pointer shrink-0">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
                             <span><%= isRtl ? 'إضافة شرط وقت' : 'Add Time Condition' %></span>
                         </button>
@@ -1646,7 +1634,7 @@ function isTabAllowed(tabName) {
         <% } %>
     <!-- MODAL 1: EXTENSION FORM -->
     <div id="extensionModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <div class="flex items-center gap-3">
@@ -1782,7 +1770,7 @@ function isTabAllowed(tabName) {
     </div>
     <!-- MODAL: WEBRTC CREDENTIALS DISPLAY -->
     <div id="webrtcCredentialsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-md w-full p-6 text-[var(--text-primary)]">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-md w-full p-6 text-[var(--text-primary)]">
             <div class="flex items-center justify-between mb-4 pb-2 border-b border-[var(--border-primary)]">
                 <h3 class="text-base font-extrabold text-purple-400 flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
@@ -1807,7 +1795,7 @@ function isTabAllowed(tabName) {
 
     <!-- MODAL 2: RING GROUP FORM -->
     <div id="ringGroupModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <div class="flex items-center gap-3">
@@ -1944,7 +1932,7 @@ function isTabAllowed(tabName) {
 
     <!-- MODAL 2.5: QUEUE FORM -->
     <div id="queueModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <div class="flex items-center gap-3">
@@ -2133,7 +2121,7 @@ function isTabAllowed(tabName) {
     </div>
     <!-- MODAL 3: TRUNK FORM -->
     <div id="trunkModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-4xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-4xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <div class="flex items-center gap-3">
@@ -2268,7 +2256,7 @@ function isTabAllowed(tabName) {
                             <input type="text" id="trunkDialString" placeholder="e.g. dongle/dongle0/$OUTNUM$" class="config-input w-full font-mono text-xs" autocomplete="off">
                             
                             <!-- DONGLE FLOATING POPUP -->
-                            <div id="dongleInfoPopup" class="fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-4 z-[999999] hidden space-y-2">
+                            <div id="dongleInfoPopup" class="fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4 z-[999999] hidden space-y-2">
                                 <div class="text-[11px] font-bold text-[var(--text-secondary)] uppercase flex items-center justify-between">
                                     <span><%= isRtl ? 'أجهزة Dongle المتصلة:' : 'Connected Dongles:' %></span>
                                     <button type="button" onclick="loadDongleInfoPopup()" class="text-[10px] text-blue-400 hover:underline">Refresh</button>
@@ -2376,7 +2364,7 @@ function isTabAllowed(tabName) {
 
     <!-- MODAL IVR: IVR FORM -->
     <div id="ivrModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <div class="flex items-center gap-3">
@@ -2516,7 +2504,7 @@ function isTabAllowed(tabName) {
 
     <!-- MODAL 4: INBOUND ROUTE FORM -->
     <div id="inboundModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-2xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-2xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <div class="flex items-center gap-3">
@@ -2557,7 +2545,7 @@ function isTabAllowed(tabName) {
                                 <input type="text" id="inExtension" placeholder="e.g. 01012345678 (blank = ANY)" class="config-input w-full font-mono text-xs" autocomplete="off">
 
                                 <!-- DONGLE DID FLOATING POPUP FOR INBOUND ROUTES -->
-                                <div id="inboundDongleInfoPopup" class="fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl shadow-2xl p-4 z-[999999] hidden space-y-2 max-h-[320px] flex flex-col">
+                                <div id="inboundDongleInfoPopup" class="fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4 z-[999999] hidden space-y-2 max-h-[320px] flex flex-col">
                                     <div class="text-[11px] font-bold text-[var(--text-secondary)] uppercase flex items-center justify-between shrink-0">
                                         <span><%= isRtl ? 'أجهزة Dongle والأرقام المعرفة:' : 'Connected Dongles & Numbers:' %></span>
                                         <button type="button" onclick="loadInboundDonglePopup()" class="text-[10px] text-blue-400 hover:underline">Refresh</button>
@@ -2601,7 +2589,7 @@ function isTabAllowed(tabName) {
     </div>
     <!-- MODAL 5: OUTBOUND ROUTE FORM -->
     <div id="outboundModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <div class="flex items-center gap-3">
@@ -2716,7 +2704,7 @@ function isTabAllowed(tabName) {
 
     <!-- MODAL 8: TIME GROUP FORM -->
     <div id="timeGroupModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <div class="flex items-center gap-3">
@@ -2791,7 +2779,7 @@ function isTabAllowed(tabName) {
 
     <!-- MODAL 9: TIME CONDITION FORM -->
     <div id="timeConditionModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <div class="flex items-center gap-3">
@@ -2880,7 +2868,7 @@ function isTabAllowed(tabName) {
 
     <!-- ANNOUNCEMENT MODAL -->
     <div id="announcementModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-3xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <div class="flex items-center gap-3">
@@ -2990,7 +2978,7 @@ function isTabAllowed(tabName) {
 
     <!-- MODAL: ADD MOH CATEGORY -->
     <div id="mohCategoryModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إضافة فئة موسيقى جديدة' : 'Add MoH Category' %></h3>
                 <button type="button" onclick="closeModal('mohCategoryModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
@@ -3018,7 +3006,7 @@ function isTabAllowed(tabName) {
 
     <!-- MODAL: ADD DONGLE SLOT (ROOT USER ONLY) -->
     <div id="addDongleSlotModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إضافة شريحة/مودم جديد لـ Asterisk' : 'Add Dongle Slot(s) to Asterisk' %></h3>
                 <button type="button" onclick="closeModal('addDongleSlotModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
@@ -3072,7 +3060,7 @@ function isTabAllowed(tabName) {
 
     <!-- MODAL: REMOVE DONGLE SLOT (ROOT USER ONLY) -->
     <div id="removeDongleSlotModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                 <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'حذف شرائح/مودم من Asterisk' : 'Remove Dongle Slot(s) from Asterisk' %></h3>
                 <button type="button" onclick="closeModal('removeDongleSlotModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
@@ -3852,7 +3840,7 @@ function isTabAllowed(tabName) {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             const bgClass = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-red-600' : type === 'warning' ? 'bg-amber-600' : 'bg-slate-800';
-            toast.className = `${bgClass} text-white text-xs font-bold px-4 py-3 rounded-lg shadow-xl flex items-center gap-2 border border-white/20 transition-all duration-300 transform translate-y-2 opacity-0`;
+            toast.className = `${bgClass} text-white text-xs font-bold px-4 py-3 rounded-lg flex items-center gap-2 border border-white/20 transition-all duration-300 transform translate-y-2 opacity-0`;
             toast.innerHTML = `<span>${message}</span>`;
             container.appendChild(toast);
             setTimeout(() => {
@@ -4551,7 +4539,7 @@ function isTabAllowed(tabName) {
                 let badgeText = 'Off';
 
                 if (isAssigned) {
-                    badgeStyle = 'bg-gradient-to-r from-amber-500 to-indigo-600 text-white font-black border-purple-600 shadow-md';
+                    badgeStyle = 'bg-gradient-to-r from-amber-500 to-indigo-600 text-white font-black border-purple-600';
                     badgeText = 'static + dyn';
                 }
 
@@ -7313,7 +7301,7 @@ function isTabAllowed(tabName) {
                     <div data-node-id="${node.id}" 
                          onmouseenter="highlightNode('${node.id}')" 
                          onmouseleave="resetHighlight()" 
-                         class="diagram-card w-full h-full bg-[#111115]/95 backdrop-blur-md border ${accentColorClass} rounded-xl p-3 flex flex-col hover:shadow-[0_0_20px_rgba(239,68,68,0.08)] transition duration-200 cursor-pointer relative select-none">
+                         class="diagram-card w-full h-full bg-[#111115]/95 backdrop-blur-md border ${accentColorClass} rounded-xl p-3 flex flex-col transition duration-200 cursor-pointer relative select-none">
                         
                         <div class="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#1c1c24] bg-[#27272a]"></div>
                         <div class="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#1c1c24] bg-[#27272a]"></div>
@@ -7726,7 +7714,7 @@ function isTabAllowed(tabName) {
                         const monthStr = formatMonthText(rule.month);
                         
                         rulesHTML += `
-                            <div class="inline-flex flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-mono my-1 mr-1.5 shadow-sm">
+                            <div class="inline-flex flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-mono my-1 mr-1.5">
                                 <span class="text-indigo-400 font-bold">🕐 ${timeStr}</span>
                                 <span class="text-indigo-500/50">•</span>
                                 <span>📅 ${weekdayStr}</span>
@@ -7834,7 +7822,7 @@ function isTabAllowed(tabName) {
             let dayTogglesHTML = '';
             daysList.forEach(d => {
                 const isActive = activeDaysSet.has(d.id);
-                const activeClass = isActive ? 'bg-blue-600 text-white font-black shadow-sm shadow-blue-500/30' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] font-bold';
+                const activeClass = isActive ? 'bg-blue-600 text-white font-black' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] font-bold';
                 dayTogglesHTML += `
                     <button type="button" data-day="${d.id}" onclick="toggleDayPill(this)" class="day-toggle-btn px-3 py-1.5 text-xs rounded-lg border border-[var(--border-primary)] ${activeClass} hover:text-white cursor-pointer transition-all">
                         ${isRtl ? d.labelAr : d.labelEn}
@@ -7987,8 +7975,7 @@ function isTabAllowed(tabName) {
             btn.classList.toggle('bg-blue-600');
             btn.classList.toggle('text-white');
             btn.classList.toggle('font-black');
-            btn.classList.toggle('shadow-sm');
-            btn.classList.toggle('shadow-blue-500/30');
+
             btn.classList.toggle('bg-[var(--bg-secondary)]');
             btn.classList.toggle('text-[var(--text-secondary)]');
             btn.classList.toggle('font-bold');
@@ -8047,7 +8034,7 @@ function isTabAllowed(tabName) {
                     const day = b.getAttribute('data-day');
                     const isActive = targetDays.includes(day);
                     if (isActive) {
-                        b.className = 'day-toggle-btn px-3 py-1.5 text-xs rounded-lg border border-[var(--border-primary)] bg-blue-600 text-white font-black shadow-sm shadow-blue-500/30 hover:text-white cursor-pointer transition-all';
+                        b.className = 'day-toggle-btn px-3 py-1.5 text-xs rounded-lg border border-[var(--border-primary)] bg-blue-600 text-white font-black hover:text-white cursor-pointer transition-all';
                     } else {
                         b.className = 'day-toggle-btn px-3 py-1.5 text-xs rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] font-bold hover:text-white cursor-pointer transition-all';
                     }

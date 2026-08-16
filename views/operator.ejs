@@ -1,8 +1,8 @@
 <%
 const words = {
     en: {
-        title: "Live Panel", subtitle: "Switchboard",
-        desc: "Real-time extension and call monitoring",
+        title: "Live", subtitle: "Panel",
+        desc: "",
         online: "Online", offline: "Offline",
         incall: "In Call", ringing: "Ringing", idle: "Idle",
         connectedWith: "Connected with: ",
@@ -25,8 +25,8 @@ const words = {
         viewMinimal: "Minimal View"
     },
     ar: {
-        title: "لوحة المراقبة", subtitle: "المباشرة",
-        desc: "مراقبة فورية للتحويلات والمكالمات في نظام الاتصالات",
+        title: "لوحة", subtitle: "المراقبة المباشرة",
+        desc: "",
         online: "متصل", offline: "غير متصل",
         incall: "في مكالمة", ringing: "يرن", idle: "خامل",
         connectedWith: "متصل بـ: ",
@@ -113,19 +113,16 @@ const isRtl = currentLang === 'ar';
         .panel-surface { 
             background-color: var(--bg-secondary); 
             border: 1px solid var(--border-primary); 
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
         .card-stat { 
             transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1), 
-                        border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), 
-                        box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); 
+                        border-color 150ms cubic-bezier(0.4, 0, 0.2, 1); 
         }
         .card-stat:hover { 
             transform: translateY(-2px); 
             border-color: var(--border-accent); 
-            box-shadow: 0 8px 24px rgba(255, 59, 48, 0.1); 
         }
         input, select, button { 
             transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); 
@@ -166,7 +163,6 @@ const isRtl = currentLang === 'ar';
         #switchboardGrid .panel-surface.state-idle:hover,
         .light-theme #switchboardGrid .panel-surface.state-idle:hover {
             border-color: rgba(255, 255, 255, 0.5) !important;
-            box-shadow: 0 8px 24px rgba(245, 158, 11, 0.25) !important;
         }
         #switchboardGrid .panel-surface.state-idle .text-white,
         #switchboardGrid .panel-surface.state-idle .text-base.font-bold,
@@ -193,7 +189,6 @@ const isRtl = currentLang === 'ar';
         #switchboardGrid .panel-surface.state-idle [id^="sipBadge-"],
         #switchboardGrid .panel-surface.state-idle [id^="badge-"] {
             background-color: #22c55e !important;
-            box-shadow: 0 0 8px rgba(34, 197, 94, 0.6) !important;
         }
         #switchboardGrid .panel-surface.state-idle [id^="sipLabel-"],
         #switchboardGrid .panel-surface.state-idle [id^="status-"] {
@@ -219,9 +214,9 @@ const isRtl = currentLang === 'ar';
             animation: pulse-ring-purple 2s infinite;
         }
         @keyframes pulse-ring-purple {
-            0% { border-color: rgba(255, 255, 255, 0.3); box-shadow: 0 0 0 0 rgba(126, 34, 206, 0.4); }
-            50% { border-color: rgba(255, 255, 255, 0.8); box-shadow: 0 0 20px rgba(168, 85, 247, 0.6); }
-            100% { border-color: rgba(255, 255, 255, 0.3); box-shadow: 0 0 0 0 rgba(126, 34, 206, 0.4); }
+            0% { border-color: rgba(255, 255, 255, 0.3); }
+            50% { border-color: rgba(255, 255, 255, 0.8); }
+            100% { border-color: rgba(255, 255, 255, 0.3); }
         }
         #switchboardGrid .panel-surface.state-ringing .text-white,
         #switchboardGrid .panel-surface.state-ringing .text-base.font-bold,
@@ -248,7 +243,6 @@ const isRtl = currentLang === 'ar';
         #switchboardGrid .panel-surface.state-ringing [id^="sipBadge-"],
         #switchboardGrid .panel-surface.state-ringing [id^="badge-"] {
             background-color: #3b82f6 !important;
-            box-shadow: 0 0 8px rgba(59, 130, 246, 0.6) !important;
         }
         #switchboardGrid .panel-surface.state-ringing [id^="sipLabel-"],
         #switchboardGrid .panel-surface.state-ringing [id^="status-"],
@@ -272,7 +266,6 @@ const isRtl = currentLang === 'ar';
             background-color: #15803d !important;
             border-color: rgba(255, 255, 255, 0.4) !important;
             color: #ffffff !important;
-            box-shadow: 0 8px 24px rgba(21, 128, 61, 0.4) !important;
         }
         #switchboardGrid .panel-surface.state-incall .text-white,
         #switchboardGrid .panel-surface.state-incall .text-base.font-bold,
@@ -300,7 +293,6 @@ const isRtl = currentLang === 'ar';
         #switchboardGrid .panel-surface.state-incall [id^="sipBadge-"],
         #switchboardGrid .panel-surface.state-incall [id^="badge-"] {
             background-color: #a855f7 !important;
-            box-shadow: 0 0 8px rgba(168, 85, 247, 0.6) !important;
         }
         #switchboardGrid .panel-surface.state-incall [id^="sipLabel-"],
         #switchboardGrid .panel-surface.state-incall [id^="status-"],
@@ -501,14 +493,13 @@ const isRtl = currentLang === 'ar';
     <%- include('sidebar') %>
     <div class="flex-1 p-8 relative flex flex-col min-h-screen">
         
-        <div class="live-panel-header mb-4 shrink-0">
+        <div class="live-panel-header mb-4 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="min-w-0">
                 <h2 class="text-xl font-vibrant-display text-[var(--text-primary)] tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
-                <p class="mt-1 text-xs text-[var(--text-muted)]"><%= t.desc %></p>
             </div>
             <div class="flex items-center gap-2 shrink-0 flex-wrap">
                 <div class="inline-flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1">
-                    <button type="button" id="btn-op-grid" onclick="setOperatorViewMode('grid')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white shadow-sm">
+                    <button type="button" id="btn-op-grid" onclick="setOperatorViewMode('grid')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                         <span><%= t.viewGrid %></span>
                     </button>
@@ -603,7 +594,7 @@ const isRtl = currentLang === 'ar';
                                     <span id="sipLabel-<%= emp.extension %>" class="text-[11px] font-bold uppercase tracking-wide text-zinc-500 transition-all duration-300"><%= isOnline ? t.online : t.offline %></span>
                                     <span id="ipBadge-<%= emp.extension %>" class="relative group cursor-help">
                                         <svg class="w-3.5 h-3.5 text-zinc-600 hover:text-zinc-400 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
-                                        <span class="ip-tooltip hidden group-hover:block absolute right-0 top-full mt-1 bg-[#18181b] border border-[#27272a] text-xs font-mono text-zinc-300 px-2 py-1 rounded shadow-lg whitespace-nowrap z-50" id="ipText-<%= emp.extension %>"></span>
+                                        <span class="ip-tooltip hidden group-hover:block absolute right-0 top-full mt-1 bg-[#18181b] border border-[#27272a] text-xs font-mono text-zinc-300 px-2 py-1 rounded whitespace-nowrap z-50" id="ipText-<%= emp.extension %>"></span>
                                     </span>
                                 </div>
                             </div>
@@ -686,13 +677,13 @@ const isRtl = currentLang === 'ar';
             switchboardGrid.classList.remove('view-mode-grid', 'view-mode-compact', 'view-mode-minimal');
 
             if (currentOpViewMode === 'minimal') {
-                btnMinimal.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer btn-primary shadow-sm';
+                btnMinimal.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer btn-primary';
                 switchboardGrid.classList.add('view-mode-minimal');
             } else if (currentOpViewMode === 'compact') {
-                btnCompact.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer btn-primary shadow-sm';
+                btnCompact.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer btn-primary';
                 switchboardGrid.classList.add('view-mode-compact');
             } else {
-                btnGrid.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer btn-primary shadow-sm';
+                btnGrid.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer btn-primary';
                 switchboardGrid.classList.add('view-mode-grid');
             }
         }
@@ -872,7 +863,7 @@ const isRtl = currentLang === 'ar';
                         ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
                         : 'bg-rose-500/15 text-rose-400 border-rose-500/20';
 
-                    const statusDotClass = isOnline ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : 'bg-rose-500';
+                    const statusDotClass = isOnline ? 'bg-emerald-400' : 'bg-rose-500';
 
                     const card = document.createElement('div');
                     card.className = 'panel-surface rounded-xl p-3.5 flex flex-col justify-between transition-all duration-200 hover:border-[var(--border-accent)]';
@@ -1125,7 +1116,7 @@ const isRtl = currentLang === 'ar';
     <!-- Employee Group Manager Modal -->
     <!-- Auto-Dialer Live Lead Pop-Up Modal -->
     <div id="dialerLeadModal" class="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-md w-full p-6 text-[var(--text-primary)] animate-fade-in">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-md w-full p-6 text-[var(--text-primary)] animate-fade-in">
             <div class="flex items-center justify-between mb-3 border-b border-[var(--border-primary)] pb-3">
                 <div class="flex items-center gap-2">
                     <span class="h-3 w-3 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -1185,7 +1176,7 @@ const isRtl = currentLang === 'ar';
     </div>
     <!-- Intercom Instant Meeting Modal -->
     <div id="intercomModal" class="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] shadow-2xl max-w-xl w-full p-6 text-[var(--text-primary)] animate-fade-in flex flex-col max-h-[90vh]">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-xl w-full p-6 text-[var(--text-primary)] animate-fade-in flex flex-col max-h-[90vh]">
             <!-- Modal Header -->
             <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-4">
                 <div class="flex items-center gap-2.5">
@@ -1234,7 +1225,7 @@ const isRtl = currentLang === 'ar';
                 <span id="intercomSelectionStatus" class="text-xs font-bold text-emerald-400">0 selected</span>
                 <div class="flex items-center gap-2">
                     <button type="button" onclick="closeIntercomModal()" class="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl transition cursor-pointer"><%= t.close %></button>
-                    <button type="button" id="startIntercomBtn" onclick="submitIntercomCall()" class="px-5 py-2 text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-lg shadow-emerald-600/25 transition flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                    <button type="button" id="startIntercomBtn" onclick="submitIntercomCall()" class="px-5 py-2 text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1.1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
                         <span id="startIntercomBtnText"><%= t.startIntercom %></span>
                     </button>

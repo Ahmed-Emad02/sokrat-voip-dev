@@ -73,7 +73,7 @@ const isRtl = currentLang === 'ar';
 
         <!-- DNC LIST & DISPOSITIONS -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 shadow-xl">
+            <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= t.dnc %></h3>
                     <button type="button" onclick="openAddDncModal()" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.addDnc %></button>
@@ -94,7 +94,7 @@ const isRtl = currentLang === 'ar';
                 </div>
             </div>
 
-            <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 shadow-xl">
+            <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5">
                 <h3 class="text-sm font-extrabold text-[var(--text-primary)] mb-4"><%= t.attempts %></h3>
                 <div id="attemptsContainer" class="space-y-2 max-h-64 overflow-y-auto">
                     <div class="text-center text-[var(--text-muted)] text-xs py-4">No active attempt logs yet.</div>
@@ -204,7 +204,7 @@ const isRtl = currentLang === 'ar';
             data.campaigns.forEach(c => {
                 const s = c.stats || {};
                 const card = document.createElement('div');
-                card.className = 'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 shadow-xl flex flex-col justify-between';
+                card.className = 'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 flex flex-col justify-between';
                 card.innerHTML = `
                     <div>
                         <div class="flex items-center justify-between mb-2">

@@ -122,20 +122,17 @@ const isRtl = currentLang === 'ar';
         .panel-surface { 
             background-color: var(--bg-secondary); 
             border: 1px solid var(--border-primary); 
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
         
         .card-stat { 
             transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
-                        border-color 150ms ease, 
-                        box-shadow 200ms ease; 
+                        border-color 150ms ease; 
         }
         .card-stat:hover { 
             transform: translateY(-1px);
             border-color: var(--border-accent); 
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22);
         }
         .ext-card {
             transition: all 150ms ease;
@@ -148,7 +145,6 @@ const isRtl = currentLang === 'ar';
         .ext-card.active {
             background-color: #27272a;
             border-color: var(--accent-color);
-            box-shadow: inset 0 0 0 1px rgba(255, 59, 48, 0.18);
         }
         input, select, button { 
             transition: all 150ms ease; 
@@ -297,7 +293,7 @@ const isRtl = currentLang === 'ar';
         </div>
 
         <!-- Filter Form -->
-        <form id="filterForm" class="panel-surface p-3 px-4 rounded-xl mb-4 shadow-lg flex flex-col gap-2.5 relative z-30">
+        <form id="filterForm" class="panel-surface p-3 px-4 rounded-xl mb-4 flex flex-col gap-2.5 relative z-30">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <div class="grid grid-cols-1 md:grid-cols-5 gap-2.5 items-end">
                 <div>
@@ -323,7 +319,7 @@ const isRtl = currentLang === 'ar';
         </form>
         <div class="flex gap-6 flex-1 min-h-0">
             <!-- Left Extensions List -->
-            <div id="extListCol" class="panel-surface rounded-2xl shadow-2xl w-60 shrink-0 flex flex-col min-h-0">
+            <div id="extListCol" class="panel-surface rounded-2xl w-60 shrink-0 flex flex-col min-h-0">
                 <div class="px-4 py-3.5 border-b border-[#27272a] bg-black/30 shrink-0 flex items-center justify-between <%= isRtl ? 'flex-row-reverse' : '' %>">
                     <span class="text-xs font-bold uppercase tracking-widest text-zinc-400"><%= t.extList %></span>
                 </div>
@@ -351,7 +347,7 @@ const isRtl = currentLang === 'ar';
             </div>
 
             <!-- Right Detail Panel (Consolidated Table or Deep-dive) -->
-            <div id="detailPanel" class="flex-1 panel-surface rounded-2xl shadow-2xl overflow-y-auto min-h-0 p-6 flex flex-col">
+            <div id="detailPanel" class="flex-1 panel-surface rounded-2xl overflow-y-auto min-h-0 p-6 flex flex-col">
                 <!-- Fallback Loading spinner placeholder -->
                 <div class="flex-1 flex items-center justify-center text-zinc-500">
                     <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[var(--accent-color)]"></div>
@@ -564,7 +560,7 @@ const isRtl = currentLang === 'ar';
                 html += '<div class="flex gap-1">';
                 html += '<button onclick="overviewPage=' + Math.max(1, overviewPage - 1) + ';renderOverview()" class="px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider transition cursor-pointer ' + (overviewPage <= 1 ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-zinc-900 hover:bg-zinc-800 hover:text-white') + '" ' + (overviewPage <= 1 ? 'disabled' : '') + '>Prev</button>';
                 for (let p = Math.max(1, overviewPage - 2); p <= Math.min(totalPages, overviewPage + 2); p++) {
-                    html += '<button onclick="overviewPage=' + p + ';renderOverview()" class="px-2.5 py-1 rounded text-xs font-bold tracking-wider transition cursor-pointer ' + (p === overviewPage ? 'bg-[var(--accent-color)] text-white shadow-sm' : 'text-zinc-400 bg-zinc-900 hover:bg-zinc-800 hover:text-white') + '">' + p + '</button>';
+                    html += '<button onclick="overviewPage=' + p + ';renderOverview()" class="px-2.5 py-1 rounded text-xs font-bold tracking-wider transition cursor-pointer ' + (p === overviewPage ? 'bg-[var(--accent-color)] text-white' : 'text-zinc-400 bg-zinc-900 hover:bg-zinc-800 hover:text-white') + '">' + p + '</button>';
                 }
                 html += '<button onclick="overviewPage=' + Math.min(totalPages, overviewPage + 1) + ';renderOverview()" class="px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider transition cursor-pointer ' + (overviewPage >= totalPages ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-zinc-900 hover:bg-zinc-800 hover:text-white') + '" ' + (overviewPage >= totalPages ? 'disabled' : '') + '>Next</button>';
                 html += '</div></div>';
@@ -739,8 +735,8 @@ const isRtl = currentLang === 'ar';
                             <td class="p-3 text-white font-bold">${call.src}</td>
                             <td class="p-3 text-white">${call.dst}</td>
                             <td class="p-3 text-zinc-400">${fmtDur(call.billsec)}</td>
-                            <td class="p-3">
-                                <span class="px-2 py-0.5 rounded text-[10px] font-black tracking-wider ${dispMap[call.disposition] || 'bg-zinc-800 text-zinc-400 border border-zinc-700/50'}">
+                            <td class="p-3 whitespace-nowrap">
+                                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded text-[10px] font-black tracking-wider whitespace-nowrap ${dispMap[call.disposition] || 'bg-zinc-800 text-zinc-400 border border-zinc-700/50'}">
                                     ${call.disposition}
                                 </span>
                             </td>
@@ -750,7 +746,7 @@ const isRtl = currentLang === 'ar';
                 html += '</tbody></table></div></div>';
             }
             html += '</div>';
-            panel.className = 'flex-1 panel-surface rounded-2xl shadow-2xl overflow-y-auto min-h-0 p-6 flex flex-col';
+            panel.className = 'flex-1 panel-surface rounded-2xl overflow-y-auto min-h-0 p-6 flex flex-col';
             panel.innerHTML = html;
 
             // Trigger ECharts rendering

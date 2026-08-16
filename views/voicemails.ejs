@@ -6,7 +6,28 @@ const words = {
         searchCallerid: "Caller ID", searchMailbox: "All Mailboxes", noData: "No voicemail messages found.",
         play: "Play", download: "Download", noAudio: "No Audio", footerLeft: "Voicemails", footerRight: "Total messages:",
         pagPrev: "Prev", pagNext: "Next", pagShowing: "Showing", pagOf: "of", pagResults: "results",
-        btn: "Search", exportCsv: "Download CSV", startTime: "Start Time", endTime: "End Time", clearBtn: "Reset Filters"
+        btn: "Search", exportCsv: "Download CSV", startTime: "Start Time", endTime: "End Time", clearBtn: "Reset Filters",
+        storageSettingsBtn: "Storage & Retention",
+        storageModalTitle: "Voicemail Storage & Retention",
+        storageOverview: "Storage Overview",
+        totalMsgsStored: "Total Voicemails",
+        diskUsage: "Disk Space Used",
+        activeMailboxes: "Active Mailboxes",
+        maxMsgLimit: "Max Messages per Mailbox",
+        maxMsgHelp: "Asterisk mailbox quota (10 - 9999). Default: 1000. New callers are rejected when the mailbox reaches this limit.",
+        maxSecLimit: "Max Message Duration",
+        maxSecHelp: "Maximum recording length for incoming voicemail audio (10 - 1800 seconds). Default: 300s (5 min).",
+        retentionTitle: "Lifespan & Auto-Purge Policy",
+        retentionDays: "Delete Voicemails Older Than",
+        retentionHelp: "Automatically purges old voicemail audio and metadata files exceeding this age.",
+        purgeNowBtn: "Purge Old Messages Now",
+        purgeConfirm: "Are you sure you want to delete all voicemails older than {days} days? This action cannot be undone.",
+        purging: "Purging...",
+        purgeSuccess: "Successfully purged {count} voicemails, freeing {size}.",
+        saveSuccess: "Voicemail storage settings and Asterisk limits updated successfully.",
+        saveSettings: "Save Settings",
+        saving: "Saving...",
+        cancel: "Cancel"
     },
     ar: {
         title: "البريد الصوتي", subtitle: "صندوق الوارد", desc: "استمع إلى رسائل البريد الصوتي وأدرها",
@@ -14,7 +35,28 @@ const words = {
         searchCallerid: "رقم المتصل", searchMailbox: "جميع صناديق البريد", noData: "لم يتم العثور على رسائل بريد صوتي.",
         play: "تشغيل", download: "تحميل", noAudio: "لا يوجد صوت", footerLeft: "البريد الصوتي", footerRight: "إجمالي الرسائل:",
         pagPrev: "السابق", pagNext: "التالي", pagShowing: "عرض", pagOf: "من", pagResults: "نتيجة",
-        btn: "بحث", exportCsv: "تحميل CSV", startTime: "وقت البداية", endTime: "وقت النهاية", clearBtn: "إعادة ضبط التصفية"
+        btn: "بحث", exportCsv: "تحميل CSV", startTime: "وقت البداية", endTime: "وقت النهاية", clearBtn: "إعادة ضبط التصفية",
+        storageSettingsBtn: "إعدادات التخزين والاحتفاظ",
+        storageModalTitle: "إعدادات التخزين ومدة الاحتفاظ بالبريد الصوتي",
+        storageOverview: "نظرة عامة على التخزين",
+        totalMsgsStored: "إجمالي الرسائل",
+        diskUsage: "المساحة المستخدمة",
+        activeMailboxes: "صناديق البريد النشطة",
+        maxMsgLimit: "الحد الأقصى للرسائل لكل صندوق بريد",
+        maxMsgHelp: "سعة صندوق البريد في أستريسك (10 - 9999). الافتراضي: 1000. سيتم رفض الرسائل عند امتلاء الصندوق.",
+        maxSecLimit: "الحد الأقصى لطول الرسالة",
+        maxSecHelp: "أقصى مدة لتسجيل المتصل بالثواني (10 - 1800 ثانية). الافتراضي: 300 ثانية (5 دقائق).",
+        retentionTitle: "عمر الرسائل والحذف التلقائي",
+        retentionDays: "حذف الرسائل الأقدم من",
+        retentionHelp: "حذف تلقائي للملفات والتسجيلات الصوتية التي تجاوزت هذا العمر.",
+        purgeNowBtn: "تنظيف وحذف الرسائل القديمة الآن",
+        purgeConfirm: "هل أنت متأكد من رغبتك في حذف جميع رسائل البريد الصوتي الأقدم من {days} يوم؟ لا يمكن التراجع عن هذا الإجراء.",
+        purging: "جاري التنظيف...",
+        purgeSuccess: "تم حذف {count} رسالة صوتية بنجاح وتوفير {size}.",
+        saveSuccess: "تم حفظ إعدادات التخزين وحدود أستريسك بنجاح.",
+        saveSettings: "حفظ الإعدادات",
+        saving: "جاري الحفظ...",
+        cancel: "إلغاء"
     }
 };
 const t = words[currentLang];
@@ -60,7 +102,7 @@ function fmtDur(s) {
                         radial-gradient(circle at 90% 80%, rgba(255, 255, 255, 0.02) 0%, transparent 45%);
             pointer-events: none; z-index: -1;
         }
-        .panel-surface { background-color: var(--bg-secondary); border: 1px solid var(--border-primary); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
+        .panel-surface { background-color: var(--bg-secondary); border: 1px solid var(--border-primary); }
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
         input, select, button { transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); }
@@ -81,7 +123,6 @@ function fmtDur(s) {
             height: 12px;
             border-radius: 50%;
             background: var(--accent-color, #ff3b30);
-            box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
             cursor: pointer;
             transition: transform 0.15s ease, background-color 0.15s ease;
         }
@@ -89,7 +130,6 @@ function fmtDur(s) {
         .media-slider:active::-webkit-slider-thumb {
             transform: scale(1.3);
             background: #ffffff;
-            box-shadow: 0 0 8px var(--accent-color, #ff3b30);
         }
         .media-slider::-moz-range-thumb {
             width: 12px;
@@ -97,7 +137,6 @@ function fmtDur(s) {
             border: none;
             border-radius: 50%;
             background: var(--accent-color, #ff3b30);
-            box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
             cursor: pointer;
             transition: transform 0.15s ease, background-color 0.15s ease;
         }
@@ -105,7 +144,6 @@ function fmtDur(s) {
         .media-slider:active::-moz-range-thumb {
             transform: scale(1.3);
             background: #ffffff;
-            box-shadow: 0 0 8px var(--accent-color, #ff3b30);
         }
         .vol-slider {
             -webkit-appearance: none;
@@ -165,19 +203,27 @@ function fmtDur(s) {
     <%- include('sidebar') %>
     <div class="flex-1 p-8 relative">
         <!-- Header Bar with Integrated Action -->
-        <div class="mb-4 flex items-center justify-between gap-4">
+        <div class="mb-4 flex items-center justify-between gap-4 flex-wrap">
             <div>
                 <h2 class="text-2xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
-            <button type="button" onclick="exportCSV()" class="config-btn-secondary px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm">
-                <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span><%= t.exportCsv %></span>
-            </button>
+            <div class="flex items-center gap-2.5">
+                <button type="button" onclick="openVmStorageModal()" class="config-btn-secondary px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 cursor-pointer">
+                    <svg class="w-4 h-4 text-[var(--accent-color)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                    <span><%= t.storageSettingsBtn %></span>
+                </button>
+                <button type="button" onclick="exportCSV()" class="config-btn-secondary px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-2 cursor-pointer">
+                    <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span><%= t.exportCsv %></span>
+                </button>
+            </div>
         </div>
 
-        <form id="vmFilterForm" action="/voicemails" method="GET" class="panel-surface p-4 rounded-xl mb-4 shadow-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+        <form id="vmFilterForm" action="/voicemails" method="GET" class="panel-surface p-4 rounded-xl mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <input type="hidden" name="page" value="<%= filters.page %>">
             <input type="hidden" name="perPage" value="<%= filters.perPage %>">
@@ -216,14 +262,14 @@ function fmtDur(s) {
             <div class="flex items-center gap-1">
                 <button onclick="goToPage(<%= pagination.page - 1 %>)" <%= pagination.page <= 1 ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page <= 1 ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagPrev %></button>
                 <% for (let p = Math.max(1, pagination.page - 2); p <= Math.min(pagination.totalPages, pagination.page + 2); p++) { %>
-                    <button onclick="goToPage(<%= p %>)" class="px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition cursor-pointer <%= p === pagination.page ? 'bg-[var(--accent-color)] text-white shadow-sm' : 'text-zinc-400 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= p %></button>
+                    <button onclick="goToPage(<%= p %>)" class="px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition cursor-pointer <%= p === pagination.page ? 'bg-[var(--accent-color)] text-white' : 'text-zinc-400 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= p %></button>
                 <% } %>
                 <button onclick="goToPage(<%= pagination.page + 1 %>)" <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page >= pagination.totalPages ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagNext %></button>
             </div>
         </div>
         <% } %>
 
-        <div class="panel-surface rounded-2xl overflow-hidden shadow-2xl">
+        <div class="panel-surface rounded-2xl overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-start border-collapse">
                     <thead>
@@ -253,7 +299,7 @@ function fmtDur(s) {
                                             <audio preload="none" data-player-audio>
                                                 <source src="/vm-audio/<%= msg.mailbox %>/<%= msg.wavFile %>">
                                             </audio>
-                                            <button data-player-playpause class="shrink-0 w-7 h-7 rounded-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] flex items-center justify-center transition cursor-pointer shadow-sm" title="Play / Pause">
+                                            <button data-player-playpause class="shrink-0 w-7 h-7 rounded-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] flex items-center justify-center transition cursor-pointer" title="Play / Pause">
                                                 <svg data-icon-play class="w-3.5 h-3.5 text-white fill-white" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                                                 <svg data-icon-pause class="w-3.5 h-3.5 text-white fill-white hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                                             </button>
@@ -270,7 +316,7 @@ function fmtDur(s) {
                                                         <svg data-icon-vol-high class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M11 5L6 9H2v6h4l5 4V5z"/></svg>
                                                         <svg data-icon-vol-mute class="w-3 h-3 text-red-400 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/><path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
                                                     </button>
-                                                    <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/vol:flex items-center p-1.5 bg-[#18181b] border border-[var(--border-primary)] rounded-lg shadow-xl z-30 transition-all duration-150">
+                                                    <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/vol:flex items-center p-1.5 bg-[#18181b] border border-[var(--border-primary)] rounded-lg z-30 transition-all duration-150">
                                                         <input type="range" data-player-volume min="0" max="1" step="0.05" value="1"
                                                                class="vol-slider w-16 h-1 cursor-pointer focus:outline-none"
                                                                title="Volume" style="--vol-before-width: 100%;">
@@ -310,7 +356,7 @@ function fmtDur(s) {
                     <div class="flex items-center gap-1">
                         <button onclick="goToPage(<%= pagination.page - 1 %>)" <%= pagination.page <= 1 ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page <= 1 ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagPrev %></button>
                         <% for (let p = Math.max(1, pagination.page - 2); p <= Math.min(pagination.totalPages, pagination.page + 2); p++) { %>
-                            <button onclick="goToPage(<%= p %>)" class="px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition cursor-pointer <%= p === pagination.page ? 'bg-[var(--accent-color)] text-white shadow-sm' : 'text-zinc-400 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= p %></button>
+                            <button onclick="goToPage(<%= p %>)" class="px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition cursor-pointer <%= p === pagination.page ? 'bg-[var(--accent-color)] text-white' : 'text-zinc-400 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= p %></button>
                         <% } %>
                         <button onclick="goToPage(<%= pagination.page + 1 %>)" <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page >= pagination.totalPages ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagNext %></button>
                     </div>
@@ -576,6 +622,277 @@ function fmtDur(s) {
             });
             obs.observe(document.body, { childList: true, subtree: true });
         })();
+    </script>
+
+    <!-- VOICEMAIL STORAGE & RETENTION MODAL -->
+    <div id="vmStorageModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-200 p-4" onclick="if(event.target===this) closeVmStorageModal()">
+        <div class="panel-surface border border-[var(--border-primary)] rounded-2xl w-full max-w-xl flex flex-col max-h-[90vh] overflow-hidden">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-[var(--accent-color)]/10 border border-[var(--accent-color)]/20 flex items-center justify-center text-[var(--accent-color)] font-bold">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black text-[var(--text-primary)]"><%= t.storageModalTitle %></h3>
+                        <p class="text-xs text-[var(--text-muted)] font-semibold mt-0.5"><%= isRtl ? 'إدارة سعة التخزين والحد الأقصى للرسائل وسياسة الحذف التلقائي' : 'Manage storage quotas, Asterisk mailbox limits, and retention policy' %></p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeVmStorageModal()" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer transition">✕</button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 overflow-y-auto space-y-5">
+                <!-- Telemetry Stats Cards -->
+                <div>
+                    <span class="text-[10px] font-black uppercase text-[var(--text-secondary)] tracking-wider block mb-2"><%= t.storageOverview %></span>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="p-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] flex flex-col">
+                            <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase"><%= t.totalMsgsStored %></span>
+                            <span id="vmStatMsgs" class="text-xl font-black text-[var(--text-primary)] mt-1 font-mono">0</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] flex flex-col">
+                            <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase"><%= t.diskUsage %></span>
+                            <span id="vmStatDisk" class="text-xl font-black text-emerald-400 mt-1 font-mono">0 MB</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] flex flex-col">
+                            <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase"><%= t.activeMailboxes %></span>
+                            <span id="vmStatMailboxes" class="text-xl font-black text-indigo-400 mt-1 font-mono">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Form -->
+                <form id="vmStorageForm" onsubmit="saveVmStorageSettings(event)" class="space-y-4 pt-1">
+                    <!-- Max Messages Limit per Mailbox -->
+                    <div class="p-4 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] space-y-2">
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="text-xs font-black uppercase text-[var(--text-primary)] tracking-wide"><%= t.maxMsgLimit %></label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="vmMaxMsgInput" name="max_messages" min="10" max="9999" step="10" required class="w-28 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono font-bold focus:outline-none focus:border-[var(--accent-color)] text-center">
+                                <span class="text-xs text-[var(--text-muted)] font-bold"><%= isRtl ? 'رسالة' : 'msgs' %></span>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-[var(--text-muted)] leading-relaxed"><%= t.maxMsgHelp %></p>
+                    </div>
+
+                    <!-- Max Duration per Message -->
+                    <div class="p-4 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] space-y-2">
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="text-xs font-black uppercase text-[var(--text-primary)] tracking-wide"><%= t.maxSecLimit %></label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="vmMaxSecsInput" name="max_duration_sec" min="10" max="1800" step="10" required class="w-28 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono font-bold focus:outline-none focus:border-[var(--accent-color)] text-center">
+                                <span class="text-xs text-[var(--text-muted)] font-bold"><%= isRtl ? 'ثانية' : 'sec' %></span>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-[var(--text-muted)] leading-relaxed"><%= t.maxSecHelp %></p>
+                    </div>
+
+                    <!-- Lifespan & Auto-Purge Policy -->
+                    <div class="p-4 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-[var(--border-primary)]/60">
+                            <div>
+                                <span class="text-xs font-black uppercase text-[var(--text-primary)] tracking-wide block"><%= t.retentionTitle %></span>
+                                <span class="text-[11px] text-[var(--text-muted)]"><%= t.retentionHelp %></span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="vmAutoPurgeToggle" name="auto_purge_enabled" class="sr-only peer">
+                                <div class="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--accent-color)]"></div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-3 pt-1">
+                            <label class="text-xs font-bold text-[var(--text-secondary)]"><%= t.retentionDays %></label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="vmRetentionDaysInput" name="retention_days" min="1" max="3650" step="1" required class="w-28 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono font-bold focus:outline-none focus:border-[var(--accent-color)] text-center">
+                                <span class="text-xs text-[var(--text-muted)] font-bold"><%= isRtl ? 'يوم' : 'days' %></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="vmStorageMsg" class="text-xs text-center hidden py-1"></div>
+
+                    <!-- Footer Buttons -->
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                        <button type="button" onclick="runVmPurgeNow()" id="vmPurgeNowBtn" class="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 transition flex items-center justify-center gap-1.5 cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            <span><%= t.purgeNowBtn %></span>
+                        </button>
+                        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <button type="button" onclick="closeVmStorageModal()" class="px-4 py-2 rounded-xl text-xs font-bold bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-white border border-[var(--border-primary)] transition cursor-pointer"><%= t.cancel %></button>
+                            <button type="submit" id="vmSaveSettingsBtn" class="btn-primary px-5 py-2 rounded-xl text-xs uppercase tracking-wider font-extrabold cursor-pointer flex items-center justify-center gap-1.5">
+                                <span><%= t.saveSettings %></span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- VOICEMAIL STORAGE & RETENTION MODAL JS ---
+        const vmWords = {
+            purging: <%- JSON.stringify(t.purging || 'Purging...') %>,
+            purgeSuccess: <%- JSON.stringify(t.purgeSuccess || 'Successfully purged {count} voicemails, freeing {size}.') %>,
+            saveSuccess: <%- JSON.stringify(t.saveSuccess || 'Settings updated successfully.') %>,
+            saving: <%- JSON.stringify(t.saving || 'Saving...') %>,
+            purgeConfirm: <%- JSON.stringify(t.purgeConfirm || 'Are you sure you want to delete all voicemails older than {days} days? This action cannot be undone.') %>
+        };
+
+        async function openVmStorageModal() {
+            const modal = document.getElementById('vmStorageModal');
+            if (!modal) return;
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100', 'pointer-events-auto');
+
+            try {
+                const res = await fetch('/api/voicemail-storage/settings');
+                const data = await res.json();
+                if (data && data.success) {
+                    populateVmStorageUI(data.settings, data.stats);
+                }
+            } catch (err) {
+                console.error('Failed to load voicemail storage settings:', err);
+            }
+        }
+
+        function closeVmStorageModal() {
+            const modal = document.getElementById('vmStorageModal');
+            if (!modal) return;
+            modal.classList.remove('opacity-100', 'pointer-events-auto');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function populateVmStorageUI(settings, stats) {
+            if (settings) {
+                const maxMsgInput = document.getElementById('vmMaxMsgInput');
+                const maxSecsInput = document.getElementById('vmMaxSecsInput');
+                const retentionInput = document.getElementById('vmRetentionDaysInput');
+                const autoPurgeToggle = document.getElementById('vmAutoPurgeToggle');
+                if (maxMsgInput) maxMsgInput.value = settings.max_messages || 1000;
+                if (maxSecsInput) maxSecsInput.value = settings.max_duration_sec || 300;
+                if (retentionInput) retentionInput.value = settings.retention_days || 90;
+                if (autoPurgeToggle) autoPurgeToggle.checked = !!settings.auto_purge_enabled;
+            }
+            if (stats) {
+                const statMsgs = document.getElementById('vmStatMsgs');
+                const statDisk = document.getElementById('vmStatDisk');
+                const statMailboxes = document.getElementById('vmStatMailboxes');
+                if (statMsgs) statMsgs.textContent = stats.totalMessages || 0;
+                if (statDisk) statDisk.textContent = stats.totalSizeFormatted || '0 KB';
+                if (statMailboxes) statMailboxes.textContent = stats.mailboxesCount || 0;
+            }
+        }
+
+        async function saveVmStorageSettings(e) {
+            e.preventDefault();
+            const saveBtn = document.getElementById('vmSaveSettingsBtn');
+            const msgEl = document.getElementById('vmStorageMsg');
+            const max_messages = parseInt(document.getElementById('vmMaxMsgInput').value, 10);
+            const max_duration_sec = parseInt(document.getElementById('vmMaxSecsInput').value, 10);
+            const retention_days = parseInt(document.getElementById('vmRetentionDaysInput').value, 10);
+            const auto_purge_enabled = document.getElementById('vmAutoPurgeToggle').checked ? 1 : 0;
+
+            saveBtn.disabled = true;
+            const origText = saveBtn.innerHTML;
+            saveBtn.textContent = vmWords.saving;
+
+            try {
+                const res = await fetch('/api/voicemail-storage/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ max_messages, max_duration_sec, retention_days, auto_purge_enabled })
+                });
+                const data = await res.json();
+                if (data && data.success) {
+                    populateVmStorageUI(data.settings, data.stats);
+                    if (typeof showToast === 'function') {
+                        showToast(vmWords.saveSuccess, 'success');
+                    }
+                    if (msgEl) {
+                        msgEl.className = 'text-xs text-center py-1 text-emerald-400 font-bold';
+                        msgEl.textContent = vmWords.saveSuccess;
+                        msgEl.classList.remove('hidden');
+                        setTimeout(() => {
+                            msgEl.classList.add('hidden');
+                            closeVmStorageModal();
+                        }, 1200);
+                    }
+                } else {
+                    if (msgEl) {
+                        msgEl.className = 'text-xs text-center py-1 text-red-400 font-bold';
+                        msgEl.textContent = (data && data.error) ? data.error : 'Failed to save settings';
+                        msgEl.classList.remove('hidden');
+                    }
+                }
+            } catch (err) {
+                if (msgEl) {
+                    msgEl.className = 'text-xs text-center py-1 text-red-400 font-bold';
+                    msgEl.textContent = err.message;
+                    msgEl.classList.remove('hidden');
+                }
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = origText;
+            }
+        }
+
+        async function runVmPurgeNow() {
+            const retention_days = parseInt(document.getElementById('vmRetentionDaysInput').value, 10) || 90;
+            const confirmMsg = vmWords.purgeConfirm.replace('{days}', retention_days);
+            if (!confirm(confirmMsg)) return;
+
+            const purgeBtn = document.getElementById('vmPurgeNowBtn');
+            const msgEl = document.getElementById('vmStorageMsg');
+            purgeBtn.disabled = true;
+            const origText = purgeBtn.innerHTML;
+            purgeBtn.textContent = vmWords.purging;
+
+            try {
+                const res = await fetch('/api/voicemail-storage/purge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ retention_days })
+                });
+                const data = await res.json();
+                if (data && data.success) {
+                    populateVmStorageUI(null, data.stats);
+                    const successMsg = vmWords.purgeSuccess.replace('{count}', data.purgedCount).replace('{size}', data.freedFormatted);
+                    if (typeof showToast === 'function') {
+                        showToast(successMsg, 'success');
+                    }
+                    if (msgEl) {
+                        msgEl.className = 'text-xs text-center py-1 text-emerald-400 font-bold';
+                        msgEl.textContent = successMsg;
+                        msgEl.classList.remove('hidden');
+                    }
+                    // If messages were purged, refresh page list after 1.5s
+                    if (data.purgedCount > 0) {
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    }
+                } else {
+                    if (msgEl) {
+                        msgEl.className = 'text-xs text-center py-1 text-red-400 font-bold';
+                        msgEl.textContent = (data && data.error) ? data.error : 'Purge failed';
+                        msgEl.classList.remove('hidden');
+                    }
+                }
+            } catch (err) {
+                if (msgEl) {
+                    msgEl.className = 'text-xs text-center py-1 text-red-400 font-bold';
+                    msgEl.textContent = err.message;
+                    msgEl.classList.remove('hidden');
+                }
+            } finally {
+                purgeBtn.disabled = false;
+                purgeBtn.innerHTML = origText;
+            }
+        }
     </script>
 </body>
 </html>

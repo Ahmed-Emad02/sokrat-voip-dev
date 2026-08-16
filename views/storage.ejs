@@ -166,11 +166,10 @@ const isRtl = currentLang === 'ar';
         <div class="mb-6 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h2 class="text-3xl font-extrabold text-white tracking-tight"><%= t.title %> <span class="text-[var(--accent-color)]"><%= t.subtitle %></span></h2>
-                <p class="text-xs text-[var(--text-muted)] mt-1"><%= isRtl ? 'إدارة مساحة التخزين والنسخ الاحتياطي إلى الكمبيوتر أو Google Drive' : 'Monitor server storage, purge old recordings, and export call data to PC or Google Drive' %></p>
             </div>
             
             <div class="flex items-center gap-3">
-                <button onclick="fetchStorageInfo()" class="panel-surface hover:bg-[var(--bg-hover)] text-white border border-[var(--border-primary)] rounded-xl px-4 py-2 text-xs font-bold flex items-center gap-2 cursor-pointer transition shadow-sm">
+                <button onclick="fetchStorageInfo()" class="panel-surface hover:bg-[var(--bg-hover)] text-white border border-[var(--border-primary)] rounded-xl px-4 py-2 text-xs font-bold flex items-center gap-2 cursor-pointer transition">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                     <%= isRtl ? 'تحديث البيانات' : 'Refresh Metrics' %>
                 </button>
@@ -291,7 +290,7 @@ const isRtl = currentLang === 'ar';
                         </div>
 
                         <div class="pt-4 border-t border-[var(--border-primary)]/50 mt-2">
-                            <button type="submit" id="downloadZipBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl py-3 px-4 text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-emerald-950/40">
+                            <button type="submit" id="downloadZipBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl py-3 px-4 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                                 <span><%= t.downloadZipBtn %></span>
                             </button>
@@ -346,7 +345,7 @@ const isRtl = currentLang === 'ar';
                             <button type="submit" id="saveGdriveBtn" class="bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2.5 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
                                 <span><%= t.saveGdriveBtn %></span>
                             </button>
-                            <button type="button" onclick="syncGdriveNow()" id="syncGdriveBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl py-2.5 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-blue-950/40">
+                            <button type="button" onclick="syncGdriveNow()" id="syncGdriveBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl py-2.5 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                                 <span><%= t.syncGdriveBtn %></span>
                             </button>
@@ -373,7 +372,7 @@ const isRtl = currentLang === 'ar';
                     <button onclick="savePurgePolicy()" id="savePurgeBtn" class="bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl px-4 py-2 text-xs cursor-pointer transition">
                         <%= t.savePurgeBtn %>
                     </button>
-                    <button onclick="runPurgeNow()" id="runPurgeBtn" class="bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-xl px-4 py-2 text-xs flex items-center gap-2 cursor-pointer transition shadow-md shadow-amber-950/40">
+                    <button onclick="runPurgeNow()" id="runPurgeBtn" class="bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-xl px-4 py-2 text-xs flex items-center gap-2 cursor-pointer transition">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
                         <%= t.runPurgeBtn %>
                     </button>
@@ -389,7 +388,12 @@ const isRtl = currentLang === 'ar';
                     <input type="range" id="purgeDaysSlider" min="7" max="365" step="1" value="90" oninput="document.getElementById('purge-days-val').textContent = this.value + ' Days'" class="w-full cursor-pointer accent-amber-500">
                 </div>
                 <div class="p-3.5 rounded-xl bg-black/20 border border-[var(--border-primary)] text-xs text-[var(--text-muted)] space-y-1">
-                    <div class="font-bold text-[var(--text-primary)]">⚠️ Purge Safety Notice:</div>
+                    <div class="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <span><%= isRtl ? 'تنبيه أمان الحذف:' : 'Purge Safety Notice:' %></span>
+                    </div>
                     <p>Audio recording files (`.wav`, `.gsm`, `.mp3`) older than the selected threshold will be permanently deleted from `/var/spool/asterisk/monitor/`. CDR database call logs remain untouched.</p>
                 </div>
             </div>

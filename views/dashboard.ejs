@@ -127,19 +127,16 @@ const isRtl = currentLang === 'ar';
         .panel-surface { 
             background-color: var(--bg-secondary); 
             border: 1px solid var(--border-primary); 
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
         .card-stat { 
             transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1), 
-                        border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), 
-                        box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); 
+                        border-color 150ms cubic-bezier(0.4, 0, 0.2, 1); 
         }
         .card-stat:hover { 
             transform: translateY(-2px); 
             border-color: var(--border-accent); 
-            box-shadow: 0 8px 24px rgba(255, 59, 48, 0.1); 
         }
         input, select, button { 
             transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); 
@@ -157,7 +154,7 @@ const isRtl = currentLang === 'ar';
         </div>
 
         <!-- Date Range Filter -->
-        <form action="/" method="GET" class="panel-surface p-3 px-4 rounded-xl mb-4 shadow-lg relative z-30">
+        <form action="/" method="GET" class="panel-surface p-3 px-4 rounded-xl mb-4 relative z-30">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <div class="flex flex-wrap items-end gap-2.5">
                 <div class="flex-1 min-w-[180px]">
@@ -185,7 +182,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 1: Total Calls -->
             <a href="<%= baseUrl %>&statusFilter=ALL&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض إجمالي المكالمات في سجل الاتصالات' : 'View total calls in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-[var(--accent-color)] hover:shadow-lg hover:shadow-[var(--accent-color)]/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-[var(--accent-color)] transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-[var(--accent-color)]/10 border border-[var(--accent-color)]/20 flex items-center justify-center shrink-0">
@@ -208,7 +205,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 2: Answered Calls -->
             <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات التي تم الرد عليها في سجل الاتصالات' : 'View answered calls in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-emerald-500 hover:shadow-lg hover:shadow-emerald-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-emerald-500 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
@@ -231,7 +228,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 3: Total Inbound Calls -->
             <a href="<%= baseUrl %>&directionFilter=INBOUND&statusFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات الواردة في سجل الاتصالات' : 'View inbound calls in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-[var(--accent-color)] hover:shadow-lg hover:shadow-[var(--accent-color)]/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-[var(--accent-color)] transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-[var(--accent-color)]/10 border border-[var(--accent-color)]/20 flex items-center justify-center shrink-0">
@@ -252,7 +249,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 4: Total Outbound Calls -->
             <a href="<%= baseUrl %>&directionFilter=OUTBOUND&statusFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات الصادرة في سجل الاتصالات' : 'View outbound calls in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-sky-500 hover:shadow-lg hover:shadow-sky-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-sky-500 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
@@ -273,7 +270,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 5: Internal Calls -->
             <a href="<%= baseUrl %>&callScopeFilter=INTERNAL&statusFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات الداخلية في سجل الاتصالات' : 'View internal calls in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-purple-500 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
@@ -294,7 +291,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 6: External Calls -->
             <a href="<%= baseUrl %>&callScopeFilter=EXTERNAL&statusFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات الخارجية في سجل الاتصالات' : 'View external calls in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-indigo-500 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
@@ -318,7 +315,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 7: Answer Rate -->
             <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات المجابة في سجل الاتصالات' : 'View answered calls in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-[var(--accent-color)] hover:shadow-lg hover:shadow-[var(--accent-color)]/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-[var(--accent-color)] transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
@@ -345,7 +342,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 8: No Answer / Missed Calls -->
             <a href="<%= baseUrl %>&statusFilter=NO ANSWER&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات الفائتة في سجل الاتصالات' : 'View missed / no answer calls in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-rose-500 hover:shadow-lg hover:shadow-rose-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-rose-500 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
@@ -368,7 +365,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 9: Busy Calls -->
             <a href="<%= baseUrl %>&statusFilter=BUSY&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات المشغولة في سجل الاتصالات' : 'View busy calls in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-amber-500 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
@@ -391,7 +388,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 10: Failed Calls -->
             <a href="<%= baseUrl %>&statusFilter=FAILED&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات الفاشلة في سجل الاتصالات' : 'View failed calls in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-red-600 hover:shadow-lg hover:shadow-red-600/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-red-600 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
@@ -414,7 +411,7 @@ const isRtl = currentLang === 'ar';
             <!-- Card 11: Total Talk Time -->
             <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض تفاصيل أوقات المكالمات في سجل الاتصالات' : 'View total talk time details in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-cyan-500 hover:shadow-lg hover:shadow-cyan-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-cyan-500 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0">
@@ -441,7 +438,7 @@ const isRtl = currentLang === 'ar';
             %>
             <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض تفاصيل مدة المكالمات في سجل الاتصالات' : 'View average call duration details in Call History' %>"
-               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/10 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
+               class="panel-surface rounded-xl p-5 card-stat border border-[#27272a]/30 hover:border-indigo-500 transition-all duration-200 cursor-pointer group relative block overflow-hidden">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
@@ -462,7 +459,7 @@ const isRtl = currentLang === 'ar';
 
         <!-- Charts Row 1: Call Volume Trend + Disposition Breakdown -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 shrink-0">
-            <div class="panel-surface border border-[#27272a]/30 rounded-2xl shadow-xl">
+            <div class="panel-surface border border-[#27272a]/30 rounded-2xl">
                 <div class="px-5 py-4 border-b border-[#27272a] bg-black/20">
                     <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartTrend %></h2>
                 </div>
@@ -470,7 +467,7 @@ const isRtl = currentLang === 'ar';
                     <div id="trendChart" class="w-full h-72"></div>
                 </div>
             </div>
-            <div class="panel-surface border border-[#27272a]/30 rounded-2xl shadow-xl">
+            <div class="panel-surface border border-[#27272a]/30 rounded-2xl">
                 <div class="px-5 py-4 border-b border-[#27272a] bg-black/20">
                     <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartDisposition %></h2>
                 </div>
@@ -482,7 +479,7 @@ const isRtl = currentLang === 'ar';
 
         <!-- Charts Row 2: Hourly Distribution + Top Talkers -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 shrink-0">
-            <div class="panel-surface border border-[#27272a]/30 rounded-2xl shadow-xl">
+            <div class="panel-surface border border-[#27272a]/30 rounded-2xl">
                 <div class="px-5 py-4 border-b border-[#27272a] bg-black/20">
                     <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartHourly %></h2>
                 </div>
@@ -490,7 +487,7 @@ const isRtl = currentLang === 'ar';
                     <div id="hourlyChart" class="w-full h-64"></div>
                 </div>
             </div>
-            <div class="panel-surface border border-[#27272a]/30 rounded-2xl shadow-xl">
+            <div class="panel-surface border border-[#27272a]/30 rounded-2xl">
                 <div class="px-5 py-4 border-b border-[#27272a] bg-black/20">
                     <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartTopTalkers %></h2>
                 </div>
@@ -502,7 +499,7 @@ const isRtl = currentLang === 'ar';
 
         <!-- Charts Row 3: Call Duration Breakdown + Call Scope Breakdown -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 shrink-0">
-            <div class="panel-surface border border-[#27272a]/30 rounded-2xl shadow-xl">
+            <div class="panel-surface border border-[#27272a]/30 rounded-2xl">
                 <div class="px-5 py-4 border-b border-[#27272a] bg-black/20">
                     <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= isRtl ? 'تصنيف مدة المكالمات' : 'Call Duration Breakdown' %></h2>
                 </div>
@@ -510,7 +507,7 @@ const isRtl = currentLang === 'ar';
                     <div id="durationChart" class="w-full h-64 min-h-[256px]"></div>
                 </div>
             </div>
-            <div class="panel-surface border border-[#27272a]/30 rounded-2xl shadow-xl">
+            <div class="panel-surface border border-[#27272a]/30 rounded-2xl">
                 <div class="px-5 py-4 border-b border-[#27272a] bg-black/20">
                     <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartScope %></h2>
                 </div>
@@ -656,9 +653,7 @@ const isRtl = currentLang === 'ar';
                     itemStyle: {
                         borderRadius: 6,
                         borderColor: isLight ? '#ffffff' : '#121212',
-                        borderWidth: 2.5,
-                        shadowBlur: 20,
-                        shadowColor: 'rgba(0, 0, 0, 0.25)'
+                        borderWidth: 2.5
                     },
                     label: {
                         show: true,

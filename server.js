@@ -134,10 +134,81 @@ function isInternalChannel(channel) {
     return value.startsWith('SIP/') || value.startsWith('PJSIP/') || value.startsWith('IAX2/');
 }
 
-function isOutboundCdr(row) {
-    return isInternalChannel(row.channel) && !isInternalChannel(row.dstchannel);
+function isTrunkChannel(channel) {
+    const value = String(channel || '').toUpperCase();
+    return value.startsWith('DONGLE/') || value.startsWith('DAHDI/');
 }
 
+function isExternalPhoneNumber(dst) {
+    const clean = String(dst || '').trim();
+    if (!clean) return false;
+    if (clean.startsWith('*')) return false; // Feature codes like *80, *97, *43
+    return (clean.startsWith('0') || clean.startsWith('+')) && clean.replace(/\D/g, '').length >= 7;
+}
+
+function classifyCdr(row) {
+    const ch = String(row.channel || '');
+    const dstCh = String(row.dstchannel || '');
+    const lastData = String(row.lastdata || '');
+    const dcontext = String(row.dcontext || '');
+    const did = String(row.did || '').trim();
+    const dst = String(row.dst || '').trim();
+
+    // 1. Inbound calls: from trunk / dongle / DID
+    if (isTrunkChannel(ch) || dcontext.startsWith('from-dongle') || dcontext.startsWith('from-trunk') || dcontext.startsWith('from-pstn') || did) {
+        return { direction: 'INBOUND', call_scope: 'EXTERNAL' };
+    }
+
+    // 2. Outbound calls: internal caller dialing external number via trunk
+    if (isTrunkChannel(dstCh) || lastData.toLowerCase().startsWith('dongle/') || lastData.toLowerCase().startsWith('dahdi/') || isExternalPhoneNumber(dst)) {
+        return { direction: 'OUTBOUND', call_scope: 'EXTERNAL' };
+    }
+
+    // 3. Otherwise, Internal
+    return { direction: 'INTERNAL', call_scope: 'INTERNAL' };
+}
+
+function isOutboundCdr(row) {
+    return classifyCdr(row).direction === 'OUTBOUND';
+}
+
+function isInboundCdr(row) {
+    return classifyCdr(row).direction === 'INBOUND';
+}
+
+function isInternalCdr(row) {
+    return classifyCdr(row).direction === 'INTERNAL';
+}
+
+const CDR_DIRECTION_CASE = `
+    CASE
+        WHEN c.channel LIKE 'Dongle/%' OR c.channel LIKE 'DAHDI/%' 
+             OR c.dcontext LIKE 'from-dongle%' OR c.dcontext LIKE 'from-trunk%' OR c.dcontext LIKE 'from-pstn%'
+             OR (c.did != '' AND c.did IS NOT NULL)
+        THEN 'INBOUND'
+        
+        WHEN (c.channel LIKE 'SIP/%' OR c.channel LIKE 'PJSIP/%' OR c.channel LIKE 'IAX2/%' OR c.dcontext = 'from-internal' OR c.dcontext LIKE 'from-internal%')
+             AND (c.dstchannel LIKE 'Dongle/%' OR c.dstchannel LIKE 'DAHDI/%' OR c.lastdata LIKE 'dongle/%' OR c.lastdata LIKE 'DAHDI/%'
+                  OR (c.dst REGEXP '^[0+]' AND LENGTH(c.dst) >= 7 AND c.dst NOT REGEXP '^[*][0-9]+'))
+        THEN 'OUTBOUND'
+        
+        ELSE 'INTERNAL'
+    END
+`;
+
+const CDR_CALL_SCOPE_CASE = `
+    CASE
+        WHEN (c.channel LIKE 'SIP/%' OR c.channel LIKE 'PJSIP/%' OR c.channel LIKE 'IAX2/%' OR c.dcontext = 'from-internal' OR c.dcontext LIKE 'from-internal%' OR c.dcontext LIKE 'from-intercom%')
+             AND (c.dstchannel NOT LIKE 'Dongle/%' AND c.dstchannel NOT LIKE 'DAHDI/%' AND c.lastdata NOT LIKE 'dongle/%' AND c.lastdata NOT LIKE 'DAHDI/%')
+             AND (c.dst NOT REGEXP '^[0+]' OR LENGTH(c.dst) < 7 OR c.dst REGEXP '^[*][0-9]+' OR c.dst IN ('101','102','111','200','600','300'))
+             AND c.channel NOT LIKE 'Dongle/%' AND c.channel NOT LIKE 'DAHDI/%'
+             AND (c.did = '' OR c.did IS NULL)
+             AND c.dcontext NOT LIKE 'from-dongle%' AND c.dcontext NOT LIKE 'from-trunk%' AND c.dcontext NOT LIKE 'from-pstn%'
+        THEN 'INTERNAL'
+        
+        ELSE 'EXTERNAL'
+    END
+`;
 app.set('view engine', 'ejs');
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
@@ -409,6 +480,19 @@ async function initAuthDb() {
     try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN last_backup_status VARCHAR(50) DEFAULT NULL'); } catch (_) {}
     try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN queue_provisioned TINYINT(1) DEFAULT 0'); } catch (_) {}
     await conn.execute('INSERT IGNORE INTO storage_settings (id) VALUES (1)');
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS voicemail_storage_settings (
+            id INT PRIMARY KEY DEFAULT 1,
+            max_messages INT DEFAULT 1000,
+            max_duration_sec INT DEFAULT 300,
+            retention_days INT DEFAULT 90,
+            auto_purge_enabled TINYINT(1) DEFAULT 0,
+            last_purged_at DATETIME DEFAULT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute('INSERT IGNORE INTO voicemail_storage_settings (id, max_messages, max_duration_sec, retention_days, auto_purge_enabled) VALUES (1, 1000, 300, 90, 0)');
+
 
     // Default dispositions
     const defaultDispositions = [
@@ -568,6 +652,16 @@ async function initAuthDb() {
     await conn.end();
     await syncAllExtensionsAstdb();
     await acquireDialerLeaderLock();
+    try {
+        const [vmRows] = await pool.query('SELECT * FROM `asterisk`.`voicemail_storage_settings` WHERE id = 1');
+        if (vmRows && vmRows.length > 0) {
+            syncVoicemailLimits(vmRows[0].max_messages || 1000, vmRows[0].max_duration_sec || 300);
+        } else {
+            syncVoicemailLimits(1000, 300);
+        }
+    } catch (vmErr) {
+        console.error('Voicemail limits boot sync error:', vmErr.message);
+    }
 }
 initAuthDb().catch(err => console.error('AUTH DB init error:', err));
 
@@ -2730,23 +2824,8 @@ app.get('/', async (req, res) => {
         }
         const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
 
-        const directionCase = `
-            CASE
-                WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
-                 AND (UPPER(c.dstchannel) NOT LIKE 'SIP/%' AND UPPER(c.dstchannel) NOT LIKE 'PJSIP/%' AND UPPER(c.dstchannel) NOT LIKE 'IAX2/%')
-                THEN 'OUTBOUND'
-                ELSE 'INBOUND'
-            END
-        `;
-        const callScopeCase = `
-            CASE
-                WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
-                 AND (UPPER(c.dstchannel) LIKE 'SIP/%' OR UPPER(c.dstchannel) LIKE 'PJSIP/%' OR UPPER(c.dstchannel) LIKE 'IAX2/%')
-                THEN 'INTERNAL'
-                ELSE 'EXTERNAL'
-            END
-        `;
-
+        const directionCase = CDR_DIRECTION_CASE;
+        const callScopeCase = CDR_CALL_SCOPE_CASE;
         let query = `
             SELECT c.src, c.dst, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.channel, c.dstchannel, c.calldate, c.did, c.uniqueid, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name
             FROM ${tables.cdr} c
@@ -2824,15 +2903,24 @@ app.get('/', async (req, res) => {
         rows.forEach(row => {
             stats.totalCalls++;
             const sec = parseInt(row.billsec) || 0;
-            const isOutbound = isOutboundCdr(row);
-            const isInternalCall = isInternalChannel(row.channel) && isInternalChannel(row.dstchannel);
-            if (isInternalCall) {
+            const callClass = classifyCdr(row);
+
+            if (callClass.call_scope === 'INTERNAL') {
                 stats.internalCount++;
                 if (row.disposition === 'ANSWERED') stats.internalTalkSec += sec;
             } else {
                 stats.externalCount++;
                 if (row.disposition === 'ANSWERED') stats.externalTalkSec += sec;
             }
+
+            if (callClass.direction === 'OUTBOUND') {
+                stats.outboundCount++;
+                if (row.disposition === 'ANSWERED') stats.outboundMin += sec;
+            } else if (callClass.direction === 'INBOUND') {
+                stats.inboundCount++;
+                if (row.disposition === 'ANSWERED') stats.inboundMin += sec;
+            }
+
             const disp = row.disposition;
             if (disp === 'ANSWERED') {
                 stats.answeredCalls++;
@@ -2845,25 +2933,14 @@ app.get('/', async (req, res) => {
                 stats.failedCalls++;
             }
 
-            let counted = false;
             [row.src, row.dst].forEach((ext, idx) => {
                 if (employeeMetrics[ext]) {
                     employeeMetrics[ext].totalCalls++;
                     employeeMetrics[ext].totalTalkSec += (row.disposition === 'ANSWERED' ? sec : 0);
                     employeeMetrics[ext].uniqueNumbers.add(idx === 0 ? row.dst : row.src);
-                    counted = true;
                 }
             });
-
-            if (employeeMetrics[row.src] && isOutbound) {
-                stats.outboundCount++;
-                if (row.disposition === 'ANSWERED') stats.outboundMin += sec;
-            } else if (employeeMetrics[row.dst]) {
-                stats.inboundCount++;
-                if (row.disposition === 'ANSWERED') stats.inboundMin += sec;
-            }
         });
-
         stats.inboundMin = Math.round(stats.inboundMin / 60);
         stats.outboundMin = Math.round(stats.outboundMin / 60);
         stats.internalMin = Math.round(stats.internalTalkSec / 60);
@@ -2878,10 +2955,10 @@ app.get('/', async (req, res) => {
             const day = moment(row.calldate).format('YYYY-MM-DD');
             trendMap[day] = trendMap[day] || { total: 0, inbound: 0, outbound: 0 };
             trendMap[day].total++;
-            const isOutbound = isOutboundCdr(row);
-            if (isOutbound) trendMap[day].outbound++;
-            else trendMap[day].inbound++;
-
+            const callClass = classifyCdr(row);
+            if (callClass.direction === 'OUTBOUND') trendMap[day].outbound++;
+            else if (callClass.direction === 'INBOUND') trendMap[day].inbound++;
+            else trendMap[day].internal = (trendMap[day].internal || 0) + 1;
             const disp = row.disposition || 'UNKNOWN';
             dispCounts[disp] = (dispCounts[disp] || 0) + 1;
 
@@ -2948,8 +3025,8 @@ app.get('/', async (req, res) => {
     } catch (error) { res.status(500).send("Dashboard Error: " + error.message); }
 });
 
-// Helper to format Destination field for inbound/USSD calls
-function formatDestination(row) {
+// Helper to format Destination field for inbound/USSD/Ring Groups calls
+function formatDestination(row, ringGroupSet = new Set()) {
     let dst = String(row.dst || '').trim();
     if (dst === 's' || dst.toLowerCase() === 'ussd') {
         if (row.channel && row.channel.toLowerCase().startsWith('dongle/')) {
@@ -2970,6 +3047,25 @@ function formatDestination(row) {
         }
         return 'System (s)';
     }
+
+    const isHuntOrGroup = (ringGroupSet && ringGroupSet.has(dst)) 
+                       || (row.dcontext && (row.dcontext.startsWith('ext-group') || row.dcontext.startsWith('ext-queues')))
+                       || (row.lastdata && (row.lastdata.includes('auto-blkvm') || row.lastdata.includes('from-queue')));
+
+    if (isHuntOrGroup) {
+        let pickedUpExt = null;
+        if (row.dstchannel) {
+            pickedUpExt = getExtensionFromChannel(row.dstchannel);
+        }
+        if (!pickedUpExt && row.lastdata) {
+            const m = String(row.lastdata).match(/(?:SIP|PJSIP|IAX2|Local)\/(\d{2,5})(?:[-@:;,]|$)/i);
+            if (m) pickedUpExt = m[1];
+        }
+        if (pickedUpExt && pickedUpExt !== dst) {
+            return `${dst} (${pickedUpExt})`;
+        }
+    }
+
     return dst;
 }
 
@@ -3002,22 +3098,8 @@ app.get('/cdr', async (req, res) => {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const perPage = Math.min(200, Math.max(1, parseInt(req.query.perPage) || 25));
         const offset = (page - 1) * perPage;
-        const directionCase = `
-            CASE
-                WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
-                 AND (UPPER(c.dstchannel) NOT LIKE 'SIP/%' AND UPPER(c.dstchannel) NOT LIKE 'PJSIP/%' AND UPPER(c.dstchannel) NOT LIKE 'IAX2/%')
-                THEN 'OUTBOUND'
-                ELSE 'INBOUND'
-            END
-        `;
-        const callScopeCase = `
-            CASE
-                WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
-                 AND (UPPER(c.dstchannel) LIKE 'SIP/%' OR UPPER(c.dstchannel) LIKE 'PJSIP/%' OR UPPER(c.dstchannel) LIKE 'IAX2/%')
-                THEN 'INTERNAL'
-                ELSE 'EXTERNAL'
-            END
-        `;
+        const directionCase = CDR_DIRECTION_CASE;
+        const callScopeCase = CDR_CALL_SCOPE_CASE;
 
         let countQuery = `
             SELECT COUNT(*) as total
@@ -3101,13 +3183,18 @@ app.get('/cdr', async (req, res) => {
         const [rows] = await pool.query(query, queryParams);
         const totalPages = Math.ceil(total / perPage) || 1;
 
+        let ringGroupSet = new Set();
+        try {
+            const [rgRows] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups`');
+            rgRows.forEach(r => ringGroupSet.add(String(r.grpnum)));
+        } catch (_) {}
+
         const formattedRows = rows.map(row => {
             return {
                 ...row,
-                dst: formatDestination(row)
+                dst: formatDestination(row, ringGroupSet)
             };
         });
-
         res.render('cdr', {
             calls: formattedRows,
             filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, directionFilter, callScopeFilter, page, perPage },
@@ -3126,6 +3213,8 @@ app.get('/cdr/export', async (req, res) => {
         const statusFilter = req.query.statusFilter || 'ALL';
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
+        const searchDid = req.query.searchDid || '';
+        const searchUniqueId = req.query.searchUniqueId || '';
         let selectedExtensions = req.query.targetExtension;
         if (!selectedExtensions) selectedExtensions = ['ALL'];
         else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
@@ -3143,22 +3232,8 @@ app.get('/cdr/export', async (req, res) => {
         const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
         const directionFilter = req.query.directionFilter || 'ALL';
         const callScopeFilter = req.query.callScopeFilter || 'ALL';
-        const directionCase = `
-            CASE
-                WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
-                 AND (UPPER(c.dstchannel) NOT LIKE 'SIP/%' AND UPPER(c.dstchannel) NOT LIKE 'PJSIP/%' AND UPPER(c.dstchannel) NOT LIKE 'IAX2/%')
-                THEN 'OUTBOUND'
-                ELSE 'INBOUND'
-            END
-        `;
-        const callScopeCase = `
-            CASE
-                WHEN (UPPER(c.channel) LIKE 'SIP/%' OR UPPER(c.channel) LIKE 'PJSIP/%' OR UPPER(c.channel) LIKE 'IAX2/%')
-                 AND (UPPER(c.dstchannel) LIKE 'SIP/%' OR UPPER(c.dstchannel) LIKE 'PJSIP/%' OR UPPER(c.dstchannel) LIKE 'IAX2/%')
-                THEN 'INTERNAL'
-                ELSE 'EXTERNAL'
-            END
-        `;
+        const directionCase = CDR_DIRECTION_CASE;
+        const callScopeCase = CDR_CALL_SCOPE_CASE;
         let query = `
             SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             ${directionCase} as direction,
@@ -3221,6 +3296,12 @@ app.get('/cdr/export', async (req, res) => {
 
         const [rows] = await pool.query(query, queryParams);
 
+        let ringGroupSet = new Set();
+        try {
+            const [rgRows] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups`');
+            rgRows.forEach(r => ringGroupSet.add(String(r.grpnum)));
+        } catch (_) {}
+
         // Build CSV string
         const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
         
@@ -3228,17 +3309,18 @@ app.get('/cdr/export', async (req, res) => {
         csvContent += csvHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n";
 
         for (const row of rows) {
-            const formattedDst = formatDestination(row);
+            const formattedDst = formatDestination(row, ringGroupSet);
             const rowData = [
                 `"${moment(row.calldate).format('YYYY-MM-DD HH:mm:ss')}"`,
                 /^\+?\d+$/.test(String(row.src || '')) ? `="` + String(row.src || '').trim() + `"` : `"${String(row.src || '').replace(/"/g, '""')}"`,
                 `"${String(row.src_name || '').replace(/"/g, '""')}"`,
-            row.call_scope || "EXTERNAL",
+                `"${formattedDst.replace(/"/g, '""')}"`,
                 /^\+?\d+$/.test(String(row.did || '')) ? `="` + String(row.did || '').trim() + `"` : `"${String(row.did || '').replace(/"/g, '""')}"`,
                 row.duration || 0,
                 row.billsec || 0,
                 `"${row.disposition || ''}"`,
                 `"${row.direction || ''}"`,
+                `"${row.call_scope || 'EXTERNAL'}"`,
                 `"${row.channel || ''}"`,
                 `"${row.dstchannel || ''}"`,
                 `"${row.uniqueid || ''}"`
@@ -3482,6 +3564,263 @@ app.get('/vm-export', (req, res) => {
     res.send(csv);
 });
 
+// --- VOICEMAIL STORAGE & RETENTION HELPERS ---
+function syncVoicemailLimits(maxmsg = 1000, maxsecs = 300) {
+    const maxMsgNum = Math.min(9999, Math.max(10, parseInt(maxmsg, 10) || 1000));
+    const maxSecsNum = Math.min(1800, Math.max(10, parseInt(maxsecs, 10) || 300));
+    
+    // 1. Update /etc/asterisk/vm_general.inc
+    const vmInc = '/etc/asterisk/vm_general.inc';
+    try {
+        if (fs.existsSync(vmInc)) {
+            let content = fs.readFileSync(vmInc, 'utf8');
+            let lines = content.split('\n').filter(l => !l.trim().startsWith('maxmsg=') && !l.trim().startsWith('maxsecs=') && !l.trim().startsWith('minsecs='));
+            lines.push(`maxmsg=${maxMsgNum}`);
+            lines.push(`maxsecs=${maxSecsNum}`);
+            lines.push('minsecs=3');
+            fs.writeFileSync(vmInc, lines.join('\n'), 'utf8');
+        }
+    } catch (e) {
+        console.error('Error updating vm_general.inc:', e.message);
+    }
+
+    // 2. Update /etc/asterisk/voicemail.conf [general] section
+    const vmFile = '/etc/asterisk/voicemail.conf';
+    try {
+        if (fs.existsSync(vmFile)) {
+            let content = fs.readFileSync(vmFile, 'utf8');
+            let lines = content.split('\n').filter(l => !l.trim().startsWith('maxmsg=') && !l.trim().startsWith('maxsecs=') && !l.trim().startsWith('minsecs='));
+            const genIdx = lines.findIndex(l => l.trim() === '[general]');
+            if (genIdx !== -1) {
+                lines.splice(genIdx + 1, 0, `maxmsg=${maxMsgNum}`, `maxsecs=${maxSecsNum}`, 'minsecs=3');
+            }
+            fs.writeFileSync(vmFile, lines.join('\n'), 'utf8');
+        }
+    } catch (e) {
+        console.error('Error updating voicemail.conf:', e.message);
+    }
+
+    // 3. Reload Asterisk voicemail module
+    exec(`${ASTERISK_BIN} -rx 'voicemail reload'`, (err) => {
+        if (err) console.error('Voicemail reload error:', err.message);
+    });
+}
+
+function getVoicemailStorageStats() {
+    let totalMessages = 0;
+    let totalBytes = 0;
+    const mailboxes = new Set();
+    let oldestTime = null;
+    let newestTime = null;
+
+    try {
+        if (fs.existsSync(VM_ROOT)) {
+            const extDirs = fs.readdirSync(VM_ROOT, { withFileTypes: true }).filter(d => d.isDirectory());
+            for (const ext of extDirs) {
+                const mailboxPath = path.join(VM_ROOT, ext.name);
+                const subfolders = ['INBOX', 'Old', 'Work', 'Family', 'Friends', 'Cust1', 'Cust2', 'Cust3', 'Cust4', 'Cust5'];
+                for (const sf of subfolders) {
+                    const sfPath = path.join(mailboxPath, sf);
+                    if (!fs.existsSync(sfPath)) continue;
+                    const dirents = fs.readdirSync(sfPath, { withFileTypes: true });
+                    for (const dirent of dirents) {
+                        if (!dirent.isFile()) continue;
+                        const fPath = path.join(sfPath, dirent.name);
+                        try {
+                            const stat = fs.statSync(fPath);
+                            totalBytes += stat.size;
+                            if (dirent.name.endsWith('.txt')) {
+                                totalMessages++;
+                                 mailboxes.add(ext.name);
+                                const meta = parseVmTxt(fPath);
+                                const t = meta && meta.origtime ? parseInt(meta.origtime) * 1000 : stat.mtimeMs;
+                                if (t) {
+                                    if (!oldestTime || t < oldestTime) oldestTime = t;
+                                    if (!newestTime || t > newestTime) newestTime = t;
+                                }
+                            }
+                        } catch {}
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error calculating voicemail storage stats:', err);
+    }
+
+    const totalSizeMB = (totalBytes / (1024 * 1024)).toFixed(2);
+    let totalSizeFormatted = totalBytes < 1024 * 1024
+        ? (totalBytes / 1024).toFixed(1) + ' KB'
+        : (totalBytes < 1024 * 1024 * 1024
+            ? (totalBytes / (1024 * 1024)).toFixed(2) + ' MB'
+            : (totalBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB');
+
+    return {
+        totalMessages,
+        totalBytes,
+        totalSizeMB: parseFloat(totalSizeMB),
+        totalSizeFormatted,
+        mailboxesCount: mailboxes.size,
+        oldestTime,
+        newestTime
+    };
+}
+
+function purgeOldVoicemails(days = 90) {
+    const daysNum = Math.max(1, parseInt(days, 10) || 90);
+    const thresholdMs = Date.now() - (daysNum * 24 * 60 * 60 * 1000);
+    let purgedCount = 0;
+    let freedBytes = 0;
+
+    try {
+        if (fs.existsSync(VM_ROOT)) {
+            const extDirs = fs.readdirSync(VM_ROOT, { withFileTypes: true }).filter(d => d.isDirectory());
+            for (const ext of extDirs) {
+                const mailboxPath = path.join(VM_ROOT, ext.name);
+                const subfolders = ['INBOX', 'Old', 'Work', 'Family', 'Friends', 'Cust1', 'Cust2', 'Cust3', 'Cust4', 'Cust5'];
+                for (const sf of subfolders) {
+                    const sfPath = path.join(mailboxPath, sf);
+                    if (!fs.existsSync(sfPath)) continue;
+                    const files = fs.readdirSync(sfPath);
+                    const txtFiles = files.filter(f => f.endsWith('.txt'));
+                    for (const txt of txtFiles) {
+                        const txtPath = path.join(sfPath, txt);
+                        try {
+                            const stat = fs.statSync(txtPath);
+                            const meta = parseVmTxt(txtPath);
+                            const msgTime = meta && meta.origtime ? parseInt(meta.origtime) * 1000 : stat.mtimeMs;
+                            if (msgTime && msgTime < thresholdMs) {
+                                const baseName = txt.replace(/\.txt$/, '');
+                                const related = files.filter(f => f.startsWith(baseName));
+                                for (const rf of related) {
+                                    const rfPath = path.join(sfPath, rf);
+                                    try {
+                                        const rfStat = fs.statSync(rfPath);
+                                        freedBytes += rfStat.size;
+                                        fs.unlinkSync(rfPath);
+                                    } catch {}
+                                }
+                                purgedCount++;
+                            }
+                        } catch {}
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error purging old voicemails:', err);
+    }
+
+    let freedFormatted = freedBytes < 1024 * 1024
+        ? (freedBytes / 1024).toFixed(1) + ' KB'
+        : (freedBytes < 1024 * 1024 * 1024
+            ? (freedBytes / (1024 * 1024)).toFixed(2) + ' MB'
+            : (freedBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB');
+
+    return {
+        purgedCount,
+        freedBytes,
+        freedFormatted
+    };
+}
+
+// Schedule daily voicemail auto-purge check
+setInterval(async () => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM `asterisk`.`voicemail_storage_settings` WHERE id = 1');
+        if (rows && rows.length > 0) {
+            const s = rows[0];
+            if (s.auto_purge_enabled && s.retention_days > 0) {
+                const res = purgeOldVoicemails(s.retention_days);
+                if (res.purgedCount > 0) {
+                    console.log(`[Auto-Purge] Purged ${res.purgedCount} old voicemails (> ${s.retention_days} days), freed ${res.freedFormatted}`);
+                }
+                await pool.query('UPDATE `asterisk`.`voicemail_storage_settings` SET last_purged_at = NOW() WHERE id = 1');
+            }
+        }
+    } catch (err) {
+        console.error('Voicemail auto-purge timer error:', err.message);
+    }
+}, 24 * 60 * 60 * 1000).unref();
+
+// --- VOICEMAIL STORAGE & RETENTION APIs ---
+app.get('/api/voicemail-storage/settings', requireAuth, async (req, res) => {
+    try {
+        let settings = { max_messages: 1000, max_duration_sec: 300, retention_days: 90, auto_purge_enabled: 0, last_purged_at: null };
+        try {
+            const [rows] = await pool.query('SELECT * FROM `asterisk`.`voicemail_storage_settings` WHERE id = 1');
+            if (rows && rows.length > 0) settings = rows[0];
+        } catch (_) {}
+
+        const stats = getVoicemailStorageStats();
+        res.json({ success: true, settings, stats });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/voicemail-storage/settings', requireAuth, async (req, res) => {
+    try {
+        const max_messages = Math.min(9999, Math.max(10, parseInt(req.body.max_messages, 10) || 1000));
+        const max_duration_sec = Math.min(1800, Math.max(10, parseInt(req.body.max_duration_sec, 10) || 300));
+        const retention_days = Math.min(3650, Math.max(1, parseInt(req.body.retention_days, 10) || 90));
+        const auto_purge_enabled = (req.body.auto_purge_enabled === 1 || req.body.auto_purge_enabled === '1' || req.body.auto_purge_enabled === true) ? 1 : 0;
+
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`voicemail_storage_settings\` (id, max_messages, max_duration_sec, retention_days, auto_purge_enabled)
+            VALUES (1, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                max_messages = VALUES(max_messages),
+                max_duration_sec = VALUES(max_duration_sec),
+                retention_days = VALUES(retention_days),
+                auto_purge_enabled = VALUES(auto_purge_enabled)
+        `, [max_messages, max_duration_sec, retention_days, auto_purge_enabled]);
+
+        syncVoicemailLimits(max_messages, max_duration_sec);
+
+        const stats = getVoicemailStorageStats();
+        res.json({
+            success: true,
+            message: `Voicemail storage settings updated (Limit: ${max_messages} msgs/box, Duration: ${max_duration_sec}s, Retention: ${retention_days} days).`,
+            settings: { max_messages, max_duration_sec, retention_days, auto_purge_enabled },
+            stats
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/voicemail-storage/purge', requireAuth, async (req, res) => {
+    try {
+        let days = parseInt(req.body.retention_days, 10);
+        if (!days || days < 1) {
+            try {
+                const [rows] = await pool.query('SELECT retention_days FROM `asterisk`.`voicemail_storage_settings` WHERE id = 1');
+                if (rows && rows.length > 0) days = rows[0].retention_days;
+            } catch (_) {}
+        }
+        days = Math.max(1, days || 90);
+
+        const result = purgeOldVoicemails(days);
+
+        try {
+            await pool.query('UPDATE `asterisk`.`voicemail_storage_settings` SET last_purged_at = NOW() WHERE id = 1');
+        } catch (_) {}
+
+        const stats = getVoicemailStorageStats();
+        res.json({
+            success: true,
+            message: `Cleanup completed: ${result.purgedCount} voicemails older than ${days} days were purged (${result.freedFormatted} freed).`,
+            purgedCount: result.purgedCount,
+            freedBytes: result.freedBytes,
+            freedFormatted: result.freedFormatted,
+            stats
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // --- API: GENERAL EXTENSIONS OVERVIEW ---
 app.get('/api/ext-overview', async (req, res) => {
     try {
@@ -3509,25 +3848,31 @@ app.get('/api/ext-overview', async (req, res) => {
 
         rows.forEach(row => {
             const sec = parseInt(row.billsec) || 0;
-            const isOutbound = isOutboundCdr(row);
+            const callClass = classifyCdr(row);
             const srcExt = row.src || getExtensionFromChannel(row.channel);
             const dstExt = row.dst || getExtensionFromChannel(row.dstchannel);
 
             if (srcExt && employeeMetrics[srcExt]) {
                 employeeMetrics[srcExt].totalCalls++;
                 if (dstExt) employeeMetrics[srcExt].uniqueNumbers.add(dstExt);
-                if (isOutbound) {
+                if (callClass.direction === 'OUTBOUND') {
                     employeeMetrics[srcExt].outboundCalls++;
                     if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].outboundTalkSec += sec;
-                } else {
+                } else if (callClass.direction === 'INBOUND') {
                     employeeMetrics[srcExt].inboundCalls++;
                     if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].inboundTalkSec += sec;
+                } else {
+                    employeeMetrics[srcExt].outboundCalls++;
+                    if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].outboundTalkSec += sec;
                 }
             }
             if (dstExt && employeeMetrics[dstExt] && dstExt !== srcExt) {
                 employeeMetrics[dstExt].totalCalls++;
                 if (srcExt) employeeMetrics[dstExt].uniqueNumbers.add(srcExt);
-                if (isOutbound) {
+                if (callClass.direction === 'INBOUND') {
+                    employeeMetrics[dstExt].inboundCalls++;
+                    if (row.disposition === 'ANSWERED') employeeMetrics[dstExt].inboundTalkSec += sec;
+                } else if (callClass.direction === 'OUTBOUND') {
                     employeeMetrics[dstExt].outboundCalls++;
                     if (row.disposition === 'ANSWERED') employeeMetrics[dstExt].outboundTalkSec += sec;
                 } else {
@@ -3589,19 +3934,19 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
 
         rows.forEach(row => {
             const sec = parseInt(row.billsec) || 0;
-            const isOutboundCall = isOutboundCdr(row);
+            const callClass = classifyCdr(row);
             const isSrc = row.src === extension || row.cnum === extension || getExtensionFromChannel(row.channel) === extension;
             const isDst = row.dst === extension || getExtensionFromChannel(row.dstchannel) === extension;
 
             if (!isSrc && !isDst) return;
             let callDirection = 'internal';
-            if (isSrc && isOutboundCall) callDirection = 'outbound';
-            else if (isDst && !isOutboundCall) callDirection = 'inbound';
-            if (isSrc && isDst) callDirection = 'internal';
+            if (callClass.direction === 'OUTBOUND') callDirection = isSrc ? 'outbound' : 'inbound';
+            else if (callClass.direction === 'INBOUND') callDirection = isDst ? 'inbound' : 'outbound';
+            else callDirection = 'internal';
 
             if (direction === 'inbound' && callDirection !== 'inbound') return;
             if (direction === 'outbound' && callDirection !== 'outbound') return;
-
+            if (direction === 'internal' && callDirection !== 'internal') return;
             stats.totalCalls++;
             if (row.disposition === 'ANSWERED') stats.answeredCalls++;
 
@@ -3663,16 +4008,17 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
         stats.recentCalls = [];
         for (const row of rows) {
             const sec = parseInt(row.billsec) || 0;
-            const isOutboundCall = isOutboundCdr(row);
+            const callClass = classifyCdr(row);
             const isSrc = row.src === extension || row.cnum === extension || getExtensionFromChannel(row.channel) === extension;
             const isDst = row.dst === extension || getExtensionFromChannel(row.dstchannel) === extension;
             if (!isSrc && !isDst) continue;
             let callDirection = 'internal';
-            if (isSrc && isOutboundCall) callDirection = 'outbound';
-            else if (isDst && !isOutboundCall) callDirection = 'inbound';
-            if (isSrc && isDst) callDirection = 'internal';
+            if (callClass.direction === 'OUTBOUND') callDirection = isSrc ? 'outbound' : 'inbound';
+            else if (callClass.direction === 'INBOUND') callDirection = isDst ? 'inbound' : 'outbound';
+            else callDirection = 'internal';
             if (direction === 'inbound' && callDirection !== 'inbound') continue;
             if (direction === 'outbound' && callDirection !== 'outbound') continue;
+            if (direction === 'internal' && callDirection !== 'internal') continue;
             stats.recentCalls.push({
                 calldate: row.calldate,
                 src: row.src, dst: row.dst,

@@ -81,7 +81,6 @@ const isRtl = currentLang === 'ar';
         .panel-surface { 
             background-color: var(--bg-secondary); 
             border: 1px solid var(--border-primary); 
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
@@ -203,7 +202,6 @@ const isRtl = currentLang === 'ar';
         html.light-theme #addBlacklistModalContainer {
             background-color: #ffffff !important;
             border-color: #cbd5e1 !important;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
         }
         html.light-theme #blacklistModalContainer .bg-\[\#18181b\],
         html.light-theme #blacklistModalContainer .bg-\[\#09090b\] {
@@ -263,11 +261,10 @@ const isRtl = currentLang === 'ar';
         <div class="mb-6 flex justify-between items-center <%= isRtl ? 'flex-row-reverse' : '' %>">
             <div>
                 <h2 class="text-3xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
-                <p class="text-xs text-zinc-500 font-bold mt-1"><%= t.desc %></p>
             </div>
             <% if (isSuperAdmin) { %>
             <div class="flex items-center gap-3">
-                <button onclick="openBlacklistModal()" class="blacklist-trigger-btn font-extrabold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer shadow-md">
+                <button onclick="openBlacklistModal()" class="blacklist-trigger-btn font-extrabold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer">
                     <svg class="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                     </svg>
@@ -279,7 +276,7 @@ const isRtl = currentLang === 'ar';
                     </svg>
                     <span><%= isRtl ? 'استيراد CSV' : 'Import CSV' %></span>
                 </button>
-                <button onclick="openAddContactModal()" class="btn-primary px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md flex items-center gap-1.5 cursor-pointer">
+                <button onclick="openAddContactModal()" class="btn-primary px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                     </svg>
@@ -290,7 +287,7 @@ const isRtl = currentLang === 'ar';
         </div>
 
         <!-- Search -->
-        <div class="panel-surface p-4 rounded-2xl mb-6 shadow-2xl flex items-center gap-3">
+        <div class="panel-surface p-4 rounded-2xl mb-6 flex items-center gap-3">
             <svg class="w-5 h-5 text-zinc-500 <%= isRtl ? 'mr-1' : 'ml-1' %>" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -298,7 +295,7 @@ const isRtl = currentLang === 'ar';
         </div>
 
         <!-- Directory Table -->
-        <div class="panel-surface rounded-2xl overflow-hidden shadow-2xl">
+        <div class="panel-surface rounded-2xl overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-start border-collapse">
                     <thead>
@@ -348,7 +345,7 @@ const isRtl = currentLang === 'ar';
     <% if (isSuperAdmin) { %>
     <!-- Edit Contact Modal -->
     <div id="editContactModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
-        <div id="editContactModalContainer" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 shadow-2xl scale-95 transition-all duration-300 transform">
+        <div id="editContactModalContainer" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 scale-95 transition-all duration-300 transform">
             <div class="flex justify-between items-center mb-5 <%= isRtl ? 'flex-row-reverse' : '' %>">
                 <h3 class="text-sm font-black text-white uppercase tracking-wider"><%= t.editTitle %></h3>
                 <button onclick="closeEditContactModal()" class="text-zinc-500 hover:text-white transition cursor-pointer">
@@ -384,7 +381,7 @@ const isRtl = currentLang === 'ar';
 
     <!-- Add Contact Modal (Address Book Version) -->
     <div id="addContactModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
-        <div id="addContactModalContainer" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 shadow-2xl scale-95 transition-all duration-300 transform">
+        <div id="addContactModalContainer" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 scale-95 transition-all duration-300 transform">
             <div class="flex justify-between items-center mb-5 <%= isRtl ? 'flex-row-reverse' : '' %>">
                 <h3 class="text-sm font-black text-white uppercase tracking-wider"><%= isRtl ? 'إضافة جهة اتصال جديدة' : 'Add New Contact' %></h3>
                 <button onclick="closeAddContactModal()" class="text-zinc-500 hover:text-white transition cursor-pointer">
@@ -419,7 +416,7 @@ const isRtl = currentLang === 'ar';
 
     <!-- Import CSV Modal -->
     <div id="importCsvModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
-        <div id="importCsvModalContainer" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 shadow-2xl scale-95 transition-all duration-300 transform">
+        <div id="importCsvModalContainer" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 scale-95 transition-all duration-300 transform">
             <div class="flex justify-between items-center mb-5 <%= isRtl ? 'flex-row-reverse' : '' %>">
                 <h3 class="text-sm font-black text-white uppercase tracking-wider"><%= isRtl ? 'استيراد جهات اتصال CSV' : 'Import CSV Contacts' %></h3>
                 <button onclick="closeImportCsvModal()" class="text-zinc-500 hover:text-white transition cursor-pointer">
@@ -719,7 +716,7 @@ const isRtl = currentLang === 'ar';
     </script>
     <!-- INBOUND BLACKLIST MANAGEMENT MODAL -->
     <div id="blacklistModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300">
-        <div id="blacklistModalContainer" class="bg-[#121212] border border-[#27272a] rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl scale-95 transition-all duration-300 overflow-hidden">
+        <div id="blacklistModalContainer" class="bg-[#121212] border border-[#27272a] rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col scale-95 transition-all duration-300 overflow-hidden">
             <!-- Modal Header -->
             <div class="px-6 py-4 border-b border-[#27272a] bg-[#18181b] flex items-center justify-between">
                 <div class="flex items-center gap-3">
@@ -734,11 +731,11 @@ const isRtl = currentLang === 'ar';
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button type="button" onclick="syncBlacklistToAstDB()" class="btn-sync-astdb font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition shadow-sm">
+                    <button type="button" onclick="syncBlacklistToAstDB()" class="btn-sync-astdb font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition">
                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                         <span><%= isRtl ? 'مزامنة محرك AstDB' : 'Sync AstDB Engine' %></span>
                     </button>
-                    <button type="button" onclick="openAddBlacklistModal()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition shadow-md">
+                    <button type="button" onclick="openAddBlacklistModal()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition">
                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                         <span><%= isRtl ? 'إضافة رقم محظور' : 'Add Blocked Number' %></span>
                     </button>
@@ -796,7 +793,7 @@ const isRtl = currentLang === 'ar';
 
     <!-- ADD / EDIT BLACKLIST ENTRY MODAL -->
     <div id="addBlacklistModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300">
-        <div id="addBlacklistModalContainer" class="bg-[#121212] border border-[#27272a] rounded-2xl w-full max-w-md p-6 shadow-2xl scale-95 transition-all duration-300">
+        <div id="addBlacklistModalContainer" class="bg-[#121212] border border-[#27272a] rounded-2xl w-full max-w-md p-6 scale-95 transition-all duration-300">
             <div class="flex items-center justify-between mb-5">
                 <h3 id="blacklistModalTitle" class="text-base font-black text-white"><%= isRtl ? 'إضافة رقم للقائمة السوداء' : 'Add Blocked Number' %></h3>
                 <button type="button" onclick="closeAddBlacklistModal()" class="modal-close-icon p-1 rounded-lg transition cursor-pointer">
@@ -834,7 +831,7 @@ const isRtl = currentLang === 'ar';
 
                 <div class="flex items-center justify-end gap-2 pt-2">
                     <button type="button" onclick="closeAddBlacklistModal()" class="btn-cancel-action px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
-                    <button type="submit" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shadow-md"><%= isRtl ? 'حفظ القاعده' : 'Save Rule' %></button>
+                    <button type="submit" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer"><%= isRtl ? 'حفظ القاعده' : 'Save Rule' %></button>
                 </div>
             </form>
         </div>
