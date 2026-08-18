@@ -575,6 +575,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             background-color: #f3e8ff !important;
             border-color: #a855f7 !important;
         }
+        .light-theme .dongle-device-card.dongle-state-purple .dongle-icon-box {
+            background-color: #e9d5ff !important;
+            border: 1px solid #c084fc !important;
+            color: #6b21a8 !important;
+        }
         .light-theme .dongle-device-card.dongle-state-purple .dongle-metric,
         .light-theme .dongle-device-card.dongle-state-purple .dongle-priority-metric,
         .light-theme .dongle-device-card.dongle-state-purple .dongle-routing-panel,
@@ -584,6 +589,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .light-theme .dongle-device-card.dongle-state-purple .dongle-routing-trunk {
             background: #ffffff !important;
+            border-color: #d8b4fe !important;
         }
         .light-theme .dongle-device-card.dongle-state-purple .dongle-card-footer {
             background-color: #e9d5ff !important;
@@ -591,26 +597,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
 
         .light-theme .dongle-device-card.dongle-state-green {
-            background-color: #dcfce7 !important;
-            border-color: #10b981 !important;
-        }
-        .light-theme .dongle-device-card.dongle-state-green .dongle-metric,
-        .light-theme .dongle-device-card.dongle-state-green .dongle-priority-metric,
-        .light-theme .dongle-device-card.dongle-state-green .dongle-routing-panel,
-        .light-theme .dongle-device-card.dongle-state-green .dongle-hardware-summary {
-            background: #bbf7d0 !important;
-            border-color: #34d399 !important;
-        }
-        .light-theme .dongle-device-card.dongle-state-green .dongle-routing-trunk {
-            background: #ffffff !important;
-        }
-        .light-theme .dongle-device-card.dongle-state-green .dongle-card-footer {
-            background-color: #bbf7d0 !important;
-            border-top-color: #34d399 !important;
-        }
-        .light-theme .dongle-device-card.dongle-state-green {
             background-color: #d1fae5 !important;
             border-color: #047857 !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-green .dongle-icon-box {
+            background-color: #a7f3d0 !important;
+            border: 1px solid #34d399 !important;
+            color: #065f46 !important;
         }
         .light-theme .dongle-device-card.dongle-state-green .dongle-metric,
         .light-theme .dongle-device-card.dongle-state-green .dongle-priority-metric,
@@ -621,6 +614,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .light-theme .dongle-device-card.dongle-state-green .dongle-routing-trunk {
             background: #ffffff !important;
+            border-color: #6ee7b7 !important;
         }
         .light-theme .dongle-device-card.dongle-state-green .dongle-card-footer {
             background-color: #a7f3d0 !important;
@@ -631,6 +625,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             background-color: #fce7f3 !important;
             border-color: #ec4899 !important;
         }
+        .light-theme .dongle-device-card.dongle-state-pink .dongle-icon-box {
+            background-color: #fbcfe8 !important;
+            border: 1px solid #f472b6 !important;
+            color: #9d174d !important;
+        }
         .light-theme .dongle-device-card.dongle-state-pink .dongle-metric,
         .light-theme .dongle-device-card.dongle-state-pink .dongle-priority-metric,
         .light-theme .dongle-device-card.dongle-state-pink .dongle-routing-panel,
@@ -640,37 +639,66 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .light-theme .dongle-device-card.dongle-state-pink .dongle-routing-trunk {
             background: #ffffff !important;
+            border-color: #f9a8d4 !important;
         }
         .light-theme .dongle-device-card.dongle-state-pink .dongle-card-footer {
             background-color: #fbcfe8 !important;
             border-top-color: #f472b6 !important;
         }
+
+        /* 3. DIALING / RINGING (Blue) in Light Theme */
         .light-theme .dongle-device-card.dongle-state-blue {
-            background-color: #dbeafe !important;
+            background-color: #eff6ff !important;
             border-color: #3b82f6 !important;
         }
-        .light-theme .dongle-device-card.dongle-state-red {
-            background-color: #ffe4e6 !important;
-            border-color: #9f1239 !important;
+        .light-theme .dongle-device-card.dongle-state-blue:hover {
+            border-color: #2563eb !important;
         }
-        .light-theme .dongle-device-card.dongle-state-red .dongle-metric,
-        .light-theme .dongle-device-card.dongle-state-red .dongle-priority-metric,
-        .light-theme .dongle-device-card.dongle-state-red .dongle-routing-panel,
-        .light-theme .dongle-device-card.dongle-state-red .dongle-hardware-summary {
-            background: #fecdd3 !important;
-            border-color: #fb7185 !important;
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-icon-box {
+            background-color: #dbeafe !important;
+            border: 1px solid #60a5fa !important;
+            color: #1e40af !important;
         }
-        .light-theme .dongle-device-card.dongle-state-red .dongle-routing-trunk {
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-status-pill {
+            background-color: #2563eb !important;
+            border: 1px solid #1d4ed8 !important;
+            color: #ffffff !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-status-dot {
+            background-color: #ffffff !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-metric,
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-priority-metric,
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-routing-panel,
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-hardware-summary {
+            background: #dbeafe !important;
+            border-color: #93c5fd !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-routing-trunk {
             background: #ffffff !important;
+            border-color: #bfdbfe !important;
         }
-        .light-theme .dongle-device-card.dongle-state-red .dongle-card-footer {
-            background-color: #fecdd3 !important;
-            border-top-color: #fb7185 !important;
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-card-footer {
+            background-color: #dbeafe !important;
+            border-top-color: #93c5fd !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-action-button.dongle-action-primary {
+            background-color: #2563eb !important;
+            border-color: #1d4ed8 !important;
+            color: #ffffff !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-blue .dongle-action-button.dongle-action-primary:hover {
+            background-color: #1d4ed8 !important;
         }
 
         .light-theme .dongle-device-card.dongle-state-yellow {
             background-color: #fef3c7 !important;
             border-color: #f59e0b !important;
+        }
+        .light-theme .dongle-device-card.dongle-state-yellow .dongle-icon-box {
+            background-color: #fde68a !important;
+            border: 1px solid #fbbf24 !important;
+            color: #92400e !important;
         }
         .light-theme .dongle-device-card.dongle-state-yellow .dongle-metric,
         .light-theme .dongle-device-card.dongle-state-yellow .dongle-priority-metric,
@@ -681,6 +709,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .light-theme .dongle-device-card.dongle-state-yellow .dongle-routing-trunk {
             background: #ffffff !important;
+            border-color: #fde68a !important;
         }
         .light-theme .dongle-device-card.dongle-state-yellow .dongle-card-footer {
             background-color: #fde68a !important;
@@ -691,6 +720,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             background-color: #ffe4e6 !important;
             border-color: #f43f5e !important;
         }
+        .light-theme .dongle-device-card.dongle-state-red .dongle-icon-box {
+            background-color: #fecdd3 !important;
+            border: 1px solid #fb7185 !important;
+            color: #9f1239 !important;
+        }
         .light-theme .dongle-device-card.dongle-state-red .dongle-metric,
         .light-theme .dongle-device-card.dongle-state-red .dongle-priority-metric,
         .light-theme .dongle-device-card.dongle-state-red .dongle-routing-panel,
@@ -700,17 +734,27 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .light-theme .dongle-device-card.dongle-state-red .dongle-routing-trunk {
             background: #ffffff !important;
+            border-color: #fda4af !important;
         }
         .light-theme .dongle-device-card.dongle-state-red .dongle-card-footer {
             background-color: #fecdd3 !important;
             border-top-color: #fb7185 !important;
         }
+
         .light-theme .dongle-device-card .dongle-metric-label {
             color: #374151 !important;
         }
         .light-theme .dongle-device-card .dongle-metric-value,
         .light-theme .dongle-device-card .dongle-priority-value {
             color: #111827 !important;
+        }
+        .light-theme .dongle-device-card .dongle-hardware-summary {
+            color: #1f2937 !important;
+        }
+        .light-theme .dongle-device-card .dongle-dial-string {
+            color: #0f172a !important;
+            background: rgba(0, 0, 0, 0.05) !important;
+            border: 1px solid rgba(0, 0, 0, 0.1) !important;
         }
 
         .selected-row {

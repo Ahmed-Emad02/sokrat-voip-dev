@@ -61,3 +61,19 @@ test('views/sidebar.ejs includes light theme overrides for fallback classes', ()
     assert.ok(content.includes('.light-theme .bg-black\\/40'), 'sidebar.ejs should define .light-theme .bg-black/40 override');
     assert.ok(content.includes('v1.0.2'), 'sidebar.ejs should display version v1.0.2');
 });
+
+test('views/gsm-dongles.ejs includes complete light theme overrides for dialing state and other states', () => {
+    const gsmDonglesEjsPath = path.join(__dirname, '../views/gsm-dongles.ejs');
+    const content = fs.readFileSync(gsmDonglesEjsPath, 'utf8');
+
+    // Dialing / Ringing (Blue) state overrides
+    assert.ok(content.includes('.light-theme .dongle-device-card.dongle-state-blue'), 'gsm-dongles.ejs should define .light-theme .dongle-device-card.dongle-state-blue override');
+    assert.ok(content.includes('.light-theme .dongle-device-card.dongle-state-blue .dongle-metric'), 'gsm-dongles.ejs should define .light-theme .dongle-device-card.dongle-state-blue .dongle-metric override');
+    assert.ok(content.includes('.light-theme .dongle-device-card.dongle-state-blue .dongle-card-footer'), 'gsm-dongles.ejs should define .light-theme .dongle-device-card.dongle-state-blue .dongle-card-footer override');
+    assert.ok(content.includes('.light-theme .dongle-device-card.dongle-state-blue .dongle-icon-box'), 'gsm-dongles.ejs should define .light-theme .dongle-device-card.dongle-state-blue .dongle-icon-box override');
+    assert.ok(content.includes('.light-theme .dongle-device-card.dongle-state-blue .dongle-status-pill'), 'gsm-dongles.ejs should define .light-theme .dongle-device-card.dongle-state-blue .dongle-status-pill override');
+
+    // Common light theme metric text contrast
+    assert.ok(content.includes('.light-theme .dongle-device-card .dongle-metric-label'), 'gsm-dongles.ejs should define dark metric labels in light theme');
+    assert.ok(content.includes('.light-theme .dongle-device-card .dongle-metric-value'), 'gsm-dongles.ejs should define dark metric values in light theme');
+});
