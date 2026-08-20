@@ -1187,8 +1187,9 @@ function setExtensionOnline(name, source, ip) {
         }
     }
 
-    if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
-        peerIPs[name] = ip;
+    let cleanIp = String(ip || '').trim().replace(/^sip:/i, '').split(':')[0].replace(/[^0-9.]/g, '');
+    if (cleanIp && /^\d+\.\d+\.\d+\.\d+$/.test(cleanIp)) {
+        peerIPs[name] = cleanIp;
         io.emit('peerIPs', peerIPs);
     }
 
@@ -2249,8 +2250,10 @@ app.use(async (req, res, next) => {
         }
         res.locals.roster = roster.map(emp => ({ 
             ...emp, 
-            online: onlineMap[emp.extension] || false
+            online: onlineMap[emp.extension] || false,
+            ip: peerIPs[emp.extension] || null
         }));
+        res.locals.peerIPs = peerIPs;
         res.locals.activeCalls = activeCalls;
         res.locals.currentPage = req.path;
         if (req.query.lang === 'ar' || req.query.lang === 'en') {
@@ -3132,7 +3135,7 @@ app.get('/cdr', async (req, res) => {
         let countParams = [startDate, endDate];
 
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
             FROM ${tables.cdr} c
@@ -3256,7 +3259,7 @@ app.get('/cdr/export', async (req, res) => {
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
             FROM ${tables.cdr} c
