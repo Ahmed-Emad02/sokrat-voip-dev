@@ -3,8 +3,7 @@
  */
 
 const { verifyEmbedSession, logCrmAudit } = require('../lib/integration-auth');
-const { executeCallSpy, executeCallHangup } = require('../lib/call-control');
-
+const { executeCallSpy, executeCallHangup, executeCallHijack } = require('../lib/call-control');
 function registerCrmLiveSocket(io, pool, dependencies = {}) {
     const { getPeerStatus, getActiveCalls, getAmiClient, ASTERISK_BIN } = dependencies;
     const crmNamespace = io.of('/crm-live');
@@ -165,25 +164,11 @@ function registerCrmLiveSocket(io, pool, dependencies = {}) {
                         mode: action
                     });
                 } else if (action === 'hijack') {
-                    const activeMap = typeof getActiveCalls === 'function' ? getActiveCalls() : {};
-                    const call = activeMap[target];
-                    if (!call || !call.channel) {
-                        throw new Error(`No active call channel found for extension ${target}`);
-                    }
-                    const { resolveDeviceChannel } = require('../lib/call-control');
-                    const supervisorChan = await resolveDeviceChannel(pool, String(supervisorExt));
-
-                    if (ami) {
-                        ami.write(`Action: Redirect\r\nChannel: ${call.channel}\r\nContext: from-internal\r\nExten: ${supervisorExt}\r\nPriority: 1\r\n\r\n`);
-                    } else {
-                        const { execFile } = require('child_process');
-                        await new Promise((resolve, reject) => {
-                            execFile(ASTERISK_BIN || '/usr/sbin/asterisk', ['-rx', `channel redirect ${call.channel} from-internal,${supervisorExt},1`], (err) => {
-                                if (err) return reject(err);
-                                resolve();
-                            });
-                        });
-                    }
+                    await executeCallHijack(pool, ami, ASTERISK_BIN, {
+                        supervisorExt: String(supervisorExt),
+                        targetExt: target,
+                        activeCallsObj: getActiveCalls
+                    });
                 } else {
                     throw new Error(`Unsupported live action: ${action}`);
                 }

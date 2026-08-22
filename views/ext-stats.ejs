@@ -297,15 +297,15 @@ const isRtl = currentLang === 'ar';
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <div class="grid grid-cols-1 md:grid-cols-5 gap-2.5 items-end">
                 <div>
-                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.startTime %></label>
+                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="startDate"><%= t.startTime %></label>
                     <input type="datetime-local" id="startDate" name="startDate" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                 </div>
                 <div>
-                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.endTime %></label>
+                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="endDate"><%= t.endTime %></label>
                     <input type="datetime-local" id="endDate" name="endDate" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                 </div>
                 <div id="dirFilterCol">
-                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
+                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="direction"><%= t.direction %></label>
                     <select id="direction" name="direction" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                         <option value="all"><%= t.allDir %></option>
                         <option value="inbound"><%= t.inbound %></option>
@@ -391,9 +391,20 @@ const isRtl = currentLang === 'ar';
                 allowInput: true,
                 scrollInputIntoView: false,
                 appendTo: document.body,
-                monthSelectorType: "dropdown"
+                monthSelectorType: "dropdown",
+                onReady: function(selectedDates, dateStr, instance) {
+                    if (instance.altInput) {
+                        var origId = instance.input.id || (instance.input.name ? instance.input.name + 'Input' : 'datePicker_' + Math.random().toString(36).substring(2, 7));
+                        if (origId.endsWith('_raw')) origId = origId.replace(/_raw$/, '');
+                        instance.input.id = origId + '_raw';
+                        instance.altInput.id = origId;
+                        instance.altInput.name = (instance.input.name || origId) + '_display';
+                        instance.altInput.setAttribute('autocomplete', 'off');
+                        var ariaLabel = instance.input.getAttribute('aria-label') || instance.input.name || origId;
+                        instance.altInput.setAttribute('aria-label', ariaLabel);
+                    }
+                }
             });
-
             document.getElementById('filterForm').addEventListener('submit', (e) => {
                 e.preventDefault();
                 if (currentExtension) {
@@ -435,8 +446,8 @@ const isRtl = currentLang === 'ar';
 
         function loadOverview() {
             overviewPage = 1;
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
+            const startDate = (document.getElementById('startDate_raw') || document.getElementById('startDate')).value;
+            const endDate = (document.getElementById('endDate_raw') || document.getElementById('endDate')).value;
             const lang = '<%= currentLang %>';
             const panel = document.getElementById('detailPanel');
             
@@ -572,8 +583,8 @@ const isRtl = currentLang === 'ar';
         }
 
         function loadStats(ext) {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
+            const startDate = (document.getElementById('startDate_raw') || document.getElementById('startDate')).value;
+            const endDate = (document.getElementById('endDate_raw') || document.getElementById('endDate')).value;
             const direction = document.getElementById('direction').value;
             const lang = '<%= currentLang %>';
             const panel = document.getElementById('detailPanel');

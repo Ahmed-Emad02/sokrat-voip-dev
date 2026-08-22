@@ -359,15 +359,15 @@ const isRtl = currentLang === 'ar';
                 <input type="hidden" id="editContactId">
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'الاسم الأول' : 'First Name' %></label>
+                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="editContactFirstName"><%= isRtl ? 'الاسم الأول' : 'First Name' %></label>
                         <input type="text" id="editContactFirstName" required class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'اسم العائلة' : 'Last Name' %></label>
+                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="editContactLastName"><%= isRtl ? 'اسم العائلة' : 'Last Name' %></label>
                         <input type="text" id="editContactLastName" required class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'رقم الهاتف' : 'Phone Number' %></label>
+                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="editContactPhone"><%= isRtl ? 'رقم الهاتف' : 'Phone Number' %></label>
                         <input type="text" id="editContactPhone" required class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
                 </div>
@@ -394,15 +394,15 @@ const isRtl = currentLang === 'ar';
             <form id="manualContactForm" onsubmit="submitAddContact(event)">
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'الاسم الأول' : 'First Name' %></label>
+                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="contactFirstName"><%= isRtl ? 'الاسم الأول' : 'First Name' %></label>
                         <input type="text" id="contactFirstName" required class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'اسم العائلة' : 'Last Name' %></label>
+                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="contactLastName"><%= isRtl ? 'اسم العائلة' : 'Last Name' %></label>
                         <input type="text" id="contactLastName" required class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'رقم الهاتف' : 'Phone Number' %></label>
+                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="contactPhone"><%= isRtl ? 'رقم الهاتف' : 'Phone Number' %></label>
                         <input type="text" id="contactPhone" required placeholder="e.g. 010..." class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
                 </div>
@@ -443,7 +443,7 @@ const isRtl = currentLang === 'ar';
                     </div>
 
                     <div>
-                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'ملف CSV' : 'CSV File' %></label>
+                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="csvFileSelect"><%= isRtl ? 'ملف CSV' : 'CSV File' %></label>
                         <input type="file" id="csvFileSelect" accept=".csv" required class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)] file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-white hover:file:bg-zinc-700 file:cursor-pointer">
                     </div>
                 </div>
@@ -803,16 +803,16 @@ const isRtl = currentLang === 'ar';
             <form id="blacklistForm" onsubmit="submitBlacklistForm(event)" class="space-y-4">
                 <input type="hidden" id="blEditId" value="">
                 <div>
-                    <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'رقم الهاتف / النمط *' : 'Phone Number / Pattern *' %></label>
+                    <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="blPhone"><%= isRtl ? 'رقم الهاتف / النمط *' : 'Phone Number / Pattern *' %></label>
                     <input type="text" id="blPhone" required placeholder="e.g. 01012345678 or +2010..." class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-rose-500">
                     <p class="text-[10px] text-zinc-500 mt-1"><%= isRtl ? 'أدخل الرقم بالتنسيق المحلي أو الدولي.' : 'Enter phone number in local or E.164 format.' %></p>
                 </div>
                 <div>
-                    <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'السبب / اسم المتصل' : 'Caller Name / Reason' %></label>
+                    <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="blDesc"><%= isRtl ? 'السبب / اسم المتصل' : 'Caller Name / Reason' %></label>
                     <input type="text" id="blDesc" placeholder="e.g. Spam / Telemarketer / Harassment" class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500">
                 </div>
                 <div>
-                    <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'إجراء استجابة الحظر' : 'Block Response Action' %></label>
+                    <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="blAction"><%= isRtl ? 'إجراء استجابة الحظر' : 'Block Response Action' %></label>
                     <select id="blAction" class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500">
                         <option value="zapateller"><%= isRtl ? 'لهجة Zapateller + رسالة غير مستعمل (Default)' : 'Zapateller Tone + Disconnected Prompt (Default)' %></option>
                         <option value="hangup"><%= isRtl ? 'إنهاء المكالمة فوراً (Immediate Hangup)' : 'Immediate Hangup' %></option>

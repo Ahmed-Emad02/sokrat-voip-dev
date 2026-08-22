@@ -22,7 +22,8 @@ const words = {
         startIntercom: "Start Intercom",
         viewGrid: "Card View",
         viewCompact: "Compact View",
-        viewMinimal: "Minimal View"
+        viewMinimal: "Minimal View",
+        dropHere: "Drop extensions here"
     },
     ar: {
         title: "لوحة", subtitle: "المراقبة المباشرة",
@@ -46,7 +47,8 @@ const words = {
         startIntercom: "بدء المكالمة",
         viewGrid: "عرض البطاقات",
         viewCompact: "عرض مدمج",
-        viewMinimal: "عرض مصغر"
+        viewMinimal: "عرض مصغر",
+        dropHere: "أفلت التحويلات هنا"
     }
 };
 const t = words[currentLang];
@@ -558,6 +560,44 @@ const isRtl = currentLang === 'ar';
             font-size: 0.6875rem !important;
             padding: 0.2rem 0.5rem !important;
         }
+
+        /* === Drag & Drop arrangement of extension cards (local-only persistence) === */
+        #switchboardGrid article[id^="card-"][draggable="true"] { cursor: grab; }
+        #switchboardGrid article[id^="card-"].dnd-dragging {
+            opacity: 0.45 !important;
+            transform: scale(0.98) !important;
+        }
+        /* Snap card layout instantly while dragging — transitions would smear rapid reflows into flicker */
+        #switchboardGrid.dnd-active article[id^="card-"] { transition: none !important; }
+        #switchboardGrid.dnd-active .extension-group-grid {
+            min-height: 72px;
+            border-radius: 0.75rem;
+            outline: 2px dashed rgba(245, 158, 11, 0.4);
+            outline-offset: 3px;
+        }
+        #switchboardGrid .extension-group-grid.dnd-drop-hover {
+            outline-color: var(--accent-color);
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+        .light-theme #switchboardGrid .extension-group-grid.dnd-drop-hover {
+            background-color: rgba(0, 0, 0, 0.04);
+        }
+        /* Empty groups stay visible as drop targets */
+        #switchboardGrid .extension-group-grid > .drop-hint { display: none; }
+        #switchboardGrid .extension-group-grid:not(:has(> article[id^="card-"])) > .drop-hint {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 56px;
+            border: 1px dashed var(--border-primary);
+            border-radius: 0.75rem;
+            color: var(--text-muted);
+            font-size: 0.6875rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+    </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
@@ -595,8 +635,12 @@ const isRtl = currentLang === 'ar';
         <div class="flex-1 min-h-0 overflow-y-auto mb-4 bg-black/20 rounded-2xl p-3 border border-[#27272a]/30">
             <div id="switchboardGrid">
                 <%
-                // Group roster by emp_group
+                // Group roster by emp_group; every defined group gets a section even when empty
                 var groups = {};
+                var definedGroups = Array.isArray(employeeGroups) ? employeeGroups : [];
+                definedGroups.forEach(function(gName) {
+                    if (gName && !groups[gName]) groups[gName] = [];
+                });
                 roster.forEach(function(emp) {
                     var g = emp.emp_group || '___ungrouped___';
                     if (!groups[g]) groups[g] = [];
@@ -609,7 +653,7 @@ const isRtl = currentLang === 'ar';
                 });
                 %>
                 <% groupNames.forEach(function(gName) { %>
-                <section class="mb-5" aria-label="<%= gName === '___ungrouped___' ? t.ungrouped : gName %>">
+                <section class="mb-5" aria-label="<%= gName === '___ungrouped___' ? t.ungrouped : gName %>" data-group="<%= gName %>">
                     <div class="employee-group-header mb-2">
                         <span class="h-2 w-2 rounded-full bg-[var(--accent-color)] shrink-0"></span>
                         <h3 class="text-sm font-extrabold text-[var(--text-primary)] truncate">
@@ -641,6 +685,7 @@ const isRtl = currentLang === 'ar';
                         %>
                         <article id="card-<%= emp.extension %>"
                                  data-start="<%= startTimeStamp %>"
+                                 data-emp-group="<%= emp.emp_group || '' %>"
                                  class="panel-surface rounded-xl p-3 flex flex-col justify-between min-h-[188px] transition-all duration-300 relative overflow-hidden border <%= stateClass %>">
                             <div class="flex items-start justify-between gap-3 min-w-0">
                                 <div class="flex items-start gap-2.5 min-w-0 flex-1">
@@ -697,6 +742,7 @@ const isRtl = currentLang === 'ar';
                             </div>
                         </article>
                         <% }) %>
+                        <div class="drop-hint col-span-full select-none"><%= t.dropHere %></div>
                     </div>
                 </section>
                 <% }) %>
@@ -1103,6 +1149,276 @@ const isRtl = currentLang === 'ar';
         });
     </script>
     <script>
+        // Live Panel: drag & drop extension cards to reorder them or move them between groups.
+        // The arrangement is persisted locally per browser (localStorage) — no server-side changes.
+        (function () {
+            const LAYOUT_KEY = 'operator_panel_layout_v1';
+            const gridRoot = document.getElementById('switchboardGrid');
+            if (!gridRoot) return;
+
+            const allCards = Array.from(gridRoot.querySelectorAll('article[id^="card-"]'));
+            if (!allCards.length) return;
+
+            let draggedCard = null;
+
+            function extOf(card) { return card.id.replace(/^card-/, ''); }
+
+            function loadLayout() {
+                try {
+                    const parsed = JSON.parse(localStorage.getItem(LAYOUT_KEY));
+                    return (parsed && typeof parsed === 'object' && parsed.groups && typeof parsed.groups === 'object') ? parsed : null;
+                } catch (_) { return null; }
+            }
+
+            function saveLayout() {
+                // Only the ORDER of cards within their own group is stored locally.
+                // Group membership is authoritative on the server (employee_extras.emp_group).
+                const groups = {};
+                gridRoot.querySelectorAll('section[data-group]').forEach(section => {
+                    groups[section.dataset.group] = Array.from(
+                        section.querySelectorAll('.extension-group-grid > article[id^="card-"]')
+                    )
+                        .filter(card => section.dataset.group === '___ungrouped___'
+                            ? !(card.dataset.empGroup || '')
+                            : card.dataset.empGroup === section.dataset.group)
+                        .map(extOf);
+                });
+                try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({ v: 1, groups })); } catch (_) {}
+            }
+
+            function updateGroupCounts() {
+                gridRoot.querySelectorAll('section[data-group]').forEach(section => {
+                    const count = section.querySelectorAll('.extension-group-grid > article[id^="card-"]').length;
+                    section.querySelectorAll('.employee-group-count').forEach(el => { el.textContent = count; });
+                });
+            }
+
+            const UNGROUPED_KEY = '___ungrouped___';
+
+            // Push cross-group moves to the server so the employee group in PBX
+            // extension configuration matches the Live Panel arrangement.
+            function syncGroupAssignments() {
+                const jobs = [];
+                gridRoot.querySelectorAll('article[id^="card-"]').forEach(card => {
+                    const section = card.closest('section[data-group]');
+                    if (!section) return;
+                    const target = section.dataset.group === UNGROUPED_KEY ? '' : section.dataset.group;
+                    if ((card.dataset.empGroup || '') === target) return;
+                    jobs.push({ card, target, previous: card.dataset.empGroup || '' });
+                });
+
+                if (!jobs.length) { saveLayout(); return; }
+
+                const ungroupedLabel = '<%= t.ungrouped %>';
+                let pending = jobs.length;
+                let failures = 0;
+
+                jobs.forEach(job => {
+                    // Optimistic UI — chip follows the drop immediately
+                    job.card.querySelector('.employee-group-chip').textContent = job.target || ungroupedLabel;
+                    fetch('/api/employee/group-assignment', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ extension: extOf(job.card), group: job.target })
+                    })
+                        .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                        .then(({ ok, data }) => {
+                            if (!ok || !data.success) throw new Error(data.error || 'Failed to assign group');
+                            job.card.dataset.empGroup = job.target;
+                        })
+                        .catch(() => {
+                            failures++;
+                            // Roll back optimistic label; the card returns to its server
+                            // group on next reload since layout storage keeps same-group order only.
+                            job.card.querySelector('.employee-group-chip').textContent = job.previous || ungroupedLabel;
+                        })
+                        .finally(() => {
+                            if (--pending === 0) {
+                                saveLayout();
+                                if (failures) {
+                                    alert((document.documentElement.dir === 'rtl'
+                                        ? 'تعذر حفظ المجموعة لـ '
+                                        : 'Could not save the group assignment for ')
+                                        + failures + (document.documentElement.dir === 'rtl' ? ' تحويلة.' : ' extension(s).'));
+                                }
+                            }
+                        });
+                });
+            }
+
+            function applySavedLayout() {
+                const saved = loadLayout();
+                if (!saved || !saved.groups) return;
+                const sections = Array.from(gridRoot.querySelectorAll('section[data-group]'));
+                if (!sections.length) return;
+                const grids = new Map(sections.map(s => [s.dataset.group, s.querySelector('.extension-group-grid')]));
+
+                const originalGridOf = new Map();
+                allCards.forEach(card => {
+                    const section = card.closest('section[data-group]');
+                    originalGridOf.set(card, section ? grids.get(section.dataset.group) : null);
+                });
+
+                allCards.forEach(card => card.remove());
+
+                const placed = new Set();
+                sections.forEach(section => {
+                    const grid = grids.get(section.dataset.group);
+                    if (!grid) return;
+                    // Layout storage only orders cards inside their own server-side group
+                    const wanted = saved.groups[section.dataset.group];
+                    if (Array.isArray(wanted)) {
+                        wanted.forEach(ext => {
+                            const card = allCards.find(c => c.id === 'card-' + String(ext));
+                            if (!card || placed.has(card)) return;
+                            const homeKey = (card.dataset.empGroup || '') === '' ? UNGROUPED_KEY : card.dataset.empGroup;
+                            if (homeKey !== section.dataset.group) return;
+                            grid.appendChild(card);
+                            placed.add(card);
+                        });
+                    }
+                });
+
+                allCards.forEach(card => {
+                    if (!placed.has(card)) {
+                        const grid = originalGridOf.get(card);
+                        if (grid) grid.appendChild(card);
+                    }
+                });
+            }
+
+            function setDraggable(card, enabled) {
+                if (enabled) card.setAttribute('draggable', 'true');
+                else card.removeAttribute('draggable');
+            }
+
+            // Only allow starting a drag from the card surface itself,
+            // never from interactive controls inside the card.
+            gridRoot.addEventListener('pointerdown', e => {
+                if (e.button !== 0 || !e.target.closest) return;
+                const card = e.target.closest('article[id^="card-"]');
+                if (!card || !gridRoot.contains(card)) return;
+                if (e.target.closest('select, option, button, input, textarea, a, label')) return;
+                setDraggable(card, true);
+            }, true);
+
+            document.addEventListener('pointerup', () => {
+                gridRoot.querySelectorAll('article[id^="card-"][draggable]').forEach(card => setDraggable(card, false));
+            }, true);
+
+            gridRoot.addEventListener('dragstart', e => {
+                const card = e.target.closest && e.target.closest('article[id^="card-"]');
+                if (!card) return;
+                draggedCard = card;
+                card.classList.add('dnd-dragging');
+                gridRoot.classList.add('dnd-active');
+                if (e.dataTransfer) {
+                    e.dataTransfer.effectAllowed = 'move';
+                    try { e.dataTransfer.setData('text/plain', extOf(card)); } catch (_) {}
+                }
+            });
+
+            function insertionBoundary(grid, x, y) {
+                let closest = null;
+                let closestDist = Infinity;
+                grid.querySelectorAll('article[id^="card-"]').forEach(card => {
+                    if (card === draggedCard) return;
+                    const box = card.getBoundingClientRect();
+                    const dx = x - (box.left + box.width / 2);
+                    const dy = y - (box.top + box.height / 2);
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < closestDist) { closest = { card, dx, dy }; closestDist = dist; }
+                });
+                if (!closest) return null;
+                const rtl = document.documentElement.dir === 'rtl';
+                const insertBefore = Math.abs(closest.dy) > Math.abs(closest.dx)
+                    ? closest.dy < 0
+                    : (rtl ? closest.dx > 0 : closest.dx < 0);
+                return insertBefore ? closest.card : closest.card.nextSibling;
+            }
+
+            // Insertion jobs are batched to one per animation frame and flip-suppressed:
+            // when the cursor rests near an unstable boundary (e.g. swapping with a
+            // corner card), consecutive dragover events would otherwise alternate the
+            // insertion point several times per second, which reads as visual flicker.
+            const FLIP_SUPPRESS_MS = 90;
+            const FLIP_TRAVEL_PX = 6;
+            let pendingDropJob = null;
+            let dropRafId = null;
+            let lastAppliedSlot = { key: '', at: 0, x: 0, y: 0 };
+
+            function applyDropJob() {
+                dropRafId = null;
+                const job = pendingDropJob;
+                pendingDropJob = null;
+                if (!job || !draggedCard) return;
+
+                const boundary = insertionBoundary(job.grid, job.x, job.y);
+                if (!draggedCard || boundary === draggedCard) return;
+
+                // Skip when the card already occupies the exact target slot (no-op move)
+                if (draggedCard.parentElement === job.grid &&
+                    (boundary === draggedCard.nextSibling || (!boundary && !draggedCard.nextSibling))) {
+                    lastAppliedSlot.at = performance.now();
+                    lastAppliedSlot.x = job.x;
+                    lastAppliedSlot.y = job.y;
+                    return;
+                }
+
+                const key = (boundary ? boundary.id : 'end') + ':' + Array.prototype.indexOf.call(job.grid.children, boundary);
+                const now = performance.now();
+                const traveled = Math.hypot(job.x - lastAppliedSlot.x, job.y - lastAppliedSlot.y);
+                const suppress = key !== lastAppliedSlot.key &&
+                    (now - lastAppliedSlot.at) < FLIP_SUPPRESS_MS &&
+                    traveled < FLIP_TRAVEL_PX;
+                if (suppress) {
+                    pendingDropJob = job;
+                    if (!dropRafId) dropRafId = requestAnimationFrame(applyDropJob);
+                    return;
+                }
+                lastAppliedSlot = { key, at: now, x: job.x, y: job.y };
+
+                if (boundary) job.grid.insertBefore(draggedCard, boundary);
+                else job.grid.appendChild(draggedCard);
+            }
+
+            gridRoot.querySelectorAll('.extension-group-grid').forEach(grid => {
+                grid.addEventListener('dragover', e => {
+                    if (!draggedCard) return;
+                    e.preventDefault();
+                    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+                    grid.classList.add('dnd-drop-hover');
+                    pendingDropJob = { grid, x: e.clientX, y: e.clientY };
+                    if (!dropRafId) dropRafId = requestAnimationFrame(applyDropJob);
+                });
+                grid.addEventListener('dragleave', e => {
+                    if (!grid.contains(e.relatedTarget)) grid.classList.remove('dnd-drop-hover');
+                });
+                grid.addEventListener('drop', e => {
+                    e.preventDefault();
+                    grid.classList.remove('dnd-drop-hover');
+                });
+            });
+
+            gridRoot.addEventListener('dragend', () => {
+                if (!draggedCard) return;
+                draggedCard.classList.remove('dnd-dragging');
+                setDraggable(draggedCard, false);
+                draggedCard = null;
+                if (dropRafId) { cancelAnimationFrame(dropRafId); dropRafId = null; }
+                pendingDropJob = null;
+                lastAppliedSlot = { key: '', at: 0, x: 0, y: 0 };
+                gridRoot.classList.remove('dnd-active');
+                gridRoot.querySelectorAll('.dnd-drop-hover').forEach(el => el.classList.remove('dnd-drop-hover'));
+                updateGroupCounts();
+                syncGroupAssignments();
+            });
+
+            applySavedLayout();
+            updateGroupCounts();
+        })();
+    </script>
+    <script>
         var isRtl = <%= isRtl %>;
 
         function openGroupManager() {
@@ -1444,7 +1760,7 @@ const isRtl = currentLang === 'ar';
 
                     item.innerHTML = `
                         <div class="flex items-center gap-3 min-w-0 flex-1">
-                            <input type="checkbox" ${isChecked ? 'checked' : ''} ${isAvailable ? '' : 'disabled'} onchange="toggleIntercomExtension('${emp.extension}', this.checked)" class="rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500 bg-zinc-800 disabled:opacity-40 cursor-pointer">
+                            <input type="checkbox" id="intercom_chk_${emp.extension}" name="intercom_extension" aria-label="Select extension ${emp.extension}" ${isChecked ? 'checked' : ''} ${isAvailable ? '' : 'disabled'} onchange="toggleIntercomExtension('${emp.extension}', this.checked)" class="rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500 bg-zinc-800 disabled:opacity-40 cursor-pointer">
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs font-bold truncate ${isAvailable ? 'text-white' : 'text-zinc-400'}">${emp.name}</span>

@@ -113,8 +113,8 @@
             <h2 class="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Add Group</h2>
             <form method="POST" action="/groups/add" class="flex flex-wrap items-end gap-3">
                 <div class="flex-1 min-w-[250px]">
-                    <label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Group Name</label>
-                    <input type="text" name="name" placeholder="e.g. Support Team" required>
+                    <label for="groupNameInput" class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Group Name</label>
+                    <input type="text" id="groupNameInput" name="name" autocomplete="off" placeholder="e.g. Support Team" required>
                 </div>
                 <button type="submit" class="btn-primary">Create Group</button>
             </form>

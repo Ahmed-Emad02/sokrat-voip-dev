@@ -2248,6 +2248,12 @@ app.use(async (req, res, next) => {
             }
             if (Object.keys(peerStatus).length) console.log('DB fallback found peers:', Object.keys(peerStatus));
         }
+        let employeeGroupNames = [];
+        try {
+            const [groupRows] = await pool.query(`SELECT name FROM ${tables.employeeGroups} ORDER BY name ASC`);
+            employeeGroupNames = groupRows.map(g => String(g.name)).filter(Boolean);
+        } catch (_) {}
+        res.locals.employeeGroups = employeeGroupNames;
         res.locals.roster = roster.map(emp => ({ 
             ...emp, 
             online: onlineMap[emp.extension] || false,
@@ -4504,18 +4510,13 @@ app.post('/api/hijack', requireAuth, requireActionPermission('operator-hijack'),
             return res.status(404).json({ success: false, error: `No active call found for extension ${target}` });
         }
 
-        const { resolveDeviceChannel } = require('./lib/call-control');
-        const supervisorChan = await resolveDeviceChannel(pool, supervisor);
-
-        if (amiClient) {
-            amiClient.write(`Action: Redirect\r\nChannel: ${call.channel}\r\nContext: from-internal\r\nExten: ${supervisor}\r\nPriority: 1\r\n\r\n`);
-            res.json({ success: true, message: `Redirecting call on extension ${target} to supervisor ${supervisor}.` });
-        } else {
-            exec(`${ASTERISK_BIN} -rx "channel redirect ${call.channel} from-internal,${supervisor},1"`, (err) => {
-                if (err) return res.status(500).json({ success: false, error: err.message });
-                res.json({ success: true, message: `Redirecting call on extension ${target} to supervisor ${supervisor}.` });
-            });
-        }
+        const { executeCallHijack } = require('./lib/call-control');
+        await executeCallHijack(pool, amiClient, ASTERISK_BIN, {
+            supervisorExt: supervisor,
+            targetExt: target,
+            activeCallsObj: activeCalls
+        });
+        res.json({ success: true, message: `Hijacking call on extension ${target} to supervisor ${supervisor}.` });
     } catch (error) {
         res.status(400).json({ success: false, error: error.message });
     }
@@ -5637,7 +5638,7 @@ app.post('/api/storage/gdrive/sync', requireAuth, async (req, res) => {
 // 6. POST /api/storage/purge-settings - Save retention days threshold
 app.post('/api/storage/purge-settings', requireAuth, async (req, res) => {
     try {
-        const days = parseInt(req.body.auto_purge_days, 10) || 90;
+        const days = Math.min(1095, Math.max(1, parseInt(req.body.auto_purge_days, 10) || 90));
         await pool.query(`
             INSERT INTO \`asterisk\`.\`storage_settings\` (id, auto_purge_days)
             VALUES (1, ?)
@@ -6788,6 +6789,54 @@ app.put('/api/employee/extras/:extension', requireAuth, async (req, res) => {
     }
 });
 
+// PUT /api/employee/group-assignment — Assign one extension to an employee group (Live Panel drag & drop).
+// Updates only emp_group; photo and title on the extras row are preserved.
+app.put('/api/employee/group-assignment', requireAuth, async (req, res) => {
+    try {
+        const extension = String(req.body.extension || '').trim();
+        const groupName = String(req.body.group || '').trim();
+        if (!/^\d+$/.test(extension)) {
+            return res.status(400).json({ success: false, error: 'Valid numeric extension is required' });
+        }
+        const [extensions] = await pool.query(
+            `SELECT extension FROM ${tables.users} WHERE extension = ?`,
+            [extension]
+        );
+        if (!extensions.length) {
+            return res.status(404).json({ success: false, error: 'Extension not found' });
+        }
+
+        let targetGroup = null;
+        if (groupName) {
+            const [groups] = await pool.query(
+                `SELECT name FROM ${tables.employeeGroups} WHERE name = ?`,
+                [groupName]
+            );
+            if (!groups.length) {
+                return res.status(400).json({ success: false, error: 'Employee group does not exist' });
+            }
+            targetGroup = groups[0].name;
+        }
+
+        if (targetGroup === null) {
+            await pool.query(
+                `UPDATE ${tables.employeeExtras} SET emp_group = NULL WHERE extension = ?`,
+                [extension]
+            );
+        } else {
+            await pool.query(`
+                INSERT INTO ${tables.employeeExtras} (extension, photo, title, emp_group)
+                VALUES (?, NULL, NULL, ?)
+                ON DUPLICATE KEY UPDATE emp_group = VALUES(emp_group)
+            `, [extension, targetGroup]);
+        }
+
+        res.json({ success: true, extension, emp_group: targetGroup });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // --- 2. RING GROUPS MANAGEMENT APIs ---
 
 // GET /api/config/ringgroups - List all Ring Groups
@@ -6970,7 +7019,7 @@ app.post('/api/config/queues', async (req, res) => {
     try {
         const {
             extension, descr, static_members, dynmembers, musicclass,
-            joinannounce_id, recording, maxwait, timeout, retry, dest,
+            joinannounce_id, recording, maxwait, timeout, retry, dest, failover, destcontinue,
             strategy, autofill, skip_busy
         } = req.body;
 
@@ -7000,14 +7049,14 @@ app.post('/api/config/queues', async (req, res) => {
         const maxWaitVal = String(maxwait !== undefined && maxwait !== null ? maxwait : '0');
         const agentTimeoutVal = String(timeout || '15');
         const retryVal = String(retry || '5');
-        const failDest = String(dest || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
+        const failDest = String(dest || failover || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
+        const continueDest = String(destcontinue || req.body.continue_dest || '').trim() || 'app-blackhole,hangup,1';
 
         await pool.query(`
             INSERT INTO \`asterisk\`.\`queues_config\`
             (extension, descr, grppre, alertinfo, joinannounce_id, ringing, agentannounce_id, maxwait, password, ivr_id, callback_id, dest, destcontinue, cwignore, qregex, queuewait, use_queue_context, togglehint, qnoanswer, callconfirm, callconfirm_id, monitor_type, monitor_heard, monitor_spoken)
             VALUES (?, ?, '', '', ?, 0, 0, ?, '', 'none', 'none', ?, ?, ?, '', 0, 0, 0, 0, 0, 0, ?, 0, 0)
-        `, [num, name, annId, maxWaitVal, failDest, failDest, cwignoreVal, monitorTypeVal]);
-
+        `, [num, name, annId, maxWaitVal, failDest, continueDest, cwignoreVal, monitorTypeVal]);
         const details = [
             [num, 'strategy', ringStrategy, 0],
             [num, 'autofill', isAutofill, 0],
@@ -7080,7 +7129,7 @@ app.put('/api/config/queues/:extension', async (req, res) => {
         const num = String(req.params.extension).trim();
         const {
             descr, static_members, dynmembers, musicclass,
-            joinannounce_id, recording, maxwait, timeout, retry, dest,
+            joinannounce_id, recording, maxwait, timeout, retry, dest, failover, destcontinue,
             strategy, autofill, skip_busy
         } = req.body;
 
@@ -7101,14 +7150,14 @@ app.put('/api/config/queues/:extension', async (req, res) => {
         const maxWaitVal = String(maxwait !== undefined && maxwait !== null ? maxwait : '0');
         const agentTimeoutVal = String(timeout || '15');
         const retryVal = String(retry || '5');
-        const failDest = String(dest || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
+        const failDest = String(dest || failover || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
+        const continueDest = String(destcontinue || req.body.continue_dest || '').trim() || 'app-blackhole,hangup,1';
 
         await pool.query(`
             UPDATE \`asterisk\`.\`queues_config\`
             SET descr = ?, joinannounce_id = ?, maxwait = ?, dest = ?, destcontinue = ?, cwignore = ?, monitor_type = ?
             WHERE extension = ?
-        `, [name, annId, maxWaitVal, failDest, failDest, cwignoreVal, monitorTypeVal, num]);
-
+        `, [name, annId, maxWaitVal, failDest, continueDest, cwignoreVal, monitorTypeVal, num]);
         await pool.query('DELETE FROM `asterisk`.`queues_details` WHERE id = ?', [num]);
 
         const details = [
@@ -8625,7 +8674,7 @@ app.get('/api/config/diagram', async (req, res) => {
 
         // Query Queues
         const [queuesRows] = await pool.query(`
-            SELECT extension, descr, maxwait, dest FROM \`asterisk\`.\`queues_config\`
+            SELECT extension, descr, maxwait, dest, destcontinue FROM \`asterisk\`.\`queues_config\`
             ORDER BY CAST(extension AS UNSIGNED) ASC
         `);
 

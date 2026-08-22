@@ -140,14 +140,14 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
             <!-- Softphone Extension Registration Control Bar -->
             <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
                 <div class="flex items-center gap-2">
-                    <label class="text-xs font-bold text-[var(--text-secondary)] uppercase whitespace-nowrap"><%= isRtl ? 'التحويلة:' : 'Extension:' %></label>
+                    <label class="text-xs font-bold text-[var(--text-secondary)] uppercase whitespace-nowrap" for="spExtSelect"><%= isRtl ? 'التحويلة:' : 'Extension:' %></label>
                     <select id="spExtSelect" class="soft-input font-mono font-bold text-xs min-w-[180px]">
                         <option value=""><%= isRtl ? 'جاري التحميل...' : 'Loading Extensions...' %></option>
                     </select>
                 </div>
                 <div class="flex items-center gap-2">
-                    <label class="text-xs font-bold text-[var(--text-secondary)] uppercase whitespace-nowrap"><%= isRtl ? 'كلمة السر:' : 'Password:' %></label>
-                    <input type="password" id="spPassword" placeholder="<%= isRtl ? 'أدخل كلمة السر' : 'Enter password' %>" class="soft-input font-mono text-xs w-[140px]">
+                    <label class="text-xs font-bold text-[var(--text-secondary)] uppercase whitespace-nowrap" for="spPassword"><%= isRtl ? 'كلمة السر:' : 'Password:' %></label>
+                    <input type="password" id="spPassword" name="password" autocomplete="current-password" placeholder="<%= isRtl ? 'أدخل كلمة السر' : 'Enter password' %>" class="soft-input font-mono text-xs w-[140px]">
                 </div>
 
                 <button type="button" id="spRegBtn" onclick="toggleRegistration()" class="px-5 py-2 rounded-xl text-xs font-extrabold text-white bg-purple-600 hover:bg-purple-700 transition cursor-pointer">
@@ -341,15 +341,15 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
 
             <form onsubmit="saveContactToAddressBook(event)" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'الاسم الأول' : 'First Name' %></label>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="contactFirstName"><%= isRtl ? 'الاسم الأول' : 'First Name' %></label>
                     <input type="text" id="contactFirstName" required class="soft-input w-full">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم العائلة' : 'Last Name' %></label>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="contactLastName"><%= isRtl ? 'اسم العائلة' : 'Last Name' %></label>
                     <input type="text" id="contactLastName" class="soft-input w-full">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'رقم الهاتف' : 'Phone Number' %></label>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="contactPhone"><%= isRtl ? 'رقم الهاتف' : 'Phone Number' %></label>
                     <input type="text" id="contactPhone" required placeholder="01xxxxxxxxx" class="soft-input w-full font-mono">
                 </div>
 
@@ -377,7 +377,7 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
 
             <div class="flex flex-col gap-4">
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'الرقم الهدف' : 'Target Number' %></label>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="xferTargetInput"><%= isRtl ? 'الرقم الهدف' : 'Target Number' %></label>
                     <input type="text" id="xferTargetInput" placeholder="<%= isRtl ? 'رقم التحويلة أو الهاتف' : 'Extension or phone number' %>" class="soft-input w-full font-mono">
                 </div>
 
@@ -1108,7 +1108,7 @@ const isRtl = (typeof currentLang !== 'undefined' && currentLang === 'ar');
                         /* Content: dialpad (idle) or call controls (active) */
                         + '<div id="pipIdle" style="flex:1;display:flex;flex-direction:column;gap:8px;">'
                         + '<div style="display:flex;gap:6px;">'
-                        + '<input id="pipNum" type="tel" placeholder="Number" style="flex:1;padding:8px 10px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f1f5f9;font-size:14px;font-family:monospace;font-weight:bold;outline:none;">'
+                        + '<input id="pipNum" type="tel" name="pip_number" autocomplete="tel" placeholder="Number" style="flex:1;padding:8px 10px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f1f5f9;font-size:14px;font-family:monospace;font-weight:bold;outline:none;">'
                         + '<button id="pipCallBtn" style="padding:8px 16px;border-radius:10px;border:none;background:#059669;color:white;font-weight:bold;font-size:12px;cursor:pointer;">Call</button>'
                         + '</div>'
                         + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;" id="pipDialpad">'

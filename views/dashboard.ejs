@@ -158,12 +158,12 @@ const isRtl = currentLang === 'ar';
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <div class="flex flex-wrap items-end gap-2.5">
                 <div class="flex-1 min-w-[180px]">
-                    <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.startTime %></label>
-                    <input type="datetime-local" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                    <label for="dashStartDate" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.startTime %></label>
+                    <input type="datetime-local" id="dashStartDate" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                 </div>
                 <div class="flex-1 min-w-[180px]">
-                    <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.endTime %></label>
-                    <input type="datetime-local" name="endDate" value="<%= moment(filters.endDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                    <label for="dashEndDate" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.endTime %></label>
+                    <input type="datetime-local" id="dashEndDate" name="endDate" value="<%= moment(filters.endDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                 </div>
                 <div class="flex items-end gap-2">
                     <a href="/?lang=<%= currentLang %>" class="text-xs text-zinc-400 hover:text-white transition font-mono whitespace-nowrap"><%= isRtl ? 'إعادة ضبط' : 'Reset' %></a>
@@ -296,7 +296,7 @@ const isRtl = currentLang === 'ar';
                     <div class="flex items-center gap-2">
                         <div class="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
                             <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 002 2h1.5a2.5 2.5 0 002.5-2.5V8.5d"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 002 2h1.5a2.5 2.5 0 002.5-2.5V8.5a5.5 5.5 0 00-5.5-5.5h-.055M12 3a9 9 0 100 18 9 9 0 000-18z"/>
                             </svg>
                         </div>
                         <p class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider"><%= t.externalCalls %></p>
@@ -908,12 +908,24 @@ const isRtl = currentLang === 'ar';
                 allowInput: true,
                 scrollInputIntoView: false,
                 appendTo: document.body,
-                monthSelectorType: "dropdown"
+                monthSelectorType: "dropdown",
+                onReady: function(selectedDates, dateStr, instance) {
+                    if (instance.altInput) {
+                        var origId = instance.input.id || (instance.input.name ? instance.input.name + 'Input' : 'datePicker_' + Math.random().toString(36).substring(2, 7));
+                        if (origId.endsWith('_raw')) origId = origId.replace(/_raw$/, '');
+                        instance.input.id = origId + '_raw';
+                        instance.altInput.id = origId;
+                        instance.altInput.name = (instance.input.name || origId) + '_display';
+                        instance.altInput.setAttribute('autocomplete', 'off');
+                        var ariaLabel = instance.input.getAttribute('aria-label') || instance.input.name || origId;
+                        instance.altInput.setAttribute('aria-label', ariaLabel);
+                    }
+                }
             });
         });
     </script>
     <script>
-        // Fix Flatpickr month dropdown: force <select> visible, handle click for showPicker()
+        // Fix Flatpickr month dropdown: force select dropdown visible, handle click for showPicker()
         (function() {
             function forceMonthSelect() {
                 document.querySelectorAll('.flatpickr-current-month').forEach(function(el) {

@@ -2383,11 +2383,11 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
         </div>
         <form id="recordingForm" onsubmit="return submitRecording(event)" class="p-5 space-y-4">
             <div>
-                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= sbT.recName %></label>
-                <input type="text" id="recordingName" name="name" required placeholder="<%= sbT.recPlaceholder %>" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">
+                <label for="recordingName" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= sbT.recName %></label>
+                <input type="text" id="recordingName" name="name" autocomplete="off" required placeholder="<%= sbT.recPlaceholder %>" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">
             </div>
             <div>
-                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= sbT.recFile %></label>
+                <label for="recordingFile" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= sbT.recFile %></label>
                 <div class="relative">
                     <input type="file" id="recordingFile" name="file" accept="audio/*,.mpeg,.mpg" required class="w-full text-xs text-[var(--text-secondary)] file:mr-3 rtl:file:mr-0 rtl:file:ml-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-[var(--border-primary)] file:bg-[var(--bg-card)] file:text-xs file:font-bold file:text-[var(--text-primary)] hover:file:bg-[var(--bg-hover)] file:cursor-pointer file:transition cursor-pointer">
                 </div>
@@ -2424,13 +2424,13 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
         </div>
         <form id="smtpSettingsForm" onsubmit="return saveSmtpSettings(event)" class="p-5 space-y-4">
             <div>
-                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Email Address</label>
-                <input type="email" id="smtpEmail" name="email" required placeholder="smtp@gmail.com" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">
+                <label for="smtpEmail" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Email Address</label>
+                <input type="email" id="smtpEmail" name="email" autocomplete="email" required placeholder="smtp@gmail.com" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">
                 <p class="text-[10px] text-[var(--text-muted)] mt-1">Gmail or any SMTP email address</p>
             </div>
             <div>
-                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">App Password</label>
-                <input type="password" id="smtpPassword" name="password" placeholder="App Password" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">
+                <label for="smtpPassword" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">App Password</label>
+                <input type="password" id="smtpPassword" name="password" autocomplete="current-password" placeholder="App Password" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">
                 <p class="text-[10px] text-[var(--text-muted)] mt-1">Leave blank to keep existing password</p>
             </div>
             <div id="smtpStatusMsg" class="text-xs hidden text-center"></div>
@@ -2729,7 +2729,7 @@ function renderTimeModal(data) {
         '</div>' +
 
         '<div>' +
-            '<label class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= sbT.timezone %></label>' +
+            '<label for="tzSearch" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= sbT.timezone %></label>' +
             '<div class="relative">' +
                 '<input type="text" id="tzSearch" oninput="filterTimezones()" placeholder="<%= sbT.searchTimezone %>" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition mb-1.5">' +
                 '<select id="timezoneSelect" size="6" class="w-full px-2 py-1 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] focus:outline-none focus:border-[var(--accent-color)] transition" style="scrollbar-width:thin">' + tzOptions + '</select>' +
@@ -2751,11 +2751,11 @@ function renderTimeModal(data) {
             '<span class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider"><%= sbT.setManually %></span>' +
             '<div class="flex gap-3">' +
                 '<div class="flex-1">' +
-                    '<label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1"><%= sbT.dateLabel %></label>' +
+                    '<label for="manualDate" class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1"><%= sbT.dateLabel %></label>' +
                     '<input type="date" id="manualDate" value="' + dateStr + '" ' + manualDisabled + ' class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] focus:outline-none focus:border-[var(--accent-color)] transition">' +
                 '</div>' +
                 '<div class="flex-1">' +
-                    '<label class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1"><%= sbT.timeLabel %></label>' +
+                    '<label for="manualTime" class="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1"><%= sbT.timeLabel %></label>' +
                     '<input type="time" id="manualTime" value="' + timeStr + '" ' + manualDisabled + ' class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] focus:outline-none focus:border-[var(--accent-color)] transition">' +
                 '</div>' +
             '</div>' +
@@ -3233,8 +3233,12 @@ function enhanceSelectElements() {
 
             searchInput = document.createElement('input');
             searchInput.type = 'text';
+            searchInput.id = `${select.id || 'select'}_search_${Math.random().toString(36).substring(2, 7)}`;
+            searchInput.name = `${select.name || select.id || 'custom'}_search`;
+            searchInput.autocomplete = 'off';
             const isArabic = document.documentElement.dir === 'rtl' || (document.documentElement.lang || '').startsWith('ar');
             searchInput.placeholder = isArabic ? 'بحث...' : 'Search...';
+            searchInput.setAttribute('aria-label', isArabic ? 'بحث في الخيارات' : 'Search options');
             searchInput.className = 'custom-select-search config-dropdown-search';
             searchInput.addEventListener('click', event => event.stopPropagation());
             searchInput.addEventListener('input', event => buildOptions(event.target.value));
@@ -3397,7 +3401,7 @@ window.addEventListener('resize', () => {
         /* Dialpad */
         + '<div id="spwDialpad" class="px-3 pb-3">'
         + '<div class="flex gap-2 mb-2">'
-        + '<input id="spwDtmf" type="tel" placeholder="Enter number" class="flex-1 px-3 py-2 rounded-xl border text-sm font-mono" style="background:var(--bg-primary,#0f172a);border-color:var(--border-primary,#334155);color:var(--text-primary,#f1f5f9)" onkeydown="if(event.key===\'Enter\')spwCmd(\'dial\')">'
+        + '<input id="spwDtmf" type="tel" autocomplete="tel" placeholder="Enter number" class="flex-1 px-3 py-2 rounded-xl border text-sm font-mono" style="background:var(--bg-primary,#0f172a);border-color:var(--border-primary,#334155);color:var(--text-primary,#f1f5f9)" onkeydown="if(event.key===\'Enter\')spwCmd(\'dial\')">'
         + '<button id="spwCallBtn" onclick="spwCmd(\'dial\')" class="px-4 py-2 rounded-xl font-extrabold text-white text-xs" style="background:#059669">Call</button>'
         + '</div>'
         + '<div class="grid grid-cols-3 gap-1.5">'

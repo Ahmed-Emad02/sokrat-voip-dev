@@ -1203,7 +1203,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                         <form id="ussd-execution-form" class="flex flex-col sm:flex-row items-end gap-2.5">
                             <div class="flex-1 w-full sm:w-auto">
-                                <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1">
+                                <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="ussd-target-dongle">
                                     <%= isRtl ? 'الشريحة المستهدفة *' : 'Target Dongle *' %>
                                 </label>
                                 <select id="ussd-target-dongle" class="config-input w-full py-1.5 text-xs font-semibold cursor-pointer" required>
@@ -1217,7 +1217,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             </div>
                             
                             <div class="flex-1 w-full sm:w-auto">
-                                <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1">
+                                <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="clear-logs-btn">
                                     <%= isRtl ? 'رمز الـ USSD *' : 'USSD Code *' %>
                                 </label>
                                 <div class="flex items-center bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 focus-within:border-indigo-500 transition-colors">
