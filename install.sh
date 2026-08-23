@@ -500,6 +500,34 @@ same => n,Answer()
 same => n,AGI(hijack_call.py,${EXTEN:3})
 same => n,Hangup()
 
+; === Solution C: Real-Time AI Noise Suppression Live Echo Tests ===
+; *88 = RNNoise AI Neural Filter + VAD Gate (100% Dead Silence on Pauses)
+exten => *88,1,NoOp(--- RNNoise AI Noise Suppression + VAD Gate Live Echo Test ---)
+same => n,Answer()
+same => n,Wait(0.5)
+same => n,Set(RNNOISE(both,gate=on)=on)
+same => n,Playback(beep)
+same => n,Echo()
+same => n,Hangup()
+
+; *87 = RNNoise AI Neural Filter Continuous (Without VAD Hard Gate)
+exten => *87,1,NoOp(--- RNNoise AI Noise Suppression Continuous Echo Test ---)
+same => n,Answer()
+same => n,Wait(0.5)
+same => n,Set(RNNOISE(both,gate=off)=on)
+same => n,Playback(beep)
+same => n,Echo()
+same => n,Hangup()
+
+; *89 = Raw Unfiltered Baseline (Original Audio)
+exten => *89,1,NoOp(--- Raw Audio Echo Test (Unfiltered A/B Comparison) ---)
+same => n,Answer()
+same => n,Wait(0.5)
+same => n,Set(RNNOISE(both)=off)
+same => n,Playback(beep)
+same => n,Echo()
+same => n,Hangup()
+
 CHANSPY
 
 # Append Intercom dialplan contexts
@@ -608,7 +636,18 @@ echo "  Stripped."
 append_context '[macro-dialout-trunk-predial-hook]' '[macro-dialout-trunk-predial-hook]' << 'MACRO'
 
 [macro-dialout-trunk-predial-hook]
-exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid) ---)
+exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)
+same => n,Set(CALLER_DENOISE=${DB(AMPUSER/${REALCALLERIDNUM}/ai_denoise)})
+same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=${DB(AMPUSER/${CALLERID(num)}/ai_denoise)}))
+same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=both))
+same => n,Set(CALLER_VAD=${DB(AMPUSER/${REALCALLERIDNUM}/vad_gate)})
+same => n,ExecIf($["${CALLER_VAD}" = ""]?Set(CALLER_VAD=${DB(AMPUSER/${CALLERID(num)}/vad_gate)}))
+same => n,Set(U_THRESH=${DB(AUDIO_GLOBALS/vad_threshold)})
+same => n,ExecIf($["${U_THRESH}" = ""]?Set(U_THRESH=0.20))
+same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
+same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
+same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG}))
+same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
 same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,Set(RAW_TARGET=${CUT(OUT_${DIAL_TRUNK},/,2)})
 same => n,Set(DONGLE_TARGET=${DB(DONGLE_DEVICE_MAP/${RAW_TARGET})})
@@ -635,11 +674,76 @@ echo "  Stripped."
 append_context '[macro-dialout-one-predial-hook]' '[macro-dialout-one-predial-hook]' << 'ONEHOOK'
 
 [macro-dialout-one-predial-hook]
-exten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer for Internal/Extension Call ---)
+exten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer & RNNoise Filter for Outbound Extension Leg ---)
+same => n,Set(CALLER_DENOISE=${DB(AMPUSER/${CALLERID(num)}/ai_denoise)})
+same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=both))
+same => n,Set(CALLER_VAD=${DB(AMPUSER/${CALLERID(num)}/vad_gate)})
+same => n,Set(U_THRESH=${DB(AUDIO_GLOBALS/vad_threshold)})
+same => n,ExecIf($["${U_THRESH}" = ""]?Set(U_THRESH=0.20))
+same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
+same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
+same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG}))
+same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
 same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,MacroExit()
 
 ONEHOOK
+
+# Strip old [func-apply-sipheaders-custom] before appending
+echo "  Stripping old [func-apply-sipheaders-custom]..."
+python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\[func-apply-sipheaders-custom\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
+echo "  Stripped."
+
+# Append func-apply-sipheaders-custom
+append_context '[func-apply-sipheaders-custom]' '[func-apply-sipheaders-custom]' << 'SIPHEADER'
+
+[func-apply-sipheaders-custom]
+exten => s,1,NoOp(--- SIP Client Incoming Leg & AI Denoise Hook ---)
+same => n,Set(CALLEE_EXT=${DEXTEN})
+same => n,ExecIf($["${CALLEE_EXT}" = ""]?Set(CALLEE_EXT=${EXTTOCALL}))
+same => n,ExecIf($["${CALLEE_EXT}" = ""]?Set(CALLEE_EXT=${CUT(CUT(CHANNEL,-,1),/,2)}))
+same => n,Set(CALLEE_DENOISE=${DB(AMPUSER/${CALLEE_EXT}/ai_denoise)})
+same => n,ExecIf($["${CALLEE_DENOISE}" = ""]?Set(CALLEE_EXT=${DB(DEVICE/${CALLEE_EXT}/user)}))
+same => n,ExecIf($["${CALLEE_DENOISE}" = ""]?Set(CALLEE_DENOISE=${DB(AMPUSER/${CALLEE_EXT}/ai_denoise)}))
+same => n,ExecIf($["${CALLEE_DENOISE}" = ""]?Set(CALLEE_DENOISE=both))
+same => n,Set(CALLEE_VAD=${DB(AMPUSER/${CALLEE_EXT}/vad_gate)})
+same => n,Set(U_THRESH=${DB(AUDIO_GLOBALS/vad_threshold)})
+same => n,ExecIf($["${U_THRESH}" = ""]?Set(U_THRESH=0.20))
+same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
+same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
+same => n,ExecIf($["${CALLEE_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG}))
+same => n,ExecIf($["${CALLEE_DENOISE}" != "off"]?Set(RNNOISE(${CALLEE_DENOISE},${VAD_OPT})=on))
+; Rule 1: Do not mask internal extension-to-extension calls (e.g. 101 calling 102)
+same => n,GotoIf($[${LEN(${CALLERID(num)})} <= 4]?done)
+same => n,GotoIf($["${DB_EXISTS(AMPUSER/${CALLERID(num)}/cidname)}" = "1"]?done)
+
+; Rule 2: Skip masking if caller ID is anonymous, unavailable, unknown, or restricted
+same => n,GotoIf($["${CALLERID(num)}" = "" | "${CALLERID(num)}" = "anonymous" | "${CALLERID(num)}" = "unknown" | "${CALLERID(num)}" = "s" | "${CALLERID(num)}" = "unavailable" | "${CALLERID(num)}" = "restricted"]?done)
+
+; Rule 3: Skip if caller ID is too short to mask (needs at least 6 digits)
+same => n,Set(RAW_NUM=${CALLERID(num)})
+same => n,Set(NUM_LEN=${LEN(${RAW_NUM})})
+same => n,GotoIf($[${NUM_LEN} < 6]?done)
+
+; Rule 4: Check if destination extension has unmask_cid enabled in AstDB
+same => n,Set(TARGET_EXT=${DEXTEN})
+same => n,ExecIf($["${TARGET_EXT}" = ""]?Set(TARGET_EXT=${EXTTOCALL}))
+same => n,ExecIf($["${TARGET_EXT}" = ""]?Set(TARGET_EXT=${CUT(CUT(CHANNEL,-,1),/,2)}))
+same => n,GotoIf($["${TARGET_EXT}" != "" & "${DB(AMPUSER/${TARGET_EXT}/unmask_cid)}" = "1"]?done)
+; Rule 5: Extract prefix (first 3 chars) and suffix (last 2 chars)
+same => n,Set(CID_PREFIX=${RAW_NUM:0:3})
+same => n,Set(CID_SUFFIX=${RAW_NUM:-2})
+
+; Rule 6: Build masked representation (e.g. 010*********23)
+same => n,Set(MASKED_NUM=${CID_PREFIX}*********${CID_SUFFIX})
+
+; Rule 7: Apply to CallerID number and name for SIP INVITE
+same => n,NoOp(Masking CallerID for SIP Client Display: ${RAW_NUM} -> ${MASKED_NUM})
+same => n,Set(CALLERID(num)=${MASKED_NUM})
+same => n,ExecIf($["${CALLERID(name)}" != "" & "${CALLERID(name)}" != "${RAW_NUM}"]?Set(CALLERID(name)=${CALLERID(name)} [${MASKED_NUM}]):Set(CALLERID(name)=${MASKED_NUM}))
+
+same => n(done),Return()
+SIPHEADER
 
 asterisk -rx "dialplan reload" 2>/dev/null || true
 echo "  Dialplan reloaded"
@@ -676,8 +780,34 @@ echo "  [10a] Installing build dependencies..."
 yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom
 yum -y install asterisk18-devel
 
-# 10b — Compile and Install chan_dongle
-echo "  [10b] Compiling chan_dongle..."
+# 10b — Compile and Install librnnoise & func_rnnoise.so
+echo "  [10b] Compiling librnnoise and func_rnnoise.so..."
+if [ ! -f /usr/lib64/librnnoise.so ] || [ ! -f /usr/include/rnnoise.h ]; then
+    cd /tmp
+    rm -rf rnnoise_build
+    mkdir -p rnnoise_build && cd rnnoise_build
+    git clone https://github.com/xiph/rnnoise.git
+    cd rnnoise
+    libtoolize --copy --force && autoreconf -fi
+    ./configure --prefix=/usr --libdir=/usr/lib64 CFLAGS="-O3 -mavx2 -mfma"
+    make -j$(nproc)
+    make install
+    ldconfig
+    echo "  librnnoise compiled and installed"
+else
+    echo "  librnnoise already installed"
+fi
+
+if [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ]; then
+    gcc -shared -fPIC -O3 -mavx2 -mfma -I/usr/include -o /usr/lib64/asterisk/modules/func_rnnoise.so \
+        "$INSTALL_DIR/asterisk/func_rnnoise.c" -lrnnoise -lm -lpthread
+    chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so
+    asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
+    echo "  func_rnnoise.so compiled and loaded into Asterisk"
+fi
+
+# 10c — Compile and Install chan_dongle
+echo "  [10c] Compiling chan_dongle..."
 if [ ! -f /usr/lib64/asterisk/modules/chan_dongle.so ] && [ ! -f /usr/lib/asterisk/modules/chan_dongle.so ]; then
     cd /usr/src
     if [ ! -d asterisk-chan-dongle ]; then
@@ -694,8 +824,8 @@ else
     echo "  chan_dongle already installed"
 fi
 
-# 10c — Configure and apply dongle.conf
-echo "  [10c] Configuring and applying dongle.conf..."
+# 10d — Configure and apply dongle.conf
+echo "  [10d] Configuring and applying dongle.conf..."
 
 echo "  Configuring $NUM_DONGLES dongle(s)..."
 
@@ -712,6 +842,8 @@ for ((i=0; i<NUM_DONGLES; i++)); do
     cat >> "$TEMP_CONF" << EOF
 
 [dongle$i]
+txgain=3
+rxgain=3
 audio=/dev/ttyUSB$audio_port
 data=/dev/ttyUSB$data_port
 imei=
@@ -724,8 +856,8 @@ cp "$TEMP_CONF" /etc/asterisk/dongle.conf
 rm -f "$TEMP_CONF"
 echo "  dongle.conf successfully generated with $NUM_DONGLES dongle(s) at /etc/asterisk/dongle.conf"
 
-# 10c2 — Ensure /var/log/asterisk/full captures VERBOSE messages (required for SMS/USSD parsing)
-echo "  [10c2] Enabling verbose logging in Asterisk logger.conf..."
+# 10d2 — Ensure /var/log/asterisk/full captures VERBOSE messages (required for SMS/USSD parsing)
+echo "  [10d2] Enabling verbose logging in Asterisk logger.conf..."
 if grep -q '^full\s*=>' /etc/asterisk/logger.conf; then
     if ! grep -q 'verbose' /etc/asterisk/logger.conf; then
         sed -i 's/^\(full\s*=>.*\)/\1,verbose/' /etc/asterisk/logger.conf
@@ -735,8 +867,8 @@ if grep -q '^full\s*=>' /etc/asterisk/logger.conf; then
     fi
 fi
 
-# 10d — Permissions, udev & USB Autosuspend Disable
-echo "  [10d] Configuring permissions, udev, and disabling USB autosuspend..."
+# 10e — Permissions, udev & USB Autosuspend Disable
+echo "  [10e] Configuring permissions, udev, and disabling USB autosuspend..."
 usermod -a -G lock,dialout asterisk
 chgrp asterisk /run/lock 2>/dev/null || true
 chmod 775 /run/lock 2>/dev/null || true
@@ -794,16 +926,16 @@ systemctl disable dongle-auto-reload.service 2>/dev/null || true
 rm -f /etc/systemd/system/dongle-auto-reload.service
 echo "  Old dongle-auto-reload.service removed"
 
-# 10e — Reload and restart
-echo "  [10e] Reloading rules and restarting Asterisk..."
+# 10f — Reload and restart
+echo "  [10f] Reloading rules and restarting Asterisk..."
 systemctl daemon-reload
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger 2>/dev/null || true
 systemctl restart asterisk
 echo "  Asterisk restarted"
 
-# 10f — Initialize sim_mappings.json
-echo "  [10f] Initializing sim_mappings.json..."
+# 10g — Initialize sim_mappings.json
+echo "  [10g] Initializing sim_mappings.json..."
 if [ ! -f "$INSTALL_DIR/sim_mappings.json" ]; then
     echo '{}' > "$INSTALL_DIR/sim_mappings.json"
     chmod 644 "$INSTALL_DIR/sim_mappings.json"
@@ -811,6 +943,22 @@ if [ ! -f "$INSTALL_DIR/sim_mappings.json" ]; then
 else
     echo "  sim_mappings.json already exists"
 fi
+
+# 10h — Initialize AstDB Noise & Audio Defaults
+echo "  [10h] Initializing AstDB Noise and Audio defaults..."
+asterisk -rx "database put AUDIO_GLOBALS vad_threshold 0.20" 2>/dev/null || true
+asterisk -rx "database put AUDIO_GLOBALS vad_hangover 250" 2>/dev/null || true
+for ext in $(asterisk -rx "database show AMPUSER" 2>/dev/null | grep "/cidname" | awk -F'/' '{print $2}' | sort -u); do
+    curr_denoise=$(asterisk -rx "database get AMPUSER $ext/ai_denoise" 2>/dev/null | grep "Value:" | awk '{print $2}')
+    if [ -z "$curr_denoise" ]; then
+        asterisk -rx "database put AMPUSER $ext/ai_denoise both" 2>/dev/null || true
+    fi
+    curr_vad=$(asterisk -rx "database get AMPUSER $ext/vad_gate" 2>/dev/null | grep "Value:" | awk '{print $2}')
+    if [ -z "$curr_vad" ]; then
+        asterisk -rx "database put AMPUSER $ext/vad_gate 1" 2>/dev/null || true
+    fi
+done
+echo "  AstDB Noise and Audio defaults initialized"
 
 # ──────────────────────────────────────────────
 # Step 11 — Configure Apache Reverse Proxy

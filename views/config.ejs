@@ -626,7 +626,6 @@ function isTabAllowed(tabName) {
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إدارة التحويلات (SIP Extensions)' : 'SIP Extensions' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'إنشاء وتعديل واستعراض التحويلات المسجلة في المقسم' : 'Manage extensions directly in Issabel/FreePBX MySQL database' %></p>
                     </div>
                     <button type="button" onclick="openExtensionModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
@@ -665,7 +664,6 @@ function isTabAllowed(tabName) {
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'مجموعات الاتصال (Ring Groups)' : 'Ring Groups' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'تحديد مجموعات الاتصال وإجراءات توزيع المكالمات' : 'Create and configure ring groups for incoming call distribution' %></p>
                     </div>
                     <button type="button" onclick="openRingGroupModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
@@ -705,7 +703,6 @@ function isTabAllowed(tabName) {
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'طوابير الانتظار (Queues)' : 'Queues' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'إدارة وتحديد طوابير الانتظار والوكلاء الثابتين والديناميكيين' : 'Create and manage call queues, static and dynamic agents' %></p>
                     </div>
                     <button type="button" onclick="openQueueModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
@@ -745,7 +742,6 @@ function isTabAllowed(tabName) {
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'الرد الآلي (IVR Menu)' : 'IVR Menus (Interactive Voice Response)' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'إنشاء وتعديل قوائم الرد الآلي وتوجيه خيارات المفاتيح' : 'Create and manage IVR menus and keypress routing options' %></p>
                     </div>
                     <button type="button" onclick="openIvrModal()" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-2 cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
@@ -819,7 +815,6 @@ function isTabAllowed(tabName) {
                 <div class="config-card p-6 lg:col-span-2">
                     <div class="mb-5 pb-3 border-b border-[var(--border-primary)]">
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التسجيلات الصوتية المسجلة في المقسم' : 'System Recordings List' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'قائمة التسجيلات المستخدمة في مجموعات الاتصال والمسارات الواردة' : 'List of custom sound recordings available for Ring Groups & Inbound Routes' %></p>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -850,7 +845,6 @@ function isTabAllowed(tabName) {
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'خطوط الربط (Trunks)' : 'Trunks' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'إعداد خطوط الربط ومسارات الاتصال المخصصة' : 'Manage custom trunks and dial strings' %></p>
                     </div>
                     <button type="button" onclick="openTrunkModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
@@ -886,7 +880,6 @@ function isTabAllowed(tabName) {
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'المسارات الواردة (Inbound Routes)' : 'Inbound Routes' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'توجيه المكالمات الواردة حسب رقم DID أو رقم المتصل' : 'Route incoming DID/CID calls to destinations' %></p>
                     </div>
                     <button type="button" id="openInboundRouteBtn" onclick="openInboundModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
@@ -1000,7 +993,6 @@ function isTabAllowed(tabName) {
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'المسارات الصادرة (Outbound Routes)' : 'Outbound Routes' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'قواعد توجيه المكالمات الصادرة عبر خطوط الربط' : 'Configure dial pattern matching and trunk sequencing for dialout' %></p>
                     </div>
                     <button type="button" onclick="openOutboundModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
@@ -1035,7 +1027,6 @@ function isTabAllowed(tabName) {
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'رسائل البريد الصوتي (Voicemail Greetings)' : 'Voicemail Greetings' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'تخصيص رسالة ترحيب البريد الصوتي للتحويلات' : 'Configure custom voicemail greetings (.gsm) for extensions' %></p>
                     </div>
                 </div>
 
@@ -1092,68 +1083,99 @@ function isTabAllowed(tabName) {
                     border-color: #cbd5e1 !important;
                 }
                 .light-theme #grid-pattern circle {
-                    fill: #94a3b8 !important;
-                    fill-opacity: 0.35 !important;
+                    fill: #64748b !important;
+                    fill-opacity: 0.45 !important;
                 }
-                
-                /* Cards styling in Light Theme */
+
+                /* Cards styling in Light Theme — solid surface, stronger separation */
                 .light-theme .diagram-card {
-                    background-color: rgba(255, 255, 255, 0.95) !important;
-                    border-color: #cbd5e1 !important;
+                    background-color: #ffffff !important;
+                    border-color: #94a3b8 !important;
+                    border-width: 1.5px !important;
+                    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.12) !important;
                 }
                 .light-theme .diagram-card:hover {
+                    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.20) !important;
                 }
-                
+                /* Per-type accent borders so node categories stay readable */
+                .light-theme .diagram-card[data-node-type="inbound"]       { border-color: #059669 !important; }
+                .light-theme .diagram-card[data-node-type="timecondition"] { border-color: #ca8a04 !important; }
+                .light-theme .diagram-card[data-node-type="ivr"]           { border-color: #2563eb !important; }
+                .light-theme .diagram-card[data-node-type="ringgroup"]     { border-color: #9333ea !important; }
+                .light-theme .diagram-card[data-node-type="queue"]         { border-color: #d97706 !important; }
+                .light-theme .diagram-card[data-node-type="extension"]     { border-color: #dc2626 !important; }
+                .light-theme .diagram-card[data-node-type="outbound"]      { border-color: #ea580c !important; }
+                .light-theme .diagram-card[data-node-type="trunk"]         { border-color: #0891b2 !important; }
+
                 /* Text colors overrides inside card */
                 .light-theme .diagram-card span.text-white {
                     color: #0f172a !important; /* Slate-900 */
+                    font-weight: 800 !important;
                 }
                 .light-theme .diagram-card .text-gray-400,
                 .light-theme .diagram-card div.text-\[10px\] {
-                    color: #334155 !important; /* Slate-700 (Subtitle) */
+                    color: #1e293b !important; /* Slate-800 (Subtitle) */
+                    font-weight: 600 !important;
                 }
-                
+
                 /* Details box overrides in Light Theme */
                 .light-theme .diagram-card div.font-mono {
-                    background-color: #f1f5f9 !important; /* Slate-100 */
-                    border-color: #cbd5e1 !important; /* Slate-300 */
-                    color: #475569 !important; /* Slate-600 */
+                    background-color: #f8fafc !important;
+                    border-color: #cbd5e1 !important;
+                    color: #334155 !important;
                 }
                 .light-theme .diagram-card div.font-mono span {
-                    color: #475569 !important; /* Label text (e.g. :Context, :CID) */
+                    color: #334155 !important;
                 }
                 .light-theme .diagram-card div.font-mono span.text-white {
-                    color: #0f172a !important; /* Value text (e.g. from-internal) */
+                    color: #0f172a !important;
+                    font-weight: 700 !important;
                 }
                 .light-theme .diagram-card div.font-mono span.text-emerald-400 {
                     color: #047857 !important;
+                    font-weight: 700 !important;
                 }
                 .light-theme .diagram-card div.font-mono span.text-purple-400 {
                     color: #6d28d9 !important;
+                    font-weight: 700 !important;
                 }
                 .light-theme .diagram-card div.font-mono span.text-red-400 {
                     color: #b91c1c !important;
+                    font-weight: 700 !important;
                 }
                 .light-theme .diagram-card div.font-mono span.text-cyan-400 {
                     color: #0e7490 !important;
+                    font-weight: 700 !important;
                 }
                 .light-theme .diagram-card div.font-mono span.text-orange-400 {
                     color: #c2410c !important;
+                    font-weight: 700 !important;
                 }
                 .light-theme .diagram-card div.font-mono span.text-yellow-400 {
-                    color: #a16207 !important;
+                    color: #854d0e !important;
+                    font-weight: 700 !important;
                 }
-                
+
                 /* Port circle style */
                 .light-theme .diagram-card .absolute.rounded-full {
                     border-color: #ffffff !important;
-                    background-color: #64748b !important;
+                    background-color: #475569 !important;
                 }
-                
-                /* Global wires in light theme should be darker to be visible */
+
+                /* Wires read better on a light canvas */
+                .light-theme .diagram-wire {
+                    opacity: 0.8 !important;
+                }
                 .light-theme .diagram-wire[data-type="ext-route-global"] {
                     stroke: #475569 !important;
-                    opacity: 0.6 !important;
+                    opacity: 0.38 !important;
+                }
+
+                /* While dragging a card, wires must track it instantly —
+                   otherwise the transitioned path (and its arrowhead) lags
+                   behind and appears split from the line */
+                #diagramSvg.wires-live .diagram-wire {
+                    transition: none !important;
                 }
             </style>
             <div class="config-card p-6 relative">
@@ -1161,7 +1183,6 @@ function isTabAllowed(tabName) {
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
                     <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'مخطط الإعدادات (Config Diagram)' : 'Config Diagram' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'عرض مرئي تفاعلي للعلاقات بين المسارات، مجموعات الاتصال، التحويلات، وخطوط الربط' : 'Interactive visual diagram of the connections between inbound routes, ring groups, extensions, outbound routes, and trunks' %></p>
                     </div>
                     <!-- Toolbar controls -->
                     <div class="flex items-center gap-2">
@@ -1185,6 +1206,10 @@ function isTabAllowed(tabName) {
                         <button onclick="resetDiagramZoom()" title="<%= isRtl ? 'إعادة ضبط' : 'Reset Zoom' %>" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:bg-[var(--bg-hover)] text-xs font-semibold rounded-lg cursor-pointer transition">
                             <%= isRtl ? 'إعادة ضبط' : 'Reset' %>
                         </button>
+                        <button onclick="resetDiagramLayout()" title="<%= isRtl ? 'إرجاع البطاقات إلى الترتيب التلقائي' : 'Restore automatic card arrangement' %>" class="px-2.5 py-1.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:bg-[var(--bg-hover)] text-xs font-semibold rounded-lg cursor-pointer transition flex items-center gap-1 text-[var(--text-primary)]">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                            <span><%= isRtl ? 'إرجاع الترتيب' : 'Auto Arrange' %></span>
+                        </button>
                     </div>
                 </div>
 
@@ -1202,7 +1227,7 @@ function isTabAllowed(tabName) {
                 </div>
 
                 <!-- Canvas Wrapper -->
-                <div id="diagramCanvasContainer" class="relative w-full border border-[var(--border-primary)] rounded-xl overflow-auto bg-[#09090b]" style="height: calc(100vh - 280px); min-height: 700px;">
+                <div id="diagramCanvasContainer" class="relative w-full border border-[var(--border-primary)] rounded-xl overflow-auto bg-[#09090b]" style="height: calc(100vh - 280px); min-height: 560px;">
                     <svg id="diagramSvg" class="w-full h-full cursor-grab active:cursor-grabbing select-none">
                         <!-- Grid pattern definition -->
                         <defs>
@@ -1242,7 +1267,6 @@ function isTabAllowed(tabName) {
                                 <h2 class="text-lg font-extrabold text-[var(--text-primary)] tracking-tight"><%= isRtl ? 'مجموعات الوقت (Time Groups)' : 'Time Groups' %></h2>
                                 <span id="timegroups-count-badge" class="px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 text-[10px] font-extrabold">0 Groups</span>
                             </div>
-                            <p class="text-xs text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'تعريف فترات وساعات وأيام العمل الرسمية لاستخدامها في توجيه المكالمات' : 'Define business hours, days of week, and date interval windows for call routing' %></p>
                         </div>
                     </div>
                     <div class="flex items-center gap-3 w-full lg:w-auto">
@@ -1297,7 +1321,6 @@ function isTabAllowed(tabName) {
                                 <h2 class="text-lg font-extrabold text-[var(--text-primary)] tracking-tight"><%= isRtl ? 'شروط الوقت (Time Conditions)' : 'Time Conditions' %></h2>
                                 <span id="timeconditions-count-badge" class="px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-[10px] font-extrabold">0 Conditions</span>
                             </div>
-                            <p class="text-xs text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'توجيه المكالمات تلقائياً بناءً على تقييم وقت الاتصال الحالي مقابل مجموعة الوقت المحددة' : 'Evaluate calls against Time Groups to route calls to match vs non-match destinations' %></p>
                         </div>
                     </div>
                     <div class="flex items-center gap-3 w-full lg:w-auto">
@@ -1342,7 +1365,6 @@ function isTabAllowed(tabName) {
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'الإعلانات الصوتية (Announcements)' : 'Announcements' %></h2>
-                        <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'إدارة رسائل الإعلانات الصوتية وتوجيه المكالمات بعد التشغيل' : 'Manage playback messages and post-playback destinations' %></p>
                     </div>
                     <button type="button" onclick="openAnnouncementModal()" class="config-btn-primary px-4 py-2 flex items-center gap-2 text-xs cursor-pointer">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
@@ -1380,9 +1402,6 @@ function isTabAllowed(tabName) {
                             </svg>
                             <span><%= isRtl ? 'الموسيقى أثناء الانتظار (Music on Hold - MoH)' : 'Music on Hold (MoH)' %></span>
                         </h2>
-                        <p class="text-xs text-[var(--text-muted)] mt-1">
-                            <%= isRtl ? 'إدارة فئات الموسيقى أثناء الانتظار، رفع مقاطع الصوت، والتحكم بخيارات Asterisk MoH' : 'Manage Music on Hold categories, upload audio tracks, and preview hold music classes' %>
-                        </p>
                     </div>
                     <div class="flex items-center gap-2 flex-wrap">
                         <button type="button" onclick="openMohCategoryModal()" class="config-btn-secondary px-3.5 py-2 text-xs flex items-center gap-1.5 cursor-pointer">
@@ -1461,9 +1480,6 @@ function isTabAllowed(tabName) {
                             </div>
                             <div class="min-w-0">
                                 <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إعدادات مودم GSM' : 'GSM Modem Configuration' %></h2>
-                                <p class="text-xs text-[var(--text-muted)] mt-1 max-w-2xl leading-relaxed">
-                                    <%= isRtl ? 'اضبط كسب الاستقبال والإرسال لكل مودم من -10 إلى +10 dB. احفظ جهازاً منفرداً أو طبّق جميع التغييرات دفعة واحدة.' : 'Tune receive and transmit gain for each modem from -10 to +10 dB. Save one device or apply every pending change together.' %>
-                                </p>
                             </div>
                         </div>
                         <button type="button" onclick="saveAllDongleGains()" class="config-action-btn config-action-btn--primary self-start lg:self-auto">
@@ -1508,6 +1524,49 @@ function isTabAllowed(tabName) {
                     </div>
                     <div id="modemDonglesGrid" class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <!-- Rendered dynamically by fetchModemConfig() -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Universal Voice Processing (RNNoise / VAD) — system-wide defaults, applied per-extension -->
+            <div class="config-card overflow-hidden">
+                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'معالجة الصوت الشاملة (AI RNNoise & VAD)' : 'Universal Voice Processing (AI RNNoise & VAD)' %></h2>
+                            <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'إعدادات عامة لحساسية كشف الكلام ومدة الاحتفاظ بالصوت تُطبق على جميع التحويلات. لا يزال تفعيل العزل واتجاهه يُدار لكل تحويلة من إعدادات المقسم.' : 'System-wide speech detection sensitivity and hold time applied to every extension. Enabling suppression and its direction remain per-extension in PBX Config.' %></p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="saveAudioGlobals()" class="config-action-btn config-action-btn--primary self-start sm:self-auto shrink-0">
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        <span><%= isRtl ? 'حفظ الإعدادات العامة' : 'Save Universal Settings' %></span>
+                    </button>
+                </div>
+                <div class="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="globalVadThreshold" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'حساسية كشف الكلام (Threshold)' : 'Speech Detection Threshold' %></label>
+                        <select id="globalVadThreshold" class="config-input w-full text-xs font-semibold">
+                            <option value="0.05">0.05 (<%= isRtl ? 'أقصى حساسية - يلتقط همساً خافتاً' : 'Maximum sensitivity - catches faint whispers' %>)</option>
+                            <option value="0.10">0.10 (<%= isRtl ? 'حساسية عالية / صوت خافت' : 'High Sensitivity / Soft Voice' %>)</option>
+                            <option value="0.15">0.15 (<%= isRtl ? 'حساسية مرتفعة' : 'Elevated Sensitivity' %>)</option>
+                            <option value="0.20"><%= isRtl ? '0.20 (متوازن - افتراضي موصى به)' : '0.20 (Balanced - Recommended Default)' %></option>
+                            <option value="0.30">0.30 (<%= isRtl ? 'متوسط / بيئة هادئة نسبياً' : 'Moderate / Fairly Quiet Environment' %>)</option>
+                            <option value="0.45">0.45 (<%= isRtl ? 'صارم - ضوضاء خلفية عالية فقط' : 'Strict - Only Strong Speech' %>)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="globalVadHangover" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'مهلة الاحتفاظ بالصوت (Hangover)' : 'Hangover Hold Time' %></label>
+                        <select id="globalVadHangover" class="config-input w-full text-xs font-semibold">
+                            <option value="100">100 ms (<%= isRtl ? 'قصائر جداً - كتم فوري بين الكلمات' : 'Very short - instant gating between words' %>)</option>
+                            <option value="150">150 ms (<%= isRtl ? 'سريع' : 'Quick' %>)</option>
+                            <option value="250"><%= isRtl ? '250 ms (طبيعي - افتراضي)' : '250 ms (Natural - Default)' %></option>
+                            <option value="350">350 ms (<%= isRtl ? 'ناعم' : 'Soft Hold' %>)</option>
+                            <option value="500">500 ms (<%= isRtl ? 'طويل - يحافظ على سلاسة الكلام' : 'Long - smooths speech pauses' %>)</option>
+                            <option value="750">750 ms (<%= isRtl ? 'الأطول - أقل كتم ممكن' : 'Longest - minimal muting' %>)</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -1626,9 +1685,6 @@ function isTabAllowed(tabName) {
                             </svg>
                             <span><%= isRtl ? 'طرفية النظام (TTY Shell Terminal)' : 'TTY Shell Terminal' %></span>
                         </h2>
-                        <p class="text-xs text-[var(--text-muted)] mt-1">
-                            <%= isRtl ? 'نافذة طرفية تفاعلية مباشرة مع دعم كامل للصق من الحافظة وإدخال الأوامر' : 'Interactive real-time Linux PTY shell window with full clipboard paste support' %>
-                        </p>
                     </div>
                     <!-- Controls Toolbar -->
                     <div class="flex flex-wrap items-center gap-2">
@@ -1716,7 +1772,6 @@ function isTabAllowed(tabName) {
                                 <input type="text" id="extSecret" autocomplete="new-password" required placeholder="e.g. P@ssword123!" class="config-input w-full font-mono text-xs">
                             </div>
                         </div>
-
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
                             <div>
                                 <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extTech"><%= isRtl ? 'نوع جهاز التحويلة *' : 'Extension Tech / Device Type *' %></label>
@@ -1730,6 +1785,25 @@ function isTabAllowed(tabName) {
                                 <select id="extVoicemail" class="config-input w-full text-xs font-semibold">
                                     <option value="disabled"><%= isRtl ? 'معطل (Disabled / No Voicemail)' : 'Disabled (No Voicemail)' %></option>
                                     <option value="enabled"><%= isRtl ? 'مفعل (Enabled / Active)' : 'Enabled (Voicemail Active)' %></option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extDenoise"><%= isRtl ? 'عزل الضوضاء بالذكاء الاصطناعي (AI RNNoise)' : 'AI Noise Suppression (RNNoise)' %></label>
+                                <select id="extDenoise" class="config-input w-full text-xs font-semibold">
+                                    <option value="both" selected><%= isRtl ? 'مفعل (إرسال واستقبال - Both RX & TX)' : 'Enabled (Both RX & TX)' %></option>
+                                    <option value="rx"><%= isRtl ? 'مفعل للميكروفون فقط (RX Only)' : 'Microphone Only (RX Only)' %></option>
+                                    <option value="tx"><%= isRtl ? 'مفعل للسماعة فقط (TX Only)' : 'Speaker Only (TX Only)' %></option>
+                                    <option value="off"><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extVadGate"><%= isRtl ? 'بوابة كتم الصمت (VAD Noise Gate)' : 'VAD Silence Gate (100% Silence on Pauses)' %></label>
+                                <select id="extVadGate" class="config-input w-full text-xs font-semibold">
+                                    <option value="1" selected><%= isRtl ? 'مفعل (صمت 100% عند التوقف عن الكلام)' : 'Enabled (100% Silence on Pauses)' %></option>
+                                    <option value="0"><%= isRtl ? 'معطل (عزل مستمر دون كتم)' : 'Disabled (Continuous Filter)' %></option>
                                 </select>
                             </div>
                         </div>
@@ -2142,7 +2216,7 @@ function isTabAllowed(tabName) {
                                     <span class="text-[10px] text-rose-400/70 font-mono">FAILOVER</span>
                                 </div>
                                 <div>
-                                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'تحديد الوجهة عند عدم الرد أو انتهاء الوقت *' : 'Fail Over Destination *' %></label>
+                                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'تحديد الوجهة عند عدم الرد أو انتهاء الوقت *' : 'Fail Over Destination *' %></span>
                                     <div id="queueDestComponentContainer"></div>
                                     <input type="hidden" id="queueDestination" required>
                                 </div>
@@ -2158,14 +2232,14 @@ function isTabAllowed(tabName) {
                                     <span class="text-[10px] text-blue-400/70 font-mono">CONTINUE</span>
                                 </div>
                                 <div>
-                                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'تحديد الوجهة عند خروج المتصل أو مواصلة الطابور *' : 'Queue Continue Destination *' %></label>
+                                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'تحديد الوجهة عند خروج المتصل أو مواصلة الطابور *' : 'Queue Continue Destination *' %></span>
                                     <div id="queueContinueDestComponentContainer"></div>
                                     <input type="hidden" id="queueContinueDestination" required>
                                 </div>
                             </div>
                         </div>
                     </div>
-
+                </div>
                 <!-- Footer -->
                 <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
                     <button type="button" onclick="closeModal('queueModal')" class="config-btn-secondary px-5 py-2.5 text-xs font-semibold"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
@@ -2176,7 +2250,6 @@ function isTabAllowed(tabName) {
                 </div>
             </form>
         </div>
-    </div>
     </div>
     <!-- MODAL 3: TRUNK FORM -->
     <div id="trunkModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
@@ -2808,7 +2881,6 @@ function isTabAllowed(tabName) {
                             </span>
                             <span class="text-[10px] text-sky-400/70 font-mono">RULES</span>
                         </div>
-                        <p class="text-[11px] text-[var(--text-muted)]"><%= isRtl ? 'يتم توجيه المكالمات حسب هذه القواعد. إذا تم تحديد قواعد متعددة، تطبق في حالة مطابقة أي منها.' : 'Calls route according to these rules. If multiple rules are defined, the condition matches if ANY rule matches.' %></p>
                         
                         <div id="timeGroupRulesListContainer" class="space-y-3 max-h-[320px] overflow-y-auto pr-1 mb-2 custom-scrollbar bg-black/40 p-3 rounded-xl border border-sky-500/15">
                             <!-- Populated dynamically -->
@@ -3098,11 +3170,11 @@ function isTabAllowed(tabName) {
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="newSlotRxGain">Rx Gain (dB)</label>
-                        <input type="number" id="newSlotRxGain" value="0" min="-10" max="10" class="config-input w-full font-mono text-xs">
+                        <input type="number" id="newSlotRxGain" value="3" min="-10" max="10" class="config-input w-full font-mono text-xs">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="newSlotTxGain">Tx Gain (dB)</label>
-                        <input type="number" id="newSlotTxGain" value="0" min="-10" max="10" class="config-input w-full font-mono text-xs">
+                        <input type="number" id="newSlotTxGain" value="3" min="-10" max="10" class="config-input w-full font-mono text-xs">
                     </div>
                 </div>
                 <div class="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-mono text-emerald-400">
@@ -3390,6 +3462,10 @@ function isTabAllowed(tabName) {
 
             render() {
                 if (!this.container) return;
+                if (this.currentCatMenu && this.currentCatMenu.parentNode) {
+                    try { this.currentCatMenu.parentNode.removeChild(this.currentCatMenu); } catch(_) {}
+                    this.currentCatMenu = null;
+                }
                 if (this.currentMenu && this.currentMenu.parentNode) {
                     try { this.currentMenu.parentNode.removeChild(this.currentMenu); } catch(_) {}
                     this.currentMenu = null;
@@ -3407,21 +3483,36 @@ function isTabAllowed(tabName) {
                 }
 
                 const isCustom = this.selectedCategory === 'custom';
-                const catSelectId = `dest-cat-${this.instanceId}`;
+                const catTriggerId = `dest-cat-${this.instanceId}`;
                 const targetSelectId = `dest-target-${this.instanceId}`;
                 const customInputId = `dest-custom-${this.instanceId}`;
 
                 this.container.innerHTML = `
                     <div class="destination-select-wrapper space-y-2 text-xs">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <!-- Primary Category Select -->
+                            <!-- Primary Category Custom Select Combobox -->
                             <div>
-                                <label for="${catSelectId}" class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+                                <label for="${catTriggerId}" class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
                                     ${this.isRtl ? 'فئة الوجهة (Category)' : 'Category'}
                                 </label>
-                                <select id="${catSelectId}" class="dest-primary-select config-input w-full font-bold text-xs py-1.5 no-enhance">
-                                    ${categories.map(c => `<option value="${c.id}" ${c.id === this.selectedCategory ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
-                                </select>
+                                <div class="relative dest-cat-combobox-wrapper">
+                                    <button type="button" id="${catTriggerId}" aria-haspopup="listbox" aria-expanded="false" aria-controls="destination-cat-dropdown-${this.instanceId}" class="dest-cat-trigger custom-select-trigger config-dropdown-trigger w-full border rounded-lg px-3 py-2 flex items-center justify-between gap-2 cursor-pointer select-none transition">
+                                        <span class="config-dropdown-label flex-1 text-[var(--text-primary)]">
+                                            ${escapeHtml(currentCatObj ? currentCatObj.label : 'Choose Category')}
+                                        </span>
+                                        <svg class="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                    </button>
+                                    <!-- Category Dropdown Menu -->
+                                    <div id="destination-cat-dropdown-${this.instanceId}" class="dest-cat-dropdown-menu config-dropdown-menu hidden">
+                                        <div class="options-list config-dropdown-options space-y-1 custom-scrollbar flex-1" role="listbox">
+                                            ${categories.map(c => `
+                                                <button type="button" role="option" aria-selected="${String(c.id === this.selectedCategory)}" data-cat-id="${escapeHtml(c.id)}" class="dest-cat-option-item custom-select-option config-dropdown-option flex items-center justify-between gap-2 transition-colors ${c.id === this.selectedCategory ? 'is-selected font-bold' : ''}">
+                                                    <span class="flex-1 min-w-0 text-left ${this.isRtl ? 'text-right' : 'text-left'}">${escapeHtml(c.label)}</span>
+                                                </button>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Secondary Target Select / Custom Input -->
@@ -3467,35 +3558,78 @@ function isTabAllowed(tabName) {
             }
 
             bindEvents() {
-                const primarySelect = this.container.querySelector('.dest-primary-select');
+                const catTrigger = this.container.querySelector('.dest-cat-trigger');
+                const catMenu = this.container.querySelector('.dest-cat-dropdown-menu');
                 const customInput = this.container.querySelector('.dest-custom-input');
                 const trigger = this.container.querySelector('.dest-combobox-trigger');
                 const menu = this.container.querySelector('.dest-dropdown-menu');
                 const searchInput = this.container.querySelector('.dest-search-input');
+
+                if (catMenu && catMenu.parentNode !== document.body) {
+                    document.body.appendChild(catMenu);
+                    this.currentCatMenu = catMenu;
+                }
 
                 if (menu && menu.parentNode !== document.body) {
                     document.body.appendChild(menu);
                     this.currentMenu = menu;
                 }
 
-                if (primarySelect) {
-                    primarySelect.addEventListener('change', event => {
-                        this.selectedCategory = event.target.value;
-                        const categories = DestinationSelect.getCategories();
-                        const category = categories.find(item => item.id === this.selectedCategory);
-                        if (this.selectedCategory === 'custom') {
-                            this.selectedTarget = 'custom';
-                            this.dialplanString = this.customDialplanString || '';
-                        } else if (category && category.targets && category.targets.length) {
-                            this.selectedTarget = category.targets[0].id;
-                            this.dialplanString = category.targets[0].dialplanString;
-                        } else {
-                            this.selectedTarget = '';
-                            this.dialplanString = '';
+                const positionCatMenu = () => {
+                    if (!catTrigger || !catMenu) return;
+                    if (typeof window.positionConfigDropdown === 'function') {
+                        window.positionConfigDropdown(catTrigger, catMenu);
+                    }
+                };
+                const hideCatMenu = () => {
+                    if (!catMenu) return;
+                    if (typeof window.closeConfigDropdownMenu === 'function') {
+                        window.closeConfigDropdownMenu(catMenu);
+                    } else {
+                        catMenu.classList.add('hidden');
+                        catTrigger?.setAttribute('aria-expanded', 'false');
+                    }
+                };
+                const chooseCategory = item => {
+                    this.selectedCategory = item.getAttribute('data-cat-id');
+                    const categories = DestinationSelect.getCategories();
+                    const category = categories.find(c => c.id === this.selectedCategory);
+                    if (this.selectedCategory === 'custom') {
+                        this.selectedTarget = 'custom';
+                        this.dialplanString = this.customDialplanString || '';
+                    } else if (category && category.targets && category.targets.length) {
+                        this.selectedTarget = category.targets[0].id;
+                        this.dialplanString = category.targets[0].dialplanString;
+                    } else {
+                        this.selectedTarget = '';
+                        this.dialplanString = '';
+                    }
+                    this.searchTerm = '';
+                    hideCatMenu();
+                    this.render();
+                    this.emitChange();
+                };
+
+                if (catTrigger && catMenu) {
+                    catMenu._reposition = positionCatMenu;
+                    catMenu._trigger = catTrigger;
+                    catTrigger.addEventListener('click', event => {
+                        event.stopPropagation();
+                        const isOpening = catMenu.classList.contains('hidden');
+                        if (!isOpening) {
+                            hideCatMenu();
+                            return;
                         }
-                        this.searchTerm = '';
-                        this.render();
-                        this.emitChange();
+                        if (typeof window.closeConfigDropdowns === 'function') {
+                            window.closeConfigDropdowns(catMenu);
+                        }
+                        catMenu.classList.remove('hidden');
+                        catTrigger.setAttribute('aria-expanded', 'true');
+                        positionCatMenu();
+                    });
+                    catMenu.addEventListener('click', event => event.stopPropagation());
+                    catMenu.querySelectorAll('.dest-cat-option-item').forEach(item => {
+                        item.addEventListener('click', () => chooseCategory(item));
                     });
                 }
 
@@ -4005,9 +4139,9 @@ function isTabAllowed(tabName) {
             if (tabId === 'timeconditions') { fetchTimeConditions(); fetchTimeGroups(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); }
             if (tabId === 'announcements') { fetchAnnouncements(); fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); }
             if (tabId === 'voicemail') fetchVoicemailExtensions();
-            if (tabId === 'modem') fetchModemConfig();
+            if (tabId === 'modem') { fetchModemConfig(); loadAudioGlobals(); fetchRtcpDiagnostics(); startRtcpTimer(); }
             if (tabId === 'terminal') initTtyTerminal();
-            if (tabId === 'diagram') fetchDiagramData();
+            if (tabId === 'diagram') { sizeDiagramCanvas(); fetchDiagramData(); }
             if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchInboundRoutes(); fetchDongleMappingsTab(); }
             if (tabId === 'dongles') { switchTab('inbound'); return; }
             if (typeof enhanceSelectElements === 'function') setTimeout(enhanceSelectElements, 100);
@@ -4129,7 +4263,7 @@ function isTabAllowed(tabName) {
                             </td>
                         `;
                         tr.querySelector('[data-action="edit"]').addEventListener('click', () => {
-                            editExtension(ext.extension, ext.name, ext.secret, ext.voicemail, ext.tech);
+                            editExtension(ext.extension, ext.name, ext.secret, ext.voicemail, ext.tech, ext.denoise, ext.vad_gate);
                         });
                         tr.querySelector('[data-action="delete"]').addEventListener('click', () => {
                             deleteExtension(ext.extension);
@@ -4230,8 +4364,12 @@ function isTabAllowed(tabName) {
             document.getElementById('extensionForm').reset();
             document.getElementById('extVoicemail').value = 'disabled';
             document.getElementById('extTech').value = 'sip';
+            document.getElementById('extDenoise').value = 'both';
             document.getElementById('extVoicemail').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extTech').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extDenoise').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extVadGate').value = '1';
+            document.getElementById('extVadGate').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
             openModal('extensionModal');
             try {
@@ -4241,7 +4379,7 @@ function isTabAllowed(tabName) {
             }
         }
 
-        async function editExtension(extNum, name, secret, voicemail, tech) {
+        async function editExtension(extNum, name, secret, voicemail, tech, denoise, vadGate) {
             document.getElementById('extModalTitle').textContent = (isRtl ? 'تعديل التحويلة ' : 'Edit Extension ') + extNum;
             document.getElementById('extEditMode').value = 'true';
             document.getElementById('extNum').value = extNum;
@@ -4250,8 +4388,12 @@ function isTabAllowed(tabName) {
             document.getElementById('extSecret').value = secret || '';
             document.getElementById('extVoicemail').value = (voicemail === 'default' || voicemail === 'enabled') ? 'enabled' : 'disabled';
             document.getElementById('extTech').value = (tech === 'pjsip' || tech === 'webrtc') ? 'webrtc' : 'sip';
+            document.getElementById('extDenoise').value = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
+            document.getElementById('extVadGate').value = (vadGate === '0' || vadGate === 0 || vadGate === false) ? '0' : '1';
             document.getElementById('extVoicemail').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extTech').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extDenoise').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extVadGate').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
             openModal('extensionModal');
 
@@ -4292,6 +4434,8 @@ function isTabAllowed(tabName) {
             const secret = document.getElementById('extSecret').value.trim();
             const voicemail = document.getElementById('extVoicemail').value;
             const tech = document.getElementById('extTech').value;
+            const denoise = document.getElementById('extDenoise').value;
+            const vadGate = document.getElementById('extVadGate').value;
             const saveButton = document.getElementById('extSaveBtn');
             const saveText = document.getElementById('extSaveBtnText');
             const originalText = saveText.textContent;
@@ -4304,7 +4448,7 @@ function isTabAllowed(tabName) {
                 const response = await fetch(wasEdit ? '/api/config/extensions/' + extNum : '/api/config/extensions', {
                     method: wasEdit ? 'PUT' : 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ extension: extNum, name, secret, voicemail, tech })
+                    body: JSON.stringify({ extension: extNum, name, secret, voicemail, tech, denoise, vad_gate: vadGate })
                 });
                 const data = await response.json();
                 if (!response.ok || !data.success) {
@@ -5665,6 +5809,7 @@ function isTabAllowed(tabName) {
                     loadedTrunksList = Array.isArray(data.trunks) ? data.trunks : [];
                     const list = loadedTrunksList;
                     if (!tbody) return;
+                    tbody.innerHTML = '';
                     if (list.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">' + (isRtl ? 'لا توجد خطوط ربط.' : 'No trunks found.') + '</td></tr>';
                         return;
@@ -6944,13 +7089,138 @@ function isTabAllowed(tabName) {
         let diagramRawData = null;
         let diagramNodesList = [];
         let diagramLinks = [];
-        
+        let diagramRenderCtx = null; // { cardWidth, cardHeight, makeWirePath } set by renderDiagram
+        let diagramCardDrag = null;
+
         let zoomScale = 1.0;
         let panX = 0;
         let panY = 0;
         let isDragging = false;
         let startX, startY;
         let isPanZoomInitialized = false;
+
+        const DIAGRAM_LAYOUT_KEY = 'config_diagram_layout_v1';
+
+        const WIRE_COLORS = {
+            'inbound-dest': '#10b981', 'inbound-tc': '#eab308', 'inbound-ivr': '#3b82f6',
+            'tc-true': '#10b981', 'tc-false': '#ef4444', 'tc-ivr': '#3b82f6',
+            'ivr-entry': '#3b82f6', 'ivr-timeout': '#f59e0b', 'ivr-invalid': '#ef4444',
+            'rg-member': '#a855f7', 'queue-member': '#f59e0b', 'queue-failover': '#ef4444',
+            'queue-continue': '#38bdf8', 'ext-route-restricted': '#f97316', 'ext-route-global': '#64748b',
+            'route-trunk': '#06b6d4'
+        };
+        const FAILING_WIRES = new Set(['tc-false', 'ivr-invalid', 'queue-failover']);
+
+        function saveDiagramNodePosition(nodeId, x, y) {
+            try {
+                const saved = JSON.parse(localStorage.getItem(DIAGRAM_LAYOUT_KEY)) || {};
+                saved[nodeId] = { x: Math.round(x), y: Math.round(y) };
+                localStorage.setItem(DIAGRAM_LAYOUT_KEY, JSON.stringify(saved));
+            } catch (_) {}
+        }
+
+        window.resetDiagramLayout = function () {
+            try { localStorage.removeItem(DIAGRAM_LAYOUT_KEY); } catch (_) {}
+            renderDiagram();
+            sizeDiagramCanvas();
+            setTimeout(fitDiagramToScreen, 50);
+        };
+
+        // Stretch the diagram canvas to consume all remaining viewport space
+        function sizeDiagramCanvas() {
+            const section = document.getElementById('section-diagram');
+            const container = document.getElementById('diagramCanvasContainer');
+            if (!section || !container || section.classList.contains('hidden')) return;
+            const top = container.getBoundingClientRect().top;
+            const available = window.innerHeight - top - 24;
+            container.style.height = Math.max(560, Math.floor(available)) + 'px';
+        }
+        window.sizeDiagramCanvas = sizeDiagramCanvas;
+        window.addEventListener('resize', () => {
+            sizeDiagramCanvas();
+            if (typeof fitDiagramToScreen === 'function' && diagramNodesList.length) fitDiagramToScreen();
+        });
+
+        function initDiagramNodeDragging() {
+            const svgNodes = document.getElementById('diagramNodes');
+            if (!svgNodes || svgNodes.dataset.dragInit === '1') return;
+            svgNodes.dataset.dragInit = '1';
+
+            const toSvgCoords = (clientX, clientY) => {
+                const svg = document.getElementById('diagramSvg');
+                const rect = svg.getBoundingClientRect();
+                return {
+                    x: (clientX - rect.left - panX) / zoomScale,
+                    y: (clientY - rect.top - panY) / zoomScale
+                };
+            };
+
+            svgNodes.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                const cardEl = e.target.closest && e.target.closest('[data-node-id]');
+                if (!cardEl) return;
+                const nodeId = cardEl.getAttribute('data-node-id');
+                const node = diagramNodesList.find(n => n.id === nodeId);
+                if (!node || !diagramRenderCtx) return;
+                e.stopPropagation();
+                const pt = toSvgCoords(e.clientX, e.clientY);
+                diagramCardDrag = {
+                    node,
+                    fo: cardEl.closest('foreignObject'),
+                    dx: pt.x - node.x,
+                    dy: pt.y - node.y,
+                    moved: false
+                };
+                const svgEl = document.getElementById('diagramSvg');
+                if (svgEl) svgEl.classList.add('wires-live');
+                try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
+            }, true);
+
+            svgNodes.addEventListener('pointermove', (e) => {
+                if (!diagramCardDrag) return;
+                const ctx = diagramRenderCtx;
+                const pt = toSvgCoords(e.clientX, e.clientY);
+                const nx = Math.max(0, pt.x - diagramCardDrag.dx);
+                const ny = Math.max(0, pt.y - diagramCardDrag.dy);
+                if (!diagramCardDrag.moved && (Math.abs(nx - diagramCardDrag.node.x) > 2 || Math.abs(ny - diagramCardDrag.node.y) > 2)) {
+                    diagramCardDrag.moved = true;
+                    document.body.style.userSelect = 'none';
+                }
+                if (!diagramCardDrag.moved) return;
+                diagramCardDrag.node.x = nx;
+                diagramCardDrag.node.y = ny;
+                if (diagramCardDrag.fo) {
+                    diagramCardDrag.fo.setAttribute('x', nx);
+                    diagramCardDrag.fo.setAttribute('y', ny);
+                }
+                const attached = document.querySelectorAll(
+                    `.diagram-wire[data-src="${CSS.escape(diagramCardDrag.node.id)}"], .diagram-wire[data-tgt="${CSS.escape(diagramCardDrag.node.id)}"]`
+                );
+                attached.forEach(wire => {
+                    const src = diagramNodesList.find(n => n.id === wire.getAttribute('data-src'));
+                    const tgt = diagramNodesList.find(n => n.id === wire.getAttribute('data-tgt'));
+                    if (src && tgt) {
+                        // Stale draw-in dash props would break the stretched path into pieces
+                        wire.style.strokeDasharray = '';
+                        wire.style.strokeDashoffset = '';
+                        wire.setAttribute('d', ctx.makeWirePath(src, tgt));
+                    }
+                });
+            }, true);
+
+            const endDrag = (e) => {
+                if (!diagramCardDrag) return;
+                if (diagramCardDrag.moved) {
+                    saveDiagramNodePosition(diagramCardDrag.node.id, diagramCardDrag.node.x, diagramCardDrag.node.y);
+                }
+                diagramCardDrag = null;
+                document.body.style.userSelect = '';
+                const svgEl = document.getElementById('diagramSvg');
+                if (svgEl) svgEl.classList.remove('wires-live');
+            };
+            svgNodes.addEventListener('pointerup', endDrag, true);
+            svgNodes.addEventListener('pointercancel', endDrag, true);
+        }
 
         function fetchDiagramData() {
             const svgNodes = document.getElementById('diagramNodes');
@@ -6973,6 +7243,7 @@ function isTabAllowed(tabName) {
                     }
                     diagramRawData = data;
                     renderDiagram();
+                    sizeDiagramCanvas();
                     if (!isPanZoomInitialized) {
                         initPanZoom();
                         isPanZoomInitialized = true;
@@ -6997,12 +7268,6 @@ function isTabAllowed(tabName) {
 
             const cardWidth = 280;
             const cardHeight = 135;
-            const columnGap = 100;
-            const rowGap = 30;
-            const colSpacing = cardWidth + columnGap;
-            const ySpacing = cardHeight + rowGap;
-            const fixedTopMargin = 40;
-            const bottomPadding = 40;
 
             function formatDestination(dest) {
                 if (!dest) return isRtl ? 'غير محدد' : 'Not set';
@@ -7051,28 +7316,13 @@ function isTabAllowed(tabName) {
             const queues = diagramRawData.queues || [];
             const ivrs = diagramRawData.ivrs || [];
 
-            const columns = [inbound, timeconditions, ivrs, ringgroups, queues, extensions, outbound, trunks];
-            const maxCount = Math.max(...columns.map(column => column.length), 1);
-            const contentHeight = Math.max(550, fixedTopMargin
-                + maxCount * cardHeight
-                + Math.max(maxCount - 1, 0) * rowGap
-                + bottomPadding);
-            const contentWidth = Math.max(1400, 50 + columns.length * 380 + 100);
-            svg.style.height = `${contentHeight}px`;
-            svg.style.width = `${contentWidth}px`;
-            svg.setAttribute('height', String(contentHeight));
-            svg.setAttribute('width', String(contentWidth));
-
             diagramNodesList = [];
-            
+
             // 1. Inbound Nodes
             inbound.forEach((route, i) => {
-                const startY = fixedTopMargin;
                 const nodeId = 'inbound-' + (route.did || 'any') + '-' + i;
                 diagramNodesList.push({
                     id: nodeId,
-                    x: 50,
-                    y: startY + i * ySpacing,
                     type: 'inbound',
                     title: route.did ? `DID: ${route.did}` : (isRtl ? 'أي رقم وارد' : 'Any DID'),
                     subtitle: route.description || (isRtl ? 'مسار وارد' : 'Inbound Route'),
@@ -7083,11 +7333,8 @@ function isTabAllowed(tabName) {
 
             // 2. Ring Groups Nodes
             ringgroups.forEach((rg, i) => {
-                const startY = fixedTopMargin;
                 diagramNodesList.push({
                     id: 'ringgroup-' + rg.grpnum,
-                    x: 50 + colSpacing * 3,
-                    y: startY + i * ySpacing,
                     type: 'ringgroup',
                     title: `${isRtl ? 'مجموعة:' : 'Group:'} ${rg.grpnum}`,
                     subtitle: rg.description || (isRtl ? 'مجموعة اتصال' : 'Ring Group'),
@@ -7098,12 +7345,9 @@ function isTabAllowed(tabName) {
 
             // 2.5 IVR Nodes
             ivrs.forEach((ivr, i) => {
-                const startY = fixedTopMargin;
                 const entriesCount = Array.isArray(ivr.entries) ? ivr.entries.length : 0;
                 diagramNodesList.push({
                     id: 'ivr-' + ivr.id,
-                    x: 50 + colSpacing * 2,
-                    y: startY + i * ySpacing,
                     type: 'ivr',
                     title: `${isRtl ? 'الرد الآلي:' : 'IVR:'} ${ivr.name}`,
                     subtitle: ivr.description || (isRtl ? 'قائمة الرد الآلي' : 'IVR Menu'),
@@ -7114,11 +7358,8 @@ function isTabAllowed(tabName) {
 
             // 3. Queues Nodes
             queues.forEach((q, i) => {
-                const startY = fixedTopMargin;
                 diagramNodesList.push({
                     id: 'queue-' + q.extension,
-                    x: 50 + colSpacing * 4,
-                    y: startY + i * ySpacing,
                     type: 'queue',
                     title: `${isRtl ? 'طابور:' : 'Queue:'} ${q.extension}`,
                     subtitle: q.descr || (isRtl ? 'طابور انتظار' : 'Call Queue'),
@@ -7129,11 +7370,8 @@ function isTabAllowed(tabName) {
 
             // 4. Extensions Nodes
             extensions.forEach((ext, i) => {
-                const startY = fixedTopMargin;
                 diagramNodesList.push({
                     id: 'extension-' + ext.extension,
-                    x: 50 + colSpacing * 5,
-                    y: startY + i * ySpacing,
                     type: 'extension',
                     title: `${isRtl ? 'تحويلة:' : 'Ext:'} ${ext.extension}`,
                     subtitle: ext.name || (isRtl ? 'تحويلة SIP' : 'SIP Extension'),
@@ -7144,13 +7382,10 @@ function isTabAllowed(tabName) {
 
             // 5. Outbound Routes Nodes
             outbound.forEach((route, i) => {
-                const startY = fixedTopMargin;
                 const patterns = Array.isArray(route.patterns) ? route.patterns : [];
                 const patternStr = patterns.map(p => p.pattern).filter(Boolean).slice(0, 2).join(', ');
                 diagramNodesList.push({
                     id: 'outbound-' + route.route_id,
-                    x: 50 + colSpacing * 6,
-                    y: startY + i * ySpacing,
                     type: 'outbound',
                     title: route.name,
                     subtitle: isRtl ? 'مسار صادر' : 'Outbound Route',
@@ -7161,11 +7396,8 @@ function isTabAllowed(tabName) {
 
             // 6. Trunks Nodes
             trunks.forEach((tk, i) => {
-                const startY = fixedTopMargin;
                 diagramNodesList.push({
                     id: 'trunk-' + tk.trunkid,
-                    x: 50 + colSpacing * 7,
-                    y: startY + i * ySpacing,
                     type: 'trunk',
                     title: tk.name,
                     subtitle: `${tk.tech ? tk.tech.toUpperCase() : 'SIP'} Trunk`,
@@ -7175,12 +7407,9 @@ function isTabAllowed(tabName) {
             });
             // 7. Time Conditions Nodes
             timeconditions.forEach((tc, i) => {
-                const startY = fixedTopMargin;
                 const scheduleStr = tc.details ? tc.details.map(d => d.time + ' ' + d.name).join('; ') : '';
                 diagramNodesList.push({
                     id: 'timecondition-' + tc.timeconditions_id,
-                    x: 50 + colSpacing,
-                    y: startY + i * ySpacing,
                     type: 'timecondition',
                     title: tc.displayname || (isRtl ? 'شرط زمني' : 'Time Condition'),
                     subtitle: tc.timegroup_name || (isRtl ? 'غير محدد' : 'No group'),
@@ -7366,62 +7595,175 @@ function isTabAllowed(tabName) {
                 });
             });
 
+            // -----------------------------------------------------------------
+            // Layered auto-layout (Sugiyama-lite):
+            //   1) layer = longest path from any source (cycle tolerant)
+            //   2) barycenter ordering sweeps to reduce wire crossings
+            //   3) x by layer, vertically centered stacks per layer
+            // Manual drags are persisted in localStorage and win over auto layout.
+            // -----------------------------------------------------------------
+            function computeDiagramLayout() {
+                const columnGap = 110;
+                const rowGap = 34;
+                const colSpacing = cardWidth + columnGap;
+                const ySpacing = cardHeight + rowGap;
+                const marginX = 60;
+                const marginTop = 50;
+                const bottomPadding = 50;
+
+                const nodeById = new Map(diagramNodesList.map(n => [n.id, n]));
+
+                // 1) Longest-path layering
+                const layerOf = new Map(diagramNodesList.map(n => [n.id, 0]));
+                const maxIters = diagramNodesList.length + 2;
+                for (let iter = 0; iter < maxIters; iter++) {
+                    let changed = false;
+                    diagramLinks.forEach(link => {
+                        const s = layerOf.get(link.source) || 0;
+                        const cur = layerOf.get(link.target) || 0;
+                        if (s >= cur && s < diagramNodesList.length) {
+                            layerOf.set(link.target, s + 1);
+                            changed = true;
+                        }
+                    });
+                    if (!changed) break;
+                }
+
+                // 2) Group by layer + barycenter ordering
+                const maxLayer = Math.max(0, ...layerOf.values());
+                const layers = [];
+                for (let l = 0; l <= maxLayer; l++) layers.push([]);
+                diagramNodesList.forEach(n => layers[layerOf.get(n.id)].push(n));
+
+                const posInLayer = new Map();
+                layers.forEach(nodes => nodes.forEach((n, i) => posInLayer.set(n.id, i)));
+                const preds = new Map(diagramNodesList.map(n => [n.id, []]));
+                const succs = new Map(diagramNodesList.map(n => [n.id, []]));
+                diagramLinks.forEach(l => {
+                    if (nodeById.has(l.source) && nodeById.has(l.target)) {
+                        succs.get(l.source).push(l.target);
+                        preds.get(l.target).push(l.source);
+                    }
+                });
+                const bary = ids => ids.length
+                    ? ids.reduce((sum, id) => sum + (posInLayer.get(id) || 0), 0) / ids.length
+                    : Infinity;
+
+                for (let sweep = 0; sweep < 4; sweep++) {
+                    const down = sweep % 2 === 0;
+                    const order = down
+                        ? layers.map((_, i) => i).slice(1)
+                        : layers.map((_, i) => i).reverse().slice(0, -1);
+                    order.forEach(li => {
+                        layers[li]
+                            .map((n, i) => ({ n, i, b: down ? bary(preds.get(n.id)) : bary(succs.get(n.id)) }))
+                            .sort((a, b2) => (a.b === b2.b ? a.i - b2.i : a.b - b2.b))
+                            .forEach((entry, i) => {
+                                layers[li][i] = entry.n;
+                                posInLayer.set(entry.n.id, i);
+                            });
+                    });
+                }
+
+                // 3) Coordinates — each layer stack centered on the shared midline
+                const densest = Math.max(1, ...layers.map(l => l.length));
+                const contentHeight = Math.max(560, marginTop + densest * ySpacing - rowGap + bottomPadding);
+                const midY = contentHeight / 2 - cardHeight / 2;
+                layers.forEach((nodes, li) => {
+                    const stackHeight = nodes.length * ySpacing - rowGap;
+                    const startY = midY - stackHeight / 2 + (nodes.length ? rowGap / 2 : 0);
+                    nodes.forEach((n, i) => {
+                        n.x = Math.round(marginX + li * colSpacing);
+                        n.y = Math.round(startY + i * ySpacing);
+                    });
+                });
+
+                // Saved manual positions override the auto layout
+                let saved = null;
+                try { saved = JSON.parse(localStorage.getItem('config_diagram_layout_v1')); } catch (_) {}
+                if (saved && typeof saved === 'object') {
+                    diagramNodesList.forEach(n => {
+                        if (saved[n.id] && Number.isFinite(saved[n.id].x) && Number.isFinite(saved[n.id].y)) {
+                            n.x = saved[n.id].x;
+                            n.y = saved[n.id].y;
+                        }
+                    });
+                }
+
+                const maxUsedLayer = layers.reduce((m, l, li) => l.length ? Math.max(m, li) : m, 0);
+                return {
+                    width: marginX * 2 + maxUsedLayer * colSpacing + cardWidth,
+                    height: contentHeight
+                };
+            }
+
+            const layoutSize = computeDiagramLayout();
+            svg.style.height = `${layoutSize.height}px`;
+            svg.style.width = `${layoutSize.width}px`;
+            svg.setAttribute('height', String(layoutSize.height));
+            svg.setAttribute('width', String(layoutSize.width));
+
+            diagramRenderCtx = {
+                cardWidth,
+                cardHeight,
+                makeWirePath
+            };
+            initDiagramNodeDragging();
+
+            const colSpacing = cardWidth + 110;
+
+            // Arrowhead markers — one per stroke color used by the wires
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            defs.innerHTML = Object.entries(WIRE_COLORS).map(([type, color]) =>
+                `<marker id="arrow-${type}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="${color}"/></marker>`
+            ).join('');
+            svgWires.appendChild(defs);
+
+            function makeWirePath(sourceNode, targetNode) {
+                const x1 = sourceNode.x + cardWidth;
+                const y1 = sourceNode.y + cardHeight / 2;
+                const x2 = targetNode.x - 4;
+                const y2 = targetNode.y + cardHeight / 2;
+
+                const colDistance = Math.abs(x2 - x1);
+                if (colDistance > colSpacing * 1.2) {
+                    const arcOffset = (y1 <= y2) ? -55 : 55;
+                    const controlY1 = y1 + arcOffset;
+                    const controlY2 = y2 + arcOffset;
+                    return `M ${x1} ${y1} C ${x1 + colSpacing * 0.4} ${controlY1}, ${x2 - colSpacing * 0.4} ${controlY2}, ${x2} ${y2}`;
+                }
+                const dx = colDistance * 0.42;
+                const controlX1 = (x2 >= x1) ? (x1 + dx) : (x1 - dx);
+                const controlX2 = (x2 >= x1) ? (x2 - dx) : (x2 + dx);
+                const dy = y2 - y1;
+                const bow = (dy >= 0 ? 1 : -1) * Math.min(25, Math.abs(dy) * 0.2);
+                return `M ${x1} ${y1} C ${controlX1} ${y1 + bow}, ${controlX2} ${y2 - bow}, ${x2} ${y2}`;
+            }
+
             // Render Wires
             diagramLinks.forEach(link => {
                 const sourceNode = diagramNodesList.find(n => n.id === link.source);
                 const targetNode = diagramNodesList.find(n => n.id === link.target);
                 if (!sourceNode || !targetNode) return;
 
-                const x1 = sourceNode.x + cardWidth;
-                const y1 = sourceNode.y + cardHeight / 2;
-                const x2 = targetNode.x;
-                const y2 = targetNode.y + cardHeight / 2;
+                const strokeColor = WIRE_COLORS[link.type] || '#3f3f46';
+                const isGlobalMesh = link.type === 'ext-route-global';
 
-                const colDistance = Math.abs(x2 - x1);
-                let d = '';
-                if (colDistance > colSpacing * 1.2) {
-                    const arcOffset = (y1 <= y2) ? -55 : 55;
-                    const controlY1 = y1 + arcOffset;
-                    const controlY2 = y2 + arcOffset;
-                    d = `M ${x1} ${y1} C ${x1 + colSpacing * 0.4} ${controlY1}, ${x2 - colSpacing * 0.4} ${controlY2}, ${x2} ${y2}`;
-                } else {
-                    const dx = colDistance * 0.42;
-                    const controlX1 = (x2 >= x1) ? (x1 + dx) : (x1 - dx);
-                    const controlX2 = (x2 >= x1) ? (x2 - dx) : (x2 + dx);
-                    const dy = y2 - y1;
-                    const bow = (dy >= 0 ? 1 : -1) * Math.min(25, Math.abs(dy) * 0.2);
-                    const controlY1 = y1 + bow;
-                    const controlY2 = y2 - bow;
-                    d = `M ${x1} ${y1} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${x2} ${y2}`;
-                }
-
-                let strokeColor = '#3f3f46';
-                if (link.type === 'inbound-dest') strokeColor = '#10b981';
-                else if (link.type === 'inbound-tc') strokeColor = '#eab308';
-                else if (link.type === 'inbound-ivr') strokeColor = '#3b82f6';
-                else if (link.type === 'tc-true') strokeColor = '#10b981';
-                else if (link.type === 'tc-false') strokeColor = '#ef4444';
-                else if (link.type === 'tc-ivr') strokeColor = '#3b82f6';
-                else if (link.type === 'ivr-entry') strokeColor = '#3b82f6';
-                else if (link.type === 'ivr-timeout') strokeColor = '#f59e0b';
-                else if (link.type === 'ivr-invalid') strokeColor = '#ef4444';
-                else if (link.type === 'rg-member') strokeColor = '#a855f7';
-                else if (link.type === 'queue-member') strokeColor = '#f59e0b';
-                else if (link.type === 'queue-dest') strokeColor = '#3b82f6';
-                else if (link.type === 'ext-route-restricted') strokeColor = '#f97316';
-                else if (link.type === 'ext-route-global') strokeColor = '#64748b';
-                else if (link.type === 'route-trunk') strokeColor = '#06b6d4';
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('id', link.id);
                 path.setAttribute('class', 'diagram-wire transition-all duration-200');
-                path.setAttribute('d', d);
+                path.setAttribute('d', makeWirePath(sourceNode, targetNode));
                 path.setAttribute('fill', 'none');
                 path.setAttribute('stroke', strokeColor);
-                path.setAttribute('stroke-width', '2px');
+                path.setAttribute('stroke-width', isGlobalMesh ? '1px' : '2px');
                 path.setAttribute('stroke-linecap', 'round');
+                if (FAILING_WIRES.has(link.type)) path.setAttribute('stroke-dasharray', '7 5');
+                if (!isGlobalMesh) path.setAttribute('marker-end', `url(#arrow-${link.type})`);
                 path.setAttribute('data-type', link.type);
-                path.style.opacity = '0.5';
-                
+                path.setAttribute('data-src', link.source);
+                path.setAttribute('data-tgt', link.target);
+                path.style.opacity = isGlobalMesh ? '0.16' : '0.55';
+
                 svgWires.appendChild(path);
             });
 
@@ -7666,11 +8008,11 @@ function isTabAllowed(tabName) {
                 fo.setAttribute('class', 'overflow-visible');
 
                 fo.innerHTML = `
-                    <div data-node-id="${node.id}" 
-                         onmouseenter="highlightNode('${node.id}')" 
-                         onmouseleave="resetHighlight()" 
+                    <div data-node-id="${node.id}" data-node-type="${node.type}"
+                         onmouseenter="highlightNode('${node.id}')"
+                         onmouseleave="resetHighlight()"
                          class="diagram-card w-full h-full bg-[#111115]/95 backdrop-blur-md border ${accentColorClass} rounded-xl p-3 flex flex-col transition duration-200 cursor-pointer relative select-none">
-                        
+
                         <div class="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#1c1c24] bg-[#27272a]"></div>
                         <div class="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#1c1c24] bg-[#27272a]"></div>
 
@@ -7688,7 +8030,16 @@ function isTabAllowed(tabName) {
                     strokeDashoffset: [anime.setDashoffset, 0],
                     easing: 'easeInOutCubic',
                     duration: 850,
-                    delay: anime.stagger(20)
+                    delay: anime.stagger(20),
+                    complete: () => {
+                        // The draw-in trick bakes stroke-dasharray at the ORIGINAL path
+                        // length; if it stays, stretching a wire later renders gaps
+                        // (line-gap-line). Strip inline dash props so the path is solid.
+                        document.querySelectorAll('.diagram-wire').forEach(wire => {
+                            wire.style.strokeDasharray = '';
+                            wire.style.strokeDashoffset = '';
+                        });
+                    }
                 });
                 anime({
                     targets: '.diagram-card',
@@ -7779,46 +8130,16 @@ function isTabAllowed(tabName) {
         function resetHighlight() {
             const connections = document.querySelectorAll('.diagram-wire');
             const cards = document.querySelectorAll('.diagram-card');
-            
+
             connections.forEach(wire => {
-                wire.style.strokeWidth = '2px';
-                wire.style.filter = 'none';
-                
                 const type = wire.getAttribute('data-type');
-                if (type === 'inbound-dest') {
-                    wire.style.stroke = '#10b981';
-                    wire.style.opacity = '0.5';
-                } else if (type === 'inbound-tc') {
-                    wire.style.stroke = '#eab308';
-                    wire.style.opacity = '0.5';
-                } else if (type === 'tc-true') {
-                    wire.style.stroke = '#10b981';
-                    wire.style.opacity = '0.5';
-                } else if (type === 'tc-false') {
-                    wire.style.stroke = '#ef4444';
-                    wire.style.opacity = '0.5';
-                } else if (type === 'rg-member') {
-                    wire.style.stroke = '#a855f7';
-                    wire.style.opacity = '0.5';
-                } else if (type === 'queue-member') {
-                    wire.style.stroke = '#f59e0b';
-                    wire.style.opacity = '0.5';
-                } else if (type === 'queue-dest') {
-                    wire.style.stroke = '#3b82f6';
-                    wire.style.opacity = '0.5';
-                } else if (type === 'ext-route-restricted') {
-                    wire.style.stroke = '#f97316';
-                    wire.style.opacity = '0.5';
-                } else if (type === 'ext-route-global') {
-                    wire.style.stroke = '#64748b';
-                    wire.style.strokeWidth = '2px';
-                    wire.style.opacity = '0.5';
-                } else if (type === 'route-trunk') {
-                    wire.style.stroke = '#06b6d4';
-                    wire.style.opacity = '0.5';
-                }
+                const isGlobalMesh = type === 'ext-route-global';
+                wire.style.stroke = WIRE_COLORS[type] || '#3f3f46';
+                wire.style.strokeWidth = isGlobalMesh ? '1px' : '2px';
+                wire.style.filter = 'none';
+                wire.style.opacity = isGlobalMesh ? '0.16' : '0.55';
             });
-            
+
             cards.forEach(card => {
                 card.style.opacity = '1';
                 card.style.borderColor = '';
@@ -9532,6 +9853,45 @@ function isTabAllowed(tabName) {
         }
         window.saveAllDongleGains = saveAllDongleGains;
         window.saveModemConfig = saveAllDongleGains;
+
+        async function loadAudioGlobals() {
+            const threshEl = document.getElementById('globalVadThreshold');
+            const hangEl = document.getElementById('globalVadHangover');
+            if (!threshEl || !hangEl) return;
+            try {
+                const res = await fetch('/api/config/audio-globals');
+                const data = await res.json();
+                if (data.success) {
+                    threshEl.value = String(parseFloat(data.globals.vad_threshold).toFixed(2));
+                    hangEl.value = String(parseInt(data.globals.vad_hangover, 10));
+                    if (!threshEl.value || threshEl.selectedIndex === -1) threshEl.value = '0.20';
+                    if (!hangEl.value || hangEl.selectedIndex === -1) hangEl.value = '250';
+                }
+            } catch (_) {}
+        }
+        window.loadAudioGlobals = loadAudioGlobals;
+
+        async function saveAudioGlobals() {
+            const threshEl = document.getElementById('globalVadThreshold');
+            const hangEl = document.getElementById('globalVadHangover');
+            if (!threshEl || !hangEl) return;
+            try {
+                const res = await fetch('/api/config/audio-globals', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vad_threshold: threshEl.value, vad_hangover: hangEl.value })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(isRtl ? 'تم حفظ إعدادات معالجة الصوت الشاملة.' : 'Universal voice processing settings saved.', 'success');
+                } else {
+                    showToast(data.error || 'Failed to save universal voice processing settings.', 'error');
+                }
+            } catch (e) {
+                showToast('Error saving universal settings: ' + e.message, 'error');
+            }
+        }
+        window.saveAudioGlobals = saveAudioGlobals;
 
         async function resetAllDongleGains() {
             if (!confirm(isRtl ? 'هل أنت تأكد من إعادة ضبط مستويات كسب جميع الشرائح إلى (txgain=0 و rxgain=0) في dongle.conf؟' : 'Are you sure you want to reset all dongle gains to txgain=0 and rxgain=0 in dongle.conf?')) return;

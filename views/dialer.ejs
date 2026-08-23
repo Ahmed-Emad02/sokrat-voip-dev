@@ -50,6 +50,22 @@ const isRtl = currentLang === 'ar';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sokrat VOIP — <%= t.title %></title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .config-input {
+            background-color: var(--bg-card) !important;
+            border: 1px solid var(--border-primary) !important;
+            color: var(--text-primary) !important;
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+            outline: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .config-input:focus {
+            border-color: var(--accent-color) !important;
+            box-shadow: 0 0 0 2px var(--accent-transparent) !important;
+        }
+    </style>
 </head>
 <body class="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen flex flex-col md:flex-row m-0 p-0 font-sans">
     <%- include('sidebar', { activeTab: 'dialer', isRtl, currentLang }) %>

@@ -544,6 +544,28 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         background: rgba(16, 185, 129, 0.35) !important;
     }
 
+    /* Light theme — match the solid primary style: deep red background, white text */
+    .light-theme .config-action-btn--positive {
+        background: #b91c1c !important;
+        color: #ffffff !important;
+    }
+    .light-theme .config-action-btn--positive::before {
+        background: #991b1b !important;
+    }
+    .light-theme .config-action-btn--state-on {
+        background: rgba(5, 150, 105, 0.14) !important;
+        color: #047857 !important;
+    }
+    .light-theme .config-action-btn--danger,
+    .light-theme .config-action-btn--state-off {
+        background: #b91c1c !important;
+        color: #ffffff !important;
+    }
+    .light-theme .config-action-btn--danger::before,
+    .light-theme .config-action-btn--state-off::before {
+        background: #991b1b !important;
+    }
+
     /* =============================================
        4. CONFIG SIDEBAR TAB BUTTONS
        ============================================= */
@@ -743,6 +765,54 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         opacity: 1 !important;
     }
 
+    /* Unified stylized appearance for all select elements across Sokrat VoIP */
+    select:not([multiple]):not(.flatpickr-monthDropdown-months) {
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        background-color: var(--bg-card) !important;
+        color: var(--text-primary) !important;
+        border: 1px solid var(--border-primary) !important;
+        border-radius: 0.5rem;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a1a1aa' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E") !important;
+        background-repeat: no-repeat !important;
+        background-position: right 0.65rem center !important;
+        background-size: 0.85rem 0.85rem !important;
+        padding-right: 2rem !important;
+        cursor: pointer;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    html[dir="rtl"] select:not([multiple]):not(.flatpickr-monthDropdown-months),
+    [dir="rtl"] select:not([multiple]):not(.flatpickr-monthDropdown-months) {
+        background-position: left 0.65rem center !important;
+        padding-right: 0.75rem !important;
+        padding-left: 2rem !important;
+    }
+    select:not([multiple]):not(.flatpickr-monthDropdown-months):focus {
+        border-color: var(--accent-color) !important;
+        outline: none !important;
+        box-shadow: 0 0 0 2px var(--accent-transparent) !important;
+    }
+    select:not([multiple]):not(.flatpickr-monthDropdown-months):disabled {
+        opacity: 0.5 !important;
+        cursor: not-allowed !important;
+    }
+    select option {
+        background-color: var(--bg-secondary) !important;
+        color: var(--text-primary) !important;
+    }
+    select[data-player-speed] {
+        padding-right: 1.25rem !important;
+        background-position: right 0.25rem center !important;
+        background-size: 0.65rem 0.65rem !important;
+    }
+    html[dir="rtl"] select[data-player-speed],
+    [dir="rtl"] select[data-player-speed] {
+        padding-left: 1.25rem !important;
+        padding-right: 0.35rem !important;
+        background-position: left 0.25rem center !important;
+    }
+
     /* Shared dropdown contract for native selects and application comboboxes. */
     .config-dropdown-trigger {
         min-height: 2.125rem;
@@ -836,11 +906,11 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         border-radius: 4px;
     }
     .config-dropdown-options::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.25);
+        background: rgba(220, 38, 38, 0.45);
         border-radius: 4px;
     }
     .config-dropdown-options::-webkit-scrollbar-thumb:hover {
-        background: var(--accent-color);
+        background: rgba(220, 38, 38, 0.7);
     }
 
     /* Terminal panes intentionally stay dark in both themes. */
@@ -989,7 +1059,92 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         color: #92400e !important; /* text-amber-800 */
         border-color: #fde68a !important; /* border-amber-200 */
     }
-
+    .light-theme .user-avatar-badge {
+        background-color: #ffffff !important;
+        background-image: none !important;
+        border-color: #cbd5e1 !important;
+        color: #111827 !important;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+    }
+    /* Time Groups Schedule Rule Card light mode high-contrast overrides */
+    .light-theme .rule-card {
+        background-color: #f0f9ff !important;
+        border-color: #bae6fd !important;
+        color: #0f172a !important;
+    }
+    .light-theme .rule-card:hover {
+        border-color: #7dd3fc !important;
+    }
+    .light-theme .rule-card .text-sky-300 {
+        color: #0369a1 !important;
+        font-weight: 800 !important;
+    }
+    .light-theme .rule-card .text-sky-400 {
+        color: #0284c7 !important;
+    }
+    .light-theme .rule-card .border-sky-500\/15,
+    .light-theme .rule-card .border-sky-500\/20,
+    .light-theme .rule-card .border-sky-500\/30 {
+        border-color: #bae6fd !important;
+    }
+    .light-theme .rule-card .bg-sky-500\/20 {
+        background-color: #e0f2fe !important;
+        color: #0369a1 !important;
+    }
+    .light-theme .rule-card .rule-chip-preview {
+        background-color: #e0f2fe !important;
+        color: #0369a1 !important;
+        border-color: #7dd3fc !important;
+        font-weight: 700 !important;
+    }
+    .light-theme .rule-card .text-indigo-300 {
+        color: #4338ca !important;
+        font-weight: 700 !important;
+    }
+    .light-theme .rule-card .bg-indigo-500\/15 {
+        background-color: #e0e7ff !important;
+        border-color: #c7d2fe !important;
+    }
+    .light-theme .rule-card .bg-indigo-500\/15:hover {
+        background-color: #c7d2fe !important;
+    }
+    .light-theme .rule-card .bg-sky-500\/15 {
+        background-color: #e0f2fe !important;
+        color: #0369a1 !important;
+        border-color: #bae6fd !important;
+        font-weight: 700 !important;
+    }
+    .light-theme .rule-card .bg-sky-500\/15:hover {
+        background-color: #bae6fd !important;
+    }
+    .light-theme .rule-card .text-emerald-300 {
+        color: #047857 !important;
+        font-weight: 700 !important;
+    }
+    .light-theme .rule-card .bg-emerald-500\/15 {
+        background-color: #d1fae5 !important;
+        border-color: #a7f3d0 !important;
+        font-weight: 700 !important;
+    }
+    .light-theme .rule-card .bg-emerald-500\/15:hover {
+        background-color: #a7f3d0 !important;
+    }
+    .light-theme .rule-card .day-toggle-btn:not(.bg-blue-600) {
+        background-color: #f1f5f9 !important;
+        color: #334155 !important;
+        border-color: #cbd5e1 !important;
+        font-weight: 700 !important;
+    }
+    .light-theme .rule-card .day-toggle-btn:not(.bg-blue-600):hover {
+        background-color: #e2e8f0 !important;
+        color: #0f172a !important;
+    }
+    .light-theme .rule-card .day-toggle-btn.bg-blue-600 {
+        background-color: #2563eb !important;
+        color: #ffffff !important;
+        font-weight: 900 !important;
+        border-color: #1d4ed8 !important;
+    }
     /* Secondary actions styling overrides in light mode */
     .light-theme button[onclick*="reloadDongle"],
     .light-theme button[onclick*="resetUsbPort"],
@@ -1776,15 +1931,15 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         scrollbar-color: rgba(220, 38, 38, 0.35) transparent;
     }
 
-    /* Light Theme Scrollbars */
+    /* Light Theme Scrollbars — keep the brand red, just a touch stronger for white backgrounds */
     .light-theme ::-webkit-scrollbar-thumb {
-        background: rgba(148, 163, 184, 0.4);
+        background: rgba(220, 38, 38, 0.45);
     }
     .light-theme ::-webkit-scrollbar-thumb:hover {
-        background: rgba(148, 163, 184, 0.75);
+        background: rgba(220, 38, 38, 0.7);
     }
     .light-theme * {
-        scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+        scrollbar-color: rgba(220, 38, 38, 0.45) transparent;
     }
 </style>
 
@@ -2203,8 +2358,8 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 <span class="sidebar-text"><%= sbT.configLink %></span>
             </a>
             <% } %>
+        </nav>
     </div>
-
     <!-- Sidebar Footer Action Panel -->
     <div class="flex flex-col gap-4 border-t border-[var(--border-primary)] pt-4 mt-auto">
         <!-- Collapse / Expand Sidebar Button for Desktop (right above system clock) -->

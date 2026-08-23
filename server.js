@@ -4242,8 +4242,12 @@ function addDongleSlotToConf(dongleData) {
     const dataPort = String(dongleData.data || '/dev/ttyUSB2').trim();
     const imei = String(dongleData.imei || '').trim();
     const imsi = String(dongleData.imsi || '').trim();
-    const rx = Math.max(-10, Math.min(10, parseInt(dongleData.rxgain, 10) || 0));
-    const tx = Math.max(-10, Math.min(10, parseInt(dongleData.txgain, 10) || 0));
+    // Default gain is 3 dB for new slots unless explicitly provided
+    const DEFAULT_DONGLE_GAIN = 3;
+    const rxRaw = parseInt(dongleData.rxgain, 10);
+    const txRaw = parseInt(dongleData.txgain, 10);
+    const rx = Math.max(-10, Math.min(10, Number.isFinite(rxRaw) ? rxRaw : DEFAULT_DONGLE_GAIN));
+    const tx = Math.max(-10, Math.min(10, Number.isFinite(txRaw) ? txRaw : DEFAULT_DONGLE_GAIN));
 
     const newSection = `\n[${dName}]\ntxgain=${tx}\nrxgain=${rx}\naudio=${audioPort}\ndata=${dataPort}\nimei=${imei}\nimsi=${imsi}\n`;
     content = content.trimEnd() + '\n' + newSection;
@@ -6233,9 +6237,11 @@ function updateVoicemailConf(extNum, displayName, vmVal) {
 }
 
 // Helper function to sync extension astdb recording & user settings
-async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip') {
+async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'both', vadGateVal = '1') {
     const techUpper = (tech || 'sip').toUpperCase();
     const techLower = (tech || 'sip').toLowerCase();
+    const validDenoise = ['both', 'rx', 'tx', 'off'].includes(denoiseVal) ? denoiseVal : 'both';
+    const validVadGate = (vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
     const commands = [
         `database put AMPUSER ${extNum}/answermode disabled`,
         `database put AMPUSER ${extNum}/cfringtimer 0`,
@@ -6251,6 +6257,8 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
         `database put AMPUSER ${extNum}/recording/priority 10`,
         `database put AMPUSER ${extNum}/ringtimer 0`,
         `database put AMPUSER ${extNum}/voicemail ${vmVal}`,
+        `database put AMPUSER ${extNum}/ai_denoise ${validDenoise}`,
+        `database put AMPUSER ${extNum}/vad_gate ${validVadGate}`,
         `database put DEVICE/${extNum} default_user "${extNum}"`,
         `database put DEVICE/${extNum} dial "${techUpper}/${extNum}"`,
         `database put DEVICE/${extNum} tech "${techLower}"`,
@@ -6391,7 +6399,33 @@ app.get('/api/config/extensions', async (req, res) => {
             LEFT JOIN ${tables.employeeExtras} ee ON ee.extension = u.extension
             ORDER BY CAST(u.extension AS UNSIGNED) ASC
         `);
-        res.json({ success: true, extensions });
+
+        let denoiseMap = {};
+        let vadMap = {};
+        try {
+            const { stdout: astdbOut } = await execPromise(`${ASTERISK_BIN} -rx "database show AMPUSER"`);
+            const lines = (astdbOut || '').split('\n');
+            for (const line of lines) {
+                const matchDenoise = line.match(/\/AMPUSER\/(\d+)\/ai_denoise\s*:\s*(\w+)/);
+                if (matchDenoise) {
+                    denoiseMap[matchDenoise[1]] = matchDenoise[2].trim();
+                }
+                const matchVad = line.match(/\/AMPUSER\/(\d+)\/vad_gate\s*:\s*(\w+)/);
+                if (matchVad) {
+                    vadMap[matchVad[1]] = matchVad[2].trim();
+                }
+            }
+        } catch (err) {
+            console.error('[GET /api/config/extensions] AstDB denoise/VAD lookup error:', err.message);
+        }
+
+        const enriched = extensions.map(ext => ({
+            ...ext,
+            denoise: denoiseMap[ext.extension] || 'both',
+            vad_gate: vadMap[ext.extension] !== undefined ? vadMap[ext.extension] : '1'
+        }));
+
+        res.json({ success: true, extensions: enriched });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -6400,7 +6434,7 @@ app.get('/api/config/extensions', async (req, res) => {
 // POST /api/config/extensions - Create new Generic SIP Extension
 app.post('/api/config/extensions', async (req, res) => {
     try {
-        const { extension, name, secret, voicemail, tech } = req.body;
+        const { extension, name, secret, voicemail, tech, denoise, vad_gate, vadGate } = req.body;
         if (!extension || !/^\d+$/.test(extension)) {
             return res.status(400).json({ success: false, error: 'Valid numeric Extension number is required.' });
         }
@@ -6481,9 +6515,9 @@ app.post('/api/config/extensions', async (req, res) => {
             updatePjsipCustomConfig(extNum, '', '', 'delete');
             reloadPjsip();
         }
-
-        // 4. Update astdb entries for call recording ALWAYS, DEVICE dial mapping and Voicemail setting
-        await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech);
+        const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
+        const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
+        await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech, denoiseVal, vadGateVal);
         reloadPbxConfig();
 
         res.json({
@@ -6500,8 +6534,7 @@ app.post('/api/config/extensions', async (req, res) => {
 app.put('/api/config/extensions/:extension', async (req, res) => {
     try {
         const extNum = String(req.params.extension).trim();
-        const { name, secret, voicemail, tech } = req.body;
-
+        const { name, secret, voicemail, tech, denoise, vad_gate, vadGate } = req.body;
         const displayName = String(name || '').trim();
         const extSecret = String(secret || '').trim();
         const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
@@ -6555,7 +6588,9 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         pjsipPresence[extNum] = false;
         delete pendingOffline[extNum];
 
-        await setExtensionAstdbDefaults(extNum, displayName || extNum, vmVal, devTech);
+        const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
+        const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
+        await setExtensionAstdbDefaults(extNum, displayName || extNum, vmVal, devTech, denoiseVal, vadGateVal);
         reloadPbxConfig();
 
         res.json({ success: true, message: `Extension ${extNum} updated successfully.` });
@@ -9043,6 +9078,7 @@ app.get('/api/config/modem', async (req, res) => {
                 }
             }
         } catch (_) {}
+
         res.json({ success: true, defaults, dongles });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -9313,7 +9349,45 @@ app.get('/api/config/modem/rtcp', async (req, res) => {
     }
 });
 
+// GET /api/config/audio-globals - Universal VAD/RNNoise tuning (threshold & hangover) used by the dialplan for every extension
+app.get('/api/config/audio-globals', async (req, res) => {
+    try {
+        let vad_threshold = '0.20';
+        let vad_hangover = '250';
+        try {
+            const { stdout } = await execPromise(`${ASTERISK_BIN} -rx "database show AUDIO_GLOBALS"`);
+            const thresh = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_threshold\s*:\s*([\d\.]+)/);
+            const hang = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_hangover\s*:\s*(\d+)/);
+            if (thresh) vad_threshold = thresh[1];
+            if (hang) vad_hangover = hang[1];
+        } catch (_) {}
+        res.json({ success: true, globals: { vad_threshold, vad_hangover } });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// PUT /api/config/audio-globals - Update universal VAD/RNNoise tuning
+app.put('/api/config/audio-globals', async (req, res) => {
+    try {
+        const threshold = parseFloat(req.body.vad_threshold);
+        const hangover = parseInt(req.body.vad_hangover, 10);
+        if (isNaN(threshold) || threshold < 0.01 || threshold > 0.95) {
+            return res.status(400).json({ success: false, error: 'vad_threshold must be between 0.01 and 0.95' });
+        }
+        if (isNaN(hangover) || hangover < 50 || hangover > 2000) {
+            return res.status(400).json({ success: false, error: 'vad_hangover must be between 50 and 2000 ms' });
+        }
+        await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS vad_threshold ${threshold.toFixed(2)}"`);
+        await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS vad_hangover ${hangover}"`);
+        res.json({ success: true, globals: { vad_threshold: threshold.toFixed(2), vad_hangover: String(hangover) }, message: 'Universal voice processing settings saved. Applied to all extensions immediately.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // POST /api/config/modem/gain - Update volume gain (txgain, rxgain) for dongle(s)
+// Note: RNNoise/VAD is extension-scoped only (AMPUSER AstDB); dongles carry no audio-filter settings.
 app.post('/api/config/modem/gain', async (req, res) => {
     try {
         const { dongleId, rxgain, txgain, gains } = req.body;
@@ -9344,15 +9418,14 @@ app.post('/api/config/modem/gain', async (req, res) => {
             return res.status(400).json({ success: false, error: 'No valid dongle IDs provided.' });
         }
 
-        updateDongleGainsInConf(safeGainMap, false);
+        if (Object.keys(safeGainMap).length > 0) {
+            updateDongleGainsInConf(safeGainMap, false);
+            try {
+                await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so']);
+            } catch (_) {}
+        }
 
-        try {
-            await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_dongle.so']);
-        } catch (_) {}
-
-        // dongle restart disabled
-
-        res.json({ success: true, message: 'Dongle volume gain updated successfully and reloaded in Asterisk.' });
+        res.json({ success: true, message: 'Dongle configuration updated successfully.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -9429,8 +9502,8 @@ app.post('/api/config/modem/dongle-slot', requireAuth, async (req, res) => {
                 data: (count === 1 && dataPort) ? dataPort : dataPath,
                 imei: (count === 1 && imei) ? imei : '',
                 imsi: (count === 1 && imsi) ? imsi : '',
-                rxgain: rxgain || 0,
-                txgain: txgain || 0
+                rxgain: Number.isFinite(parseInt(rxgain, 10)) ? parseInt(rxgain, 10) : 3,
+                txgain: Number.isFinite(parseInt(txgain, 10)) ? parseInt(txgain, 10) : 3
             });
 
             await pool.query(`

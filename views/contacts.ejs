@@ -813,7 +813,7 @@ const isRtl = currentLang === 'ar';
                 </div>
                 <div>
                     <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="blAction"><%= isRtl ? 'إجراء استجابة الحظر' : 'Block Response Action' %></label>
-                    <select id="blAction" class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500">
+                    <select id="blAction" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                         <option value="zapateller"><%= isRtl ? 'لهجة Zapateller + رسالة غير مستعمل (Default)' : 'Zapateller Tone + Disconnected Prompt (Default)' %></option>
                         <option value="hangup"><%= isRtl ? 'إنهاء المكالمة فوراً (Immediate Hangup)' : 'Immediate Hangup' %></option>
                         <option value="congestion"><%= isRtl ? 'نغمة الازدحام (Congestion Signal)' : 'Congestion Signal' %></option>

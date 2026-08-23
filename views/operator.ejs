@@ -730,7 +730,7 @@ const isRtl = currentLang === 'ar';
                                     <select id="actionSelect-<%= emp.extension %>"
                                             onchange="handleSelectAction('<%= emp.extension %>', this.value); this.value='';"
                                             <%= (callState === 'incall' || callState === 'ringing') ? '' : 'disabled' %>
-                                            class="action-select w-full bg-[#18181b] text-xs font-semibold rounded-lg px-2.5 py-1.5 border border-[#27272a] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 text-slate-300">
+                                            class="action-select w-full bg-[var(--bg-card)] text-xs font-semibold rounded-lg px-2.5 py-1.5 border border-[var(--border-primary)] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 text-[var(--text-primary)]">
                                         <option value="" disabled selected hidden><%= isRtl ? 'إجراءات المكالمة' : 'Call Actions' %></option>
                                         <option value="listen"><%= isRtl ? 'استماع (Listen)' : 'Listen' %></option>
                                         <option value="whisper"><%= isRtl ? 'همس (Whisper)' : 'Whisper' %></option>
@@ -1591,7 +1591,7 @@ const isRtl = currentLang === 'ar';
                     <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                     <%= t.hostExt %>
                 </label>
-                <select id="intercomCallerSelect" onchange="onIntercomHostChange()" class="bg-[#18181b] border border-[#27272a] rounded-lg text-xs font-bold px-3 py-1.5 text-white focus:outline-none focus:border-emerald-500 flex-1 max-w-[220px]">
+                <select id="intercomCallerSelect" onchange="onIntercomHostChange()" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-bold px-3 py-1.5 text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 flex-1 max-w-[220px]">
                     <% roster.forEach(emp => { %>
                         <option value="<%= emp.extension %>"><%= emp.name %> (<%= emp.extension %>)</option>
                     <% }) %>

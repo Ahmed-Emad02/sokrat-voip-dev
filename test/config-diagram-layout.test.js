@@ -1,0 +1,88 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+const ejs = require('ejs');
+
+const configEjsPath = path.join(__dirname, '../views/config.ejs');
+
+async function renderDiagramTab() {
+    return ejs.renderFile(configEjsPath, {
+        currentPage: '/config',
+        currentLang: 'en',
+        isRtl: false,
+        isSuperAdmin: true,
+        isRoot: true,
+        user: { username: 'admin', isRoot: true },
+        currentUser: { username: 'admin', isRoot: true },
+        allowedTabs: ['diagram'],
+        isTabAllowed: () => true
+    });
+}
+
+test('config diagram uses graph-derived layered layout instead of fixed category columns', async () => {
+    const html = await renderDiagramTab();
+    const content = fs.readFileSync(configEjsPath, 'utf8');
+
+    assert.ok(content.includes('computeDiagramLayout'), 'Layered layout engine must exist');
+    assert.ok(content.includes('Longest-path layering'), 'Layout must derive layers from the link graph');
+    assert.ok(content.includes('barycenter ordering'), 'Layout must reorder layers to reduce crossings');
+    assert.equal(/x: 50 \+ colSpacing \* \d/.test(content), false, 'Fixed per-category column slots must be gone');
+    assert.ok(html.includes('section-diagram'), 'Diagram section must still render');
+});
+
+test('config diagram cards are draggable with persisted positions and auto-arrange reset', async () => {
+    const content = fs.readFileSync(configEjsPath, 'utf8');
+
+    assert.ok(content.includes('initDiagramNodeDragging'), 'Node drag initializer must exist');
+    assert.ok(content.includes("addEventListener('pointerdown'"), 'Drag must start from card pointer events');
+    assert.ok(content.includes('saveDiagramNodePosition'), 'Dragged positions must be saved');
+    assert.ok(content.includes('config_diagram_layout_v1'), 'Positions must persist under a versioned key');
+    assert.ok(content.includes('resetDiagramLayout'), 'Auto Arrange reset must be exposed');
+    assert.ok(content.includes('makeWirePath(src, tgt)'), 'Attached wires must re-route while dragging');
+});
+
+test('config diagram wires render arrowheads, dashed failure paths and a faint global mesh', async () => {
+    const content = fs.readFileSync(configEjsPath, 'utf8');
+
+    assert.ok(content.includes('marker-end'), 'Wires must carry directional arrows');
+    assert.ok(content.includes('auto-start-reverse'), 'Arrow markers must be defined');
+    assert.ok(content.includes("FAILING_WIRES.has(link.type)"), 'Failure wires must be styled distinctly');
+    assert.ok(content.includes("'7 5'"), 'Dashed stroke for failure paths');
+    assert.ok(content.includes('isGlobalMesh ? \'0.16\' : \'0.55\''), 'Global outbound mesh must be de-emphasized');
+});
+
+test('diagram cards stay attached to their wires while dragging (no arrow split)', () => {
+    const content = fs.readFileSync(configEjsPath, 'utf8');
+
+    // Drag session must freeze wire transitions, otherwise the path morphs
+    // 200ms behind the card and the arrowhead separates from the line
+    assert.ok(content.includes('wires-live'), 'Drag sessions must toggle a wires-live class');
+    assert.ok(content.includes('#diagramSvg.wires-live .diagram-wire'), 'wires-live must disable wire transitions');
+    const startAdds = content.includes("svgEl.classList.add('wires-live')");
+    const endRemoves = content.includes("svgEl.classList.remove('wires-live')");
+    assert.ok(startAdds && endRemoves, 'wires-live must be added on drag start and removed on drag end');
+
+    // The draw-in animation must not leave stroke-dasharray behind, or stretched
+    // wires render as line-gap-line fragments
+    assert.ok(content.includes('complete: () => {'), 'Entrance animation needs a complete callback');
+    assert.ok(content.includes("wire.style.strokeDasharray = ''"), 'Stale dash props must be stripped after animation');
+    assert.ok(content.includes('// Stale draw-in dash props would break the stretched path into pieces'), 'Drag re-routing must also clear stale dash props');
+});
+
+test('light theme diagram cards are high-visibility and canvas fills the viewport', async () => {
+    const html = await renderDiagramTab();
+    const content = fs.readFileSync(configEjsPath, 'utf8');
+
+    // Cards expose their node type so light-theme CSS can apply strong accent borders
+    assert.ok(html.includes('data-node-type='), 'Cards must carry their node type');
+    for (const type of ['inbound', 'ringgroup', 'queue', 'extension', 'outbound', 'trunk', 'timecondition', 'ivr']) {
+        assert.ok(content.includes(`[data-node-type="${type}"]`), `Light theme must define an accent border for ${type}`);
+    }
+    assert.ok(content.includes('box-shadow: 0 3px 12px rgba(15, 23, 42, 0.12)'), 'Light cards must use solid shadows for visibility');
+
+    // Canvas consumes remaining viewport space instead of a fixed estimate
+    assert.ok(content.includes('sizeDiagramCanvas'), 'Canvas sizing helper must exist');
+    assert.ok(content.includes("window.addEventListener('resize'"), 'Canvas must resize with the window');
+    assert.ok(content.includes('Math.max(560, Math.floor(available))'), 'Canvas height must track available space with a sane floor');
+});
