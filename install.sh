@@ -14,8 +14,8 @@ NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf 2>/dev/null | cut -d= -f2- | xargs || true)
 
 echo "============================================"
-echo " Issabel Dashboard Installer v1.0.3"
-echo " Target: Issabel 5 / Asterisk 18"
+echo " Sokrat VOIP Installer v1.0.3"
+echo " Target: Asterisk 18"
 echo "============================================"
 
 # Collect required interactive input BEFORE any system checks or package installations.
@@ -206,7 +206,7 @@ fi
 if command -v ffmpeg &>/dev/null || [ -x /usr/local/bin/ffmpeg ]; then
     echo "  ffmpeg verified: $(/usr/local/bin/ffmpeg -version 2>&1 | head -1 || ffmpeg -version 2>&1 | head -1)"
 else
-    echo "  Notice: ffmpeg binary skipped; audio conversion will use sox/issabel fallback"
+    echo "  Notice: ffmpeg binary skipped; audio conversion will use sox fallback"
 fi
 # ──────────────────────────────────────────────
 # Step 5 — Create the Environment File
