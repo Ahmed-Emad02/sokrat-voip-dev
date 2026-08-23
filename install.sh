@@ -925,8 +925,5 @@ journalctl -u sokrat-voip -n 10 --no-pager -l
 echo ""
 echo "============================================"
 echo " Installation complete!"
-echo ""
-echo "  http://<your-issabel-ip>     -> Custom Dashboard"
-echo "  https://<your-issabel-ip>    -> Custom Dashboard (SSL)"
-echo "  http://<your-issabel-ip>:3000 -> Issabel Web Interface"
-echo "============================================"
+echo " Access Sokrat VOIP on http://<machine_ip>/"
+
