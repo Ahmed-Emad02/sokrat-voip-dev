@@ -7180,19 +7180,71 @@ function isTabAllowed(tabName) {
                 if (!diagramCardDrag) return;
                 const ctx = diagramRenderCtx;
                 const pt = toSvgCoords(e.clientX, e.clientY);
-                const nx = Math.max(0, pt.x - diagramCardDrag.dx);
-                const ny = Math.max(0, pt.y - diagramCardDrag.dy);
+                let nx = pt.x - diagramCardDrag.dx;
+                let ny = pt.y - diagramCardDrag.dy;
                 if (!diagramCardDrag.moved && (Math.abs(nx - diagramCardDrag.node.x) > 2 || Math.abs(ny - diagramCardDrag.node.y) > 2)) {
                     diagramCardDrag.moved = true;
                     document.body.style.userSelect = 'none';
                 }
                 if (!diagramCardDrag.moved) return;
+
+                // No invisible walls: the coordinate space starts at (0,0), so dragging
+                // past the top/left edge shifts the WHOLE board (nodes, cards, wires)
+                // instead of blocking the card.
+                const EDGE_PAD = 60;
+                if (nx < EDGE_PAD || ny < EDGE_PAD) {
+                    const shiftX = nx < EDGE_PAD ? Math.ceil(EDGE_PAD - nx) : 0;
+                    const shiftY = ny < EDGE_PAD ? Math.ceil(EDGE_PAD - ny) : 0;
+                    if (shiftX || shiftY) {
+                        diagramNodesList.forEach(n => { n.x += shiftX; n.y += shiftY; });
+                        const nodeById = new Map(diagramNodesList.map(n => [n.id, n]));
+                        svgNodes.querySelectorAll('foreignObject').forEach(fo => {
+                            const div = fo.querySelector && fo.querySelector('[data-node-id]');
+                            const n = div ? nodeById.get(div.getAttribute('data-node-id')) : null;
+                            if (n) {
+                                fo.setAttribute('x', n.x);
+                                fo.setAttribute('y', n.y);
+                            }
+                        });
+                        document.querySelectorAll('.diagram-wire').forEach(wire => {
+                            const src = nodeById.get(wire.getAttribute('data-src'));
+                            const tgt = nodeById.get(wire.getAttribute('data-tgt'));
+                            if (src && tgt) {
+                                wire.removeAttribute('stroke-dasharray');
+                                wire.removeAttribute('stroke-dashoffset');
+                                wire.setAttribute('d', ctx.makeWirePath(src, tgt));
+                            }
+                        });
+                        nx += shiftX;
+                        ny += shiftY;
+                    }
+                }
+
                 diagramCardDrag.node.x = nx;
                 diagramCardDrag.node.y = ny;
                 if (diagramCardDrag.fo) {
                     diagramCardDrag.fo.setAttribute('x', nx);
                     diagramCardDrag.fo.setAttribute('y', ny);
                 }
+
+                // Grow the canvas on demand — dragging toward any edge expands the
+                // drawable area instead of clipping the card.
+                const svgEl = document.getElementById('diagramSvg');
+                if (svgEl) {
+                    const curW = parseFloat(svgEl.getAttribute('width')) || 0;
+                    const curH = parseFloat(svgEl.getAttribute('height')) || 0;
+                    const needW = nx + ctx.cardWidth + 160;
+                    const needH = ny + ctx.cardHeight + 160;
+                    if (needW > curW) {
+                        svgEl.setAttribute('width', String(Math.ceil(needW)));
+                        svgEl.style.width = Math.ceil(needW) + 'px';
+                    }
+                    if (needH > curH) {
+                        svgEl.setAttribute('height', String(Math.ceil(needH)));
+                        svgEl.style.height = Math.ceil(needH) + 'px';
+                    }
+                }
+
                 const attached = document.querySelectorAll(
                     `.diagram-wire[data-src="${CSS.escape(diagramCardDrag.node.id)}"], .diagram-wire[data-tgt="${CSS.escape(diagramCardDrag.node.id)}"]`
                 );
@@ -7200,9 +7252,12 @@ function isTabAllowed(tabName) {
                     const src = diagramNodesList.find(n => n.id === wire.getAttribute('data-src'));
                     const tgt = diagramNodesList.find(n => n.id === wire.getAttribute('data-tgt'));
                     if (src && tgt) {
-                        // Stale draw-in dash props would break the stretched path into pieces
-                        wire.style.strokeDasharray = '';
-                        wire.style.strokeDashoffset = '';
+                        // Stale draw-in dash state (attribute OR style) would break the
+                        // stretched path into pieces
+                        wire.removeAttribute('stroke-dasharray');
+                        wire.removeAttribute('stroke-dashoffset');
+                        wire.style.removeProperty('stroke-dasharray');
+                        wire.style.removeProperty('stroke-dashoffset');
                         wire.setAttribute('d', ctx.makeWirePath(src, tgt));
                     }
                 });
@@ -8023,23 +8078,17 @@ function isTabAllowed(tabName) {
                 svgNodes.appendChild(fo);
             });
 
-            // Anime.js SVG wire stroke & node entrance animation
+            // Anime.js entrance: wires FADE in. The old draw-in trick animated
+            // stroke-dashoffset, which leaves stroke-dasharray baked onto every path
+            // (as an SVG attribute) — stretched wires then rendered as line-gap
+            // fragments. A plain opacity fade keeps every wire a solid stroke.
             if (typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                 anime({
                     targets: '.diagram-wire',
-                    strokeDashoffset: [anime.setDashoffset, 0],
-                    easing: 'easeInOutCubic',
-                    duration: 850,
-                    delay: anime.stagger(20),
-                    complete: () => {
-                        // The draw-in trick bakes stroke-dasharray at the ORIGINAL path
-                        // length; if it stays, stretching a wire later renders gaps
-                        // (line-gap-line). Strip inline dash props so the path is solid.
-                        document.querySelectorAll('.diagram-wire').forEach(wire => {
-                            wire.style.strokeDasharray = '';
-                            wire.style.strokeDashoffset = '';
-                        });
-                    }
+                    opacity: [0, (el) => parseFloat(el && el.style ? el.style.opacity : '0.55') || 0.55],
+                    easing: 'easeOutQuad',
+                    duration: 600,
+                    delay: anime.stagger(8)
                 });
                 anime({
                     targets: '.diagram-card',

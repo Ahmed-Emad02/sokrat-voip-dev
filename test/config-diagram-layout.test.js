@@ -63,11 +63,19 @@ test('diagram cards stay attached to their wires while dragging (no arrow split)
     const endRemoves = content.includes("svgEl.classList.remove('wires-live')");
     assert.ok(startAdds && endRemoves, 'wires-live must be added on drag start and removed on drag end');
 
-    // The draw-in animation must not leave stroke-dasharray behind, or stretched
-    // wires render as line-gap-line fragments
-    assert.ok(content.includes('complete: () => {'), 'Entrance animation needs a complete callback');
-    assert.ok(content.includes("wire.style.strokeDasharray = ''"), 'Stale dash props must be stripped after animation');
-    assert.ok(content.includes('// Stale draw-in dash props would break the stretched path into pieces'), 'Drag re-routing must also clear stale dash props');
+    // The draw-in dash animation is gone entirely — no stroke-dasharray residue can
+    // ever fragment a stretched wire (attribute OR style)
+    assert.equal(content.includes('setDashoffset'), false, 'Dash-draw entrance must not be used');
+    assert.ok(content.includes("opacity: [0, (el) => parseFloat(el && el.style ? el.style.opacity : '0.55')"), 'Wires must fade in via opacity');
+    assert.ok(content.includes("wire.removeAttribute('stroke-dasharray')"), 'Drag re-routing strips attribute-level dash state too');
+
+    // Canvas grows on demand so cards can be dragged past the auto-layout edge
+    assert.ok(content.includes("svgEl.setAttribute('width', String(Math.ceil(needW)))"), 'Dragging toward an edge must expand the canvas');
+
+    // No walls on ANY side: crossing the origin shifts the whole board
+    assert.ok(content.includes('shifts the WHOLE board'), 'Origin-crossing drags must shift all nodes/cards/wires');
+    assert.ok(content.includes('diagramNodesList.forEach(n => { n.x += shiftX; n.y += shiftY; })'), 'Board shift must move every node');
+    assert.ok(content.includes("svgNodes.querySelectorAll('foreignObject')"), 'Board shift must reposition every card element');
 });
 
 test('light theme diagram cards are high-visibility and canvas fills the viewport', async () => {

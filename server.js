@@ -180,18 +180,23 @@ function isInternalCdr(row) {
     return classifyCdr(row).direction === 'INTERNAL';
 }
 
+// External destination test: any numeric/+ number of 7+ digits.
+// Covers 0-prefixed local dials, E.164 (+…) and normalized numbers stored without
+// their trunk prefix (e.g. Egyptian mobiles without the leading 0, service codes).
+const CDR_EXTERNAL_DST_SQL = `(c.dst REGEXP '^[0-9+]+$' AND CHAR_LENGTH(c.dst) >= 7)`;
+
 const CDR_DIRECTION_CASE = `
     CASE
-        WHEN c.channel LIKE 'Dongle/%' OR c.channel LIKE 'DAHDI/%' 
+        WHEN c.channel LIKE 'Dongle/%' OR c.channel LIKE 'DAHDI/%'
              OR c.dcontext LIKE 'from-dongle%' OR c.dcontext LIKE 'from-trunk%' OR c.dcontext LIKE 'from-pstn%'
              OR (c.did != '' AND c.did IS NOT NULL)
         THEN 'INBOUND'
-        
+
         WHEN (c.channel LIKE 'SIP/%' OR c.channel LIKE 'PJSIP/%' OR c.channel LIKE 'IAX2/%' OR c.dcontext = 'from-internal' OR c.dcontext LIKE 'from-internal%')
              AND (c.dstchannel LIKE 'Dongle/%' OR c.dstchannel LIKE 'DAHDI/%' OR c.lastdata LIKE 'dongle/%' OR c.lastdata LIKE 'DAHDI/%'
-                  OR (c.dst REGEXP '^[0+]' AND LENGTH(c.dst) >= 7 AND c.dst NOT REGEXP '^[*][0-9]+'))
+                  OR ${CDR_EXTERNAL_DST_SQL})
         THEN 'OUTBOUND'
-        
+
         ELSE 'INTERNAL'
     END
 `;
@@ -200,14 +205,50 @@ const CDR_CALL_SCOPE_CASE = `
     CASE
         WHEN (c.channel LIKE 'SIP/%' OR c.channel LIKE 'PJSIP/%' OR c.channel LIKE 'IAX2/%' OR c.dcontext = 'from-internal' OR c.dcontext LIKE 'from-internal%' OR c.dcontext LIKE 'from-intercom%')
              AND (c.dstchannel NOT LIKE 'Dongle/%' AND c.dstchannel NOT LIKE 'DAHDI/%' AND c.lastdata NOT LIKE 'dongle/%' AND c.lastdata NOT LIKE 'DAHDI/%')
-             AND (c.dst NOT REGEXP '^[0+]' OR LENGTH(c.dst) < 7 OR c.dst REGEXP '^[*][0-9]+' OR c.dst IN ('101','102','111','200','600','300'))
+             AND (NOT ${CDR_EXTERNAL_DST_SQL} OR c.dst IN ('101','102','111','200','600','300'))
              AND c.channel NOT LIKE 'Dongle/%' AND c.channel NOT LIKE 'DAHDI/%'
              AND (c.did = '' OR c.did IS NULL)
              AND c.dcontext NOT LIKE 'from-dongle%' AND c.dcontext NOT LIKE 'from-trunk%' AND c.dcontext NOT LIKE 'from-pstn%'
         THEN 'INTERNAL'
-        
+
         ELSE 'EXTERNAL'
     END
+`;
+
+// Disposition resolution order for unanswered calls:
+//   1. Persisted Q.850 hangup cause (userfield, captured by the cdr-cause-capture
+//      hangup handler) — authoritative when the driver reports a specific cause:
+//      17/21 user busy or rejected => BUSY, 18/19 no reply/user busy on routing => NO ANSWER,
+//      34/38/41/42/44 congestion family => CONGESTION.
+//   2. Heuristic fallback for legacy rows (no userfield): a call that rang >=5s and was
+//      released without answer over GSM reports CONGESTION/BUSY — report NO ANSWER.
+const CDR_DISPOSITION_SQL = `
+    CASE
+        WHEN c.billsec > 0 THEN c.disposition
+        WHEN c.userfield = '17' OR c.userfield = '21' THEN 'BUSY'
+        WHEN c.userfield IN ('18', '19') THEN 'NO ANSWER'
+        WHEN c.userfield IN ('34', '38', '41', '42', '44') THEN 'CONGESTION'
+        WHEN c.disposition IN ('CONGESTION', 'BUSY') AND c.duration >= 5 THEN 'NO ANSWER'
+        ELSE c.disposition
+    END
+`;
+
+// Call History hygiene:
+//  - hide synthetic harness calls (test contexts, echo tests)
+//  - one entry per call: Asterisk writes multiple channel segments sharing a
+//    uniqueid (the post-fail "Congestion()" continuation used to surface as a
+//    phantom FAILED row seconds after the real attempt) — keep the primary
+//    segment (longest duration, latest sequence as tiebreaker).
+const CDR_HISTORY_FILTERS_SQL = `
+    AND c.dst NOT IN ('ussd','sms','report','s','*87','*88','*89')
+    AND c.dcontext NOT LIKE 'test-%'
+    AND c.dcontext NOT LIKE '%benchmark%'
+    AND c.dcontext <> 'play_audio'
+    AND NOT EXISTS (
+        SELECT 1 FROM ${tables.cdr} cx
+        WHERE cx.uniqueid = c.uniqueid
+          AND (cx.duration > c.duration OR (cx.duration = c.duration AND cx.sequence > c.sequence))
+    )
 `;
 app.set('view engine', 'ejs');
 app.use(express.static(path.join(__dirname, 'public')));
@@ -2857,7 +2898,7 @@ app.get('/', async (req, res) => {
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
         let query = `
-            SELECT c.src, c.dst, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.channel, c.dstchannel, c.calldate, c.did, c.uniqueid, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name
+            SELECT c.src, c.dst, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.channel, c.dstchannel, c.calldate, c.did, c.uniqueid, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             WHERE c.calldate BETWEEN ? AND ?
@@ -3136,18 +3177,18 @@ app.get('/cdr', async (req, res) => {
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             WHERE c.calldate BETWEEN ? AND ?
-            AND c.dst NOT IN ('ussd','sms','report','s')
+            ${CDR_HISTORY_FILTERS_SQL}
         `;
         let countParams = [startDate, endDate];
 
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             WHERE c.calldate BETWEEN ? AND ?
-            AND c.dst NOT IN ('ussd','sms','report','s')
+            ${CDR_HISTORY_FILTERS_SQL}
         `;
         let queryParams = [startDate, endDate];
 
@@ -3265,13 +3306,13 @@ app.get('/cdr/export', async (req, res) => {
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             WHERE c.calldate BETWEEN ? AND ?
-            AND c.dst NOT IN ('ussd','sms','report','s')
+            ${CDR_HISTORY_FILTERS_SQL}
         `;
         let queryParams = [startDate, endDate];
 
@@ -3857,7 +3898,7 @@ app.get('/api/ext-overview', async (req, res) => {
         const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
         const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
 
-        const [rows] = await pool.query(`SELECT src, dst, billsec, REPLACE(disposition, 'CONGESTION', 'FAILED') as disposition, channel, dstchannel FROM ${tables.cdr} WHERE calldate BETWEEN ? AND ? AND dst NOT IN ('ussd','sms','report','s')`, [startDate, endDate]);
+        const [rows] = await pool.query(`SELECT src, dst, billsec, ${CDR_DISPOSITION_SQL} as disposition, channel, dstchannel FROM ${tables.cdr} c WHERE calldate BETWEEN ? AND ? AND dst NOT IN ('ussd','sms','report','s')`, [startDate, endDate]);
 
         const employeeMetrics = {};
         res.locals.roster.forEach(emp => {
@@ -3941,7 +3982,7 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
         const direction = req.query.direction || 'all';
 
         const [rows] = await pool.query(
-             `SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, REPLACE(c.disposition, 'CONGESTION', 'FAILED') as disposition, c.channel, c.dstchannel, c.uniqueid, c.cnum
+             `SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.channel, c.dstchannel, c.uniqueid, c.cnum
               FROM ${tables.cdr} c
               WHERE c.calldate BETWEEN ? AND ?
              AND (c.src = ? OR c.dst = ? OR c.cnum = ? OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)'))

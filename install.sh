@@ -596,6 +596,7 @@ same => n,ExecIf($["${EXTEN}" != "+1234567890" & ${DIALPLAN_EXISTS(from-trunk,${
 same => n,Goto(s,process)
 
 exten => s,1,Set(DONGLE_TARGET=${DONGLENAME})
+same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
 same => n,Set(CHANNEL(hangup_handler_push)=dongle-hangup-cleanup,s,1)
 same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=))
 same => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)
@@ -652,6 +653,7 @@ same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,Set(RAW_TARGET=${CUT(OUT_${DIAL_TRUNK},/,2)})
 same => n,Set(DONGLE_TARGET=${DB(DONGLE_DEVICE_MAP/${RAW_TARGET})})
 same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${RAW_TARGET}))
+same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
 same => n,Set(CHANNEL(hangup_handler_push)=dongle-hangup-cleanup,s,1)
 same => n,MacroExit()
 
@@ -665,6 +667,17 @@ same => n,Verbose(1, [DONGLE-DIALPLAN-CLEANUP] Resetting dongle ${DONGLE_TARGET}
 same => n,NoOp([DONGLE-DIALPLAN-CLEANUP] Restart disabled for ${DONGLE_TARGET})
 same => n(done),Return()
 MACRO
+
+# Append CDR hangup-cause capture subroutine
+append_context '[cdr-cause-capture]' '[cdr-cause-capture]' << 'CAUSECAP'
+
+[cdr-cause-capture]
+; Persist the Q.850 hangup cause on monitored channels so Call History can
+; distinguish busy / no-answer / congestion instead of relying on driver defaults.
+exten => s,1,Set(CDR(userfield)=${HANGUPCAUSE})
+same => n,Return()
+
+CAUSECAP
 # Strip old [macro-dialout-one-predial-hook] before appending
 echo "  Stripping old [macro-dialout-one-predial-hook]..."
 python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\\[macro-dialout-one-predial-hook\\].*?(?=\\n\\[|\\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
@@ -685,6 +698,7 @@ same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
 same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
 same => n,Set(JITTERBUFFER(adaptive)=default)
+same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
 same => n,MacroExit()
 
 ONEHOOK
@@ -777,7 +791,7 @@ echo "[10/14] Setting up GSM dongles & chan_dongle..."
 
 # 10a — Install Build Dependencies
 echo "  [10a] Installing build dependencies..."
-yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom
+yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom wget curl tar
 yum -y install asterisk18-devel
 
 # 10b — Compile and Install librnnoise & func_rnnoise.so
@@ -788,7 +802,17 @@ if [ ! -f /usr/lib64/librnnoise.so ] || [ ! -f /usr/include/rnnoise.h ]; then
     mkdir -p rnnoise_build && cd rnnoise_build
     git clone https://github.com/xiph/rnnoise.git
     cd rnnoise
-    libtoolize --copy --force && autoreconf -fi
+    chmod +x autogen.sh download_model.sh 2>/dev/null || true
+    if [ -f "./autogen.sh" ]; then
+        ./autogen.sh || (./download_model.sh && libtoolize --copy --force && autoreconf -fi)
+    else
+        [ -f "./download_model.sh" ] && ./download_model.sh
+        libtoolize --copy --force && autoreconf -fi
+    fi
+    if [ ! -f src/rnnoise_data.c ] || [ ! -f src/rnnoise_data.h ]; then
+        echo "  Downloading neural network model data..."
+        [ -f "./download_model.sh" ] && ./download_model.sh
+    fi
     ./configure --prefix=/usr --libdir=/usr/lib64 CFLAGS="-O3 -mavx2 -mfma"
     make -j$(nproc)
     make install
