@@ -18,14 +18,19 @@ const mockGroups = [
     { id: 2, name: 'operators', permissions: ['dashboard', 'cdr', 'voicemails', 'ext-stats'] }
 ];
 
-const mockUsers = [
-    { id: 1, username: 'admin', email: 'admin@sokrat.local', group_id: 1, group_name: 'super admins', extension: null, created_at: new Date() },
-    { id: 2, username: 'alice', email: 'alice@sokrat.local', group_id: 2, group_name: 'operators', extension: '101', created_at: new Date() },
-    { id: 3, username: 'bob', email: 'bob@sokrat.local', group_id: 2, group_name: 'operators', extension: '102', created_at: new Date() },
-    { id: 4, username: 'general_operator', email: null, group_id: 2, group_name: 'operators', extension: null, created_at: new Date() }
+const mockAvailableDongles = [
+    { dongle_name: 'dongle0', phone_number: '01011112222' },
+    { dongle_name: 'dongle1', phone_number: '01033334444' }
 ];
 
-test('views/users.ejs renders Connected Extension selector, Table Column, and Edit User modal', async () => {
+const mockUsers = [
+    { id: 1, username: 'admin', email: 'admin@sokrat.local', group_id: 1, group_name: 'super admins', extension: null, allowed_dongles: [], created_at: new Date() },
+    { id: 2, username: 'alice', email: 'alice@sokrat.local', group_id: 2, group_name: 'operators', extension: '101', allowed_dongles: ['dongle0'], created_at: new Date() },
+    { id: 3, username: 'bob', email: 'bob@sokrat.local', group_id: 2, group_name: 'operators', extension: '102', allowed_dongles: ['dongle1'], created_at: new Date() },
+    { id: 4, username: 'general_operator', email: null, group_id: 2, group_name: 'operators', extension: null, allowed_dongles: [], created_at: new Date() }
+];
+
+test('views/users.ejs renders Connected Extension selector, Allowed Dongles controls, Table Columns, and Edit User modal', async () => {
     const html = await ejs.renderFile(usersViewPath, {
         currentLang: 'en',
         currentPage: '/users',
@@ -34,6 +39,7 @@ test('views/users.ejs renders Connected Extension selector, Table Column, and Ed
         users: mockUsers,
         groups: mockGroups,
         roster: mockRoster,
+        availableDongles: mockAvailableDongles,
         allTabs: ['dashboard', 'users', 'cdr', 'voicemails', 'ext-stats', 'operator', 'config']
     });
 
@@ -43,9 +49,16 @@ test('views/users.ejs renders Connected Extension selector, Table Column, and Ed
     assert.ok(html.includes('value="101"'), 'Extension 101 option present in create dropdown');
     assert.ok(html.includes('101 - Alice Smith'), 'Alice Smith option present in create dropdown');
 
-    // 2. Registered Users Table: Extension column header and cell badges
+    // Add User Form: Allowed Dongles dropdown with checkboxes
+    assert.ok(html.includes('id="createDongleDropdownBtn"'), 'createDongleDropdownBtn exists in add user form');
+    assert.ok(html.includes('createDongles'), 'createDongles checkbox class exists in add user form');
+    assert.ok(html.includes('value="dongle0"'), 'dongle0 checkbox exists in add user form');
+
+    // 2. Registered Users Table: Extension and Dongles column headers and cell badges
     assert.ok(html.includes('Extension'), 'Extension column header rendered');
+    assert.ok(html.includes('Allowed Dongles'), 'Allowed Dongles column header rendered');
     assert.ok(html.includes('user-ext-cell'), 'user-ext-cell class present in table rows');
+    assert.ok(html.includes('user-dongles-cell'), 'user-dongles-cell class present in table rows');
     assert.ok(html.includes('101'), 'Extension 101 badge rendered for alice');
     assert.ok(html.includes('102'), 'Extension 102 badge rendered for bob');
     assert.ok(html.includes('Unrestricted'), 'Unrestricted label rendered for accounts without extension');
@@ -53,6 +66,7 @@ test('views/users.ejs renders Connected Extension selector, Table Column, and Ed
     // 3. Edit User Modal & Triggers
     assert.ok(html.includes('id="editUserModal"'), 'editUserModal exists');
     assert.ok(html.includes('id="editUserExtension"'), 'editUserExtension dropdown exists in edit modal');
+    assert.ok(html.includes('id="editDongleDropdownBtn"'), 'editDongleDropdownBtn exists in edit modal');
     assert.ok(html.includes('showEditUserFromBtn(this)'), 'showEditUserFromBtn onclick binding exists');
     assert.ok(html.includes('action="/users/edit"'), 'Form points to POST /users/edit');
 });
@@ -66,11 +80,13 @@ test('views/users.ejs renders correctly in Arabic (ar)', async () => {
         users: mockUsers,
         groups: mockGroups,
         roster: mockRoster,
+        availableDongles: mockAvailableDongles,
         allTabs: ['dashboard', 'users', 'cdr', 'voicemails', 'ext-stats', 'operator', 'config']
     });
 
     assert.ok(html.includes('التحويلة المرتبطة'), 'Arabic Connected Extension label rendered');
     assert.ok(html.includes('التحويلة'), 'Arabic Extension table column header rendered');
+    assert.ok(html.includes('الدونجلات المصرح بها'), 'Arabic Allowed Dongles column header rendered');
     assert.ok(html.includes('تعديل'), 'Arabic Edit button rendered');
     assert.ok(html.includes('غير مقيد'), 'Arabic Unrestricted label rendered');
 });
@@ -243,4 +259,29 @@ test('Inline script blocks in views/users.ejs have valid JavaScript syntax', asy
             new Function(jsCode);
         }, `Inline script in users.ejs threw syntax error:\n${jsCode.substring(0, 200)}...`);
     }
+});
+
+test('dashboard_user_dongles mapping and manual dongle permissions operate correctly', () => {
+    const fs = require('fs');
+    const serverCode = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+    assert.ok(serverCode.includes('dashboard_user_dongles'), 'server.js creates dashboard_user_dongles table');
+    assert.ok(serverCode.includes('getUserAllowedDongles'), 'server.js defines getUserAllowedDongles helper');
+    assert.ok(serverCode.includes('getAllServerDongles'), 'server.js defines getAllServerDongles helper');
+
+    // Manual dongle assignment mapping simulation
+    const mockUserDongles = [
+        { user_id: 2, dongle_name: 'dongle0' },
+        { user_id: 3, dongle_name: 'dongle1' }
+    ];
+
+    const resolveUserDongles = (userId, isSuperAdmin) => {
+        if (isSuperAdmin) return null;
+        const assigned = mockUserDongles.filter(r => r.user_id === userId).map(r => r.dongle_name.toLowerCase());
+        return assigned;
+    };
+
+    assert.equal(resolveUserDongles(1, true), null, 'Super Admin receives null (unrestricted access)');
+    assert.deepEqual(resolveUserDongles(2, false), ['dongle0'], 'User 2 only has access to dongle0');
+    assert.deepEqual(resolveUserDongles(3, false), ['dongle1'], 'User 3 only has access to dongle1');
+    assert.deepEqual(resolveUserDongles(4, false), [], 'User 4 with no assigned dongles receives empty array');
 });

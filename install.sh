@@ -295,6 +295,16 @@ ensure_db_column "dashboard_users" "reset_token_expires" "DATETIME DEFAULT NULL"
 ensure_db_index "dashboard_users" "idx_dash_users_extension" "KEY \`idx_dash_users_extension\` (\`extension\`)"
 ensure_db_index "dashboard_users" "idx_unique_email" "UNIQUE KEY \`idx_unique_email\` (\`email\`)"
 
+mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
+CREATE TABLE IF NOT EXISTS \`dashboard_user_dongles\` (
+  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+  \`user_id\` INT NOT NULL,
+  \`dongle_name\` VARCHAR(50) NOT NULL,
+  UNIQUE KEY \`idx_user_dongle\` (\`user_id\`, \`dongle_name\`),
+  KEY \`idx_dongle_name\` (\`dongle_name\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+" 2>/dev/null || true
+
 ensure_db_column "gsm_dongles" "dynamic_enabled" "TINYINT(1) NOT NULL DEFAULT 0"
 
 ensure_db_column "storage_settings" "auto_purge_days" "INT DEFAULT 90"

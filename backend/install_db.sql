@@ -12,6 +12,14 @@ CREATE TABLE IF NOT EXISTS `dashboard_users` (
   KEY `idx_dash_users_extension` (`extension`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `dashboard_user_dongles` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `dongle_name` VARCHAR(50) NOT NULL,
+  UNIQUE KEY `idx_user_dongle` (`user_id`, `dongle_name`),
+  KEY `idx_dongle_name` (`dongle_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `dashboard_settings` (
   `setting_key` VARCHAR(100) PRIMARY KEY,
   `setting_value` TEXT DEFAULT NULL

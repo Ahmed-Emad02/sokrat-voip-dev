@@ -126,7 +126,8 @@ const tables = {
     employeeExtras: tableName(ASTERISK_DB, 'employee_extras'),
     employeeGroups: tableName(ASTERISK_DB, 'employee_groups'),
     dashboardUsers: tableName(ASTERISK_DB, 'dashboard_users'),
-    dashboardGroupPermissions: tableName(ASTERISK_DB, 'dashboard_group_permissions')
+    dashboardGroupPermissions: tableName(ASTERISK_DB, 'dashboard_group_permissions'),
+    dashboardUserDongles: tableName(ASTERISK_DB, 'dashboard_user_dongles')
 };
 
 function isInternalChannel(channel) {
@@ -320,6 +321,15 @@ async function initAuthDb() {
     try { await conn.execute('ALTER TABLE dashboard_users ADD COLUMN extension VARCHAR(20) DEFAULT NULL'); } catch (_) {}
     try { await conn.execute('ALTER TABLE dashboard_users ADD UNIQUE KEY idx_unique_email (email)'); } catch (_) {}
     try { await conn.execute('ALTER TABLE dashboard_users ADD KEY idx_dash_users_extension (extension)'); } catch (_) {}
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS dashboard_user_dongles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            dongle_name VARCHAR(50) NOT NULL,
+            UNIQUE KEY idx_user_dongle (user_id, dongle_name),
+            KEY idx_dongle_name (dongle_name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dashboard_settings (
             setting_key VARCHAR(100) PRIMARY KEY,
@@ -723,6 +733,60 @@ function getUserScopedExtension(req) {
     const ext = req.session.extension;
     if (!ext || typeof ext !== 'string' || ext.trim() === '' || ext === 'ALL' || ext === 'none') return null;
     return ext.trim();
+}
+
+async function getUserAllowedDongles(req) {
+    if (!req || !req.session) return [];
+    if (isSuperAdmin(req)) return null; // null means unrestricted / all dongles
+    const userId = req.session.userId;
+    if (!userId) return [];
+    try {
+        const [rows] = await pool.query('SELECT dongle_name FROM `asterisk`.`dashboard_user_dongles` WHERE user_id = ?', [userId]);
+        return rows.map(r => r.dongle_name.toLowerCase().trim());
+    } catch (err) {
+        console.error('getUserAllowedDongles error:', err.message);
+        return [];
+    }
+}
+
+async function getAllServerDongles() {
+    try {
+        const [rows] = await pool.query('SELECT dongle_name, phone_number, imsi, imei FROM `asterisk`.`gsm_dongles`');
+        const map = new Map();
+        rows.forEach(r => {
+            if (r.dongle_name) {
+                map.set(r.dongle_name.toLowerCase().trim(), {
+                    dongle_name: r.dongle_name.trim(),
+                    phone_number: r.phone_number ? r.phone_number.trim() : null,
+                    imsi: r.imsi ? r.imsi.trim() : null,
+                    imei: r.imei ? r.imei.trim() : null
+                });
+            }
+        });
+        const confDongles = parseDongleConfGain().dongles || {};
+        Object.keys(confDongles).forEach(dName => {
+            const key = dName.toLowerCase().trim();
+            if (!map.has(key)) {
+                map.set(key, {
+                    dongle_name: dName.trim(),
+                    phone_number: null,
+                    imsi: null,
+                    imei: null
+                });
+            }
+        });
+        const list = Array.from(map.values());
+        list.sort((a, b) => {
+            const numA = parseInt(a.dongle_name.replace(/\D/g, ''), 10);
+            const numB = parseInt(b.dongle_name.replace(/\D/g, ''), 10);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return a.dongle_name.localeCompare(b.dongle_name);
+        });
+        return list;
+    } catch (err) {
+        console.error('getAllServerDongles error:', err.message);
+        return [];
+    }
 }
 
 async function getUserPermissions(userId) {
@@ -2424,8 +2488,32 @@ app.get('/users', async (req, res) => {
             const [perms] = await conn.execute('SELECT tab FROM dashboard_group_permissions WHERE group_id = ?', [g.id]);
             groups.push({ ...g, permissions: perms.map(p => p.tab) });
         }
+        let [dongleMappings] = [[], []];
+        try {
+            const [dmRows] = await conn.execute('SELECT user_id, dongle_name FROM dashboard_user_dongles');
+            dongleMappings = dmRows;
+        } catch (_) {}
         await conn.end();
-        res.render('users', { users: userRows, groups, allTabs: ALL_TABS, success: req.query.success || null, error: req.query.error || null, currentLang: res.locals.currentLang || 'en' });
+
+        const userDonglesMap = new Map();
+        for (const m of dongleMappings) {
+            if (!userDonglesMap.has(m.user_id)) userDonglesMap.set(m.user_id, []);
+            userDonglesMap.get(m.user_id).push(m.dongle_name);
+        }
+        for (const u of userRows) {
+            u.allowed_dongles = userDonglesMap.get(u.id) || [];
+        }
+        const availableDongles = await getAllServerDongles();
+
+        res.render('users', {
+            users: userRows,
+            groups,
+            availableDongles,
+            allTabs: ALL_TABS,
+            success: req.query.success || null,
+            error: req.query.error || null,
+            currentLang: res.locals.currentLang || 'en'
+        });
     } catch (err) {
         res.status(500).send('Users error: ' + err.message);
     }
@@ -2434,7 +2522,7 @@ app.get('/users', async (req, res) => {
 // POST /users/add - add new user
 app.post('/users/add', async (req, res) => {
     try {
-        const { username, password, email, group_id, extension } = req.body;
+        const { username, password, email, group_id, extension, dongles } = req.body;
         if (!username || !password || password.length < 3) {
             return res.redirect('/users?error=' + encodeURIComponent('Username and password (min 3 chars) required'));
         }
@@ -2446,6 +2534,13 @@ app.post('/users/add', async (req, res) => {
         }
         const cleanEmail = (email && email.trim()) ? email.trim() : null;
         const cleanExt = (extension && extension.trim() && extension !== 'ALL' && extension !== 'none') ? extension.trim() : null;
+        let allowedDonglesList = [];
+        if (Array.isArray(dongles)) {
+            allowedDonglesList = dongles.map(d => String(d).trim().toLowerCase()).filter(Boolean);
+        } else if (typeof dongles === 'string' && dongles.trim()) {
+            allowedDonglesList = [dongles.trim().toLowerCase()];
+        }
+
         const conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'admin',
@@ -2464,7 +2559,13 @@ app.post('/users/add', async (req, res) => {
             }
         }
         const hash = await bcrypt.hash(password, 10);
-        await conn.execute('INSERT INTO dashboard_users (username, email, password_hash, group_id, extension) VALUES (?, ?, ?, ?, ?)', [username, cleanEmail, hash, group_id, cleanExt]);
+        const [result] = await conn.execute('INSERT INTO dashboard_users (username, email, password_hash, group_id, extension) VALUES (?, ?, ?, ?, ?)', [username, cleanEmail, hash, group_id, cleanExt]);
+        const newUserId = result.insertId;
+        for (const d of allowedDonglesList) {
+            try {
+                await conn.execute('INSERT IGNORE INTO dashboard_user_dongles (user_id, dongle_name) VALUES (?, ?)', [newUserId, d]);
+            } catch (_) {}
+        }
         await conn.end();
         res.redirect('/users?success=' + encodeURIComponent('User added successfully'));
     } catch (err) {
@@ -2472,17 +2573,24 @@ app.post('/users/add', async (req, res) => {
     }
 });
 
-// POST /users/edit - edit user details (email, group_id, extension)
+// POST /users/edit - edit user details (email, group_id, extension, dongles)
 app.post('/users/edit', async (req, res) => {
     try {
         if (!isSuperAdmin(req)) {
             return res.redirect('/users?error=' + encodeURIComponent('Super Admin authorization required'));
         }
-        const { id, email, group_id, extension } = req.body;
+        const { id, email, group_id, extension, dongles } = req.body;
         if (!id) return res.redirect('/users?error=' + encodeURIComponent('User ID required'));
         if (!group_id) return res.redirect('/users?error=' + encodeURIComponent('A group must be selected'));
         const cleanEmail = (email && email.trim()) ? email.trim() : null;
         const cleanExt = (extension && extension.trim() && extension !== 'ALL' && extension !== 'none') ? extension.trim() : null;
+        let allowedDonglesList = [];
+        if (Array.isArray(dongles)) {
+            allowedDonglesList = dongles.map(d => String(d).trim().toLowerCase()).filter(Boolean);
+        } else if (typeof dongles === 'string' && dongles.trim()) {
+            allowedDonglesList = [dongles.trim().toLowerCase()];
+        }
+
         const conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'admin',
@@ -2501,6 +2609,12 @@ app.post('/users/edit', async (req, res) => {
             }
         }
         await conn.execute('UPDATE dashboard_users SET email = ?, group_id = ?, extension = ? WHERE id = ?', [cleanEmail, group_id, cleanExt, id]);
+        try {
+            await conn.execute('DELETE FROM dashboard_user_dongles WHERE user_id = ?', [id]);
+            for (const d of allowedDonglesList) {
+                await conn.execute('INSERT IGNORE INTO dashboard_user_dongles (user_id, dongle_name) VALUES (?, ?)', [id, d]);
+            }
+        } catch (_) {}
         await conn.end();
         res.redirect('/users?success=' + encodeURIComponent('User updated successfully'));
     } catch (err) {
@@ -2525,6 +2639,9 @@ app.post('/users/delete', async (req, res) => {
             await conn.end();
             return res.redirect('/users?error=Cannot delete your own account');
         }
+        try {
+            await conn.execute('DELETE FROM dashboard_user_dongles WHERE user_id = ?', [id]);
+        } catch (_) {}
         await conn.execute('DELETE FROM dashboard_users WHERE id = ?', [id]);
         await conn.end();
         res.redirect('/users?success=User deleted');
@@ -5269,7 +5386,13 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
         if ((rawDongleId && !dId) || (rawImsi && !dImsi)) {
             return res.status(400).json({ success: false, error: 'Invalid dongle ID or IMSI.' });
         }
-
+        const allowedDongles = await getUserAllowedDongles(req);
+        if (allowedDongles !== null && dId) {
+            const isAllowed = allowedDongles.includes(dId.toLowerCase());
+            if (!isAllowed) {
+                return res.status(403).json({ success: false, error: 'Forbidden: Access denied to this dongle.' });
+            }
+        }
         const simMappings = readSimMappings();
         if (dImsi) simMappings[dImsi] = rawNum;
         saveSimMappings(simMappings);
@@ -5404,8 +5527,7 @@ app.post('/api/gsm-dongles/reset-usb-port', (req, res) => {
 // Page View route
 app.get('/gsm-dongles', async (req, res) => {
     try {
-        const scopedExt = getUserScopedExtension(req);
-        const allowedDongles = scopedExt ? await getDonglesForExtension(scopedExt) : null;
+        const allowedDongles = await getUserAllowedDongles(req);
         getAstDbNumbers(astDbMappings => {
             getDevicesOutputCached((error, stdout) => {
                 let devices = [];
@@ -5413,7 +5535,7 @@ app.get('/gsm-dongles', async (req, res) => {
                     devices = parseDevicesOutput(stdout, false, astDbMappings);
                 }
                 enrichDongleRouting(devices).then(enriched => {
-                    const filteredDevices = scopedExt ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
+                    const filteredDevices = allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
                     res.render('gsm-dongles', {
                         devices: filteredDevices,
                         moment
@@ -5428,8 +5550,7 @@ app.get('/gsm-dongles', async (req, res) => {
 
 // API Endpoint to fetch latest device status
 app.get('/api/gsm-dongles', async (req, res) => {
-    const scopedExt = getUserScopedExtension(req);
-    const allowedDongles = scopedExt ? await getDonglesForExtension(scopedExt) : null;
+    const allowedDongles = await getUserAllowedDongles(req);
     getAstDbNumbers(astDbMappings => {
         getDevicesOutputCached((error, stdout) => {
             if (error) {
@@ -5437,7 +5558,7 @@ app.get('/api/gsm-dongles', async (req, res) => {
             }
             const devices = parseDevicesOutput(stdout, false, astDbMappings);
             enrichDongleRouting(devices).then(enriched => {
-                const filteredDevices = scopedExt ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
+                const filteredDevices = allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
                 res.json({ success: true, devices: filteredDevices });
             });
         });
@@ -5450,11 +5571,10 @@ app.post('/api/gsm-dongles/reload/:dongleId', async (req, res) => {
     if (!/^dongle[0-9]+$/.test(dongleId)) {
         return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
     }
-    const scopedExt = getUserScopedExtension(req);
-    if (scopedExt) {
-        const allowedDongles = await getDonglesForExtension(scopedExt);
+    const allowedDongles = await getUserAllowedDongles(req);
+    if (allowedDongles !== null) {
         const reqDongle = String(dongleId).toLowerCase().trim();
-        const isAllowed = allowedDongles && allowedDongles.some(d => d.toLowerCase() === reqDongle);
+        const isAllowed = allowedDongles.includes(reqDongle);
         if (!isAllowed) {
             return res.status(403).json({ success: false, error: "Forbidden: Access denied to this dongle." });
         }
@@ -5518,11 +5638,10 @@ app.post('/api/gsm-dongles/reboot-modem/:dongleId', async (req, res) => {
     if (!/^dongle[0-9]+$/.test(dongleId)) {
         return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
     }
-    const scopedExt = getUserScopedExtension(req);
-    if (scopedExt) {
-        const allowedDongles = await getDonglesForExtension(scopedExt);
+    const allowedDongles = await getUserAllowedDongles(req);
+    if (allowedDongles !== null) {
         const reqDongle = String(dongleId).toLowerCase().trim();
-        const isAllowed = allowedDongles && allowedDongles.some(d => d.toLowerCase() === reqDongle);
+        const isAllowed = allowedDongles.includes(reqDongle);
         if (!isAllowed) {
             return res.status(403).json({ success: false, error: "Forbidden: Access denied to this dongle." });
         }
@@ -5542,11 +5661,10 @@ app.post('/api/gsm-dongles/virtual-replug/:dongleId', async (req, res) => {
     if (!/^dongle[0-9]+$/.test(dongleId)) {
         return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
     }
-    const scopedExt = getUserScopedExtension(req);
-    if (scopedExt) {
-        const allowedDongles = await getDonglesForExtension(scopedExt);
+    const allowedDongles = await getUserAllowedDongles(req);
+    if (allowedDongles !== null) {
         const reqDongle = String(dongleId).toLowerCase().trim();
-        const isAllowed = allowedDongles && allowedDongles.some(d => d.toLowerCase() === reqDongle);
+        const isAllowed = allowedDongles.includes(reqDongle);
         if (!isAllowed) {
             return res.status(403).json({ success: false, error: "Forbidden: Access denied to this dongle." });
         }
@@ -5886,11 +6004,10 @@ app.post('/api/gsm-dongles/ussd', async (req, res) => {
     if (!/^[0-9*#+,]+$/.test(code)) {
         return res.status(400).json({ success: false, error: "Invalid USSD code format" });
     }
-    const scopedExt = getUserScopedExtension(req);
-    if (scopedExt) {
-        const allowedDongles = await getDonglesForExtension(scopedExt);
+    const allowedDongles = await getUserAllowedDongles(req);
+    if (allowedDongles !== null) {
         const reqDongle = String(dongle).toLowerCase().trim();
-        const isAllowed = allowedDongles && allowedDongles.some(d => d.toLowerCase() === reqDongle);
+        const isAllowed = allowedDongles.includes(reqDongle);
         if (!isAllowed) {
             return res.status(403).json({ success: false, error: "Forbidden: You can only execute USSD requests on your assigned dongle." });
         }
@@ -6057,13 +6174,12 @@ function saveSmsInbox(inbox) {
 // Endpoint to fetch SMS inbox
 app.get('/api/gsm-dongles/sms', async (req, res) => {
     try {
-        const scopedExt = getUserScopedExtension(req);
-        const allowedDongles = scopedExt ? await getDonglesForExtension(scopedExt) : null;
+        const allowedDongles = await getUserAllowedDongles(req);
         let inbox = readSmsInbox();
-        if (scopedExt) {
+        if (allowedDongles !== null) {
             inbox = inbox.filter(msg => {
                 const msgDongle = String(msg.dongleId || '').toLowerCase().trim();
-                return allowedDongles && allowedDongles.some(d => d.toLowerCase() === msgDongle);
+                return allowedDongles.some(d => d.toLowerCase() === msgDongle);
             });
         }
         res.json({ success: true, sms: inbox });
