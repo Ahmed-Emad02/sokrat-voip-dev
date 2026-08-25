@@ -3,11 +3,13 @@ CREATE TABLE IF NOT EXISTS `dashboard_users` (
   `username` VARCHAR(100) NOT NULL UNIQUE,
   `email` VARCHAR(255) DEFAULT NULL UNIQUE,
   `password_hash` VARCHAR(255) NOT NULL,
+  `extension` VARCHAR(20) DEFAULT NULL,
   `reset_token` VARCHAR(255) DEFAULT NULL,
   `reset_expires` DATETIME DEFAULT NULL,
   `reset_token_expires` DATETIME DEFAULT NULL,
   `group_id` INT DEFAULT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY `idx_dash_users_extension` (`extension`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `dashboard_settings` (
@@ -33,9 +35,25 @@ CREATE TABLE IF NOT EXISTS `gsm_dongles` (
   `imsi` VARCHAR(30) DEFAULT NULL,
   `imei` VARCHAR(30) DEFAULT NULL,
   `phone_number` VARCHAR(30) DEFAULT NULL,
+  `dynamic_enabled` TINYINT(1) NOT NULL DEFAULT 0,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY `idx_imsi` (`imsi`),
   KEY `idx_imei` (`imei`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `dongle_state_logs` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `dongle_name` VARCHAR(50) NOT NULL,
+  `sim_number` VARCHAR(50) DEFAULT NULL,
+  `imsi` VARCHAR(30) DEFAULT NULL,
+  `imei` VARCHAR(30) DEFAULT NULL,
+  `state` VARCHAR(50) NOT NULL,
+  `started_at` DATETIME NOT NULL,
+  `ended_at` DATETIME DEFAULT NULL,
+  `duration_sec` INT DEFAULT 0,
+  KEY `idx_dongle_start` (`dongle_name`, `started_at`),
+  KEY `idx_sim_start` (`sim_number`, `started_at`),
+  KEY `idx_state` (`state`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `employee_groups` (
@@ -172,9 +190,12 @@ CREATE TABLE IF NOT EXISTS `storage_settings` (
   `gdrive_folder_name` VARCHAR(255) DEFAULT 'Sokrat-VoIP-Backups',
   `gdrive_credentials` TEXT DEFAULT NULL,
   `auto_backup_schedule` VARCHAR(50) DEFAULT 'daily',
+  `queue_provisioned` TINYINT(1) DEFAULT 0,
   `last_backup_at` DATETIME DEFAULT NULL,
   `last_backup_status` VARCHAR(50) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO `storage_settings` (`id`) VALUES (1);
 
 CREATE TABLE IF NOT EXISTS `voicemail_storage_settings` (
   `id` INT PRIMARY KEY DEFAULT 1,

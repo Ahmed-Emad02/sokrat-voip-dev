@@ -415,3 +415,45 @@ test('views/config.ejs correctly gates sub-tab visibility and root-only controls
     assert.ok(rootConfigHtml.includes('id="section-terminal"'), 'Root should see TTY Terminal section');
     assert.ok(rootConfigHtml.includes('id="tab-btn-terminal"'), 'Root should see TTY Terminal tab button');
 });
+
+test('TAB_ROUTE_MAP correctly maps all route paths with leading slashes including /config and /users', async () => {
+    const TAB_ROUTE_MAP = {
+        '/': 'dashboard',
+        '/cdr': 'cdr',
+        '/voicemails': 'voicemails',
+        '/ext-stats': 'ext-stats',
+        '/operator': 'operator',
+        '/gsm-dongles': 'gsm-dongles',
+        '/softphone': 'softphone',
+        '/contacts': 'contacts',
+        '/users': 'users',
+        '/config': 'config',
+        '/dialer': 'dialer',
+        '/storage': 'storage'
+    };
+
+    assert.equal(TAB_ROUTE_MAP['/config'], 'config', '/config must map to config');
+    assert.equal(TAB_ROUTE_MAP['/users'], 'users', '/users must map to users');
+    assert.equal(TAB_ROUTE_MAP['/dialer'], 'dialer', '/dialer must map to dialer');
+
+    // When a non-superadmin user accesses /config, sidebar receives allowedTabs and renders all permitted links
+    const sidebarEjsPath = path.join(__dirname, '../views/sidebar.ejs');
+    const configSidebarHtml = await ejs.renderFile(sidebarEjsPath, {
+        currentLang: 'en',
+        currentPage: '/config',
+        isRtl: false,
+        isSuperAdmin: false,
+        isRootUser: false,
+        currentUser: 'emad',
+        allowedTabs: ['config', 'config-extensions', 'cdr', 'operator', 'voicemails', 'ext-stats', 'gsm-dongles']
+    });
+
+    assert.ok(configSidebarHtml.includes('/config?lang='), 'Sidebar during /config request must show /config');
+    assert.ok(configSidebarHtml.includes('/cdr?lang='), 'Sidebar during /config request must show /cdr');
+    assert.ok(configSidebarHtml.includes('/operator?lang='), 'Sidebar during /config request must show /operator');
+    assert.ok(configSidebarHtml.includes('/gsm-dongles?lang='), 'Sidebar during /config request must show /gsm-dongles');
+    assert.ok(configSidebarHtml.includes('/voicemails?lang='), 'Sidebar during /config request must show /voicemails');
+    assert.ok(configSidebarHtml.includes('/ext-stats?lang='), 'Sidebar during /config request must show /ext-stats');
+    assert.ok(configSidebarHtml.includes('/storage?lang='), 'Sidebar during /config request must show /storage');
+    assert.ok(configSidebarHtml.includes('/contacts?lang='), 'Sidebar during /config request must show /contacts');
+});

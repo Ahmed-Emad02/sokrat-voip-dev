@@ -4,6 +4,13 @@ const words = {
         title: "Dashboard", subtitle: "",
         desc: "Real-time call center performance overview",
         startTime: "Start Time", endTime: "End Time",
+        roster: "Extension Roster", allExt: "All Extensions",
+        status: "Call Status", allDisp: "All Dispositions",
+        direction: "Direction", allDir: "All Directions", dirIn: "Inbound", dirOut: "Outbound", dirInternal: "Internal",
+        scope: "Call Scope", allScope: "All Scopes", scopeInternal: "Internal Only", scopeExternal: "External Only",
+        src: "Source", dst: "Destination", did: "DID Number", uid: "Unique ID",
+        moreFilters: "More Filters", lessFilters: "Fewer Filters",
+        reset: "Reset Filters",
         btn: "Refresh Metrics",
         totalCalls: "Total Calls", answeredCalls: "Answered",
         inbound: "Inbound", outbound: "Outbound",
@@ -33,6 +40,13 @@ const words = {
         title: "لوحة التحكم", subtitle: "",
         desc: "نظرة عامة على أداء مركز الاتصال في الوقت الفعلي",
         startTime: "وقت البداية", endTime: "وقت النهاية",
+        roster: "قائمة الموظفين", allExt: "جميع التحويلات",
+        status: "حالة المكالمة", allDisp: "جميع الحالات",
+        direction: "الاتجاه", allDir: "كل الاتجاهات", dirIn: "وارد", dirOut: "صادر", dirInternal: "داخلي",
+        scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط",
+        src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
+        moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر",
+        reset: "إعادة ضبط",
         btn: "تحديث مؤشرات الأداء",
         totalCalls: "إجمالي المكالمات", answeredCalls: "تم الرد",
         inbound: "وارد", outbound: "صادر",
@@ -153,22 +167,179 @@ const isRtl = currentLang === 'ar';
             </div>
         </div>
 
-        <!-- Date Range Filter -->
-        <form action="/" method="GET" class="panel-surface p-3 px-4 rounded-xl mb-4 relative z-30">
+        <!-- Compact Balanced Filter Form -->
+        <form id="dashFilterForm" action="/" method="GET" class="panel-surface p-3 px-3.5 rounded-xl mb-4 flex flex-col gap-2.5 relative z-30">
             <input type="hidden" name="lang" value="<%= currentLang %>">
-            <div class="flex flex-wrap items-end gap-2.5">
-                <div class="flex-1 min-w-[180px]">
-                    <label for="dashStartDate" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.startTime %></label>
+            
+            <!-- Row 1: Primary Filters (5-column responsive grid) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="dashStartDate"><%= t.startTime %></label>
                     <input type="datetime-local" id="dashStartDate" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                 </div>
-                <div class="flex-1 min-w-[180px]">
+                <div>
                     <label for="dashEndDate" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.endTime %></label>
                     <input type="datetime-local" id="dashEndDate" name="endDate" value="<%= moment(filters.endDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                 </div>
-                <div class="flex items-end gap-2">
-                    <a href="/?lang=<%= currentLang %>" class="text-xs text-zinc-400 hover:text-white transition font-mono whitespace-nowrap"><%= isRtl ? 'إعادة ضبط' : 'Reset' %></a>
-                    <button type="submit" class="btn-primary px-5 py-1.5 text-xs uppercase tracking-wider"><%= t.btn %></button>
+                <div class="relative">
+                    <label for="dashTargetExtensionSelect" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.roster %></label>
+                    <select name="targetExtension" id="dashTargetExtensionSelect" multiple class="hidden no-enhance">
+                        <% 
+                          let rosterList = (typeof roster !== 'undefined' && Array.isArray(roster)) ? roster : [];
+                          const isScopedUser = typeof userExtension !== 'undefined' && userExtension && (typeof isSuperAdmin !== 'undefined' && !isSuperAdmin);
+                          if (isScopedUser) {
+                              rosterList = rosterList.filter(emp => emp.extension === userExtension);
+                          }
+                          let selectedExts = Array.isArray(filters.targetExtension) ? filters.targetExtension : (filters.targetExtension && filters.targetExtension !== 'ALL' ? [filters.targetExtension] : ['ALL']);
+                          if (isScopedUser) {
+                              selectedExts = [userExtension];
+                          }
+                          let isAllExt = !isScopedUser && (selectedExts.includes('ALL') || selectedExts.length === 0);
+                        %>
+                        <% if (!isScopedUser) { %>
+                            <option value="ALL" <%= isAllExt ? 'selected' : '' %>><%= t.allExt %></option>
+                        <% } %>
+                        <% rosterList.forEach(emp => { 
+                            let isSel = isScopedUser || (!isAllExt && selectedExts.includes(emp.extension));
+                        %>
+                            <option value="<%= emp.extension %>" <%= isSel ? 'selected' : '' %>><%= emp.extension %> - <%= emp.name %></option>
+                        <% }) %>
+                    </select>
+
+                    <button type="button" id="dashExtChecklistBtn" onclick="toggleChecklistMenu('dashExtChecklistMenu', event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] flex items-center justify-between gap-2 cursor-pointer text-start">
+                        <span id="dashExtChecklistLabel" class="truncate font-semibold"><%= isScopedUser ? (rosterList[0] ? (rosterList[0].extension + ' - ' + rosterList[0].name) : userExtension) : t.allExt %></span>
+                        <svg class="w-3.5 h-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+
+                    <div id="dashExtChecklistMenu" class="checklist-menu hidden absolute left-0 right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl p-2 z-[9999] max-h-56 overflow-y-auto space-y-1" style="scrollbar-width:thin">
+                        <% if (!isScopedUser) { %>
+                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_ext_chk_all">
+                                <input type="checkbox" id="dash_ext_chk_all" name="dash_ext_chk_all" value="ALL" <%= isAllExt ? 'checked' : '' %> onchange="onExtChecklistChange(this)" class="dash-ext-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                                <span class="font-bold text-[var(--text-primary)]"><%= t.allExt %></span>
+                            </label>
+                        <% } %>
+                        <% rosterList.forEach(emp => { 
+                            let isSel = isScopedUser || (!isAllExt && selectedExts.includes(emp.extension));
+                        %>
+                            <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_ext_chk_<%= emp.extension %>">
+                                <input type="checkbox" id="dash_ext_chk_<%= emp.extension %>" name="dash_ext_chk" value="<%= emp.extension %>" <%= isSel ? 'checked' : '' %> onchange="onExtChecklistChange(this)" class="dash-ext-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                                <span class="text-zinc-300 font-mono"><%= emp.extension %></span>
+                                <span class="text-zinc-400 truncate"><%= emp.name %></span>
+                            </label>
+                        <% }) %>
+                    </div>
                 </div>
+                <div class="relative">
+                    <label for="dashStatusFilterSelect" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.status %></label>
+                    <select name="statusFilter" id="dashStatusFilterSelect" multiple class="hidden no-enhance">
+                        <% 
+                          let selectedSt = Array.isArray(filters.statusFilter) ? filters.statusFilter : (filters.statusFilter && filters.statusFilter !== 'ALL' ? [filters.statusFilter] : ['ALL']);
+                          let isAllSt = selectedSt.includes('ALL') || selectedSt.length === 0;
+                        %>
+                        <option value="ALL" <%= isAllSt ? 'selected' : '' %>><%= t.allDisp %></option>
+                        <option value="ANSWERED" <%= (!isAllSt && selectedSt.includes('ANSWERED')) ? 'selected' : '' %>>ANSWERED</option>
+                        <option value="NO ANSWER" <%= (!isAllSt && selectedSt.includes('NO ANSWER')) ? 'selected' : '' %>>NO ANSWER</option>
+                        <option value="BUSY" <%= (!isAllSt && selectedSt.includes('BUSY')) ? 'selected' : '' %>>BUSY</option>
+                        <option value="FAILED" <%= (!isAllSt && selectedSt.includes('FAILED')) ? 'selected' : '' %>>FAILED</option>
+                    </select>
+
+                    <button type="button" id="dashStatusChecklistBtn" onclick="toggleChecklistMenu('dashStatusChecklistMenu', event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] flex items-center justify-between gap-2 cursor-pointer text-start">
+                        <span id="dashStatusChecklistLabel" class="truncate font-semibold"><%= t.allDisp %></span>
+                        <svg class="w-3.5 h-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+
+                    <div id="dashStatusChecklistMenu" class="checklist-menu hidden absolute left-0 right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl p-2 z-[9999] max-h-56 overflow-y-auto space-y-1" style="scrollbar-width:thin">
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_status_chk_all">
+                            <input type="checkbox" id="dash_status_chk_all" name="dash_status_chk_all" value="ALL" <%= isAllSt ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-bold text-[var(--text-primary)]"><%= t.allDisp %></span>
+                        </label>
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_status_chk_ans">
+                            <input type="checkbox" id="dash_status_chk_ans" name="dash_status_chk" value="ANSWERED" <%= (!isAllSt && selectedSt.includes('ANSWERED')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-mono text-emerald-400 font-bold">ANSWERED</span>
+                        </label>
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_status_chk_noans">
+                            <input type="checkbox" id="dash_status_chk_noans" name="dash_status_chk" value="NO ANSWER" <%= (!isAllSt && selectedSt.includes('NO ANSWER')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-mono text-teal-400 font-bold">NO ANSWER</span>
+                        </label>
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_status_chk_busy">
+                            <input type="checkbox" id="dash_status_chk_busy" name="dash_status_chk" value="BUSY" <%= (!isAllSt && selectedSt.includes('BUSY')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-mono text-amber-400 font-bold">BUSY</span>
+                        </label>
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_status_chk_failed">
+                            <input type="checkbox" id="dash_status_chk_failed" name="dash_status_chk" value="FAILED" <%= (!isAllSt && selectedSt.includes('FAILED')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-mono text-purple-400 font-bold">FAILED</span>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label for="dashScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
+                    <select id="dashScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
+                        <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
+                        <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Row 2: Secondary / Advanced Filters (Collapsible Drawer) -->
+            <% 
+                let hasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
+                                         (filters.searchSrc && filters.searchSrc.trim() !== '') ||
+                                         (filters.searchDst && filters.searchDst.trim() !== '') ||
+                                         (filters.searchDid && filters.searchDid.trim() !== '') ||
+                                         (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
+                let activeSecondaryCount = 0;
+                if (filters.directionFilter && filters.directionFilter !== 'ALL') activeSecondaryCount++;
+                if (filters.searchSrc && filters.searchSrc.trim() !== '') activeSecondaryCount++;
+                if (filters.searchDst && filters.searchDst.trim() !== '') activeSecondaryCount++;
+                if (filters.searchDid && filters.searchDid.trim() !== '') activeSecondaryCount++;
+                if (filters.searchUniqueId && filters.searchUniqueId.trim() !== '') activeSecondaryCount++;
+            %>
+            <div id="dashSecondaryFilters" class="<%= hasActiveSecondary ? '' : 'hidden' %> border-t border-[var(--border-primary)]/40 pt-2.5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                    <div>
+                        <label for="dashDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
+                        <select id="dashDirectionFilter" name="directionFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                            <option value="ALL" <%= filters.directionFilter === 'ALL' ? 'selected' : '' %>><%= t.allDir %></option>
+                            <option value="OUTBOUND" <%= filters.directionFilter === 'OUTBOUND' ? 'selected' : '' %>><%= t.dirOut %></option>
+                            <option value="INBOUND" <%= filters.directionFilter === 'INBOUND' ? 'selected' : '' %>><%= t.dirIn %></option>
+                            <option value="INTERNAL" <%= filters.directionFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.dirInternal %></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="dashSearchSrc" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.src %></label>
+                        <input type="text" id="dashSearchSrc" name="searchSrc" value="<%= filters.searchSrc || '' %>" placeholder="e.g., 101" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                    </div>
+                    <div>
+                        <label for="dashSearchDst" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.dst %></label>
+                        <input type="text" id="dashSearchDst" name="searchDst" value="<%= filters.searchDst || '' %>" placeholder="e.g., 010..." class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                    </div>
+                    <div>
+                        <label for="dashSearchDid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.did %></label>
+                        <input type="text" id="dashSearchDid" name="searchDid" value="<%= filters.searchDid || '' %>" placeholder="e.g., 01234567" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                    </div>
+                    <div>
+                        <label for="dashSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
+                        <input type="text" id="dashSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Action Bar -->
+            <div class="flex items-center justify-between gap-3 pt-1.5 border-t border-[var(--border-primary)]/50">
+                <div class="flex items-center gap-3">
+                    <a href="/?lang=<%= currentLang %>" class="text-xs text-zinc-400 hover:text-white transition font-mono whitespace-nowrap"><%= t.reset %></a>
+                    <button type="button" id="dashToggleMoreBtn" onclick="toggleDashboardMoreFilters()" class="text-xs text-zinc-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer py-1">
+                        <span id="dashToggleMoreLabel"><%= hasActiveSecondary ? t.lessFilters : t.moreFilters %></span>
+                        <svg id="dashToggleMoreIcon" class="w-3.5 h-3.5 transition-transform duration-200 <%= hasActiveSecondary ? 'rotate-180' : '' %>" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        <% if (activeSecondaryCount > 0) { %>
+                            <span class="inline-flex items-center px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-[var(--accent-color)]/20 text-[var(--accent-color)] border border-[var(--accent-color)]/30">
+                                <%= activeSecondaryCount %> <%= isRtl ? 'نشط' : 'Active' %>
+                            </span>
+                        <% } %>
+                    </button>
+                </div>
+                <button type="submit" class="btn-primary px-5 py-1 text-xs uppercase tracking-wider"><%= t.btn %></button>
             </div>
         </form>
 
@@ -176,6 +347,19 @@ const isRtl = currentLang === 'ar';
             const formattedStart = encodeURIComponent(moment(filters.startDate).format('YYYY-MM-DDTHH:mm'));
             const formattedEnd = encodeURIComponent(moment(filters.endDate).format('YYYY-MM-DDTHH:mm'));
             let baseUrl = '/cdr?startDate=' + formattedStart + '&endDate=' + formattedEnd + '&lang=' + currentLang;
+            if (filters.searchSrc) baseUrl += '&searchSrc=' + encodeURIComponent(filters.searchSrc);
+            if (filters.searchDst) baseUrl += '&searchDst=' + encodeURIComponent(filters.searchDst);
+            if (filters.searchDid) baseUrl += '&searchDid=' + encodeURIComponent(filters.searchDid);
+            if (filters.searchUniqueId) baseUrl += '&searchUniqueId=' + encodeURIComponent(filters.searchUniqueId);
+            if (filters.targetExtension && filters.targetExtension !== 'ALL') {
+                if (Array.isArray(filters.targetExtension)) {
+                    filters.targetExtension.forEach(ext => {
+                        if (ext !== 'ALL') baseUrl += '&targetExtension=' + encodeURIComponent(ext);
+                    });
+                } else {
+                    baseUrl += '&targetExtension=' + encodeURIComponent(filters.targetExtension);
+                }
+            }
         %>
         <!-- Row 1: Volume & Direction Metrics (6 cards) -->
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6 shrink-0">
@@ -901,7 +1085,7 @@ const isRtl = currentLang === 'ar';
             // Initialize Flatpickr on datetime inputs
             flatpickr('input[type="datetime-local"]', {
                 enableTime: true,
-                dateFormat: "Y-m-d H:i:S",
+                dateFormat: "Y-m-d\\TH:i",
                 altInput: true,
                 altFormat: "m/d/Y h:i K",
                 time_24hr: false,
@@ -922,6 +1106,139 @@ const isRtl = currentLang === 'ar';
                     }
                 }
             });
+        });
+    </script>
+    <script>
+        function toggleChecklistMenu(menuId, event) {
+            if (event) event.stopPropagation();
+            const menu = document.getElementById(menuId);
+            if (!menu) return;
+            const isHidden = menu.classList.contains('hidden');
+            document.querySelectorAll('.checklist-menu').forEach(m => m.classList.add('hidden'));
+            if (isHidden) menu.classList.remove('hidden');
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.checklist-menu') && !e.target.closest('button[onclick*="toggleChecklistMenu"]')) {
+                document.querySelectorAll('.checklist-menu').forEach(m => m.classList.add('hidden'));
+            }
+        });
+
+        function syncExtChecklistUI() {
+            const chks = Array.from(document.querySelectorAll('.dash-ext-chk'));
+            const select = document.getElementById('dashTargetExtensionSelect');
+            const labelSpan = document.getElementById('dashExtChecklistLabel');
+            if (!select || !labelSpan) return;
+
+            const selectedVals = chks.filter(c => c.checked).map(c => c.value);
+            Array.from(select.options).forEach(opt => {
+                opt.selected = selectedVals.includes(opt.value);
+            });
+
+            const nonAllSelected = selectedVals.filter(v => v !== 'ALL');
+            if (selectedVals.includes('ALL') || nonAllSelected.length === 0) {
+                labelSpan.textContent = <%- JSON.stringify(t.allExt) %>;
+            } else if (nonAllSelected.length === 1) {
+                labelSpan.textContent = nonAllSelected[0];
+            } else {
+                const isRtl = <%= isRtl ? 'true' : 'false' %>;
+                const countText = isRtl ? ('محدد (' + nonAllSelected.length + ')') : (nonAllSelected.length + ' Selected');
+                labelSpan.textContent = countText;
+            }
+        }
+
+        function onExtChecklistChange(chk) {
+            const chks = Array.from(document.querySelectorAll('.dash-ext-chk'));
+            const allChk = chks.find(c => c.value === 'ALL');
+            if (chk.value === 'ALL') {
+                if (chk.checked) {
+                    chks.forEach(c => { if (c !== chk) c.checked = false; });
+                } else {
+                    chk.checked = true;
+                }
+            } else {
+                if (allChk) allChk.checked = false;
+                const checkedCount = chks.filter(c => c.checked && c.value !== 'ALL').length;
+                if (checkedCount === 0 && allChk) allChk.checked = true;
+            }
+            syncExtChecklistUI();
+        }
+
+        function syncStatusChecklistUI() {
+            const chks = Array.from(document.querySelectorAll('.dash-status-chk'));
+            const select = document.getElementById('dashStatusFilterSelect');
+            const labelSpan = document.getElementById('dashStatusChecklistLabel');
+            if (!select || !labelSpan) return;
+
+            const selectedVals = chks.filter(c => c.checked).map(c => c.value);
+            Array.from(select.options).forEach(opt => {
+                opt.selected = selectedVals.includes(opt.value);
+            });
+
+            const nonAllSelected = selectedVals.filter(v => v !== 'ALL');
+            if (selectedVals.includes('ALL') || nonAllSelected.length === 0) {
+                labelSpan.textContent = <%- JSON.stringify(t.allDisp) %>;
+            } else if (nonAllSelected.length === 1) {
+                labelSpan.textContent = nonAllSelected[0];
+            } else {
+                const isRtl = <%= isRtl ? 'true' : 'false' %>;
+                const countText = isRtl ? ('محدد (' + nonAllSelected.length + ')') : (nonAllSelected.length + ' Selected');
+                labelSpan.textContent = countText;
+            }
+        }
+
+        function onStatusChecklistChange(chk) {
+            const chks = Array.from(document.querySelectorAll('.dash-status-chk'));
+            const allChk = chks.find(c => c.value === 'ALL');
+            if (chk.value === 'ALL') {
+                if (chk.checked) {
+                    chks.forEach(c => { if (c !== chk) c.checked = false; });
+                } else {
+                    chk.checked = true;
+                }
+            } else {
+                if (allChk) allChk.checked = false;
+                const checkedCount = chks.filter(c => c.checked && c.value !== 'ALL').length;
+                if (checkedCount === 0 && allChk) allChk.checked = true;
+            }
+            syncStatusChecklistUI();
+        }
+
+        function toggleDashboardMoreFilters(forcedState) {
+            const drawer = document.getElementById('dashSecondaryFilters');
+            const label = document.getElementById('dashToggleMoreLabel');
+            const icon = document.getElementById('dashToggleMoreIcon');
+            if (!drawer) return;
+
+            const isCurrentlyHidden = drawer.classList.contains('hidden');
+            const expand = (typeof forcedState === 'boolean') ? forcedState : isCurrentlyHidden;
+
+            if (expand) {
+                drawer.classList.remove('hidden');
+                if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
+                if (icon) icon.classList.add('rotate-180');
+                try { localStorage.setItem('dash_filters_expanded', 'true'); } catch (e) {}
+            } else {
+                drawer.classList.add('hidden');
+                if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
+                if (icon) icon.classList.remove('rotate-180');
+                try { localStorage.setItem('dash_filters_expanded', 'false'); } catch (e) {}
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            syncExtChecklistUI();
+            syncStatusChecklistUI();
+            
+            const hasServerActiveSecondary = <%= hasActiveSecondary ? 'true' : 'false' %>;
+            if (!hasServerActiveSecondary) {
+                try {
+                    const savedExpanded = localStorage.getItem('dash_filters_expanded');
+                    if (savedExpanded === 'true') {
+                        toggleDashboardMoreFilters(true);
+                    }
+                } catch (e) {}
+            }
         });
     </script>
     <script>

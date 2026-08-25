@@ -264,6 +264,50 @@ fi
 echo "[6/14] Initializing database tables..."
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk < "$INSTALL_DIR/backend/install_db.sql"
 
+# Schema migration statements for re-installations on existing databases
+ensure_db_column() {
+    local tbl="$1"
+    local col="$2"
+    local col_def="$3"
+    local exists
+    exists=$(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse \
+        "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '$tbl' AND COLUMN_NAME = '$col'")
+    if [ "$exists" = "0" ]; then
+        mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "ALTER TABLE \`$tbl\` ADD \`$col\` $col_def"
+    fi
+}
+
+ensure_db_index() {
+    local tbl="$1"
+    local idx="$2"
+    local idx_def="$3"
+    local exists
+    exists=$(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse \
+        "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '$tbl' AND INDEX_NAME = '$idx'")
+    if [ "$exists" = "0" ]; then
+        mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "ALTER TABLE \`$tbl\` ADD $idx_def" 2>/dev/null || true
+    fi
+}
+
+ensure_db_column "dashboard_users" "group_id" "INT DEFAULT NULL"
+ensure_db_column "dashboard_users" "extension" "VARCHAR(20) DEFAULT NULL"
+ensure_db_column "dashboard_users" "reset_token_expires" "DATETIME DEFAULT NULL"
+ensure_db_index "dashboard_users" "idx_dash_users_extension" "KEY \`idx_dash_users_extension\` (\`extension\`)"
+ensure_db_index "dashboard_users" "idx_unique_email" "UNIQUE KEY \`idx_unique_email\` (\`email\`)"
+
+ensure_db_column "gsm_dongles" "dynamic_enabled" "TINYINT(1) NOT NULL DEFAULT 0"
+
+ensure_db_column "storage_settings" "auto_purge_days" "INT DEFAULT 90"
+ensure_db_column "storage_settings" "gdrive_enabled" "TINYINT(1) DEFAULT 0"
+ensure_db_column "storage_settings" "gdrive_folder_name" "VARCHAR(255) DEFAULT 'Sokrat-VoIP-Backups'"
+ensure_db_column "storage_settings" "gdrive_credentials" "TEXT DEFAULT NULL"
+ensure_db_column "storage_settings" "auto_backup_schedule" "VARCHAR(50) DEFAULT 'daily'"
+ensure_db_column "storage_settings" "last_backup_at" "DATETIME DEFAULT NULL"
+ensure_db_column "storage_settings" "last_backup_status" "VARCHAR(50) DEFAULT NULL"
+ensure_db_column "storage_settings" "queue_provisioned" "TINYINT(1) DEFAULT 0"
+
+mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "INSERT IGNORE INTO \`storage_settings\` (\`id\`) VALUES (1);" 2>/dev/null || true
+
 # Older/partial Announcement module installs can lack the Pico TTS columns.
 # Use information_schema checks rather than version-specific ADD IF NOT EXISTS syntax.
 ANNOUNCEMENT_TABLE_EXISTS=$(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse \
@@ -273,21 +317,11 @@ if [ "$ANNOUNCEMENT_TABLE_EXISTS" != "1" ]; then
     exit 1
 fi
 
-ANNOUNCEMENT_TTS_LANG_EXISTS=$(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse \
-    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'announcement' AND COLUMN_NAME = 'tts_lang'")
-if [ "$ANNOUNCEMENT_TTS_LANG_EXISTS" = "0" ]; then
-    mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e \
-        "ALTER TABLE \`announcement\` ADD \`tts_lang\` VARCHAR(10) NOT NULL DEFAULT 'en-US'"
-fi
-
-ANNOUNCEMENT_TTS_TEXT_EXISTS=$(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse \
-    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'announcement' AND COLUMN_NAME = 'tts_text'")
-if [ "$ANNOUNCEMENT_TTS_TEXT_EXISTS" = "0" ]; then
-    mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e \
-        "ALTER TABLE \`announcement\` ADD \`tts_text\` TEXT NOT NULL DEFAULT ('')"
-fi
+ensure_db_column "announcement" "tts_lang" "VARCHAR(10) NOT NULL DEFAULT 'en-US'"
+ensure_db_column "announcement" "tts_text" "TEXT NOT NULL DEFAULT ('')"
 echo "  Announcement TTS schema ensured"
 echo "  Database tables ensured"
+echo "  Database migrations applied"
 
 # ──────────────────────────────────────────────
 # Step 7 — Configure Asterisk AMI
@@ -608,7 +642,9 @@ same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "s" | "${MY_SI
 same => n(skip_dynamic),ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=${EXTEN}))
 
 same => n,Set(CALLER_NUMBER=${FILTER(0123456789+,${CALLERID(num)})})
+same => n,Set(CLEAN_CALLER=${FILTER(0123456789,${CALLER_NUMBER})})
 same => n,NoOp(Caller Number: ${CALLER_NUMBER})
+same => n,ExecIf($["${DB(blacklist/${CALLER_NUMBER})}" != "" | "${DB(blacklist/${CLEAN_CALLER})}" != "" | "${DB(blacklist/+${CLEAN_CALLER})}" != "" | "${DB(blacklist/0${CLEAN_CALLER})}" != ""]?Goto(blacklisted))
 same => n,Set(FOUND_NAME=${SHELL(sqlite3 /var/www/db/address_book.db "SELECT name || ' ' || last_name FROM contact WHERE (replace(replace(replace(replace(replace(telefono,'-',''),' ',''),'(',''),')',''),'.','') = '${CALLER_NUMBER}' OR '${CALLER_NUMBER}' LIKE '%' || replace(replace(replace(replace(replace(telefono,'-',''),' ',''),'(',''),')',''),'.','') OR replace(replace(replace(replace(replace(telefono,'-',''),' ',''),'(',''),')',''),'.','') LIKE '%${CALLER_NUMBER}') AND length(replace(replace(replace(replace(replace(telefono,'-',''),' ',''),'(',''),')',''),'.','')) >= 5 LIMIT 1" | tr -d '\n')})
 same => n,GotoIf($["${FOUND_NAME}" = ""]?skip_cid)
 same => n,NoOp(Found Contact Name: ${FOUND_NAME})
@@ -619,7 +655,12 @@ same => n(no_route),NoOp(DONGLE-ERROR: No matching inbound route in from-trunk f
 same => n,Playtones(congestion)
 same => n,Congestion(10)
 same => n,Hangup()
-
+same => n(blacklisted),NoOp(--- INBOUND CALL REJECTED BY BLACKLIST RULE: ${CALLER_NUMBER} ---)
+same => n,Answer()
+same => n,Wait(1)
+same => n,Zapateller()
+same => n,Playback(ss-noservice)
+same => n,Hangup()
 [ext-moh]
 exten => _!,1,NoOp(--- Class-Aware Music On Hold: ${EXTEN} ---)
 same => n,Answer()
