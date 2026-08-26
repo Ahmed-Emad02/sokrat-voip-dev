@@ -130,14 +130,15 @@ test('Asterisk dialplan extensions_custom.conf and install.sh contain Call Picku
 
     const dialplan = fs.readFileSync(dialplanPath, 'utf8');
     const installer = fs.readFileSync(installerPath, 'utf8');
+    // 1. General Department Group Call Pickup (*1 & *8 alias)
+    assert.ok(dialplan.includes('exten => *1,1,NoOp(--- Department Group Call Pickup'), 'extensions_custom.conf has *1 pickup');
+    assert.ok(installer.includes('exten => *1,1,NoOp(--- Department Group Call Pickup'), 'install.sh has *1 pickup');
+    assert.ok(dialplan.includes('exten => *8,1,Goto(*1,1)'), 'extensions_custom.conf has *8 alias');
+    assert.ok(installer.includes('exten => *8,1,Goto(*1,1)'), 'install.sh has *8 alias');
 
-    // 1. General Department Group Call Pickup (*8)
-    assert.ok(dialplan.includes('exten => *8,1,NoOp(--- Department Group Call Pickup'), 'extensions_custom.conf has *8 pickup');
-    assert.ok(installer.includes('exten => *8,1,NoOp(--- Department Group Call Pickup'), 'install.sh has *8 pickup');
-
-    // 2. Directed Call Pickup / Ring Group Intercept (*8X.)
-    assert.ok(dialplan.includes('exten => _*8X.,1,NoOp(--- Directed / Ring Group Pickup'), 'extensions_custom.conf has _*8X. pickup');
-    assert.ok(installer.includes('exten => _*8X.,1,NoOp(--- Directed / Ring Group Pickup'), 'install.sh has _*8X. pickup');
+    // 2. Directed Call Pickup / Ring Group Intercept (*1X.)
+    assert.ok(dialplan.includes('exten => _*1X.,1,NoOp(--- Directed / Ring Group Pickup'), 'extensions_custom.conf has _*1X. pickup');
+    assert.ok(installer.includes('exten => _*1X.,1,NoOp(--- Directed / Ring Group Pickup'), 'install.sh has _*1X. pickup');
     assert.ok(dialplan.includes('PickupChan(PJSIP/${EXTEN:2}&SIP/${EXTEN:2}&Local/${EXTEN:2}@ext-local,p)'), 'Directed pickup targets PJSIP, SIP, and Local channels');
     assert.ok(dialplan.includes('${EXTEN:2}@ext-group'), 'Directed pickup targets Ring Groups via @ext-group context');
 

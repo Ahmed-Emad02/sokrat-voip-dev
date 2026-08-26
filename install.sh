@@ -562,24 +562,30 @@ same => n,Playback(beep)
 same => n,Echo()
 same => n,Hangup()
 
-; === Solution D: Call Pickup Feature Codes (*8, *8<EXT/GROUP>, **<EXT>) ===
+; === Solution D: Call Pickup Feature Codes (*1, *1<EXT/GROUP>, **<EXT>) ===
 ; Directed Call Pickup (**EXT, e.g. **102)
 exten => _**X.,1,NoOp(--- Directed Call Pickup for Target ${EXTEN:2} by ${CALLERID(num)} ---)
 same => n,PickupChan(PJSIP/${EXTEN:2}&SIP/${EXTEN:2}&Local/${EXTEN:2}@ext-local,p)
 same => n,Pickup(${EXTEN:2}@ext-local&${EXTEN:2}@from-internal&${EXTEN:2}@from-did-direct)
 same => n,Hangup()
 
-; Directed Call Pickup or Ring Group Intercept (*8 + Number, e.g. *8102 or *8600)
-exten => _*8X.,1,NoOp(--- Directed / Ring Group Pickup for Target ${EXTEN:2} by ${CALLERID(num)} ---)
+; Directed Call Pickup or Ring Group Intercept (*1 + Number, e.g. *1102 or *1600)
+exten => _*1X.,1,NoOp(--- Directed / Ring Group Pickup for Target ${EXTEN:2} by ${CALLERID(num)} ---)
 same => n,PickupChan(PJSIP/${EXTEN:2}&SIP/${EXTEN:2}&Local/${EXTEN:2}@ext-local,p)
 same => n,Pickup(${EXTEN:2}@ext-local&${EXTEN:2}@from-internal&${EXTEN:2}@from-did-direct&${EXTEN:2}@ext-group)
 same => n,Hangup()
 
-; General Department Group Call Pickup (*8)
-exten => *8,1,NoOp(--- Department Group Call Pickup by ${CALLERID(num)} ---)
+; General Department Group Call Pickup (*1)
+exten => *1,1,NoOp(--- Department Group Call Pickup by ${CALLERID(num)} ---)
 same => n,Pickup()
 same => n,Hangup()
 
+; Backward Compatibility Aliases (*8, *8X.)
+exten => *8,1,Goto(*1,1)
+exten => _*8X.,1,NoOp(--- Directed Pickup Alias to *1 ---)
+same => n,PickupChan(PJSIP/${EXTEN:2}&SIP/${EXTEN:2}&Local/${EXTEN:2}@ext-local,p)
+same => n,Pickup(${EXTEN:2}@ext-local&${EXTEN:2}@from-internal&${EXTEN:2}@from-did-direct&${EXTEN:2}@ext-group)
+same => n,Hangup()
 CHANSPY
 
 # Append Intercom dialplan contexts
