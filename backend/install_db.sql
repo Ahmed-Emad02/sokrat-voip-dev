@@ -230,6 +230,11 @@ UPDATE `asterisk`.`pjsipsettings` SET `data` = '2', `seq` = 1 WHERE `keyword` = 
 UPDATE `asterisk`.`pjsipsettings` SET `data` = '3', `seq` = 2 WHERE `keyword` = 'ulaw';
 UPDATE `asterisk`.`pjsipsettings` SET `data` = '4', `seq` = 3 WHERE `keyword` = 'alaw';
 UPDATE `asterisk`.`pjsipsettings` SET `data` = '5', `seq` = 4 WHERE `keyword` = 'gsm';
+
+-- Configure Call Pickup feature code to '*' (General & Directed) and disable conflicting direct voicemail '*'
+UPDATE `asterisk`.`featurecodes` SET `customcode` = '*', `enabled` = 1 WHERE `modulename` = 'core' AND `featurename` = 'pickupexten';
+UPDATE `asterisk`.`featurecodes` SET `customcode` = '*', `enabled` = 1 WHERE `modulename` = 'core' AND `featurename` = 'pickup';
+UPDATE `asterisk`.`featurecodes` SET `customcode` = '**', `enabled` = 0 WHERE `modulename` = 'voicemail' AND `featurename` = 'directdialvoicemail';
 CREATE TABLE IF NOT EXISTS `dashboard_crm_clients` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `client_id` VARCHAR(64) NOT NULL UNIQUE,
