@@ -14,10 +14,9 @@ NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf 2>/dev/null | cut -d= -f2- | xargs || true)
 
 echo "============================================"
-echo " Sokrat VOIP Installer v1.0.3"
+echo " Sokrat VOIP Installer v1.0.4"
 echo " Target: Asterisk 18"
 echo "============================================"
-
 # Collect required interactive input BEFORE any system checks or package installations.
 # When the installer is piped to Bash, stdin contains the script, so read from the
 # controlling terminal (or another terminal-backed descriptor) instead.
@@ -307,6 +306,8 @@ CREATE TABLE IF NOT EXISTS \`dashboard_user_dongles\` (
 
 ensure_db_column "gsm_dongles" "dynamic_enabled" "TINYINT(1) NOT NULL DEFAULT 0"
 
+ensure_db_column "employee_extras" "is_group_admin" "TINYINT(1) NOT NULL DEFAULT 0"
+
 ensure_db_column "storage_settings" "auto_purge_days" "INT DEFAULT 90"
 ensure_db_column "storage_settings" "gdrive_enabled" "TINYINT(1) DEFAULT 0"
 ensure_db_column "storage_settings" "gdrive_folder_name" "VARCHAR(255) DEFAULT 'Sokrat-VoIP-Backups'"
@@ -570,6 +571,24 @@ same => n,Wait(0.5)
 same => n,Set(RNNOISE(both)=off)
 same => n,Playback(beep)
 same => n,Echo()
+same => n,Hangup()
+
+; === Solution D: Call Pickup Feature Codes (*8, *8<EXT/GROUP>, **<EXT>) ===
+; Directed Call Pickup (**EXT, e.g. **102)
+exten => _**X.,1,NoOp(--- Directed Call Pickup for Target ${EXTEN:2} by ${CALLERID(num)} ---)
+same => n,PickupChan(PJSIP/${EXTEN:2}&SIP/${EXTEN:2}&Local/${EXTEN:2}@ext-local,p)
+same => n,Pickup(${EXTEN:2}@ext-local&${EXTEN:2}@from-internal&${EXTEN:2}@from-did-direct)
+same => n,Hangup()
+
+; Directed Call Pickup or Ring Group Intercept (*8 + Number, e.g. *8102 or *8600)
+exten => _*8X.,1,NoOp(--- Directed / Ring Group Pickup for Target ${EXTEN:2} by ${CALLERID(num)} ---)
+same => n,PickupChan(PJSIP/${EXTEN:2}&SIP/${EXTEN:2}&Local/${EXTEN:2}@ext-local,p)
+same => n,Pickup(${EXTEN:2}@ext-local&${EXTEN:2}@from-internal&${EXTEN:2}@from-did-direct&${EXTEN:2}@ext-group)
+same => n,Hangup()
+
+; General Department Group Call Pickup (*8)
+exten => *8,1,NoOp(--- Department Group Call Pickup by ${CALLERID(num)} ---)
+same => n,Pickup()
 same => n,Hangup()
 
 CHANSPY

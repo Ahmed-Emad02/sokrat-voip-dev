@@ -59,7 +59,7 @@ test('views/sidebar.ejs includes light theme overrides for fallback classes', ()
     assert.ok(content.includes('.light-theme .text-zinc-200'), 'sidebar.ejs should define .light-theme .text-zinc-200 override');
     assert.ok(content.includes('.light-theme .bg-\\[\\#09090b\\]'), 'sidebar.ejs should define .light-theme .bg-[#09090b] override');
     assert.ok(content.includes('.light-theme .bg-black\\/40'), 'sidebar.ejs should define .light-theme .bg-black/40 override');
-    assert.ok(content.includes('v1.0.3'), 'sidebar.ejs should display version v1.0.3');
+    assert.ok(content.includes('v1.0.4'), 'sidebar.ejs should display version v1.0.4');
 });
 
 test('views/gsm-dongles.ejs includes complete light theme overrides for dialing state and other states', () => {

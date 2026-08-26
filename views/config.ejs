@@ -1,6 +1,7 @@
 <%
 var activeLang = (typeof currentLang !== 'undefined' && currentLang) ? currentLang : 'en';
 var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
+var canManageGroupAdmin = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) || (typeof currentUser !== 'undefined' && currentUser && (currentUser.isRoot || currentUser.group_name === 'super admins'));
 
 function isTabAllowed(tabName) {
     if (typeof allowedTabs === 'undefined') return true;
@@ -1851,6 +1852,27 @@ function isTabAllowed(tabName) {
                                         <option value=""><%= isRtl ? 'جاري تحميل المجموعات...' : 'Loading groups...' %></option>
                                     </select>
                                     <p class="mt-1 text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'تُدار المجموعات من لوحة المراقبة المباشرة' : 'Groups are managed from the Live Panel' %></p>
+                                </div>
+                                <div class="sm:col-span-2 pt-1">
+                                    <label class="flex items-center gap-2.5 p-2.5 rounded-xl border border-emerald-500/20 bg-black/20 <%= canManageGroupAdmin ? 'hover:bg-black/30 cursor-pointer' : 'opacity-60 cursor-not-allowed' %> text-xs">
+                                        <input type="checkbox" id="extIsGroupAdmin" class="tab-checkbox" <%= canManageGroupAdmin ? '' : 'disabled' %>>
+                                        <div class="flex-1">
+                                            <div class="flex items-center justify-between">
+                                                <span class="font-bold text-white flex items-center gap-1.5">
+                                                    <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+                                                    <span><%= isRtl ? 'مدير المجموعة (Group Admin)' : 'Group Admin (Call Pickup Authority)' %></span>
+                                                </span>
+                                                <% if (!canManageGroupAdmin) { %>
+                                                    <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 uppercase">
+                                                        <%= isRtl ? 'مدراء النظام فقط' : 'Super Admin Only' %>
+                                                    </span>
+                                                <% } %>
+                                            </div>
+                                            <p class="text-[10px] text-[var(--text-muted)] mt-0.5">
+                                                <%= isRtl ? 'عند التفعيل، يحصل هذا الموظف وحده على صلاحية التقاط مكالمات أعضاء مجموعته (*8) — صلاحية خاصة بمدراء النظام' : 'When enabled, only this extension has authority to pick up ringing calls from its group members (*8) — Super Admin permission required' %>
+                                            </p>
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -4233,14 +4255,14 @@ function isTabAllowed(tabName) {
                         const titleText = ext.title
                             ? `<span class="text-xs font-bold text-[var(--text-primary)] truncate">${escapeHtml(ext.title)}</span>`
                             : `<span class="text-[11px] text-[var(--text-muted)]">${isRtl ? 'بدون مسمى وظيفي' : 'No job title'}</span>`;
-                        const groupText = ext.emp_group
-                            ? `<span class="text-[10px] font-bold text-red-400 truncate">${escapeHtml(ext.emp_group)}</span>`
-                            : `<span class="text-[10px] text-[var(--text-muted)]">${isRtl ? 'بدون مجموعة' : 'No group'}</span>`;
+                        const adminBadge = ext.is_group_admin ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono" title="${isRtl ? 'مدير المجموعة (صلاحية التقاط المكالمات)' : 'Group Admin (Call Pickup Authority)'}"><svg class="w-2.5 h-2.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg><span>Admin</span></span>` : '';
+                        const groupLabel = ext.emp_group ? escapeHtml(ext.emp_group) : (isRtl ? 'بدون مجموعة' : 'Ungrouped');
+                        const groupClass = ext.emp_group ? 'text-red-400 font-bold' : 'text-[var(--text-muted)]';
+                        const groupText = `<div class="flex items-center gap-1.5 flex-wrap"><span class="text-[10px] truncate ${groupClass}">${groupLabel}</span>${adminBadge}</div>`;
                         const isWebRtcExt = (ext.tech === 'pjsip' || ext.tech === 'webrtc');
                         const techBadge = isWebRtcExt
                             ? `<span class="ext-tech-badge ext-tech-webrtc"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>WebRTC Softphone</span>`
                             : `<span class="ext-tech-badge ext-tech-sip">Generic SIP Device</span>`;
-
                         tr.innerHTML = `
                             <td class="py-3 px-4 font-mono font-bold text-[var(--text-primary)]">${escapeHtml(ext.extension)}</td>
                             <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${escapeHtml(ext.name || '-')}</td>
@@ -4297,6 +4319,8 @@ function isTabAllowed(tabName) {
             document.getElementById('extPhoto').value = '';
             document.getElementById('extPhotoUrl').value = '';
             document.getElementById('extTitle').value = '';
+            const isGroupAdminEl = document.getElementById('extIsGroupAdmin');
+            if (isGroupAdminEl) isGroupAdminEl.checked = false;
             showEmployeePhotoPreview('', '');
             const groupSelect = document.getElementById('extGroup');
             groupSelect.disabled = true;
@@ -4417,6 +4441,8 @@ function isTabAllowed(tabName) {
                 setEmployeeGroupOptions(groupsData.groups || [], extras.emp_group || '');
                 document.getElementById('extTitle').value = extras.title || '';
                 document.getElementById('extPhotoUrl').value = extras.photo || '';
+                const isGroupAdminEl = document.getElementById('extIsGroupAdmin');
+                if (isGroupAdminEl) isGroupAdminEl.checked = Boolean(extras.is_group_admin);
                 if (extras.photo) {
                     showEmployeePhotoPreview(extras.photo, extras.photo.split('/').pop());
                 }
@@ -4524,7 +4550,8 @@ function isTabAllowed(tabName) {
                 body: JSON.stringify({
                     photo: photoUrl,
                     title: title || null,
-                    emp_group: empGroup || null
+                    emp_group: empGroup || null,
+                    is_group_admin: document.getElementById('extIsGroupAdmin')?.checked ? 1 : 0
                 })
             });
             const data = await response.json();

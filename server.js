@@ -398,9 +398,11 @@ async function initAuthDb() {
             photo VARCHAR(255) DEFAULT NULL,
             title VARCHAR(255) DEFAULT NULL,
             emp_group VARCHAR(100) DEFAULT NULL,
+            is_group_admin TINYINT(1) NOT NULL DEFAULT 0,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    try { await conn.execute('ALTER TABLE employee_extras ADD COLUMN is_group_admin TINYINT(1) NOT NULL DEFAULT 0'); } catch (_) {}
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS ${tables.employeeGroups} (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -716,6 +718,11 @@ async function initAuthDb() {
     } catch (vmErr) {
         console.error('Voicemail limits boot sync error:', vmErr.message);
     }
+    try {
+        await syncExtensionCallPickupGroups();
+    } catch (cgErr) {
+        console.error('Callgroup boot sync error:', cgErr.message);
+    }
 }
 initAuthDb().catch(err => console.error('AUTH DB init error:', err));
 
@@ -786,6 +793,110 @@ async function getAllServerDongles() {
     } catch (err) {
         console.error('getAllServerDongles error:', err.message);
         return [];
+    }
+}
+
+async function syncExtensionCallPickupGroups() {
+    try {
+        const [groupRows] = await pool.query('SELECT id, name FROM `asterisk`.`employee_groups` ORDER BY id ASC');
+        const groupMap = new Map();
+        // Reserve group ID 1 for default / ungrouped extensions so all ungrouped extensions can pick up from each other
+        let nextGroupId = 2;
+        groupRows.forEach(g => {
+            if (g.name) {
+                const key = g.name.trim().toLowerCase();
+                if (!groupMap.has(key)) {
+                    groupMap.set(key, {
+                        id: nextGroupId++,
+                        name: g.name.trim()
+                    });
+                }
+            }
+        });
+
+        const [extRows] = await pool.query(`
+            SELECT u.extension, ee.emp_group, ee.is_group_admin
+            FROM \`asterisk\`.\`users\` u
+            LEFT JOIN \`asterisk\`.\`employee_extras\` ee ON u.extension = ee.extension
+        `);
+
+        // Determine which groups (including ungrouped) have at least one designated Group Admin
+        const groupsWithAdmins = new Set();
+        extRows.forEach(r => {
+            const g = r.emp_group ? String(r.emp_group).trim().toLowerCase() : '__ungrouped__';
+            const isAdmin = Boolean(r.is_group_admin === 1 || r.is_group_admin === true || r.is_group_admin === '1');
+            if (isAdmin) {
+                groupsWithAdmins.add(g);
+            }
+        });
+
+        let sipCustomPostContent = '; Auto-generated Callgroup and Pickupgroup definitions for Sokrat VoIP Live Panel\n';
+        let pjsipCustomPostContent = '; Auto-generated Callgroup and Pickupgroup definitions for Sokrat VoIP Live Panel\n';
+
+        for (const row of extRows) {
+            const ext = String(row.extension || '').trim();
+            if (!/^\d+$/.test(ext)) continue;
+
+            const groupKey = row.emp_group ? String(row.emp_group).trim().toLowerCase() : '__ungrouped__';
+            const groupInfo = row.emp_group && groupMap.has(groupKey) ? groupMap.get(groupKey) : null;
+            const groupId = groupInfo ? groupInfo.id : 1; // Default group 1 for ungrouped
+            const namedGroup = groupInfo ? groupInfo.name.replace(/[^a-zA-Z0-9_]/g, '_') : 'default';
+            const isGroupAdmin = Boolean(row.is_group_admin === 1 || row.is_group_admin === true || row.is_group_admin === '1');
+
+            let pickupGroupId = groupId;
+            let namedPickupGroup = namedGroup;
+
+            // If this group (including ungrouped) has designated admin(s), ONLY group admins have pickupgroup set
+            if (groupsWithAdmins.has(groupKey)) {
+                if (isGroupAdmin) {
+                    pickupGroupId = groupId;
+                    namedPickupGroup = namedGroup;
+                } else {
+                    pickupGroupId = '';
+                    namedPickupGroup = '';
+                }
+            }
+
+            const callgroupLine = `callgroup=${groupId}\n`;
+            const pickupgroupLine = `pickupgroup=${pickupGroupId}\n`;
+            const namedCallgroupLine = `namedcallgroup=${namedGroup}\n`;
+            const namedPickupgroupLine = `namedpickupgroup=${namedPickupGroup}\n`;
+
+            const pjsipNamedCallgroupLine = `named_call_group=${namedGroup}\n`;
+            const pjsipNamedPickupgroupLine = `named_pickup_group=${namedPickupGroup}\n`;
+            sipCustomPostContent += `\n[${ext}](+)\n${callgroupLine}${pickupgroupLine}${namedCallgroupLine}${namedPickupgroupLine}`;
+            pjsipCustomPostContent += `\n[${ext}](+)\n${pjsipNamedCallgroupLine}${pjsipNamedPickupgroupLine}`;
+
+            try {
+                await pool.query(`
+                    INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags) VALUES (?, 'callgroup', ?, 0)
+                    ON DUPLICATE KEY UPDATE data = VALUES(data)
+                `, [ext, String(groupId)]);
+                if (pickupGroupId !== '') {
+                    await pool.query(`
+                        INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags) VALUES (?, 'pickupgroup', ?, 0)
+                        ON DUPLICATE KEY UPDATE data = VALUES(data)
+                    `, [ext, String(pickupGroupId)]);
+                } else {
+                    await pool.query(`DELETE FROM \`asterisk\`.\`sip\` WHERE id = ? AND keyword = 'pickupgroup'`, [ext]);
+                }
+            } catch (_) {}
+        }
+
+        const fs = require('fs');
+        const sipConfPath = '/etc/asterisk/sip_custom_post.conf';
+        const pjsipConfPath = '/etc/asterisk/pjsip_custom_post.conf';
+
+        try { fs.writeFileSync(sipConfPath, sipCustomPostContent, 'utf8'); } catch (_) {}
+        try { fs.writeFileSync(pjsipConfPath, pjsipCustomPostContent, 'utf8'); } catch (_) {}
+
+        const { execFile: execFileCb } = require('child_process');
+        execFileCb(ASTERISK_BIN, ['-rx', 'sip reload'], () => {});
+        execFileCb(ASTERISK_BIN, ['-rx', 'pjsip reload'], () => {});
+
+        console.log(`CALLPICKUP: Synchronized callgroups for ${extRows.length} extension(s) across ${groupRows.length} group(s)`);
+    } catch (err) {
+        console.error('CALLPICKUP: Failed to synchronize callgroups:', err.message);
     }
 }
 
@@ -2265,7 +2376,7 @@ app.use(async (req, res, next) => {
     res.setHeader('Expires', '0');
     try {
         const [users] = await pool.query(`
-            SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group
+            SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group, ee.is_group_admin
             FROM ${tables.users} u
             LEFT JOIN ${tables.employeeExtras} ee ON u.extension = ee.extension
         `);
@@ -2301,7 +2412,14 @@ app.use(async (req, res, next) => {
 
         users.forEach(u => {
             if (u.extension && /^\d+$/.test(u.extension)) {
-                extMap.set(u.extension, { extension: u.extension, name: u.name || u.extension, photo: u.photo, title: u.title, emp_group: u.emp_group });
+                extMap.set(u.extension, {
+                    extension: u.extension,
+                    name: u.name || u.extension,
+                    photo: u.photo,
+                    title: u.title,
+                    emp_group: u.emp_group,
+                    is_group_admin: Boolean(u.is_group_admin === 1 || u.is_group_admin === true || u.is_group_admin === '1')
+                });
             }
         });
 
@@ -6743,7 +6861,7 @@ app.get('/api/config/extensions', async (req, res) => {
             SELECT u.extension, u.name, u.outboundcid, u.recording, u.voicemail,
                    s_secret.data AS secret, s_context.data AS context, s_nat.data AS nat,
                    COALESCE(d.tech, 'sip') AS tech,
-                   ee.photo, ee.title, ee.emp_group
+                   ee.photo, ee.title, ee.emp_group, ee.is_group_admin
             FROM ${tables.users} u
             LEFT JOIN ${tables.devices} d ON d.id = u.extension
             LEFT JOIN ${tables.sip} s_secret ON s_secret.id = u.extension AND s_secret.keyword = 'secret'
@@ -6774,10 +6892,10 @@ app.get('/api/config/extensions', async (req, res) => {
 
         const enriched = extensions.map(ext => ({
             ...ext,
+            is_group_admin: Boolean(ext.is_group_admin === 1 || ext.is_group_admin === true || ext.is_group_admin === '1'),
             denoise: denoiseMap[ext.extension] || 'both',
             vad_gate: vadMap[ext.extension] !== undefined ? vadMap[ext.extension] : '1'
         }));
-
         res.json({ success: true, extensions: enriched });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -6871,7 +6989,32 @@ app.post('/api/config/extensions', async (req, res) => {
         const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
         const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
         await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech, denoiseVal, vadGateVal);
+        let isGroupAdmin = 0;
+        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
+            const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
+            if (requestedAdmin === 1 && !isSuperAdmin(req)) {
+                return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admins can assign Group Admin status' });
+            }
+            if (isSuperAdmin(req)) {
+                isGroupAdmin = requestedAdmin;
+            }
+        }
+        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined || req.body.emp_group !== undefined) {
+            const empGroup = req.body.emp_group !== undefined ? (String(req.body.emp_group || '').trim() || null) : null;
+            const title = req.body.title !== undefined ? (String(req.body.title || '').trim() || null) : null;
+            const photo = req.body.photo ? String(req.body.photo).trim() : null;
+            await pool.query(`
+                INSERT INTO ${tables.employeeExtras} (extension, photo, title, emp_group, is_group_admin)
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    photo = COALESCE(?, photo),
+                    title = COALESCE(?, title),
+                    emp_group = COALESCE(?, emp_group),
+                    is_group_admin = VALUES(is_group_admin)
+            `, [extNum, photo, title, empGroup, isGroupAdmin, photo, title, empGroup]);
+        }
         reloadPbxConfig();
+        syncExtensionCallPickupGroups().catch(() => {});
 
         res.json({
             success: true,
@@ -6941,17 +7084,43 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         pjsipPresence[extNum] = false;
         delete pendingOffline[extNum];
 
-        const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
-        const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
-        await setExtensionAstdbDefaults(extNum, displayName || extNum, vmVal, devTech, denoiseVal, vadGateVal);
-        reloadPbxConfig();
+        const [currExtRows] = await pool.query(
+            `SELECT is_group_admin FROM ${tables.employeeExtras} WHERE extension = ?`,
+            [extNum]
+        );
+        const currentIsAdmin = currExtRows[0]?.is_group_admin ? 1 : 0;
+        let isGroupAdmin = currentIsAdmin;
+        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
+            const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
+            if (requestedAdmin !== currentIsAdmin && !isSuperAdmin(req)) {
+                return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admins can modify Group Admin status' });
+            }
+            if (isSuperAdmin(req)) {
+                isGroupAdmin = requestedAdmin;
+            }
+        }
 
+        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined || req.body.emp_group !== undefined || req.body.title !== undefined || req.body.photo !== undefined) {
+            const empGroup = req.body.emp_group !== undefined ? (String(req.body.emp_group || '').trim() || null) : null;
+            const title = req.body.title !== undefined ? (String(req.body.title || '').trim() || null) : null;
+            const photo = req.body.photo !== undefined ? (req.body.photo ? String(req.body.photo).trim() : null) : undefined;
+            await pool.query(`
+                INSERT INTO ${tables.employeeExtras} (extension, photo, title, emp_group, is_group_admin)
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    photo = COALESCE(?, photo),
+                    title = COALESCE(?, title),
+                    emp_group = COALESCE(?, emp_group),
+                    is_group_admin = VALUES(is_group_admin)
+            `, [extNum, photo || null, title, empGroup, isGroupAdmin, photo !== undefined ? photo : null, title, empGroup]);
+        }
+        reloadPbxConfig();
+        syncExtensionCallPickupGroups().catch(() => {});
         res.json({ success: true, message: `Extension ${extNum} updated successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
 // DELETE /api/config/extensions/:extension - Delete Extension
 app.delete('/api/config/extensions/:extension', async (req, res) => {
     try {
@@ -6982,6 +7151,7 @@ app.delete('/api/config/extensions/:extension', async (req, res) => {
         });
         updateVoicemailConf(extNum, '', 'novm');
         reloadPbxConfig();
+        syncExtensionCallPickupGroups().catch(() => {});
 
         res.json({ success: true, message: `Extension ${extNum} deleted successfully.` });
     } catch (error) {
@@ -7011,6 +7181,7 @@ app.post('/api/employee/groups', requireAuth, async (req, res) => {
             `INSERT INTO ${tables.employeeGroups} (name, description) VALUES (?, ?)`,
             [name, description || null]
         );
+        syncExtensionCallPickupGroups().catch(() => {});
         res.json({ success: true, id: result.insertId, group: { id: result.insertId, name, description } });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
@@ -7053,6 +7224,7 @@ app.put('/api/employee/groups/:id', requireAuth, async (req, res) => {
             );
         }
         await connection.commit();
+        syncExtensionCallPickupGroups().catch(() => {});
         res.json({ success: true, group: { id, name, description } });
     } catch (error) {
         await connection.rollback();
@@ -7088,6 +7260,7 @@ app.delete('/api/employee/groups/:id', requireAuth, async (req, res) => {
         );
         await connection.query(`DELETE FROM ${tables.employeeGroups} WHERE id = ?`, [id]);
         await connection.commit();
+        syncExtensionCallPickupGroups().catch(() => {});
         res.json({ success: true });
     } catch (error) {
         await connection.rollback();
@@ -7105,10 +7278,14 @@ app.get('/api/employee/extras/:extension', requireAuth, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Valid numeric extension is required' });
         }
         const [rows] = await pool.query(
-            `SELECT photo, title, emp_group FROM ${tables.employeeExtras} WHERE extension = ?`,
+            `SELECT photo, title, emp_group, is_group_admin FROM ${tables.employeeExtras} WHERE extension = ?`,
             [extension]
         );
-        res.json({ success: true, extras: rows[0] || null });
+        const ex = rows[0] ? {
+            ...rows[0],
+            is_group_admin: Boolean(rows[0].is_group_admin === 1 || rows[0].is_group_admin === true || rows[0].is_group_admin === '1')
+        } : null;
+        res.json({ success: true, extras: ex });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -7149,28 +7326,41 @@ app.put('/api/employee/extras/:extension', requireAuth, async (req, res) => {
         }
 
         const [currentRows] = await pool.query(
-            `SELECT photo FROM ${tables.employeeExtras} WHERE extension = ?`,
+            `SELECT photo, is_group_admin FROM ${tables.employeeExtras} WHERE extension = ?`,
             [extension]
         );
         const previousPhoto = currentRows[0]?.photo || null;
+        const currentIsAdmin = currentRows[0]?.is_group_admin ? 1 : 0;
+        let isGroupAdmin = currentIsAdmin;
 
-        if (!photo && !title && !empGroup) {
+        if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
+            const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
+            if (requestedAdmin !== currentIsAdmin && !isSuperAdmin(req)) {
+                return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admins can modify Group Admin status' });
+            }
+            if (isSuperAdmin(req)) {
+                isGroupAdmin = requestedAdmin;
+            }
+        }
+        if (!photo && !title && !empGroup && !isGroupAdmin) {
             await pool.query(`DELETE FROM ${tables.employeeExtras} WHERE extension = ?`, [extension]);
         } else {
             await pool.query(`
-                INSERT INTO ${tables.employeeExtras} (extension, photo, title, emp_group)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO ${tables.employeeExtras} (extension, photo, title, emp_group, is_group_admin)
+                VALUES (?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     photo = VALUES(photo),
                     title = VALUES(title),
-                    emp_group = VALUES(emp_group)
-            `, [extension, photo, title || null, empGroup || null]);
+                    emp_group = VALUES(emp_group),
+                    is_group_admin = VALUES(is_group_admin)
+            `, [extension, photo, title || null, empGroup || null, isGroupAdmin]);
         }
 
         if (previousPhoto && previousPhoto !== photo) removeEmployeePhoto(previousPhoto);
+        syncExtensionCallPickupGroups().catch(() => {});
         res.json({
             success: true,
-            extras: { photo, title: title || null, emp_group: empGroup || null }
+            extras: { photo, title: title || null, emp_group: empGroup || null, is_group_admin: Boolean(isGroupAdmin) }
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -7219,6 +7409,7 @@ app.put('/api/employee/group-assignment', requireAuth, async (req, res) => {
             `, [extension, targetGroup]);
         }
 
+        syncExtensionCallPickupGroups().catch(() => {});
         res.json({ success: true, extension, emp_group: targetGroup });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
