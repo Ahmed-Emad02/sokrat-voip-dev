@@ -163,17 +163,6 @@ else
     cd "$INSTALL_DIR"
 fi
 
-mkdir -p "$INSTALL_DIR/public/js"
-if [ ! -f "$INSTALL_DIR/public/js/jssip.min.js" ]; then
-    echo "  Warning: jssip.min.js missing from repo, fetching static asset..."
-    curl -fsSL -o "$INSTALL_DIR/public/js/jssip.min.js" https://cdn.jsdelivr.net/npm/jssip@3.10.1/dist/jssip.min.js
-fi
-if [ ! -f "$INSTALL_DIR/public/js/jssip.min.js" ]; then
-    echo "  Error: Failed to locate or download public/js/jssip.min.js" >&2
-    exit 1
-else
-    echo "  WebRTC static assets verified (jssip.min.js)"
-fi
 
 # ──────────────────────────────────────────────
 # Step 4 — Install Dependencies
