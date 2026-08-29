@@ -24,6 +24,9 @@ test('backend/install_db.sql has full schema parity for extension scoping, dongl
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `storage_settings`/, 'storage_settings table must be created');
     assert.match(sql, /`queue_provisioned` TINYINT\(1\) DEFAULT 0/, 'storage_settings must define queue_provisioned column');
     assert.match(sql, /INSERT IGNORE INTO `storage_settings` \(`id`\) VALUES \(1\);/, 'storage_settings default row must be seeded');
+
+    // RCONFFAIL notification cleanup
+    assert.match(sql, /DELETE FROM `asterisk`\.`notifications` WHERE `id` = 'RCONFFAIL';/, 'install_db.sql must delete stale RCONFFAIL notifications');
 });
 
 test('install.sh contains schema migrations, rnnoise builds, and inbound blacklist dialplan', () => {
@@ -41,6 +44,11 @@ test('install.sh contains schema migrations, rnnoise builds, and inbound blackli
     assert.match(script, /ExecIf\(\$\["\$\{DB\(blacklist\/\$\{CALLER_NUMBER\}\)\}" != ""/, 'install.sh must check DB(blacklist/...)');
     assert.match(script, /same => n\(blacklisted\),NoOp\(--- INBOUND CALL REJECTED BY BLACKLIST RULE:/, 'install.sh must define blacklisted rejection label');
     assert.match(script, /same => n,Playback\(ss-noservice\)/, 'install.sh must play ss-noservice on blacklist rejection');
+
+    // amportal-reload.service boot race prevention & notification cleanup
+    assert.match(script, /DELETE FROM \\`notifications\\` WHERE \\`id\\` = 'RCONFFAIL';/, 'install.sh must clear stale RCONFFAIL notification');
+    assert.match(script, /AMPORTAL_SERVICE in \/usr\/lib\/systemd\/system\/amportal-reload\.service \/etc\/systemd\/system\/amportal-reload\.service/, 'install.sh must inspect amportal-reload.service unit locations');
+    assert.match(script, /ExecStartPre=\/bin\/bash -c '\\''for i in \$\(seq 1 30\); do if \/usr\/sbin\/asterisk -rx "core show version"/, 'install.sh must configure ExecStartPre readiness check on amportal-reload.service');
 });
 
 test('install.sh and uninstall.sh pass bash syntax validation', () => {

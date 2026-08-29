@@ -33,6 +33,9 @@ if (pairingRateLimitTimer.unref) pairingRateLimitTimer.unref();
 
 function createCrmRouter(pool, options = {}) {
     const getPeerStatus = typeof options === 'function' ? options : (options.getPeerStatus || (() => options.peerStatus || {}));
+    const getActiveCalls = typeof options === 'object' && typeof options.getActiveCalls === 'function'
+        ? options.getActiveCalls
+        : (() => options.activeCalls || {});
     const router = express.Router();
 
     // 1. PUBLIC HEALTH ENDPOINT
@@ -155,7 +158,7 @@ function createCrmRouter(pool, options = {}) {
         });
     });
 
-    // 4. SAFE EXTENSION LIST
+    // 4. SAFE LIVE EXTENSION LIST
     router.get('/extensions', requireCrmScope('extensions:read'), async (req, res) => {
         try {
             const [rows] = await pool.query(`
@@ -166,28 +169,55 @@ function createCrmRouter(pool, options = {}) {
             `);
 
             const peerMap = typeof getPeerStatus === 'function' ? getPeerStatus() : {};
+            const activeCallMap = getActiveCalls();
 
             const extensions = rows.map(r => {
                 const ext = String(r.id);
-                const p = peerMap[ext];
+                const peer = peerMap[ext];
+                const activeCall = activeCallMap && typeof activeCallMap === 'object'
+                    ? activeCallMap[ext]
+                    : null;
                 let isOnline = false;
 
-                if (typeof p === 'boolean') {
-                    isOnline = p;
-                } else if (p && typeof p === 'object') {
-                    isOnline = (p.status || '').toLowerCase().includes('ok');
+                if (typeof peer === 'boolean') {
+                    isOnline = peer;
+                } else if (peer && typeof peer === 'object') {
+                    const peerStatus = String(peer.status || '').toLowerCase();
+                    isOnline = Boolean(peer.online)
+                        || peerStatus.includes('ok')
+                        || ['online', 'registered', 'available', 'idle', 'ready'].includes(peerStatus);
                 }
+
+                const inCall = Boolean(activeCall);
+                const rawCallState = String(activeCall?.state || activeCall?.status || '').toLowerCase();
+                const status = inCall
+                    ? (rawCallState.includes('ring') ? 'ringing' : 'in_call')
+                    : (isOnline ? 'online' : 'offline');
+                const startedAt = inCall
+                    ? (Number(activeCall.start || activeCall.started_at) || Date.now())
+                    : null;
 
                 return {
                     extension: ext,
                     name: r.name || `Extension ${ext}`,
                     technology: 'sip',
                     enabled: true,
-                    online: isOnline
+                    online: isOnline || inCall,
+                    in_call: inCall,
+                    status,
+                    call: inCall ? {
+                        state: activeCall.state || activeCall.status || 'In Call',
+                        partner: String(activeCall.partner || activeCall.callee || activeCall.caller || ''),
+                        started_at: startedAt,
+                        duration_seconds: Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+                    } : null
                 };
             });
 
-            res.json({ extensions });
+            res.json({
+                extensions,
+                generated_at: new Date().toISOString()
+            });
         } catch (err) {
             console.error('CRM Extensions fetch error:', err.message);
             res.status(500).json({ success: false, error: 'Failed to retrieve extensions' });

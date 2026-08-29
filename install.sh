@@ -323,6 +323,9 @@ echo "  Announcement TTS schema ensured"
 echo "  Database tables ensured"
 echo "  Database migrations applied"
 
+# Clear any stale retrieve_conf failure notification
+mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "DELETE FROM \`notifications\` WHERE \`id\` = 'RCONFFAIL';" 2>/dev/null || true
+
 # ──────────────────────────────────────────────
 # Step 7 — Configure Asterisk AMI
 # ──────────────────────────────────────────────
@@ -829,6 +832,41 @@ same => n,ExecIf($["${CALLERID(name)}" != "" & "${CALLERID(name)}" != "${RAW_NUM
 same => n(done),Return()
 SIPHEADER
 
+# Strip old [ext-external-failover] and [sub-failover-screen] before appending
+python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\[ext-external-failover\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);f=re.sub(r'\[sub-failover-screen\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
+
+# Append ext-external-failover
+append_context '[ext-external-failover]' '[ext-external-failover]' << 'FAILOVER_CTX'
+
+[ext-external-failover]
+; Sokrat Call Center Failover to External Mobile Number with Call Screening Whisper
+; Supports:
+;   1. Explicit Dongle: ext-external-failover,01011719380/dongle1,1 OR ext-external-failover,01011719380@dongle1,1
+;   2. Automatic Outbound Routes: ext-external-failover,01011719380,1
+exten => _[0-9+*#].!,1,NoOp(=== SOKRAT FAILOVER: Target '${EXTEN}' for Customer '${CALLERID(num)}' ===)
+same => n,Set(CUST_NUM=${CALLERID(num)})
+same => n,Set(RAW_TARGET=${EXTEN})
+same => n,Set(TARGET_NUM=${CUT(RAW_TARGET,/,1)})
+same => n,Set(TARGET_NUM=${CUT(TARGET_NUM,@,1)})
+same => n,Set(EXPLICIT_DONGLE=${CUT(RAW_TARGET,/,2)})
+same => n,ExecIf($["${EXPLICIT_DONGLE}"=""]?Set(EXPLICIT_DONGLE=${CUT(RAW_TARGET,@,2)}))
+same => n,Set(__FAILOVER_DEST=${TARGET_NUM})
+same => n,Set(CDR(userfield)=Failover: ${RAW_TARGET})
+same => n,GotoIf($["${EXPLICIT_DONGLE}"!=""]?dial_explicit:dial_routes)
+same => n(dial_explicit),NoOp(Dialing explicitly via Dongle/${EXPLICIT_DONGLE}/${TARGET_NUM})
+same => n,Dial(Dongle/${EXPLICIT_DONGLE}/${TARGET_NUM},60,U(sub-failover-screen^${CUST_NUM}))
+same => n,Hangup()
+same => n(dial_routes),NoOp(Dialing via Outbound Routes for ${TARGET_NUM})
+same => n,Dial(Local/${TARGET_NUM}@outbound-allroutes,60,U(sub-failover-screen^${CUST_NUM}))
+same => n,Hangup()
+[sub-failover-screen]
+exten => s,1,NoOp(=== SOKRAT CALL SCREENING: ANNOUNCING CUSTOMER ${ARG1} TO MANAGER ===)
+same => n,Wait(0.4)
+same => n,ExecIf($[${ISNULL(${ARG1})} = 0]?Playback(followme/call-from))
+same => n,ExecIf($[${ISNULL(${ARG1})} = 0]?SayDigits(${ARG1}))
+same => n,Return()
+FAILOVER_CTX
+
 asterisk -rx "dialplan reload" 2>/dev/null || true
 echo "  Dialplan reloaded"
 
@@ -1136,6 +1174,18 @@ Environment=LC_ALL=en_US.UTF-8
 [Install]
 WantedBy=multi-user.target
 UNIT
+
+# Configure amportal-reload.service with Asterisk readiness pre-check to prevent boot-time AMI race condition
+for AMPORTAL_SERVICE in /usr/lib/systemd/system/amportal-reload.service /etc/systemd/system/amportal-reload.service; do
+    if [ -f "$AMPORTAL_SERVICE" ]; then
+        echo "  Configuring amportal-reload.service with Asterisk readiness pre-check..."
+        if ! grep -q "ExecStartPre=" "$AMPORTAL_SERVICE"; then
+            sed -i '/\[Service\]/a ExecStartPre=/bin/bash -c '\''for i in $(seq 1 30); do if /usr/sbin/asterisk -rx "core show version" >/dev/null 2>&1; then exit 0; fi; sleep 1; done; exit 0'\''' "$AMPORTAL_SERVICE"
+        else
+            sed -i 's|^ExecStartPre=.*|ExecStartPre=/bin/bash -c '\''for i in $(seq 1 30); do if /usr/sbin/asterisk -rx "core show version" >/dev/null 2>&1; then exit 0; fi; sleep 1; done; exit 0'\''|' "$AMPORTAL_SERVICE"
+        fi
+    fi
+done
 
 systemctl daemon-reload
 systemctl enable --now sokrat-voip

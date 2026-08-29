@@ -53,7 +53,32 @@ const words = {
         legendTopHeaderDesc: "Resets all USB ports & reloads Asterisk chan_dongle module server-wide.",
         legendRestartDesc: "Restarts the dongle channel in Asterisk without touching hardware.",
         legendRebootDesc: "Reboots modem internal firmware & SIM module via AT command.",
-        legendReplugDesc: "Simulates physically pulling & replugging USB cable (sysfs)."
+        legendReplugDesc: "Simulates physically pulling & replugging USB cable (sysfs).",
+        btnPopulateHardware: "Populate IMEI/IMSI in dongle.conf",
+        legendPopulateDesc: "Writes detected IMEI and IMSI into dongle.conf for persistent slot binding.",
+        populateHardwareConfirm: "Do you want to write detected IMEI and IMSI into /etc/asterisk/dongle.conf for ",
+        populateHardwareSuccess: "Populated IMEI and IMSI in dongle.conf successfully",
+        btnEditPorts: "Edit TTY Ports (Audio & Data)",
+        legendEditPortsDesc: "Changes the audio and data /dev/ttyUSB* ports for this dongle in dongle.conf.",
+        editPortsModalTitle: "Edit Dongle TTY Ports",
+        editPortsSuccess: "TTY ports updated in dongle.conf successfully",
+        btnAuditHardware: "Audit & Sync Config",
+        auditModalTitle: "GSM Hardware & dongle.conf Audit",
+        auditSubtitle: "Compares /etc/asterisk/dongle.conf against live Asterisk chan_dongle devices to detect mismatches and unpopulated slots.",
+        auditTotalSlots: "Total Slots",
+        auditInSync: "Synchronized",
+        auditIssues: "Mismatches / Actions",
+        auditDisconnected: "Disconnected",
+        auditReconcileAllBtn: "Sync dongle.conf to Live Hardware",
+        auditReconciling: "Reconciling config...",
+        auditCloseBtn: "Close",
+        auditRecheckBtn: "Re-run Audit",
+        auditAllSyncedMsg: "All active GSM dongles match /etc/asterisk/dongle.conf perfectly.",
+        auditTableSlot: "Slot",
+        auditTableConfig: "Configured (dongle.conf)",
+        auditTableLive: "Live Device (Asterisk)",
+        auditTableStatus: "Status / Diagnostics",
+        auditTableAction: "Action"
     },
     ar: {
         title: "شرائح الاتصال", subtitle: "GSM",
@@ -103,7 +128,32 @@ const words = {
         legendTopHeaderDesc: "إعادة تعيين كافة منافذ USB وإعادة تحميل تعريف chan_dongle على مستوى السيرفر.",
         legendRestartDesc: "إعادة تشغيل قناة الشريحة داخل Asterisk دون مساس بالجهاز.",
         legendRebootDesc: "إعادة تشغيل نظام المودم الداخلي ووحدة الشريحة عبر أمر AT.",
-        legendReplugDesc: "محاكاة فصل وإعادة توصيل كابل الـ USB في النواة (Sysfs)."
+        legendReplugDesc: "محاكاة فصل وإعادة توصيل كابل الـ USB في النواة (Sysfs).",
+        btnPopulateHardware: "تثبيت كود IMEI و IMSI في dongle.conf",
+        legendPopulateDesc: "يكتب كود IMEI و IMSI المكتشف في ملف dongle.conf لربط منفذ الشريحة بالجهاز بشكل دائم.",
+        populateHardwareConfirm: "هل تريد حفظ كود IMEI و IMSI في ملف /etc/asterisk/dongle.conf للشريحة ",
+        populateHardwareSuccess: "تم حفظ كود IMEI و IMSI في ملف dongle.conf بنجاح",
+        btnEditPorts: "تعديل منافذ TTY (الصوت والبيانات)",
+        legendEditPortsDesc: "تعديل منافذ /dev/ttyUSB* للصوت والأوامر للشريحة في ملف dongle.conf.",
+        editPortsModalTitle: "تعديل منافذ TTY للشريحة",
+        editPortsSuccess: "تم تحديث منافذ TTY في ملف dongle.conf بنجاح",
+        btnAuditHardware: "فحص ومطابقة الإعدادات",
+        auditModalTitle: "فحص وتدقيق أجهزة GSM وملف dongle.conf",
+        auditSubtitle: "مقارنة إعدادات /etc/asterisk/dongle.conf مع الأجهزة الحقيقية في Asterisk لاكتشاف الاختلافات والأكواد غير المسجلة.",
+        auditTotalSlots: "إجمالي المنافذ",
+        auditInSync: "مطابق تماماً",
+        auditIssues: "اختلافات / إجراءات",
+        auditDisconnected: "غير متصل",
+        auditReconcileAllBtn: "تحديث dongle.conf لمطابقة الأجهزة المتصلة",
+        auditReconciling: "جاري المطابقة...",
+        auditCloseBtn: "إغلاق",
+        auditRecheckBtn: "إعادة الفحص",
+        auditAllSyncedMsg: "كافة شرائح GSM النشطة مطابقة لملف dongle.conf بشكل مثالي.",
+        auditTableSlot: "المنفذ",
+        auditTableConfig: "المسجل في dongle.conf",
+        auditTableLive: "الجهاز الحقيقي (Asterisk)",
+        auditTableStatus: "الحالة والتشخيص",
+        auditTableAction: "الإجراء"
     }
 };
 const t = words[currentLang] || words['en'];
@@ -1034,6 +1084,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <span class="text-[9px] uppercase tracking-wider text-emerald-400/80 block"><%= isRtl ? 'جاهز' : 'Ready' %></span>
                     <span id="gsm-device-ready" class="text-sm font-black text-emerald-400 font-mono">0</span>
                 </div>
+                <button id="global-audit-btn" type="button" onclick="openDongleAuditModal()" class="dongle-action-button dongle-action-secondary cursor-pointer px-3.5 py-2 font-bold text-xs flex items-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                    <span><%= t.btnAuditHardware %></span>
+                </button>
                 <button id="global-reset-usb-btn" class="dongle-action-button dongle-action-primary cursor-pointer px-3.5 py-2 font-bold text-xs flex items-center gap-2">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
                     <span><%= t.btnResetAllUsb %></span>
@@ -1120,6 +1174,20 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                         <%= t.btnVirtualReplug %>
                                     </span>
                                     <p class="text-[10px] text-[var(--text-muted)] leading-relaxed"><%= t.legendReplugDesc %></p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] flex items-start gap-2.5">
+                                    <span class="px-2 py-1 rounded bg-black/40 border border-white/20 text-white text-[9px] font-bold shrink-0 flex items-center gap-1">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                                        <%= t.btnPopulateHardware %>
+                                    </span>
+                                    <p class="text-[10px] text-[var(--text-muted)] leading-relaxed"><%= t.legendPopulateDesc %></p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-[var(--bg-primary)]/60 border border-[var(--border-primary)] flex items-start gap-2.5">
+                                    <span class="px-2 py-1 rounded bg-black/40 border border-white/20 text-white text-[9px] font-bold shrink-0 flex items-center gap-1">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/><circle cx="7" cy="12" r="3"/><path d="M17 7l4 4-4 4"/></svg>
+                                        <%= t.btnEditPorts %>
+                                    </span>
+                                    <p class="text-[10px] text-[var(--text-muted)] leading-relaxed"><%= t.legendEditPortsDesc %></p>
                                 </div>
                             </div>
                         </div>
@@ -1436,6 +1504,197 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         </div>
     </div>
 
+    <!-- Edit TTY Ports Modal -->
+    <div id="edit-ports-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200">
+        <div id="edit-ports-modal-card" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 scale-95 opacity-0 transition-all duration-200 flex flex-col gap-4 mx-4">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
+                <h3 class="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <svg class="text-[var(--accent-color)]" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 17l6-6-6-6"/><path d="M12 19h8"/><circle cx="7" cy="12" r="3"/><path d="M17 7l4 4-4 4"/>
+                    </svg>
+                    <span id="edit-ports-modal-title"><%= t.editPortsModalTitle %></span>
+                </h3>
+                <button type="button" onclick="closeEditPortsModal()" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer p-1 rounded-lg hover:bg-[var(--bg-hover)]">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <form id="edit-ports-form" onsubmit="saveDonglePorts(event)" class="flex flex-col gap-4">
+                <input type="hidden" id="edit-ports-dongle-id" value="">
+                
+                <div class="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-[var(--text-muted)] uppercase"><%= isRtl ? 'الشريحة المستهدفة:' : 'Target Dongle:' %></span>
+                        <span id="edit-ports-dongle-badge" class="bg-[var(--accent-color)] text-white font-mono font-bold px-2.5 py-0.5 rounded-lg text-xs uppercase shadow-sm"></span>
+                    </div>
+                    <span class="text-[10px] text-[var(--text-muted)] font-mono">/etc/asterisk/dongle.conf</span>
+                </div>
+
+                <!-- Audio & Data Inputs -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="edit-ports-audio" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1 flex items-center justify-between">
+                            <span class="flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                <%= isRtl ? 'منفذ الصوت (Audio)' : 'Audio Port (Voice)' %>
+                            </span>
+                        </label>
+                        <input type="text" id="edit-ports-audio" required pattern="^/dev/ttyUSB[0-9]+$" placeholder="/dev/ttyUSB1" oninput="validatePortsForm()" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-emerald-400">
+                        <span class="text-[10px] text-[var(--text-muted)] mt-1 block font-mono">audio=/dev/ttyUSBX</span>
+                    </div>
+
+                    <div>
+                        <label for="edit-ports-data" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1 flex items-center justify-between">
+                            <span class="flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                                <%= isRtl ? 'منفذ الأوامر (Data)' : 'Data Port (AT)' %>
+                            </span>
+                        </label>
+                        <input type="text" id="edit-ports-data" required pattern="^/dev/ttyUSB[0-9]+$" placeholder="/dev/ttyUSB2" oninput="validatePortsForm()" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-cyan-400">
+                        <span class="text-[10px] text-[var(--text-muted)] mt-1 block font-mono">data=/dev/ttyUSBX</span>
+                    </div>
+                </div>
+
+                <!-- Conflict Warning -->
+                <div id="edit-ports-conflict-warning" class="hidden p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-bold flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <span><%= isRtl ? 'تنبيه: لا يمكن أن يكون منفذ الصوت ومنفذ البيانات نفس المنفذ' : 'Conflict: Audio Port and Data Port cannot be the same device' %></span>
+                </div>
+
+                <!-- Detected System Serial Devices List -->
+                <div class="rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] p-3 flex flex-col gap-2">
+                    <div class="flex items-center justify-between border-b border-[var(--border-primary)]/60 pb-2">
+                        <span class="text-[10px] font-extrabold text-[var(--text-secondary)] uppercase tracking-wider">
+                            <%= isRtl ? 'المنافذ المكتشفة في السيرفر (انقر لتعيين المنفذ فوراً):' : 'Detected System Ports (Click to assign directly):' %>
+                        </span>
+                        <button type="button" onclick="loadDetectedPortsList()" class="text-[10px] text-[var(--accent-color)] hover:underline font-bold cursor-pointer">
+                            <%= isRtl ? 'تحديث المنافذ' : 'Refresh Ports' %>
+                        </button>
+                    </div>
+                    <div id="detected-ports-chips" class="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-1">
+                        <span class="text-xs text-[var(--text-muted)] py-2 text-center"><%= isRtl ? 'جاري فحص المنافذ...' : 'Scanning detected ports...' %></span>
+                    </div>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeEditPortsModal()" class="bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] font-semibold rounded-xl px-4 py-2 text-xs transition cursor-pointer border border-[var(--border-primary)]">
+                        <%= isRtl ? 'إلغاء' : 'Cancel' %>
+                    </button>
+                    <button type="submit" id="save-ports-submit-btn" class="bg-[var(--accent-color)] hover:opacity-90 text-white font-bold rounded-xl px-5 py-2 text-xs transition cursor-pointer flex items-center gap-1.5 shadow-md">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        <span><%= isRtl ? 'حفظ التغييرات' : 'Save Changes' %></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- GSM Dongle & dongle.conf Audit Modal -->
+    <div id="dongle-audit-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-200">
+        <div id="dongle-audit-modal-card" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-4xl p-5 sm:p-6 scale-95 opacity-0 transition-all duration-200 flex flex-col gap-4 mx-4 max-h-[90vh] overflow-hidden shadow-2xl">
+            <!-- Modal Header -->
+            <div class="flex items-start justify-between border-b border-[var(--border-primary)] pb-3.5 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 text-[var(--accent-color)] flex items-center justify-center shrink-0">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base sm:text-lg font-black text-[var(--text-primary)] tracking-tight"><%= t.auditModalTitle %></h3>
+                        <p class="text-[11px] text-[var(--text-muted)] mt-0.5 leading-relaxed"><%= t.auditSubtitle %></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="runDongleAudit()" id="audit-refresh-btn" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer p-1.5 rounded-lg hover:bg-[var(--bg-hover)] flex items-center gap-1 text-xs font-bold" title="<%= t.auditRecheckBtn %>">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
+                        <span class="hidden sm:inline"><%= t.auditRecheckBtn %></span>
+                    </button>
+                    <button type="button" onclick="closeDongleAuditModal()" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer p-1.5 rounded-lg hover:bg-[var(--bg-hover)]">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body (Scrollable) -->
+            <div class="flex flex-col gap-4 overflow-y-auto pr-1">
+                <!-- KPI Summary Row -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 shrink-0">
+                    <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] flex flex-col gap-0.5">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-[var(--text-muted)]"><%= t.auditTotalSlots %></span>
+                        <span id="audit-kpi-total" class="text-lg font-black text-[var(--text-primary)] font-mono">0</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col gap-0.5">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400/80"><%= t.auditInSync %></span>
+                        <span id="audit-kpi-synced" class="text-lg font-black text-emerald-400 font-mono">0</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col gap-0.5">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-amber-400/80"><%= t.auditIssues %></span>
+                        <span id="audit-kpi-issues" class="text-lg font-black text-amber-400 font-mono">0</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-zinc-500/10 border border-zinc-500/20 flex flex-col gap-0.5">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-[var(--text-muted)]"><%= t.auditDisconnected %></span>
+                        <span id="audit-kpi-disconnected" class="text-lg font-black text-[var(--text-secondary)] font-mono">0</span>
+                    </div>
+                </div>
+
+                <!-- Reconcile Quick Action Banner (Shown when actions are available) -->
+                <div id="audit-action-banner" class="p-3.5 rounded-xl bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-transparent border border-orange-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2 h-2 rounded-full bg-orange-400 animate-pulse shrink-0"></span>
+                        <p id="audit-banner-text" class="text-xs text-[var(--text-primary)] font-semibold leading-relaxed">
+                            <%= isRtl ? 'تم اكتشاف اختلافات بين الإعدادات والأجهزة المتصلة. يمكنك مطابقة الإعدادات بضغطة واحدة.' : 'Hardware detected that is not populated in dongle.conf. Sync configuration to match live devices.' %>
+                        </p>
+                    </div>
+                    <button type="button" onclick="reconcileAllDongles()" id="audit-reconcile-all-btn" class="bg-[var(--accent-color)] hover:opacity-90 text-white font-bold rounded-xl px-4 py-2 text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0 shadow-lg shadow-orange-500/10">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span><%= t.auditReconcileAllBtn %></span>
+                    </button>
+                </div>
+
+                <!-- Detailed Comparison Table -->
+                <div class="rounded-xl border border-[var(--border-primary)] overflow-hidden bg-[var(--bg-card)]">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-start text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-black/30 border-b border-[var(--border-primary)] text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">
+                                    <th class="px-3.5 py-2.5 text-start"><%= t.auditTableSlot %></th>
+                                    <th class="px-3.5 py-2.5 text-start"><%= t.auditTableConfig %></th>
+                                    <th class="px-3.5 py-2.5 text-start"><%= t.auditTableLive %></th>
+                                    <th class="px-3.5 py-2.5 text-start"><%= t.auditTableStatus %></th>
+                                    <th class="px-3.5 py-2.5 text-end"><%= t.auditTableAction %></th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-slots-table-body" class="divide-y divide-[var(--border-primary)]/50 font-mono">
+                                <tr>
+                                    <td colspan="5" class="px-4 py-8 text-center text-xs text-[var(--text-muted)] font-sans">
+                                        <%= isRtl ? 'جاري فحص الإعدادات والأجهزة...' : 'Scanning configuration and devices...' %>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-between pt-2 border-t border-[var(--border-primary)] shrink-0">
+                <span id="audit-timestamp" class="text-[10px] font-mono text-[var(--text-muted)]"></span>
+                <button type="button" onclick="closeDongleAuditModal()" class="bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] font-semibold rounded-xl px-5 py-2 text-xs transition cursor-pointer border border-[var(--border-primary)]">
+                    <%= t.auditCloseBtn %>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- WebSockets Real-time streaming -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -1501,7 +1760,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 btnRestartDongle: "<%= t.btnRestartDongle %>",
                 btnRebootModem: "<%= t.btnRebootModem %>",
                 btnVirtualReplug: "<%= t.btnVirtualReplug %>",
-                btnResetUsb: "<%= t.btnResetUsb %>"
+                btnResetUsb: "<%= t.btnResetUsb %>",
+                btnPopulateHardware: "<%= t.btnPopulateHardware %>",
+                populateHardwareConfirm: "<%= t.populateHardwareConfirm %>",
+                populateHardwareSuccess: "<%= t.populateHardwareSuccess %>",
+                btnEditPorts: "<%= t.btnEditPorts %>",
+                editPortsModalTitle: "<%= t.editPortsModalTitle %>",
+                editPortsSuccess: "<%= t.editPortsSuccess %>"
             };
 
             // Socket.io initialization with safety check to prevent halts if blocked/undefined
@@ -1735,6 +2000,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     const mode = [dev.Mode, dev.Submode].filter(Boolean).join(' / ') || '-';
                     const state = states[index];
                     const signal = getDongleSignalView(dev);
+                    const hasValidHardware = imei && imei !== '-' && imei !== 'Unknown' && imsi && imsi !== '-' && imsi !== 'Unknown';
                     const card = document.createElement('article');
 
                     card.id = 'row-' + id;
@@ -1742,6 +2008,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     card.dataset.number = phoneNumber === 'Unknown' ? '' : phoneNumber;
                     card.dataset.imsi = imsi;
                     card.dataset.imei = imei;
+                    card.dataset.audio = String(dev.audio || '');
+                    card.dataset.data = String(dev.data || '');
 
                     if (currentViewMode === 'minimal') {
                         card.className = `dongle-device-card dongle-state-${state.color} rounded-xl cursor-pointer p-3 sm:px-4 py-2.5 flex items-center justify-between gap-3 text-xs flex-wrap md:flex-nowrap transition-all`;
@@ -1856,6 +2124,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     <span style="color:${signal.activeColor}">●</span> ${escapeHtml(signal.level)} · ${signal.rssi}/31
                                 </span>
                                 <div class="flex items-center gap-1.5 shrink-0">
+                                    <button type="button" id="editPortsBtn-${escapeHtml(id)}" data-dongle-action="edit-ports" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnEditPorts)}">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/><circle cx="7" cy="12" r="3"/><path d="M17 7l4 4-4 4"/></svg>
+                                    </button>
+
+                                    <button type="button" id="populateBtn-${escapeHtml(id)}" data-dongle-action="populate-hardware" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center ${hasValidHardware ? '' : 'opacity-40 cursor-not-allowed'}" title="${escapeHtml(words.btnPopulateHardware)}" ${hasValidHardware ? '' : 'disabled'}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                                    </button>
+
                                     <button type="button" id="reloadBtn-${escapeHtml(id)}" data-dongle-action="reload" class="dongle-action-button dongle-action-primary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnRestartDongle)}">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
                                     </button>
@@ -1892,8 +2168,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     if (action === 'edit-number') editSimNumber(id, card.dataset.imsi, card.dataset.number);
                     if (action === 'reload') reloadDongle(id);
                     if (action === 'reboot-modem') rebootModem(id);
+                    if (action === 'edit-ports') openEditPortsModal(id, card.dataset.audio, card.dataset.data);
                     if (action === 'virtual-replug') virtualReplug(id);
                     if (action === 'reset-usb') resetUsbPort(id);
+                    if (action === 'populate-hardware') populateDongleHardware(id, card.dataset.imei, card.dataset.imsi);
                 });
             }
 
@@ -2141,6 +2419,457 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     closeSmsModal();
                 }
             });
+
+            // Edit Ports Modal elements & controllers
+            const editPortsModal = document.getElementById('edit-ports-modal');
+            const editPortsModalCard = document.getElementById('edit-ports-modal-card');
+            const editPortsDongleId = document.getElementById('edit-ports-dongle-id');
+            const editPortsDongleBadge = document.getElementById('edit-ports-dongle-badge');
+            const editPortsAudioInput = document.getElementById('edit-ports-audio');
+            const editPortsDataInput = document.getElementById('edit-ports-data');
+            const editPortsConflictWarning = document.getElementById('edit-ports-conflict-warning');
+            const detectedPortsChips = document.getElementById('detected-ports-chips');
+            const savePortsSubmitBtn = document.getElementById('save-ports-submit-btn');
+
+            let detectedDevicesList = [];
+
+            window.validatePortsForm = function() {
+                const audio = editPortsAudioInput ? editPortsAudioInput.value.trim().toLowerCase() : '';
+                const data = editPortsDataInput ? editPortsDataInput.value.trim().toLowerCase() : '';
+
+                const hasConflict = Boolean(audio && data && audio === data);
+                if (editPortsConflictWarning) {
+                    if (hasConflict) editPortsConflictWarning.classList.remove('hidden');
+                    else editPortsConflictWarning.classList.add('hidden');
+                }
+                if (savePortsSubmitBtn) {
+                    savePortsSubmitBtn.disabled = hasConflict || !audio || !data;
+                }
+                renderDetectedPortsRows();
+            };
+
+            window.setPortSelection = function(portType, portName) {
+                if (portType === 'audio' && editPortsAudioInput) {
+                    editPortsAudioInput.value = portName;
+                } else if (portType === 'data' && editPortsDataInput) {
+                    editPortsDataInput.value = portName;
+                }
+                validatePortsForm();
+            };
+
+            function renderDetectedPortsRows() {
+                if (!detectedPortsChips) return;
+                if (!detectedDevicesList || detectedDevicesList.length === 0) {
+                    detectedPortsChips.innerHTML = `<span class="text-xs text-[var(--text-muted)] py-2 text-center">${isRtl ? 'لا توجد منافذ USB تسلسلية مكتشفة' : 'No ttyUSB devices detected'}</span>`;
+                    return;
+                }
+
+                const currentDongleId = editPortsDongleId ? editPortsDongleId.value.trim().toLowerCase() : '';
+                const selectedAudio = editPortsAudioInput ? editPortsAudioInput.value.trim().toLowerCase() : '';
+                const selectedData = editPortsDataInput ? editPortsDataInput.value.trim().toLowerCase() : '';
+
+                let html = '';
+                detectedDevicesList.forEach(dev => {
+                    const portPath = '/dev/' + dev.name;
+                    const portLower = portPath.toLowerCase();
+                    const isAudio = selectedAudio === portLower;
+                    const isData = selectedData === portLower;
+                    const isMappedOther = dev.dongleId && dev.dongleId.toLowerCase() !== currentDongleId;
+
+                    let statusBadge = '';
+                    let cardBg = 'bg-[var(--bg-secondary)] border-[var(--border-primary)]';
+
+                    if (isAudio) {
+                        statusBadge = `<span class="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold font-mono shrink-0">● ${isRtl ? 'صوت (Audio)' : 'AUDIO PORT'}</span>`;
+                        cardBg = 'bg-emerald-950/20 border-emerald-500/40';
+                    } else if (isData) {
+                        statusBadge = `<span class="px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-[10px] font-bold font-mono shrink-0">● ${isRtl ? 'أوامر (Data)' : 'DATA PORT'}</span>`;
+                        cardBg = 'bg-cyan-950/20 border-cyan-500/40';
+                    } else if (isMappedOther) {
+                        statusBadge = `<span class="px-2 py-0.5 rounded-md bg-zinc-700/30 text-[var(--text-muted)] border border-zinc-700/50 text-[10px] font-mono shrink-0">${isRtl ? 'مستخدم في ' : 'Used by '}${escapeHtml(dev.dongleId)}</span>`;
+                    } else {
+                        statusBadge = `<span class="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[var(--text-muted)] border border-[var(--border-primary)] text-[10px] font-mono shrink-0">${isRtl ? 'متاح' : 'Available'}</span>`;
+                    }
+
+                    html += `
+                        <div class="flex items-center justify-between gap-2 p-2 rounded-xl border ${cardBg} transition text-xs font-mono">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="font-bold text-[var(--text-primary)] truncate">${escapeHtml(portPath)}</span>
+                                ${statusBadge}
+                            </div>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <button type="button" onclick="setPortSelection('audio', '${escapeHtml(portPath)}')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold font-sans cursor-pointer transition flex items-center gap-1 ${
+                                    isAudio ? 'bg-emerald-500 text-white shadow-sm' : 'bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                }" title="${isRtl ? 'تعيين كمنفذ للصوت' : 'Assign as Audio Port'}">
+                                    <span>${isRtl ? 'صوت' : 'Audio'}</span>
+                                </button>
+                                <button type="button" onclick="setPortSelection('data', '${escapeHtml(portPath)}')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold font-sans cursor-pointer transition flex items-center gap-1 ${
+                                    isData ? 'bg-cyan-500 text-white shadow-sm' : 'bg-[var(--bg-card)] hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                                }" title="${isRtl ? 'تعيين كمنفذ للأوامر' : 'Assign as Data Port'}">
+                                    <span>${isRtl ? 'أوامر' : 'Data'}</span>
+                                </button>
+                            </div>
+                        </div>`;
+                });
+                detectedPortsChips.innerHTML = html;
+            }
+
+            window.loadDetectedPortsList = function() {
+                if (!detectedPortsChips) return;
+                const dongleId = editPortsDongleId ? editPortsDongleId.value.trim() : '';
+                detectedPortsChips.innerHTML = `<span class="text-xs text-[var(--text-muted)] py-2 text-center">${isRtl ? 'جاري فحص المنافذ...' : 'Scanning detected ports...'}</span>`;
+                const url = dongleId ? `/api/gsm-dongles/ttyusb-devices?dongleId=${encodeURIComponent(dongleId)}` : '/api/gsm-dongles/ttyusb-devices';
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && Array.isArray(data.devices)) {
+                            detectedDevicesList = data.devices;
+                            renderDetectedPortsRows();
+                        } else {
+                            detectedPortsChips.innerHTML = `<span class="text-xs text-[var(--text-muted)] py-2 text-center">${isRtl ? 'لا توجد منافذ USB تسلسلية مكتشفة' : 'No ttyUSB devices detected'}</span>`;
+                        }
+                    })
+                    .catch(() => {
+                        detectedPortsChips.innerHTML = `<span class="text-xs text-[var(--text-muted)] py-2 text-center">${isRtl ? 'تعذر فحص المنافذ' : 'Could not scan ports'}</span>`;
+                    });
+            };
+
+            window.openEditPortsModal = function(dongleId, currentAudio, currentData) {
+                if (!dongleId) return;
+                if (editPortsDongleId) editPortsDongleId.value = dongleId;
+                if (editPortsDongleBadge) editPortsDongleBadge.textContent = dongleId;
+                if (editPortsAudioInput) editPortsAudioInput.value = currentAudio || '';
+                if (editPortsDataInput) editPortsDataInput.value = currentData || '';
+
+                validatePortsForm();
+                loadDetectedPortsList();
+
+                if (editPortsModal && editPortsModalCard) {
+                    editPortsModal.classList.remove('opacity-0', 'pointer-events-none');
+                    editPortsModalCard.classList.remove('scale-95', 'opacity-0');
+                    editPortsModalCard.classList.add('scale-100', 'opacity-100');
+                }
+            };
+
+            window.closeEditPortsModal = function() {
+                if (editPortsModal && editPortsModalCard) {
+                    editPortsModal.classList.add('opacity-0', 'pointer-events-none');
+                    editPortsModalCard.classList.remove('scale-100', 'opacity-100');
+                    editPortsModalCard.classList.add('scale-95', 'opacity-0');
+                }
+            };
+
+            if (editPortsModal) {
+                editPortsModal.addEventListener('click', (e) => {
+                    if (e.target === editPortsModal) closeEditPortsModal();
+                });
+            }
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && editPortsModal && !editPortsModal.classList.contains('opacity-0')) {
+                    closeEditPortsModal();
+                }
+            });
+
+            window.saveDonglePorts = function(e) {
+                if (e && e.preventDefault) e.preventDefault();
+                const dongleId = editPortsDongleId ? editPortsDongleId.value.trim() : '';
+                const audio = editPortsAudioInput ? editPortsAudioInput.value.trim() : '';
+                const data = editPortsDataInput ? editPortsDataInput.value.trim() : '';
+
+                if (!dongleId || !audio || !data) {
+                    showToast(isRtl ? 'خطأ' : 'Error', isRtl ? 'يرجى إدخال منفذ الصوت ومنفذ البيانات' : 'Both audio and data ports are required', 'error');
+                    return;
+                }
+                if (audio.toLowerCase() === data.toLowerCase()) {
+                    showToast(isRtl ? 'خطأ' : 'Error', isRtl ? 'لا يمكن أن يكون منفذ الصوت ومنفذ البيانات نفس المنفذ' : 'Audio and Data ports cannot be the same device', 'error');
+                    return;
+                }
+
+                if (savePortsSubmitBtn) savePortsSubmitBtn.disabled = true;
+                showToast(isRtl ? 'تحديث المنافذ' : 'Updating Ports', (isRtl ? 'جاري تحديث منافذ TTY لـ ' : 'Updating TTY ports for ') + dongleId + '...', 'info');
+
+                fetch('/api/gsm-dongles/update-ports/' + encodeURIComponent(dongleId), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ audio, data })
+                })
+                    .then(res => res.json())
+                    .then(resData => {
+                        if (resData.success) {
+                            showToast(isRtl ? 'نجاح' : 'Success', (words.editPortsSuccess || (isRtl ? 'تم تحديث منافذ TTY بنجاح' : 'TTY ports updated successfully')) + ' (' + dongleId + ')', 'success');
+                            closeEditPortsModal();
+                            refreshDevicesList();
+                        } else {
+                            showToast(isRtl ? 'خطأ' : 'Error', resData.error || 'Failed to update TTY ports', 'error');
+                        }
+                    })
+                    .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
+                    .finally(() => {
+                        if (savePortsSubmitBtn) savePortsSubmitBtn.disabled = false;
+                    });
+            };
+
+            // Dongle & Config Audit Modal elements & controllers
+            const dongleAuditModal = document.getElementById('dongle-audit-modal');
+            const dongleAuditModalCard = document.getElementById('dongle-audit-modal-card');
+            const auditKpiTotal = document.getElementById('audit-kpi-total');
+            const auditKpiSynced = document.getElementById('audit-kpi-synced');
+            const auditKpiIssues = document.getElementById('audit-kpi-issues');
+            const auditKpiDisconnected = document.getElementById('audit-kpi-disconnected');
+            const auditActionBanner = document.getElementById('audit-action-banner');
+            const auditBannerText = document.getElementById('audit-banner-text');
+            const auditReconcileAllBtn = document.getElementById('audit-reconcile-all-btn');
+            const auditSlotsTableBody = document.getElementById('audit-slots-table-body');
+            const auditTimestamp = document.getElementById('audit-timestamp');
+            const auditRefreshBtn = document.getElementById('audit-refresh-btn');
+
+            let currentAuditData = null;
+
+            window.openDongleAuditModal = function() {
+                if (dongleAuditModal && dongleAuditModalCard) {
+                    dongleAuditModal.classList.remove('opacity-0', 'pointer-events-none');
+                    dongleAuditModalCard.classList.remove('scale-95', 'opacity-0');
+                    dongleAuditModalCard.classList.add('scale-100', 'opacity-100');
+                    runDongleAudit();
+                }
+            };
+
+            window.closeDongleAuditModal = function() {
+                if (dongleAuditModal && dongleAuditModalCard) {
+                    dongleAuditModal.classList.add('opacity-0', 'pointer-events-none');
+                    dongleAuditModalCard.classList.remove('scale-100', 'opacity-100');
+                    dongleAuditModalCard.classList.add('scale-95', 'opacity-0');
+                }
+            };
+
+            if (dongleAuditModal) {
+                dongleAuditModal.addEventListener('click', (e) => {
+                    if (e.target === dongleAuditModal) closeDongleAuditModal();
+                });
+            }
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && dongleAuditModal && !dongleAuditModal.classList.contains('opacity-0')) {
+                    closeDongleAuditModal();
+                }
+            });
+
+            window.runDongleAudit = function() {
+                if (!auditSlotsTableBody) return;
+                auditSlotsTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-xs text-[var(--text-muted)] font-sans">
+                            <div class="inline-flex items-center gap-2">
+                                <svg class="animate-spin text-[var(--accent-color)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="16"/></svg>
+                                <span>${isRtl ? 'جاري فحص الإعدادات والأجهزة...' : 'Scanning configuration and live devices...'}</span>
+                            </div>
+                        </td>
+                    </tr>`;
+
+                if (auditRefreshBtn) {
+                    const icon = auditRefreshBtn.querySelector('svg');
+                    if (icon) icon.classList.add('animate-spin');
+                }
+
+                fetch('/api/gsm-dongles/audit')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && data.audit) {
+                            currentAuditData = data.audit;
+                            renderAuditReport(data.audit);
+                        } else {
+                            auditSlotsTableBody.innerHTML = `
+                                <tr>
+                                    <td colspan="5" class="px-4 py-6 text-center text-xs text-rose-400 font-sans">
+                                        ${escapeHtml(data.error || 'Failed to load audit data')}
+                                    </td>
+                                </tr>`;
+                        }
+                    })
+                    .catch(err => {
+                        auditSlotsTableBody.innerHTML = `
+                            <tr>
+                                <td colspan="5" class="px-4 py-6 text-center text-xs text-rose-400 font-sans">
+                                    ${escapeHtml(err.message || 'Network Error during audit')}
+                                </td>
+                            </tr>`;
+                    })
+                    .finally(() => {
+                        if (auditRefreshBtn) {
+                            const icon = auditRefreshBtn.querySelector('svg');
+                            if (icon) icon.classList.remove('animate-spin');
+                        }
+                    });
+            };
+
+            function renderAuditReport(audit) {
+                if (!audit) return;
+                const { summary, slots, timestamp } = audit;
+
+                if (auditKpiTotal) auditKpiTotal.textContent = summary.totalSlots || 0;
+                if (auditKpiSynced) auditKpiSynced.textContent = summary.syncedCount || 0;
+                if (auditKpiIssues) auditKpiIssues.textContent = (summary.issuesCount || 0) + (summary.unpinnedCount || 0);
+                if (auditKpiDisconnected) auditKpiDisconnected.textContent = summary.disconnectedCount || 0;
+                if (auditTimestamp) auditTimestamp.textContent = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                const actionableSlots = (slots || []).filter(s => s.actionNeeded || (s.live && (s.live.imei || s.live.imsi) && s.status !== 'synced'));
+
+                if (auditActionBanner) {
+                    if (actionableSlots.length > 0) {
+                        auditActionBanner.classList.remove('hidden');
+                        if (auditBannerText) {
+                            auditBannerText.textContent = isRtl
+                                ? `تم اكتشاف ${actionableSlots.length} شريحة بها اختلافات أو كود IMEI غير مسجل في dongle.conf. انقر لمطابقة الإعدادات فوراً.`
+                                : `Detected ${actionableSlots.length} slot(s) with mismatches or unpopulated hardware IDs. Sync configuration to match live devices.`;
+                        }
+                    } else {
+                        auditActionBanner.classList.add('hidden');
+                    }
+                }
+
+                if (!slots || slots.length === 0) {
+                    auditSlotsTableBody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="px-4 py-8 text-center text-xs text-[var(--text-muted)] font-sans">
+                                ${isRtl ? 'لا توجد منافذ مهيأة في dongle.conf' : 'No dongle slots configured in dongle.conf'}
+                            </td>
+                        </tr>`;
+                    return;
+                }
+
+                let html = '';
+                slots.forEach(slot => {
+                    const cfg = slot.config || {};
+                    const liv = slot.live || {};
+                    const isConnected = liv.state && !['not connected', 'not initialized', 'unknown'].includes(String(liv.state).toLowerCase());
+                    const canSync = liv.imei || liv.imsi;
+
+                    let statusBadge = '';
+                    if (slot.status === 'synced') {
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold font-sans">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> ${isRtl ? 'مطابق تماماً' : 'Synchronized'}
+                        </span>`;
+                    } else if (slot.status === 'mismatch') {
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold font-sans">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span> ${isRtl ? 'اختلاف في IMEI/IMSI' : 'Hardware Mismatch'}
+                        </span>`;
+                    } else if (slot.status === 'unpinned') {
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold font-sans">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> ${isRtl ? 'غير مسجل في conf' : 'Unpinned in config'}
+                        </span>`;
+                    } else if (slot.status === 'disconnected') {
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-500/10 text-[var(--text-muted)] border border-zinc-500/20 text-[10px] font-bold font-sans">
+                            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span> ${isRtl ? 'غير متصل' : 'Disconnected'}
+                        </span>`;
+                    } else {
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold font-sans">
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span> ${escapeHtml(slot.status)}
+                        </span>`;
+                    }
+
+                    const issuesList = (slot.issues || []).map(iss => {
+                        const colorClass = iss.severity === 'critical' ? 'text-rose-400' : (iss.severity === 'warning' ? 'text-amber-400' : 'text-blue-400');
+                        return `<p class="text-[10px] font-sans ${colorClass} leading-tight">• ${escapeHtml(iss.message)}</p>`;
+                    }).join('');
+
+                    html += `
+                        <tr class="hover:bg-[var(--bg-hover)] transition">
+                            <td class="px-3.5 py-3 align-top">
+                                <div class="flex flex-col gap-0.5">
+                                    <span class="font-bold text-[var(--text-primary)]">[${escapeHtml(slot.slotId)}]</span>
+                                    <span class="text-[10px] text-[var(--text-muted)]">${escapeHtml(cfg.audio || '-')}</span>
+                                    <span class="text-[10px] text-[var(--text-muted)]">${escapeHtml(cfg.data || '-')}</span>
+                                </div>
+                            </td>
+                            <td class="px-3.5 py-3 align-top">
+                                <div class="flex flex-col gap-1 text-[11px]">
+                                    <div><span class="text-[10px] text-[var(--text-muted)] font-sans">IMEI:</span> <span class="${cfg.imei ? 'text-[var(--text-primary)]' : 'text-amber-400/80 italic font-sans'}">${escapeHtml(cfg.imei || '(none)')}</span></div>
+                                    <div><span class="text-[10px] text-[var(--text-muted)] font-sans">IMSI:</span> <span class="${cfg.imsi ? 'text-[var(--text-primary)]' : 'text-amber-400/80 italic font-sans'}">${escapeHtml(cfg.imsi || '(none)')}</span></div>
+                                </div>
+                            </td>
+                            <td class="px-3.5 py-3 align-top">
+                                <div class="flex flex-col gap-1 text-[11px]">
+                                    <div><span class="text-[10px] text-[var(--text-muted)] font-sans">State:</span> <span class="font-bold ${isConnected ? 'text-emerald-400 font-sans' : 'text-zinc-400 font-sans'}">${escapeHtml(liv.state || 'Not Connected')}</span></div>
+                                    <div><span class="text-[10px] text-[var(--text-muted)] font-sans">IMEI:</span> <span class="${liv.imei ? 'text-[var(--text-primary)]' : 'text-zinc-500 italic font-sans'}">${escapeHtml(liv.imei || '(none)')}</span></div>
+                                    <div><span class="text-[10px] text-[var(--text-muted)] font-sans">IMSI:</span> <span class="${liv.imsi ? 'text-[var(--text-primary)]' : 'text-zinc-500 italic font-sans'}">${escapeHtml(liv.imsi || '(none)')}</span></div>
+                                </div>
+                            </td>
+                            <td class="px-3.5 py-3 align-top">
+                                <div class="flex flex-col gap-1.5">
+                                    <div>${statusBadge}</div>
+                                    <div class="flex flex-col gap-0.5">${issuesList}</div>
+                                </div>
+                            </td>
+                            <td class="px-3.5 py-3 align-middle text-end">
+                                ${canSync && slot.status !== 'synced' ? `
+                                    <button type="button" onclick="reconcileSlot('${escapeHtml(slot.slotId)}')" class="bg-[var(--accent-color)]/20 hover:bg-[var(--accent-color)] text-[var(--accent-color)] hover:text-white font-sans font-bold px-2.5 py-1 rounded-lg text-xs transition cursor-pointer border border-[var(--accent-color)]/40 shrink-0">
+                                        ${isRtl ? 'مطابقة' : 'Sync'}
+                                    </button>
+                                ` : ''}
+                            </td>
+                        </tr>`;
+                });
+
+                auditSlotsTableBody.innerHTML = html;
+            }
+
+            window.reconcileSlot = function(slotId) {
+                if (!slotId) return;
+                showToast(isRtl ? 'جاري المطابقة' : 'Reconciling', (isRtl ? 'جاري مطابقة إعدادات ' : 'Reconciling config for ') + slotId + '...', 'info');
+
+                fetch('/api/gsm-dongles/reconcile-conf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slots: [slotId] })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast(isRtl ? 'نجاح' : 'Success', data.message || 'Slot reconciled successfully', 'success');
+                            if (data.audit) {
+                                currentAuditData = data.audit;
+                                renderAuditReport(data.audit);
+                            } else {
+                                runDongleAudit();
+                            }
+                            refreshDevicesList();
+                        } else {
+                            showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Reconciliation failed', 'error');
+                        }
+                    })
+                    .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'));
+            };
+
+            window.reconcileAllDongles = function() {
+                if (auditReconcileAllBtn) auditReconcileAllBtn.disabled = true;
+                showToast(isRtl ? 'جاري المطابقة الشاملة' : 'Reconciling All Slots', isRtl ? 'جاري تحديث dongle.conf لكافة الأجهزة المتصلة...' : 'Updating dongle.conf for all live devices...', 'info');
+
+                fetch('/api/gsm-dongles/reconcile-conf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ syncAll: true })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast(isRtl ? 'نجاح' : 'Success', data.message || 'All dongles reconciled successfully', 'success');
+                            if (data.audit) {
+                                currentAuditData = data.audit;
+                                renderAuditReport(data.audit);
+                            } else {
+                                runDongleAudit();
+                            }
+                            refreshDevicesList();
+                        } else {
+                            showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Reconciliation failed', 'error');
+                        }
+                    })
+                    .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
+                    .finally(() => {
+                        if (auditReconcileAllBtn) auditReconcileAllBtn.disabled = false;
+                    });
+            };
 
             function renderSmsCard(sms) {
                 const dateStr = new Date(sms.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -2541,6 +3270,40 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             setTimeout(refreshDevicesList, 4000);
                         } else {
                             showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Virtual re-plug failed', 'error');
+                        }
+                    })
+                    .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
+                    .finally(() => { if (btn) btn.disabled = false; });
+            };
+
+            // 4. Populate IMEI & IMSI in /etc/asterisk/dongle.conf
+            window.populateDongleHardware = function(id, imei, imsi) {
+                const cleanImei = String(imei || '').trim();
+                const cleanImsi = String(imsi || '').trim();
+                if (!cleanImei || cleanImei === '-' || cleanImei === 'Unknown' || !cleanImsi || cleanImsi === '-' || cleanImsi === 'Unknown') {
+                    showToast(isRtl ? 'تنبيه' : 'Notice', isRtl ? 'معرفات الجهاز (IMEI / IMSI) غير مكتشفة بعد لهذه الشريحة' : 'Hardware identifiers (IMEI / IMSI) are not detected for this dongle yet', 'warning');
+                    return;
+                }
+
+                const confirmMsg = `${words.populateHardwareConfirm || (isRtl ? 'هل تريد حفظ كود IMEI و IMSI في ملف dongle.conf للشريحة ' : 'Do you want to populate IMEI and IMSI in dongle.conf for ')}${id}?\n\nIMEI: ${cleanImei}\nIMSI: ${cleanImsi}`;
+                if (!confirm(confirmMsg)) return;
+
+                const btn = document.getElementById('populateBtn-' + id);
+                if (btn) btn.disabled = true;
+                showToast(isRtl ? 'تثبيت المعرفات' : 'Populating Hardware IDs', (isRtl ? 'جاري حفظ IMEI و IMSI في dongle.conf لـ ' : 'Writing IMEI & IMSI to dongle.conf for ') + id + '...', 'info');
+
+                fetch('/api/gsm-dongles/populate-hardware/' + encodeURIComponent(id), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imei: cleanImei, imsi: cleanImsi })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast(isRtl ? 'نجاح' : 'Success', (words.populateHardwareSuccess || (isRtl ? 'تم حفظ كود IMEI و IMSI بنجاح' : 'Populated IMEI and IMSI in dongle.conf successfully')) + ' (' + id + ')', 'success');
+                            refreshDevicesList();
+                        } else {
+                            showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Failed to populate hardware IDs', 'error');
                         }
                     })
                     .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))

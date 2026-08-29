@@ -1315,7 +1315,10 @@ let peerIPs = {};
 let pjsipContactState = {};
 let sipSnapshotStartTime = 0;
 // Mount CRM Integration REST API Router
-app.use('/api/integrations/crm/v1', createCrmRouter(pool, { getPeerStatus: () => peerStatus }));
+app.use('/api/integrations/crm/v1', createCrmRouter(pool, {
+    getPeerStatus: () => peerStatus,
+    getActiveCalls: () => activeCalls
+}));
 
 // Register /crm-live Socket.io namespace
 
@@ -4625,6 +4628,293 @@ function removeDongleSlotFromConf(dongleName) {
 
     fs.writeFileSync(confPath, newLines.join('\n'), 'utf8');
 }
+
+function updateDongleImeiImsiInConf(dongleName, imei, imsi) {
+    const confPath = '/etc/asterisk/dongle.conf';
+    if (!fs.existsSync(confPath)) {
+        throw new Error('/etc/asterisk/dongle.conf file not found');
+    }
+
+    const dName = String(dongleName || '').trim().toLowerCase();
+    if (!dName) throw new Error('Dongle name is required.');
+
+    const cleanImei = String(imei || '').trim();
+    const cleanImsi = String(imsi || '').trim();
+
+    let content = fs.readFileSync(confPath, 'utf8');
+    let lines = content.split(/\r?\n/);
+    let sectionHeaderLineIdx = {};
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        let secMatch = line.match(/^\[([^\]]+)\]/);
+        if (secMatch) {
+            sectionHeaderLineIdx[secMatch[1].trim().toLowerCase()] = i;
+        }
+    }
+
+    if (!sectionHeaderLineIdx.hasOwnProperty(dName)) {
+        throw new Error(`Section [${dName}] not found in /etc/asterisk/dongle.conf`);
+    }
+
+    const headerIdx = sectionHeaderLineIdx[dName];
+    let endIdx = lines.length;
+    for (let j = headerIdx + 1; j < lines.length; j++) {
+        if (lines[j].trim().match(/^\[([^\]]+)\]/)) {
+            endIdx = j;
+            break;
+        }
+    }
+
+    let imeiFound = false;
+    let imsiFound = false;
+
+    for (let j = headerIdx + 1; j < endIdx; j++) {
+        let lineTrim = lines[j].trim();
+        if (lineTrim.startsWith('imei=') || lineTrim.startsWith('imei =')) {
+            lines[j] = `imei=${cleanImei}`;
+            imeiFound = true;
+        } else if (lineTrim.startsWith('imsi=') || lineTrim.startsWith('imsi =')) {
+            lines[j] = `imsi=${cleanImsi}`;
+            imsiFound = true;
+        }
+    }
+
+    if (!imeiFound) {
+        lines.splice(endIdx, 0, `imei=${cleanImei}`);
+        endIdx++;
+    }
+    if (!imsiFound) {
+        lines.splice(endIdx, 0, `imsi=${cleanImsi}`);
+        endIdx++;
+    }
+
+    fs.writeFileSync(confPath, lines.join('\n'), 'utf8');
+    return { dongleName: dName, imei: cleanImei, imsi: cleanImsi };
+}
+
+function updateDonglePortsInConf(dongleName, audioPort, dataPort) {
+    const confPath = '/etc/asterisk/dongle.conf';
+    if (!fs.existsSync(confPath)) {
+        throw new Error('/etc/asterisk/dongle.conf file not found');
+    }
+
+    const dName = String(dongleName || '').trim().toLowerCase();
+    if (!dName) throw new Error('Dongle name is required.');
+
+    let cleanAudio = String(audioPort || '').trim();
+    let cleanData = String(dataPort || '').trim();
+
+    if (!cleanAudio.startsWith('/dev/')) cleanAudio = '/dev/' + cleanAudio;
+    if (!cleanData.startsWith('/dev/')) cleanData = '/dev/' + cleanData;
+
+    if (!/^\/dev\/ttyUSB\d+$/i.test(cleanAudio)) {
+        throw new Error(`Invalid audio TTY port: "${cleanAudio}". Must be in format /dev/ttyUSBX.`);
+    }
+    if (!/^\/dev\/ttyUSB\d+$/i.test(cleanData)) {
+        throw new Error(`Invalid data TTY port: "${cleanData}". Must be in format /dev/ttyUSBX.`);
+    }
+    if (cleanAudio.toLowerCase() === cleanData.toLowerCase()) {
+        throw new Error('Audio port and Data port cannot be the same ttyUSB device.');
+    }
+
+    let content = fs.readFileSync(confPath, 'utf8');
+    let lines = content.split(/\r?\n/);
+    let sectionHeaderLineIdx = {};
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        let secMatch = line.match(/^\[([^\]]+)\]/);
+        if (secMatch) {
+            sectionHeaderLineIdx[secMatch[1].trim().toLowerCase()] = i;
+        }
+    }
+
+    if (!sectionHeaderLineIdx.hasOwnProperty(dName)) {
+        throw new Error(`Section [${dName}] not found in /etc/asterisk/dongle.conf`);
+    }
+
+    const headerIdx = sectionHeaderLineIdx[dName];
+    let endIdx = lines.length;
+    for (let j = headerIdx + 1; j < lines.length; j++) {
+        if (lines[j].trim().match(/^\[([^\]]+)\]/)) {
+            endIdx = j;
+            break;
+        }
+    }
+
+    let audioFound = false;
+    let dataFound = false;
+
+    for (let j = headerIdx + 1; j < endIdx; j++) {
+        let lineTrim = lines[j].trim();
+        if (lineTrim.startsWith('audio=') || lineTrim.startsWith('audio =')) {
+            lines[j] = `audio=${cleanAudio}`;
+            audioFound = true;
+        } else if (lineTrim.startsWith('data=') || lineTrim.startsWith('data =')) {
+            lines[j] = `data=${cleanData}`;
+            dataFound = true;
+        }
+    }
+
+    if (!audioFound) {
+        lines.splice(endIdx, 0, `audio=${cleanAudio}`);
+        endIdx++;
+    }
+    if (!dataFound) {
+        lines.splice(endIdx, 0, `data=${cleanData}`);
+        endIdx++;
+    }
+
+    fs.writeFileSync(confPath, lines.join('\n'), 'utf8');
+    return { dongleName: dName, audio: cleanAudio, data: cleanData };
+}
+
+async function auditDongleConfVsLive() {
+    const { defaults, dongles: confDongles } = parseDongleConfGain();
+
+    let liveDevices = [];
+    try {
+        const stdout = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
+        liveDevices = parseDevicesOutput(stdout || '', false);
+    } catch (_) {}
+
+    const liveMap = new Map();
+    for (const dev of liveDevices) {
+        if (dev.ID) {
+            liveMap.set(String(dev.ID).toLowerCase(), dev);
+        }
+    }
+
+    let detectedUsbPorts = [];
+    try {
+        const { execSync } = require('child_process');
+        const raw = execSync('ls /dev/ | grep -i ttyusb', { encoding: 'utf8', timeout: 5000 }).trim();
+        detectedUsbPorts = raw ? raw.split('\n').filter(Boolean) : [];
+    } catch (_) {}
+
+    const slots = [];
+    let syncedCount = 0;
+    let issuesCount = 0;
+    let unpinnedCount = 0;
+    let disconnectedCount = 0;
+
+    for (const slotId in confDongles) {
+        const conf = confDongles[slotId];
+        const live = liveMap.get(slotId.toLowerCase()) || null;
+
+        const slotReport = {
+            slotId,
+            config: {
+                audio: conf.audio || '',
+                data: conf.data || '',
+                imei: conf.imei || '',
+                imsi: conf.imsi || '',
+                rxgain: conf.rxgain,
+                txgain: conf.txgain
+            },
+            live: live ? {
+                state: live.State || 'Unknown',
+                number: live.Number || 'Unknown',
+                imei: live.IMEI && live.IMEI !== '-' && live.IMEI !== 'Unknown' ? live.IMEI : '',
+                imsi: live.IMSI && live.IMSI !== '-' && live.IMSI !== 'Unknown' ? live.IMSI : '',
+                provider: live['Provider Name'] || '',
+                model: live.Model || '',
+                firmware: live.Firmware || '',
+                rssi: live.RSSI || '0'
+            } : null,
+            status: 'unknown',
+            issues: [],
+            actionNeeded: false
+        };
+
+        const isLiveConnected = live && !['not connected', 'not initialized', 'unknown'].includes(String(live.State || '').toLowerCase());
+
+        if (!live || !isLiveConnected) {
+            slotReport.status = 'disconnected';
+            slotReport.issues.push({
+                type: 'disconnected',
+                severity: 'warning',
+                message: 'No active hardware responding on configured ports'
+            });
+            disconnectedCount++;
+        } else {
+            const confImei = slotReport.config.imei;
+            const confImsi = slotReport.config.imsi;
+            const liveImei = slotReport.live.imei;
+            const liveImsi = slotReport.live.imsi;
+
+            let hasMismatch = false;
+
+            if (confImei && liveImei && confImei !== liveImei) {
+                slotReport.issues.push({
+                    type: 'imei_mismatch',
+                    severity: 'critical',
+                    message: `Configured IMEI (${confImei}) does not match live hardware IMEI (${liveImei})`
+                });
+                hasMismatch = true;
+            }
+
+            if (confImsi && liveImsi && confImsi !== liveImsi) {
+                slotReport.issues.push({
+                    type: 'imsi_mismatch',
+                    severity: 'warning',
+                    message: `Configured IMSI (${confImsi}) does not match live SIM IMSI (${liveImsi})`
+                });
+                hasMismatch = true;
+            }
+
+            if (!confImei && liveImei) {
+                slotReport.issues.push({
+                    type: 'missing_imei',
+                    severity: 'info',
+                    message: `Live IMEI (${liveImei}) detected but not populated in dongle.conf`
+                });
+                slotReport.actionNeeded = true;
+            }
+
+            if (!confImsi && liveImsi) {
+                slotReport.issues.push({
+                    type: 'missing_imsi',
+                    severity: 'info',
+                    message: `Live IMSI (${liveImsi}) detected but not populated in dongle.conf`
+                });
+                slotReport.actionNeeded = true;
+            }
+
+            if (hasMismatch) {
+                slotReport.status = 'mismatch';
+                slotReport.actionNeeded = true;
+                issuesCount++;
+            } else if (!confImei && !confImsi) {
+                slotReport.status = 'unpinned';
+                unpinnedCount++;
+            } else if (confImei === liveImei && (!confImsi || confImsi === liveImsi)) {
+                slotReport.status = 'synced';
+                syncedCount++;
+            } else {
+                slotReport.status = 'partial';
+                issuesCount++;
+            }
+        }
+
+        slots.push(slotReport);
+    }
+
+    return {
+        timestamp: new Date().toISOString(),
+        summary: {
+            totalSlots: slots.length,
+            syncedCount,
+            issuesCount,
+            unpinnedCount,
+            disconnectedCount,
+            healthy: issuesCount === 0 && disconnectedCount === 0
+        },
+        slots,
+        detectedUsbPorts
+    };
+}
 const SOKRAT_MANAGED_CONTEXTS = ['from-dongle-custom', 'macro-dialout-trunk-predial-hook', 'macro-dialout-one-predial-hook'];
 
 function getDialplanJitterBufferStatus() {
@@ -5259,6 +5549,13 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
                     row.Number = 'Unknown';
                 }
             }
+            try {
+                const { dongles: confDongles } = parseDongleConfGain();
+                if (confDongles && confDongles[row.ID]) {
+                    row.audio = confDongles[row.ID].audio || '';
+                    row.data = confDongles[row.ID].data || '';
+                }
+            } catch (_) {}
             devices.push(row);
         }
     }
@@ -5804,6 +6101,182 @@ app.post('/api/gsm-dongles/virtual-replug/:dongleId', async (req, res) => {
     });
 });
 
+// API Endpoint to populate IMEI and IMSI in /etc/asterisk/dongle.conf for a specific dongle
+app.post('/api/gsm-dongles/populate-hardware/:dongleId', requireAuth, async (req, res) => {
+    try {
+        const { dongleId } = req.params;
+        if (!/^dongle[0-9]+$/i.test(dongleId)) {
+            return res.status(400).json({ success: false, error: 'Invalid dongle ID format' });
+        }
+
+        const allowedDongles = await getUserAllowedDongles(req);
+        if (allowedDongles !== null) {
+            const reqDongle = String(dongleId).toLowerCase().trim();
+            if (!allowedDongles.includes(reqDongle)) {
+                return res.status(403).json({ success: false, error: 'Forbidden: Access denied to this dongle.' });
+            }
+        }
+
+        let { imei, imsi } = req.body || {};
+        imei = String(imei || '').trim();
+        imsi = String(imsi || '').trim();
+
+        // If not supplied in request body or placeholders, look up live detected hardware values
+        if (!imei || imei === '-' || imei === 'Unknown' || !imsi || imsi === '-' || imsi === 'Unknown') {
+            const [dbRows] = await pool.query(
+                'SELECT imsi, imei FROM `asterisk`.`gsm_dongles` WHERE dongle_name = ?',
+                [dongleId]
+            );
+            if (dbRows && dbRows[0]) {
+                if (!imei || imei === '-' || imei === 'Unknown') imei = dbRows[0].imei || '';
+                if (!imsi || imsi === '-' || imsi === 'Unknown') imsi = dbRows[0].imsi || '';
+            }
+        }
+
+        // Also query Asterisk live dongle status if still missing
+        if (!imei || !imsi) {
+            try {
+                const output = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
+                const devices = parseDevicesOutput(output || '', true);
+                const dev = devices.find(d => String(d.ID).toLowerCase() === dongleId.toLowerCase());
+                if (dev) {
+                    if (!imei && dev.IMEI && dev.IMEI !== '-' && dev.IMEI !== 'Unknown') imei = dev.IMEI;
+                    if (!imsi && dev.IMSI && dev.IMSI !== '-' && dev.IMSI !== 'Unknown') imsi = dev.IMSI;
+                }
+            } catch (_) {}
+        }
+
+        if (!imei || imei === '-' || imei === 'Unknown') {
+            return res.status(400).json({ success: false, error: `Valid IMEI could not be detected for ${dongleId}. Ensure device is connected and initialized.` });
+        }
+        if (!imsi || imsi === '-' || imsi === 'Unknown') {
+            return res.status(400).json({ success: false, error: `Valid IMSI could not be detected for ${dongleId}. Ensure SIM card is inserted and initialized.` });
+        }
+
+        // Update /etc/asterisk/dongle.conf
+        updateDongleImeiImsiInConf(dongleId, imei, imsi);
+
+        // Update database table
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, imsi, imei)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE imsi = VALUES(imsi), imei = VALUES(imei)
+        `, [dongleId, imsi, imei]);
+
+        io.emit('usbDevicesUpdated');
+
+        res.json({
+            success: true,
+            dongleId,
+            imei,
+            imsi,
+            message: `Populated IMEI (${imei}) and IMSI (${imsi}) in /etc/asterisk/dongle.conf for [${dongleId}].`
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// API Endpoint to update audio and data TTY ports in /etc/asterisk/dongle.conf for a specific dongle
+app.post('/api/gsm-dongles/update-ports/:dongleId', requireAuth, async (req, res) => {
+    try {
+        const { dongleId } = req.params;
+        if (!/^dongle[0-9]+$/i.test(dongleId)) {
+            return res.status(400).json({ success: false, error: 'Invalid dongle ID format' });
+        }
+
+        const allowedDongles = await getUserAllowedDongles(req);
+        if (allowedDongles !== null) {
+            const reqDongle = String(dongleId).toLowerCase().trim();
+            if (!allowedDongles.includes(reqDongle)) {
+                return res.status(403).json({ success: false, error: 'Forbidden: Access denied to this dongle.' });
+            }
+        }
+
+        const { audio, data } = req.body || {};
+        if (!audio || !data) {
+            return res.status(400).json({ success: false, error: 'Both audio port and data port are required (e.g. /dev/ttyUSB1, /dev/ttyUSB2).' });
+        }
+
+        const updated = updateDonglePortsInConf(dongleId, audio, data);
+
+        // Restart dongle channel in Asterisk to bind to new ports immediately
+        execFile(ASTERISK_BIN, ['-rx', `dongle restart now ${dongleId}`], () => {});
+
+        setTimeout(() => io.emit('usbDevicesUpdated'), 2500);
+
+        res.json({
+            success: true,
+            dongleId,
+            audio: updated.audio,
+            data: updated.data,
+            message: `Updated TTY ports for [${dongleId}]: audio=${updated.audio}, data=${updated.data}`
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// API Endpoint to audit dongle.conf vs live Asterisk devices
+app.get('/api/gsm-dongles/audit', requireAuth, async (req, res) => {
+    try {
+        const audit = await auditDongleConfVsLive();
+        res.json({ success: true, audit });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// API Endpoint to reconcile dongle.conf to match live hardware
+app.post('/api/gsm-dongles/reconcile-conf', requireAuth, async (req, res) => {
+    try {
+        const allowedDongles = await getUserAllowedDongles(req);
+        if (allowedDongles !== null && allowedDongles.length === 0) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Access denied.' });
+        }
+
+        const { slots: targetSlots } = req.body || {};
+        const audit = await auditDongleConfVsLive();
+        const updatedSlots = [];
+
+        for (const slot of audit.slots) {
+            if (targetSlots && Array.isArray(targetSlots) && !targetSlots.includes(slot.slotId)) {
+                continue;
+            }
+            if (allowedDongles !== null && !allowedDongles.includes(slot.slotId.toLowerCase())) {
+                continue;
+            }
+
+            // Reconcile slot if live hardware is detected
+            if (slot.live && (slot.live.imei || slot.live.imsi)) {
+                const imei = slot.live.imei || '';
+                const imsi = slot.live.imsi || '';
+                if (imei || imsi) {
+                    updateDongleImeiImsiInConf(slot.slotId, imei, imsi);
+                    await pool.query(`
+                        INSERT INTO \`asterisk\`.\`gsm_dongles\` (dongle_name, imsi, imei)
+                        VALUES (?, ?, ?)
+                        ON DUPLICATE KEY UPDATE imsi = VALUES(imsi), imei = VALUES(imei)
+                    `, [slot.slotId, imsi || null, imei || null]);
+                    updatedSlots.push({ slotId: slot.slotId, imei, imsi });
+                }
+            }
+        }
+
+        io.emit('usbDevicesUpdated');
+
+        const newAudit = await auditDongleConfVsLive();
+        res.json({
+            success: true,
+            message: `Successfully reconciled ${updatedSlots.length} dongle slot(s) in /etc/asterisk/dongle.conf to match live hardware.`,
+            updatedSlots,
+            audit: newAudit
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // API Endpoint to re-detect dongle SIM numbers and update trunk caller IDs
 app.post('/api/gsm-dongles/redetect', async (req, res) => {
     try {
@@ -5821,11 +6294,80 @@ app.post('/api/gsm-dongles/emit-usb-update', (req, res) => {
     res.json({ ok: true });
 });
 
+function getDongleSiblingPorts(dongleId) {
+    if (!dongleId) return [];
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const { execSync } = require('child_process');
+        const confPath = '/etc/asterisk/dongle.conf';
+        if (!fs.existsSync(confPath)) return [];
+
+        const conf = fs.readFileSync(confPath, 'utf8');
+        let currentSec = null;
+        let audioPort = null;
+        let dataPort = null;
+
+        for (const line of conf.split('\n')) {
+            const trimmed = line.trim();
+            const m = trimmed.match(/^\[([a-zA-Z0-9_]+)\]$/);
+            if (m) { currentSec = m[1]; continue; }
+            if (currentSec === dongleId) {
+                if (trimmed.startsWith('audio=')) audioPort = trimmed.split('=')[1].trim();
+                if (trimmed.startsWith('data=')) dataPort = trimmed.split('=')[1].trim();
+            }
+        }
+
+        const testPort = (audioPort || dataPort || '').replace('/dev/', '');
+        if (testPort) {
+            const sysPath = '/sys/class/tty/' + testPort + '/device';
+            if (fs.existsSync(sysPath)) {
+                const realPath = execSync('readlink -f ' + sysPath, { encoding: 'utf8' }).trim();
+                const parentUsbDir = path.dirname(path.dirname(realPath));
+
+                const allTtys = fs.readdirSync('/sys/class/tty').filter(t => t.startsWith('ttyUSB'));
+                const siblings = [];
+                for (const tty of allTtys) {
+                    try {
+                        const ttyReal = execSync('readlink -f /sys/class/tty/' + tty + '/device', { encoding: 'utf8' }).trim();
+                        if (ttyReal.startsWith(parentUsbDir + '/')) {
+                            siblings.push(tty);
+                        }
+                    } catch (_) {}
+                }
+                if (siblings.length > 0) {
+                    siblings.sort((a, b) => {
+                        const numA = parseInt(a.replace('ttyUSB', ''), 10);
+                        const numB = parseInt(b.replace('ttyUSB', ''), 10);
+                        return numA - numB;
+                    });
+                    return siblings;
+                }
+            }
+        }
+
+        // Fallback: derive the 3 sibling ports based on slot index or configured port numbers
+        const slotMatch = dongleId.match(/^dongle(\d+)$/i);
+        if (slotMatch) {
+            const idx = parseInt(slotMatch[1], 10);
+            return [`ttyUSB${idx * 3}`, `ttyUSB${idx * 3 + 1}`, `ttyUSB${idx * 3 + 2}`];
+        } else if (audioPort || dataPort) {
+            const numMatch = (audioPort || dataPort).match(/ttyUSB(\d+)/i);
+            if (numMatch) {
+                const base = Math.floor(parseInt(numMatch[1], 10) / 3) * 3;
+                return [`ttyUSB${base}`, `ttyUSB${base + 1}`, `ttyUSB${base + 2}`];
+            }
+        }
+    } catch (_) {}
+    return [];
+}
+
 // API Endpoint to list /dev/ttyUSB* devices with dongle mapping
 app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, (req, res) => {
     const { execSync } = require('child_process');
     const fs = require('fs');
     try {
+        const dongleId = req.query.dongleId ? String(req.query.dongleId).trim() : null;
         const raw = execSync('ls /dev/ | grep -i ttyusb', { encoding: 'utf8', timeout: 5000 }).trim();
         const devices = raw ? raw.split('\n').filter(Boolean) : [];
 
@@ -5845,11 +6387,25 @@ app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, (req, res) => {
             }
         } catch (_) {}
 
-        const enriched = devices.map(d => ({
+        let enriched = devices.map(d => ({
             name: d,
             dongleId: portMap[d] ? portMap[d].dongleId : null,
             portType: portMap[d] ? portMap[d].portType : null
         }));
+
+        if (dongleId) {
+            const siblingPortNames = getDongleSiblingPorts(dongleId);
+            if (siblingPortNames && siblingPortNames.length > 0) {
+                const enrichedMap = new Map(enriched.map(e => [e.name, e]));
+                enriched = siblingPortNames.map(portName => {
+                    return enrichedMap.get(portName) || {
+                        name: portName,
+                        dongleId: portMap[portName] ? portMap[portName].dongleId : null,
+                        portType: portMap[portName] ? portMap[portName].portType : null
+                    };
+                });
+            }
+        }
 
         res.json({ success: true, devices: enriched });
     } catch (e) {

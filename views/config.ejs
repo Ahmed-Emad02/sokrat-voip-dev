@@ -3408,6 +3408,11 @@ function isTabAllowed(tabName) {
                         targets: trunkTargets
                     },
                     {
+                        id: 'external',
+                        label: rtl ? 'رقم خارجي / جوال (External Number / Mobile)' : 'External Number / Mobile',
+                        targets: []
+                    },
+                    {
                         id: 'custom',
                         label: rtl ? 'تطبيق مخصص (Custom App)' : 'Custom App',
                         targets: []
@@ -3440,6 +3445,14 @@ function isTabAllowed(tabName) {
                 if (dest.startsWith('app-announcement-')) return { category: 'announcements', target: dest.split(',')[0].replace('app-announcement-', ''), dialplan: dest };
                 if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) return { category: 'timeconditions', target: dest.split(',')[1], dialplan: dest };
                 if (dest.startsWith('ext-trunk,')) return { category: 'trunks', target: dest.split(',')[1], dialplan: dest };
+                if (dest.startsWith('ext-external-failover,') || (dest.startsWith('from-internal,') && !dest.startsWith('from-internal-xfer,'))) {
+                    const rawTarget = dest.split(',')[1] || '';
+                    const num = rawTarget.split('/')[0].split('@')[0];
+                    const dongle = rawTarget.includes('/') ? rawTarget.split('/')[1] : (rawTarget.includes('@') ? rawTarget.split('@')[1] : '');
+                    if (num && /^[0-9+*#]{3,25}$/.test(num) && !/^[1-9][0-9]{1,3}$/.test(num)) {
+                        return { category: 'external', target: num, dongle, dialplan: dest };
+                    }
+                }
 
                 return { category: 'custom', target: 'custom', dialplan: dest };
             }
@@ -3448,6 +3461,7 @@ function isTabAllowed(tabName) {
                 const parsed = DestinationSelect.parseDialplanString(this.initialDialplan);
                 this.selectedCategory = parsed.category;
                 this.selectedTarget = parsed.target;
+                this.selectedDongle = parsed.dongle || '';
                 this.dialplanString = parsed.dialplan;
                 if (this.selectedCategory === 'custom') {
                     this.customDialplanString = parsed.dialplan;
@@ -3461,6 +3475,7 @@ function isTabAllowed(tabName) {
                 const parsed = DestinationSelect.parseDialplanString(destStr);
                 this.selectedCategory = parsed.category;
                 this.selectedTarget = parsed.target;
+                this.selectedDongle = parsed.dongle || '';
                 this.dialplanString = parsed.dialplan;
                 if (this.selectedCategory === 'custom') {
                     this.customDialplanString = parsed.dialplan;
@@ -3505,9 +3520,11 @@ function isTabAllowed(tabName) {
                 }
 
                 const isCustom = this.selectedCategory === 'custom';
+                const isExternal = this.selectedCategory === 'external';
                 const catTriggerId = `dest-cat-${this.instanceId}`;
                 const targetSelectId = `dest-target-${this.instanceId}`;
                 const customInputId = `dest-custom-${this.instanceId}`;
+                const externalInputId = `dest-external-${this.instanceId}`;
 
                 this.container.innerHTML = `
                     <div class="destination-select-wrapper space-y-2 text-xs">
@@ -3537,13 +3554,27 @@ function isTabAllowed(tabName) {
                                 </div>
                             </div>
 
-                            <!-- Secondary Target Select / Custom Input -->
+                            <!-- Secondary Target Select / Custom Input / External Input -->
                             <div>
-                                <label for="${isCustom ? customInputId : targetSelectId}" class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
-                                    ${this.isRtl ? 'الهدف / الإجراء (Target)' : 'Target'}
+                                <label for="${isCustom ? customInputId : (isExternal ? externalInputId : targetSelectId)}" class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">
+                                    ${isExternal ? (this.isRtl ? 'رقم الهاتف الخارجي والمنفذ المستهدف' : 'External Phone Number & Trunk') : (this.isRtl ? 'الهدف / الإجراء (Target)' : 'Target')}
                                 </label>
                                 ${isCustom ? `
                                     <input type="text" id="${customInputId}" value="${escapeHtml(this.customDialplanString)}" placeholder="e.g. custom-app,s,1" class="dest-custom-input config-input w-full font-mono text-xs py-1.5">
+                                ` : isExternal ? `
+                                    <div class="space-y-1.5">
+                                        <input type="tel" id="${externalInputId}" autocomplete="tel" value="${escapeHtml(this.selectedTarget && this.selectedTarget !== 'external' ? this.selectedTarget : '')}" placeholder="${this.isRtl ? 'مثال: 01012345678 أو +201012345678' : 'e.g. 01012345678 or +201012345678'}" class="dest-external-input config-input w-full font-mono text-xs py-1.5">
+                                        <div class="flex items-center gap-1.5">
+                                            <label for="dest-dongle-${this.instanceId}" class="text-[10px] text-[var(--text-muted)] font-bold shrink-0">${this.isRtl ? 'المنفذ:' : 'Trunk:'}</label>
+                                            <select id="dest-dongle-${this.instanceId}" name="dest_dongle_${this.instanceId}" aria-label="${this.isRtl ? 'منفذ الشريحة' : 'Failover Trunk'}" class="dest-external-dongle config-input w-full text-[11px] py-1 font-mono">
+                                                <option value="" ${!this.selectedDongle ? 'selected' : ''}>${this.isRtl ? 'تلقائي (تسلسل المسارات الصادرة)' : 'Auto (Outbound Routes Sequence)'}</option>
+                                                <option value="dongle1" ${this.selectedDongle === 'dongle1' ? 'selected' : ''}>dongle1 (Second GSM Modem)</option>
+                                                <option value="dongle2" ${this.selectedDongle === 'dongle2' ? 'selected' : ''}>dongle2 (Third GSM Modem)</option>
+                                                <option value="dongle3" ${this.selectedDongle === 'dongle3' ? 'selected' : ''}>dongle3 (Fourth GSM Modem)</option>
+                                                <option value="dongle0" ${this.selectedDongle === 'dongle0' ? 'selected' : ''}>dongle0 (First GSM Modem)</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                 ` : `
                                     <div class="relative dest-combobox-wrapper">
                                         <button type="button" id="${targetSelectId}" aria-haspopup="listbox" aria-expanded="false" aria-controls="destination-dropdown-${this.instanceId}" class="dest-combobox-trigger custom-select-trigger config-dropdown-trigger w-full border rounded-lg px-3 py-2 flex items-center justify-between gap-2 cursor-pointer select-none transition">
@@ -3619,6 +3650,9 @@ function isTabAllowed(tabName) {
                     if (this.selectedCategory === 'custom') {
                         this.selectedTarget = 'custom';
                         this.dialplanString = this.customDialplanString || '';
+                    } else if (this.selectedCategory === 'external') {
+                        this.selectedTarget = (this.selectedTarget && this.selectedTarget !== 'external') ? this.selectedTarget : '';
+                        this.dialplanString = this.selectedTarget ? `ext-external-failover,${this.selectedTarget},1` : 'app-blackhole,hangup,1';
                     } else if (category && category.targets && category.targets.length) {
                         this.selectedTarget = category.targets[0].id;
                         this.dialplanString = category.targets[0].dialplanString;
@@ -3662,6 +3696,27 @@ function isTabAllowed(tabName) {
                         this.emitChange();
                     });
                 }
+
+                const externalInput = this.container.querySelector('.dest-external-input');
+                const externalDongleSelect = this.container.querySelector('.dest-external-dongle');
+
+                const updateExternalDialplan = () => {
+                    const rawNum = externalInput ? externalInput.value.trim().replace(/\s+/g, '') : '';
+                    const dongle = externalDongleSelect ? externalDongleSelect.value.trim() : '';
+                    this.selectedTarget = rawNum;
+                    this.selectedDongle = dongle;
+                    if (!rawNum) {
+                        this.dialplanString = 'app-blackhole,hangup,1';
+                    } else if (dongle) {
+                        this.dialplanString = `ext-external-failover,${rawNum}/${dongle},1`;
+                    } else {
+                        this.dialplanString = `ext-external-failover,${rawNum},1`;
+                    }
+                    this.emitChange();
+                };
+
+                if (externalInput) externalInput.addEventListener('input', updateExternalDialplan);
+                if (externalDongleSelect) externalDongleSelect.addEventListener('change', updateExternalDialplan);
 
                 const positionMenu = () => {
                     if (!trigger || !menu) return;
@@ -6090,6 +6145,15 @@ function isTabAllowed(tabName) {
                 return `Queue: ${qNum}${descStr}`;
             }
 
+            if (dest.startsWith('ext-external-failover,') || dest.startsWith('from-internal,')) {
+                const rawTarget = dest.split(',')[1] || '';
+                const phone = rawTarget.split('/')[0].split('@')[0];
+                const dongle = rawTarget.includes('/') ? rawTarget.split('/')[1] : (rawTarget.includes('@') ? rawTarget.split('@')[1] : '');
+                if (phone) {
+                    const dongleLabel = dongle ? ` (${dongle})` : '';
+                    return `${isRtl ? 'رقم خارجي / جوال:' : 'External / Mobile:'} ${phone}${dongleLabel}`;
+                }
+            }
             if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
                 const parts = dest.split(',');
                 const conditionId = parts[1];
@@ -7372,6 +7436,15 @@ function isTabAllowed(tabName) {
                     const condition = (diagramRawData.timeconditions || [])
                         .find(tc => String(tc.timeconditions_id) === String(conditionId));
                     return `${isRtl ? 'شرط زمني' : 'Time Condition'}: ${condition ? condition.displayname : conditionId}`;
+                }
+                if (dest.startsWith('ext-external-failover,') || dest.startsWith('from-internal,')) {
+                    const rawTarget = dest.split(',')[1] || '';
+                    const phone = rawTarget.split('/')[0].split('@')[0];
+                    const dongle = rawTarget.includes('/') ? rawTarget.split('/')[1] : (rawTarget.includes('@') ? rawTarget.split('@')[1] : '');
+                    if (phone) {
+                        const dongleLabel = dongle ? ` (${dongle})` : '';
+                        return `${isRtl ? 'رقم خارجي:' : 'External:'} ${phone}${dongleLabel}`;
+                    }
                 }
                 return dest;
             }
