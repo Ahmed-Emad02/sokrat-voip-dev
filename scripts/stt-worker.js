@@ -95,20 +95,46 @@ function resolveVoicemailAudioPath(mailbox, msgFile) {
     return null;
 }
 
+function cleanTranscript(rawText) {
+    if (!rawText || typeof rawText !== 'string') return '';
+    let text = rawText.trim();
+    if (!text) return '';
+
+    // 1. Collapse duplicate lines
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const uniqueLines = [];
+    for (let i = 0; i < lines.length; i++) {
+        if (i === 0 || lines[i] !== lines[i - 1]) {
+            uniqueLines.push(lines[i]);
+        }
+    }
+    text = uniqueLines.join('\n');
+
+    // 2. Collapse immediate repeated word sequences (e.g. "كلم مكريم كلم مكريم" -> "كلم مكريم")
+    text = text.replace(/\b(\S+(?:\s+\S+){0,5})\b(?:\s+\1\b){2,}/gi, '$1');
+    text = text.replace(/([^\s]+)(?:\s+\1){2,}/gi, '$1');
+
+    return text.trim();
+}
+
 async function convertTo16kWav(inputPath, outputPath) {
-    // Normalizes to 16kHz 16-bit Mono PCM WAV (Whisper native audio tensor input)
+    // Normalizes to 16kHz 16-bit Mono PCM WAV with speech bandpass & loudness normalization
     await execFileAsync('ffmpeg', [
         '-y',
         '-i', inputPath,
         '-ar', '16000',
         '-ac', '1',
+        '-af', 'highpass=f=150,lowpass=f=3800,loudnorm=I=-16:TP=-1.5:LRA=11',
         '-c:a', 'pcm_s16le',
         outputPath
-    ], { timeout: 30000 });
+    ], { timeout: 45000 });
 }
 
 async function runWhisperTranscription(wavPath, modelName = 'base', language = 'auto') {
     let modelFile = path.join(MODELS_DIR, `ggml-${modelName}.bin`);
+    if (!fs.existsSync(modelFile)) {
+        modelFile = path.join(MODELS_DIR, 'ggml-small.bin');
+    }
     if (!fs.existsSync(modelFile)) {
         modelFile = path.join(MODELS_DIR, 'ggml-base.bin');
     }
@@ -125,7 +151,13 @@ async function runWhisperTranscription(wavPath, modelName = 'base', language = '
         '-f', wavPath,
         '--output-txt',
         '-of', tmpOutBase,
-        '-nt'
+        '-nt',
+        '-mc', '0',          // Stop cross-segment context repetition loop
+        '-nth', '0.65',       // Skip silence/no-speech rather than hallucinating
+        '-sns',               // Suppress non-speech tokens
+        '-et', '2.4',         // Entropy threshold
+        '-lpt', '-1.0',       // Logprob threshold
+        '--best-of', '3'      // Quality candidate search
     ];
 
     if (language && language !== 'auto') {
@@ -142,7 +174,7 @@ async function runWhisperTranscription(wavPath, modelName = 'base', language = '
             transcript = fs.readFileSync(txtFile, 'utf8').trim();
             fs.unlinkSync(txtFile);
         }
-        return transcript;
+        return cleanTranscript(transcript);
     } finally {
         try {
             if (fs.existsSync(`${tmpOutBase}.txt`)) fs.unlinkSync(`${tmpOutBase}.txt`);
@@ -310,7 +342,6 @@ async function startWorker() {
         await pool.end();
         process.exit(0);
     });
-
     while (isRunning) {
         await processNextJob(pool);
         await new Promise(r => setTimeout(r, 3000));
@@ -329,5 +360,6 @@ module.exports = {
     resolveVoicemailAudioPath,
     convertTo16kWav,
     runWhisperTranscription,
+    cleanTranscript,
     processNextJob
 };
