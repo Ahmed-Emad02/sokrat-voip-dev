@@ -22,6 +22,15 @@ if [ -f /etc/systemd/system/sokrat-voip.service ]; then
     systemctl daemon-reload
 fi
 echo "  Service stopped and unit file removed."
+if systemctl is-active sokrat-softphone &>/dev/null || systemctl is-enabled sokrat-softphone &>/dev/null; then
+    systemctl stop sokrat-softphone 2>/dev/null || true
+    systemctl disable sokrat-softphone 2>/dev/null || true
+fi
+if [ -f /etc/systemd/system/sokrat-softphone.service ]; then
+    rm -f /etc/systemd/system/sokrat-softphone.service
+    systemctl daemon-reload
+fi
+echo "  Sokrat softphone service stopped and unit file removed."
 
 # 2. Restore Apache configuration to default Issabel behavior
 echo "[2/5] Restoring Apache web server configuration..."
@@ -30,6 +39,12 @@ echo "[2/5] Restoring Apache web server configuration..."
 if [ -f /etc/httpd/conf.d/dashboard.conf ]; then
     rm -f /etc/httpd/conf.d/dashboard.conf
     echo "  Removed /etc/httpd/conf.d/dashboard.conf"
+fi
+
+# Remove softphone reverse proxy config for port 8443
+if [ -f /etc/httpd/conf.d/softphone.conf ]; then
+    rm -f /etc/httpd/conf.d/softphone.conf
+    echo "  Removed /etc/httpd/conf.d/softphone.conf"
 fi
 
 # Remove proxy directives inserted into ssl.conf
@@ -72,6 +87,10 @@ cd /tmp
 if [ -d "$INSTALL_DIR" ]; then
     rm -rf "$INSTALL_DIR"
     echo "  Removed $INSTALL_DIR"
+fi
+if [ -d "/opt/sokrat-softphone" ]; then
+    rm -rf "/opt/sokrat-softphone"
+    echo "  Removed /opt/sokrat-softphone"
 fi
 
 echo "============================================"

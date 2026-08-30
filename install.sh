@@ -10,9 +10,11 @@ export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:${PATH
 INSTALL_DIR=/opt/sokrat-voip
 REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voip-dev.git
 REPO_BRANCH=main
+SOFTPHONE_DIR=/opt/sokrat-softphone
+SOFTPHONE_REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voice.git
+SOFTPHONE_REPO_BRANCH=main
 NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf 2>/dev/null | cut -d= -f2- | xargs || true)
-
 echo "============================================"
 echo " Sokrat VOIP Installer v1.0.4"
 echo " Target: Asterisk 18"
@@ -163,6 +165,27 @@ else
     cd "$INSTALL_DIR"
 fi
 
+# 3b — Clone / Update Sokrat VOICE (WebRTC Softphone)
+echo "  [3b] Cloning Sokrat VOICE (WebRTC Softphone) repository..."
+systemctl stop sokrat-softphone 2>/dev/null || true
+if [ -d "$SOFTPHONE_DIR" ]; then
+    echo "  Directory $SOFTPHONE_DIR exists, maintaining local modifications..."
+    cd "$SOFTPHONE_DIR"
+    git config http.postBuffer 524288000 2>/dev/null || true
+    git remote set-url origin "$SOFTPHONE_REPO_URL" 2>/dev/null || true
+    git fetch --depth 1 origin "$SOFTPHONE_REPO_BRANCH" 2>/dev/null || true
+    if git diff-index --quiet HEAD -- 2>/dev/null; then
+        git checkout -B "$SOFTPHONE_REPO_BRANCH" "origin/$SOFTPHONE_REPO_BRANCH" 2>/dev/null || true
+    fi
+    cd "$INSTALL_DIR"
+else
+    if ! git clone --depth 1 --branch "$SOFTPHONE_REPO_BRANCH" --single-branch "$SOFTPHONE_REPO_URL" "$SOFTPHONE_DIR"; then
+        echo "  Shallow clone failed, retrying git clone..."
+        git clone --branch "$SOFTPHONE_REPO_BRANCH" --single-branch "$SOFTPHONE_REPO_URL" "$SOFTPHONE_DIR"
+    fi
+    cd "$INSTALL_DIR"
+fi
+
 
 # ──────────────────────────────────────────────
 # Step 4 — Install Dependencies
@@ -170,6 +193,12 @@ fi
 echo "[4/14] Installing npm dependencies from package-lock.json..."
 npm ci --omit=dev
 
+echo "  [4a] Installing Sokrat VOICE softphone npm dependencies..."
+if [ -d "$SOFTPHONE_DIR" ]; then
+    cd "$SOFTPHONE_DIR"
+    npm install --omit=dev 2>/dev/null || true
+    cd "$INSTALL_DIR"
+fi
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
 if ! command -v ffmpeg &>/dev/null && [ ! -x /usr/local/bin/ffmpeg ]; then
     if yum install -y ffmpeg &>/dev/null; then
@@ -452,10 +481,45 @@ else
     echo "  WSS transport already configured"
 fi
 
+# Patch IssabelPBX PJSIP generator to fix maxcontacts and inband_progress
+FUNCTIONS_FILE=/var/www/html/admin/modules/core/functions.inc.php
+if [ -f "$FUNCTIONS_FILE" ]; then
+    if ! grep -q "case 'maxcontacts':" "$FUNCTIONS_FILE"; then
+        sed -i "s/case 'max_contacts':/case 'maxcontacts':\n                        case 'max_contacts':/" "$FUNCTIONS_FILE"
+    fi
+    if ! grep -q "case 'inband_progress':" "$FUNCTIONS_FILE"; then
+        sed -i "/case 'use_avpf':/i \                        case 'inband_progress':\n                        case 'inbandprogress':\n                            \$output1[]='inband_progress='.\$result2['data'];\n                            break;" "$FUNCTIONS_FILE"
+    fi
+    if ! grep -q "\$devopts\['inband_progress'\]" "$FUNCTIONS_FILE"; then
+        sed -i "/\$devopts\['use_avpf'\]\['value'\]='yes';/a \                \$devopts\['inband_progress'\]\['value'\]='yes';" "$FUNCTIONS_FILE"
+    fi
+    echo "  IssabelPBX PJSIP generator patched for maxcontacts and inband_progress"
+fi
+
+# Ensure inband_progress=yes for WebRTC extensions in database
+mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
+INSERT INTO sip (id, keyword, data, flags)
+SELECT id, 'inband_progress', 'yes', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
+ON DUPLICATE KEY UPDATE data='yes';
+" 2>/dev/null || true
+
+# Ensure Asterisk socket permissions allow sokrat-softphone service access
+if [ -f /etc/asterisk/asterisk.conf ]; then
+    if ! grep -q '^astctlpermissions' /etc/asterisk/asterisk.conf; then
+        echo "astctlpermissions = 0775" >> /etc/asterisk/asterisk.conf
+    else
+        sed -i 's/^astctlpermissions.*/astctlpermissions = 0775/' /etc/asterisk/asterisk.conf
+    fi
+    if ! grep -q '^astctlgroup' /etc/asterisk/asterisk.conf; then
+        echo "astctlgroup = asterisk" >> /etc/asterisk/asterisk.conf
+    else
+        sed -i 's/^astctlgroup.*/astctlgroup = asterisk/' /etc/asterisk/asterisk.conf
+    fi
+fi
+
 asterisk -rx "pjsip reload" 2>/dev/null || true
 asterisk -rx "module load chan_sip.so" 2>/dev/null || true
 echo "  PJSIP reloaded, chan_sip loaded"
-
 # ──────────────────────────────────────────────
 # Step 9 — Add Required Dialplan Contexts
 # ──────────────────────────────────────────────
@@ -839,7 +903,7 @@ python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re
 append_context '[ext-external-failover]' '[ext-external-failover]' << 'FAILOVER_CTX'
 
 [ext-external-failover]
-; Sokrat Call Center Failover to External Mobile Number with Call Screening Whisper
+; Sokrat Call Center Failover to External Mobile Number (Direct Bridge)
 ; Supports:
 ;   1. Explicit Dongle: ext-external-failover,01011719380/dongle1,1 OR ext-external-failover,01011719380@dongle1,1
 ;   2. Automatic Outbound Routes: ext-external-failover,01011719380,1
@@ -854,17 +918,11 @@ same => n,Set(__FAILOVER_DEST=${TARGET_NUM})
 same => n,Set(CDR(userfield)=Failover: ${RAW_TARGET})
 same => n,GotoIf($["${EXPLICIT_DONGLE}"!=""]?dial_explicit:dial_routes)
 same => n(dial_explicit),NoOp(Dialing explicitly via Dongle/${EXPLICIT_DONGLE}/${TARGET_NUM})
-same => n,Dial(Dongle/${EXPLICIT_DONGLE}/${TARGET_NUM},60,U(sub-failover-screen^${CUST_NUM}))
+same => n,Dial(Dongle/${EXPLICIT_DONGLE}/${TARGET_NUM},60)
 same => n,Hangup()
 same => n(dial_routes),NoOp(Dialing via Outbound Routes for ${TARGET_NUM})
-same => n,Dial(Local/${TARGET_NUM}@outbound-allroutes,60,U(sub-failover-screen^${CUST_NUM}))
+same => n,Dial(Local/${TARGET_NUM}@outbound-allroutes,60)
 same => n,Hangup()
-[sub-failover-screen]
-exten => s,1,NoOp(=== SOKRAT CALL SCREENING: ANNOUNCING CUSTOMER ${ARG1} TO MANAGER ===)
-same => n,Wait(0.4)
-same => n,ExecIf($[${ISNULL(${ARG1})} = 0]?Playback(followme/call-from))
-same => n,ExecIf($[${ISNULL(${ARG1})} = 0]?SayDigits(${ARG1}))
-same => n,Return()
 FAILOVER_CTX
 
 asterisk -rx "dialplan reload" 2>/dev/null || true
@@ -1151,10 +1209,62 @@ httpd -t 2>&1 | grep -v 'Could not reliably' | grep -v 'AH00558' || true
 systemctl restart httpd
 echo "  Apache restarted"
 
+# Configure Standalone WebRTC Softphone Apache VirtualHost (port 8443 -> :8090)
+cat > /var/www/html/ssl-redirect.html << 'HTML'
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Redirecting to HTTPS...</title>
+    <script>
+        (function() {
+            var host = window.location.host;
+            var path = window.location.pathname || '/';
+            var search = window.location.search || '';
+            window.location.replace('https://' + host + path + search);
+        })();
+    </script>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding-top: 60px; background: #07070a; color: #ffffff;">
+    <h3 style="margin-bottom: 12px;">Redirecting to Secure HTTPS Connection...</h3>
+    <p style="color: #9e9eb0; font-size: 13px;">If you are not redirected automatically, <a id="httpsLink" href="#" style="color: #a855f7; font-weight: bold;">click here to continue</a>.</p>
+    <script>
+        document.getElementById('httpsLink').href = 'https://' + window.location.host + window.location.pathname + window.location.search;
+    </script>
+</body>
+</html>
+HTML
+
+cat > /etc/httpd/conf.d/softphone.conf << 'APACHE'
+Listen 8443 https
+
+<VirtualHost *:8443>
+    SSLEngine on
+    SSLCertificateFile /etc/asterisk/keys/asterisk.pem
+    SSLCertificateKeyFile /etc/asterisk/keys/asterisk.pem
+
+    ErrorDocument 400 /ssl-redirect.html
+    Alias /ssl-redirect.html /var/www/html/ssl-redirect.html
+
+    ProxyPreserveHost On
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Port "8443"
+
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteRule /(.*) ws://127.0.0.1:8090/$1 [P,L]
+
+    ProxyPass /ssl-redirect.html !
+    ProxyPass / http://127.0.0.1:8090/
+    ProxyPassReverse / http://127.0.0.1:8090/
+</VirtualHost>
+APACHE
+echo "  softphone.conf created (port 8443 -> :8090 with auto-HTTPS redirect & WebSocket support)"
+
 # ──────────────────────────────────────────────
 # Step 12 — Create systemd Service
 # ──────────────────────────────────────────────
-echo "[12/14] Creating systemd service..."
+echo "[12/14] Creating systemd services..."
 cat > /etc/systemd/system/sokrat-voip.service << 'UNIT'
 [Unit]
 Description=Issabel Dashboard
@@ -1191,6 +1301,47 @@ systemctl daemon-reload
 systemctl enable --now sokrat-voip
 echo "  Service enabled and started"
 
+# Provision Sokrat Standalone WebRTC Softphone Daemon
+id -u sokrat-softphone &>/dev/null || useradd -r -s /sbin/nologin -d /opt/sokrat-softphone -c "Sokrat Softphone Daemon" sokrat-softphone
+usermod -aG asterisk sokrat-softphone 2>/dev/null || true
+chown -R sokrat-softphone:sokrat-softphone /opt/sokrat-softphone 2>/dev/null || true
+cat > /etc/systemd/system/sokrat-softphone.service << 'UNIT'
+[Unit]
+Description=Sokrat Standalone WebRTC Softphone Daemon
+After=network.target asterisk.service
+Wants=asterisk.service
+
+[Service]
+Type=simple
+User=sokrat-softphone
+Group=sokrat-softphone
+WorkingDirectory=/opt/sokrat-softphone
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+# Kernel Hardening & Sandbox
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Environment
+Environment=NODE_ENV=production
+Environment=PORT=8090
+Environment=HOST=127.0.0.1
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now sokrat-softphone
+echo "  Sokrat softphone daemon enabled and started"
+
 # ──────────────────────────────────────────────
 # Step 13 — Set timezone to Africa/Cairo
 # ──────────────────────────────────────────────
@@ -1210,12 +1361,14 @@ echo "  Current timezone: $(timedatectl 2>/dev/null | grep 'Time zone' || echo '
 echo ""
 echo "[14/14] Verifying installation..."
 sleep 2
+echo "--- Sokrat VoIP Service ---"
 systemctl status sokrat-voip --no-pager -l | head -12
 echo ""
-echo "--- Last 10 log lines ---"
-journalctl -u sokrat-voip -n 10 --no-pager -l
+echo "--- Sokrat VOICE Softphone Service ---"
+systemctl status sokrat-softphone --no-pager -l | head -12
 echo ""
 echo "============================================"
 echo " Installation complete!"
-echo " Access Sokrat VOIP on http://<machine_ip>/"
-
+echo " Access Sokrat VOIP Dashboard on: http://<machine_ip>/"
+echo " Access Sokrat VOICE Softphone on: https://<machine_ip>/phone/ or https://<machine_ip>:8443/"
+echo "============================================"
