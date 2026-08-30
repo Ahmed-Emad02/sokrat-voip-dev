@@ -453,11 +453,7 @@ function fmtDur(s) {
                 }
             } catch (_) {}
         }
-    </script>
-            </div>
-        </div>
-    </div>
-    <script>
+
         function triggerAudioDownload(e, url) {
             if (e) {
                 e.preventDefault();
@@ -466,6 +462,12 @@ function fmtDur(s) {
             window.location.href = url;
         }
 
+        window.showVmTranscriptModalFromBtn = showVmTranscriptModalFromBtn;
+        window.showVmTranscriptModal = showVmTranscriptModal;
+        window.closeVmTranscriptModal = closeVmTranscriptModal;
+        window.copyVmTranscriptText = copyVmTranscriptText;
+        window.transcribeVoicemailNow = transcribeVoicemailNow;
+        window.triggerAudioDownload = triggerAudioDownload;
         function goToPage(page) {
             const formEl = document.getElementById('vmFilterForm');
             const pageEl = formEl ? formEl.querySelector('input[name="page"]') : null;

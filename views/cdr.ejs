@@ -588,9 +588,7 @@ function fmtDur(s) {
                 }
             } catch (_) {}
         }
-    </script>
-    </div>
-    <script>
+
         function triggerAudioDownload(e, url) {
             if (e) {
                 e.preventDefault();
@@ -598,6 +596,13 @@ function fmtDur(s) {
             }
             window.location.href = url;
         }
+
+        window.showTranscriptModalFromBtn = showTranscriptModalFromBtn;
+        window.showTranscriptModal = showTranscriptModal;
+        window.closeTranscriptModal = closeTranscriptModal;
+        window.copyTranscriptText = copyTranscriptText;
+        window.transcribeCallNow = transcribeCallNow;
+        window.triggerAudioDownload = triggerAudioDownload;
 
         function goToPage(page) {
             const formEl = document.getElementById('cdrFilterForm');
