@@ -525,14 +525,14 @@
                                 <select id="bulkAutoAnswer" name="bulk_auto_answer" class="user-input py-1 px-2.5 text-xs h-8">
                                     <option value="" disabled selected><%= isRtl ? 'الرد التلقائي للكل' : 'Auto Answer for All' %></option>
                                     <option value="user_choice"><%= isRtl ? 'حر (اختيار الموظف)' : 'User Controlled' %></option>
-                                    <option value="force_on">🔒 <%= isRtl ? 'إجباري مفعل دائماً' : 'Locked ON (Force)' %></option>
-                                    <option value="force_off">🔒 <%= isRtl ? 'إجباري معطل (ممنوع)' : 'Locked OFF (Prohibit)' %></option>
+                                    <option value="force_on"><%= isRtl ? '[مقفل] إجباري مفعل دائماً' : '[Locked] ON (Force)' %></option>
+                                    <option value="force_off"><%= isRtl ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)' %></option>
                                 </select>
                                 <select id="bulkDnd" name="bulk_dnd" class="user-input py-1 px-2.5 text-xs h-8">
                                     <option value="" disabled selected><%= isRtl ? 'عدم الإزعاج للكل' : 'DND for All' %></option>
                                     <option value="user_choice"><%= isRtl ? 'حر (اختيار الموظف)' : 'User Controlled' %></option>
-                                    <option value="force_on">🔒 <%= isRtl ? 'إجباري مفعل' : 'Locked ON (Force)' %></option>
-                                    <option value="force_off">🔒 <%= isRtl ? 'إجباري معطل (ممنوع)' : 'Locked OFF (Prohibit)' %></option>
+                                    <option value="force_on"><%= isRtl ? '[مقفل] إجباري مفعل' : '[Locked] ON (Force)' %></option>
+                                    <option value="force_off"><%= isRtl ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)' %></option>
                                 </select>
                                 <button type="button" onclick="applyBulkPolicies()" class="btn-primary py-1 px-3 text-xs h-8 whitespace-nowrap">
                                     <%= isRtl ? 'تطبيق على الكل' : 'Apply to All' %>
@@ -588,15 +588,15 @@
                                 <td class="py-3 px-3">
                                     <select id="policyAuto_${p.extension}" name="policy_auto_${p.extension}" class="user-input py-1 px-2 text-xs policy-auto-${p.extension}">
                                         <option value="user_choice" ${p.auto_answer === 'user_choice' ? 'selected' : ''}>${isAr ? 'حر (اختيار الموظف)' : 'User Controlled'}</option>
-                                        <option value="force_on" ${p.auto_answer === 'force_on' ? 'selected' : ''}>🔒 ${isAr ? 'إجباري مفعل (قفل)' : 'Locked ON (Force)'}</option>
-                                        <option value="force_off" ${p.auto_answer === 'force_off' ? 'selected' : ''}>🔒 ${isAr ? 'إجباري معطل (ممنوع)' : 'Locked OFF (Prohibit)'}</option>
+                                        <option value="force_on" ${p.auto_answer === 'force_on' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري مفعل (قفل)' : '[Locked] ON (Force)'}</option>
+                                        <option value="force_off" ${p.auto_answer === 'force_off' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)'}</option>
                                     </select>
                                 </td>
                                 <td class="py-3 px-3">
                                     <select id="policyDnd_${p.extension}" name="policy_dnd_${p.extension}" class="user-input py-1 px-2 text-xs policy-dnd-${p.extension}">
                                         <option value="user_choice" ${p.dnd === 'user_choice' ? 'selected' : ''}>${isAr ? 'حر (اختيار الموظف)' : 'User Controlled'}</option>
-                                        <option value="force_on" ${p.dnd === 'force_on' ? 'selected' : ''}>🔒 ${isAr ? 'إجباري مفعل (قفل)' : 'Locked ON (Force)'}</option>
-                                        <option value="force_off" ${p.dnd === 'force_off' ? 'selected' : ''}>🔒 ${isAr ? 'إجباري معطل (ممنوع)' : 'Locked OFF (Prohibit)'}</option>
+                                        <option value="force_on" ${p.dnd === 'force_on' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري مفعل (قفل)' : '[Locked] ON (Force)'}</option>
+                                        <option value="force_off" ${p.dnd === 'force_off' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)'}</option>
                                     </select>
                                 </td>
                                 <td class="py-3 px-3 text-right">
