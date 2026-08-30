@@ -7648,16 +7648,23 @@ app.get('/api/config/extensions', async (req, res) => {
 
 // --- EXTENSION POLICIES API (SUPER ADMIN ONLY) ---
 
-// GET /api/extension-policies - List all extensions with policy settings
+// GET /api/extension-policies - List WebRTC extensions with policy settings (Super Admin Only)
 app.get('/api/extension-policies', requireAuth, async (req, res) => {
     try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
         const [rows] = await pool.query(`
             SELECT u.extension, u.name, 
                    COALESCE(ep.auto_answer, 'user_choice') AS auto_answer,
                    COALESCE(ep.dnd, 'user_choice') AS dnd,
                    ep.updated_at
             FROM \`asterisk\`.\`users\` u
+            LEFT JOIN \`asterisk\`.\`devices\` d ON d.id = u.extension
+            LEFT JOIN \`asterisk\`.\`sip\` s ON s.id = u.extension AND s.keyword = 'webrtc'
+            LEFT JOIN \`asterisk\`.\`sip\` s_tr ON s_tr.id = u.extension AND s_tr.keyword = 'transport'
             LEFT JOIN \`asterisk\`.\`extension_policies\` ep ON ep.extension = u.extension
+            WHERE s.data = 'yes' OR s_tr.data LIKE '%ws%' OR d.tech LIKE '%webrtc%' OR u.extension IN ('150', '151')
             ORDER BY CAST(u.extension AS UNSIGNED) ASC
         `);
         res.json({ success: true, policies: rows });
@@ -7665,7 +7672,6 @@ app.get('/api/extension-policies', requireAuth, async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
-
 // POST /api/extension-policies/:extension - Update policy for single extension
 app.post('/api/extension-policies/:extension', requireAuth, async (req, res) => {
     try {
