@@ -18,7 +18,7 @@ const sidebarWords = {
         vmGreetingResetConfirm: "Reset to default Asterisk voicemail prompts?",
         vmGreetingChangeMode: "Changing mode will save a new greeting. Continue?",
         vmSelectAll: "Select All",
-        dashLink: "Dashboard", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Auto-Dialer", contactsLink: "Address Book", usersLink: "Users", storageLink: "Backups", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Setup Password Reset Email", netInfo: "Show Network Info", logoutLabel: "Sign Out", collapseLink: "Collapse Sidebar", expandLink: "Expand Sidebar", userLabel: "USER:", versionLabel: "VERSION:",
+        dashLink: "Dashboard", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Auto-Dialer", contactsLink: "Address Book", usersLink: "Users", storageLink: "Backups", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Setup Password Reset Email", aiSttSettings: "Cloud AI Speech-to-Text & API Keys", aiSttModalTitle: "Cloud AI Speech-to-Text & API Keys", netInfo: "Show Network Info", logoutLabel: "Sign Out", collapseLink: "Collapse Sidebar", expandLink: "Expand Sidebar", userLabel: "USER:", versionLabel: "VERSION:",
         settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
         recTitle: "Add a Recording", recName: "Recording Name", recPlaceholder: "e.g. welcome_greeting", recFile: "Audio File", recNote: "Accepted: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (max 50MB)", recUploadStatus: "Uploading...", recCancel: "Cancel", recUpload: "Upload", recComplete: "Complete!", recFailed: "Failed", recSelectFileErr: "Please select a file", recNameErr: "Please enter a recording name",
         timeSettings: "Time Settings", timeModalTitle: "Time & Timezone", currentTime: "Current Time", timezone: "Timezone", searchTimezone: "Search timezone...", ntpSync: "NTP Synchronization", setManually: "Set Manually", dateLabel: "Date", timeLabel: "Time", saveSettings: "Save Settings", saving: "Saving...", savedSuccess: "Time settings saved successfully", saveFailed: "Failed to save time settings", timezoneChanged: "Timezone changed", ntpToggled: "NTP toggled", timeSetManually: "Time set manually", loadingTimezone: "Loading..."
@@ -41,7 +41,7 @@ const sidebarWords = {
         vmGreetingResetConfirm: "إعادة تعيين ترحيب البريد الصوتي للافتراضي؟",
         vmGreetingChangeMode: "تغيير الوضع سيحفظ ترحيباً جديداً. هل تريد المتابعة؟",
         vmSelectAll: "اختر الكل",
-        dashLink: "لوحة التحكم", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", softphoneLink: "هاتف Sokrat VOICE", configLink: "الإعدادات", dialerLink: "المتصل الآلي", contactsLink: "دفتر العناوين", usersLink: "المستخدمين", storageLink: "النسخ الاحتياطي", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعداد البريد لإعادة تعيين كلمة المرور", netInfo: "معلومات الشبكة", logoutLabel: "تسجيل الخروج", collapseLink: "تصغير القائمة", expandLink: "توسيع القائمة", userLabel: "المستخدم:", versionLabel: "الإصدار:",
+        dashLink: "لوحة التحكم", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", softphoneLink: "هاتف Sokrat VOICE", configLink: "الإعدادات", dialerLink: "المتصل الآلي", contactsLink: "دفتر العناوين", usersLink: "المستخدمين", storageLink: "النسخ الاحتياطي", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعداد البريد لإعادة تعيين كلمة المرور", aiSttSettings: "إعدادات مفاتيح ومزود الذكاء الاصطناعي", aiSttModalTitle: "إعدادات مفاتيح الذكاء الاصطناعي والتفريغ الصوتي", netInfo: "معلومات الشبكة", logoutLabel: "تسجيل الخروج", collapseLink: "تصغير القائمة", expandLink: "توسيع القائمة", userLabel: "المستخدم:", versionLabel: "الإصدار:",
         settingsSubtitle: "التفضيلات وعناصر تحكم النظام", preferencesLabel: "التفضيلات", systemLabel: "النظام", appearanceLabel: "المظهر", darkModeLabel: "الوضع الداكن", lightModeLabel: "الوضع الفاتح",
         recTitle: "إضافة تسجيل صوتي", recName: "اسم التسجيل", recPlaceholder: "مثال: welcome_greeting", recFile: "ملف الصوت", recNote: "المرفقات المقبولة: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (الحد الأقصى 50 ميجابايت)", recUploadStatus: "جاري الرفع...", recCancel: "إلغاء", recUpload: "رفع", recComplete: "اكتمل الرفع!", recFailed: "فشل الرفع", recSelectFileErr: "يرجى اختيار ملف", recNameErr: "يرجى إدخال اسم التسجيل",
         timeSettings: "إعدادات الوقت", timeModalTitle: "الوقت والمنطقة الزمنية", currentTime: "الوقت الحالي", timezone: "المنطقة الزمنية", searchTimezone: "ابحث عن المنطقة الزمنية...", ntpSync: "مزامنة NTP", setManually: "ضبط يدوي", dateLabel: "التاريخ", timeLabel: "الوقت", saveSettings: "حفظ الإعدادات", saving: "جاري الحفظ...", savedSuccess: "تم حفظ إعدادات الوقت بنجاح", saveFailed: "فشل حفظ إعدادات الوقت", timezoneChanged: "تم تغيير المنطقة الزمنية", ntpToggled: "تم تبديل NTP", timeSetManually: "تم ضبط الوقت يدوياً", loadingTimezone: "جارٍ التحميل..."
@@ -52,6 +52,7 @@ const isRtl = currentLang === 'ar';
 const allowed = typeof allowedTabs !== 'undefined' ? allowedTabs : [];
 const isSuper = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) || (typeof currentUser !== 'undefined' && (currentUser === 'admin' || currentUser === 'root'));
 const isRoot = (typeof isRootUser !== 'undefined' && isRootUser) || (typeof currentUser !== 'undefined' && currentUser === 'root');
+const curPage = typeof currentPage !== 'undefined' ? currentPage : '';
 function can(tab) { return isSuper || allowed.includes(tab); }
 %>
 
@@ -2243,7 +2244,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <!-- 1. Dashboard -->
             <a href="/?lang=<%= currentLang %>" title="<%= sbT.dashLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= curPage === '/' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 <span class="sidebar-text"><%= sbT.dashLink %></span>
             </a>
@@ -2252,7 +2253,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('cdr')) { %>
             <a href="/cdr?lang=<%= currentLang %>" title="<%= sbT.cdrLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/cdr' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= curPage === '/cdr' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                 <span class="sidebar-text"><%= sbT.cdrLink %></span>
             </a>
@@ -2262,7 +2263,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('operator')) { %>
             <a href="/operator?lang=<%= currentLang %>" title="<%= sbT.opLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/operator' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= curPage === '/operator' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
                     <line x1="8" y1="21" x2="16" y2="21"/>
@@ -2276,17 +2277,16 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('ext-stats')) { %>
             <a href="/ext-stats?lang=<%= currentLang %>" title="<%= sbT.extLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/ext-stats' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= curPage === '/ext-stats' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
                 <span class="sidebar-text"><%= sbT.extLink %></span>
             </a>
             <% } %>
 
-
             <!-- 5. Address Book -->
             <a href="/contacts?lang=<%= currentLang %>" title="<%= sbT.contactsLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/contacts' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= curPage === '/contacts' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                     <circle cx="12" cy="10" r="3"/>
@@ -2299,7 +2299,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('voicemails')) { %>
             <a href="/voicemails?lang=<%= currentLang %>" title="<%= sbT.vmLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/voicemails' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= curPage === '/voicemails' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
                     <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
@@ -2313,7 +2313,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('gsm-dongles')) { %>
             <a href="/gsm-dongles?lang=<%= currentLang %>" title="<%= sbT.dongleLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/gsm-dongles' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= curPage === '/gsm-dongles' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="10" y="2" width="4" height="4" rx="0.5" />
                     <line x1="11" y1="3.5" x2="11.01" y2="3.5" stroke-width="2" />
@@ -2329,7 +2329,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (isSuper) { %>
             <a href="/users?lang=<%= currentLang %>" title="<%= sbT.usersLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/users' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= curPage === '/users' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span class="sidebar-text"><%= sbT.usersLink %></span>
             </a>
@@ -2338,7 +2338,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <!-- 9. Back up -->
             <a href="/storage?lang=<%= currentLang %>" title="<%= sbT.storageLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/storage' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= curPage === '/storage' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="7 10 12 15 17 10"/>
@@ -2351,7 +2351,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (can('config') || allowed.some(function(p) { return p.startsWith('config-'); })) { %>
             <a href="/config?lang=<%= currentLang %>" title="<%= sbT.configLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= currentPage === '/config' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
+               <%= curPage === '/config' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
                     <circle cx="12" cy="12" r="3"/>
@@ -2491,6 +2491,13 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <button type="button" onclick="openSmtpModal()" class="settings-action cursor-pointer">
                 <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path></svg></span>
                 <span class="settings-action-label"><%= sbT.smtpSettings %></span>
+                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+            </button>
+            <% } %>
+            <% if (isSuper) { %>
+            <button type="button" onclick="openSttApiKeyModal()" class="settings-action cursor-pointer">
+                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg></span>
+                <span class="settings-action-label"><%= sbT.aiSttSettings %></span>
                 <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
             </button>
             <% } %>
@@ -2640,6 +2647,118 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <button type="button" onclick="closeTimeModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] transition cursor-pointer">Close</button>
             <button type="button" id="timeSaveBtn" onclick="saveTimeSettings()" class="px-4 py-2 rounded-lg text-xs font-bold text-white bg-[var(--accent-color)] hover:bg-[#e0352b] transition cursor-pointer"><%= sbT.saveSettings %></button>
         </div>
+    </div>
+</div>
+
+<!-- STT / AI API Keys Settings Modal in Sidebar -->
+<div id="sttApiKeyModal" onclick="if(event.target===this) closeSttApiKeyModal()" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-md opacity-0 invisible transition-all duration-200 p-4" style="pointer-events:none">
+    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-xl flex flex-col max-h-[90vh] overflow-hidden shadow-2xl">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]"><%= sbT.aiSttModalTitle %></h3>
+                    <p class="text-[10px] text-[var(--text-muted)] font-mono"><%= isRtl ? 'Groq / OpenAI / Deepgram / Custom AI' : 'Groq / OpenAI / Deepgram / Custom' %></p>
+                </div>
+            </div>
+            <button onclick="closeSttApiKeyModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1 cursor-pointer">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <form id="sidebarSttSettingsForm" onsubmit="return executeSaveSidebarSttSettings(event)" class="p-6 space-y-4 overflow-y-auto" style="scrollbar-width:thin">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                    <label for="sttEnabled" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'حالة محرك التفريغ' : 'STT Engine State' %></label>
+                    <select id="sttEnabled" name="sttEnabled" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="1" selected><%= isRtl ? 'مفعل (نشط)' : 'Enabled (Active)' %></option>
+                        <option value="0"><%= isRtl ? 'معطل' : 'Disabled' %></option>
+                    </select>
+                </div>
+                <div>
+                    <label for="sttProvider" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'مزود الخدمة (AI Provider)' : 'AI Provider' %></label>
+                    <select id="sttProvider" name="sttProvider" onchange="onSttProviderChange()" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="groq" selected>Groq (Whisper-Large-V3 - <%= isRtl ? 'فائق السرعة' : 'Recommended' %>)</option>
+                        <option value="openai">OpenAI (Whisper-1)</option>
+                        <option value="deepgram">Deepgram (Nova-2)</option>
+                        <option value="custom"><%= isRtl ? 'مزود مخصص (OpenAI-Compatible)' : 'Custom OpenAI API' %></option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label for="sttApiKey" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'مفتاح الواجهة (API Key)' : 'Provider API Key' %></label>
+                <div class="relative">
+                    <input type="password" id="sttApiKey" name="sttApiKey" autocomplete="off" placeholder="gsk_... or sk-..." class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] pr-8 focus:outline-none focus:border-[var(--accent-color)]">
+                    <button type="button" onclick="togglePasswordVisibility('sttApiKey')" class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-zinc-400 hover:text-white cursor-pointer" title="Toggle Visibility">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                    <label for="sttModel" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'اسم النموذج (Model)' : 'Model Name' %></label>
+                    <input type="text" id="sttModel" name="sttModel" value="whisper-large-v3" placeholder="whisper-large-v3" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                </div>
+                <div>
+                    <label for="sttLanguage" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'اللغة' : 'Language' %></label>
+                    <select id="sttLanguage" name="sttLanguage" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="auto" selected><%= isRtl ? 'كشف تلقائي (Auto-Detect)' : 'Auto-Detect' %></option>
+                        <option value="ar"><%= isRtl ? 'العربية / عامية مصرية' : 'Arabic (Egyptian/MSA)' %></option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label for="sttApiUrl" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'رابط الواجهة (API URL)' : 'API Endpoint URL' %></label>
+                <input type="text" id="sttApiUrl" name="sttApiUrl" value="https://api.groq.com/openai/v1/audio/transcriptions" placeholder="https://api.groq.com/openai/v1/audio/transcriptions" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+            </div>
+
+            <div>
+                <label for="sttPrompt" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'موجه اللهجة وسياق المكالمات (Dialect Prompt)' : 'Dialect & Context Prompt' %></label>
+                <input type="text" id="sttPrompt" name="sttPrompt" value="محادثة هاتفية خدمة عملاء بالعامية المصرية: ألو، أيوة يا فندم، تمام، إزيك، معاك، الخط، حاضر، شكراً، مع السلامة." class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label for="sttTranscribeCalls" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'المكالمات' : 'Calls' %></label>
+                    <select id="sttTranscribeCalls" name="sttTranscribeCalls" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="1" selected><%= isRtl ? 'تلقائي' : 'Auto' %></option>
+                        <option value="0"><%= isRtl ? 'يدوي' : 'Manual' %></option>
+                    </select>
+                </div>
+                <div>
+                    <label for="sttTranscribeVoicemails" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'البريد الصوتي' : 'Voicemails' %></label>
+                    <select id="sttTranscribeVoicemails" name="sttTranscribeVoicemails" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="1" selected><%= isRtl ? 'تلقائي' : 'Auto' %></option>
+                        <option value="0"><%= isRtl ? 'يدوي' : 'Manual' %></option>
+                    </select>
+                </div>
+                <div>
+                    <label for="sttMinDuration" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'الحد الأدنى' : 'Min Duration' %></label>
+                    <select id="sttMinDuration" name="sttMinDuration" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="2">2s</option>
+                        <option value="3" selected>3s</option>
+                        <option value="5">5s</option>
+                        <option value="10">10s</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-2.5 pt-3 border-t border-[var(--border-primary)] flex-wrap">
+                <button type="button" onclick="testSttApiConnection()" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 flex items-center gap-1.5 transition cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span id="testSttBtnText"><%= isRtl ? 'اختبار المفتاح' : 'Test Key' %></span>
+                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="closeSttApiKeyModal()" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] transition cursor-pointer"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" id="sttSaveBtn" class="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-[var(--accent-color)] hover:bg-[#e0352b] transition cursor-pointer"><%= isRtl ? 'حفظ' : 'Save' %></button>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -2920,6 +3039,227 @@ function renderTimeModal(data) {
     document.getElementById('timeModalBody').innerHTML = html;
     document.getElementById('timeModalFooter').style.display = 'flex';
 }
+
+const STT_PROVIDER_DEFAULTS = {
+    groq: {
+        model: 'whisper-large-v3',
+        url: 'https://api.groq.com/openai/v1/audio/transcriptions'
+    },
+    openai: {
+        model: 'whisper-1',
+        url: 'https://api.openai.com/v1/audio/transcriptions'
+    },
+    deepgram: {
+        model: 'nova-2',
+        url: 'https://api.deepgram.com/v1/listen'
+    },
+    custom: {
+        model: 'whisper-large-v3',
+        url: 'https://api.groq.com/openai/v1/audio/transcriptions'
+    }
+};
+
+function onSttProviderChange() {
+    const provider = document.getElementById('sttProvider')?.value;
+    const modelEl = document.getElementById('sttModel');
+    const urlEl = document.getElementById('sttApiUrl');
+    const def = STT_PROVIDER_DEFAULTS[provider] || STT_PROVIDER_DEFAULTS.groq;
+    if (modelEl) modelEl.value = def.model;
+    if (urlEl) urlEl.value = def.url;
+}
+window.onSttProviderChange = onSttProviderChange;
+
+function togglePasswordVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+window.togglePasswordVisibility = togglePasswordVisibility;
+
+function openSttApiKeyModal() {
+    const menu = document.getElementById('settingsMenu');
+    if (menu) {
+        menu.classList.remove('visible', 'opacity-100', 'scale-100');
+        menu.classList.add('invisible', 'opacity-0', 'scale-95');
+        menu.style.pointerEvents = 'none';
+    }
+    const modal = document.getElementById('sttApiKeyModal');
+    if (modal) {
+        modal.classList.remove('opacity-0', 'invisible', 'hidden');
+        modal.style.pointerEvents = 'auto';
+    }
+    loadSttSettings();
+}
+window.openSttApiKeyModal = openSttApiKeyModal;
+
+function closeSttApiKeyModal() {
+    const modal = document.getElementById('sttApiKeyModal');
+    if (modal) {
+        modal.classList.add('opacity-0', 'invisible', 'hidden');
+        modal.style.pointerEvents = 'none';
+    }
+}
+window.closeSttApiKeyModal = closeSttApiKeyModal;
+
+async function loadSttSettings() {
+    const enabledEl = document.getElementById('sttEnabled');
+    const providerEl = document.getElementById('sttProvider');
+    const keyEl = document.getElementById('sttApiKey');
+    const modelEl = document.getElementById('sttModel');
+    const urlEl = document.getElementById('sttApiUrl');
+    const langEl = document.getElementById('sttLanguage');
+    const promptEl = document.getElementById('sttPrompt');
+    const callsEl = document.getElementById('sttTranscribeCalls');
+    const vmEl = document.getElementById('sttTranscribeVoicemails');
+    const minDurEl = document.getElementById('sttMinDuration');
+    const overviewBadge = document.getElementById('sttOverviewStatusBadge');
+    const overviewProvider = document.getElementById('sttOverviewProvider');
+    const overviewLang = document.getElementById('sttOverviewLanguage');
+    const overviewTriggers = document.getElementById('sttOverviewTriggers');
+    if (!enabledEl || !providerEl) return;
+
+    try {
+        const res = await fetch('/api/config/stt');
+        const data = await res.json();
+        if (data.success && data.settings) {
+            const s = data.settings;
+            enabledEl.value = String(s.enabled ? 1 : 0);
+            providerEl.value = s.provider || 'groq';
+            if (keyEl) keyEl.value = s.api_key || '';
+            if (modelEl) modelEl.value = s.model_name || 'whisper-large-v3';
+            if (urlEl) urlEl.value = s.api_url || 'https://api.groq.com/openai/v1/audio/transcriptions';
+            if (langEl) langEl.value = s.language || 'auto';
+            if (promptEl && s.prompt !== undefined) promptEl.value = s.prompt || '';
+            if (callsEl) callsEl.value = String(s.transcribe_calls ? 1 : 0);
+            if (vmEl) vmEl.value = String(s.transcribe_voicemails ? 1 : 0);
+            if (minDurEl) minDurEl.value = String(s.min_duration_sec || 3);
+
+            // Update overview card if present on page
+            if (overviewBadge) {
+                if (!s.enabled) {
+                    overviewBadge.textContent = isRtl ? 'معطل' : 'Disabled';
+                    overviewBadge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-zinc-500/10 text-zinc-400 border border-zinc-500/20';
+                } else if (!s.api_key) {
+                    overviewBadge.textContent = isRtl ? 'مطلوب مفتاح API' : 'API Key Required';
+                    overviewBadge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20';
+                } else {
+                    overviewBadge.textContent = (s.provider || 'Groq').toUpperCase() + ' Active';
+                    overviewBadge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                }
+            }
+            if (overviewProvider) {
+                overviewProvider.textContent = `${(s.provider || 'groq').toUpperCase()}: ${s.model_name || 'whisper-large-v3'}`;
+            }
+            if (overviewLang) {
+                overviewLang.textContent = s.language === 'ar' ? (isRtl ? 'العربية' : 'Arabic') : (s.language === 'en' ? 'English' : (isRtl ? 'كشف تلقائي' : 'Auto-Detect'));
+            }
+            if (overviewTriggers) {
+                const trC = s.transcribe_calls;
+                const trV = s.transcribe_voicemails;
+                if (trC && trV) overviewTriggers.textContent = isRtl ? 'مفعل للمكالمات والبريد الصوتي' : 'Calls & Voicemails';
+                else if (trC) overviewTriggers.textContent = isRtl ? 'المكالمات فقط' : 'Calls Only';
+                else if (trV) overviewTriggers.textContent = isRtl ? 'البريد الصوتي فقط' : 'Voicemails Only';
+                else overviewTriggers.textContent = isRtl ? 'يدوي فقط' : 'Manual Only';
+            }
+        }
+    } catch (_) {}
+}
+window.loadSttSettings = loadSttSettings;
+
+async function saveSttSettings() {
+    const enabledEl = document.getElementById('sttEnabled');
+    const providerEl = document.getElementById('sttProvider');
+    const keyEl = document.getElementById('sttApiKey');
+    const modelEl = document.getElementById('sttModel');
+    const urlEl = document.getElementById('sttApiUrl');
+    const langEl = document.getElementById('sttLanguage');
+    const promptEl = document.getElementById('sttPrompt');
+    const callsEl = document.getElementById('sttTranscribeCalls');
+    const vmEl = document.getElementById('sttTranscribeVoicemails');
+    const minDurEl = document.getElementById('sttMinDuration');
+    if (!enabledEl || !providerEl) return;
+
+    try {
+        const payload = {
+            enabled: enabledEl.value === '1' ? 1 : 0,
+            provider: providerEl.value,
+            api_key: keyEl ? keyEl.value : '',
+            api_url: urlEl ? urlEl.value : '',
+            model_name: modelEl ? modelEl.value : 'whisper-large-v3',
+            language: langEl ? langEl.value : 'auto',
+            prompt: promptEl ? promptEl.value : '',
+            transcribe_calls: callsEl.value === '1' ? 1 : 0,
+            transcribe_voicemails: vmEl.value === '1' ? 1 : 0,
+            min_duration_sec: parseInt(minDurEl.value, 10) || 3
+        };
+        const res = await fetch('/api/config/stt', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(isRtl ? 'تم حفظ إعدادات مزود الذكاء الاصطناعي بنجاح.' : 'Cloud AI Speech-to-Text settings saved successfully.', 'success');
+        } else {
+            showToast(data.error || 'Failed to save STT settings', 'error');
+        }
+    } catch (e) {
+        showToast('Error saving STT settings: ' + e.message, 'error');
+    }
+}
+window.saveSttSettings = saveSttSettings;
+
+async function executeSaveSidebarSttSettings(e) {
+    if (e) e.preventDefault();
+    await saveSttSettings();
+    closeSttApiKeyModal();
+    loadSttSettings();
+    return false;
+}
+window.executeSaveSidebarSttSettings = executeSaveSidebarSttSettings;
+
+async function testSttApiConnection() {
+    const providerEl = document.getElementById('sttProvider');
+    const keyEl = document.getElementById('sttApiKey');
+    const modelEl = document.getElementById('sttModel');
+    const urlEl = document.getElementById('sttApiUrl');
+    const langEl = document.getElementById('sttLanguage');
+    const promptEl = document.getElementById('sttPrompt');
+    const btnText = document.getElementById('testSttBtnText');
+    if (!keyEl || !keyEl.value.trim()) {
+        showToast(isRtl ? 'يرجى إدخال مفتاح الواجهة (API Key) أولاً.' : 'Please enter an API key first.', 'error');
+        return;
+    }
+
+    const origText = btnText ? btnText.textContent : '';
+    if (btnText) btnText.textContent = isRtl ? 'جاري التحقق...' : 'Testing...';
+
+    try {
+        const res = await fetch('/api/config/stt/test-connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                provider: providerEl.value,
+                api_key: keyEl.value.trim(),
+                api_url: urlEl ? urlEl.value.trim() : '',
+                model_name: modelEl ? modelEl.value.trim() : '',
+                language: langEl ? langEl.value : 'auto',
+                prompt: promptEl ? promptEl.value : ''
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(isRtl ? `تم التحقق بنجاح! الاتصال يعمل (${data.latencyMs}ms).` : `Success! API connection verified (${data.latencyMs}ms).`, 'success');
+        } else {
+            showToast(data.error || 'API validation failed', 'error');
+        }
+    } catch (e) {
+        showToast('Error testing connection: ' + e.message, 'error');
+    } finally {
+        if (btnText) btnText.textContent = origText;
+    }
+}
+window.testSttApiConnection = testSttApiConnection;
 
 function filterTimezones() {
     var query = document.getElementById('tzSearch').value.toLowerCase();

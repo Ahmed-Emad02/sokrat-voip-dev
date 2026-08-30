@@ -215,6 +215,24 @@ test('views/config.ejs renders AI Speech-to-Text Transcription Engine Card', asy
     assert.ok(html.includes('scanAndTranscribeQueue'), 'config.ejs must wire scanAndTranscribeQueue handler');
 });
 
+test('views/sidebar.ejs renders AI STT settings button and sttApiKeyModal in settings menu', async () => {
+    const sidebarEjsPath = path.join(__dirname, '../views/sidebar.ejs');
+    const html = await ejs.renderFile(sidebarEjsPath, {
+        currentLang: 'en',
+        isRtl: false,
+        isSuperAdmin: true,
+        isRootUser: true,
+        currentUser: 'admin',
+        allowedTabs: ['dashboard', 'cdr', 'voicemails', 'config']
+    });
+
+    assert.ok(html.includes('openSttApiKeyModal()'), 'sidebar.ejs must render openSttApiKeyModal() button in settings menu');
+    assert.ok(html.includes('id="sttApiKeyModal"'), 'sidebar.ejs must render sttApiKeyModal');
+    assert.ok(html.includes('id="sttProvider"'), 'sidebar.ejs must render sttProvider select');
+    assert.ok(html.includes('id="sttApiKey"'), 'sidebar.ejs must render sttApiKey input');
+    assert.ok(html.includes('testSttApiConnection()'), 'sidebar.ejs must render testSttApiConnection() handler');
+});
+
 test('transcribeWithCloudAi validates API key presence and rejects empty key', async () => {
     const { transcribeWithCloudAi } = require('../scripts/stt-worker');
     await assert.rejects(async () => {
