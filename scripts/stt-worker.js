@@ -145,7 +145,6 @@ async function runWhisperTranscription(wavPath, modelName = 'base', language = '
         throw new Error(`Whisper model file not found in ${MODELS_DIR}`);
     }
 
-    const tmpOutBase = path.join(os.tmpdir(), `whisper_out_${Date.now()}_${Math.random().toString(36).slice(2)}`);
     const args = [
         '-m', modelFile,
         '-f', wavPath,
@@ -157,7 +156,8 @@ async function runWhisperTranscription(wavPath, modelName = 'base', language = '
         '-sns',               // Suppress non-speech tokens
         '-et', '2.4',         // Entropy threshold
         '-lpt', '-1.0',       // Logprob threshold
-        '--best-of', '3'      // Quality candidate search
+        '-bs', '1',           // Fast greedy beam search (prevents looping)
+        '-bo', '1'            // Single best candidate
     ];
 
     if (language && language !== 'auto') {
@@ -167,7 +167,7 @@ async function runWhisperTranscription(wavPath, modelName = 'base', language = '
     }
 
     try {
-        await execFileAsync(WHISPER_BIN, args, { timeout: 180000 });
+        await execFileAsync(WHISPER_BIN, args, { timeout: 300000 });
         const txtFile = `${tmpOutBase}.txt`;
         let transcript = '';
         if (fs.existsSync(txtFile)) {
