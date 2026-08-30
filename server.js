@@ -593,9 +593,13 @@ async function initAuthDb() {
         CREATE TABLE IF NOT EXISTS \`asterisk\`.\`stt_settings\` (
             \`id\` INT PRIMARY KEY DEFAULT 1,
             \`enabled\` TINYINT(1) DEFAULT 1,
-            \`engine\` VARCHAR(32) DEFAULT 'whisper.cpp',
-            \`model_name\` VARCHAR(32) DEFAULT 'base',
+            \`engine\` VARCHAR(32) DEFAULT 'cloud_api',
+            \`provider\` VARCHAR(32) DEFAULT 'groq',
+            \`api_key\` TEXT DEFAULT NULL,
+            \`api_url\` VARCHAR(255) DEFAULT 'https://api.groq.com/openai/v1/audio/transcriptions',
+            \`model_name\` VARCHAR(64) DEFAULT 'whisper-large-v3',
             \`language\` VARCHAR(10) DEFAULT 'auto',
+            \`prompt\` TEXT DEFAULT NULL,
             \`transcribe_calls\` TINYINT(1) DEFAULT 1,
             \`transcribe_voicemails\` TINYINT(1) DEFAULT 1,
             \`min_duration_sec\` INT DEFAULT 3,
@@ -603,9 +607,11 @@ async function initAuthDb() {
             \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `provider` VARCHAR(32) DEFAULT \'groq\''); } catch (_) {}
+    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `api_key` TEXT DEFAULT NULL'); } catch (_) {}
+    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `api_url` VARCHAR(255) DEFAULT \'https://api.groq.com/openai/v1/audio/transcriptions\''); } catch (_) {}
+    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `prompt` TEXT DEFAULT NULL'); } catch (_) {}
     await conn.execute('INSERT IGNORE INTO `asterisk`.`stt_settings` (id) VALUES (1)');
-
-
     // Default dispositions
     const defaultDispositions = [
         ['Interested', 'interested'],
@@ -4327,10 +4333,21 @@ app.post('/api/transcripts/voicemail/:mailbox/:file/transcribe', async (req, res
     }
 });
 
-// 5. GET /api/config/stt - Get STT engine settings
+// 5. GET /api/config/stt - Get Cloud AI STT engine settings
 app.get('/api/config/stt', async (req, res) => {
     try {
-        let settings = { enabled: 1, engine: 'whisper.cpp', model_name: 'base', language: 'auto', transcribe_calls: 1, transcribe_voicemails: 1, min_duration_sec: 3 };
+        let settings = {
+            enabled: 1,
+            provider: 'groq',
+            api_key: '',
+            api_url: 'https://api.groq.com/openai/v1/audio/transcriptions',
+            model_name: 'whisper-large-v3',
+            language: 'auto',
+            prompt: 'محادثة هاتفية خدمة عملاء بالعامية المصرية: ألو، أيوة يا فندم، تمام، إزيك، معاك، الخط، حاضر، شكراً، مع السلامة.',
+            transcribe_calls: 1,
+            transcribe_voicemails: 1,
+            min_duration_sec: 3
+        };
         try {
             const [rows] = await pool.query('SELECT * FROM `asterisk`.`stt_settings` WHERE id = 1');
             if (rows && rows.length > 0) settings = rows[0];
@@ -4341,36 +4358,78 @@ app.get('/api/config/stt', async (req, res) => {
     }
 });
 
-// 6. PUT /api/config/stt - Update STT engine settings
+// 6. PUT /api/config/stt - Update Cloud AI STT engine settings
 app.put('/api/config/stt', async (req, res) => {
     try {
-        const { enabled, model_name, language, transcribe_calls, transcribe_voicemails, min_duration_sec } = req.body;
+        const {
+            enabled,
+            provider,
+            api_key,
+            api_url,
+            model_name,
+            language,
+            prompt,
+            transcribe_calls,
+            transcribe_voicemails,
+            min_duration_sec
+        } = req.body;
+
         const isEnabled = (enabled === 1 || enabled === true || enabled === '1') ? 1 : 0;
-        const model = ['tiny', 'base', 'small', 'medium'].includes(model_name) ? model_name : 'base';
+        const validProvider = ['groq', 'openai', 'deepgram', 'custom'].includes(provider) ? provider : 'groq';
+        const apiKeyVal = api_key !== undefined ? String(api_key).trim() : '';
+        const apiUrlVal = api_url !== undefined ? String(api_url).trim() : '';
+        const model = String(model_name || 'whisper-large-v3').trim();
         const lang = String(language || 'auto').trim();
+        const promptVal = prompt !== undefined ? String(prompt).trim() : '';
         const trCalls = (transcribe_calls === 1 || transcribe_calls === true || transcribe_calls === '1') ? 1 : 0;
         const trVm = (transcribe_voicemails === 1 || transcribe_voicemails === true || transcribe_voicemails === '1') ? 1 : 0;
         const minDur = Math.max(1, parseInt(min_duration_sec, 10) || 3);
 
         await pool.query(`
-            INSERT INTO \`asterisk\`.\`stt_settings\` (id, enabled, engine, model_name, language, transcribe_calls, transcribe_voicemails, min_duration_sec)
-            VALUES (1, ?, 'whisper.cpp', ?, ?, ?, ?, ?)
+            INSERT INTO \`asterisk\`.\`stt_settings\` (id, enabled, engine, provider, api_key, api_url, model_name, language, prompt, transcribe_calls, transcribe_voicemails, min_duration_sec)
+            VALUES (1, ?, 'cloud_api', ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 enabled = VALUES(enabled),
+                provider = VALUES(provider),
+                api_key = VALUES(api_key),
+                api_url = VALUES(api_url),
                 model_name = VALUES(model_name),
                 language = VALUES(language),
+                prompt = VALUES(prompt),
                 transcribe_calls = VALUES(transcribe_calls),
                 transcribe_voicemails = VALUES(transcribe_voicemails),
                 min_duration_sec = VALUES(min_duration_sec)
-        `, [isEnabled, model, lang, trCalls, trVm, minDur]);
+        `, [isEnabled, validProvider, apiKeyVal, apiUrlVal, model, lang, promptVal, trCalls, trVm, minDur]);
 
         res.json({
             success: true,
-            settings: { enabled: isEnabled, model_name: model, language: lang, transcribe_calls: trCalls, transcribe_voicemails: trVm, min_duration_sec: minDur },
-            message: 'Speech-to-Text settings updated successfully.'
+            settings: {
+                enabled: isEnabled,
+                provider: validProvider,
+                api_key: apiKeyVal,
+                api_url: apiUrlVal,
+                model_name: model,
+                language: lang,
+                prompt: promptVal,
+                transcribe_calls: trCalls,
+                transcribe_voicemails: trVm,
+                min_duration_sec: minDur
+            },
+            message: 'Cloud AI Speech-to-Text settings updated successfully.'
         });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 6b. POST /api/config/stt/test-connection - Verify Cloud AI API connection and key validity
+app.post('/api/config/stt/test-connection', async (req, res) => {
+    try {
+        const { testCloudSttConnection } = require('./scripts/stt-worker');
+        const result = await testCloudSttConnection(req.body);
+        res.json(result);
+    } catch (e) {
+        res.status(400).json({ success: false, error: e.message });
     }
 });
 

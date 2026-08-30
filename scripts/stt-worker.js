@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Sokrat VoIP - Local Speech-To-Text (STT) Background Worker
- * Powered by whisper.cpp (Local On-Premise AI Transcription)
+ * Sokrat VoIP - Cloud AI Speech-To-Text (STT) Background Worker
+ * Supports OpenAI, Groq, Deepgram, and OpenAI-Compatible Custom Endpoints
  */
 
 const mysql = require('mysql2/promise');
@@ -18,10 +18,14 @@ const DB_CONFIG = {
     connectionLimit: 4
 };
 
-const WHISPER_BIN = '/usr/local/bin/whisper-cli';
-const MODELS_DIR = '/opt/whisper.cpp/models';
 const MONITOR_ROOT = '/var/spool/asterisk/monitor';
 const VM_ROOT = '/var/spool/asterisk/voicemail/default';
+
+const DEFAULT_PROMPTS = {
+    ar: 'محادثة هاتفية خدمة عملاء بالعامية المصرية: ألو، أيوة يا فندم، تمام، إزيك، معاك، الخط، حاضر، شكراً، مع السلامة.',
+    en: 'Phone conversation: hello, yes, okay, thank you, goodbye.',
+    auto: 'محادثة هاتفية بالعامية المصرية: ألو، أيوة، تمام، إزيك، شكراً. Phone call.'
+};
 
 let isRunning = true;
 let isBusy = false;
@@ -95,110 +99,144 @@ function resolveVoicemailAudioPath(mailbox, msgFile) {
     return null;
 }
 
-const EGYPTIAN_ARABIC_PROMPT = 'محادثة هاتفية خدمة عملاء بالعامية المصرية: ألو، أيوة يا فندم، تمام، إزيك، معاك، الخط، الدونجل، الصوت، واضح، حاضر، شكراً، مع السلامة.';
-
-function filterForeignHallucinations(line) {
-    if (!line) return '';
-    // Strip pure Latin artifact tokens (e.g. "canción", "imperlational", "básicamente") that bleed into Arabic audio on pauses
-    const arabicChars = (line.match(/[\u0600-\u06FF]/g) || []).length;
-    const latinChars = (line.match(/[a-zA-Z]/g) || []).length;
-    if (arabicChars > 0 && latinChars > 0 && arabicChars >= latinChars) {
-        return line.replace(/[a-zA-Z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF]{3,}/g, '').replace(/\s{2,}/g, ' ').trim();
-    }
-    return line.trim();
-}
-
-function cleanTranscript(rawText) {
-    if (!rawText || typeof rawText !== 'string') return '';
-    const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    const cleanedLines = [];
-
-    for (let line of lines) {
-        line = filterForeignHallucinations(line);
-        if (!line || line.length < 2) continue;
-
-        // Collapse repetitive token loops within line (e.g. "نفسك نفسك نفسك" -> "نفسك")
-        line = line.replace(/(\b\S+\b)(?:\s+\1\b){2,}/gu, '$1');
-        line = line.replace(/(\b\S+\s+\S+\b)(?:\s+\1\b){2,}/gu, '$1');
-
-        // Remove timestamp brackets if line has no speech text
-        const textWithoutTimestamp = line.replace(/^\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*/, '').trim();
-        if (!textWithoutTimestamp || textWithoutTimestamp.length < 2) continue;
-
-        if (cleanedLines.length === 0 || cleanedLines[cleanedLines.length - 1] !== line) {
-            cleanedLines.push(line);
-        }
-    }
-
-    return cleanedLines.join('\n');
-}
-
-async function convertTo16kWav(inputPath, outputPath) {
-    // Normalizes to 16kHz 16-bit Mono PCM WAV with speech bandpass & loudness normalization
+async function prepareAudioForUpload(inputPath, outputPath) {
+    // Normalizes to high-quality compressed 16kHz mono MP3 for fast upload and high transcription accuracy
     await execFileAsync('ffmpeg', [
         '-y',
         '-i', inputPath,
         '-ar', '16000',
         '-ac', '1',
-        '-af', 'highpass=f=150,lowpass=f=3800,loudnorm=I=-16:TP=-1.5:LRA=11',
-        '-c:a', 'pcm_s16le',
+        '-af', 'highpass=f=120,lowpass=f=3800,loudnorm=I=-16:TP=-1.5:LRA=11',
+        '-b:a', '64k',
         outputPath
-    ], { timeout: 45000 });
+    ], { timeout: 30000 });
 }
 
-async function runWhisperTranscription(wavPath, modelName = 'base', language = 'auto') {
-    let modelFile = path.join(MODELS_DIR, `ggml-${modelName}.bin`);
-    if (!fs.existsSync(modelFile)) {
-        modelFile = path.join(MODELS_DIR, 'ggml-small.bin');
-    }
-    if (!fs.existsSync(modelFile)) {
-        modelFile = path.join(MODELS_DIR, 'ggml-base.bin');
-    }
-    if (!fs.existsSync(modelFile)) {
-        modelFile = path.join(MODELS_DIR, 'ggml-tiny.bin');
-    }
-    if (!fs.existsSync(modelFile)) {
-        throw new Error(`Whisper model file not found in ${MODELS_DIR}`);
-    }
-    const tmpOutBase = path.join(os.tmpdir(), `whisper_out_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-    const prompt = (language === 'ar' || language === 'auto')
-        ? EGYPTIAN_ARABIC_PROMPT
-        : 'Phone conversation: hello, yes, okay, thanks, goodbye.';
+async function transcribeWithCloudAi(audioFilePath, options = {}) {
+    const {
+        provider = 'groq',
+        apiKey = '',
+        apiUrl = '',
+        modelName = 'whisper-large-v3',
+        language = 'auto',
+        prompt = ''
+    } = options;
 
-    const args = [
-        '-m', modelFile,
-        '-f', wavPath,
-        '--output-txt',
-        '-of', tmpOutBase,
-        '-mc', '0',          // Stop cross-segment context repetition loop
-        '-nth', '0.60',       // Skip silent pauses
-        '-sns',               // Suppress non-speech tokens
-        '-et', '2.4',         // Entropy threshold
-        '-lpt', '-1.0',       // Logprob threshold
-        '-bs', '1',           // Fast greedy beam search (prevents looping)
-        '-bo', '1',
-        '--prompt', prompt
-    ];
+    if (!apiKey) {
+        throw new Error('AI Provider API key is not configured. Please set your API key in PBX Settings -> Speech-to-Text.');
+    }
+
+    const fileBuffer = fs.readFileSync(audioFilePath);
+    const fileName = path.basename(audioFilePath);
+    const resolvedPrompt = prompt || DEFAULT_PROMPTS[language] || DEFAULT_PROMPTS.ar;
+
+    // --- Provider 1: Deepgram ---
+    if (provider === 'deepgram') {
+        const targetUrl = new URL(apiUrl || 'https://api.deepgram.com/v1/listen');
+        if (modelName) targetUrl.searchParams.set('model', modelName);
+        if (language && language !== 'auto') targetUrl.searchParams.set('language', language);
+        else targetUrl.searchParams.set('detect_language', 'true');
+        targetUrl.searchParams.set('smart_format', 'true');
+        targetUrl.searchParams.set('punctuate', 'true');
+
+        const res = await fetch(targetUrl.toString(), {
+            method: 'POST',
+            headers: {
+                'Authorization': `Token ${apiKey}`,
+                'Content-Type': audioFilePath.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav'
+            },
+            body: fileBuffer
+        });
+
+        if (!res.ok) {
+            const errBody = await res.text();
+            throw new Error(`Deepgram API error (${res.status}): ${errBody}`);
+        }
+
+        const data = await res.json();
+        const transcript = data?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+        return transcript.trim();
+    }
+
+    // --- Provider 2: Groq / OpenAI / Custom OpenAI-compatible ---
+    let endpoint = apiUrl;
+    if (!endpoint) {
+        if (provider === 'openai') {
+            endpoint = 'https://api.openai.com/v1/audio/transcriptions';
+        } else {
+            endpoint = 'https://api.groq.com/openai/v1/audio/transcriptions';
+        }
+    }
+
+    const formData = new FormData();
+    const blob = new Blob([fileBuffer], { type: audioFilePath.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav' });
+    formData.append('file', blob, fileName);
+
+    let effectiveModel = modelName;
+    if (!effectiveModel || effectiveModel === 'base' || effectiveModel === 'small' || effectiveModel === 'tiny') {
+        if (provider === 'openai') effectiveModel = 'whisper-1';
+        else effectiveModel = 'whisper-large-v3';
+    }
+    formData.append('model', effectiveModel);
 
     if (language && language !== 'auto') {
-        args.push('-l', language);
-    } else {
-        args.push('-l', 'ar');
+        formData.append('language', language);
+    }
+    if (resolvedPrompt) {
+        formData.append('prompt', resolvedPrompt);
+    }
+    formData.append('temperature', '0.0');
+
+    const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: formData
+    });
+
+    if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(`${provider.toUpperCase()} API error (${res.status}): ${errBody}`);
     }
 
+    const data = await res.json();
+    return (data.text || '').trim();
+}
+
+async function testCloudSttConnection(settings) {
+    const startTime = Date.now();
+    const tmpAudio = path.join(os.tmpdir(), `stt_test_${Date.now()}.wav`);
+
     try {
-        await execFileAsync(WHISPER_BIN, args, { timeout: 300000 });
-        const txtFile = `${tmpOutBase}.txt`;
-        let transcript = '';
-        if (fs.existsSync(txtFile)) {
-            transcript = fs.readFileSync(txtFile, 'utf8').trim();
-            fs.unlinkSync(txtFile);
-        }
-        return cleanTranscript(transcript);
+        // Generate a 1-second synthetic silence/tone WAV file using ffmpeg
+        await execFileAsync('ffmpeg', [
+            '-y',
+            '-f', 'lavfi',
+            '-i', 'sine=frequency=440:duration=1',
+            '-ar', '16000',
+            '-ac', '1',
+            tmpAudio
+        ], { timeout: 10000 });
+
+        const resultText = await transcribeWithCloudAi(tmpAudio, {
+            provider: settings.provider || 'groq',
+            apiKey: settings.api_key || settings.apiKey,
+            apiUrl: settings.api_url || settings.apiUrl,
+            modelName: settings.model_name || settings.modelName,
+            language: settings.language || 'auto',
+            prompt: settings.prompt
+        });
+
+        const latencyMs = Date.now() - startTime;
+        return {
+            success: true,
+            message: `API connection verified successfully (${latencyMs}ms response time).`,
+            latencyMs,
+            sampleResult: resultText || '[No speech in test tone]'
+        };
     } finally {
-        try {
-            if (fs.existsSync(`${tmpOutBase}.txt`)) fs.unlinkSync(`${tmpOutBase}.txt`);
-        } catch (_) {}
+        try { if (fs.existsSync(tmpAudio)) fs.unlinkSync(tmpAudio); } catch (_) {}
     }
 }
 
@@ -211,8 +249,12 @@ async function getSttSettings(pool) {
     } catch (_) {}
     return {
         enabled: 1,
-        model_name: 'base',
+        provider: 'groq',
+        api_key: '',
+        api_url: 'https://api.groq.com/openai/v1/audio/transcriptions',
+        model_name: 'whisper-large-v3',
         language: 'auto',
+        prompt: DEFAULT_PROMPTS.ar,
         transcribe_calls: 1,
         transcribe_voicemails: 1,
         min_duration_sec: 3
@@ -225,7 +267,7 @@ async function processNextJob(pool) {
 
     try {
         const settings = await getSttSettings(pool);
-        if (!settings.enabled) {
+        if (!settings.enabled || !settings.api_key) {
             return;
         }
 
@@ -265,27 +307,34 @@ async function processNextJob(pool) {
                     return;
                 }
 
-                const tmpWav = path.join(os.tmpdir(), `stt_call_${job.uniqueid}_${Date.now()}.wav`);
+                const tmpUploadAudio = path.join(os.tmpdir(), `stt_upload_${job.uniqueid}_${Date.now()}.mp3`);
                 try {
-                    await convertTo16kWav(audioPath, tmpWav);
+                    await prepareAudioForUpload(audioPath, tmpUploadAudio);
                     const lang = job.language && job.language !== 'auto' ? job.language : settings.language;
-                    const transcript = await runWhisperTranscription(tmpWav, settings.model_name || 'base', lang);
+                    const transcript = await transcribeWithCloudAi(tmpUploadAudio, {
+                        provider: settings.provider,
+                        apiKey: settings.api_key,
+                        apiUrl: settings.api_url,
+                        modelName: settings.model_name,
+                        language: lang,
+                        prompt: settings.prompt
+                    });
 
                     await pool.query(`
                         UPDATE \`asteriskcdrdb\`.\`cdr_transcriptions\`
                         SET status = 'completed', transcript = ?, duration_sec = ?, completed_at = NOW()
                         WHERE id = ?
-                    `, [transcript || '[No audible speech detected]', duration, job.id]);
-                    console.log(`[STT-WORKER] Transcribed call ${job.uniqueid} (${duration}s): "${(transcript || '').slice(0, 60)}..."`);
+                    `, [transcript || '[No speech detected]', duration, job.id]);
+                    console.log(`[STT-CLOUD-WORKER] Transcribed call ${job.uniqueid} (${duration}s via ${settings.provider}): "${(transcript || '').slice(0, 80)}..."`);
                 } catch (err) {
-                    console.error(`[STT-WORKER] Error transcribing call ${job.uniqueid}:`, err.message);
+                    console.error(`[STT-CLOUD-WORKER] Error transcribing call ${job.uniqueid}:`, err.message);
                     await pool.query(`
                         UPDATE \`asteriskcdrdb\`.\`cdr_transcriptions\`
                         SET status = 'failed', error_message = ?
                         WHERE id = ?
                     `, [err.message.slice(0, 250), job.id]);
                 } finally {
-                    try { if (fs.existsSync(tmpWav)) fs.unlinkSync(tmpWav); } catch (_) {}
+                    try { if (fs.existsSync(tmpUploadAudio)) fs.unlinkSync(tmpUploadAudio); } catch (_) {}
                 }
                 return;
             }
@@ -315,62 +364,70 @@ async function processNextJob(pool) {
                     return;
                 }
 
-                const tmpWav = path.join(os.tmpdir(), `stt_vm_${job.mailbox}_${Date.now()}.wav`);
+                const tmpUploadAudio = path.join(os.tmpdir(), `stt_vm_upload_${job.mailbox}_${Date.now()}.mp3`);
                 try {
-                    await convertTo16kWav(audioPath, tmpWav);
-                    const transcript = await runWhisperTranscription(tmpWav, settings.model_name || 'base', settings.language || 'auto');
+                    await prepareAudioForUpload(audioPath, tmpUploadAudio);
+                    const transcript = await transcribeWithCloudAi(tmpUploadAudio, {
+                        provider: settings.provider,
+                        apiKey: settings.api_key,
+                        apiUrl: settings.api_url,
+                        modelName: settings.model_name,
+                        language: settings.language || 'auto',
+                        prompt: settings.prompt
+                    });
 
                     await pool.query(`
                         UPDATE \`asteriskcdrdb\`.\`voicemail_transcriptions\`
                         SET status = 'completed', transcript = ?
                         WHERE id = ?
-                    `, [transcript || '[No audible speech in voicemail]', job.id]);
-                    console.log(`[STT-WORKER] Transcribed voicemail [${job.mailbox}/${job.msg_file}]: "${(transcript || '').slice(0, 60)}..."`);
+                    `, [transcript || '[No speech in voicemail]', job.id]);
+                    console.log(`[STT-CLOUD-WORKER] Transcribed voicemail [${job.mailbox}/${job.msg_file}]: "${(transcript || '').slice(0, 80)}..."`);
                 } catch (err) {
-                    console.error(`[STT-WORKER] Error transcribing voicemail [${job.mailbox}/${job.msg_file}]:`, err.message);
+                    console.error(`[STT-CLOUD-WORKER] Error transcribing voicemail [${job.mailbox}/${job.msg_file}]:`, err.message);
                     await pool.query(`
                         UPDATE \`asteriskcdrdb\`.\`voicemail_transcriptions\`
                         SET status = 'failed', transcript = ?
                         WHERE id = ?
                     `, [`[Transcription error: ${err.message}]`, job.id]);
                 } finally {
-                    try { if (fs.existsSync(tmpWav)) fs.unlinkSync(tmpWav); } catch (_) {}
+                    try { if (fs.existsSync(tmpUploadAudio)) fs.unlinkSync(tmpUploadAudio); } catch (_) {}
                 }
             }
         }
     } catch (err) {
-        console.error('[STT-WORKER] Loop error:', err.message);
+        console.error('[STT-CLOUD-WORKER] Loop error:', err.message);
     } finally {
         isBusy = false;
     }
 }
 
 async function startWorker() {
-    console.log('[STT-WORKER] Starting Sokrat Local Speech-To-Text Worker...');
+    console.log('[STT-CLOUD-WORKER] Starting Sokrat Cloud AI Speech-To-Text Worker...');
     const pool = mysql.createPool(DB_CONFIG);
 
     process.on('SIGINT', async () => {
         isRunning = false;
-        console.log('[STT-WORKER] Shutting down gracefully...');
+        console.log('[STT-CLOUD-WORKER] Shutting down gracefully...');
         await pool.end();
         process.exit(0);
     });
 
     process.on('SIGTERM', async () => {
         isRunning = false;
-        console.log('[STT-WORKER] Received SIGTERM. Shutting down...');
+        console.log('[STT-CLOUD-WORKER] Received SIGTERM. Shutting down...');
         await pool.end();
         process.exit(0);
     });
+
     while (isRunning) {
         await processNextJob(pool);
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 2500));
     }
 }
 
 if (require.main === module) {
     startWorker().catch(err => {
-        console.error('[STT-WORKER] Fatal startup error:', err);
+        console.error('[STT-CLOUD-WORKER] Fatal startup error:', err);
         process.exit(1);
     });
 }
@@ -378,8 +435,9 @@ if (require.main === module) {
 module.exports = {
     resolveCallAudioPath,
     resolveVoicemailAudioPath,
-    convertTo16kWav,
-    runWhisperTranscription,
-    cleanTranscript,
+    prepareAudioForUpload,
+    transcribeWithCloudAi,
+    testCloudSttConnection,
+    getSttSettings,
     processNextJob
 };

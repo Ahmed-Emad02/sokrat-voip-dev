@@ -1360,33 +1360,11 @@ systemctl daemon-reload
 systemctl enable --now sokrat-softphone
 echo "  Sokrat softphone daemon enabled and started"
 
-# Provision Sokrat Local Speech-To-Text (whisper.cpp) Worker Daemon
-echo "  Provisioning Sokrat Local Speech-To-Text Worker..."
-yum install -y cmake 2>/dev/null || true
-if [ ! -d /opt/whisper.cpp ]; then
-    git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git /opt/whisper.cpp
-fi
-if [ ! -f /opt/whisper.cpp/build/bin/whisper-cli ]; then
-    cd /opt/whisper.cpp
-    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD_LIBRARIES="-lstdc++fs"
-    cmake --build build --config Release -j$(nproc)
-fi
-mkdir -p /opt/whisper.cpp/models
-if [ ! -f /opt/whisper.cpp/models/ggml-base.bin ]; then
-    curl -L -o /opt/whisper.cpp/models/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin || true
-fi
-if [ ! -f /opt/whisper.cpp/models/ggml-tiny.bin ]; then
-    curl -L -o /opt/whisper.cpp/models/ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin || true
-fi
-cat > /usr/local/bin/whisper-cli << 'WRAPPER'
-#!/bin/bash
-export LD_LIBRARY_PATH="/opt/whisper.cpp/build/bin:$LD_LIBRARY_PATH"
-exec /opt/whisper.cpp/build/bin/whisper-cli "$@"
-WRAPPER
-chmod +x /usr/local/bin/whisper-cli
+# Provision Sokrat Cloud AI Speech-To-Text Worker Daemon
+echo "  Provisioning Sokrat Cloud AI Speech-To-Text Worker..."
 cat > /etc/systemd/system/sokrat-stt.service << 'UNIT'
 [Unit]
-Description=Sokrat VoIP Local Speech-To-Text Transcription Worker
+Description=Sokrat VoIP Cloud AI Speech-To-Text Worker
 After=network.target mariadb.service mysqld.service asterisk.service
 Wants=asterisk.service
 
@@ -1400,15 +1378,13 @@ RestartSec=5
 Nice=15
 CPUShares=256
 Environment=NODE_ENV=production
-Environment=PATH=/usr/local/bin:/usr/bin:/bin:/opt/whisper.cpp/build/bin
-Environment=LD_LIBRARY_PATH=/opt/whisper.cpp/build/bin
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
 systemctl enable --now sokrat-stt 2>/dev/null || true
-echo "  Sokrat STT worker daemon enabled and started"
+echo "  Sokrat Cloud AI STT worker daemon enabled and started"
 
 # ──────────────────────────────────────────────
 # Step 13 — Set timezone to Africa/Cairo

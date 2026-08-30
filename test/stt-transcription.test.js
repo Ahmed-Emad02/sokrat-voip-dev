@@ -5,22 +5,16 @@ const path = require('path');
 const { execSync } = require('child_process');
 const ejs = require('ejs');
 
-test('whisper.cpp binaries and models exist on disk', () => {
-    assert.ok(fs.existsSync('/usr/local/bin/whisper-cli'), '/usr/local/bin/whisper-cli wrapper must exist');
-    assert.ok(fs.existsSync('/opt/whisper.cpp/build/bin/whisper-cli'), 'whisper-cli binary must exist');
-    assert.ok(fs.existsSync('/opt/whisper.cpp/models/ggml-base.bin'), 'ggml-base.bin model must exist');
-    assert.ok(fs.existsSync('/opt/whisper.cpp/models/ggml-tiny.bin'), 'ggml-tiny.bin model must exist');
-});
-
-test('scripts/stt-worker.js and scripts/enqueue-stt.js exist and export required helpers', () => {
+test('scripts/stt-worker.js and scripts/enqueue-stt.js exist and export required Cloud AI helpers', () => {
     assert.ok(fs.existsSync(path.join(__dirname, '../scripts/stt-worker.js')), 'scripts/stt-worker.js must exist');
     assert.ok(fs.existsSync(path.join(__dirname, '../scripts/enqueue-stt.js')), 'scripts/enqueue-stt.js must exist');
 
     const worker = require('../scripts/stt-worker');
     assert.equal(typeof worker.resolveCallAudioPath, 'function', 'resolveCallAudioPath must be exported');
     assert.equal(typeof worker.resolveVoicemailAudioPath, 'function', 'resolveVoicemailAudioPath must be exported');
-    assert.equal(typeof worker.convertTo16kWav, 'function', 'convertTo16kWav must be exported');
-    assert.equal(typeof worker.runWhisperTranscription, 'function', 'runWhisperTranscription must be exported');
+    assert.equal(typeof worker.prepareAudioForUpload, 'function', 'prepareAudioForUpload must be exported');
+    assert.equal(typeof worker.transcribeWithCloudAi, 'function', 'transcribeWithCloudAi must be exported');
+    assert.equal(typeof worker.testCloudSttConnection, 'function', 'testCloudSttConnection must be exported');
 
     const enqueue = require('../scripts/enqueue-stt');
     assert.equal(typeof enqueue.enqueueCall, 'function', 'enqueueCall must be exported');
@@ -44,8 +38,8 @@ test('server.js defines all required STT REST API routes and CDR/Voicemail integ
     assert.ok(serverJs.includes("app.post('/api/transcripts/voicemail/:mailbox/:file/transcribe'"), 'POST /api/transcripts/voicemail route must exist');
     assert.ok(serverJs.includes("app.get('/api/config/stt'"), 'GET /api/config/stt route must exist');
     assert.ok(serverJs.includes("app.put('/api/config/stt'"), 'PUT /api/config/stt route must exist');
+    assert.ok(serverJs.includes("app.post('/api/config/stt/test-connection'"), 'POST /api/config/stt/test-connection route must exist');
     assert.ok(serverJs.includes("app.post('/api/transcripts/scan'"), 'POST /api/transcripts/scan route must exist');
-
     assert.ok(serverJs.includes('cdr_transcriptions'), 'server.js must query cdr_transcriptions table');
     assert.ok(serverJs.includes('voicemail_transcriptions'), 'server.js must query voicemail_transcriptions table');
     assert.ok(serverJs.includes('searchTranscript'), 'server.js must support searchTranscript parameter');
@@ -203,22 +197,27 @@ test('views/config.ejs renders AI Speech-to-Text Transcription Engine Card', asy
         allowedTabs: ['modem', 'extensions'],
         isTabAllowed: () => true
     });
-
+    assert.ok(html.includes('id="sttApiKeyModal"'), 'config.ejs must render sttApiKeyModal popup');
+    assert.ok(html.includes('openSttApiKeyModal'), 'config.ejs must wire openSttApiKeyModal button handler');
+    assert.ok(html.includes('id="sttOverviewStatusBadge"'), 'config.ejs must render sttOverviewStatusBadge');
+    assert.ok(html.includes('id="sttOverviewProvider"'), 'config.ejs must render sttOverviewProvider');
     assert.ok(html.includes('id="sttEnabled"'), 'config.ejs must render sttEnabled select');
-    assert.ok(html.includes('id="sttModel"'), 'config.ejs must render sttModel select');
+    assert.ok(html.includes('id="sttProvider"'), 'config.ejs must render sttProvider select');
+    assert.ok(html.includes('id="sttApiKey"'), 'config.ejs must render sttApiKey input');
+    assert.ok(html.includes('id="sttModel"'), 'config.ejs must render sttModel input');
+    assert.ok(html.includes('id="sttApiUrl"'), 'config.ejs must render sttApiUrl input');
     assert.ok(html.includes('id="sttLanguage"'), 'config.ejs must render sttLanguage select');
+    assert.ok(html.includes('id="sttPrompt"'), 'config.ejs must render sttPrompt input');
     assert.ok(html.includes('id="sttTranscribeCalls"'), 'config.ejs must render sttTranscribeCalls select');
     assert.ok(html.includes('id="sttTranscribeVoicemails"'), 'config.ejs must render sttTranscribeVoicemails select');
     assert.ok(html.includes('saveSttSettings'), 'config.ejs must wire saveSttSettings handler');
+    assert.ok(html.includes('testSttApiConnection'), 'config.ejs must wire testSttApiConnection handler');
     assert.ok(html.includes('scanAndTranscribeQueue'), 'config.ejs must wire scanAndTranscribeQueue handler');
 });
 
-test('live whisper transcription executes on sample audio and returns clean transcript', async () => {
-    const { runWhisperTranscription } = require('../scripts/stt-worker');
-    const sampleWav = '/opt/whisper.cpp/samples/jfk.wav';
-    assert.ok(fs.existsSync(sampleWav), 'Sample audio /opt/whisper.cpp/samples/jfk.wav must exist');
-
-    const transcript = await runWhisperTranscription(sampleWav, 'tiny', 'en');
-    assert.ok(transcript && transcript.length > 10, 'Transcript must contain valid text');
-    assert.ok(transcript.toLowerCase().includes('fellow americans'), 'Transcript must accurately transcribe JFK sample');
+test('transcribeWithCloudAi validates API key presence and rejects empty key', async () => {
+    const { transcribeWithCloudAi } = require('../scripts/stt-worker');
+    await assert.rejects(async () => {
+        await transcribeWithCloudAi('/tmp/dummy.mp3', { apiKey: '' });
+    }, /API key is not configured/);
 });
