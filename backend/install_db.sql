@@ -295,3 +295,50 @@ CREATE TABLE IF NOT EXISTS `dashboard_crm_audit_logs` (
   `details` TEXT DEFAULT NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `stt_settings` (
+  `id` INT PRIMARY KEY DEFAULT 1,
+  `enabled` TINYINT(1) DEFAULT 1,
+  `engine` VARCHAR(32) DEFAULT 'cloud_api',
+  `provider` VARCHAR(32) DEFAULT 'groq',
+  `api_key` TEXT DEFAULT NULL,
+  `api_url` VARCHAR(255) DEFAULT 'https://api.groq.com/openai/v1/audio/transcriptions',
+  `model_name` VARCHAR(64) DEFAULT 'whisper-large-v3',
+  `language` VARCHAR(10) DEFAULT 'auto',
+  `prompt` TEXT DEFAULT NULL,
+  `transcribe_calls` TINYINT(1) DEFAULT 1,
+  `transcribe_voicemails` TINYINT(1) DEFAULT 1,
+  `min_duration_sec` INT DEFAULT 3,
+  `max_concurrency` INT DEFAULT 1,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO `stt_settings` (`id`) VALUES (1);
+
+CREATE TABLE IF NOT EXISTS `asteriskcdrdb`.`cdr_transcriptions` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `uniqueid` VARCHAR(32) NOT NULL UNIQUE,
+  `recordingfile` VARCHAR(255) NOT NULL,
+  `language` VARCHAR(10) DEFAULT 'auto',
+  `transcript` LONGTEXT NOT NULL,
+  `status` ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+  `error_message` VARCHAR(255) DEFAULT NULL,
+  `duration_sec` INT DEFAULT 0,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `completed_at` DATETIME DEFAULT NULL,
+  INDEX `idx_stt_status` (`status`),
+  FULLTEXT KEY `ft_transcript` (`transcript`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `asteriskcdrdb`.`voicemail_transcriptions` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `mailbox` VARCHAR(20) NOT NULL,
+  `msg_file` VARCHAR(100) NOT NULL,
+  `callerid` VARCHAR(80) DEFAULT NULL,
+  `transcript` LONGTEXT NOT NULL,
+  `status` ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_vm_file` (`mailbox`, `msg_file`),
+  INDEX `idx_vm_stt_status` (`status`),
+  FULLTEXT KEY `ft_vm_transcript` (`transcript`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
