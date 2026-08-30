@@ -13,6 +13,8 @@ REPO_BRANCH=main
 SOFTPHONE_DIR=/opt/sokrat-softphone
 SOFTPHONE_REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voice.git
 SOFTPHONE_REPO_BRANCH=main
+PUSH_GATEWAY_DIR=/opt/sokrat-push-gateway
+PUSH_GATEWAY_REPO=https://github.com/Ahmed-Emad02/sokrat-push-gateway.git
 NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf 2>/dev/null | cut -d= -f2- | xargs || true)
 echo "============================================"
@@ -354,6 +356,75 @@ echo "  Database migrations applied"
 
 # Clear any stale retrieve_conf failure notification
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "DELETE FROM \`notifications\` WHERE \`id\` = 'RCONFFAIL';" 2>/dev/null || true
+
+# ──────────────────────────────────────────────
+# Step 6b — Sokrat Push Gateway (mobile push-to-wake)
+# ──────────────────────────────────────────────
+echo "[6b/14] Installing Sokrat Push Gateway (mobile push-to-wake)..."
+if [ -d "$PUSH_GATEWAY_DIR" ]; then
+    echo "  Updating sokrat-push-gateway..."
+    cd "$PUSH_GATEWAY_DIR"
+    git fetch origin
+    git checkout origin/master -B master 2>/dev/null || git checkout origin/main -B main 2>/dev/null || true
+else
+    git clone "$PUSH_GATEWAY_REPO" "$PUSH_GATEWAY_DIR"
+    cd "$PUSH_GATEWAY_DIR"
+fi
+
+# Gateway dependencies (apns2, firebase-admin, express, mysql2, dotenv)
+if [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
+    npm install --production --prefix "$PUSH_GATEWAY_DIR"
+fi
+
+# Gateway .env (reuse the same MySQL root password and host settings)
+if [ ! -f "$PUSH_GATEWAY_DIR/.env" ]; then
+    cat > "$PUSH_GATEWAY_DIR/.env" << PUSHENV
+PORT=8095
+DB_HOST=127.0.0.1
+DB_USER=root
+DB_PASS=${MYSQL_ROOT_PWD}
+DB_NAME=asterisk
+APNS_ENABLED=false
+FCM_ENABLED=false
+PUSHENV
+    echo "  push-gateway .env created (set APNS/FCM keys to enable real pushes)"
+fi
+
+# Use a dedicated user for the gateway (mirrors the app service approach)
+if ! id sokrat-push >/dev/null 2>&1; then
+    useradd -r -s /sbin/nologin -d "$PUSH_GATEWAY_DIR" sokrat-push
+    chown -R sokrat-push:sokrat-push "$PUSH_GATEWAY_DIR"
+fi
+
+# Install gateway systemd unit
+cp "$PUSH_GATEWAY_DIR/systemd/sokrat-push-gateway.service" /etc/systemd/system/sokrat-push-gateway.service
+sed -i 's|/opt/sokrat-voice/sokrat-push-gateway|'"$PUSH_GATEWAY_DIR"'|g' /etc/systemd/system/sokrat-push-gateway.service
+sed -i 's|^User=.*|User=sokrat-push|' /etc/systemd/system/sokrat-push-gateway.service
+sed -i 's|^Group=.*|Group=sokrat-push|' /etc/systemd/system/sokrat-push-gateway.service
+systemctl daemon-reload
+systemctl enable --now sokrat-push-gateway.service
+echo "  push-gateway service enabled and started"
+
+# Install the Asterisk dialplan hook (macro-sokrat-push-hook) if not present
+DIALPLAN_FILE=/etc/asterisk/extensions_custom.conf
+touch "$DIALPLAN_FILE"
+if ! grep -qF '[macro-sokrat-push-hook]' "$DIALPLAN_FILE"; then
+    cat >> "$DIALPLAN_FILE" << 'PUSHHOOK'
+
+[macro-sokrat-push-hook]
+exten => s,1,NoOp(=== Sokrat Push Wake-Up Hook ===)
+same => n,Set(_SOKRAT_CALLEE=${MACRO_EXTEN})
+same => n,Set(_SOKRAT_CALLER=${CALLERID(num)})
+same => n,Set(_SOKRAT_CALLER_NAME=${URIENCODE(${CALLERID(name)})})
+same => n,System(nohup /usr/bin/curl -s --max-time 1 "http://127.0.0.1:8095/api/push/incoming-call?callee=${_SOKRAT_CALLEE}&caller=${_SOKRAT_CALLER}&callerName=${_SOKRAT_CALLER_NAME}" >/dev/null 2>&1 &)
+same => n,MacroExit()
+PUSHHOOK
+    asterisk -rx "dialplan reload" 2>/dev/null || true
+    echo "  macro-sokrat-push-hook added and dialplan reloaded"
+else
+    echo "  macro-sokrat-push-hook already present, skipping"
+fi
+echo "  Sokrat Push Gateway installed"
 
 # ──────────────────────────────────────────────
 # Step 7 — Configure Asterisk AMI
