@@ -1271,7 +1271,7 @@ Listen 8443 https
     RewriteEngine On
     RewriteCond %{HTTP:Upgrade} =websocket [NC]
     RewriteRule /(.*) ws://127.0.0.1:8090/$1 [P,L]
-
+    ProxyPass /ws ws://127.0.0.1:8088/ws
     ProxyPass /ssl-redirect.html !
     ProxyPass / http://127.0.0.1:8090/
     ProxyPassReverse / http://127.0.0.1:8090/
