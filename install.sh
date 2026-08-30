@@ -796,6 +796,9 @@ same => n,MacroExit()
 
 [dongle-hangup-cleanup]
 exten => s,1,NoOp(--- Pure Dialplan Dongle Hangup Cleanup ---)
+same => n,GotoIf($["${BLINDTRANSFER}"!=""]?done)
+same => n,GotoIf($["${ATTENDEDTRANSFER}"!=""]?done)
+same => n,GotoIf($["${TRANSFER_CONTEXT}"!=""]?done)
 same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${CUT(CHANNEL,-,1)}))
 same => n,ExecIf($["${DONGLE_TARGET:0:7}"="Dongle/"]?Set(DONGLE_TARGET=${DONGLE_TARGET:7}))
 same => n,ExecIf($["${DB_EXISTS(DONGLE_DEVICE_MAP/${DONGLE_TARGET})}"="1"]?Set(DONGLE_TARGET=${DB(DONGLE_DEVICE_MAP/${DONGLE_TARGET})}))
