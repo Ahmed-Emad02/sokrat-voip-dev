@@ -780,11 +780,15 @@ same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=${DB(AMPUSER/${C
 same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=both))
 same => n,Set(CALLER_VAD=${DB(AMPUSER/${REALCALLERIDNUM}/vad_gate)})
 same => n,ExecIf($["${CALLER_VAD}" = ""]?Set(CALLER_VAD=${DB(AMPUSER/${CALLERID(num)}/vad_gate)}))
+same => n,Set(CALLER_VAD_DB=${DB(AMPUSER/${REALCALLERIDNUM}/vad_db)})
+same => n,ExecIf($["${CALLER_VAD_DB}" = ""]?Set(CALLER_VAD_DB=${DB(AMPUSER/${CALLERID(num)}/vad_db)}))
+same => n,ExecIf($["${CALLER_VAD_DB}" = "" | "${CALLER_VAD_DB}" = "off" | "${CALLER_VAD_DB}" = "0"]?Set(CALLER_VAD_DB=${DB(AUDIO_GLOBALS/vad_db_threshold)}))
+same => n,ExecIf($["${CALLER_VAD_DB}" = "" | "${CALLER_VAD_DB}" = "off"]?Set(CALLER_VAD_DB=-90))
 same => n,Set(U_THRESH=${DB(AUDIO_GLOBALS/vad_threshold)})
 same => n,ExecIf($["${U_THRESH}" = ""]?Set(U_THRESH=0.20))
 same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
 same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
-same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG}))
+same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLER_VAD_DB}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
 same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,Set(RAW_TARGET=${CUT(OUT_${DIAL_TRUNK},/,2)})
@@ -831,11 +835,14 @@ exten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer & RNNoise Filter for Outbou
 same => n,Set(CALLER_DENOISE=${DB(AMPUSER/${CALLERID(num)}/ai_denoise)})
 same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=both))
 same => n,Set(CALLER_VAD=${DB(AMPUSER/${CALLERID(num)}/vad_gate)})
+same => n,Set(CALLER_VAD_DB=${DB(AMPUSER/${CALLERID(num)}/vad_db)})
+same => n,ExecIf($["${CALLER_VAD_DB}" = "" | "${CALLER_VAD_DB}" = "off" | "${CALLER_VAD_DB}" = "0"]?Set(CALLER_VAD_DB=${DB(AUDIO_GLOBALS/vad_db_threshold)}))
+same => n,ExecIf($["${CALLER_VAD_DB}" = "" | "${CALLER_VAD_DB}" = "off"]?Set(CALLER_VAD_DB=-90))
 same => n,Set(U_THRESH=${DB(AUDIO_GLOBALS/vad_threshold)})
 same => n,ExecIf($["${U_THRESH}" = ""]?Set(U_THRESH=0.20))
 same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
 same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
-same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG}))
+same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLER_VAD_DB}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
 same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
@@ -861,11 +868,14 @@ same => n,ExecIf($["${CALLEE_DENOISE}" = ""]?Set(CALLEE_EXT=${DB(DEVICE/${CALLEE
 same => n,ExecIf($["${CALLEE_DENOISE}" = ""]?Set(CALLEE_DENOISE=${DB(AMPUSER/${CALLEE_EXT}/ai_denoise)}))
 same => n,ExecIf($["${CALLEE_DENOISE}" = ""]?Set(CALLEE_DENOISE=both))
 same => n,Set(CALLEE_VAD=${DB(AMPUSER/${CALLEE_EXT}/vad_gate)})
+same => n,Set(CALLEE_VAD_DB=${DB(AMPUSER/${CALLEE_EXT}/vad_db)})
+same => n,ExecIf($["${CALLEE_VAD_DB}" = "" | "${CALLEE_VAD_DB}" = "off" | "${CALLEE_VAD_DB}" = "0"]?Set(CALLEE_VAD_DB=${DB(AUDIO_GLOBALS/vad_db_threshold)}))
+same => n,ExecIf($["${CALLEE_VAD_DB}" = "" | "${CALLEE_VAD_DB}" = "off"]?Set(CALLEE_VAD_DB=-90))
 same => n,Set(U_THRESH=${DB(AUDIO_GLOBALS/vad_threshold)})
 same => n,ExecIf($["${U_THRESH}" = ""]?Set(U_THRESH=0.20))
 same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
 same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
-same => n,ExecIf($["${CALLEE_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG}))
+same => n,ExecIf($["${CALLEE_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLEE_VAD_DB}))
 same => n,ExecIf($["${CALLEE_DENOISE}" != "off"]?Set(RNNOISE(${CALLEE_DENOISE},${VAD_OPT})=on))
 ; Rule 1: Do not mask internal extension-to-extension calls (e.g. 101 calling 102)
 same => n,GotoIf($[${LEN(${CALLERID(num)})} <= 4]?done)
@@ -1141,6 +1151,7 @@ fi
 echo "  [10h] Initializing AstDB Noise and Audio defaults..."
 asterisk -rx "database put AUDIO_GLOBALS vad_threshold 0.20" 2>/dev/null || true
 asterisk -rx "database put AUDIO_GLOBALS vad_hangover 250" 2>/dev/null || true
+asterisk -rx "database put AUDIO_GLOBALS vad_db_threshold -90" 2>/dev/null || true
 for ext in $(asterisk -rx "database show AMPUSER" 2>/dev/null | grep "/cidname" | awk -F'/' '{print $2}' | sort -u); do
     curr_denoise=$(asterisk -rx "database get AMPUSER $ext/ai_denoise" 2>/dev/null | grep "Value:" | awk '{print $2}')
     if [ -z "$curr_denoise" ]; then
@@ -1149,6 +1160,10 @@ for ext in $(asterisk -rx "database show AMPUSER" 2>/dev/null | grep "/cidname" 
     curr_vad=$(asterisk -rx "database get AMPUSER $ext/vad_gate" 2>/dev/null | grep "Value:" | awk '{print $2}')
     if [ -z "$curr_vad" ]; then
         asterisk -rx "database put AMPUSER $ext/vad_gate 1" 2>/dev/null || true
+    fi
+    curr_vad_db=$(asterisk -rx "database get AMPUSER $ext/vad_db" 2>/dev/null | grep "Value:" | awk '{print $2}')
+    if [ -z "$curr_vad_db" ]; then
+        asterisk -rx "database put AMPUSER $ext/vad_db off" 2>/dev/null || true
     fi
 done
 echo "  AstDB Noise and Audio defaults initialized"
@@ -1344,6 +1359,56 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now sokrat-softphone
 echo "  Sokrat softphone daemon enabled and started"
+
+# Provision Sokrat Local Speech-To-Text (whisper.cpp) Worker Daemon
+echo "  Provisioning Sokrat Local Speech-To-Text Worker..."
+yum install -y cmake 2>/dev/null || true
+if [ ! -d /opt/whisper.cpp ]; then
+    git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git /opt/whisper.cpp
+fi
+if [ ! -f /opt/whisper.cpp/build/bin/whisper-cli ]; then
+    cd /opt/whisper.cpp
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD_LIBRARIES="-lstdc++fs"
+    cmake --build build --config Release -j$(nproc)
+fi
+mkdir -p /opt/whisper.cpp/models
+if [ ! -f /opt/whisper.cpp/models/ggml-base.bin ]; then
+    curl -L -o /opt/whisper.cpp/models/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin || true
+fi
+if [ ! -f /opt/whisper.cpp/models/ggml-tiny.bin ]; then
+    curl -L -o /opt/whisper.cpp/models/ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin || true
+fi
+cat > /usr/local/bin/whisper-cli << 'WRAPPER'
+#!/bin/bash
+export LD_LIBRARY_PATH="/opt/whisper.cpp/build/bin:$LD_LIBRARY_PATH"
+exec /opt/whisper.cpp/build/bin/whisper-cli "$@"
+WRAPPER
+chmod +x /usr/local/bin/whisper-cli
+cat > /etc/systemd/system/sokrat-stt.service << 'UNIT'
+[Unit]
+Description=Sokrat VoIP Local Speech-To-Text Transcription Worker
+After=network.target mariadb.service mysqld.service asterisk.service
+Wants=asterisk.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/sokrat-voip
+ExecStart=/usr/bin/node /opt/sokrat-voip/scripts/stt-worker.js
+Restart=always
+RestartSec=5
+Nice=15
+CPUShares=256
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/opt/whisper.cpp/build/bin
+Environment=LD_LIBRARY_PATH=/opt/whisper.cpp/build/bin
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now sokrat-stt 2>/dev/null || true
+echo "  Sokrat STT worker daemon enabled and started"
 
 # ──────────────────────────────────────────────
 # Step 13 — Set timezone to Africa/Cairo

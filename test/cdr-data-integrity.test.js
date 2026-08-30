@@ -35,9 +35,9 @@ test('persisted hangup cause (userfield) drives authoritative dispositions', () 
     assert.ok((installer.match(/cdr-cause-capture/g) || []).length >= 4, 'Installer templates must wire the capture handler everywhere');
 });
 
-test('call history collapses multi-segment rows and hides harness noise', () => {
+test('call history and dashboard collapse multi-segment rows and hide harness noise', () => {
     const filtersCount = (serverJs.match(/CDR_HISTORY_FILTERS_SQL/g) || []).length;
-    assert.ok(filtersCount >= 3, 'History filters must be defined and used by history + export queries');
+    assert.ok(filtersCount >= 4, 'History filters must be defined and used by dashboard, history + export queries');
 
     // One entry per call: keep the primary segment per shared uniqueid
     assert.ok(serverJs.includes('cx.uniqueid = c.uniqueid'), 'Dedupe must key on the shared uniqueid');

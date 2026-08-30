@@ -56,14 +56,17 @@ test('views/config.ejs renders extDenoise AI noise suppression control in extens
     assert.ok(html.includes('value="tx"'), 'extDenoise must include "tx" option');
     assert.ok(html.includes('value="off"'), 'extDenoise must include "off" option');
     assert.ok(html.includes('id="extVadGate"'), 'extensionModal must render extVadGate select dropdown');
+    assert.ok(html.includes('id="extVadDb"'), 'extensionModal must render extVadDb select dropdown');
+    assert.ok(html.includes('value="-45"'), 'extVadDb must include "-45" dBFS option');
 });
-
-test('/etc/asterisk/extensions_custom.conf queries DB(AMPUSER/.../ai_denoise) and vad_gate dynamically', () => {
+test('/etc/asterisk/extensions_custom.conf queries DB(AMPUSER/.../ai_denoise), vad_gate and vad_db dynamically', () => {
     const content = fs.readFileSync('/etc/asterisk/extensions_custom.conf', 'utf8');
     assert.ok(content.includes('CALLER_DENOISE=${DB(AMPUSER/${CALLERID(num)}/ai_denoise)}'), 'Dialplan must check caller extension ai_denoise setting');
     assert.ok(content.includes('CALLEE_DENOISE=${DB(AMPUSER/${CALLEE_EXT}/ai_denoise)}'), 'Dialplan must check callee extension ai_denoise setting');
     assert.ok(content.includes('CALLER_VAD=${DB(AMPUSER/${CALLERID(num)}/vad_gate)}'), 'Dialplan must check caller extension vad_gate setting');
     assert.ok(content.includes('CALLEE_VAD=${DB(AMPUSER/${CALLEE_EXT}/vad_gate)}'), 'Dialplan must check callee extension vad_gate setting');
+    assert.ok(content.includes('CALLER_VAD_DB=${DB(AMPUSER/${CALLERID(num)}/vad_db)}'), 'Dialplan must check caller extension vad_db setting');
+    assert.ok(content.includes('CALLEE_VAD_DB=${DB(AMPUSER/${CALLEE_EXT}/vad_db)}'), 'Dialplan must check callee extension vad_db setting');
 });
 
 function readContext(contextName) {
@@ -108,18 +111,18 @@ test('server and UI no longer expose per-dongle noise settings', () => {
     // Extension-scoped controls remain
     assert.ok(configHtml.includes('id="extDenoise"'), 'Extension modal keeps its AI denoise control');
     assert.ok(configHtml.includes('id="extVadGate"'), 'Extension modal keeps its VAD gate control');
+    assert.ok(configHtml.includes('id="extVadDb"'), 'Extension modal keeps its VAD dB cutoff control');
 });
-
 test('universal VAD tuning is wired into every extension-scoped hook and survives reinstalls', () => {
     // Live dialplan: all three extension hooks must consume the universal threshold/hangover
     for (const ctx of ['macro-dialout-trunk-predial-hook', 'macro-dialout-one-predial-hook', 'func-apply-sipheaders-custom']) {
         const body = readContext(ctx);
         assert.ok(body.includes('${DB(AUDIO_GLOBALS/vad_threshold)}'), `${ctx} must read universal threshold`);
         assert.ok(body.includes('${DB(AUDIO_GLOBALS/vad_hangover)}'), `${ctx} must read universal hangover`);
+        assert.ok(body.includes('${DB(AUDIO_GLOBALS/vad_db_threshold)}'), `${ctx} must read universal decibel threshold`);
         assert.ok(body.includes('threshold=${U_THRESH},hangover=${U_HANG}'), `${ctx} must pass universal values to RNNOISE`);
         assert.ok(body.includes('?Set(U_THRESH=0.20)'), `${ctx} must default threshold safely`);
     }
-
     // Dongle contexts stay free of audio logic
     assert.equal(readContext('from-dongle-custom').includes('AUDIO_GLOBALS'), false, 'Dongle inbound context must not use audio globals');
 
@@ -138,5 +141,6 @@ test('server exposes and validates /api/config/audio-globals; modem tab renders 
     const configHtml = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
     assert.ok(configHtml.includes("id=\"globalVadThreshold\""), 'Modem tab must render universal threshold select');
     assert.ok(configHtml.includes("id=\"globalVadHangover\""), 'Modem tab must render universal hangover select');
+    assert.ok(configHtml.includes("id=\"globalVadDbThreshold\""), 'Modem tab must render universal dB threshold select');
     assert.ok(configHtml.includes('/api/config/audio-globals'), 'Modem tab JS must call the audio-globals API');
 });

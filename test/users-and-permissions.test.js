@@ -424,7 +424,6 @@ test('TAB_ROUTE_MAP correctly maps all route paths with leading slashes includin
         '/ext-stats': 'ext-stats',
         '/operator': 'operator',
         '/gsm-dongles': 'gsm-dongles',
-        '/softphone': 'softphone',
         '/contacts': 'contacts',
         '/users': 'users',
         '/config': 'config',

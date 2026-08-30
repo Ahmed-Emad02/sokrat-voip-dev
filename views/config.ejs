@@ -1546,7 +1546,7 @@ function isTabAllowed(tabName) {
                         <span><%= isRtl ? 'حفظ الإعدادات العامة' : 'Save Universal Settings' %></span>
                     </button>
                 </div>
-                <div class="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label for="globalVadThreshold" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'حساسية كشف الكلام (Threshold)' : 'Speech Detection Threshold' %></label>
                         <select id="globalVadThreshold" class="config-input w-full text-xs font-semibold">
@@ -1567,6 +1567,91 @@ function isTabAllowed(tabName) {
                             <option value="350">350 ms (<%= isRtl ? 'ناعم' : 'Soft Hold' %>)</option>
                             <option value="500">500 ms (<%= isRtl ? 'طويل - يحافظ على سلاسة الكلام' : 'Long - smooths speech pauses' %>)</option>
                             <option value="750">750 ms (<%= isRtl ? 'الأطول - أقل كتم ممكن' : 'Longest - minimal muting' %>)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="globalVadDbThreshold" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'عتبة كتم الديسيبل العامة (dB Cutoff)' : 'Universal dBFS Gate Cutoff' %></label>
+                        <select id="globalVadDbThreshold" class="config-input w-full text-xs font-semibold">
+                            <option value="-90" selected><%= isRtl ? 'تلقائي / عصبي فقط (Auto / Neural Only)' : 'Auto / Neural Only (Default -90 dBFS)' %></option>
+                            <option value="-55">-55 dBFS (<%= isRtl ? 'هادئ جداً' : 'Very Soft Noise' %>)</option>
+                            <option value="-50">-50 dBFS (<%= isRtl ? 'خافت / متوازن' : 'Soft / Balanced' %>)</option>
+                            <option value="-45">-45 dBFS (<%= isRtl ? 'متوسط / مكتب هادئ' : 'Moderate / Quiet Office' %>)</option>
+                            <option value="-42">-42 dBFS (<%= isRtl ? 'عالي / مكتب نشط' : 'High / Busy Office' %>)</option>
+                            <option value="-38">-38 dBFS (<%= isRtl ? 'صارم / ضوضاء قوية' : 'Strict / Heavy Noise' %>)</option>
+                            <option value="-35">-35 dBFS (<%= isRtl ? 'عدواني / ضوضاء شديدة' : 'Aggressive / Loud Noise' %>)</option>
+                            <option value="-30">-30 dBFS (<%= isRtl ? 'أقصى كتم / أصوات عالية' : 'Maximum / Extreme Noise' %>)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <!-- AI Speech-to-Text Transcription Engine Card -->
+            <div class="config-card overflow-hidden">
+                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'محرك التفريغ الصوتي بالذكاء الاصطناعي (AI Speech-to-Text)' : 'AI Speech-to-Text Transcription Engine (whisper.cpp)' %></h2>
+                            <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تفريغ المكالمات المسجلة والبريد الصوتي محلياً بالكامل على السيرفر بدون سحابة خارجية.' : 'Transcribe recorded calls and voicemails locally on-premise without external cloud APIs.' %></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
+                        <button type="button" onclick="scanAndTranscribeQueue()" class="config-action-btn config-action-btn--secondary">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span><%= isRtl ? 'فحص السجلات غير المفرغة' : 'Scan & Queue Audio' %></span>
+                        </button>
+                        <button type="button" onclick="saveSttSettings()" class="config-action-btn config-action-btn--primary">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                            <span><%= isRtl ? 'حفظ إعدادات التفريغ' : 'Save STT Settings' %></span>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="sttEnabled" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'حالة محرك التفريغ' : 'STT Engine State' %></label>
+                        <select id="sttEnabled" class="config-input w-full text-xs font-semibold">
+                            <option value="1" selected><%= isRtl ? 'مفعل (نشط)' : 'Enabled (Active)' %></option>
+                            <option value="0"><%= isRtl ? 'معطل' : 'Disabled' %></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="sttModel" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'النموذج اللغوي (Whisper Model)' : 'AI Model (Whisper)' %></label>
+                        <select id="sttModel" class="config-input w-full text-xs font-semibold">
+                            <option value="base" selected><%= isRtl ? 'base (متوازن وسريع - 142MB موصى به)' : 'base (Balanced & Fast - 142MB Recommended)' %></option>
+                            <option value="tiny"><%= isRtl ? 'tiny (فائق السرعة - 75MB)' : 'tiny (Ultra-Fast - 75MB)' %></option>
+                            <option value="small"><%= isRtl ? 'small (دقة أعلى - 466MB)' : 'small (Higher Accuracy - 466MB)' %></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="sttLanguage" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'اللغة الافتراضية' : 'Default Language' %></label>
+                        <select id="sttLanguage" class="config-input w-full text-xs font-semibold">
+                            <option value="auto" selected><%= isRtl ? 'كشف تلقائي (Auto-Detect)' : 'Auto-Detect (Multilingual)' %></option>
+                            <option value="ar"><%= isRtl ? 'العربية (Arabic)' : 'Arabic (العربية)' %></option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="sttTranscribeCalls" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'تفريغ المكالمات المسجلة' : 'Transcribe Call Recordings' %></label>
+                        <select id="sttTranscribeCalls" class="config-input w-full text-xs font-semibold">
+                            <option value="1" selected><%= isRtl ? 'تلقائي لجميع المكالمات' : 'Automatically (All Calls)' %></option>
+                            <option value="0"><%= isRtl ? 'يدوي فقط / معطل' : 'Manual Only / Disabled' %></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="sttTranscribeVoicemails" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'تفريغ البريد الصوتي' : 'Transcribe Voicemails' %></label>
+                        <select id="sttTranscribeVoicemails" class="config-input w-full text-xs font-semibold">
+                            <option value="1" selected><%= isRtl ? 'تلقائي لجميع الرسائل' : 'Automatically (All Messages)' %></option>
+                            <option value="0"><%= isRtl ? 'يدوي فقط / معطل' : 'Manual Only / Disabled' %></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="sttMinDuration" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'الحد الأدنى لزمن المكالمة' : 'Min Call Duration' %></label>
+                        <select id="sttMinDuration" class="config-input w-full text-xs font-semibold">
+                            <option value="2">2 seconds</option>
+                            <option value="3" selected>3 seconds</option>
+                            <option value="5">5 seconds</option>
+                            <option value="10">10 seconds</option>
                         </select>
                     </div>
                 </div>
@@ -1790,9 +1875,9 @@ function isTabAllowed(tabName) {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
                             <div>
-                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extDenoise"><%= isRtl ? 'عزل الضوضاء بالذكاء الاصطناعي (AI RNNoise)' : 'AI Noise Suppression (RNNoise)' %></label>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extDenoise"><%= isRtl ? 'عزل الضوضاء (AI RNNoise)' : 'AI Noise Suppression (RNNoise)' %></label>
                                 <select id="extDenoise" class="config-input w-full text-xs font-semibold">
                                     <option value="both" selected><%= isRtl ? 'مفعل (إرسال واستقبال - Both RX & TX)' : 'Enabled (Both RX & TX)' %></option>
                                     <option value="rx"><%= isRtl ? 'مفعل للميكروفون فقط (RX Only)' : 'Microphone Only (RX Only)' %></option>
@@ -1805,6 +1890,19 @@ function isTabAllowed(tabName) {
                                 <select id="extVadGate" class="config-input w-full text-xs font-semibold">
                                     <option value="1" selected><%= isRtl ? 'مفعل (صمت 100% عند التوقف عن الكلام)' : 'Enabled (100% Silence on Pauses)' %></option>
                                     <option value="0"><%= isRtl ? 'معطل (عزل مستمر دون كتم)' : 'Disabled (Continuous Filter)' %></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extVadDb"><%= isRtl ? 'عتبة كتم الديسيبل (dB Cutoff)' : 'Decibel Cutoff (dBFS Noise Gate)' %></label>
+                                <select id="extVadDb" class="config-input w-full text-xs font-semibold">
+                                    <option value="off" selected><%= isRtl ? 'تلقائي / عصبي فقط (Auto / Neural)' : 'Auto / Neural Only (Default)' %></option>
+                                    <option value="-55">-55 dBFS (<%= isRtl ? 'هادئ جداً' : 'Very Soft Noise' %>)</option>
+                                    <option value="-50">-50 dBFS (<%= isRtl ? 'خافت / متوازن' : 'Soft / Balanced' %>)</option>
+                                    <option value="-45">-45 dBFS (<%= isRtl ? 'متوسط / مكتب هادئ' : 'Moderate / Quiet Office' %>)</option>
+                                    <option value="-42">-42 dBFS (<%= isRtl ? 'عالي / مكتب نشط' : 'High / Busy Office' %>)</option>
+                                    <option value="-38">-38 dBFS (<%= isRtl ? 'صارم / ضوضاء قوية' : 'Strict / Heavy Noise' %>)</option>
+                                    <option value="-35">-35 dBFS (<%= isRtl ? 'عدواني / ضوضاء شديدة' : 'Aggressive / Loud Noise' %>)</option>
+                                    <option value="-30">-30 dBFS (<%= isRtl ? 'أقصى كتم / أصوات عالية' : 'Maximum / Extreme Noise' %>)</option>
                                 </select>
                             </div>
                         </div>
@@ -4216,7 +4314,7 @@ function isTabAllowed(tabName) {
             if (tabId === 'timeconditions') { fetchTimeConditions(); fetchTimeGroups(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); }
             if (tabId === 'announcements') { fetchAnnouncements(); fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); }
             if (tabId === 'voicemail') fetchVoicemailExtensions();
-            if (tabId === 'modem') { fetchModemConfig(); loadAudioGlobals(); fetchRtcpDiagnostics(); startRtcpTimer(); }
+            if (tabId === 'modem') { fetchModemConfig(); loadAudioGlobals(); loadSttSettings(); fetchRtcpDiagnostics(); startRtcpTimer(); }
             if (tabId === 'terminal') initTtyTerminal();
             if (tabId === 'diagram') { sizeDiagramCanvas(); fetchDiagramData(); }
             if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchInboundRoutes(); fetchDongleMappingsTab(); }
@@ -4340,7 +4438,7 @@ function isTabAllowed(tabName) {
                             </td>
                         `;
                         tr.querySelector('[data-action="edit"]').addEventListener('click', () => {
-                            editExtension(ext.extension, ext.name, ext.secret, ext.voicemail, ext.tech, ext.denoise, ext.vad_gate);
+                            editExtension(ext.extension, ext.name, ext.secret, ext.voicemail, ext.tech, ext.denoise, ext.vad_gate, ext.vad_db);
                         });
                         tr.querySelector('[data-action="delete"]').addEventListener('click', () => {
                             deleteExtension(ext.extension);
@@ -4449,6 +4547,8 @@ function isTabAllowed(tabName) {
             document.getElementById('extDenoise').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extVadGate').value = '1';
             document.getElementById('extVadGate').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extVadDb').value = 'off';
+            document.getElementById('extVadDb').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
             openModal('extensionModal');
             try {
@@ -4458,7 +4558,7 @@ function isTabAllowed(tabName) {
             }
         }
 
-        async function editExtension(extNum, name, secret, voicemail, tech, denoise, vadGate) {
+        async function editExtension(extNum, name, secret, voicemail, tech, denoise, vadGate, vadDb) {
             document.getElementById('extModalTitle').textContent = (isRtl ? 'تعديل التحويلة ' : 'Edit Extension ') + extNum;
             document.getElementById('extEditMode').value = 'true';
             document.getElementById('extNum').value = extNum;
@@ -4469,10 +4569,12 @@ function isTabAllowed(tabName) {
             document.getElementById('extTech').value = (tech === 'pjsip' || tech === 'webrtc') ? 'webrtc' : 'sip';
             document.getElementById('extDenoise').value = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
             document.getElementById('extVadGate').value = (vadGate === '0' || vadGate === 0 || vadGate === false) ? '0' : '1';
+            document.getElementById('extVadDb').value = (vadDb && vadDb !== 'undefined') ? String(vadDb).trim() : 'off';
             document.getElementById('extVoicemail').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extTech').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extDenoise').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extVadGate').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extVadDb').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
             openModal('extensionModal');
 
@@ -4517,6 +4619,7 @@ function isTabAllowed(tabName) {
             const tech = document.getElementById('extTech').value;
             const denoise = document.getElementById('extDenoise').value;
             const vadGate = document.getElementById('extVadGate').value;
+            const vadDb = document.getElementById('extVadDb').value;
             const saveButton = document.getElementById('extSaveBtn');
             const saveText = document.getElementById('extSaveBtnText');
             const originalText = saveText.textContent;
@@ -4529,7 +4632,7 @@ function isTabAllowed(tabName) {
                 const response = await fetch(wasEdit ? '/api/config/extensions/' + extNum : '/api/config/extensions', {
                     method: wasEdit ? 'PUT' : 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ extension: extNum, name, secret, voicemail, tech, denoise, vad_gate: vadGate })
+                    body: JSON.stringify({ extension: extNum, name, secret, voicemail, tech, denoise, vad_gate: vadGate, vad_db: vadDb })
                 });
                 const data = await response.json();
                 if (!response.ok || !data.success) {
@@ -7085,14 +7188,26 @@ function isTabAllowed(tabName) {
                     
                     data.extensions.forEach(ext => {
                         const label = document.createElement('label');
-                        label.className = 'flex items-center justify-between p-2 hover:bg-[var(--bg-hover)]/40 rounded cursor-pointer text-xs';
-                        label.innerHTML = `
-                            <span class="flex items-center gap-2 font-mono">
-                                <input type="checkbox" name="vm_mailbox" value="${ext.extension}" class="tab-checkbox vm-ext-chk">
-                                <span class="font-bold text-[var(--text-primary)]">${ext.extension}</span>
-                                <span class="text-[var(--text-muted)]">- ${ext.name}</span>
+                        label.className = 'flex items-center justify-between gap-2 p-2 hover:bg-[var(--bg-hover)]/40 rounded-lg cursor-pointer text-xs transition';
+                        
+                        const greetingBadge = ext.hasCustomGreeting ? `
+                            <span class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md flex items-center gap-1.5 font-sans shrink-0 max-w-[220px] truncate shadow-sm" title="${escapeHtml(ext.greetingName || (isRtl ? 'ترحيب مخصص' : 'Custom Greeting'))}">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="shrink-0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                                <span class="truncate">${escapeHtml(ext.greetingName || (isRtl ? 'ترحيب مخصص' : 'Custom Greeting'))}</span>
                             </span>
-                            ${ext.hasCustomGreeting ? `<span class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.5 rounded">${isRtl ? 'ترحيب مخصص' : 'Custom Greeting'}</span>` : `<span class="text-[10px] text-[var(--text-muted)] bg-[var(--bg-card)] border border-[var(--border-primary)] px-1 py-0.5 rounded">${isRtl ? 'ترحيب افتراضي' : 'Default Greeting'}</span>`}
+                        ` : `
+                            <span class="text-[10px] text-[var(--text-muted)] bg-[var(--bg-card)] border border-[var(--border-primary)] px-2 py-0.5 rounded-md font-sans shrink-0">
+                                ${isRtl ? 'ترحيب افتراضي' : 'Default Greeting'}
+                            </span>
+                        `;
+
+                        label.innerHTML = `
+                            <span class="flex items-center gap-2 font-mono min-w-0 truncate">
+                                <input type="checkbox" name="vm_mailbox" value="${escapeHtml(ext.extension)}" class="tab-checkbox vm-ext-chk">
+                                <span class="font-bold text-[var(--text-primary)] shrink-0">${escapeHtml(ext.extension)}</span>
+                                <span class="text-[var(--text-muted)] truncate">- ${escapeHtml(ext.name || '')}</span>
+                            </span>
+                            ${greetingBadge}
                         `;
                         checklist.appendChild(label);
                     });
@@ -10006,6 +10121,7 @@ function isTabAllowed(tabName) {
         async function loadAudioGlobals() {
             const threshEl = document.getElementById('globalVadThreshold');
             const hangEl = document.getElementById('globalVadHangover');
+            const dbThreshEl = document.getElementById('globalVadDbThreshold');
             if (!threshEl || !hangEl) return;
             try {
                 const res = await fetch('/api/config/audio-globals');
@@ -10013,8 +10129,12 @@ function isTabAllowed(tabName) {
                 if (data.success) {
                     threshEl.value = String(parseFloat(data.globals.vad_threshold).toFixed(2));
                     hangEl.value = String(parseInt(data.globals.vad_hangover, 10));
+                    if (dbThreshEl && data.globals.vad_db_threshold) {
+                        dbThreshEl.value = String(data.globals.vad_db_threshold);
+                    }
                     if (!threshEl.value || threshEl.selectedIndex === -1) threshEl.value = '0.20';
                     if (!hangEl.value || hangEl.selectedIndex === -1) hangEl.value = '250';
+                    if (dbThreshEl && (!dbThreshEl.value || dbThreshEl.selectedIndex === -1)) dbThreshEl.value = '-90';
                 }
             } catch (_) {}
         }
@@ -10023,12 +10143,20 @@ function isTabAllowed(tabName) {
         async function saveAudioGlobals() {
             const threshEl = document.getElementById('globalVadThreshold');
             const hangEl = document.getElementById('globalVadHangover');
+            const dbThreshEl = document.getElementById('globalVadDbThreshold');
             if (!threshEl || !hangEl) return;
             try {
+                const payload = {
+                    vad_threshold: threshEl.value,
+                    vad_hangover: hangEl.value
+                };
+                if (dbThreshEl) {
+                    payload.vad_db_threshold = dbThreshEl.value;
+                }
                 const res = await fetch('/api/config/audio-globals', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ vad_threshold: threshEl.value, vad_hangover: hangEl.value })
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -10042,6 +10170,80 @@ function isTabAllowed(tabName) {
         }
         window.saveAudioGlobals = saveAudioGlobals;
 
+
+        async function loadSttSettings() {
+            const enabledEl = document.getElementById('sttEnabled');
+            const modelEl = document.getElementById('sttModel');
+            const langEl = document.getElementById('sttLanguage');
+            const callsEl = document.getElementById('sttTranscribeCalls');
+            const vmEl = document.getElementById('sttTranscribeVoicemails');
+            const minDurEl = document.getElementById('sttMinDuration');
+            if (!enabledEl || !modelEl) return;
+            try {
+                const res = await fetch('/api/config/stt');
+                const data = await res.json();
+                if (data.success && data.settings) {
+                    const s = data.settings;
+                    enabledEl.value = String(s.enabled ? 1 : 0);
+                    modelEl.value = s.model_name || 'base';
+                    langEl.value = s.language || 'auto';
+                    callsEl.value = String(s.transcribe_calls ? 1 : 0);
+                    vmEl.value = String(s.transcribe_voicemails ? 1 : 0);
+                    minDurEl.value = String(s.min_duration_sec || 3);
+                }
+            } catch (_) {}
+        }
+        window.loadSttSettings = loadSttSettings;
+
+        async function saveSttSettings() {
+            const enabledEl = document.getElementById('sttEnabled');
+            const modelEl = document.getElementById('sttModel');
+            const langEl = document.getElementById('sttLanguage');
+            const callsEl = document.getElementById('sttTranscribeCalls');
+            const vmEl = document.getElementById('sttTranscribeVoicemails');
+            const minDurEl = document.getElementById('sttMinDuration');
+            if (!enabledEl || !modelEl) return;
+
+            try {
+                const payload = {
+                    enabled: enabledEl.value === '1' ? 1 : 0,
+                    model_name: modelEl.value,
+                    language: langEl.value,
+                    transcribe_calls: callsEl.value === '1' ? 1 : 0,
+                    transcribe_voicemails: vmEl.value === '1' ? 1 : 0,
+                    min_duration_sec: parseInt(minDurEl.value, 10) || 3
+                };
+                const res = await fetch('/api/config/stt', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(isRtl ? 'تم حفظ إعدادات التفريغ الصوتي بنجاح.' : 'Speech-to-Text settings saved successfully.', 'success');
+                } else {
+                    showToast(data.error || 'Failed to save STT settings', 'error');
+                }
+            } catch (e) {
+                showToast('Error saving STT settings: ' + e.message, 'error');
+            }
+        }
+        window.saveSttSettings = saveSttSettings;
+
+        async function scanAndTranscribeQueue() {
+            try {
+                const res = await fetch('/api/transcripts/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(isRtl ? 'تم فحص وإضافة التسجيلات غير المفرغة لقائمة الانتظار.' : 'Un-transcribed recordings queued for transcription.', 'success');
+                } else {
+                    showToast(data.error || 'Failed to scan recordings', 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+        window.scanAndTranscribeQueue = scanAndTranscribeQueue;
         async function resetAllDongleGains() {
             if (!confirm(isRtl ? 'هل أنت تأكد من إعادة ضبط مستويات كسب جميع الشرائح إلى (txgain=0 و rxgain=0) في dongle.conf؟' : 'Are you sure you want to reset all dongle gains to txgain=0 and rxgain=0 in dongle.conf?')) return;
 

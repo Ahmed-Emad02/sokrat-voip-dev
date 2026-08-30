@@ -41,6 +41,7 @@
 struct rnnoise_vad_state {
 	int gate_enabled;        /*!< 1 = VAD gate active (100% silence during pauses), 0 = pure RNNoise */
 	float threshold;         /*!< Speech detection probability threshold (default 0.20) */
+	float min_dbfs;          /*!< Minimum frame RMS energy threshold in dBFS (default -90.0 dBFS) */
 	int hangover_frames;     /*!< Hold frames after speech ends (default 25 = 250ms) */
 	int hangover_count;      /*!< Active hangover countdown */
 	int release_frames;      /*!< Cosine release fade-out frame duration (default 6 = 60ms) */
@@ -67,6 +68,7 @@ static void init_vad_defaults(struct rnnoise_vad_state *vad)
 {
 	vad->gate_enabled = 1;
 	vad->threshold = 0.20f;
+	vad->min_dbfs = -90.0f;
 	vad->hangover_frames = 25; /* 250ms at 10ms/frame */
 	vad->hangover_count = 0;
 	vad->release_frames = 6;   /* 60ms at 10ms/frame */
@@ -109,15 +111,35 @@ static const struct ast_datastore_info rnnoise_datastore = {
 	.destroy = datastore_destroy_cb,
 };
 
-/*! \brief Apply Attack-Hold-Release VAD Noise Gate Envelope to PCM samples */
+/*! \brief Calculate RMS energy of PCM frame in dBFS */
+static float calculate_frame_dbfs(const short *pcm, int samples)
+{
+	if (!pcm || samples <= 0) {
+		return -96.0f;
+	}
+	double sum_sq = 0.0;
+	for (int i = 0; i < samples; i++) {
+		double s = (double)pcm[i];
+		sum_sq += (s * s);
+	}
+	double rms = sqrt(sum_sq / (double)samples);
+	if (rms < 1.0) {
+		return -96.0f; /* Digital floor */
+	}
+	return (float)(20.0 * log10(rms / 32767.0));
+}
+
+/*! \brief Apply Attack-Hold-Release VAD Noise Gate Envelope to PCM samples with dBFS energy cutoff */
 static void apply_vad_envelope(struct rnnoise_vad_state *vad, short *pcm, int samples, float vad_prob)
 {
 	if (!vad->gate_enabled) {
 		return;
 	}
 
-	if (vad_prob >= vad->threshold) {
-		/* Speech active: Instant attack (100% gain) */
+	float frame_dbfs = calculate_frame_dbfs(pcm, samples);
+
+	if (vad_prob >= vad->threshold && frame_dbfs >= vad->min_dbfs) {
+		/* Speech active and above decibel cutoff: Instant attack (100% gain) */
 		vad->hangover_count = vad->hangover_frames;
 		vad->release_count = 0;
 		vad->current_gain = 1.0f;
@@ -303,7 +325,7 @@ static int rnnoise_callback(struct ast_audiohook *audiohook, struct ast_channel 
 	return 0;
 }
 
-/*! \brief Parse options like gate=on,gate=off,threshold=0.20,hangover=250 */
+/*! \brief Parse options like gate=on,gate=off,threshold=0.20,hangover=250,mindb=-45 */
 static void parse_rnnoise_options(struct rnnoise_vad_state *vad, const char *opts)
 {
 	char *buf, *opt, *val;
@@ -324,6 +346,14 @@ static void parse_rnnoise_options(struct rnnoise_vad_state *vad, const char *opt
 			} else if (!strcasecmp(opt, "hangover")) {
 				int ms = atoi(val);
 				if (ms > 0) vad->hangover_frames = ms / 10;
+			} else if (!strcasecmp(opt, "db") || !strcasecmp(opt, "mindb") || !strcasecmp(opt, "db_threshold") || !strcasecmp(opt, "dbfs")) {
+				if (!strcasecmp(val, "off") || !strcasecmp(val, "auto") || !strcasecmp(val, "0")) {
+					vad->min_dbfs = -90.0f;
+				} else {
+					float db = atof(val);
+					if (db > 0.0f && db <= 90.0f) db = -db;
+					if (db >= -90.0f && db <= 0.0f) vad->min_dbfs = db;
+				}
 			}
 		} else {
 			opt = ast_strip(opt);
@@ -465,14 +495,15 @@ static int rnnoise_write(struct ast_channel *chan, const char *cmd, char *data, 
 	ast_mutex_unlock(&info->lock);
 	ast_channel_unlock(chan);
 
-	ast_verb(2, "[AI-NOISE-VAD] Channel %s: RNNoise %s (rx=%s[gate=%s], tx=%s[gate=%s])\n",
+	ast_verb(2, "[AI-NOISE-VAD] Channel %s: RNNoise %s (rx=%s[gate=%s,mindb=%.1fdB], tx=%s[gate=%s,mindb=%.1fdB])\n",
 		ast_channel_name(chan),
 		(info->rx.enabled || info->tx.enabled) ? "enabled" : "disabled",
 		info->rx.enabled ? "on" : "off",
 		info->rx.vad.gate_enabled ? "on" : "off",
+		info->rx.vad.min_dbfs,
 		info->tx.enabled ? "on" : "off",
-		info->tx.vad.gate_enabled ? "on" : "off");
-
+		info->tx.vad.gate_enabled ? "on" : "off",
+		info->tx.vad.min_dbfs);
 	return 0;
 }
 
@@ -480,16 +511,15 @@ static struct ast_custom_function rnnoise_function = {
 	.name = "RNNOISE",
 	.synopsis = "Apply deep learning real-time noise suppression & VAD gate to a channel",
 	.syntax = "RNNOISE(direction[,options])",
-	.desc = "Apply deep learning neural network noise reduction with VAD Noise Gate to audio on the channel.\n"
+	.desc = "Apply deep learning neural network noise reduction with VAD Noise Gate and dBFS energy cutoff to audio on the channel.\n"
 	        "Valid directions: 'rx', 'tx', or 'both'.\n"
-	        "Options: gate=on|off, threshold=0.20, hangover=250\n"
+	        "Options: gate=on|off, threshold=0.20, hangover=250, mindb=-45\n"
 	        "Values: 'on' or 'off'.\n\n"
 	        "Examples:\n"
 	        "  Set(RNNOISE(rx)=on)\n"
 	        "  Set(RNNOISE(both,gate=on)=on)\n"
 	        "  Set(RNNOISE(both,gate=off)=on)\n"
-	        "  Set(RNNOISE(rx,threshold=0.25,hangover=300)=on)\n",
-	.read = rnnoise_read,
+	        "  Set(RNNOISE(rx,threshold=0.25,hangover=300,mindb=-42)=on)\n",
 	.write = rnnoise_write,
 };
 

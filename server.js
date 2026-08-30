@@ -548,6 +548,53 @@ async function initAuthDb() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     await conn.execute('INSERT IGNORE INTO voicemail_storage_settings (id, max_messages, max_duration_sec, retention_days, auto_purge_enabled) VALUES (1, 1000, 300, 90, 0)');
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`cdr_transcriptions\` (
+            \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+            \`uniqueid\` VARCHAR(32) NOT NULL UNIQUE,
+            \`recordingfile\` VARCHAR(255) NOT NULL,
+            \`language\` VARCHAR(10) DEFAULT 'auto',
+            \`transcript\` LONGTEXT NOT NULL,
+            \`status\` ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+            \`error_message\` VARCHAR(255) DEFAULT NULL,
+            \`duration_sec\` INT DEFAULT 0,
+            \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+            \`completed_at\` DATETIME DEFAULT NULL,
+            INDEX \`idx_stt_status\` (\`status\`),
+            FULLTEXT KEY \`ft_transcript\` (\`transcript\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+    try { await conn.execute('ALTER TABLE `asteriskcdrdb`.`cdr_transcriptions` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci'); } catch (_) {}
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`voicemail_transcriptions\` (
+            \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+            \`mailbox\` VARCHAR(20) NOT NULL,
+            \`msg_file\` VARCHAR(100) NOT NULL,
+            \`callerid\` VARCHAR(80) DEFAULT NULL,
+            \`transcript\` LONGTEXT NOT NULL,
+            \`status\` ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+            \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY \`uniq_vm_file\` (\`mailbox\`, \`msg_file\`),
+            INDEX \`idx_vm_stt_status\` (\`status\`),
+            FULLTEXT KEY \`ft_vm_transcript\` (\`transcript\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+    try { await conn.execute('ALTER TABLE `asteriskcdrdb`.`voicemail_transcriptions` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci'); } catch (_) {}
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asterisk\`.\`stt_settings\` (
+            \`id\` INT PRIMARY KEY DEFAULT 1,
+            \`enabled\` TINYINT(1) DEFAULT 1,
+            \`engine\` VARCHAR(32) DEFAULT 'whisper.cpp',
+            \`model_name\` VARCHAR(32) DEFAULT 'base',
+            \`language\` VARCHAR(10) DEFAULT 'auto',
+            \`transcribe_calls\` TINYINT(1) DEFAULT 1,
+            \`transcribe_voicemails\` TINYINT(1) DEFAULT 1,
+            \`min_duration_sec\` INT DEFAULT 3,
+            \`max_concurrency\` INT DEFAULT 1,
+            \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute('INSERT IGNORE INTO `asterisk`.`stt_settings` (id) VALUES (1)');
 
 
     // Default dispositions
@@ -1123,7 +1170,6 @@ const TAB_ROUTE_MAP = {
     '/ext-stats': 'ext-stats',
     '/operator': 'operator',
     '/gsm-dongles': 'gsm-dongles',
-    '/softphone': 'softphone',
     '/contacts': 'contacts',
     '/users': 'users',
     '/config': 'config',
@@ -1213,7 +1259,7 @@ app.use(async (req, res, next) => {
         return next();
     }
     // Denied — redirect to the first tab they *can* access, or /login
-    const tabToRoute = { dashboard: '/', cdr: '/cdr', voicemails: '/voicemails', 'ext-stats': '/ext-stats', operator: '/operator', 'gsm-dongles': '/gsm-dongles', softphone: '/softphone', contacts: '/contacts', users: '/users', config: '/config', dialer: '/dialer', storage: '/storage' };
+    const tabToRoute = { dashboard: '/', cdr: '/cdr', voicemails: '/voicemails', 'ext-stats': '/ext-stats', operator: '/operator', 'gsm-dongles': '/gsm-dongles', contacts: '/contacts', users: '/users', config: '/config', dialer: '/dialer', storage: '/storage' };
     const firstAllowed = req.session.userPermissions.find(p => tabToRoute[p] || (p.startsWith('config-') && tabToRoute['config']));
     res.redirect(firstAllowed ? (tabToRoute[firstAllowed] || '/config') : '/login');
 });
@@ -3193,7 +3239,7 @@ app.get('/', async (req, res) => {
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             WHERE c.calldate BETWEEN ? AND ?
-            AND c.dst NOT IN ('ussd','sms','report','s')
+            ${CDR_HISTORY_FILTERS_SQL}
         `;
         let queryParams = [startDate, endDate];
 
@@ -3225,7 +3271,7 @@ app.get('/', async (req, res) => {
             if (statusesToMatch.includes('FAILED') && !statusesToMatch.includes('CONGESTION')) {
                 statusesToMatch.push('CONGESTION');
             }
-            query += " AND (TRIM(UPPER(c.disposition)) IN (?) OR ('FAILED' IN (?) AND TRIM(UPPER(c.disposition)) = 'CONGESTION'))";
+            query += ` AND ((${CDR_DISPOSITION_SQL}) IN (?) OR ('FAILED' IN (?) AND (${CDR_DISPOSITION_SQL}) = 'CONGESTION'))`;
             queryParams.push(statusesToMatch, statusFilterList);
         }
         if (directionFilter !== 'ALL') {
@@ -3465,10 +3511,13 @@ app.get('/cdr', async (req, res) => {
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
 
+        const searchTranscript = req.query.searchTranscript ? String(req.query.searchTranscript).trim() : '';
+
         let countQuery = `
             SELECT COUNT(*) as total
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
+            LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
             WHERE c.calldate BETWEEN ? AND ?
             ${CDR_HISTORY_FILTERS_SQL}
         `;
@@ -3476,10 +3525,12 @@ app.get('/cdr', async (req, res) => {
 
         let query = `
             SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            stt.transcript, stt.status as stt_status, stt.duration_sec as stt_duration, stt.language as stt_lang,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
             FROM ${tables.cdr} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
+            LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
             WHERE c.calldate BETWEEN ? AND ?
             ${CDR_HISTORY_FILTERS_SQL}
         `;
@@ -3522,7 +3573,7 @@ app.get('/cdr', async (req, res) => {
             if (statusesToMatch.includes('FAILED') && !statusesToMatch.includes('CONGESTION')) {
                 statusesToMatch.push('CONGESTION');
             }
-            const clause = " AND (TRIM(UPPER(c.disposition)) IN (?) OR ('FAILED' IN (?) AND TRIM(UPPER(c.disposition)) = 'CONGESTION'))";
+            const clause = ` AND ((${CDR_DISPOSITION_SQL}) IN (?) OR ('FAILED' IN (?) AND (${CDR_DISPOSITION_SQL}) = 'CONGESTION'))`;
             query += clause; countQuery += clause;
             queryParams.push(statusesToMatch, statusFilterList);
             countParams.push(statusesToMatch, statusFilterList);
@@ -3538,6 +3589,12 @@ app.get('/cdr', async (req, res) => {
             query += clause; countQuery += clause;
             queryParams.push(callScopeFilter);
             countParams.push(callScopeFilter);
+        }
+        if (searchTranscript) {
+            const clause = " AND stt.transcript LIKE ?";
+            query += clause; countQuery += clause;
+            queryParams.push(`%${searchTranscript}%`);
+            countParams.push(`%${searchTranscript}%`);
         }
 
         query += " ORDER BY c.calldate DESC LIMIT ? OFFSET ?";
@@ -3561,7 +3618,7 @@ app.get('/cdr', async (req, res) => {
         });
         res.render('cdr', {
             calls: formattedRows,
-            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, directionFilter, callScopeFilter, page, perPage },
+            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, page, perPage },
             pagination: { total, totalPages, page, perPage },
             moment
         });
@@ -3642,7 +3699,7 @@ app.get('/cdr/export', async (req, res) => {
             if (statusesToMatch.includes('FAILED') && !statusesToMatch.includes('CONGESTION')) {
                 statusesToMatch.push('CONGESTION');
             }
-            const clause = " AND (TRIM(UPPER(c.disposition)) IN (?) OR ('FAILED' IN (?) AND TRIM(UPPER(c.disposition)) = 'CONGESTION'))";
+            const clause = ` AND ((${CDR_DISPOSITION_SQL}) IN (?) OR ('FAILED' IN (?) AND (${CDR_DISPOSITION_SQL}) = 'CONGESTION'))`;
             query += clause;
             queryParams.push(statusesToMatch, statusFilterList);
         }
@@ -3764,7 +3821,7 @@ function getAllVoicemailMailboxes() {
     return [...mailboxes].sort((a, b) => parseInt(a) - parseInt(b));
 }
 
-function scanVoicemails() {
+async function scanVoicemails() {
     const messages = [];
     if (!fs.existsSync(VM_ROOT)) return messages;
     const extDirs = fs.readdirSync(VM_ROOT, { withFileTypes: true }).filter(d => d.isDirectory());
@@ -3801,16 +3858,37 @@ function scanVoicemails() {
                 extension: meta.extension || '',
                 wavFile: wavFile,
                 txtFile: txt,
+                transcript: '',
+                stt_status: 'none',
                 read: meta.message === 'read'
             });
         }
     }
+
+    try {
+        const [transcripts] = await pool.query('SELECT mailbox, msg_file, transcript, status FROM `asteriskcdrdb`.`voicemail_transcriptions`');
+        const transMap = new Map();
+        for (const t of transcripts) {
+            transMap.set(`${t.mailbox}:${t.msg_file}`, t);
+        }
+        for (const m of messages) {
+            if (m.wavFile) {
+                const tr = transMap.get(`${m.mailbox}:${m.wavFile}`);
+                if (tr) {
+                    m.transcript = tr.transcript || '';
+                    m.stt_status = tr.status || 'none';
+                }
+            }
+        }
+    } catch (_) {}
+
     messages.sort((a, b) => b.origtime - a.origtime);
     return messages;
 }
 
-app.get('/voicemails', (req, res) => {
-    const allMsgs = scanVoicemails();
+app.get('/voicemails', async (req, res) => {
+    const allMsgs = await scanVoicemails();
+    const searchTranscript = req.query.searchTranscript ? String(req.query.searchTranscript).trim() : '';
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
     const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : '';
@@ -3830,21 +3908,24 @@ app.get('/voicemails', (req, res) => {
         filtered = filtered.filter(m => m.origtime && m.origtime <= endMs);
     }
 
+    if (searchTranscript) {
+        filtered = filtered.filter(m => (m.transcript || '').toLowerCase().includes(searchTranscript.toLowerCase()));
+    }
     const total = filtered.length;
     const totalPages = Math.ceil(total / perPage) || 1;
     const paged = filtered.slice((page - 1) * perPage, page * perPage);
-
     const mailboxes = getAllVoicemailMailboxes();
 
     res.render('voicemails', {
         messages: paged, mailboxes, moment,
-        filters: { searchCallerid, searchMailbox, startDate, endDate, page, perPage },
+        filters: { searchCallerid, searchMailbox, searchTranscript, startDate, endDate, page, perPage },
         pagination: { total, totalPages, page, perPage }
     });
 });
 
-app.get('/api/voicemails', (req, res) => {
-    const allMsgs = scanVoicemails();
+app.get('/api/voicemails', async (req, res) => {
+    const allMsgs = await scanVoicemails();
+    const searchTranscript = req.query.searchTranscript ? String(req.query.searchTranscript).trim() : '';
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
     const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : '';
@@ -3901,8 +3982,8 @@ app.get('/vm-audio/:mailbox/:file', (req, res) => {
     }
 });
 
-app.get('/vm-export', (req, res) => {
-    const allMsgs = scanVoicemails();
+app.get('/vm-export', async (req, res) => {
+    const allMsgs = await scanVoicemails();
     const searchCallerid = req.query.searchCallerid || '';
     const searchMailbox = req.query.searchMailbox || '';
     const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : '';
@@ -4142,6 +4223,7 @@ app.post('/api/voicemail-storage/settings', requireAuth, async (req, res) => {
                 auto_purge_enabled = VALUES(auto_purge_enabled)
         `, [max_messages, max_duration_sec, retention_days, auto_purge_enabled]);
 
+
         syncVoicemailLimits(max_messages, max_duration_sec);
 
         const stats = getVoicemailStorageStats();
@@ -4153,6 +4235,144 @@ app.post('/api/voicemail-storage/settings', requireAuth, async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// --- SPEECH-TO-TEXT (STT) TRANSCRIPTION REST APIs ---
+
+// 1. GET /api/transcripts/call/:uniqueid - Fetch call transcript
+app.get('/api/transcripts/call/:uniqueid', async (req, res) => {
+    try {
+        const { uniqueid } = req.params;
+        const [rows] = await pool.query(
+            'SELECT uniqueid, recordingfile, language, transcript, status, error_message, duration_sec, created_at, completed_at FROM `asteriskcdrdb`.`cdr_transcriptions` WHERE uniqueid = ?',
+            [uniqueid]
+        );
+        if (rows.length > 0) {
+            return res.json({ success: true, transcription: rows[0] });
+        }
+        res.json({ success: true, transcription: { uniqueid, status: 'none', transcript: '' } });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 2. POST /api/transcripts/call/:uniqueid/transcribe - Manually enqueue/re-transcribe call recording
+app.post('/api/transcripts/call/:uniqueid/transcribe', async (req, res) => {
+    try {
+        const { uniqueid } = req.params;
+        const [cdr] = await pool.query(
+            'SELECT uniqueid, recordingfile FROM `asteriskcdrdb`.`cdr` WHERE uniqueid = ? AND recordingfile IS NOT NULL AND recordingfile != "" LIMIT 1',
+            [uniqueid]
+        );
+        if (!cdr.length || !cdr[0].recordingfile) {
+            return res.status(404).json({ success: false, error: 'Call recording not found.' });
+        }
+        const lang = req.body.language || 'auto';
+        await pool.query(`
+            INSERT INTO \`asteriskcdrdb\`.\`cdr_transcriptions\` (uniqueid, recordingfile, language, status, transcript)
+            VALUES (?, ?, ?, 'pending', '')
+            ON DUPLICATE KEY UPDATE
+                language = VALUES(language),
+                status = 'pending',
+                error_message = NULL
+        `, [uniqueid, cdr[0].recordingfile, lang]);
+
+        res.json({ success: true, message: 'Call queued for transcription.', uniqueid });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 3. GET /api/transcripts/voicemail/:mailbox/:file - Fetch voicemail transcript
+app.get('/api/transcripts/voicemail/:mailbox/:file', async (req, res) => {
+    try {
+        const { mailbox, file } = req.params;
+        const [rows] = await pool.query(
+            'SELECT mailbox, msg_file, transcript, status, created_at FROM `asteriskcdrdb`.`voicemail_transcriptions` WHERE mailbox = ? AND msg_file = ?',
+            [mailbox, file]
+        );
+        if (rows.length > 0) {
+            return res.json({ success: true, transcription: rows[0] });
+        }
+        res.json({ success: true, transcription: { mailbox, msg_file: file, status: 'none', transcript: '' } });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 4. POST /api/transcripts/voicemail/:mailbox/:file/transcribe - Enqueue voicemail for transcription
+app.post('/api/transcripts/voicemail/:mailbox/:file/transcribe', async (req, res) => {
+    try {
+        const { mailbox, file } = req.params;
+        await pool.query(`
+            INSERT INTO \`asteriskcdrdb\`.\`voicemail_transcriptions\` (mailbox, msg_file, status, transcript)
+            VALUES (?, ?, ?, 'pending')
+            ON DUPLICATE KEY UPDATE
+                status = 'pending'
+        `, [mailbox, file, '']);
+
+        res.json({ success: true, message: 'Voicemail queued for transcription.', mailbox, file });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 5. GET /api/config/stt - Get STT engine settings
+app.get('/api/config/stt', async (req, res) => {
+    try {
+        let settings = { enabled: 1, engine: 'whisper.cpp', model_name: 'base', language: 'auto', transcribe_calls: 1, transcribe_voicemails: 1, min_duration_sec: 3 };
+        try {
+            const [rows] = await pool.query('SELECT * FROM `asterisk`.`stt_settings` WHERE id = 1');
+            if (rows && rows.length > 0) settings = rows[0];
+        } catch (_) {}
+        res.json({ success: true, settings });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 6. PUT /api/config/stt - Update STT engine settings
+app.put('/api/config/stt', async (req, res) => {
+    try {
+        const { enabled, model_name, language, transcribe_calls, transcribe_voicemails, min_duration_sec } = req.body;
+        const isEnabled = (enabled === 1 || enabled === true || enabled === '1') ? 1 : 0;
+        const model = ['tiny', 'base', 'small', 'medium'].includes(model_name) ? model_name : 'base';
+        const lang = String(language || 'auto').trim();
+        const trCalls = (transcribe_calls === 1 || transcribe_calls === true || transcribe_calls === '1') ? 1 : 0;
+        const trVm = (transcribe_voicemails === 1 || transcribe_voicemails === true || transcribe_voicemails === '1') ? 1 : 0;
+        const minDur = Math.max(1, parseInt(min_duration_sec, 10) || 3);
+
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`stt_settings\` (id, enabled, engine, model_name, language, transcribe_calls, transcribe_voicemails, min_duration_sec)
+            VALUES (1, ?, 'whisper.cpp', ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                enabled = VALUES(enabled),
+                model_name = VALUES(model_name),
+                language = VALUES(language),
+                transcribe_calls = VALUES(transcribe_calls),
+                transcribe_voicemails = VALUES(transcribe_voicemails),
+                min_duration_sec = VALUES(min_duration_sec)
+        `, [isEnabled, model, lang, trCalls, trVm, minDur]);
+
+        res.json({
+            success: true,
+            settings: { enabled: isEnabled, model_name: model, language: lang, transcribe_calls: trCalls, transcribe_voicemails: trVm, min_duration_sec: minDur },
+            message: 'Speech-to-Text settings updated successfully.'
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 7. POST /api/transcripts/scan - Trigger bulk scan of untranscribed audio recordings
+app.post('/api/transcripts/scan', async (req, res) => {
+    try {
+        const { scanAndEnqueueUntranscribed } = require('./scripts/enqueue-stt');
+        await scanAndEnqueueUntranscribed();
+        res.json({ success: true, message: 'Un-transcribed recordings and voicemails enqueued successfully.' });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
@@ -4193,7 +4413,7 @@ app.get('/api/ext-overview', async (req, res) => {
         const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
         const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
 
-        const [rows] = await pool.query(`SELECT src, dst, billsec, ${CDR_DISPOSITION_SQL} as disposition, channel, dstchannel FROM ${tables.cdr} c WHERE calldate BETWEEN ? AND ? AND dst NOT IN ('ussd','sms','report','s')`, [startDate, endDate]);
+        const [rows] = await pool.query(`SELECT src, dst, billsec, ${CDR_DISPOSITION_SQL} as disposition, channel, dstchannel FROM ${tables.cdr} c WHERE calldate BETWEEN ? AND ? ${CDR_HISTORY_FILTERS_SQL}`, [startDate, endDate]);
 
         const employeeMetrics = {};
         res.locals.roster.forEach(emp => {
@@ -4284,6 +4504,7 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
              `SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.channel, c.dstchannel, c.uniqueid, c.cnum
               FROM ${tables.cdr} c
               WHERE c.calldate BETWEEN ? AND ?
+              ${CDR_HISTORY_FILTERS_SQL}
              AND (c.src = ? OR c.dst = ? OR c.cnum = ? OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)'))
              ORDER BY c.calldate DESC`,
             [startDate, endDate, extension, extension, extension, extension, extension]
@@ -5228,18 +5449,6 @@ app.get('/operator', (req, res) => {
     try {
         res.render('operator', { moment });
     } catch (error) { res.status(500).send("Operator Panel Engine Error: " + error.message); }
-});
-app.get('/softphone', requireAuth, (req, res) => {
-    try {
-        const currentLang = res.locals.currentLang || 'en';
-        res.render('softphone', {
-            currentPage: '/softphone',
-            currentLang,
-            isSuperAdmin: isSuperAdmin(req)
-        });
-    } catch (error) {
-        res.status(500).send("Softphone Engine Error: " + error.message);
-    }
 });
 
 // --- GSM DONGLES MONITOR & USSD ROUTING ENGINE ---
@@ -7264,11 +7473,12 @@ function updateVoicemailConf(extNum, displayName, vmVal) {
 }
 
 // Helper function to sync extension astdb recording & user settings
-async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'both', vadGateVal = '1') {
+async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'both', vadGateVal = '1', vadDbVal = 'off') {
     const techUpper = (tech || 'sip').toUpperCase();
     const techLower = (tech || 'sip').toLowerCase();
     const validDenoise = ['both', 'rx', 'tx', 'off'].includes(denoiseVal) ? denoiseVal : 'both';
     const validVadGate = (vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
+    const validVadDb = (vadDbVal !== undefined && vadDbVal !== null) ? String(vadDbVal).trim() : 'off';
     const commands = [
         `database put AMPUSER ${extNum}/answermode disabled`,
         `database put AMPUSER ${extNum}/cfringtimer 0`,
@@ -7286,6 +7496,7 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
         `database put AMPUSER ${extNum}/voicemail ${vmVal}`,
         `database put AMPUSER ${extNum}/ai_denoise ${validDenoise}`,
         `database put AMPUSER ${extNum}/vad_gate ${validVadGate}`,
+        `database put AMPUSER ${extNum}/vad_db ${validVadDb}`,
         `database put DEVICE/${extNum} default_user "${extNum}"`,
         `database put DEVICE/${extNum} dial "${techUpper}/${extNum}"`,
         `database put DEVICE/${extNum} tech "${techLower}"`,
@@ -7355,7 +7566,7 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create')
     content = content.trim();
 
     if (action !== 'delete') {
-        const newBlock = `\n${startMarker}\n[${extNum}](+)\ntransport=transport-wss\nwebrtc=yes\nice_support=yes\nuse_avpf=yes\nmedia_use_received_transport=yes\ndirect_media=no\nrtcp_mux=yes\nmedia_encryption=dtls\ndtls_cert_file=/etc/asterisk/keys/asterisk.pem\ndtls_private_key=/etc/asterisk/keys/asterisk.pem\ndtls_ca_file=/etc/asterisk/keys/asterisk.pem\ndtls_verify=fingerprint\ndtls_setup=actpass\n\n[${extNum}](+type=aor)\nmax_contacts=5\nremove_existing=yes\n${endMarker}`;
+        const newBlock = `\n${startMarker}\n[${extNum}](+)\nwebrtc=yes\nice_support=yes\nuse_avpf=yes\nmedia_use_received_transport=yes\ndirect_media=no\nrtcp_mux=yes\nmedia_encryption=dtls\ndtls_cert_file=/etc/asterisk/keys/asterisk.pem\ndtls_private_key=/etc/asterisk/keys/asterisk.pem\ndtls_ca_file=/etc/asterisk/keys/asterisk.pem\ndtls_verify=fingerprint\ndtls_setup=actpass\n\n[${extNum}](+type=aor)\nmax_contacts=1\nremove_existing=yes\n${endMarker}`;
         content += (content ? '\n' : '') + newBlock;
     }
 
@@ -7371,44 +7582,6 @@ function reloadPjsip() {
     exec(`${ASTERISK_BIN} -rx "pjsip reload"`, () => {});
 }
 
-app.get('/api/webrtc/config', requireAuth, async (req, res) => {
-    try {
-        const isAdmin = isSuperAdmin(req);
-        const currentUser = req.session ? String(req.session.username || '').trim() : '';
-
-        let query = `
-            SELECT u.extension, u.name, d.tech
-            FROM ${tables.users} u
-            LEFT JOIN ${tables.devices} d ON d.id = u.extension
-            WHERE d.tech = 'pjsip'
-        `;
-        let params = [];
-
-        if (!isAdmin) {
-            query += ` AND u.extension = ?`;
-            params.push(currentUser);
-        }
-
-        const [rows] = await pool.query(query, params);
-        const isSecure = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https';
-        const host = req.hostname || '127.0.0.1';
-        const defaultPort = isSecure ? 8089 : 8088;
-        const wsPort = process.env.WEBRTC_PORT || defaultPort;
-        const protocol = isSecure ? 'wss' : 'ws';
-        const defaultWsUrl = `${protocol}://${host}:${wsPort}/ws`;
-        const wsUrl = process.env.WEBRTC_WSS_URL || (isSecure ? defaultWsUrl : (process.env.WEBRTC_WS_URL || defaultWsUrl));
-        res.json({
-            success: true,
-            wsUrl,
-            extensions: rows.map(r => ({
-                extension: r.extension,
-                name: r.name
-            }))
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
 
 // GET /api/config/extensions - List all Extensions
 app.get('/api/config/extensions', async (req, res) => {
@@ -7429,6 +7602,7 @@ app.get('/api/config/extensions', async (req, res) => {
 
         let denoiseMap = {};
         let vadMap = {};
+        let vadDbMap = {};
         try {
             const { stdout: astdbOut } = await execPromise(`${ASTERISK_BIN} -rx "database show AMPUSER"`);
             const lines = (astdbOut || '').split('\n');
@@ -7441,6 +7615,10 @@ app.get('/api/config/extensions', async (req, res) => {
                 if (matchVad) {
                     vadMap[matchVad[1]] = matchVad[2].trim();
                 }
+                const matchVadDb = line.match(/\/AMPUSER\/(\d+)\/vad_db\s*:\s*([\w\-]+)/);
+                if (matchVadDb) {
+                    vadDbMap[matchVadDb[1]] = matchVadDb[2].trim();
+                }
             }
         } catch (err) {
             console.error('[GET /api/config/extensions] AstDB denoise/VAD lookup error:', err.message);
@@ -7450,7 +7628,8 @@ app.get('/api/config/extensions', async (req, res) => {
             ...ext,
             is_group_admin: Boolean(ext.is_group_admin === 1 || ext.is_group_admin === true || ext.is_group_admin === '1'),
             denoise: denoiseMap[ext.extension] || 'both',
-            vad_gate: vadMap[ext.extension] !== undefined ? vadMap[ext.extension] : '1'
+            vad_gate: vadMap[ext.extension] !== undefined ? vadMap[ext.extension] : '1',
+            vad_db: vadDbMap[ext.extension] || 'off'
         }));
         res.json({ success: true, extensions: enriched });
     } catch (error) {
@@ -7461,7 +7640,7 @@ app.get('/api/config/extensions', async (req, res) => {
 // POST /api/config/extensions - Create new Generic SIP Extension
 app.post('/api/config/extensions', async (req, res) => {
     try {
-        const { extension, name, secret, voicemail, tech, denoise, vad_gate, vadGate } = req.body;
+        const { extension, name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb } = req.body;
         if (!extension || !/^\d+$/.test(extension)) {
             return res.status(400).json({ success: false, error: 'Valid numeric Extension number is required.' });
         }
@@ -7544,7 +7723,8 @@ app.post('/api/config/extensions', async (req, res) => {
         }
         const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
         const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
-        await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech, denoiseVal, vadGateVal);
+        const vadDbVal = (vad_db !== undefined ? vad_db : (vadDb || 'off'));
+        await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech, denoiseVal, vadGateVal, vadDbVal);
         let isGroupAdmin = 0;
         if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
             const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
@@ -7586,7 +7766,7 @@ app.post('/api/config/extensions', async (req, res) => {
 app.put('/api/config/extensions/:extension', async (req, res) => {
     try {
         const extNum = String(req.params.extension).trim();
-        const { name, secret, voicemail, tech, denoise, vad_gate, vadGate } = req.body;
+        const { name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb } = req.body;
         const displayName = String(name || '').trim();
         const extSecret = String(secret || '').trim();
         const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
@@ -7635,6 +7815,20 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             updatePjsipCustomConfig(extNum, '', '', 'delete');
         }
         reloadPjsip();
+        if (denoise !== undefined) {
+            const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
+            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/ai_denoise ${denoiseVal}"`);
+        }
+        const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
+        if (vadGateVal !== undefined) {
+            const validVad = (vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
+            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/vad_gate ${validVad}"`);
+        }
+        const vadDbVal = (vad_db !== undefined ? vad_db : vadDb);
+        if (vadDbVal !== undefined) {
+            const validVadDb = String(vadDbVal).trim();
+            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/vad_db ${validVadDb}"`);
+        }
 
         sipPresence[extNum] = false;
         pjsipPresence[extNum] = false;
@@ -9571,7 +9765,7 @@ app.delete('/api/config/routes/outbound/:route_id', async (req, res) => {
 
 // --- VOICEMAIL CONFIGURATION APIs ---
 
-// GET /api/config/voicemail/extensions - List extensions with voicemail enabled
+// GET /api/config/voicemail/extensions - List extensions with voicemail enabled and active custom greeting name
 app.get('/api/config/voicemail/extensions', async (req, res) => {
     try {
         const [users] = await pool.query(`
@@ -9580,15 +9774,58 @@ app.get('/api/config/voicemail/extensions', async (req, res) => {
             ORDER BY CAST(extension AS UNSIGNED) ASC
         `);
         
+        let recordings = [];
+        try {
+            const [recRows] = await pool.query('SELECT id, displayname, filename FROM `asterisk`.`recordings` WHERE displayname != "__invalid"');
+            recordings = recRows || [];
+        } catch (_) {}
+
         const list = users.map(u => {
             const ext = u.extension;
-            const gsmPath = `/var/spool/asterisk/voicemail/default/${ext}/unavail.gsm`;
-            const wavPath = `/var/spool/asterisk/voicemail/default/${ext}/unavail.wav`;
+            const mailboxDir = `/var/spool/asterisk/voicemail/default/${ext}`;
+            const gsmPath = path.join(mailboxDir, 'unavail.gsm');
+            const wavPath = path.join(mailboxDir, 'unavail.wav');
+            const infoPath = path.join(mailboxDir, '.greeting_info');
             const hasCustom = fs.existsSync(gsmPath) || fs.existsSync(wavPath);
+            let greetingName = null;
+
+            if (hasCustom) {
+                // 1. Read from .greeting_info if present
+                if (fs.existsSync(infoPath)) {
+                    try {
+                        const meta = JSON.parse(fs.readFileSync(infoPath, 'utf8'));
+                        if (meta && meta.name) greetingName = meta.name;
+                    } catch (_) {}
+                }
+
+                // 2. Fallback: match against system recordings by file size
+                if (!greetingName && fs.existsSync(wavPath)) {
+                    try {
+                        const wavStat = fs.statSync(wavPath);
+                        for (const rec of recordings) {
+                            if (!rec.filename) continue;
+                            const recWav = path.join('/var/lib/asterisk/sounds', String(rec.filename) + '.wav');
+                            if (fs.existsSync(recWav)) {
+                                const recStat = fs.statSync(recWav);
+                                if (Math.abs(recStat.size - wavStat.size) < 1000) {
+                                    greetingName = rec.displayname || rec.filename;
+                                    try {
+                                        fs.writeFileSync(infoPath, JSON.stringify({ recordingId: rec.id, name: greetingName, filename: rec.filename }), 'utf8');
+                                        exec(`chown asterisk:asterisk "${infoPath}"`);
+                                    } catch (_) {}
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (_) {}
+                }
+            }
+
             return {
                 extension: ext,
                 name: u.name,
-                hasCustomGreeting: hasCustom
+                hasCustomGreeting: hasCustom,
+                greetingName: greetingName
             };
         });
         
@@ -9606,11 +9843,12 @@ app.post('/api/config/voicemail/greeting', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Recording is required.' });
         }
         
-        // Get recording path
-        const [recRow] = await pool.query('SELECT CAST(filename AS CHAR) AS filename FROM `asterisk`.`recordings` WHERE id = ?', [recordingId]);
+        // Get recording path and display name
+        const [recRow] = await pool.query('SELECT id, displayname, CAST(filename AS CHAR) AS filename FROM `asterisk`.`recordings` WHERE id = ?', [recordingId]);
         if (!recRow.length || !recRow[0].filename) {
             return res.status(404).json({ success: false, error: 'Recording not found.' });
         }
+        const recDisplayName = recRow[0].displayname || recRow[0].filename;
         
         const relFile = String(recRow[0].filename);
         const wavSrcPath = path.join('/var/lib/asterisk/sounds', relFile + '.wav');
@@ -9655,6 +9893,16 @@ app.post('/api/config/voicemail/greeting', async (req, res) => {
             await new Promise(resolve => exec(`sox "${wavSrcPath}" -r 8000 -c 1 -b 16 "${wavDestBusy}"`, resolve));
             
             exec(`chown -R asterisk:asterisk "${mailboxDir}"`);
+            const infoPath = path.join(mailboxDir, '.greeting_info');
+            try {
+                fs.writeFileSync(infoPath, JSON.stringify({
+                    recordingId: recRow[0].id,
+                    name: recDisplayName,
+                    filename: relFile,
+                    appliedAt: new Date().toISOString()
+                }), 'utf8');
+                exec(`chown asterisk:asterisk "${infoPath}"`);
+            } catch (_) {}
         }
         
         // Ensure Asterisk default intro prompts are muted with silent GSM files
@@ -9684,6 +9932,10 @@ app.post('/api/config/voicemail/reset', async (req, res) => {
             const mailboxDir = `/var/spool/asterisk/voicemail/default/${ext}`;
             removeVmFile(mailboxDir, 'busy');
             removeVmFile(mailboxDir, 'unavail');
+            try {
+                const infoPath = path.join(mailboxDir, '.greeting_info');
+                if (fs.existsSync(infoPath)) fs.unlinkSync(infoPath);
+            } catch (_) {}
         }
         
         ensureVmBackups();
@@ -10454,14 +10706,17 @@ app.get('/api/config/audio-globals', async (req, res) => {
     try {
         let vad_threshold = '0.20';
         let vad_hangover = '250';
+        let vad_db_threshold = '-90';
         try {
             const { stdout } = await execPromise(`${ASTERISK_BIN} -rx "database show AUDIO_GLOBALS"`);
             const thresh = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_threshold\s*:\s*([\d\.]+)/);
             const hang = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_hangover\s*:\s*(\d+)/);
+            const dbThresh = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_db_threshold\s*:\s*([\w\-]+)/);
             if (thresh) vad_threshold = thresh[1];
             if (hang) vad_hangover = hang[1];
+            if (dbThresh) vad_db_threshold = dbThresh[1];
         } catch (_) {}
-        res.json({ success: true, globals: { vad_threshold, vad_hangover } });
+        res.json({ success: true, globals: { vad_threshold, vad_hangover, vad_db_threshold } });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -10472,6 +10727,7 @@ app.put('/api/config/audio-globals', async (req, res) => {
     try {
         const threshold = parseFloat(req.body.vad_threshold);
         const hangover = parseInt(req.body.vad_hangover, 10);
+        let dbThreshold = req.body.vad_db_threshold !== undefined ? String(req.body.vad_db_threshold).trim() : undefined;
         if (isNaN(threshold) || threshold < 0.01 || threshold > 0.95) {
             return res.status(400).json({ success: false, error: 'vad_threshold must be between 0.01 and 0.95' });
         }
@@ -10480,7 +10736,18 @@ app.put('/api/config/audio-globals', async (req, res) => {
         }
         await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS vad_threshold ${threshold.toFixed(2)}"`);
         await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS vad_hangover ${hangover}"`);
-        res.json({ success: true, globals: { vad_threshold: threshold.toFixed(2), vad_hangover: String(hangover) }, message: 'Universal voice processing settings saved. Applied to all extensions immediately.' });
+        if (dbThreshold) {
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS vad_db_threshold ${dbThreshold}"`);
+        }
+        res.json({
+            success: true,
+            globals: {
+                vad_threshold: threshold.toFixed(2),
+                vad_hangover: String(hangover),
+                vad_db_threshold: dbThreshold || '-90'
+            },
+            message: 'Universal voice processing settings saved. Applied to all extensions immediately.'
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

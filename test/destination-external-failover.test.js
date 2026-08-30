@@ -28,23 +28,20 @@ test('views/config.ejs DestinationSelect supports External Mobile Number destina
     assert.match(configContent, /رقم خارجي \/ جوال:/, 'formatDestination must format external destinations in Arabic');
 });
 
-test('/etc/asterisk/extensions_custom.conf contains ext-external-failover and sub-failover-screen contexts', () => {
+test('/etc/asterisk/extensions_custom.conf contains ext-external-failover with direct bridging', () => {
     const customConfPath = '/etc/asterisk/extensions_custom.conf';
     assert.ok(fs.existsSync(customConfPath), 'extensions_custom.conf must exist');
     const conf = fs.readFileSync(customConfPath, 'utf8');
 
     // ext-external-failover context definition
     assert.match(conf, /\[ext-external-failover\]/, 'extensions_custom.conf must define [ext-external-failover]');
-    assert.match(conf, /Dial\(Dongle\/\$\{EXPLICIT_DONGLE\}\/\$\{TARGET_NUM\},60,U\(sub-failover-screen\^\$\{CUST_NUM\}\)\)/, 'ext-external-failover must dial explicit Dongle channel when specified');
-    assert.match(conf, /Dial\(Local\/\$\{TARGET_NUM\}@outbound-allroutes,60,U\(sub-failover-screen\^\$\{CUST_NUM\}\)\)/, 'ext-external-failover must dial Local with sub-failover-screen subroutine');
-    // sub-failover-screen call screening subroutine
-    assert.match(conf, /\[sub-failover-screen\]/, 'extensions_custom.conf must define [sub-failover-screen]');
-    assert.match(conf, /Playback\(followme\/call-from\)/, 'sub-failover-screen must play call-from announcement');
-    assert.match(conf, /SayDigits\(\$\{ARG1\}\)/, 'sub-failover-screen must speak the customer phone number digits');
+    assert.match(conf, /Dial\(Dongle\/\$\{EXPLICIT_DONGLE\}\/\$\{TARGET_NUM\},60\)/, 'ext-external-failover must dial explicit Dongle channel directly');
+    assert.match(conf, /Dial\(Local\/\$\{TARGET_NUM\}@outbound-allroutes,60\)/, 'ext-external-failover must dial Local directly without screening whisper');
 });
 
-test('install.sh contains ext-external-failover and sub-failover-screen dialplan migrations', () => {
+test('install.sh contains ext-external-failover dialplan migrations', () => {
     const installScript = fs.readFileSync(path.join(__dirname, '../install.sh'), 'utf8');
     assert.match(installScript, /\[ext-external-failover\]/, 'install.sh must configure [ext-external-failover]');
-    assert.match(installScript, /\[sub-failover-screen\]/, 'install.sh must configure [sub-failover-screen]');
+    assert.match(installScript, /Dial\(Dongle\/\$\{EXPLICIT_DONGLE\}\/\$\{TARGET_NUM\},60\)/, 'install.sh must dial Dongle directly');
+    assert.match(installScript, /Dial\(Local\/\$\{TARGET_NUM\}@outbound-allroutes,60\)/, 'install.sh must dial Local directly');
 });
