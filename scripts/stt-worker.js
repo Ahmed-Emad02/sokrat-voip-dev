@@ -95,26 +95,42 @@ function resolveVoicemailAudioPath(mailbox, msgFile) {
     return null;
 }
 
+const EGYPTIAN_ARABIC_PROMPT = 'محادثة هاتفية خدمة عملاء بالعامية المصرية: ألو، أيوة يا فندم، تمام، إزيك، معاك، الخط، الدونجل، الصوت، واضح، حاضر، شكراً، مع السلامة.';
+
+function filterForeignHallucinations(line) {
+    if (!line) return '';
+    // Strip pure Latin artifact tokens (e.g. "canción", "imperlational", "básicamente") that bleed into Arabic audio on pauses
+    const arabicChars = (line.match(/[\u0600-\u06FF]/g) || []).length;
+    const latinChars = (line.match(/[a-zA-Z]/g) || []).length;
+    if (arabicChars > 0 && latinChars > 0 && arabicChars >= latinChars) {
+        return line.replace(/[a-zA-Z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF]{3,}/g, '').replace(/\s{2,}/g, ' ').trim();
+    }
+    return line.trim();
+}
+
 function cleanTranscript(rawText) {
     if (!rawText || typeof rawText !== 'string') return '';
-    let text = rawText.trim();
-    if (!text) return '';
+    const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const cleanedLines = [];
 
-    // 1. Collapse duplicate lines
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    const uniqueLines = [];
-    for (let i = 0; i < lines.length; i++) {
-        if (i === 0 || lines[i] !== lines[i - 1]) {
-            uniqueLines.push(lines[i]);
+    for (let line of lines) {
+        line = filterForeignHallucinations(line);
+        if (!line || line.length < 2) continue;
+
+        // Collapse repetitive token loops within line (e.g. "نفسك نفسك نفسك" -> "نفسك")
+        line = line.replace(/(\b\S+\b)(?:\s+\1\b){2,}/gu, '$1');
+        line = line.replace(/(\b\S+\s+\S+\b)(?:\s+\1\b){2,}/gu, '$1');
+
+        // Remove timestamp brackets if line has no speech text
+        const textWithoutTimestamp = line.replace(/^\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*/, '').trim();
+        if (!textWithoutTimestamp || textWithoutTimestamp.length < 2) continue;
+
+        if (cleanedLines.length === 0 || cleanedLines[cleanedLines.length - 1] !== line) {
+            cleanedLines.push(line);
         }
     }
-    text = uniqueLines.join('\n');
 
-    // 2. Collapse immediate repeated word sequences (e.g. "كلم مكريم كلم مكريم" -> "كلم مكريم")
-    text = text.replace(/\b(\S+(?:\s+\S+){0,5})\b(?:\s+\1\b){2,}/gi, '$1');
-    text = text.replace(/([^\s]+)(?:\s+\1){2,}/gi, '$1');
-
-    return text.trim();
+    return cleanedLines.join('\n');
 }
 
 async function convertTo16kWav(inputPath, outputPath) {
@@ -144,26 +160,30 @@ async function runWhisperTranscription(wavPath, modelName = 'base', language = '
     if (!fs.existsSync(modelFile)) {
         throw new Error(`Whisper model file not found in ${MODELS_DIR}`);
     }
+    const tmpOutBase = path.join(os.tmpdir(), `whisper_out_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+    const prompt = (language === 'ar' || language === 'auto')
+        ? EGYPTIAN_ARABIC_PROMPT
+        : 'Phone conversation: hello, yes, okay, thanks, goodbye.';
 
     const args = [
         '-m', modelFile,
         '-f', wavPath,
         '--output-txt',
         '-of', tmpOutBase,
-        '-nt',
         '-mc', '0',          // Stop cross-segment context repetition loop
-        '-nth', '0.65',       // Skip silence/no-speech rather than hallucinating
+        '-nth', '0.60',       // Skip silent pauses
         '-sns',               // Suppress non-speech tokens
         '-et', '2.4',         // Entropy threshold
         '-lpt', '-1.0',       // Logprob threshold
         '-bs', '1',           // Fast greedy beam search (prevents looping)
-        '-bo', '1'            // Single best candidate
+        '-bo', '1',
+        '--prompt', prompt
     ];
 
     if (language && language !== 'auto') {
         args.push('-l', language);
     } else {
-        args.push('-l', 'auto');
+        args.push('-l', 'ar');
     }
 
     try {

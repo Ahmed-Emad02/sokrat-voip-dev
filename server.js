@@ -331,6 +331,15 @@ async function initAuthDb() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     await conn.execute(`
+        CREATE TABLE IF NOT EXISTS extension_policies (
+            extension VARCHAR(20) PRIMARY KEY,
+            auto_answer ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
+            dnd ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
         CREATE TABLE IF NOT EXISTS dashboard_settings (
             setting_key VARCHAR(100) PRIMARY KEY,
             setting_value TEXT DEFAULT NULL
@@ -7634,6 +7643,80 @@ app.get('/api/config/extensions', async (req, res) => {
         res.json({ success: true, extensions: enriched });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// --- EXTENSION POLICIES API (SUPER ADMIN ONLY) ---
+
+// GET /api/extension-policies - List all extensions with policy settings
+app.get('/api/extension-policies', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT u.extension, u.name, 
+                   COALESCE(ep.auto_answer, 'user_choice') AS auto_answer,
+                   COALESCE(ep.dnd, 'user_choice') AS dnd,
+                   ep.updated_at
+            FROM \`asterisk\`.\`users\` u
+            LEFT JOIN \`asterisk\`.\`extension_policies\` ep ON ep.extension = u.extension
+            ORDER BY CAST(u.extension AS UNSIGNED) ASC
+        `);
+        res.json({ success: true, policies: rows });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/extension-policies/:extension - Update policy for single extension
+app.post('/api/extension-policies/:extension', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        const extension = String(req.params.extension || '').trim();
+        const auto_answer = ['user_choice', 'force_on', 'force_off'].includes(req.body.auto_answer) ? req.body.auto_answer : 'user_choice';
+        const dnd = ['user_choice', 'force_on', 'force_off'].includes(req.body.dnd) ? req.body.dnd : 'user_choice';
+
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`extension_policies\` (extension, auto_answer, dnd)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd)
+        `, [extension, auto_answer, dnd]);
+
+        res.json({ success: true, message: `Policy updated for extension ${extension}` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/extension-policies-bulk - Bulk update policies for extensions
+app.post('/api/extension-policies-bulk', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        const { extensions, auto_answer, dnd } = req.body;
+        const autoAnswerVal = ['user_choice', 'force_on', 'force_off'].includes(auto_answer) ? auto_answer : 'user_choice';
+        const dndVal = ['user_choice', 'force_on', 'force_off'].includes(dnd) ? dnd : 'user_choice';
+
+        let targetExts = [];
+        if (Array.isArray(extensions) && extensions.length > 0) {
+            targetExts = extensions.map(e => String(e).trim()).filter(Boolean);
+        } else {
+            const [uRows] = await pool.query('SELECT extension FROM `asterisk`.`users`');
+            targetExts = uRows.map(r => String(r.extension));
+        }
+
+        for (const ext of targetExts) {
+            await pool.query(`
+                INSERT INTO \`asterisk\`.\`extension_policies\` (extension, auto_answer, dnd)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd)
+            `, [ext, autoAnswerVal, dndVal]);
+        }
+
+        res.json({ success: true, count: targetExts.length, message: `Policies updated for ${targetExts.length} extension(s)` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

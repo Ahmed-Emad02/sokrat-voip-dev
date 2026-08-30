@@ -38,6 +38,14 @@ CREATE TABLE IF NOT EXISTS `dashboard_group_permissions` (
   UNIQUE KEY `idx_group_tab` (`group_id`, `tab`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `extension_policies` (
+  `extension` VARCHAR(20) PRIMARY KEY,
+  `auto_answer` ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
+  `dnd` ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `gsm_dongles` (
   `dongle_name` VARCHAR(50) NOT NULL PRIMARY KEY,
   `imsi` VARCHAR(30) DEFAULT NULL,

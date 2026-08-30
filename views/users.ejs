@@ -509,8 +509,175 @@
                             <% }); %>
                         </div>
                     <% } %>
+
+                    <!-- Extension Softphone Policies Section (Super Admin Only) -->
+                    <div class="panel-surface p-6 space-y-5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#27272a] pb-4">
+                            <div>
+                                <h3 class="text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span><%= isRtl ? 'سياسات وقفل خيارات الهاتف الصوتي (الرد التلقائي و DND)' : 'Extension Softphone Policies & Feature Locks' %></span>
+                                </h3>
+                                <p class="text-xs text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'قفل الرد التلقائي أو عدم الإزعاج إجبارياً على التحويلة لمنع الموظف من تعطيلها' : 'Centrally enforce or prohibit Auto-Answer and DND on extensions. Locked policies cannot be changed by the agent.' %></p>
+                            </div>
+                            <!-- Bulk Action Toolbar -->
+                            <div class="flex items-center gap-2 shrink-0">
+                                <select id="bulkAutoAnswer" name="bulk_auto_answer" class="user-input py-1 px-2.5 text-xs h-8">
+                                    <option value="" disabled selected><%= isRtl ? 'الرد التلقائي للكل' : 'Auto Answer for All' %></option>
+                                    <option value="user_choice"><%= isRtl ? 'حر (اختيار الموظف)' : 'User Controlled' %></option>
+                                    <option value="force_on">🔒 <%= isRtl ? 'إجباري مفعل دائماً' : 'Locked ON (Force)' %></option>
+                                    <option value="force_off">🔒 <%= isRtl ? 'إجباري معطل (ممنوع)' : 'Locked OFF (Prohibit)' %></option>
+                                </select>
+                                <select id="bulkDnd" name="bulk_dnd" class="user-input py-1 px-2.5 text-xs h-8">
+                                    <option value="" disabled selected><%= isRtl ? 'عدم الإزعاج للكل' : 'DND for All' %></option>
+                                    <option value="user_choice"><%= isRtl ? 'حر (اختيار الموظف)' : 'User Controlled' %></option>
+                                    <option value="force_on">🔒 <%= isRtl ? 'إجباري مفعل' : 'Locked ON (Force)' %></option>
+                                    <option value="force_off">🔒 <%= isRtl ? 'إجباري معطل (ممنوع)' : 'Locked OFF (Prohibit)' %></option>
+                                </select>
+                                <button type="button" onclick="applyBulkPolicies()" class="btn-primary py-1 px-3 text-xs h-8 whitespace-nowrap">
+                                    <%= isRtl ? 'تطبيق على الكل' : 'Apply to All' %>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Policies Table -->
+                        <div class="overflow-x-auto">
+                            <table id="extensionPoliciesTable" class="w-full text-left text-xs">
+                                <thead>
+                                    <tr class="border-b border-[#27272a] text-[10px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">
+                                        <th class="pb-3 px-3"><%= isRtl ? 'التحويلة' : 'Extension' %></th>
+                                        <th class="pb-3 px-3"><%= isRtl ? 'اسم الموظف' : 'Agent Name' %></th>
+                                        <th class="pb-3 px-3"><%= isRtl ? 'الرد التلقائي (Auto Answer)' : 'Auto Answer Policy' %></th>
+                                        <th class="pb-3 px-3"><%= isRtl ? 'عدم الإزعاج (DND)' : 'DND Policy' %></th>
+                                        <th class="pb-3 px-3 text-right"><%= isRtl ? 'إجراء' : 'Actions' %></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="extensionPoliciesTbody" class="divide-y divide-[#27272a]">
+                                    <tr>
+                                        <td colspan="5" class="py-6 text-center text-zinc-500 font-bold"><%= isRtl ? 'جاري تحميل السياسات...' : 'Loading extension policies...' %></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="policyToast" class="fixed bottom-5 right-5 z-50 transform transition-all duration-300 translate-y-20 opacity-0 pointer-events-none px-4 py-2.5 rounded-xl text-xs font-bold shadow-2xl flex items-center gap-2"></div>
                 </div>
             <% } %>
+
+            <script>
+                async function loadExtensionPolicies() {
+                    const tbody = document.getElementById('extensionPoliciesTbody');
+                    if (!tbody) return;
+                    try {
+                        const res = await fetch('/api/extension-policies');
+                        const data = await res.json();
+                        if (!data.success || !data.policies || data.policies.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-zinc-500">No extensions found.</td></tr>';
+                            return;
+                        }
+                        tbody.innerHTML = '';
+                        const isAr = document.documentElement.getAttribute('dir') === 'rtl';
+
+                        data.policies.forEach(p => {
+                            const tr = document.createElement('tr');
+                            tr.className = 'hover:bg-zinc-800/30 transition';
+                            tr.innerHTML = `
+                                <td class="py-3 px-3 font-mono font-bold text-white text-sm">${p.extension}</td>
+                                <td class="py-3 px-3 font-semibold text-zinc-300">${p.name || 'Extension ' + p.extension}</td>
+                                <td class="py-3 px-3">
+                                    <select id="policyAuto_${p.extension}" name="policy_auto_${p.extension}" class="user-input py-1 px-2 text-xs policy-auto-${p.extension}">
+                                        <option value="user_choice" ${p.auto_answer === 'user_choice' ? 'selected' : ''}>${isAr ? 'حر (اختيار الموظف)' : 'User Controlled'}</option>
+                                        <option value="force_on" ${p.auto_answer === 'force_on' ? 'selected' : ''}>🔒 ${isAr ? 'إجباري مفعل (قفل)' : 'Locked ON (Force)'}</option>
+                                        <option value="force_off" ${p.auto_answer === 'force_off' ? 'selected' : ''}>🔒 ${isAr ? 'إجباري معطل (ممنوع)' : 'Locked OFF (Prohibit)'}</option>
+                                    </select>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <select id="policyDnd_${p.extension}" name="policy_dnd_${p.extension}" class="user-input py-1 px-2 text-xs policy-dnd-${p.extension}">
+                                        <option value="user_choice" ${p.dnd === 'user_choice' ? 'selected' : ''}>${isAr ? 'حر (اختيار الموظف)' : 'User Controlled'}</option>
+                                        <option value="force_on" ${p.dnd === 'force_on' ? 'selected' : ''}>🔒 ${isAr ? 'إجباري مفعل (قفل)' : 'Locked ON (Force)'}</option>
+                                        <option value="force_off" ${p.dnd === 'force_off' ? 'selected' : ''}>🔒 ${isAr ? 'إجباري معطل (ممنوع)' : 'Locked OFF (Prohibit)'}</option>
+                                    </select>
+                                </td>
+                                <td class="py-3 px-3 text-right">
+                                    <button type="button" onclick="saveExtensionPolicy('${p.extension}')" class="btn-ghost py-1 px-2.5 text-xs text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/50">
+                                        ${isAr ? 'حفظ' : 'Save'}
+                                    </button>
+                                </td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    } catch (e) {
+                        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-red-400">Failed to load extension policies.</td></tr>';
+                    }
+                }
+
+                async function saveExtensionPolicy(ext) {
+                    const autoSelect = document.querySelector(`.policy-auto-${ext}`);
+                    const dndSelect = document.querySelector(`.policy-dnd-${ext}`);
+                    if (!autoSelect || !dndSelect) return;
+
+                    try {
+                        const res = await fetch(`/api/extension-policies/${ext}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                auto_answer: autoSelect.value,
+                                dnd: dndSelect.value
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            showPolicyToast(`Policy updated for Ext ${ext}`, 'success');
+                        } else {
+                            showPolicyToast(data.error || 'Failed to update policy', 'error');
+                        }
+                    } catch (e) {
+                        showPolicyToast('Network error while saving policy', 'error');
+                    }
+                }
+
+                async function applyBulkPolicies() {
+                    const autoVal = document.getElementById('bulkAutoAnswer').value;
+                    const dndVal = document.getElementById('bulkDnd').value;
+                    if (!autoVal && !dndVal) {
+                        showPolicyToast('Please select at least one policy value to apply to all', 'error');
+                        return;
+                    }
+
+                    try {
+                        const res = await fetch('/api/extension-policies-bulk', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                auto_answer: autoVal || 'user_choice',
+                                dnd: dndVal || 'user_choice'
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            showPolicyToast(`Bulk policy applied to ${data.count} extension(s)`, 'success');
+                            loadExtensionPolicies();
+                        } else {
+                            showPolicyToast(data.error || 'Failed to apply bulk policy', 'error');
+                        }
+                    } catch (e) {
+                        showPolicyToast('Network error while applying bulk policy', 'error');
+                    }
+                }
+
+                function showPolicyToast(msg, type = 'success') {
+                    const t = document.getElementById('policyToast');
+                    if (!t) return;
+                    t.textContent = msg;
+                    t.className = `fixed bottom-5 right-5 z-50 transform transition-all duration-300 translate-y-0 opacity-100 pointer-events-auto px-4 py-2.5 rounded-xl text-xs font-bold shadow-2xl flex items-center gap-2 ${type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`;
+                    setTimeout(() => {
+                        t.className = 'fixed bottom-5 right-5 z-50 transform transition-all duration-300 translate-y-20 opacity-0 pointer-events-none px-4 py-2.5 rounded-xl text-xs font-bold shadow-2xl flex items-center gap-2';
+                    }, 3000);
+                }
+
+                document.addEventListener('DOMContentLoaded', loadExtensionPolicies);
+            </script>
 
         </div>
     </div>
