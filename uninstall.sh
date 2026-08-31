@@ -40,6 +40,15 @@ if [ -f /etc/systemd/system/sokrat-stt.service ]; then
     systemctl daemon-reload
 fi
 echo "  Sokrat STT service stopped and unit file removed."
+if systemctl is-active sokrat-push-gateway &>/dev/null || systemctl is-enabled sokrat-push-gateway &>/dev/null; then
+    systemctl stop sokrat-push-gateway 2>/dev/null || true
+    systemctl disable sokrat-push-gateway 2>/dev/null || true
+fi
+if [ -f /etc/systemd/system/sokrat-push-gateway.service ]; then
+    rm -f /etc/systemd/system/sokrat-push-gateway.service
+    systemctl daemon-reload
+fi
+echo "  Sokrat Push Gateway service stopped and unit file removed."
 
 # 2. Restore Apache configuration to default Issabel behavior
 echo "[2/5] Restoring Apache web server configuration..."
@@ -100,6 +109,10 @@ fi
 if [ -d "/opt/sokrat-softphone" ]; then
     rm -rf "/opt/sokrat-softphone"
     echo "  Removed /opt/sokrat-softphone"
+fi
+if [ -d "/opt/sokrat-push-gateway" ]; then
+    rm -rf "/opt/sokrat-push-gateway"
+    echo "  Removed /opt/sokrat-push-gateway"
 fi
 
 echo "============================================"
