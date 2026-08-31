@@ -115,11 +115,13 @@ test('all client script blocks in views/config.ejs parse as valid JavaScript', a
         const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
         let scriptMatch;
         let scriptCount = 0;
+        let combinedScripts = '';
 
         while ((scriptMatch = scriptRegex.exec(html)) !== null) {
             const scriptContent = scriptMatch[1].trim();
             if (!scriptContent) continue;
             scriptCount++;
+            combinedScripts += '\n;\n' + scriptContent;
             try {
                 new Function(scriptContent);
             } catch (err) {
@@ -128,6 +130,9 @@ test('all client script blocks in views/config.ejs parse as valid JavaScript', a
         }
 
         assert.ok(scriptCount > 0, `Expected script blocks to parse in ${lang}`);
+        assert.doesNotThrow(() => {
+            new Function(combinedScripts);
+        }, `Combined <script> blocks in ${lang} must parse without duplicate declaration SyntaxErrors`);
     }
 });
 

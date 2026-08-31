@@ -14,6 +14,12 @@ test('backend/install_db.sql has full schema parity for extension scoping, dongl
     assert.match(sql, /`extension` VARCHAR\(20\) DEFAULT NULL/, 'dashboard_users must define extension column');
     assert.match(sql, /KEY `idx_dash_users_extension` \(`extension`\)/, 'dashboard_users must index extension');
 
+    // dashboard_user_extensions & dashboard_user_preferences
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS `dashboard_user_extensions`/, 'dashboard_user_extensions table must be created');
+    assert.match(sql, /`extension` VARCHAR\(20\) NOT NULL/, 'dashboard_user_extensions must define extension column');
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS `dashboard_user_preferences`/, 'dashboard_user_preferences table must be created');
+    assert.match(sql, /`preferences_json` LONGTEXT NOT NULL/, 'dashboard_user_preferences must define preferences_json column');
+
     // gsm_dongles & dongle_state_logs table
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `gsm_dongles`/, 'gsm_dongles table must be created');
     assert.match(sql, /`dynamic_enabled` TINYINT\(1\) NOT NULL DEFAULT 0/, 'gsm_dongles must define dynamic_enabled column');
@@ -34,7 +40,9 @@ test('install.sh contains schema migrations, rnnoise builds, and inbound blackli
     assert.ok(fs.existsSync(installPath), 'install.sh must exist');
     const script = fs.readFileSync(installPath, 'utf8');
 
-    // Schema migrations
+    // Schema migrations & tables
+    assert.match(script, /CREATE TABLE IF NOT EXISTS \\`dashboard_user_extensions\\`/, 'install.sh must create dashboard_user_extensions table');
+    assert.match(script, /CREATE TABLE IF NOT EXISTS \\`dashboard_user_preferences\\`/, 'install.sh must create dashboard_user_preferences table');
     assert.match(script, /ensure_db_column "dashboard_users" "extension"/, 'install.sh must migrate dashboard_users.extension');
     assert.match(script, /ensure_db_column "gsm_dongles" "dynamic_enabled"/, 'install.sh must migrate gsm_dongles.dynamic_enabled');
     assert.match(script, /ensure_db_column "storage_settings" "queue_provisioned"/, 'install.sh must migrate storage_settings.queue_provisioned');

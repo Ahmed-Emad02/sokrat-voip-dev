@@ -45,7 +45,7 @@ test('server.js defines all required STT REST API routes and CDR/Voicemail integ
     assert.ok(serverJs.includes('searchTranscript'), 'server.js must support searchTranscript parameter');
 });
 
-test('views/cdr.ejs renders transcript filter, STT buttons and transcript modal without errors', async () => {
+test('views/cdr.ejs renders cleanly without STT buttons or filter', async () => {
     const cdrEjsPath = path.join(__dirname, '../views/cdr.ejs');
     const moment = require('moment');
 
@@ -76,7 +76,6 @@ test('views/cdr.ejs renders transcript filter, STT buttons and transcript modal 
             searchDst: '',
             searchDid: '',
             searchUniqueId: '',
-            searchTranscript: 'invoice',
             directionFilter: 'ALL',
             callScopeFilter: 'ALL',
             page: 1,
@@ -100,21 +99,17 @@ test('views/cdr.ejs renders transcript filter, STT buttons and transcript modal 
                 did: '',
                 src_name: 'Ahmed',
                 direction: 'OUTBOUND',
-                call_scope: 'EXTERNAL',
-                transcript: 'Hello, this is a test transcript for our customer call.',
-                stt_status: 'completed',
-                stt_duration: 40,
-                stt_lang: 'en'
+                call_scope: 'EXTERNAL'
             }
         ],
         roster: [{ extension: '101', name: 'Ahmed' }],
         moment
     });
 
-    assert.ok(html.includes('id="cdrSearchTranscript"'), 'cdr.ejs must render searchTranscript input in filter bar');
-    assert.ok(html.includes('id="transcriptModal"'), 'cdr.ejs must render transcriptModal');
-    assert.ok(html.includes('showTranscriptModal'), 'cdr.ejs must wire showTranscriptModal handler');
-    assert.ok(html.includes('transcribeCallNow'), 'cdr.ejs must wire transcribeCallNow handler');
+    assert.equal(html.includes('id="cdrSearchTranscript"'), false, 'cdr.ejs must NOT render searchTranscript input');
+    assert.equal(html.includes('id="transcriptModal"'), false, 'cdr.ejs must NOT render transcriptModal');
+    assert.equal(html.includes('showTranscriptModal'), false, 'cdr.ejs must NOT wire showTranscriptModal handler');
+    assert.equal(html.includes('transcribeCallNow'), false, 'cdr.ejs must NOT wire transcribeCallNow handler');
 
     const scriptMatches = html.match(/<script[\s\S]*?>([\s\S]*?)<\/script>/gi) || [];
     for (const s of scriptMatches) {
@@ -184,7 +179,7 @@ test('views/voicemails.ejs renders transcript filter, STT badges and transcript 
     assert.ok(html.includes('transcribeVoicemailNow'), 'voicemails.ejs must wire transcribeVoicemailNow handler');
 });
 
-test('views/config.ejs renders AI Speech-to-Text Transcription Engine Card', async () => {
+test('views/config.ejs renders AI Speech-to-Text Transcription Engine Card and parses scripts cleanly', async () => {
     const configEjsPath = path.join(__dirname, '../views/config.ejs');
     const html = await ejs.renderFile(configEjsPath, {
         currentPage: '/config',
@@ -213,6 +208,17 @@ test('views/config.ejs renders AI Speech-to-Text Transcription Engine Card', asy
     assert.ok(html.includes('saveSttSettings'), 'config.ejs must wire saveSttSettings handler');
     assert.ok(html.includes('testSttApiConnection'), 'config.ejs must wire testSttApiConnection handler');
     assert.ok(html.includes('scanAndTranscribeQueue'), 'config.ejs must wire scanAndTranscribeQueue handler');
+
+    // Verify concatenated script blocks parse without duplicate identifier errors (e.g. STT_PROVIDER_DEFAULTS)
+    const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+    let combined = '';
+    let m;
+    while ((m = scriptRegex.exec(html)) !== null) {
+        combined += '\n;\n' + m[1];
+    }
+    assert.doesNotThrow(() => {
+        new Function(combined);
+    }, 'Combined client scripts in rendered config.ejs must parse without duplicate identifier SyntaxErrors');
 });
 
 test('views/sidebar.ejs renders AI STT settings button and sttApiKeyModal in settings menu', async () => {

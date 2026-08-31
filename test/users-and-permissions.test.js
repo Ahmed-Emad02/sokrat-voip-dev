@@ -444,7 +444,7 @@ test('TAB_ROUTE_MAP correctly maps all route paths with leading slashes includin
         isSuperAdmin: false,
         isRootUser: false,
         currentUser: 'emad',
-        allowedTabs: ['config', 'config-extensions', 'cdr', 'operator', 'voicemails', 'ext-stats', 'gsm-dongles']
+        allowedTabs: ['dashboard', 'config', 'config-extensions', 'cdr', 'operator', 'voicemails', 'ext-stats', 'gsm-dongles', 'storage', 'contacts']
     });
 
     assert.ok(configSidebarHtml.includes('/config?lang='), 'Sidebar during /config request must show /config');
@@ -455,4 +455,97 @@ test('TAB_ROUTE_MAP correctly maps all route paths with leading slashes includin
     assert.ok(configSidebarHtml.includes('/ext-stats?lang='), 'Sidebar during /config request must show /ext-stats');
     assert.ok(configSidebarHtml.includes('/storage?lang='), 'Sidebar during /config request must show /storage');
     assert.ok(configSidebarHtml.includes('/contacts?lang='), 'Sidebar during /config request must show /contacts');
+    assert.ok(configSidebarHtml.includes('/?lang='), 'Sidebar during /config request must show /');
+});
+
+test('User in a group with zero permissions has all navigation links hidden and accesses /no-access', async () => {
+    const sidebarEjsPath = path.join(__dirname, '../views/sidebar.ejs');
+    const noAccessViewPath = path.join(__dirname, '../views/no-access.ejs');
+
+    // 1. Sidebar with allowedTabs = []
+    const zeroPermsSidebarHtml = await ejs.renderFile(sidebarEjsPath, {
+        currentLang: 'en',
+        currentPage: '/',
+        isRtl: false,
+        isSuperAdmin: false,
+        isRootUser: false,
+        currentUser: 'noperms_user',
+        allowedTabs: []
+    });
+
+    assert.equal(zeroPermsSidebarHtml.includes('/?lang='), false, 'Dashboard link must be hidden for 0-permission group');
+    assert.equal(zeroPermsSidebarHtml.includes('/contacts?lang='), false, 'Contacts link must be hidden for 0-permission group');
+    assert.equal(zeroPermsSidebarHtml.includes('/storage?lang='), false, 'Storage link must be hidden for 0-permission group');
+    assert.equal(zeroPermsSidebarHtml.includes('/cdr?lang='), false, 'CDR link must be hidden for 0-permission group');
+    assert.equal(zeroPermsSidebarHtml.includes('/operator?lang='), false, 'Operator link must be hidden for 0-permission group');
+    assert.equal(zeroPermsSidebarHtml.includes('/voicemails?lang='), false, 'Voicemails link must be hidden for 0-permission group');
+    assert.equal(zeroPermsSidebarHtml.includes('/ext-stats?lang='), false, 'Ext stats link must be hidden for 0-permission group');
+    assert.equal(zeroPermsSidebarHtml.includes('/gsm-dongles?lang='), false, 'GSM dongles link must be hidden for 0-permission group');
+    assert.equal(zeroPermsSidebarHtml.includes('/config?lang='), false, 'Config link must be hidden for 0-permission group');
+    assert.equal(zeroPermsSidebarHtml.includes('/users?lang='), false, 'Users link must be hidden for 0-permission group');
+
+    // 2. views/no-access.ejs renders bilingual Access Restricted card with logout action
+    const enNoAccessHtml = await ejs.renderFile(noAccessViewPath, {
+        currentLang: 'en',
+        isRtl: false,
+        username: 'noperms_user'
+    });
+    assert.ok(enNoAccessHtml.includes('Access Restricted'), 'English no-access view must render Access Restricted header');
+    assert.ok(enNoAccessHtml.includes('noperms_user'), 'No-access view must show username');
+    assert.ok(enNoAccessHtml.includes('/logout'), 'No-access view must include /logout button');
+
+    const arNoAccessHtml = await ejs.renderFile(noAccessViewPath, {
+        currentLang: 'ar',
+        isRtl: true,
+        username: 'noperms_user'
+    });
+    assert.ok(arNoAccessHtml.includes('الصلاحيات مقيدة'), 'Arabic no-access view must render Arabic header');
+    assert.ok(arNoAccessHtml.includes('تسجيل الخروج'), 'Arabic no-access view must render Arabic logout button');
+});
+
+test('User with specific single tab permission only sees that tab in the sidebar', async () => {
+    const sidebarEjsPath = path.join(__dirname, '../views/sidebar.ejs');
+
+    // Case 1: ONLY 'dashboard'
+    const dashOnlyHtml = await ejs.renderFile(sidebarEjsPath, {
+        currentLang: 'en',
+        currentPage: '/',
+        isRtl: false,
+        isSuperAdmin: false,
+        isRootUser: false,
+        currentUser: 'dash_user',
+        allowedTabs: ['dashboard']
+    });
+    assert.ok(dashOnlyHtml.includes('/?lang='), 'Dashboard link must be visible');
+    assert.equal(dashOnlyHtml.includes('/contacts?lang='), false, 'Contacts link must be hidden');
+    assert.equal(dashOnlyHtml.includes('/storage?lang='), false, 'Storage link must be hidden');
+    assert.equal(dashOnlyHtml.includes('/cdr?lang='), false, 'CDR link must be hidden');
+
+    // Case 2: ONLY 'contacts'
+    const contactsOnlyHtml = await ejs.renderFile(sidebarEjsPath, {
+        currentLang: 'en',
+        currentPage: '/contacts',
+        isRtl: false,
+        isSuperAdmin: false,
+        isRootUser: false,
+        currentUser: 'contacts_user',
+        allowedTabs: ['contacts']
+    });
+    assert.ok(contactsOnlyHtml.includes('/contacts?lang='), 'Contacts link must be visible');
+    assert.equal(contactsOnlyHtml.includes('/?lang='), false, 'Dashboard link must be hidden');
+    assert.equal(contactsOnlyHtml.includes('/storage?lang='), false, 'Storage link must be hidden');
+
+    // Case 3: ONLY 'storage'
+    const storageOnlyHtml = await ejs.renderFile(sidebarEjsPath, {
+        currentLang: 'en',
+        currentPage: '/storage',
+        isRtl: false,
+        isSuperAdmin: false,
+        isRootUser: false,
+        currentUser: 'backup_user',
+        allowedTabs: ['storage']
+    });
+    assert.ok(storageOnlyHtml.includes('/storage?lang='), 'Storage link must be visible');
+    assert.equal(storageOnlyHtml.includes('/?lang='), false, 'Dashboard link must be hidden');
+    assert.equal(storageOnlyHtml.includes('/contacts?lang='), false, 'Contacts link must be hidden');
 });

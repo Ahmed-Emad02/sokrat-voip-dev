@@ -221,13 +221,24 @@ function fmtDur(s) {
                     <select name="targetExtension" id="targetExtensionSelect" multiple class="hidden no-enhance">
                         <% 
                           let rosterList = (typeof roster !== 'undefined' && Array.isArray(roster)) ? roster : [];
-                          const isScopedUser = typeof userExtension !== 'undefined' && userExtension && (typeof isSuperAdmin !== 'undefined' && !isSuperAdmin);
+                          let scopedExts = null;
+                          if (typeof userExtensions !== 'undefined' && Array.isArray(userExtensions) && userExtensions.length > 0) {
+                              scopedExts = userExtensions;
+                          } else if (typeof userExtension !== 'undefined' && userExtension) {
+                              scopedExts = String(userExtension).split(',').map(e => e.trim()).filter(Boolean);
+                          }
+                          const isScopedUser = Boolean(scopedExts && scopedExts.length > 0 && (typeof isSuperAdmin !== 'undefined' && !isSuperAdmin));
                           if (isScopedUser) {
-                              rosterList = rosterList.filter(emp => emp.extension === userExtension);
+                              rosterList = rosterList.filter(emp => scopedExts.includes(emp.extension));
                           }
                           let selectedExts = Array.isArray(filters.targetExtension) ? filters.targetExtension : (filters.targetExtension && filters.targetExtension !== 'ALL' ? [filters.targetExtension] : ['ALL']);
                           if (isScopedUser) {
-                              selectedExts = [userExtension];
+                              if (selectedExts.includes('ALL') || selectedExts.length === 0) {
+                                  selectedExts = scopedExts;
+                              } else {
+                                  selectedExts = selectedExts.filter(e => scopedExts.includes(e));
+                                  if (selectedExts.length === 0) selectedExts = scopedExts;
+                              }
                           }
                           let isAllExt = !isScopedUser && (selectedExts.includes('ALL') || selectedExts.length === 0);
                         %>
@@ -242,7 +253,7 @@ function fmtDur(s) {
                     </select>
 
                     <button type="button" id="extChecklistBtn" onclick="toggleChecklistMenu('extChecklistMenu', event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] flex items-center justify-between gap-2 cursor-pointer text-start">
-                        <span id="extChecklistLabel" class="truncate font-semibold"><%= isScopedUser ? (rosterList[0] ? (rosterList[0].extension + ' - ' + rosterList[0].name) : userExtension) : t.allExt %></span>
+                        <span id="extChecklistLabel" class="truncate font-semibold"><%= isScopedUser ? (selectedExts.length === 1 ? (rosterList.find(e => e.extension === selectedExts[0]) ? (selectedExts[0] + ' - ' + rosterList.find(e => e.extension === selectedExts[0]).name) : selectedExts[0]) : (selectedExts.length === rosterList.length ? (rosterList[0] ? (rosterList[0].extension + ' - ' + rosterList[0].name) : selectedExts.join(', ')) : (selectedExts.length + ' ' + (isRtl ? 'تحويلات محددة' : 'Extensions')))) : t.allExt %></span>
                         <svg class="w-3.5 h-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                     </button>
 
@@ -339,10 +350,7 @@ function fmtDur(s) {
                     <label for="cdrSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
                     <input type="text" id="cdrSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
                 </div>
-                <div>
-                    <label for="cdrSearchTranscript" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= isRtl ? 'بحث في النص (STT)' : 'Transcript Keyword' %></label>
-                    <input type="text" id="cdrSearchTranscript" name="searchTranscript" value="<%= filters.searchTranscript || '' %>" placeholder="<%= isRtl ? 'كلمة في التفريغ...' : 'Search transcript...' %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                </div>
+
             </div>
 
             <div class="flex items-center justify-between gap-3 pt-1.5 border-t border-[var(--border-primary)]/50">
@@ -457,22 +465,7 @@ function fmtDur(s) {
                                                     <button type="button" onclick="triggerAudioDownload(event, '/audio/<%= call.uniqueid %>?download=1')" class="shrink-0 w-7 h-7 rounded-full bg-[var(--bg-card)] hover:bg-[var(--accent-color)] border border-[var(--border-primary)] flex items-center justify-center transition cursor-pointer group/dl" title="<%= t.download %>">
                                                         <svg class="w-3.5 h-3.5 text-[var(--text-muted)] group-hover/dl:text-white transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-4-4m4 4l4-4M5 19h14"/></svg>
                                                     </button>
-                                                    <% if (call.transcript) { %>
-                                                        <button type="button" data-uniqueid="<%= call.uniqueid %>" data-subtitle="<%= (call.src || '') + ' -> ' + (call.dst || '') %>" data-transcript="<%= (call.transcript || '').replace(/"/g, '&quot;') %>" onclick="showTranscriptModalFromBtn(this)" class="shrink-0 px-2 py-1 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer" title="<%= isRtl ? 'عرض النص المفرغ' : 'View Transcript' %>">
-                                                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                                            <span><%= isRtl ? 'النص' : 'STT' %></span>
-                                                        </button>
-                                                    <% } else if (call.stt_status === 'pending' || call.stt_status === 'processing') { %>
-                                                        <span class="shrink-0 px-2 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold flex items-center gap-1 animate-pulse select-none" title="<%= isRtl ? 'جاري التفريغ الصوتي...' : 'Transcribing...' %>">
-                                                            <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                                                            <span><%= isRtl ? 'جاري التفريغ' : 'Transcribing' %></span>
-                                                        </span>
-                                                    <% } else { %>
-                                                        <button type="button" onclick="transcribeCallNow(event, '<%= call.uniqueid %>')" class="shrink-0 px-2 py-1 rounded-md bg-[var(--bg-card)] hover:bg-[var(--accent-color)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-white text-[10px] font-bold flex items-center gap-1 transition cursor-pointer" title="<%= isRtl ? 'تفريغ المكالمة بالذكاء الاصطناعي' : 'Transcribe with AI' %>">
-                                                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
-                                                            <span><%= isRtl ? 'تفريغ' : 'STT' %></span>
-                                                        </button>
-                                                    <% } %>
+
                                                 </div>
                                             </div>
                                         <% } else { %>
@@ -515,81 +508,7 @@ function fmtDur(s) {
         </div>
     </div>
 
-    <!-- STT Transcript Modal -->
-    <div id="transcriptModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="panel-surface rounded-2xl w-full max-w-xl border border-[var(--border-primary)] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div class="p-5 border-b border-[var(--border-primary)] flex items-center justify-between">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    </div>
-                    <div>
-                        <h3 class="text-sm font-black text-white"><%= isRtl ? 'التفريغ الصوتي للمكالمة (Speech-to-Text)' : 'Call Recording Transcript' %></h3>
-                        <p id="transcriptModalSubtitle" class="text-[11px] text-[var(--text-muted)] font-mono"></p>
-                    </div>
-                </div>
-                <button type="button" onclick="closeTranscriptModal()" class="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800/60 cursor-pointer">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            </div>
-            <div class="p-5 space-y-4">
-                <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl p-4 max-h-80 overflow-y-auto" style="scrollbar-width:thin">
-                    <p id="transcriptModalBody" class="text-sm text-zinc-200 leading-relaxed font-sans select-text whitespace-pre-wrap"></p>
-                </div>
-                <div class="flex items-center justify-between gap-3 pt-2">
-                    <span class="text-[10px] text-zinc-500 font-mono"><%= isRtl ? 'تفريغ محلي بواسطة whisper.cpp' : 'Locally processed on-premise by whisper.cpp' %></span>
-                    <div class="flex items-center gap-2">
-                        <button type="button" onclick="copyTranscriptText()" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 flex items-center gap-1.5 transition cursor-pointer">
-                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                            <span id="copyTranscriptBtnText"><%= isRtl ? 'نسخ النص' : 'Copy Text' %></span>
-                        </button>
-                        <button type="button" onclick="closeTranscriptModal()" class="btn-primary px-4 py-1.5 text-xs font-bold uppercase"><%= isRtl ? 'إغلاق' : 'Close' %></button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
-        function showTranscriptModalFromBtn(btn) {
-            const uid = btn.getAttribute('data-uniqueid') || '';
-            const subtitle = btn.getAttribute('data-subtitle') || '';
-            const text = btn.getAttribute('data-transcript') || '';
-            showTranscriptModal(uid, subtitle, text);
-        }
-        function showTranscriptModal(uniqueid, subtitle, text) {
-            document.getElementById('transcriptModalSubtitle').textContent = subtitle + ' (' + uniqueid + ')';
-            document.getElementById('transcriptModalBody').textContent = text || (document.documentElement.getAttribute('dir') === 'rtl' ? '[لا يوجد نص مفرغ]' : '[No audible transcript]');
-            document.getElementById('transcriptModal').classList.remove('hidden');
-        }
-        function closeTranscriptModal() {
-            document.getElementById('transcriptModal').classList.add('hidden');
-        }
-        function copyTranscriptText() {
-            const text = document.getElementById('transcriptModalBody').textContent;
-            navigator.clipboard.writeText(text).then(() => {
-                const btnText = document.getElementById('copyTranscriptBtnText');
-                const orig = btnText.textContent;
-                btnText.textContent = '<%= isRtl ? "تم النسخ! ✓" : "Copied! ✓" %>';
-                setTimeout(() => { btnText.textContent = orig; }, 2000);
-            });
-        }
-        async function transcribeCallNow(e, uniqueid) {
-            if (e) { e.preventDefault(); e.stopPropagation(); }
-            const btn = e ? e.currentTarget : null;
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span>Queued</span>';
-            }
-            try {
-                const res = await fetch('/api/transcripts/call/' + encodeURIComponent(uniqueid) + '/transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-                const data = await res.json();
-                if (data.success) {
-                    setTimeout(() => { window.location.reload(); }, 1500);
-                }
-            } catch (_) {}
-        }
-
         function triggerAudioDownload(e, url) {
             if (e) {
                 e.preventDefault();
@@ -597,12 +516,6 @@ function fmtDur(s) {
             }
             window.location.href = url;
         }
-
-        window.showTranscriptModalFromBtn = showTranscriptModalFromBtn;
-        window.showTranscriptModal = showTranscriptModal;
-        window.closeTranscriptModal = closeTranscriptModal;
-        window.copyTranscriptText = copyTranscriptText;
-        window.transcribeCallNow = transcribeCallNow;
         window.triggerAudioDownload = triggerAudioDownload;
 
         function goToPage(page) {

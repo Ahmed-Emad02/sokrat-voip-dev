@@ -20,6 +20,24 @@ CREATE TABLE IF NOT EXISTS `dashboard_user_dongles` (
   KEY `idx_dongle_name` (`dongle_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `dashboard_user_extensions` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `extension` VARCHAR(20) NOT NULL,
+  UNIQUE KEY `idx_user_extension` (`user_id`, `extension`),
+  KEY `idx_extension` (`extension`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `dashboard_user_preferences` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `username` VARCHAR(100) NOT NULL UNIQUE,
+  `user_id` INT DEFAULT NULL,
+  `preferences_json` LONGTEXT NOT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY `idx_pref_username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `dashboard_settings` (
   `setting_key` VARCHAR(100) PRIMARY KEY,
   `setting_value` TEXT DEFAULT NULL

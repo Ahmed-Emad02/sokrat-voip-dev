@@ -324,6 +324,28 @@ CREATE TABLE IF NOT EXISTS \`dashboard_user_dongles\` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 " 2>/dev/null || true
 
+mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
+CREATE TABLE IF NOT EXISTS \`dashboard_user_extensions\` (
+  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+  \`user_id\` INT NOT NULL,
+  \`extension\` VARCHAR(20) NOT NULL,
+  UNIQUE KEY \`idx_user_extension\` (\`user_id\`, \`extension\`),
+  KEY \`idx_extension\` (\`extension\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+" 2>/dev/null || true
+
+mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
+CREATE TABLE IF NOT EXISTS \`dashboard_user_preferences\` (
+  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+  \`username\` VARCHAR(100) NOT NULL UNIQUE,
+  \`user_id\` INT DEFAULT NULL,
+  \`preferences_json\` LONGTEXT NOT NULL,
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY \`idx_pref_username\` (\`username\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+" 2>/dev/null || true
+
 ensure_db_column "gsm_dongles" "dynamic_enabled" "TINYINT(1) NOT NULL DEFAULT 0"
 
 ensure_db_column "employee_extras" "is_group_admin" "TINYINT(1) NOT NULL DEFAULT 0"

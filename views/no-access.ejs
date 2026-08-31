@@ -1,0 +1,138 @@
+<%
+const activeLang = typeof currentLang !== 'undefined' ? currentLang : 'en';
+const isRtlMode = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
+const user = typeof username !== 'undefined' ? username : 'User';
+%>
+<!DOCTYPE html>
+<html lang="<%= activeLang %>" dir="<%= isRtlMode ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - <%= isRtlMode ? 'الصلاحيات مقيدة' : 'Access Restricted' %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            if (theme === 'light') {
+                document.documentElement.classList.add('light-theme');
+            } else {
+                document.documentElement.classList.remove('light-theme');
+            }
+        })();
+    </script>
+    <style>
+        :root {
+            --bg-primary: #050507;
+            --bg-secondary: #0b0b0e;
+            --bg-card: rgba(11, 11, 14, 0.65);
+            --border-primary: rgba(255, 255, 255, 0.08);
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --accent-color: #cc090c;
+            --accent-hover: #e62629;
+            --accent-dark: #7b0002;
+        }
+        html.light-theme {
+            --bg-primary: #f4f4f5;
+            --bg-secondary: #ffffff;
+            --bg-card: rgba(255, 255, 255, 0.85);
+            --border-primary: #e4e4e7;
+            --text-primary: #09090b;
+            --text-secondary: #52525b;
+            --text-muted: #a1a1aa;
+            --accent-color: #cc090c;
+            --accent-hover: #b0080a;
+            --accent-dark: #7b0002;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            padding: 0;
+        }
+        [dir="rtl"] {
+            font-family: 'Cairo', sans-serif;
+        }
+        .access-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--border-primary);
+            border-radius: 1.5rem;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4 sm:p-6 relative overflow-hidden">
+    <!-- Ambient background glow -->
+    <div class="fixed inset-0 pointer-events-none z-0">
+        <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-red-600/10 rounded-full blur-[120px]"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] bg-amber-600/5 rounded-full blur-[100px]"></div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="w-full max-w-lg relative z-10 space-y-6">
+        <!-- Language Switcher Bar -->
+        <div class="flex justify-end gap-2 text-xs">
+            <a href="?lang=<%= activeLang === 'ar' ? 'en' : 'ar' %>" class="px-3 py-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition flex items-center gap-1.5 font-bold">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+                <span><%= activeLang === 'ar' ? 'English' : 'العربية' %></span>
+            </a>
+        </div>
+
+        <!-- Access Card -->
+        <div class="access-card p-6 sm:p-8 text-center shadow-2xl space-y-6">
+            <!-- Icon -->
+            <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-amber-500 shadow-inner">
+                <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+            </div>
+
+            <!-- Title & Subtitle -->
+            <div class="space-y-2">
+                <h1 class="text-2xl font-black tracking-tight text-[var(--text-primary)]">
+                    <%= isRtlMode ? 'الصلاحيات مقيدة' : 'Access Restricted' %>
+                </h1>
+                <p class="text-sm text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto">
+                    <%= isRtlMode 
+                        ? 'لم يتم تعيين أي صلاحيات وصول لحسابك بعد. يرجى التواصل مع مسؤول النظام (Super Admin) لمنحك الصلاحيات للتبويبات المطلوبة.' 
+                        : 'No permissions have been assigned to your account yet. Please contact a Super Administrator to grant you tab access permissions.' %>
+                </p>
+            </div>
+
+            <!-- User Badge -->
+            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-xs font-mono">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                <span class="text-[var(--text-muted)]"><%= isRtlMode ? 'المستخدم:' : 'Logged in as:' %></span>
+                <span class="text-[var(--text-primary)] font-bold"><%= user %></span>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-col sm:flex-row gap-3 pt-2 justify-center">
+                <button type="button" onclick="window.location.reload()" class="px-5 py-2.5 rounded-xl border border-[var(--border-primary)] text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition cursor-pointer flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span><%= isRtlMode ? 'تحديث الصفحة' : 'Refresh Page' %></span>
+                </button>
+                <a href="/logout" class="px-6 py-2.5 rounded-xl bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold transition shadow-lg shadow-red-900/30 flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    <span><%= isRtlMode ? 'تسجيل الخروج' : 'Log Out' %></span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Footer Branding -->
+        <div class="text-center text-[10px] text-[var(--text-muted)] font-mono">
+            <span>Sokrat VoIP Enterprise PBX</span>
+        </div>
+    </div>
+</body>
+</html>

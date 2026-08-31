@@ -127,7 +127,9 @@ const tables = {
     employeeGroups: tableName(ASTERISK_DB, 'employee_groups'),
     dashboardUsers: tableName(ASTERISK_DB, 'dashboard_users'),
     dashboardGroupPermissions: tableName(ASTERISK_DB, 'dashboard_group_permissions'),
-    dashboardUserDongles: tableName(ASTERISK_DB, 'dashboard_user_dongles')
+    dashboardUserDongles: tableName(ASTERISK_DB, 'dashboard_user_dongles'),
+    dashboardUserExtensions: tableName(ASTERISK_DB, 'dashboard_user_extensions'),
+    dashboardUserPreferences: tableName(ASTERISK_DB, 'dashboard_user_preferences')
 };
 
 function isInternalChannel(channel) {
@@ -331,6 +333,26 @@ async function initAuthDb() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     await conn.execute(`
+        CREATE TABLE IF NOT EXISTS dashboard_user_extensions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            extension VARCHAR(20) NOT NULL,
+            UNIQUE KEY idx_user_extension (user_id, extension),
+            KEY idx_extension (extension)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    try {
+        const [usersWithExt] = await conn.execute("SELECT id, extension FROM dashboard_users WHERE extension IS NOT NULL AND extension != ''");
+        for (const u of usersWithExt) {
+            const exts = String(u.extension).split(',').map(e => e.trim()).filter(Boolean);
+            for (const ext of exts) {
+                if (ext && ext !== 'ALL' && ext !== 'none') {
+                    await conn.execute('INSERT IGNORE INTO dashboard_user_extensions (user_id, extension) VALUES (?, ?)', [u.id, ext]);
+                }
+            }
+        }
+    } catch (_) {}
+    await conn.execute(`
         CREATE TABLE IF NOT EXISTS extension_policies (
             extension VARCHAR(20) PRIMARY KEY,
             auto_answer ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
@@ -350,6 +372,17 @@ async function initAuthDb() {
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL UNIQUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS dashboard_user_preferences (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(100) NOT NULL UNIQUE,
+            user_id INT DEFAULT NULL,
+            preferences_json LONGTEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_pref_username (username)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     await conn.execute(`
@@ -796,12 +829,101 @@ function isSuperAdmin(req) {
     return g === 'super admins' || g === 'super admin' || g === 'administrator' || g === 'administrators';
 }
 
-function getUserScopedExtension(req) {
+function getUserScopedExtensions(req) {
     if (!req || !req.session) return null;
-    if (isSuperAdmin(req)) return null;
+    if (isSuperAdmin(req)) return null; // null means unrestricted / all extensions
+    if (Array.isArray(req.session.allowedExtensions) && req.session.allowedExtensions.length > 0) {
+        return req.session.allowedExtensions.map(e => String(e).trim()).filter(Boolean);
+    }
     const ext = req.session.extension;
     if (!ext || typeof ext !== 'string' || ext.trim() === '' || ext === 'ALL' || ext === 'none') return null;
-    return ext.trim();
+    const parts = ext.split(',').map(e => e.trim()).filter(Boolean);
+    return parts.length > 0 ? parts : null;
+}
+
+function getUserScopedExtension(req) {
+    const exts = getUserScopedExtensions(req);
+    if (!exts || exts.length === 0) return null;
+    return exts[0];
+}
+
+function getFirstAllowedRoute(perms) {
+    if (!perms || !Array.isArray(perms) || perms.length === 0) return null;
+    const tabToRoute = {
+        dashboard: '/',
+        cdr: '/cdr',
+        operator: '/operator',
+        'ext-stats': '/ext-stats',
+        contacts: '/contacts',
+        voicemails: '/voicemails',
+        'gsm-dongles': '/gsm-dongles',
+        dialer: '/dialer',
+        storage: '/storage',
+        config: '/config'
+    };
+    for (const p of perms) {
+        if (tabToRoute[p]) return tabToRoute[p];
+        if (p.startsWith('config-')) return '/config';
+    }
+    return null;
+}
+
+function requireTabPermission(tabName) {
+    return (req, res, next) => {
+        if (isSuperAdmin(req)) return next();
+        const perms = req.session.userPermissions || [];
+        if (perms.includes(tabName)) return next();
+        return res.status(403).json({ success: false, error: `Forbidden: Missing ${tabName} permission` });
+    };
+}
+
+async function getUserPreferences(username, userId = null) {
+    if (!username) return {};
+    try {
+        const [rows] = await pool.query('SELECT preferences_json FROM `asterisk`.`dashboard_user_preferences` WHERE username = ? LIMIT 1', [username]);
+        if (rows && rows.length > 0 && rows[0].preferences_json) {
+            return JSON.parse(rows[0].preferences_json);
+        }
+    } catch (err) {
+        console.error('getUserPreferences error:', err.message);
+    }
+    return {};
+}
+
+function computePresetDateRange(preset) {
+    switch (String(preset || '').toLowerCase()) {
+        case 'yesterday':
+            return {
+                startDate: moment().subtract(1, 'day').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+                endDate: moment().subtract(1, 'day').endOf('day').format('YYYY-MM-DD HH:mm:ss')
+            };
+        case 'this_week':
+            return {
+                startDate: moment().startOf('week').format('YYYY-MM-DD HH:mm:ss'),
+                endDate: moment().endOf('week').format('YYYY-MM-DD HH:mm:ss')
+            };
+        case 'last_7_days':
+            return {
+                startDate: moment().subtract(7, 'days').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+                endDate: moment().endOf('day').format('YYYY-MM-DD HH:mm:ss')
+            };
+        case 'this_month':
+            return {
+                startDate: moment().startOf('month').format('YYYY-MM-DD HH:mm:ss'),
+                endDate: moment().endOf('month').format('YYYY-MM-DD HH:mm:ss')
+            };
+        case 'last_30_days':
+            return {
+                startDate: moment().subtract(30, 'days').startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+                endDate: moment().endOf('day').format('YYYY-MM-DD HH:mm:ss')
+            };
+        case 'today':
+        default:
+            return {
+                startDate: moment().startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+                endDate: moment().endOf('day').format('YYYY-MM-DD HH:mm:ss')
+            };
+    }
 }
 
 async function getUserAllowedDongles(req) {
@@ -1242,7 +1364,9 @@ app.use((req, res, next) => {
 // --- TAB PERMISSION MIDDLEWARE ---
 app.use(async (req, res, next) => {
     res.locals.isSuperAdmin = isSuperAdmin(req);
-    res.locals.userExtension = (req.session && req.session.extension) ? req.session.extension : null;
+    const scopedExts = getUserScopedExtensions(req);
+    res.locals.userExtensions = scopedExts;
+    res.locals.userExtension = (scopedExts && scopedExts.length > 0) ? scopedExts.join(',') : null;
     const tab = TAB_ROUTE_MAP[req.path];
     if (!tab) return next();
     // Load permissions if not cached
@@ -1253,14 +1377,12 @@ app.use(async (req, res, next) => {
             req.session.userPermissions = [];
         }
     }
-    // Dashboard and Contacts are accessible to everyone
-    if (tab === 'dashboard' || tab === 'contacts') {
-        res.locals.allowedTabs = res.locals.isSuperAdmin ? ALL_TABS : req.session.userPermissions;
-        return next();
-    }
     // Users tab is super admin only
     if (tab === 'users') {
-        if (!res.locals.isSuperAdmin) return res.redirect('/');
+        if (!res.locals.isSuperAdmin) {
+            const first = getFirstAllowedRoute(req.session.userPermissions);
+            return res.redirect(first || '/no-access');
+        }
         res.locals.allowedTabs = ALL_TABS;
         return next();
     }
@@ -1268,15 +1390,22 @@ app.use(async (req, res, next) => {
         res.locals.allowedTabs = ALL_TABS;
         return next();
     }
-    res.locals.allowedTabs = req.session.userPermissions;
-    if (req.session.userPermissions.includes(tab)) return next();
-    if (tab === 'config' && req.session.userPermissions.some(p => p.startsWith('config-'))) {
+    const userPerms = req.session.userPermissions || [];
+    res.locals.allowedTabs = userPerms;
+    if (userPerms.includes(tab)) return next();
+    if (tab === 'config' && userPerms.some(p => p.startsWith('config-'))) {
         return next();
     }
-    // Denied — redirect to the first tab they *can* access, or /login
-    const tabToRoute = { dashboard: '/', cdr: '/cdr', voicemails: '/voicemails', 'ext-stats': '/ext-stats', operator: '/operator', 'gsm-dongles': '/gsm-dongles', contacts: '/contacts', users: '/users', config: '/config', dialer: '/dialer', storage: '/storage' };
-    const firstAllowed = req.session.userPermissions.find(p => tabToRoute[p] || (p.startsWith('config-') && tabToRoute['config']));
-    res.redirect(firstAllowed ? (tabToRoute[firstAllowed] || '/config') : '/login');
+    // Denied — redirect to the first tab they can access, or /no-access
+    const firstAllowed = getFirstAllowedRoute(userPerms);
+    if (firstAllowed && firstAllowed !== req.path) {
+        return res.redirect(firstAllowed);
+    }
+    return res.status(403).render('no-access', {
+        currentLang: res.locals.currentLang || 'en',
+        isRtl: (res.locals.currentLang === 'ar'),
+        username: req.session.username
+    });
 });
 
 // --- CONFIG SUB-TAB API PERMISSIONS MIDDLEWARE ---
@@ -2579,7 +2708,16 @@ app.use(async (req, res, next) => {
 
 // GET /login - render login page
 app.get('/login', (req, res) => {
-    if (req.session.userId) return res.redirect(req.query.redirect || '/');
+    if (req.session && req.session.userId) {
+        if (isSuperAdmin(req)) return res.redirect(req.query.redirect || '/');
+        const perms = req.session.userPermissions || [];
+        const first = getFirstAllowedRoute(perms);
+        if (req.query.redirect && req.query.redirect !== '/' && perms.includes(TAB_ROUTE_MAP[req.query.redirect])) {
+            return res.redirect(req.query.redirect);
+        }
+        if (perms.includes('dashboard')) return res.redirect('/');
+        return res.redirect(first || '/no-access');
+    }
     res.render('login', { redirect: req.query.redirect || '/', error: null, currentLang: req.query.lang || 'en' });
 });
 
@@ -2604,6 +2742,9 @@ app.post('/login', async (req, res) => {
             req.session.userGroup = 'super admins';
             req.session.isRoot = true;
             req.session.extension = null;
+            req.session.allowedExtensions = [];
+            req.session.extensions = [];
+            req.session.userPreferences = await getUserPreferences(ROOT_USER, -1);
             return req.session.save(() => {
                 res.redirect(req.body.redirect || '/');
             });
@@ -2620,21 +2761,53 @@ app.post('/login', async (req, res) => {
             LEFT JOIN dashboard_groups g ON g.id = u.group_id
             WHERE u.username = ?
         `, [username]);
-        await conn.end();
         if (rows.length === 0) {
+            await conn.end();
             return res.render('login', { redirect: req.body.redirect || '/', error: 'Invalid credentials', currentLang: req.query.lang || 'en' });
         }
         const user = rows[0];
         const match = await bcrypt.compare(password, user.password_hash);
         if (!match) {
+            await conn.end();
             return res.render('login', { redirect: req.body.redirect || '/', error: 'Invalid credentials', currentLang: req.query.lang || 'en' });
         }
+
+        let userExtensions = [];
+        try {
+            const [extRows] = await conn.execute('SELECT extension FROM dashboard_user_extensions WHERE user_id = ?', [user.id]);
+            userExtensions = extRows.map(r => String(r.extension).trim()).filter(Boolean);
+        } catch (_) {}
+        if (userExtensions.length === 0 && user.extension) {
+            userExtensions = String(user.extension).split(',').map(e => e.trim()).filter(Boolean);
+        }
+        await conn.end();
+
         req.session.userId = user.id;
         req.session.username = user.username;
         req.session.userGroup = user.group_name || null;
-        req.session.extension = user.extension || null;
-        req.session.save(() => {
-            res.redirect(req.body.redirect || '/');
+        req.session.allowedExtensions = userExtensions;
+        req.session.extension = userExtensions.length > 0 ? userExtensions.join(',') : null;
+        req.session.extensions = userExtensions;
+        req.session.userPreferences = await getUserPreferences(user.username, user.id);
+        req.session.save(async () => {
+            if (isSuperAdmin(req)) {
+                return res.redirect(req.body.redirect || '/');
+            }
+            let perms = [];
+            try {
+                perms = await getUserPermissions(user.id);
+                req.session.userPermissions = perms;
+            } catch (_) {
+                req.session.userPermissions = [];
+            }
+            if (req.body.redirect && req.body.redirect !== '/' && perms.includes(TAB_ROUTE_MAP[req.body.redirect])) {
+                return res.redirect(req.body.redirect);
+            }
+            if (perms.includes('dashboard')) {
+                return res.redirect('/');
+            }
+            const first = getFirstAllowedRoute(perms);
+            return res.redirect(first || '/no-access');
         });
     } catch (err) {
         res.render('login', { redirect: req.body.redirect || '/', error: 'Login error: ' + err.message, currentLang: req.query.lang || 'en' });
@@ -2646,6 +2819,106 @@ app.get('/logout', (req, res) => {
     req.session.destroy(() => {
         res.redirect('/login');
     });
+});
+
+// GET /no-access - render permission denied page for accounts with 0 tab permissions
+app.get('/no-access', (req, res) => {
+    if (!req.session || !req.session.userId) return res.redirect('/login');
+    if (isSuperAdmin(req)) return res.redirect('/');
+    const perms = req.session.userPermissions || [];
+    const first = getFirstAllowedRoute(perms);
+    if (first) return res.redirect(first);
+    
+    const activeLang = res.locals.currentLang || req.query.lang || 'en';
+    res.status(403).render('no-access', {
+        currentLang: activeLang,
+        isRtl: (activeLang === 'ar'),
+        username: req.session.username
+    });
+});
+
+// GET /api/user/default-filters - Retrieve saved default filter preferences for current user
+app.get('/api/user/default-filters', requireAuth, async (req, res) => {
+    try {
+        const username = req.session.username;
+        const userId = req.session.userId;
+        const prefs = await getUserPreferences(username, userId);
+        res.json({
+            success: true,
+            filters: prefs.defaultFilters || {
+                dashboard: {
+                    datePreset: 'today',
+                    targetExtension: ['ALL'],
+                    statusFilter: ['ALL'],
+                    directionFilter: 'ALL',
+                    callScopeFilter: 'ALL'
+                },
+                cdr: {
+                    datePreset: 'today',
+                    targetExtension: ['ALL'],
+                    statusFilter: ['ALL'],
+                    directionFilter: 'ALL',
+                    callScopeFilter: 'ALL',
+                    perPage: 25
+                }
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/user/default-filters - Save default filter preferences for current user
+app.post('/api/user/default-filters', requireAuth, async (req, res) => {
+    try {
+        const username = req.session.username;
+        const userId = req.session.userId;
+        const { dashboard, cdr } = req.body || {};
+
+        const existingPrefs = await getUserPreferences(username, userId);
+        const updatedFilters = {
+            dashboard: {
+                datePreset: String(dashboard?.datePreset || 'today').trim(),
+                targetExtension: Array.isArray(dashboard?.targetExtension) ? dashboard.targetExtension : [dashboard?.targetExtension || 'ALL'],
+                statusFilter: Array.isArray(dashboard?.statusFilter) ? dashboard.statusFilter : [dashboard?.statusFilter || 'ALL'],
+                directionFilter: String(dashboard?.directionFilter || 'ALL').trim(),
+                callScopeFilter: String(dashboard?.callScopeFilter || 'ALL').trim()
+            },
+            cdr: {
+                datePreset: String(cdr?.datePreset || 'today').trim(),
+                targetExtension: Array.isArray(cdr?.targetExtension) ? cdr.targetExtension : [cdr?.targetExtension || 'ALL'],
+                statusFilter: Array.isArray(cdr?.statusFilter) ? cdr.statusFilter : [cdr?.statusFilter || 'ALL'],
+                directionFilter: String(cdr?.directionFilter || 'ALL').trim(),
+                callScopeFilter: String(cdr?.callScopeFilter || 'ALL').trim(),
+                perPage: Math.min(200, Math.max(1, parseInt(cdr?.perPage, 10) || 25))
+            }
+        };
+
+        const newPrefs = {
+            ...existingPrefs,
+            defaultFilters: updatedFilters
+        };
+
+        const jsonStr = JSON.stringify(newPrefs);
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`dashboard_user_preferences\` (username, user_id, preferences_json)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                user_id = VALUES(user_id),
+                preferences_json = VALUES(preferences_json),
+                updated_at = NOW()
+        `, [username, userId > 0 ? userId : null, jsonStr]);
+
+        req.session.userPreferences = newPrefs;
+
+        res.json({
+            success: true,
+            message: 'Default filter preferences saved successfully.',
+            filters: updatedFilters
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // GET /users - user management page
@@ -2675,6 +2948,11 @@ app.get('/users', async (req, res) => {
             const [dmRows] = await conn.execute('SELECT user_id, dongle_name FROM dashboard_user_dongles');
             dongleMappings = dmRows;
         } catch (_) {}
+        let [extMappings] = [[], []];
+        try {
+            const [emRows] = await conn.execute('SELECT user_id, extension FROM dashboard_user_extensions');
+            extMappings = emRows;
+        } catch (_) {}
         await conn.end();
 
         const userDonglesMap = new Map();
@@ -2682,8 +2960,15 @@ app.get('/users', async (req, res) => {
             if (!userDonglesMap.has(m.user_id)) userDonglesMap.set(m.user_id, []);
             userDonglesMap.get(m.user_id).push(m.dongle_name);
         }
+        const userExtensionsMap = new Map();
+        for (const m of extMappings) {
+            if (!userExtensionsMap.has(m.user_id)) userExtensionsMap.set(m.user_id, []);
+            userExtensionsMap.get(m.user_id).push(m.extension);
+        }
         for (const u of userRows) {
             u.allowed_dongles = userDonglesMap.get(u.id) || [];
+            u.allowed_extensions = userExtensionsMap.get(u.id) || (u.extension ? String(u.extension).split(',').map(e => e.trim()).filter(Boolean) : []);
+            u.extension = u.allowed_extensions.join(', ') || null;
         }
         const availableDongles = await getAllServerDongles();
 
@@ -2704,7 +2989,7 @@ app.get('/users', async (req, res) => {
 // POST /users/add - add new user
 app.post('/users/add', async (req, res) => {
     try {
-        const { username, password, email, group_id, extension, dongles } = req.body;
+        const { username, password, email, group_id, extension, extensions, dongles } = req.body;
         if (!username || !password || password.length < 3) {
             return res.redirect('/users?error=' + encodeURIComponent('Username and password (min 3 chars) required'));
         }
@@ -2715,7 +3000,20 @@ app.post('/users/add', async (req, res) => {
             return res.redirect('/users?error=' + encodeURIComponent('A group must be selected'));
         }
         const cleanEmail = (email && email.trim()) ? email.trim() : null;
-        const cleanExt = (extension && extension.trim() && extension !== 'ALL' && extension !== 'none') ? extension.trim() : null;
+        
+        let allowedExtensionsList = [];
+        if (Array.isArray(extensions)) {
+            allowedExtensionsList = extensions.map(e => String(e).trim()).filter(e => e && e !== 'ALL' && e !== 'none');
+        } else if (typeof extensions === 'string' && extensions.trim()) {
+            allowedExtensionsList = extensions.split(',').map(e => e.trim()).filter(e => e && e !== 'ALL' && e !== 'none');
+        } else if (Array.isArray(extension)) {
+            allowedExtensionsList = extension.map(e => String(e).trim()).filter(e => e && e !== 'ALL' && e !== 'none');
+        } else if (typeof extension === 'string' && extension.trim() && extension !== 'ALL' && extension !== 'none') {
+            allowedExtensionsList = extension.split(',').map(e => e.trim()).filter(e => e && e !== 'ALL' && e !== 'none');
+        }
+        allowedExtensionsList = [...new Set(allowedExtensionsList)];
+        const cleanExt = allowedExtensionsList.length > 0 ? allowedExtensionsList.join(',') : null;
+
         let allowedDonglesList = [];
         if (Array.isArray(dongles)) {
             allowedDonglesList = dongles.map(d => String(d).trim().toLowerCase()).filter(Boolean);
@@ -2743,6 +3041,11 @@ app.post('/users/add', async (req, res) => {
         const hash = await bcrypt.hash(password, 10);
         const [result] = await conn.execute('INSERT INTO dashboard_users (username, email, password_hash, group_id, extension) VALUES (?, ?, ?, ?, ?)', [username, cleanEmail, hash, group_id, cleanExt]);
         const newUserId = result.insertId;
+        for (const ext of allowedExtensionsList) {
+            try {
+                await conn.execute('INSERT IGNORE INTO dashboard_user_extensions (user_id, extension) VALUES (?, ?)', [newUserId, ext]);
+            } catch (_) {}
+        }
         for (const d of allowedDonglesList) {
             try {
                 await conn.execute('INSERT IGNORE INTO dashboard_user_dongles (user_id, dongle_name) VALUES (?, ?)', [newUserId, d]);
@@ -2761,11 +3064,24 @@ app.post('/users/edit', async (req, res) => {
         if (!isSuperAdmin(req)) {
             return res.redirect('/users?error=' + encodeURIComponent('Super Admin authorization required'));
         }
-        const { id, email, group_id, extension, dongles } = req.body;
+        const { id, email, group_id, extension, extensions, dongles } = req.body;
         if (!id) return res.redirect('/users?error=' + encodeURIComponent('User ID required'));
         if (!group_id) return res.redirect('/users?error=' + encodeURIComponent('A group must be selected'));
         const cleanEmail = (email && email.trim()) ? email.trim() : null;
-        const cleanExt = (extension && extension.trim() && extension !== 'ALL' && extension !== 'none') ? extension.trim() : null;
+        
+        let allowedExtensionsList = [];
+        if (Array.isArray(extensions)) {
+            allowedExtensionsList = extensions.map(e => String(e).trim()).filter(e => e && e !== 'ALL' && e !== 'none');
+        } else if (typeof extensions === 'string' && extensions.trim()) {
+            allowedExtensionsList = extensions.split(',').map(e => e.trim()).filter(e => e && e !== 'ALL' && e !== 'none');
+        } else if (Array.isArray(extension)) {
+            allowedExtensionsList = extension.map(e => String(e).trim()).filter(e => e && e !== 'ALL' && e !== 'none');
+        } else if (typeof extension === 'string' && extension.trim() && extension !== 'ALL' && extension !== 'none') {
+            allowedExtensionsList = extension.split(',').map(e => e.trim()).filter(e => e && e !== 'ALL' && e !== 'none');
+        }
+        allowedExtensionsList = [...new Set(allowedExtensionsList)];
+        const cleanExt = allowedExtensionsList.length > 0 ? allowedExtensionsList.join(',') : null;
+
         let allowedDonglesList = [];
         if (Array.isArray(dongles)) {
             allowedDonglesList = dongles.map(d => String(d).trim().toLowerCase()).filter(Boolean);
@@ -2791,6 +3107,12 @@ app.post('/users/edit', async (req, res) => {
             }
         }
         await conn.execute('UPDATE dashboard_users SET email = ?, group_id = ?, extension = ? WHERE id = ?', [cleanEmail, group_id, cleanExt, id]);
+        try {
+            await conn.execute('DELETE FROM dashboard_user_extensions WHERE user_id = ?', [id]);
+            for (const ext of allowedExtensionsList) {
+                await conn.execute('INSERT IGNORE INTO dashboard_user_extensions (user_id, extension) VALUES (?, ?)', [id, ext]);
+            }
+        } catch (_) {}
         try {
             await conn.execute('DELETE FROM dashboard_user_dongles WHERE user_id = ?', [id]);
             for (const d of allowedDonglesList) {
@@ -2823,6 +3145,9 @@ app.post('/users/delete', async (req, res) => {
         }
         try {
             await conn.execute('DELETE FROM dashboard_user_dongles WHERE user_id = ?', [id]);
+        } catch (_) {}
+        try {
+            await conn.execute('DELETE FROM dashboard_user_extensions WHERE user_id = ?', [id]);
         } catch (_) {}
         await conn.execute('DELETE FROM dashboard_users WHERE id = ?', [id]);
         await conn.end();
@@ -3219,33 +3544,64 @@ app.post('/groups/permissions', async (req, res) => {
 // --- ROUTE 1: LANDING DASHBOARD ---
 app.get('/', async (req, res) => {
     try {
-        const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
-        const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
-        const selectedExtension = req.query.targetExtension || 'ALL';
-        const statusFilter = req.query.statusFilter || 'ALL';
-        const searchSrc = req.query.searchSrc || '';
-        const searchDst = req.query.searchDst || '';
-        const searchDid = req.query.searchDid || '';
-        const searchUniqueId = req.query.searchUniqueId || '';
-        const directionFilter = req.query.directionFilter || 'ALL';
-        const callScopeFilter = req.query.callScopeFilter || 'ALL';
+        const username = req.session ? req.session.username : null;
+        let userPrefs = (req.session && req.session.userPreferences) ? req.session.userPreferences : null;
+        if (!userPrefs && username) {
+            try {
+                userPrefs = await getUserPreferences(username, req.session.userId);
+                if (req.session) req.session.userPreferences = userPrefs;
+            } catch (_) {}
+        }
+        const dashDefaults = userPrefs?.defaultFilters?.dashboard || null;
 
-        const scopedExt = getUserScopedExtension(req);
-        let selectedExtensions = scopedExt ? [scopedExt] : req.query.targetExtension;
-        if (!selectedExtensions) selectedExtensions = ['ALL'];
-        else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
+        const hasExplicitFilters = Boolean(req.query.startDate || req.query.endDate || req.query.targetExtension || req.query.statusFilter || req.query.directionFilter || req.query.callScopeFilter || req.query.searchSrc || req.query.searchDst || req.query.searchDid || req.query.searchUniqueId);
+
+        let startDate, endDate;
+        if (hasExplicitFilters) {
+            startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+            endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+        } else if (dashDefaults && dashDefaults.datePreset) {
+            const range = computePresetDateRange(dashDefaults.datePreset);
+            startDate = range.startDate;
+            endDate = range.endDate;
+        } else {
+            startDate = moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+            endDate = moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+        }
+
+        const scopedExts = getUserScopedExtensions(req);
+        let selectedExtensions = hasExplicitFilters ? req.query.targetExtension : (dashDefaults?.targetExtension || req.query.targetExtension);
+        if (scopedExts && scopedExts.length > 0) {
+            if (!selectedExtensions || selectedExtensions === 'ALL' || (Array.isArray(selectedExtensions) && selectedExtensions.includes('ALL'))) {
+                selectedExtensions = scopedExts;
+            } else {
+                const arr = Array.isArray(selectedExtensions) ? selectedExtensions : [selectedExtensions];
+                selectedExtensions = arr.filter(e => scopedExts.includes(e));
+                if (selectedExtensions.length === 0) selectedExtensions = scopedExts;
+            }
+        } else {
+            if (!selectedExtensions) selectedExtensions = ['ALL'];
+            else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
+        }
         if (selectedExtensions.length > 1 && selectedExtensions.includes('ALL')) {
             selectedExtensions = selectedExtensions.filter(e => e !== 'ALL');
         }
-        const targetExtensionFilter = scopedExt ? [scopedExt] : (selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions);
+        const targetExtensionFilter = selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions;
 
-        let selectedStatuses = req.query.statusFilter;
+        let selectedStatuses = hasExplicitFilters ? req.query.statusFilter : (dashDefaults?.statusFilter || req.query.statusFilter);
         if (!selectedStatuses) selectedStatuses = ['ALL'];
         else if (!Array.isArray(selectedStatuses)) selectedStatuses = [selectedStatuses];
         if (selectedStatuses.length > 1 && selectedStatuses.includes('ALL')) {
             selectedStatuses = selectedStatuses.filter(s => s !== 'ALL');
         }
         const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
+
+        const directionFilter = hasExplicitFilters ? (req.query.directionFilter || 'ALL') : (dashDefaults?.directionFilter || 'ALL');
+        const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (dashDefaults?.callScopeFilter || 'ALL');
+        const searchSrc = req.query.searchSrc || '';
+        const searchDst = req.query.searchDst || '';
+        const searchDid = req.query.searchDid || '';
+        const searchUniqueId = req.query.searchUniqueId || '';
 
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
@@ -3319,7 +3675,7 @@ app.get('/', async (req, res) => {
             totalTalkSec: 0
         };
         const employeeMetrics = {};
-        const effectiveRoster = scopedExt ? (res.locals.roster || []).filter(e => e.extension === scopedExt) : (res.locals.roster || []);
+        const effectiveRoster = (scopedExts && scopedExts.length > 0) ? (res.locals.roster || []).filter(e => scopedExts.includes(e.extension)) : (res.locals.roster || []);
         effectiveRoster.forEach(emp => {
             employeeMetrics[emp.extension] = { extension: emp.extension, name: emp.name, totalCalls: 0, totalTalkSec: 0, uniqueNumbers: new Set() };
         });
@@ -3496,32 +3852,68 @@ function formatDestination(row, ringGroupSet = new Set()) {
 // --- ROUTE 2: CDR DETAILS VIEW (Paginated) ---
 app.get('/cdr', async (req, res) => {
     try {
-        const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
-        const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
-        const scopedExt = getUserScopedExtension(req);
-        let selectedExtensions = scopedExt ? [scopedExt] : req.query.targetExtension;
-        if (!selectedExtensions) selectedExtensions = ['ALL'];
-        else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
+        const username = req.session ? req.session.username : null;
+        let userPrefs = (req.session && req.session.userPreferences) ? req.session.userPreferences : null;
+        if (!userPrefs && username) {
+            try {
+                userPrefs = await getUserPreferences(username, req.session.userId);
+                if (req.session) req.session.userPreferences = userPrefs;
+            } catch (_) {}
+        }
+        const cdrDefaults = userPrefs?.defaultFilters?.cdr || null;
+
+        const hasExplicitFilters = Boolean(req.query.startDate || req.query.endDate || req.query.targetExtension || req.query.statusFilter || req.query.directionFilter || req.query.callScopeFilter || req.query.searchSrc || req.query.searchDst || req.query.searchDid || req.query.searchUniqueId || req.query.perPage || req.query.page);
+
+        let startDate, endDate;
+        if (hasExplicitFilters) {
+            startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+            endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+        } else if (cdrDefaults && cdrDefaults.datePreset) {
+            const range = computePresetDateRange(cdrDefaults.datePreset);
+            startDate = range.startDate;
+            endDate = range.endDate;
+        } else {
+            startDate = moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+            endDate = moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+        }
+
+        const scopedExts = getUserScopedExtensions(req);
+        let selectedExtensions = hasExplicitFilters ? req.query.targetExtension : (cdrDefaults?.targetExtension || req.query.targetExtension);
+        if (scopedExts && scopedExts.length > 0) {
+            if (!selectedExtensions || selectedExtensions === 'ALL' || (Array.isArray(selectedExtensions) && selectedExtensions.includes('ALL'))) {
+                selectedExtensions = scopedExts;
+            } else {
+                const arr = Array.isArray(selectedExtensions) ? selectedExtensions : [selectedExtensions];
+                selectedExtensions = arr.filter(e => scopedExts.includes(e));
+                if (selectedExtensions.length === 0) selectedExtensions = scopedExts;
+            }
+        } else {
+            if (!selectedExtensions) selectedExtensions = ['ALL'];
+            else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
+        }
         if (selectedExtensions.length > 1 && selectedExtensions.includes('ALL')) {
             selectedExtensions = selectedExtensions.filter(e => e !== 'ALL');
         }
-        const targetExtensionFilter = scopedExt ? [scopedExt] : (selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions);
+        const targetExtensionFilter = selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions;
 
-        let selectedStatuses = req.query.statusFilter;
+        let selectedStatuses = hasExplicitFilters ? req.query.statusFilter : (cdrDefaults?.statusFilter || req.query.statusFilter);
         if (!selectedStatuses) selectedStatuses = ['ALL'];
         else if (!Array.isArray(selectedStatuses)) selectedStatuses = [selectedStatuses];
         if (selectedStatuses.length > 1 && selectedStatuses.includes('ALL')) {
             selectedStatuses = selectedStatuses.filter(s => s !== 'ALL');
         }
         const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
+
+        const directionFilter = hasExplicitFilters ? (req.query.directionFilter || 'ALL') : (cdrDefaults?.directionFilter || 'ALL');
+        const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (cdrDefaults?.callScopeFilter || 'ALL');
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
         const searchDid = req.query.searchDid || '';
         const searchUniqueId = req.query.searchUniqueId || '';
-        const directionFilter = req.query.directionFilter || 'ALL';
-        const callScopeFilter = req.query.callScopeFilter || 'ALL';
         const page = Math.max(1, parseInt(req.query.page) || 1);
-        const perPage = Math.min(200, Math.max(1, parseInt(req.query.perPage) || 25));
+        const perPage = hasExplicitFilters
+            ? Math.min(200, Math.max(1, parseInt(req.query.perPage) || 25))
+            : (parseInt(cdrDefaults?.perPage, 10) || 25);
         const offset = (page - 1) * perPage;
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
@@ -3651,14 +4043,24 @@ app.get('/cdr/export', async (req, res) => {
         const searchDst = req.query.searchDst || '';
         const searchDid = req.query.searchDid || '';
         const searchUniqueId = req.query.searchUniqueId || '';
-        const scopedExt = getUserScopedExtension(req);
-        let selectedExtensions = scopedExt ? [scopedExt] : req.query.targetExtension;
-        if (!selectedExtensions) selectedExtensions = ['ALL'];
-        else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
+        const scopedExts = getUserScopedExtensions(req);
+        let selectedExtensions = req.query.targetExtension;
+        if (scopedExts && scopedExts.length > 0) {
+            if (!selectedExtensions || selectedExtensions === 'ALL' || (Array.isArray(selectedExtensions) && selectedExtensions.includes('ALL'))) {
+                selectedExtensions = scopedExts;
+            } else {
+                const arr = Array.isArray(selectedExtensions) ? selectedExtensions : [selectedExtensions];
+                selectedExtensions = arr.filter(e => scopedExts.includes(e));
+                if (selectedExtensions.length === 0) selectedExtensions = scopedExts;
+            }
+        } else {
+            if (!selectedExtensions) selectedExtensions = ['ALL'];
+            else if (!Array.isArray(selectedExtensions)) selectedExtensions = [selectedExtensions];
+        }
         if (selectedExtensions.length > 1 && selectedExtensions.includes('ALL')) {
             selectedExtensions = selectedExtensions.filter(e => e !== 'ALL');
         }
-        const targetExtensionFilter = scopedExt ? [scopedExt] : (selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions);
+        const targetExtensionFilter = selectedExtensions.includes('ALL') ? 'ALL' : selectedExtensions;
 
         let selectedStatuses = req.query.statusFilter;
         if (!selectedStatuses) selectedStatuses = ['ALL'];
@@ -4560,8 +4962,8 @@ app.get('/ext-stats', (req, res) => {
 app.get('/api/ext-stats/:extension', async (req, res) => {
     try {
         const { extension } = req.params;
-        const scopedExt = getUserScopedExtension(req);
-        if (scopedExt && extension !== scopedExt) {
+        const scopedExts = getUserScopedExtensions(req);
+        if (scopedExts && !scopedExts.includes(extension)) {
             return res.status(403).json({ success: false, error: 'Forbidden: You can only view statistics for your assigned extension.' });
         }
         const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
@@ -6702,7 +7104,7 @@ app.get('/storage', requireAuth, async (req, res) => {
 });
 
 // 2. GET /api/storage/info - Disk usage, recordings size, CDR db metrics & settings
-app.get('/api/storage/info', requireAuth, async (req, res) => {
+app.get('/api/storage/info', requireAuth, requireTabPermission('storage'), async (req, res) => {
     try {
         const { execSync } = require('child_process');
         
@@ -6756,7 +7158,7 @@ app.get('/api/storage/info', requireAuth, async (req, res) => {
 });
 
 // 3. GET /api/storage/export/pc - Package CDR CSV & recordings audio into a downloadable ZIP
-app.get('/api/storage/export/pc', requireAuth, async (req, res) => {
+app.get('/api/storage/export/pc', requireAuth, requireTabPermission('storage'), async (req, res) => {
     const fs = require('fs');
     const path = require('path');
     const { spawn } = require('child_process');
@@ -6870,7 +7272,7 @@ app.get('/api/storage/export/pc', requireAuth, async (req, res) => {
 });
 
 // 4. POST /api/storage/gdrive/setup - Save Google Drive credentials and folder settings
-app.post('/api/storage/gdrive/setup', requireAuth, async (req, res) => {
+app.post('/api/storage/gdrive/setup', requireAuth, requireTabPermission('storage'), async (req, res) => {
     try {
         const { gdrive_enabled, gdrive_folder_name, auto_backup_schedule, gdrive_credentials } = req.body;
         const enabled = gdrive_enabled ? 1 : 0;
@@ -6895,7 +7297,7 @@ app.post('/api/storage/gdrive/setup', requireAuth, async (req, res) => {
 });
 
 // 5. POST /api/storage/gdrive/sync - Trigger Google Drive Sync
-app.post('/api/storage/gdrive/sync', requireAuth, async (req, res) => {
+app.post('/api/storage/gdrive/sync', requireAuth, requireTabPermission('storage'), async (req, res) => {
     try {
         const now = new Date();
         await pool.query(`
@@ -6911,7 +7313,7 @@ app.post('/api/storage/gdrive/sync', requireAuth, async (req, res) => {
 });
 
 // 6. POST /api/storage/purge-settings - Save retention days threshold
-app.post('/api/storage/purge-settings', requireAuth, async (req, res) => {
+app.post('/api/storage/purge-settings', requireAuth, requireTabPermission('storage'), async (req, res) => {
     try {
         const days = Math.min(1095, Math.max(1, parseInt(req.body.auto_purge_days, 10) || 90));
         await pool.query(`
@@ -6928,7 +7330,7 @@ app.post('/api/storage/purge-settings', requireAuth, async (req, res) => {
 });
 
 // 7. POST /api/storage/purge - Run recordings retention cleanup now
-app.post('/api/storage/purge', requireAuth, async (req, res) => {
+app.post('/api/storage/purge', requireAuth, requireTabPermission('storage'), async (req, res) => {
     try {
         const { execSync } = require('child_process');
         const [sRows] = await pool.query('SELECT auto_purge_days FROM `asterisk`.`storage_settings` WHERE id = 1');
@@ -7007,25 +7409,27 @@ app.post('/api/gsm-dongles/ussd', async (req, res) => {
 app.get('/audio/:uniqueid', async (req, res) => {
     try {
         const { uniqueid } = req.params;
-        const scopedExt = getUserScopedExtension(req);
+        const scopedExts = getUserScopedExtensions(req);
         const [rows] = await pool.query(
             `SELECT calldate, recordingfile, src, dst, cnum, channel, dstchannel FROM ${tables.cdr} WHERE uniqueid = ? AND recordingfile IS NOT NULL AND recordingfile != '' ORDER BY billsec DESC, calldate ASC LIMIT 1`,
             [uniqueid]
         );
         if (!rows.length || !rows[0].recordingfile) return res.status(404).send("Audio not found.");
 
-        if (scopedExt) {
+        if (scopedExts && scopedExts.length > 0) {
             const r = rows[0];
             const channelMatches = (ch, ext) => {
                 if (!ch || !ext) return false;
                 const reg = new RegExp(`^[A-Za-z0-9_]+/(${ext.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})([^0-9]|$)`);
                 return reg.test(ch);
             };
-            const isAuthorized = (String(r.src || '').trim() === scopedExt) ||
-                                 (String(r.dst || '').trim() === scopedExt) ||
-                                 (String(r.cnum || '').trim() === scopedExt) ||
-                                 channelMatches(r.channel, scopedExt) ||
-                                 channelMatches(r.dstchannel, scopedExt);
+            const isAuthorized = scopedExts.some(ext => {
+                return (String(r.src || '').trim() === ext) ||
+                       (String(r.dst || '').trim() === ext) ||
+                       (String(r.cnum || '').trim() === ext) ||
+                       channelMatches(r.channel, ext) ||
+                       channelMatches(r.dstchannel, ext);
+            });
             if (!isAuthorized) {
                 return res.status(403).send("Forbidden: Access denied to call recording.");
             }
@@ -7226,7 +7630,7 @@ app.get('/contacts', requireAuth, async (req, res) => {
     }
 });
 
-app.get('/api/contacts', requireAuth, async (req, res) => {
+app.get('/api/contacts', requireAuth, requireTabPermission('contacts'), async (req, res) => {
     try {
         const stdout = await runSqliteQuery("SELECT id, name, last_name, telefono FROM contact ORDER BY name ASC, last_name ASC;");
         const contacts = parseSqliteRows(stdout);
@@ -7235,7 +7639,7 @@ app.get('/api/contacts', requireAuth, async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
-app.post('/api/contacts/add', requireAuth, async (req, res) => {
+app.post('/api/contacts/add', requireAuth, requireTabPermission('contacts'), async (req, res) => {
     try {
         const { firstName, lastName, phone } = req.body;
         if (!firstName || !phone) {

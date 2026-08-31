@@ -142,14 +142,13 @@
                         <input type="hidden" name="group_id" value="<%= g.id %>">
                         <p class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">Tab Access</p>
                         <div class="flex flex-wrap gap-4">
-                            <% var visibleTabs = allTabs.filter(function(t) { return t !== 'dashboard'; }); %>
+                            <% var visibleTabs = allTabs.filter(function(t) { return t !== 'users'; }); %>
                             <% visibleTabs.forEach(function(tab) { %>
                                 <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] text-xs text-[var(--text-primary)] cursor-pointer transition">
                                     <input type="checkbox" name="tabs" value="<%= tab %>" class="tab-checkbox" <%= g.permissions.includes(tab) ? 'checked' : '' %>>
                                     <span class="capitalize"><%= tab.replace(/-/g, ' ') %></span>
                                 </label>
                             <% }); %>
-                            <span class="text-xs text-[var(--text-muted)] self-center ml-2">Dashboard is accessible to all users</span>
                         </div>
                         <div class="mt-4">
                             <button type="submit" class="btn-primary text-[10px]">Save Permissions</button>

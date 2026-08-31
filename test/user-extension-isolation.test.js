@@ -285,3 +285,106 @@ test('dashboard_user_dongles mapping and manual dongle permissions operate corre
     assert.deepEqual(resolveUserDongles(3, false), ['dongle1'], 'User 3 only has access to dongle1');
     assert.deepEqual(resolveUserDongles(4, false), [], 'User 4 with no assigned dongles receives empty array');
 });
+
+test('dashboard_user_extensions mapping and multi-extension scoping operate correctly', () => {
+    const fs = require('fs');
+    const serverCode = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+    assert.ok(serverCode.includes('dashboard_user_extensions'), 'server.js creates dashboard_user_extensions table');
+    assert.ok(serverCode.includes('getUserScopedExtensions'), 'server.js defines getUserScopedExtensions helper');
+
+    // Multi-extension assignment mapping simulation
+    const mockUserExtensions = [
+        { user_id: 2, extension: '101' },
+        { user_id: 2, extension: '102' },
+        { user_id: 3, extension: '103' }
+    ];
+
+    const resolveUserExtensions = (userId, isSuperAdmin) => {
+        if (isSuperAdmin) return null;
+        const assigned = mockUserExtensions.filter(r => r.user_id === userId).map(r => r.extension);
+        return assigned.length > 0 ? assigned : null;
+    };
+
+    assert.equal(resolveUserExtensions(1, true), null, 'Super Admin receives null (unrestricted access)');
+    assert.deepEqual(resolveUserExtensions(2, false), ['101', '102'], 'User 2 has access to both 101 and 102');
+    assert.deepEqual(resolveUserExtensions(3, false), ['103'], 'User 3 has access to 103');
+    assert.equal(resolveUserExtensions(4, false), null, 'User 4 with no assigned extension receives null (unrestricted)');
+});
+
+test('User assigned multiple extensions can view and filter both extensions on Dashboard and CDR', async () => {
+    const moment = require('moment');
+
+    // 1. Dashboard with multiple userExtensions ['101', '102']
+    const dashHtml = await ejs.renderFile(dashboardViewPath, {
+        currentLang: 'en',
+        currentPage: '/',
+        user: { username: 'multi_agent', role: 'user' },
+        isSuperAdmin: false,
+        userExtensions: ['101', '102'],
+        stats: { totalCalls: 20, answeredCalls: 16, inboundCount: 10, outboundCount: 10, internalCount: 0, externalCount: 20, inboundMin: 20, outboundMin: 20, internalMin: 0, externalMin: 40, noAnswerCalls: 2, busyCalls: 2, failedCalls: 0, totalTalkMin: 40, totalTalkSec: 2400, avgTalkSec: 150 },
+        roster: mockRoster,
+        filters: { startDate: '2026-08-24 00:00:00', endDate: '2026-08-24 23:59:59', targetExtension: ['101', '102'], statusFilter: 'ALL', searchSrc: '', searchDst: '', searchDid: '', searchUniqueId: '', directionFilter: 'ALL', callScopeFilter: 'ALL' },
+        moment,
+        trendData: JSON.stringify([]),
+        dispositionData: JSON.stringify([]),
+        hourlyData: JSON.stringify([]),
+        topTalkers: JSON.stringify([]),
+        durationData: JSON.stringify([]),
+        scopeData: JSON.stringify([])
+    });
+
+    // Options for 101 and 102 are present, but not 103 or ALL
+    assert.ok(dashHtml.includes('value="101"'), 'Extension 101 option rendered');
+    assert.ok(dashHtml.includes('value="102"'), 'Extension 102 option rendered');
+    assert.equal(dashHtml.includes('id="dash_ext_chk_all"'), false, 'ALL checkbox excluded for scoped user');
+    assert.equal(dashHtml.includes('id="dash_ext_chk_103"'), false, 'Extension 103 checkbox excluded for user scoped to 101 and 102');
+
+    // 2. CDR with multiple userExtensions ['101', '102']
+    const cdrHtml = await ejs.renderFile(cdrViewPath, {
+        currentLang: 'en',
+        currentPage: '/cdr',
+        user: { username: 'multi_agent', role: 'user' },
+        isSuperAdmin: false,
+        userExtensions: ['101', '102'],
+        calls: [],
+        roster: mockRoster,
+        filters: { startDate: '2026-08-24 00:00:00', endDate: '2026-08-24 23:59:59', targetExtension: ['101', '102'], statusFilter: 'ALL', searchSrc: '', searchDst: '', searchDid: '', searchUniqueId: '', directionFilter: 'ALL', callScopeFilter: 'ALL', page: 1, perPage: 25 },
+        pagination: { total: 0, totalPages: 1, page: 1, perPage: 25 },
+        moment
+    });
+
+    assert.ok(cdrHtml.includes('value="101"'), 'CDR extension 101 option rendered');
+    assert.ok(cdrHtml.includes('value="102"'), 'CDR extension 102 option rendered');
+    assert.equal(cdrHtml.includes('id="ext_chk_all"'), false, 'ALL checkbox excluded for scoped user in CDR');
+    assert.equal(cdrHtml.includes('id="ext_chk_103"'), false, 'Extension 103 checkbox excluded in CDR for user scoped to 101 and 102');
+});
+
+test('Multi-extension audio authorization allows calls for any assigned extension', () => {
+    const channelMatches = (ch, ext) => {
+        if (!ch || !ext) return false;
+        const reg = new RegExp(`^[A-Za-z0-9_]+/(${ext.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})([^0-9]|$)`);
+        return reg.test(ch);
+    };
+
+    const isAuthorized = (row, scopedExts) => {
+        if (!scopedExts || scopedExts.length === 0) return true; // Super Admin / unrestricted
+        return scopedExts.some(ext => {
+            return (String(row.src || '').trim() === ext) ||
+                   (String(row.dst || '').trim() === ext) ||
+                   (String(row.cnum || '').trim() === ext) ||
+                   channelMatches(row.channel, ext) ||
+                   channelMatches(row.dstchannel, ext);
+        });
+    };
+
+    const userExts = ['101', '102'];
+
+    // Call involving 101 as src
+    assert.equal(isAuthorized({ src: '101', dst: '01011112222', cnum: '101' }, userExts), true);
+    // Call involving 102 as dst
+    assert.equal(isAuthorized({ src: '01033334444', dst: '102', cnum: '01033334444' }, userExts), true);
+    // Call involving 102 via channel
+    assert.equal(isAuthorized({ src: '01099999999', dst: '8000', cnum: '01099999999', channel: 'PJSIP/102-0001' }, userExts), true);
+    // Call between 103 and 104 -> REJECTED
+    assert.equal(isAuthorized({ src: '103', dst: '104', cnum: '103', channel: 'PJSIP/103-0001' }, userExts), false);
+});
