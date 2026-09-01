@@ -33,6 +33,22 @@ const {
     consumeEmbedTicket,
     hashSecret
 } = require('./lib/integration-auth');
+const {
+    initFederationDb,
+    generateIaxConfig,
+    generateDialplanConfig,
+    ensureAsteriskIncludes,
+    syncFederationAsteriskConfig,
+    formatRemoteDestination
+} = require('./lib/federation-engine');
+const {
+    bootstrapPeer,
+    qualifyIaxPeer,
+    syncRemotePeerEntities,
+    removeRemoteFederationSetup
+} = require('./lib/federation-bootstrap');
+const FederationHub = require('./lib/federation-hub');
+let federationHub = null;
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
 let rawEncryptionKey = process.env.ENCRYPTION_KEY;
@@ -129,7 +145,11 @@ const tables = {
     dashboardGroupPermissions: tableName(ASTERISK_DB, 'dashboard_group_permissions'),
     dashboardUserDongles: tableName(ASTERISK_DB, 'dashboard_user_dongles'),
     dashboardUserExtensions: tableName(ASTERISK_DB, 'dashboard_user_extensions'),
-    dashboardUserPreferences: tableName(ASTERISK_DB, 'dashboard_user_preferences')
+    dashboardUserPreferences: tableName(ASTERISK_DB, 'dashboard_user_preferences'),
+    sokratFederationSettings: tableName(ASTERISK_DB, 'sokrat_federation_settings'),
+    sokratFederationPeers: tableName(ASTERISK_DB, 'sokrat_federation_peers'),
+    sokratFederationRemoteExtensions: tableName(ASTERISK_DB, 'sokrat_federation_remote_extensions'),
+    sokratFederationRemoteDongles: tableName(ASTERISK_DB, 'sokrat_federation_remote_dongles')
 };
 
 function isInternalChannel(channel) {
@@ -800,6 +820,11 @@ async function initAuthDb() {
     } catch (crmErr) {
         console.error('CRM DB init error:', crmErr.message);
     }
+    try {
+        await initFederationDb(conn);
+    } catch (fedErr) {
+        console.error('Federation DB init error:', fedErr.message);
+    }
     await conn.end();
     await syncAllExtensionsAstdb();
     await acquireDialerLeaderLock();
@@ -821,6 +846,11 @@ async function initAuthDb() {
     try {
         await loadClientNameFromDb();
     } catch (_) {}
+    try {
+        await syncFederationAsteriskConfig(pool, decrypt);
+    } catch (fedSyncErr) {
+        console.error('Federation config boot sync error:', fedSyncErr.message);
+    }
 }
 initAuthDb().catch(err => console.error('AUTH DB init error:', err));
 
@@ -1358,7 +1388,7 @@ app.use((req, res, next) => {
         '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info',
         '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live'
     ];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/integrations/crm/v1/')) {
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/federation/v1/')) {
         return next();
     }
     requireAuth(req, res, next);
@@ -1528,6 +1558,36 @@ const crmLiveBroadcaster = registerCrmLiveSocket(io, pool, {
     ASTERISK_BIN,
     execFileAsync
 });
+
+federationHub = new FederationHub({
+    pool,
+    io,
+    getLocalLiveStateFn: async () => {
+        try {
+            const [users] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY extension ASC');
+            const exts = (users || []).map(u => ({
+                extension: String(u.extension),
+                name: u.name || u.extension,
+                status: peerStatus[u.extension] ? 'online' : 'offline',
+                ip: peerIPs[u.extension] || null
+            }));
+            return {
+                extensions: exts,
+                activeCalls: Object.values(activeCalls || {})
+            };
+        } catch (err) {
+            return { extensions: [], activeCalls: [] };
+        }
+    },
+    executeLocalActionFn: async ({ action, targetExtension, supervisorExtension, channel }) => {
+        if (action === 'hangup' && channel) {
+            execFileAsync(ASTERISK_BIN, ['-rx', `channel request hangup ${channel}`]).catch(() => {});
+            return { success: true };
+        }
+        return { success: true };
+    }
+});
+federationHub.init().catch(err => console.error('FederationHub init error:', err.message));
 let pjsipSnapshotStartTime = 0;
 let pjsipBatchContactIds = new Set();
 let pendingOffline = {};
@@ -1741,6 +1801,38 @@ async function getTrunkStatusMap() {
                 activeCalls: activeCount
             };
         }
+
+        try {
+            const [fedPeers] = await pool.query('SELECT id, node_name, host, site_code, iax_port, status FROM `asterisk`.`sokrat_federation_peers`');
+            for (const fp of (fedPeers || [])) {
+                const outboundName = `fed_out_site${fp.site_code}`;
+                const isOnline = (iaxCliPresence[outboundName] === true) || (fp.status === 'online');
+                const trunkKey = `fed_${fp.id}`;
+
+                let activeCount = 0;
+                const outLower = outboundName.toLowerCase();
+                for (const ext in activeCalls) {
+                    const call = activeCalls[ext];
+                    const ch = String(call?.channel || '').toLowerCase();
+                    if (ch.includes(outLower)) {
+                        activeCount++;
+                    }
+                }
+
+                statusMap[trunkKey] = {
+                    trunkid: trunkKey,
+                    name: `${fp.node_name || 'Site ' + fp.site_code} (#${fp.site_code})`,
+                    tech: 'IAX2 (Federation)',
+                    channelid: `IAX2/${outboundName}`,
+                    host: fp.host,
+                    online: isOnline,
+                    statusText: isOnline ? 'OK' : 'Offline',
+                    activeCalls: activeCount,
+                    isFederation: true
+                };
+            }
+        } catch (_) {}
+
         return statusMap;
     } catch(e) {
         console.error('getTrunkStatusMap error:', e.message);
@@ -2704,6 +2796,20 @@ app.use(async (req, res, next) => {
         res.locals.greetingMode = greetingConfig.mode || 'none';
         res.locals.greetingExtensions = greetingConfig.extensions || [];
         res.locals.clientName = cachedClientName || '';
+        let fedSettings = { local_site_code: '10', local_node_name: 'Main PBX', panel_role: 'local' };
+        let fedPeers = [];
+        let fedRemoteExts = [];
+        try {
+            const [sRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
+            if (sRows && sRows[0]) fedSettings = sRows[0];
+            const [pRows] = await pool.query('SELECT id, node_name, host, site_code, status FROM `asterisk`.`sokrat_federation_peers`');
+            fedPeers = pRows || [];
+            const [reRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_remote_extensions`');
+            fedRemoteExts = reRows || [];
+        } catch (_) {}
+        res.locals.federationSettings = fedSettings;
+        res.locals.federationPeers = fedPeers;
+        res.locals.federationRemoteExtensions = fedRemoteExts;
         next();
     } catch (err) { next(err); }
 });
@@ -12129,6 +12235,419 @@ app.post('/api/config/dongle-mappings/:dongleName/toggle', requireAuth, async (r
         });
     } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// SOKRAT IAX2 MULTI-SERVER FEDERATION & CENTRAL LIVE PANEL APIs
+// ============================================================================
+
+// 1. GET /api/config/federation/settings - Retrieve local federation settings
+app.get('/api/config/federation/settings', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
+        const settings = rows[0] || { id: 1, local_site_code: '10', local_node_name: 'Main PBX', panel_role: 'local' };
+        res.json({ success: true, settings });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 2. PUT /api/config/federation/settings - Update local federation settings
+app.put('/api/config/federation/settings', requireAuth, async (req, res) => {
+    try {
+        const { local_site_code, local_node_name, panel_role } = req.body;
+        const siteCode = String(local_site_code || '10').trim().replace(/\D/g, '');
+        if (!siteCode) return res.status(400).json({ success: false, error: 'Local site code is required and must be numeric.' });
+        const nodeName = String(local_node_name || 'Main PBX').trim();
+        const role = panel_role === 'central' ? 'central' : 'local';
+
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`sokrat_federation_settings\` (id, local_site_code, local_node_name, panel_role)
+            VALUES (1, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE local_site_code = VALUES(local_site_code), local_node_name = VALUES(local_node_name), panel_role = VALUES(panel_role)
+        `, [siteCode, nodeName, role]);
+
+        await syncFederationAsteriskConfig(pool, decrypt);
+        if (federationHub) {
+            await federationHub.reloadSettingsAndPeers();
+        }
+
+        res.json({ success: true, settings: { id: 1, local_site_code: siteCode, local_node_name: nodeName, panel_role: role } });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 3. GET /api/config/federation/peers - List all connected federation peers
+app.get('/api/config/federation/peers', requireAuth, async (req, res) => {
+    try {
+        const [peers] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_peers` ORDER BY site_code ASC');
+        const [remoteExts] = await pool.query(`
+            SELECT peer_id, COUNT(*) as ext_count
+            FROM \`asterisk\`.\`sokrat_federation_remote_extensions\`
+            GROUP BY peer_id
+        `);
+        const [remoteDongles] = await pool.query(`
+            SELECT peer_id, COUNT(*) as dongle_count
+            FROM \`asterisk\`.\`sokrat_federation_remote_dongles\`
+            GROUP BY peer_id
+        `);
+
+        const extCountMap = new Map(remoteExts.map(r => [r.peer_id, r.ext_count]));
+        const dongleCountMap = new Map(remoteDongles.map(r => [r.peer_id, r.dongle_count]));
+
+        const [allRemoteExts] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_remote_extensions` ORDER BY dial_alias ASC');
+
+        const enriched = [];
+        for (const peer of peers) {
+            const outboundPeer = peer.iax_peer_outbound || `fed_out_site${peer.site_code}`;
+            const qualify = await qualifyIaxPeer(outboundPeer);
+            enriched.push({
+                ...peer,
+                iax_secret_enc: undefined, // Do not expose encrypted secret
+                api_key_enc: undefined,
+                extensionsCount: extCountMap.get(peer.id) || 0,
+                donglesCount: dongleCountMap.get(peer.id) || 0,
+                qualifyStatus: qualify.status,
+                latencyMs: qualify.latencyMs,
+                qualifyDescription: qualify.statusDescription
+            });
+        }
+
+        res.json({ success: true, peers: enriched, remoteExtensions: allRemoteExts });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 4. POST /api/config/federation/peers - Add/create peer manually
+app.post('/api/config/federation/peers', requireAuth, async (req, res) => {
+    try {
+        const { node_name, host, site_code, iax_port, iax_secret, allow_internal_dialing, allow_outbound_egress } = req.body;
+        if (!host || !site_code) {
+            return res.status(400).json({ success: false, error: 'Host and Site Code are required.' });
+        }
+        const cleanSiteCode = String(site_code).trim().replace(/\D/g, '');
+        const cleanNodeName = String(node_name || `Site ${cleanSiteCode}`).trim();
+        const secret = String(iax_secret || crypto.randomBytes(24).toString('hex')).trim();
+        const encryptedSecret = encrypt(secret);
+        const apiKey = crypto.randomBytes(32).toString('hex');
+        const encryptedApiKey = encrypt(apiKey);
+
+        const inboundUser = `fed_in_site${cleanSiteCode}`;
+        const outboundPeer = `fed_out_site${cleanSiteCode}`;
+
+        const [insertRes] = await pool.query(`
+            INSERT INTO \`asterisk\`.\`sokrat_federation_peers\` (
+                node_name, host, site_code, iax_port, iax_user_inbound, iax_peer_outbound,
+                iax_secret_enc, api_base_url, api_key_enc, allow_internal_dialing, allow_outbound_egress, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'offline')
+        `, [
+            cleanNodeName,
+            host.trim(),
+            cleanSiteCode,
+            Number(iax_port) || 4569,
+            inboundUser,
+            outboundPeer,
+            encryptedSecret,
+            `https://${host.trim()}:8443`,
+            encryptedApiKey,
+            allow_internal_dialing !== 0 ? 1 : 0,
+            allow_outbound_egress !== 0 ? 1 : 0
+        ]);
+
+        await syncFederationAsteriskConfig(pool, decrypt);
+        if (federationHub) await federationHub.reloadSettingsAndPeers();
+
+        res.json({ success: true, peerId: insertRes.insertId });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 5. PUT /api/config/federation/peers/:id - Update peer settings
+app.put('/api/config/federation/peers/:id', requireAuth, async (req, res) => {
+    try {
+        const peerId = parseInt(req.params.id, 10);
+        if (!peerId) return res.status(400).json({ success: false, error: 'Invalid peer ID.' });
+
+        const { node_name, host, allow_internal_dialing, allow_outbound_egress, status } = req.body;
+        const updates = [];
+        const params = [];
+
+        if (node_name !== undefined) {
+            updates.push('node_name = ?');
+            params.push(String(node_name).trim());
+        }
+        if (host !== undefined) {
+            updates.push('host = ?');
+            params.push(String(host).trim());
+        }
+        if (allow_internal_dialing !== undefined) {
+            updates.push('allow_internal_dialing = ?');
+            params.push(allow_internal_dialing ? 1 : 0);
+        }
+        if (allow_outbound_egress !== undefined) {
+            updates.push('allow_outbound_egress = ?');
+            params.push(allow_outbound_egress ? 1 : 0);
+        }
+        if (status !== undefined) {
+            updates.push('status = ?');
+            params.push(status);
+        }
+
+        if (updates.length === 0) {
+            return res.json({ success: true, message: 'No updates provided.' });
+        }
+
+        params.push(peerId);
+        await pool.query(`UPDATE \`asterisk\`.\`sokrat_federation_peers\` SET ${updates.join(', ')} WHERE id = ?`, params);
+
+        await syncFederationAsteriskConfig(pool, decrypt);
+        if (federationHub) await federationHub.reloadSettingsAndPeers();
+
+        res.json({ success: true, message: 'Peer updated successfully.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 6. DELETE /api/config/federation/peers/:id - Remove peer and cleanup
+app.delete('/api/config/federation/peers/:id', requireAuth, async (req, res) => {
+    try {
+        const peerId = parseInt(req.params.id, 10);
+        if (!peerId) return res.status(400).json({ success: false, error: 'Invalid peer ID.' });
+
+        const [peerRows] = await pool.query('SELECT site_code FROM `asterisk`.`sokrat_federation_peers` WHERE id = ?', [peerId]);
+        if (peerRows && peerRows[0]) {
+            const siteCode = peerRows[0].site_code;
+            const { execFile: execFileCb } = require('child_process');
+            execFileCb(ASTERISK_BIN, ['-rx', `database del FEDERATION PEER_${siteCode}_EGRESS_ALLOWED`], () => {});
+        }
+
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_remote_extensions` WHERE peer_id = ?', [peerId]);
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_remote_dongles` WHERE peer_id = ?', [peerId]);
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_peers` WHERE id = ?', [peerId]);
+
+        await syncFederationAsteriskConfig(pool, decrypt);
+        if (federationHub) await federationHub.reloadSettingsAndPeers();
+
+        res.json({ success: true, message: 'Federation peer removed successfully.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 7. POST /api/config/federation/peers/:id/sync - Trigger sync of extensions and dongles from peer
+app.post('/api/config/federation/peers/:id/sync', requireAuth, async (req, res) => {
+    try {
+        const peerId = parseInt(req.params.id, 10);
+        const [peerRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_peers` WHERE id = ?', [peerId]);
+        if (!peerRows || peerRows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Peer not found.' });
+        }
+        const peer = peerRows[0];
+        const { sshUser = 'root', sshPassword = req.body.sshPassword || 'Admin@123', sshPort = 22 } = req.body;
+
+        const syncRes = await syncRemotePeerEntities(pool, peerId, peer.site_code, peer.host, sshPort, sshUser, sshPassword);
+
+        // Bilateral push of local extensions to remote node
+        try {
+            const { execRemoteSsh } = require('./lib/federation-bootstrap');
+            const [sRows] = await pool.query('SELECT local_site_code FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
+            const localSiteCode = sRows[0]?.local_site_code || '10';
+            const [localExtRows] = await pool.query('SELECT extension, name FROM `asterisk`.`users`');
+            const [localDongleRows] = await pool.query('SELECT dongle_name, phone_number FROM `asterisk`.`gsm_dongles`');
+
+            const rDbUser = 'asteriskuser';
+            const rDbPass = 'admin';
+            const getRemotePeerIdCmd = `MYSQL_PWD='${rDbPass}' mysql -u ${rDbUser} asterisk -Nse "SELECT id FROM sokrat_federation_peers WHERE site_code='${localSiteCode}' LIMIT 1"`;
+            const remotePeerId = (await execRemoteSsh(peer.host, sshPort, sshUser, sshPassword, getRemotePeerIdCmd)) || '1';
+
+            const extInserts = [];
+            for (const le of (localExtRows || [])) {
+                const dAlias = `${localSiteCode}${le.extension}`;
+                const dName = (le.name || le.extension).replace(/'/g, "\\'");
+                extInserts.push(`(${remotePeerId}, '${le.extension}', '${dAlias}', '${dName}', 'online', NOW())`);
+            }
+            if (extInserts.length > 0) {
+                const pushExtSql = `
+                    MYSQL_PWD='${rDbPass}' mysql -u ${rDbUser} asterisk -e "
+                    DELETE FROM sokrat_federation_remote_extensions WHERE peer_id=${remotePeerId};
+                    INSERT INTO sokrat_federation_remote_extensions (peer_id, native_extension, dial_alias, display_name, status, last_seen_at)
+                    VALUES ${extInserts.join(', ')}
+                    ON DUPLICATE KEY UPDATE display_name=VALUES(display_name), status='online', last_seen_at=NOW();
+                    "
+                `;
+                await execRemoteSsh(peer.host, sshPort, sshUser, sshPassword, pushExtSql);
+            }
+
+            const dongleInserts = [];
+            for (const ld of (localDongleRows || [])) {
+                const pNum = (ld.phone_number || '').replace(/'/g, "\\'");
+                dongleInserts.push(`(${remotePeerId}, '${ld.dongle_name}', '${pNum}', '', 'Available')`);
+            }
+            if (dongleInserts.length > 0) {
+                const pushDongleSql = `
+                    MYSQL_PWD='${rDbPass}' mysql -u ${rDbUser} asterisk -e "
+                    DELETE FROM sokrat_federation_remote_dongles WHERE peer_id=${remotePeerId};
+                    INSERT INTO sokrat_federation_remote_dongles (peer_id, dongle_name, phone_number, provider, status)
+                    VALUES ${dongleInserts.join(', ')}
+                    ON DUPLICATE KEY UPDATE phone_number=VALUES(phone_number);
+                    "
+                `;
+                await execRemoteSsh(peer.host, sshPort, sshUser, sshPassword, pushDongleSql);
+            }
+
+            await execRemoteSsh(peer.host, sshPort, sshUser, sshPassword, `MYSQL_PWD='${rDbPass}' mysql -u ${rDbUser} asterisk -e "UPDATE sokrat_federation_peers SET status='online', last_sync_at=NOW() WHERE id=${remotePeerId};"`);
+        } catch (pushErr) {
+            console.error('Bilateral push on sync endpoint error:', pushErr.message);
+        }
+
+        if (federationHub) await federationHub.reloadSettingsAndPeers();
+        res.json({ success: true, ...syncRes });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 8. POST /api/config/federation/peers/:id/qualify - Run IAX qualify
+app.post('/api/config/federation/peers/:id/qualify', requireAuth, async (req, res) => {
+    try {
+        const peerId = parseInt(req.params.id, 10);
+        const [peerRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_peers` WHERE id = ?', [peerId]);
+        if (!peerRows || peerRows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Peer not found.' });
+        }
+        const peer = peerRows[0];
+        const outboundPeer = peer.iax_peer_outbound || `fed_out_site${peer.site_code}`;
+
+        const qualifyRes = await qualifyIaxPeer(outboundPeer);
+        if (qualifyRes.status === 'online') {
+            await pool.query('UPDATE `asterisk`.`sokrat_federation_peers` SET status = "online", last_sync_at = NOW() WHERE id = ?', [peerId]);
+        } else {
+            await pool.query('UPDATE `asterisk`.`sokrat_federation_peers` SET status = ?, last_sync_at = NOW() WHERE id = ?', [qualifyRes.status, peerId]);
+        }
+
+        res.json({ success: true, ...qualifyRes });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 9. POST /api/config/federation/bootstrap - Fast Automated SSH Bootstrap
+app.post('/api/config/federation/bootstrap', requireAuth, async (req, res) => {
+    try {
+        const {
+            host,
+            sshPort = 22,
+            sshUser = 'root',
+            sshPassword,
+            siteCode,
+            nodeName,
+            localSiteCode,
+            localNodeName,
+            allowInternalDialing = 1,
+            allowOutboundEgress = 1
+        } = req.body;
+
+        if (!host || !sshPassword || !siteCode) {
+            return res.status(400).json({ success: false, error: 'Host IP, SSH password, and remote Site Code are required.' });
+        }
+
+        const result = await bootstrapPeer({
+            pool,
+            encryptFn: encrypt,
+            decryptFn: decrypt,
+            host: host.trim(),
+            sshPort: Number(sshPort) || 22,
+            sshUser: (sshUser || 'root').trim(),
+            sshPassword,
+            siteCode: String(siteCode).trim(),
+            nodeName: String(nodeName || '').trim(),
+            localSiteCode: localSiteCode ? String(localSiteCode).trim() : undefined,
+            localNodeName: localNodeName ? String(localNodeName).trim() : undefined,
+            allowInternalDialing: Number(allowInternalDialing) !== 0 ? 1 : 0,
+            allowOutboundEgress: Number(allowOutboundEgress) !== 0 ? 1 : 0
+        });
+
+        if (federationHub) {
+            await federationHub.reloadSettingsAndPeers();
+        }
+
+        res.json(result);
+    } catch (err) {
+        console.error('[Federation Bootstrap] Error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 10. POST /api/config/federation/remote-cleanup - Remove federation setup from remote node
+app.post('/api/config/federation/remote-cleanup', requireAuth, async (req, res) => {
+    try {
+        const { host, sshPort = 22, sshUser = 'root', sshPassword } = req.body;
+        if (!host || !sshPassword) {
+            return res.status(400).json({ success: false, error: 'Host and SSH password required.' });
+        }
+        const result = await removeRemoteFederationSetup(host, sshPort, sshUser, sshPassword);
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 11. GET /api/federation/v1/extensions - Inter-server Extension API
+app.get('/api/federation/v1/extensions', async (req, res) => {
+    try {
+        const [users] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY extension ASC');
+        res.json({ success: true, extensions: users });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 12. GET /api/federation/v1/dongles - Inter-server GSM Dongle API
+app.get('/api/federation/v1/dongles', async (req, res) => {
+    try {
+        const [dongles] = await pool.query('SELECT dongle_name, phone_number FROM `asterisk`.`gsm_dongles` ORDER BY dongle_name ASC');
+        res.json({ success: true, dongles });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 13. GET /api/federation/v1/health - Inter-server Healthcheck
+app.get('/api/federation/v1/health', async (req, res) => {
+    try {
+        const [settingsRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
+        const settings = settingsRows[0] || { local_site_code: '10', local_node_name: 'Main PBX' };
+        res.json({ success: true, status: 'ok', local_site_code: settings.local_site_code, local_node_name: settings.local_node_name });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 14. GET /api/federation/v1/live-state - Inter-server Real-Time Live Presence & Call State
+app.get('/api/federation/v1/live-state', async (req, res) => {
+    try {
+        const [users] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY extension ASC');
+        const exts = (users || []).map(u => ({
+            extension: String(u.extension),
+            name: u.name || u.extension,
+            status: peerStatus[u.extension] ? 'online' : 'offline',
+            ip: peerIPs[u.extension] || null
+        }));
+        res.json({
+            success: true,
+            timestamp: Date.now(),
+            extensions: exts,
+            peerStatus: peerStatus || {},
+            peerIPs: peerIPs || {},
+            activeCalls: activeCalls || {}
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 // AUTO-DIALER & QUEUE CONTROL ENGINE MODULE

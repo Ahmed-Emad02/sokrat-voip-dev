@@ -622,6 +622,21 @@ const isRtl = currentLang === 'ar';
                         <span><%= t.viewMinimal %></span>
                     </button>
                 </div>
+                <% if (typeof federationPeers !== 'undefined' && federationPeers.length > 0 && typeof federationSettings !== 'undefined' && federationSettings.panel_role === 'central') { %>
+                <div class="inline-flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1">
+                    <button type="button" id="btn-node-all" onclick="filterOperatorByNode('all')" class="op-node-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold transition bg-amber-500 text-black cursor-pointer">
+                        <span><%= isRtl ? 'جميع السيرفرات' : 'All Nodes' %></span>
+                    </button>
+                    <button type="button" id="btn-node-local" onclick="filterOperatorByNode('<%= (typeof federationSettings !== 'undefined' && federationSettings.local_site_code) ? federationSettings.local_site_code : '10' %>')" class="op-node-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold transition text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer">
+                        <span><%= (typeof federationSettings !== 'undefined' && federationSettings.local_node_name) ? federationSettings.local_node_name : 'Main PBX' %> (#<%= (typeof federationSettings !== 'undefined' && federationSettings.local_site_code) ? federationSettings.local_site_code : '10' %>)</span>
+                    </button>
+                    <% federationPeers.forEach(function(p) { %>
+                    <button type="button" id="btn-node-<%= p.site_code %>" onclick="filterOperatorByNode('<%= p.site_code %>')" class="op-node-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold transition text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer">
+                        <span><%= p.node_name || 'Site ' + p.site_code %> (#<%= p.site_code %>)</span>
+                    </button>
+                    <% }) %>
+                </div>
+                <% } %>
                 <button onclick="openIntercomModal()" class="btn-primary shrink-0 px-3 py-2 text-xs cursor-pointer flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.684A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.316z"/></svg>
                     <span><%= t.intercomBtn %></span>
@@ -641,13 +656,56 @@ const isRtl = currentLang === 'ar';
         <div class="flex-1 min-h-0 overflow-y-auto mb-4 bg-black/20 rounded-2xl p-3 border border-[#27272a]/30">
             <div id="switchboardGrid">
                 <%
+                // Combine local roster with remote federation extensions when designated as Central Live Panel
+                var isCentralRole = (typeof federationSettings !== 'undefined' && federationSettings.panel_role === 'central');
+                var localSiteCode = (typeof federationSettings !== 'undefined' && federationSettings.local_site_code) ? federationSettings.local_site_code : '10';
+                var localNodeName = (typeof federationSettings !== 'undefined' && federationSettings.local_node_name) ? federationSettings.local_node_name : 'Main PBX';
+
+                var allRoster = (roster || []).map(function(emp) {
+                    return Object.assign({}, emp, {
+                        siteCode: localSiteCode,
+                        nodeName: localNodeName,
+                        cardId: String(emp.extension),
+                        isRemote: false
+                    });
+                });
+
+                var fedRemote = (isCentralRole && typeof federationRemoteExtensions !== 'undefined') ? federationRemoteExtensions : [];
+                var fedPeersList = (typeof federationPeers !== 'undefined') ? federationPeers : [];
+                var peerMap = {};
+                fedPeersList.forEach(function(p) { peerMap[p.id] = p; });
+
+                if (isCentralRole) {
+                    fedRemote.forEach(function(re) {
+                        var p = peerMap[re.peer_id] || {};
+                        var siteCode = p.site_code || '20';
+                        var nodeName = p.node_name || ('Site ' + siteCode);
+                        allRoster.push({
+                            extension: re.native_extension,
+                            dialAlias: re.dial_alias,
+                            cardId: siteCode + '_' + re.native_extension,
+                            name: re.display_name,
+                            emp_group: nodeName,
+                            siteCode: siteCode,
+                            nodeName: nodeName,
+                            isRemote: true,
+                            peerId: re.peer_id,
+                            online: re.status === 'online',
+                            photo: null,
+                            title: isRtl ? 'تحويلة بعيدة' : 'Remote Extension',
+                            is_group_admin: false,
+                            ip: p.host || null
+                        });
+                    });
+                }
+
                 // Group roster by emp_group; every defined group gets a section even when empty
                 var groups = {};
                 var definedGroups = Array.isArray(employeeGroups) ? employeeGroups : [];
                 definedGroups.forEach(function(gName) {
                     if (gName && !groups[gName]) groups[gName] = [];
                 });
-                roster.forEach(function(emp) {
+                allRoster.forEach(function(emp) {
                     var g = emp.emp_group || '___ungrouped___';
                     if (!groups[g]) groups[g] = [];
                     groups[g].push(emp);
@@ -670,7 +728,7 @@ const isRtl = currentLang === 'ar';
                     </div>
                     <div class="extension-group-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
                         <% groups[gName].forEach(function(emp) {
-                            const live = activeCalls[emp.extension];
+                            const live = activeCalls[emp.extension] || activeCalls[emp.cardId];
                             let callState = 'idle';
                             let partnerNum = '';
                             let startTimeStamp = '';
@@ -689,9 +747,10 @@ const isRtl = currentLang === 'ar';
                                 else stateClass = 'state-idle';
                             }
                         %>
-                        <article id="card-<%= emp.extension %>"
+                        <article id="card-<%= emp.cardId %>"
                                  data-start="<%= startTimeStamp %>"
                                  data-emp-group="<%= emp.emp_group || '' %>"
+                                 data-site-code="<%= emp.siteCode %>"
                                  class="panel-surface rounded-xl p-3 flex flex-col justify-between min-h-[188px] transition-all duration-300 relative overflow-hidden border <%= stateClass %>">
                             <div class="flex items-start justify-between gap-3 min-w-0">
                                 <div class="flex items-start gap-2.5 min-w-0 flex-1">
@@ -702,9 +761,12 @@ const isRtl = currentLang === 'ar';
                                         <% } %>
                                     </div>
                                     <div class="min-w-0 flex-1 <%= isRtl ? 'text-right' : 'text-left' %>">
-                                        <div class="flex items-baseline gap-2 min-w-0">
+                                        <div class="flex items-baseline gap-2 min-w-0 flex-wrap">
                                             <span class="text-base font-bold text-white truncate" title="<%= emp.name %>"><%= emp.name %></span>
-                                            <span class="extension-number text-xs font-mono font-black text-[var(--accent-color)] shrink-0"><%= emp.extension %></span>
+                                            <span class="extension-number text-xs font-mono font-black text-[var(--accent-color)] shrink-0"><%= emp.isRemote ? emp.dialAlias : emp.extension %></span>
+                                            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold <%= emp.isRemote ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30' %>">
+                                                #<%= emp.siteCode %>
+                                            </span>
                                         </div>
                                         <span class="employee-title <%= emp.title ? '' : 'employee-title-empty' %>" title="<%= emp.title || t.noTitle %>"><%= emp.title || t.noTitle %></span>
                                         <div class="flex items-center gap-1 flex-wrap mt-0.5">
@@ -720,29 +782,29 @@ const isRtl = currentLang === 'ar';
                                 </div>
                                 <div class="flex flex-col items-end gap-1 shrink-0">
                                     <div class="flex items-center gap-1.5">
-                                        <span id="sipBadge-<%= emp.extension %>" class="h-2 w-2 rounded-full bg-zinc-800 transition-all duration-300"></span>
-                                        <span id="sipLabel-<%= emp.extension %>" class="text-[11px] font-bold uppercase tracking-wide text-zinc-500 transition-all duration-300"><%= isOnline ? t.online : t.offline %></span>
+                                        <span id="sipBadge-<%= emp.cardId %>" class="h-2 w-2 rounded-full bg-zinc-800 transition-all duration-300"></span>
+                                        <span id="sipLabel-<%= emp.cardId %>" class="text-[11px] font-bold uppercase tracking-wide text-zinc-500 transition-all duration-300"><%= isOnline ? t.online : t.offline %></span>
                                     </div>
-                                    <span id="ipText-<%= emp.extension %>" class="employee-ip-badge font-mono font-bold px-1.5 py-0.5 rounded border truncate max-w-[125px] select-all <%= emp.ip ? '' : 'hidden' %>" title="<%= emp.ip || '' %>"><%= emp.ip || '' %></span>
+                                    <span id="ipText-<%= emp.cardId %>" class="employee-ip-badge font-mono font-bold px-1.5 py-0.5 rounded border truncate max-w-[125px] select-all <%= emp.ip ? '' : 'hidden' %>" title="<%= emp.ip || '' %>"><%= emp.ip || '' %></span>
                                 </div>
                             </div>
 
                             <div class="border-t border-zinc-900/50 pt-2 mt-3">
                                 <div class="flex items-center justify-between gap-2 min-w-0">
                                     <div class="flex items-center gap-1.5 min-w-0">
-                                        <span id="badge-<%= emp.extension %>" class="h-2 w-2 rounded-full shrink-0 bg-transparent transition-all duration-300"></span>
-                                        <span id="status-<%= emp.extension %>" class="text-xs font-bold uppercase tracking-wide text-zinc-500 truncate transition-all duration-300">
+                                        <span id="badge-<%= emp.cardId %>" class="h-2 w-2 rounded-full shrink-0 bg-transparent transition-all duration-300"></span>
+                                        <span id="status-<%= emp.cardId %>" class="text-xs font-bold uppercase tracking-wide text-zinc-500 truncate transition-all duration-300">
                                             <%= callState === 'incall' ? t.incall : callState === 'ringing' ? t.ringing : t.noCall %>
                                         </span>
-                                        <span id="timer-<%= emp.extension %>" class="text-xs font-mono font-bold text-[var(--accent-color)] tracking-wider <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
+                                        <span id="timer-<%= emp.cardId %>" class="text-xs font-mono font-bold text-[var(--accent-color)] tracking-wider <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
                                     </div>
-                                    <span id="partner-<%= emp.extension %>" title="<%= partnerNum %>" class="text-xs font-mono font-bold truncate max-w-[9rem] <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
+                                    <span id="partner-<%= emp.cardId %>" title="<%= partnerNum %>" class="text-xs font-mono font-bold truncate max-w-[9rem] <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
                                         <%= partnerNum %>
                                     </span>
                                 </div>
                                 <div class="mt-2 relative">
-                                    <select id="actionSelect-<%= emp.extension %>"
-                                            onchange="handleSelectAction('<%= emp.extension %>', this.value); this.value='';"
+                                    <select id="actionSelect-<%= emp.cardId %>"
+                                            onchange="handleSelectAction('<%= emp.extension %>', this.value, <%= emp.isRemote ? (emp.peerId || 0) : 0 %>); this.value='';"
                                             <%= (callState === 'incall' || callState === 'ringing') ? '' : 'disabled' %>
                                             class="action-select w-full bg-[var(--bg-card)] text-xs font-semibold rounded-lg px-2.5 py-1.5 border border-[var(--border-primary)] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 text-[var(--text-primary)]">
                                         <option value="" disabled selected hidden><%= isRtl ? 'إجراءات المكالمة' : 'Call Actions' %></option>
@@ -824,7 +886,63 @@ const isRtl = currentLang === 'ar';
             localStorage.setItem('operator_view_mode', mode);
             updateOpViewButtons();
         };
+        let currentSelectedNodeFilter = 'all';
 
+        window.filterOperatorByNode = function(siteCode) {
+            currentSelectedNodeFilter = siteCode;
+            const localSite = '<%= (typeof federationSettings !== "undefined" && federationSettings.local_site_code) ? federationSettings.local_site_code : "10" %>';
+            document.querySelectorAll('.op-node-filter-btn').forEach(btn => {
+                btn.className = 'op-node-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold transition text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer';
+            });
+
+            let targetBtnId = 'btn-node-all';
+            if (siteCode === 'all') targetBtnId = 'btn-node-all';
+            else if (siteCode === localSite || siteCode === 'local') targetBtnId = 'btn-node-local';
+            else targetBtnId = 'btn-node-' + siteCode;
+
+            const activeBtn = document.getElementById(targetBtnId);
+            if (activeBtn) {
+                activeBtn.className = 'op-node-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold transition bg-amber-500 text-black cursor-pointer shadow-md';
+            }
+
+            document.querySelectorAll('#switchboardGrid section[data-group]').forEach(section => {
+                let visibleInGroup = 0;
+                section.querySelectorAll('article[id^="card-"]').forEach(card => {
+                    const cardSite = card.getAttribute('data-site-code') || localSite;
+                    const isMatch = (siteCode === 'all' || cardSite === String(siteCode) || (siteCode === 'local' && cardSite === localSite));
+                    if (isMatch) {
+                        card.style.display = '';
+                        visibleInGroup++;
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+
+                const countBadge = section.querySelector('.employee-group-count');
+                if (countBadge) countBadge.textContent = visibleInGroup;
+
+                if (visibleInGroup === 0 && siteCode !== 'all') {
+                    section.style.display = 'none';
+                } else {
+                    section.style.display = '';
+                }
+            });
+
+            // Also filter Trunk Monitor panel
+            let visibleTrunks = 0;
+            document.querySelectorAll('#trunksLiveGrid > div[data-site-code]').forEach(tCard => {
+                const tSite = tCard.getAttribute('data-site-code') || localSite;
+                const isMatch = (siteCode === 'all' || tSite === String(siteCode) || (siteCode === 'local' && tSite === localSite));
+                if (isMatch) {
+                    tCard.style.display = '';
+                    visibleTrunks++;
+                } else {
+                    tCard.style.display = 'none';
+                }
+            });
+            const countEl = document.getElementById('trunksTotalCount');
+            if (countEl) countEl.textContent = visibleTrunks;
+        };
         updateOpViewButtons();
             const clockEl = document.getElementById('digitalClock');
             if (clockEl) {
@@ -975,14 +1093,16 @@ const isRtl = currentLang === 'ar';
                 if (!grid) return;
 
                 const trunkIds = Object.keys(localTrunksData);
-                if (countEl) countEl.textContent = trunkIds.length;
+                const localSiteCode = '<%= (typeof federationSettings !== "undefined" && federationSettings.local_site_code) ? federationSettings.local_site_code : "10" %>';
                 grid.innerHTML = '';
 
                 if (trunkIds.length === 0) {
+                    if (countEl) countEl.textContent = '0';
                     grid.innerHTML = `<div class="col-span-full py-4 text-center text-xs text-[var(--text-muted)] italic"><%= isRtl ? "لا توجد خطوط SIP أو IAX2 مهيأة." : "No SIP or IAX2 trunks configured." %></div>`;
                     return;
                 }
 
+                let visibleTrunks = 0;
                 trunkIds.forEach(tid => {
                     const trunk = localTrunksData[tid];
                     const isOnline = trunk.online;
@@ -1003,7 +1123,18 @@ const isRtl = currentLang === 'ar';
 
                     const statusDotClass = isOnline ? 'bg-emerald-400' : 'bg-rose-500';
 
+                    let trunkSiteCode = localSiteCode;
+                    if (trunk.isFederation) {
+                        const siteMatch = String(trunk.name || '').match(/#(\d+)/);
+                        trunkSiteCode = siteMatch ? siteMatch[1] : (trunk.siteCode || localSiteCode);
+                    }
+
+                    const isMatch = (currentSelectedNodeFilter === 'all' || trunkSiteCode === String(currentSelectedNodeFilter) || (currentSelectedNodeFilter === 'local' && trunkSiteCode === localSiteCode));
+                    if (isMatch) visibleTrunks++;
+
                     const card = document.createElement('div');
+                    card.setAttribute('data-site-code', trunkSiteCode);
+                    if (!isMatch) card.style.display = 'none';
                     card.className = 'panel-surface rounded-xl p-3.5 flex flex-col justify-between transition-all duration-200 hover:border-[var(--border-accent)]';
                     card.innerHTML = `
                         <div class="flex items-start justify-between gap-2 mb-2">
@@ -1014,7 +1145,10 @@ const isRtl = currentLang === 'ar';
                                 </div>
                                 <span class="text-[10px] font-mono text-[var(--text-muted)] block truncate mt-0.5">${escapeHtml(trunk.channelid || trunk.host || '-')}</span>
                             </div>
-                            <span class="px-2 py-0.5 text-[10px] font-extrabold rounded border ${techBadgeClass} shrink-0">${techDisplay}</span>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border bg-amber-500/15 text-amber-400 border-amber-500/25">#${trunkSiteCode}</span>
+                                <span class="px-2 py-0.5 text-[10px] font-extrabold rounded border ${techBadgeClass}">${techDisplay}</span>
+                            </div>
                         </div>
                         <div class="flex items-center justify-between mt-2 pt-2 border-t border-[var(--border-primary)] text-xs">
                             <span class="px-2 py-0.5 text-[10px] font-bold rounded border ${statusBadgeClass}">${escapeHtml(trunk.statusText || (isOnline ? 'OK' : 'Offline'))}</span>
@@ -1025,6 +1159,7 @@ const isRtl = currentLang === 'ar';
                     `;
                     grid.appendChild(card);
                 });
+                if (countEl) countEl.textContent = visibleTrunks;
             }
 
             function escapeHtml(str) {
@@ -1123,9 +1258,9 @@ const isRtl = currentLang === 'ar';
                 setTimeout(function() { if (a.parentNode) a.remove(); }, 500);
             }
 
-            window.handleSelectAction = function(extension, action) {
+            window.handleSelectAction = function(extension, action, peerId) {
                 if (!action) return;
-                var card = document.querySelector('[data-ext="' + extension + '"]') || document.querySelector('[data-extension="' + extension + '"]');
+                var card = document.querySelector('[data-ext="' + extension + '"]') || document.querySelector('[data-extension="' + extension + '"]') || document.getElementById('card-' + extension);
                 if (card && typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                     anime({
                         targets: card,
@@ -1160,6 +1295,34 @@ const isRtl = currentLang === 'ar';
             };
 
             socket.on('callUpdate', handleCallUpdate);
+
+            <% if (typeof federationSettings !== 'undefined' && federationSettings.panel_role === 'central') { %>
+            socket.on('operator:federation_state', (fedState) => {
+                if (!fedState || !Array.isArray(fedState.extensions)) return;
+                fedState.extensions.forEach(ext => {
+                    if (ext.isLocal) return;
+                    const cardKey = ext.siteCode + '_' + ext.extension;
+                    const card = document.getElementById('card-' + cardKey);
+                    if (!card) return;
+
+                    const isOnline = ext.status === 'online';
+                    localPeerStatus[cardKey] = isOnline;
+
+                    const sipBadge = document.getElementById('sipBadge-' + cardKey);
+                    const sipLabel = document.getElementById('sipLabel-' + cardKey);
+                    if (sipBadge && sipLabel) {
+                        sipLabel.textContent = isOnline ? '<%= t.online %>' : '<%= t.offline %>';
+                    }
+
+                    let callState = 'idle';
+                    if (ext.activeCall) {
+                        callState = ext.activeCall.state === 'In Call' ? 'incall' : 'ringing';
+                    }
+
+                    updateCardStateClass(cardKey, isOnline, callState);
+                });
+            });
+            <% } %>
         });
     </script>
     <script>

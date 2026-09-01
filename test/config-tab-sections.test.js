@@ -6,7 +6,7 @@ const ejs = require('ejs');
 
 const configEjsPath = path.join(__dirname, '../views/config.ejs');
 
-test('views/config.ejs renders all 15 PBX tab sections as direct siblings at equal DOM depth', async () => {
+test('views/config.ejs renders all 16 PBX tab sections as direct siblings at equal DOM depth', async () => {
     const content = fs.readFileSync(configEjsPath, 'utf8');
 
     const html = ejs.render(content, {
@@ -17,7 +17,7 @@ test('views/config.ejs renders all 15 PBX tab sections as direct siblings at equ
         isRoot: true,
         user: { username: 'admin', isRoot: true },
         currentUser: { username: 'admin', isRoot: true },
-        allowedTabs: ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram', 'announcements', 'modem', 'dongles', 'terminal'],
+        allowedTabs: ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram', 'announcements', 'modem', 'dongles', 'terminal', 'federation'],
         isTabAllowed: () => true
     }, { filename: configEjsPath });
 
@@ -41,7 +41,7 @@ test('views/config.ejs renders all 15 PBX tab sections as direct siblings at equ
         }
     }
 
-    assert.equal(sectionReport.length, 15, 'Must render exactly 15 tab sections');
+    assert.equal(sectionReport.length, 16, 'Must render exactly 16 tab sections');
     const depths = new Set(sectionReport.map(s => s.depthAtOpen));
     assert.equal(depths.size, 1, `All tab sections must open at the exact same DOM depth (got ${[...depths].join(', ')})`);
 });

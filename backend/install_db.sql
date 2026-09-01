@@ -24,8 +24,10 @@ CREATE TABLE IF NOT EXISTS `dashboard_user_extensions` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `user_id` INT NOT NULL,
   `extension` VARCHAR(20) NOT NULL,
+  `peer_id` INT DEFAULT NULL,
   UNIQUE KEY `idx_user_extension` (`user_id`, `extension`),
-  KEY `idx_extension` (`extension`)
+  KEY `idx_extension` (`extension`),
+  KEY `idx_peer_id` (`peer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `dashboard_user_preferences` (
@@ -377,4 +379,61 @@ CREATE TABLE IF NOT EXISTS `mobile_devices` (
   UNIQUE KEY `idx_token` (`token`(255)),
   KEY `idx_extension` (`extension`),
   KEY `idx_updated` (`updated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Sokrat IAX2 VoIP Multi-Server Federation & Central Live Panel Tables
+CREATE TABLE IF NOT EXISTS `sokrat_federation_settings` (
+  `id` TINYINT PRIMARY KEY DEFAULT 1,
+  `local_site_code` VARCHAR(10) NOT NULL DEFAULT '10',
+  `local_node_name` VARCHAR(100) NOT NULL DEFAULT 'Main PBX',
+  `panel_role` ENUM('local', 'central') NOT NULL DEFAULT 'local',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO `sokrat_federation_settings` (`id`, `local_site_code`, `local_node_name`, `panel_role`)
+VALUES (1, '10', 'Main PBX', 'local');
+
+CREATE TABLE IF NOT EXISTS `sokrat_federation_peers` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `node_name` VARCHAR(100) NOT NULL,
+  `host` VARCHAR(255) NOT NULL,
+  `site_code` VARCHAR(10) NOT NULL UNIQUE,
+  `iax_port` SMALLINT UNSIGNED NOT NULL DEFAULT 4569,
+  `iax_user_inbound` VARCHAR(80) NOT NULL,
+  `iax_peer_outbound` VARCHAR(80) NOT NULL,
+  `iax_secret_enc` TEXT NOT NULL,
+  `api_base_url` VARCHAR(255) NOT NULL,
+  `api_key_enc` TEXT NOT NULL,
+  `tls_cert_fingerprint` VARCHAR(128) DEFAULT NULL,
+  `allow_internal_dialing` TINYINT(1) NOT NULL DEFAULT 1,
+  `allow_outbound_egress` TINYINT(1) NOT NULL DEFAULT 1,
+  `status` ENUM('online', 'offline', 'error', 'unreachable') NOT NULL DEFAULT 'offline',
+  `last_sync_at` DATETIME DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_extensions` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `peer_id` INT NOT NULL,
+  `native_extension` VARCHAR(20) NOT NULL,
+  `dial_alias` VARCHAR(30) NOT NULL UNIQUE,
+  `display_name` VARCHAR(100) NOT NULL,
+  `status` ENUM('online', 'offline', 'ringing', 'in_call', 'unknown') NOT NULL DEFAULT 'unknown',
+  `last_seen_at` DATETIME DEFAULT NULL,
+  UNIQUE KEY `idx_peer_ext` (`peer_id`, `native_extension`),
+  KEY `idx_peer_id` (`peer_id`),
+  KEY `idx_dial_alias` (`dial_alias`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_dongles` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `peer_id` INT NOT NULL,
+  `dongle_name` VARCHAR(50) NOT NULL,
+  `phone_number` VARCHAR(50) DEFAULT NULL,
+  `provider` VARCHAR(50) DEFAULT NULL,
+  `status` VARCHAR(50) DEFAULT 'Unknown',
+  UNIQUE KEY `idx_peer_dongle` (`peer_id`, `dongle_name`),
+  KEY `idx_peer_id` (`peer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

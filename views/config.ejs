@@ -586,6 +586,14 @@ function isTabAllowed(tabName) {
                 </button>
                 <% } %>
 
+                <!-- 15. Connected PBXs (IAX2 Multi-Server Federation) -->
+                <button onclick="switchTab('federation')" id="tab-btn-federation" title="<%= isRtl ? 'الربط بين السيرفرات' : 'Connected PBXs' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
+                    <svg class="w-4 h-4 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="subsidebar-text truncate"><%= isRtl ? 'الربط بين السيرفرات' : 'Connected PBXs' %></span>
+                </button>
+
                 <!-- 16. tty terminal (root super user only) -->
                 <% if (typeof isRoot !== 'undefined' && isRoot) { %>
                 <button onclick="switchTab('terminal')" id="tab-btn-terminal" title="<%= isRtl ? 'الطرفية (TTY Terminal)' : 'TTY Terminal' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
@@ -1789,6 +1797,126 @@ function isTabAllowed(tabName) {
             </div>
         </div>
         <% } %>
+        <!-- SECTION 15: SOKRAT IAX2 MULTI-SERVER PBX FEDERATION -->
+        <div id="section-federation" class="tab-section hidden space-y-6">
+            <!-- 1. Top Identity & Federation Settings Banner -->
+            <div class="config-card p-6 border-l-4 border-l-amber-500">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    <div class="flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <%
+                            const fedLocalSite = (typeof federationSettings !== 'undefined' && federationSettings.local_site_code) ? federationSettings.local_site_code : '10';
+                            const fedLocalName = (typeof federationSettings !== 'undefined' && federationSettings.local_node_name) ? federationSettings.local_node_name : 'Main PBX';
+                            const fedLocalRole = (typeof federationSettings !== 'undefined' && federationSettings.panel_role) ? federationSettings.panel_role : 'local';
+                            %>
+                            <div class="flex items-center gap-2.5 flex-wrap">
+                                <h2 class="text-lg font-black text-[var(--text-primary)] tracking-tight">
+                                    <%= isRtl ? 'الربط السحابي بين السيرفرات (IAX2 PBX Federation)' : 'Multi-Server PBX Federation (IAX2)' %>
+                                </h2>
+                                <span id="fedLocalSiteBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                    Site <%= fedLocalSite %>
+                                </span>
+                                <span id="fedLocalRoleBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold <%= fedLocalRole === 'central' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30' %>">
+                                    <%= fedLocalRole === 'central' ? (isRtl ? 'لوحة مركزية موحدة' : 'Central Live Panel') : (isRtl ? 'سيرفر محلي' : 'Local PBX') %>
+                                </span>
+                            </div>
+                            <p class="text-xs text-[var(--text-muted)] mt-1">
+                                <%= isRtl ? 'ربط موحد بين سيرفرات أستيركس عبر بروتوكول IAX2 مع اتصال داخلي مباشر بالبادئة، ومشاركة خطوط GSM ومجموعات الرنين واللوحة الموحدة.' : 'Seamless inter-server VoIP federation over IAX2 with prefix site codes, shared GSM dongle egress, unified queues/ring groups, and central operator live panel.' %>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0 flex-wrap">
+                        <button type="button" onclick="openFederationSettingsModal()" class="config-btn-secondary px-4 py-2.5 flex items-center gap-2 text-xs cursor-pointer">
+                            <svg class="w-4 h-4 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span><%= isRtl ? 'إعدادات هذا السيرفر' : 'Local PBX Settings' %></span>
+                        </button>
+                        <button type="button" onclick="openConnectPbxModal()" class="config-btn-primary px-4 py-2.5 flex items-center gap-2 text-xs cursor-pointer shadow-lg shadow-amber-500/10">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                            <span class="font-extrabold"><%= isRtl ? 'ربط سيرفر جديد (1-Click)' : 'Connect New PBX' %></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Connected Peers Table Card -->
+            <div class="config-card p-6">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 border-b border-[var(--border-primary)] pb-4">
+                    <div>
+                        <h3 class="text-base font-extrabold text-[var(--text-primary)]">
+                            <%= isRtl ? 'السيرفرات المرتبطة المتصلة' : 'Connected PBX Nodes' %>
+                        </h3>
+                        <p class="text-xs text-[var(--text-muted)]">
+                            <%= isRtl ? 'قائمة السيرفرات المتصلة عبر نفق IAX2 المشفر مع حالة الاتصال والتحويلات والخطوط' : 'Active Asterisk peer nodes connected via encrypted IAX2 link with live status and synced entities' %>
+                        </p>
+                    </div>
+                    <button type="button" onclick="fetchFederationPeers()" class="px-3 py-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1.5 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span><%= isRtl ? 'تحديث الحالة' : 'Refresh' %></span>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-[var(--border-primary)] text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                                <th class="py-3 px-4"><%= isRtl ? 'السيرفر' : 'Node / PBX' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'كود الموقع (Site Code)' : 'Site Code' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'العنوان / IP' : 'Host / IP' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'الحالة (Latency)' : 'Status' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'التحويلات المرتبطة' : 'Remote Extensions' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'خطوط GSM المشاركة' : 'Shared GSM' %></th>
+                                <th class="py-3 px-4 text-center"><%= isRtl ? 'إجراءات' : 'Actions' %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="federationPeersTableBody" class="divide-y divide-[var(--border-primary)] text-xs text-[var(--text-primary)]">
+                            <tr>
+                                <td colspan="7" class="py-8 text-center text-xs text-[var(--text-muted)]">
+                                    <%= isRtl ? 'جاري تحميل السيرفرات المرتبطة...' : 'Loading connected PBX nodes...' %>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 3. Synced Remote Extensions Grid -->
+            <div class="config-card p-6">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h3 class="text-base font-extrabold text-[var(--text-primary)]">
+                            <%= isRtl ? 'دليل التحويلات البعيدة (Remote Extensions Directory)' : 'Remote Extensions Directory' %>
+                        </h3>
+                        <p class="text-xs text-[var(--text-muted)]">
+                            <%= isRtl ? 'التحويلات المتاحة للاتصال المباشر عبر بادئة كود الموقع (مثل 20101 للاتصال بتحويلة 101 في الموقع 20)' : 'Remote extensions reachable via site code prefix dialing (e.g. dial 20101 to reach ext 101 on Site 20)' %>
+                        </p>
+                    </div>
+                    <div class="relative w-full sm:w-64">
+                        <input type="text" id="fedRemoteExtSearchInput" oninput="filterRemoteExtensionsDirectory()" placeholder="<%= isRtl ? 'بحث في التحويلات البعيدة...' : 'Search remote extensions...' %>" class="config-input w-full pl-9 pr-3 py-2 text-xs rounded-xl">
+                        <svg class="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                </div>
+
+                <div id="fedRemoteExtensionsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                    <div class="col-span-full py-8 text-center text-xs text-[var(--text-muted)]">
+                        <%= isRtl ? 'لا توجد تحويلات بعيدة مسجلة حتى الآن.' : 'No remote extensions registered yet.' %>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- MODAL 1: EXTENSION FORM -->
@@ -3316,6 +3444,159 @@ function isTabAllowed(tabName) {
         </div>
     </div>
 
+    <!-- MODAL: CONNECT NEW PBX (1-CLICK SSH BOOTSTRAP) -->
+    <div id="connectPbxModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-xl w-full flex flex-col text-[var(--text-primary)] overflow-hidden shadow-2xl">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'ربط سيرفر أستيركس جديد' : 'Connect New Asterisk PBX' %></h3>
+                        <p class="text-[11px] text-[var(--text-muted)]"><%= isRtl ? 'إعداد النفق والتبادل المشفر ومزامنة التحويلات تلقائياً عبر SSH' : 'Automated IAX2 tunnel provisioning, bilateral keys, and entity discovery over SSH' %></p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModal('connectPbxModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
+            </div>
+            <form id="connectPbxForm" onsubmit="submitBootstrapPbx(event)" class="p-6 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="connRemoteHost"><%= isRtl ? 'عنوان السيرفر البعيد (Host / IP) *' : 'Remote Host / IP *' %></label>
+                        <input type="text" id="connRemoteHost" required placeholder="192.168.100.228" class="config-input w-full font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="connRemoteSshPort"><%= isRtl ? 'منفذ SSH' : 'SSH Port' %></label>
+                        <input type="number" id="connRemoteSshPort" value="22" required class="config-input w-full font-mono text-xs">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="connRemoteSshUser"><%= isRtl ? 'مستخدم SSH *' : 'SSH Username *' %></label>
+                        <input type="text" id="connRemoteSshUser" value="root" required class="config-input w-full font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="connRemoteSshPass"><%= isRtl ? 'كلمة مرور SSH *' : 'SSH Password *' %></label>
+                        <input type="password" id="connRemoteSshPass" required autocomplete="current-password" placeholder="••••••••" class="config-input w-full font-mono text-xs">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-primary)]">
+                    <div>
+                        <label class="block text-xs font-bold text-amber-400 uppercase mb-1" for="connRemoteSiteCode"><%= isRtl ? 'كود الموقع البعيد (Site Code) *' : 'Remote Site Code (Prefix) *' %></label>
+                        <input type="text" id="connRemoteSiteCode" required placeholder="20" maxlength="6" class="config-input w-full font-mono text-xs font-bold text-amber-400">
+                        <span class="text-[10px] text-[var(--text-muted)] block mt-0.5"><%= isRtl ? 'البادئة للاتصال بتحويلات هذا السيرفر (مثال 20)' : 'Prefix used to dial this server (e.g. 20 -> 20101)' %></span>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="connRemoteNodeName"><%= isRtl ? 'اسم السيرفر / الفرع *' : 'Remote PBX Name *' %></label>
+                        <input type="text" id="connRemoteNodeName" required placeholder="Branch Office" class="config-input w-full text-xs">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <label for="connAllowInternal" class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
+                        <input type="checkbox" id="connAllowInternal" checked class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
+                        <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'السماح بالاتصال الداخلي' : 'Allow Internal Dialing' %></span>
+                    </label>
+                    <label for="connAllowEgress" class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
+                        <input type="checkbox" id="connAllowEgress" checked class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
+                        <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'مشاركة خطوط GSM والصادر' : 'Allow Outbound / GSM Egress' %></span>
+                    </label>
+                </div>
+
+                <!-- Status Output / Spinner Area -->
+                <div id="connBootstrapStatusArea" class="hidden p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-mono text-amber-400">
+                    <div class="flex items-center gap-2">
+                        <svg class="animate-spin h-4 w-4 text-amber-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <span id="connBootstrapStatusText"><%= isRtl ? 'جاري الاتصال بالسيرفر وإعداد نفق IAX2...' : 'Connecting via SSH and provisioning bilateral IAX2 link...' %></span>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('connectPbxModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" id="connBootstrapSubmitBtn" class="config-btn-primary px-5 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <span><%= isRtl ? 'بدء الربط الآلي (Bootstrap)' : 'Bootstrap & Connect' %></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: EDIT FEDERATION PEER -->
+    <div id="editPeerModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden shadow-2xl">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'تعديل السيرفر المرتبط' : 'Edit Connected PBX' %></h3>
+                <button type="button" onclick="closeModal('editPeerModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
+            </div>
+            <form onsubmit="savePeerEdit(event)" class="p-6 space-y-4">
+                <input type="hidden" id="editPeerId">
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="editPeerNodeName"><%= isRtl ? 'اسم السيرفر *' : 'PBX Node Name *' %></label>
+                    <input type="text" id="editPeerNodeName" required class="config-input w-full text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="editPeerHost"><%= isRtl ? 'عنوان السيرفر / IP *' : 'Host / IP *' %></label>
+                    <input type="text" id="editPeerHost" required class="config-input w-full font-mono text-xs">
+                </div>
+                <div class="space-y-2 pt-2">
+                    <label for="editPeerAllowInternal" class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
+                        <input type="checkbox" id="editPeerAllowInternal" class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
+                        <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'السماح بالاتصال الداخلي' : 'Allow Internal Dialing' %></span>
+                    </label>
+                    <label for="editPeerAllowEgress" class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
+                        <input type="checkbox" id="editPeerAllowEgress" class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
+                        <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'مشاركة خطوط GSM والصادر' : 'Allow Outbound / GSM Egress' %></span>
+                    </label>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('editPeerModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs font-bold"><%= isRtl ? 'حفظ التغييرات' : 'Save Changes' %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: LOCAL PBX FEDERATION SETTINGS -->
+    <div id="federationSettingsModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-md w-full flex flex-col text-[var(--text-primary)] overflow-hidden shadow-2xl">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'إعدادات هوية هذا السيرفر' : 'Local PBX Identity & Central Panel' %></h3>
+                <button type="button" onclick="closeModal('federationSettingsModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer">✕</button>
+            </div>
+            <form onsubmit="saveFederationSettings(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-amber-400 uppercase mb-1" for="localSiteCodeInput"><%= isRtl ? 'كود هذا الموقع (Local Site Code) *' : 'Local Site Code *' %></label>
+                    <input type="text" id="localSiteCodeInput" value="<%= fedLocalSite %>" required placeholder="10" maxlength="6" class="config-input w-full font-mono text-xs font-bold text-amber-400">
+                    <span class="text-[10px] text-[var(--text-muted)] block mt-0.5"><%= isRtl ? 'كود موقع هذا السيرفر الذي تستخدمه السيرفرات الأخرى للاتصال به' : 'Numeric site code used by other servers to route calls to this PBX' %></span>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="localNodeNameInput"><%= isRtl ? 'اسم هذا السيرفر *' : 'Local PBX Name *' %></label>
+                    <input type="text" id="localNodeNameInput" value="<%= fedLocalName %>" required placeholder="Main PBX" class="config-input w-full text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="localPanelRoleSelect"><%= isRtl ? 'دور لوحة المراقبة (Operator Panel Role)' : 'Operator Panel Role' %></label>
+                    <select id="localPanelRoleSelect" class="config-input w-full text-xs">
+                        <option value="local" <%= fedLocalRole === 'local' ? 'selected' : '' %>><%= isRtl ? 'سيرفر محلي عادي (Local PBX)' : 'Local PBX (Default)' %></option>
+                        <option value="central" <%= fedLocalRole === 'central' ? 'selected' : '' %>><%= isRtl ? 'لوحة مركزية موحدة لجميع السيرفرات (Central Live Panel Hub)' : 'Central Live Panel Hub (Aggregates All Nodes)' %></option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('federationSettingsModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" class="config-btn-primary px-5 py-2 text-xs font-bold"><%= isRtl ? 'حفظ الإعدادات' : 'Save Settings' %></button>
+                </div>
+            </form>
+        </div>
+    </div>
     <!-- CLIENT SCRIPT -->
     <script>
         const isRtl = <%= isRtl ? 'true' : 'false' %>;
@@ -3369,11 +3650,23 @@ function isTabAllowed(tabName) {
             static getCategories() {
                 const rtl = typeof isRtl !== 'undefined' ? isRtl : false;
                 
-                const extTargets = (typeof loadedExtensionsList !== 'undefined' ? loadedExtensionsList : []).map(e => ({
+                const localExtTargets = (typeof loadedExtensionsList !== 'undefined' ? loadedExtensionsList : []).map(e => ({
                     id: String(e.extension),
                     label: `${e.extension} - ${e.name || ''}`,
                     dialplanString: `from-did-direct,${e.extension},1`
                 }));
+
+                const remoteExtTargets = (typeof loadedRemoteExtensionsList !== 'undefined' ? loadedRemoteExtensionsList : []).map(re => {
+                    const peer = (typeof loadedFederationPeersList !== 'undefined' ? loadedFederationPeersList : []).find(p => Number(p.id) === Number(re.peer_id));
+                    const peerName = peer ? (peer.node_name || 'Site ' + peer.site_code) : 'Remote';
+                    return {
+                        id: String(re.dial_alias),
+                        label: `[${peerName}] ${re.native_extension} (${re.display_name || ''}) #${re.dial_alias}`,
+                        dialplanString: `sokrat-federation-out,${re.dial_alias},1`
+                    };
+                });
+
+                const extTargets = [...localExtTargets, ...remoteExtTargets];
 
                 const ringTargets = (typeof loadedRingGroupsList !== 'undefined' ? loadedRingGroupsList : []).map(rg => ({
                     id: String(rg.grpnum),
@@ -3422,8 +3715,28 @@ function isTabAllowed(tabName) {
                     label: `Trunk: ${t.name || ''} (${t.tech || ''})`,
                     dialplanString: `ext-trunk,${t.trunkid},1`
                 }));
+                const federationTargets = (typeof loadedFederationPeersList !== 'undefined' ? loadedFederationPeersList : []).flatMap(peer => {
+                    const peerExts = (typeof loadedRemoteExtensionsList !== 'undefined' ? loadedRemoteExtensionsList : []).filter(re => Number(re.peer_id) === Number(peer.id));
+                    if (peerExts.length > 0) {
+                        return peerExts.map(re => ({
+                            id: `fed_${re.dial_alias}`,
+                            label: `[${peer.node_name || 'Site ' + peer.site_code}] ${re.display_name} (${re.dial_alias})`,
+                            dialplanString: `sokrat-federation-out,${re.dial_alias},1`
+                        }));
+                    }
+                    return [{
+                        id: `fed_peer_${peer.site_code}`,
+                        label: `[${peer.node_name || 'Site ' + peer.site_code}] Direct Site Egress (9${peer.site_code})`,
+                        dialplanString: `sokrat-federation-out,9${peer.site_code},1`
+                    }];
+                });
 
                 return [
+                    {
+                        id: 'federation',
+                        label: rtl ? 'السيرفرات المرتبطة (Federated PBXs)' : 'Federated PBXs',
+                        targets: federationTargets
+                    },
                     {
                         id: 'terminate',
                         label: rtl ? 'إنهاء المكالمة (Terminate Call)' : 'Terminate Call',
@@ -3522,6 +3835,10 @@ function isTabAllowed(tabName) {
                 if (dest.startsWith('app-announcement-')) return { category: 'announcements', target: dest.split(',')[0].replace('app-announcement-', ''), dialplan: dest };
                 if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) return { category: 'timeconditions', target: dest.split(',')[1], dialplan: dest };
                 if (dest.startsWith('ext-trunk,')) return { category: 'trunks', target: dest.split(',')[1], dialplan: dest };
+                if (dest.startsWith('sokrat-federation-out,')) {
+                    const target = dest.split(',')[1] || '';
+                    return { category: 'federation', target: `fed_${target}`, dialplan: dest };
+                }
                 if (dest.startsWith('ext-external-failover,') || (dest.startsWith('from-internal,') && !dest.startsWith('from-internal-xfer,'))) {
                     const rawTarget = dest.split(',')[1] || '';
                     const num = rawTarget.split('/')[0].split('@')[0];
@@ -4212,7 +4529,7 @@ function isTabAllowed(tabName) {
             if (force || !(Array.isArray(loadedTimeConditionsList) && loadedTimeConditionsList.length)) promises.push(fetchTimeConditions().catch(() => {}));
             if (force || !(Array.isArray(loadedRecordingsList) && loadedRecordingsList.length)) promises.push(fetchRecordings().catch(() => {}));
             if (force || !(Array.isArray(loadedMohCategories) && loadedMohCategories.length)) promises.push(fetchMohData().catch(() => {}));
-
+            if (force || !(Array.isArray(loadedFederationPeersList) && loadedFederationPeersList.length)) promises.push(fetchFederationPeers().catch(() => {}));
             if (promises.length === 0) return Promise.resolve();
             return Promise.allSettled(promises).then(() => {
                 if (typeof enhanceSelectElements === 'function') setTimeout(enhanceSelectElements, 50);
@@ -4251,7 +4568,10 @@ function isTabAllowed(tabName) {
             'removeDongleSlotModal',
             'sttApiKeyModal',
             'defaultFiltersModal',
-            'clientModal'
+            'clientModal',
+            'connectPbxModal',
+            'editPeerModal',
+            'federationSettingsModal'
         ];
         function closeAllModals() {
             PBX_CONFIG_MODAL_IDS.forEach(id => {
@@ -4285,20 +4605,21 @@ function isTabAllowed(tabName) {
             }
             stopRtcpTimer();
             if (tabId === 'extensions') fetchExtensions();
-            if (tabId === 'ringgroups') { fetchRecordings(); fetchRingGroups(); fetchExtensions(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchMohData(); }
-            if (tabId === 'queues') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchAnnouncements(); }
-            if (tabId === 'ivr') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); }
+            if (tabId === 'ringgroups') { fetchRecordings(); fetchRingGroups(); fetchExtensions(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchMohData(); fetchFederationPeers(); }
+            if (tabId === 'queues') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchAnnouncements(); fetchFederationPeers(); }
+            if (tabId === 'ivr') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); fetchFederationPeers(); }
             if (tabId === 'recordings') fetchRecordings();
             if (tabId === 'trunks') fetchTrunks();
-            if (tabId === 'outbound') { fetchOutboundRoutes(); fetchTrunks(); }
+            if (tabId === 'outbound') { fetchOutboundRoutes(); fetchTrunks(); fetchFederationPeers(); }
             if (tabId === 'timegroups') fetchTimeGroups();
-            if (tabId === 'timeconditions') { fetchTimeConditions(); fetchTimeGroups(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); }
-            if (tabId === 'announcements') { fetchAnnouncements(); fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); }
+            if (tabId === 'timeconditions') { fetchTimeConditions(); fetchTimeGroups(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); fetchFederationPeers(); }
+            if (tabId === 'announcements') { fetchAnnouncements(); fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchFederationPeers(); }
             if (tabId === 'voicemail') fetchVoicemailExtensions();
             if (tabId === 'modem') { fetchModemConfig(); loadAudioGlobals(); loadSttSettings(); fetchRtcpDiagnostics(); startRtcpTimer(); }
             if (tabId === 'terminal') initTtyTerminal();
             if (tabId === 'diagram') { sizeDiagramCanvas(); fetchDiagramData(); }
-            if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchInboundRoutes(); fetchDongleMappingsTab(); }
+            if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchInboundRoutes(); fetchDongleMappingsTab(); fetchFederationPeers(); }
+            if (tabId === 'federation') { fetchFederationSettings(); fetchFederationPeers(); }
             if (tabId === 'dongles') { switchTab('inbound'); return; }
             if (typeof enhanceSelectElements === 'function') setTimeout(enhanceSelectElements, 100);
         }
@@ -4732,20 +5053,36 @@ function isTabAllowed(tabName) {
             const container = document.getElementById('rgQuickPickContainer');
             if (!container) return;
             container.innerHTML = '';
-            if (loadedExtensionsList.length === 0) {
-                container.innerHTML = '<span class="text-[11px] text-[var(--text-muted)]">No extensions available.</span>';
-                return;
-            }
+            
             const currentSelected = parseRgListArray();
 
+            // 1. Local extensions
             (loadedExtensionsList || []).forEach(ext => {
-                const isSelected = currentSelected.includes(String(ext.extension));
+                const extStr = String(ext.extension);
+                const isSelected = currentSelected.includes(extStr);
                 const pill = document.createElement('div');
-                pill.className = `ext-pill text-xs px-2.5 py-1 rounded-lg border font-mono font-bold ${isSelected ? 'active' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] border-[var(--border-primary)]'}`;
+                pill.className = `ext-pill text-xs px-2.5 py-1 rounded-lg border font-mono font-bold cursor-pointer transition-all ${isSelected ? 'active bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] border-[var(--border-primary)] hover:border-emerald-500/40'}`;
                 pill.textContent = `${ext.extension} (${ext.name || 'Ext'})`;
-                pill.onclick = () => toggleQuickPickExt(String(ext.extension));
+                pill.onclick = () => toggleQuickPickExt(extStr);
                 container.appendChild(pill);
             });
+
+            // 2. Remote federation extensions
+            (loadedRemoteExtensionsList || []).forEach(re => {
+                const peer = (loadedFederationPeersList || []).find(p => Number(p.id) === Number(re.peer_id));
+                const peerLabel = peer ? (peer.node_name || 'Site ' + peer.site_code) : 'Remote';
+                const targetDial = `${re.dial_alias}#`;
+                const isSelected = currentSelected.includes(targetDial) || currentSelected.includes(String(re.dial_alias));
+                const pill = document.createElement('div');
+                pill.className = `ext-pill text-xs px-2.5 py-1 rounded-lg border font-mono font-bold cursor-pointer transition-all ${isSelected ? 'active bg-purple-500/20 text-purple-400 border-purple-500/40' : 'bg-purple-500/5 text-purple-300 border-purple-500/20 hover:border-purple-500/40'}`;
+                pill.textContent = `[${peerLabel}] ${re.native_extension} (${re.display_name || ''}) #${re.dial_alias}`;
+                pill.onclick = () => toggleQuickPickExt(targetDial);
+                container.appendChild(pill);
+            });
+
+            if (container.children.length === 0) {
+                container.innerHTML = '<span class="text-[11px] text-[var(--text-muted)]">No extensions available.</span>';
+            }
         }
 
         function parseRgListArray() {
@@ -5003,43 +5340,74 @@ function isTabAllowed(tabName) {
             if (!container) return;
             container.innerHTML = '';
 
-            if (loadedExtensionsList.length === 0) {
-                container.innerHTML = `<span class="text-xs text-[var(--text-muted)] italic">${isRtl ? 'لا توجد تحويلات مسجلة بالمجمّع' : 'No extensions found.'}</span>`;
-                return;
-            }
-
             const currentStatic = parseQueueExtArray('queueStaticList');
             const currentDyn = parseQueueExtArray('queueDynList');
             const filterTerm = (document.getElementById('queueAgentSearch')?.value || '').toLowerCase().trim();
 
+            const allAgentsToRender = [];
+
+            // 1. Local extensions
             (loadedExtensionsList || []).forEach(ext => {
-                const extStr = String(ext.extension);
-                const nameStr = String(ext.name || 'Ext');
-                if (filterTerm && !extStr.toLowerCase().includes(filterTerm) && !nameStr.toLowerCase().includes(filterTerm)) {
+                allAgentsToRender.push({
+                    extStr: String(ext.extension),
+                    nameStr: String(ext.name || 'Ext'),
+                    badgeLabel: null,
+                    isRemote: false
+                });
+            });
+
+            // 2. Remote federation extensions
+            (loadedRemoteExtensionsList || []).forEach(re => {
+                const peer = (loadedFederationPeersList || []).find(p => Number(p.id) === Number(re.peer_id));
+                const peerLabel = peer ? (peer.node_name || 'Site ' + peer.site_code) : 'Remote';
+                allAgentsToRender.push({
+                    extStr: String(re.dial_alias),
+                    nameStr: `[${peerLabel}] ${re.display_name || re.native_extension}`,
+                    badgeLabel: `#${peer ? peer.site_code : ''}`,
+                    isRemote: true
+                });
+            });
+
+            if (allAgentsToRender.length === 0) {
+                container.innerHTML = `<span class="text-xs text-[var(--text-muted)] italic">${isRtl ? 'لا توجد تحويلات مسجلة بالمجمّع' : 'No extensions found.'}</span>`;
+                return;
+            }
+
+            allAgentsToRender.forEach(agent => {
+                if (filterTerm && !agent.extStr.toLowerCase().includes(filterTerm) && !agent.nameStr.toLowerCase().includes(filterTerm)) {
                     return;
                 }
 
-                const isStatic = currentStatic.includes(extStr);
-                const isDyn = currentDyn.includes(extStr);
+                const isStatic = currentStatic.includes(agent.extStr);
+                const isDyn = currentDyn.includes(agent.extStr);
                 const isAssigned = isStatic || isDyn;
 
                 let badgeStyle = 'bg-slate-200/80 text-slate-700 dark:bg-zinc-800/80 dark:text-zinc-400 border-slate-300 dark:border-zinc-700 hover:border-amber-500/50';
                 let badgeText = 'Off';
 
-                if (isAssigned) {
+                if (isStatic && isDyn) {
                     badgeStyle = 'bg-gradient-to-r from-amber-500 to-indigo-600 text-white font-black border-purple-600';
                     badgeText = 'static + dyn';
+                } else if (isStatic) {
+                    badgeStyle = 'bg-amber-500 text-black font-black border-amber-600';
+                    badgeText = 'Static';
+                } else if (isDyn) {
+                    badgeStyle = 'bg-indigo-600 text-white font-black border-indigo-700';
+                    badgeText = 'Dynamic';
                 }
 
                 const item = document.createElement('div');
                 item.className = 'flex items-center justify-between p-2 rounded-xl border border-[var(--border-primary)]/60 bg-[var(--bg-secondary)] hover:border-blue-500/40 transition-all gap-2';
                 
+                const remoteBadgeHtml = agent.isRemote ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30 shrink-0">${agent.badgeLabel}</span>` : '';
+
                 item.innerHTML = `
                     <div class="flex items-center gap-2 min-w-0">
-                        <span class="px-2 py-0.5 rounded-md font-mono text-xs font-bold bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-primary)] shrink-0">${extStr}</span>
-                        <span class="text-xs font-semibold text-[var(--text-primary)] truncate">${nameStr}</span>
+                        <span class="px-2 py-0.5 rounded-md font-mono text-xs font-bold bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-primary)] shrink-0">${agent.extStr}</span>
+                        ${remoteBadgeHtml}
+                        <span class="text-xs font-semibold text-[var(--text-primary)] truncate">${escapeHtml(agent.nameStr)}</span>
                     </div>
-                    <button type="button" onclick="cycleQueueAgentRole('${extStr}')" class="px-3 py-1 text-xs rounded-lg border font-bold cursor-pointer transition-all shrink-0 ${badgeStyle}">
+                    <button type="button" onclick="cycleQueueAgentRole('${agent.extStr}')" class="px-3 py-1 text-xs rounded-lg border font-bold cursor-pointer transition-all shrink-0 ${badgeStyle}">
                         ${badgeText}
                     </button>
                 `;
@@ -6605,8 +6973,14 @@ function isTabAllowed(tabName) {
                 return;
             }
             modalTrunksSequence.forEach((trunkId, idx) => {
-                const trunkMatch = (loadedTrunksList || []).find(t => t.trunkid == trunkId);
-                const trunkName = trunkMatch ? trunkMatch.name : `Trunk ID #${trunkId}`;
+                const trunkMatch = (loadedTrunksList || []).find(t => String(t.trunkid) === String(trunkId));
+                let trunkName = trunkMatch ? trunkMatch.name : '';
+                if (!trunkName && String(trunkId).startsWith('fed_peer_')) {
+                    const pid = String(trunkId).replace('fed_peer_', '');
+                    const peerMatch = (loadedFederationPeersList || []).find(p => String(p.id) === pid);
+                    trunkName = peerMatch ? `[Remote PBX] ${peerMatch.node_name || 'Site ' + peerMatch.site_code}` : `Remote PBX #${pid}`;
+                }
+                if (!trunkName) trunkName = `Trunk ID #${trunkId}`;
                 const div = document.createElement('div');
                 div.className = 'flex items-center justify-between bg-[var(--bg-secondary)] border border-[var(--border-primary)] px-3 py-1.5 rounded-lg text-xs';
                 div.innerHTML = `
@@ -10816,6 +11190,407 @@ function isTabAllowed(tabName) {
         }
         window.runLastTtyCommand = runLastTtyCommand;
         window.restartTtyShell = restartTtyShell;
+
+        // ====================================================================
+        // SOKRAT IAX2 MULTI-SERVER PBX FEDERATION CLIENT LOGIC
+        // ====================================================================
+        let loadedFederationSettings = null;
+        let loadedFederationPeersList = [];
+        let loadedRemoteExtensionsList = [];
+
+        function fetchFederationSettings() {
+            return fetch('/api/config/federation/settings')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.settings) {
+                        loadedFederationSettings = data.settings;
+                        const siteBadge = document.getElementById('fedLocalSiteBadge');
+                        if (siteBadge) siteBadge.textContent = `Site ${data.settings.local_site_code || '10'}`;
+                        const roleBadge = document.getElementById('fedLocalRoleBadge');
+                        if (roleBadge) {
+                            if (data.settings.panel_role === 'central') {
+                                roleBadge.textContent = isRtl ? 'لوحة مركزية موحدة' : 'Central Live Panel';
+                                roleBadge.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-purple-500/20 text-purple-400 border border-purple-500/30';
+                            } else {
+                                roleBadge.textContent = isRtl ? 'سيرفر محلي' : 'Local PBX';
+                                roleBadge.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-500/20 text-blue-400 border border-blue-500/30';
+                            }
+                        }
+                    }
+                })
+                .catch(err => console.error('fetchFederationSettings error:', err));
+        }
+
+        function fetchFederationPeers() {
+            const tbody = document.getElementById('federationPeersTableBody');
+            return fetch('/api/config/federation/peers')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && Array.isArray(data.peers)) {
+                        loadedFederationPeersList = data.peers;
+                        loadedRemoteExtensionsList = data.remoteExtensions || [];
+                        renderFederationPeersTable(data.peers);
+                        fetchRemoteExtensionsDirectory();
+                        if (typeof renderQuickPickPills === 'function') renderQuickPickPills();
+                        if (typeof renderQueueAgentChecklist === 'function') renderQueueAgentChecklist();
+                    } else {
+                        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-red-400">${data.error || 'Failed to load peers.'}</td></tr>`;
+                    }
+                })
+                .catch(err => {
+                    console.error('fetchFederationPeers error:', err);
+                    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-red-400">Connection error loading peers.</td></tr>`;
+                });
+        }
+
+        function renderFederationPeersTable(peers) {
+            const tbody = document.getElementById('federationPeersTableBody');
+            if (!tbody) return;
+
+            if (peers.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="py-8 text-center text-xs text-[var(--text-muted)]">
+                            <div class="flex flex-col items-center justify-center gap-2">
+                                <span class="text-base font-bold text-[var(--text-secondary)]">${isRtl ? 'لا توجد سيرفرات مرتبطة حالياً' : 'No connected PBX nodes yet'}</span>
+                                <span class="text-[11px] text-[var(--text-muted)]">${isRtl ? 'اضغط على "ربط سيرفر جديد" لإعداد نفق IAX2 والتبادل التلقائي بنقرة واحدة.' : 'Click "Connect New PBX" to link a secondary server over an encrypted IAX2 tunnel.'}</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = peers.map(peer => {
+                const isOnline = peer.qualifyStatus === 'online' || peer.status === 'online';
+                const latency = peer.latencyMs ? `${peer.latencyMs}ms` : '';
+                const statusBadge = isOnline
+                    ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>${isRtl ? 'متصل (Online)' : 'Online'} ${latency ? '(' + latency + ')' : ''}</span>
+                       </span>`
+                    : `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-red-500/20 text-red-400 border border-red-500/30">
+                        <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+                        <span>${isRtl ? 'غير متصل (Offline)' : 'Offline'}</span>
+                       </span>`;
+
+                return `
+                    <tr class="hover:bg-[var(--bg-hover)] transition-colors">
+                        <td class="py-3 px-4">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-xs">
+                                    ${peer.site_code}
+                                </div>
+                                <div>
+                                    <span class="font-extrabold text-[var(--text-primary)] block">${peer.node_name || 'Site ' + peer.site_code}</span>
+                                    <span class="text-[10px] font-mono text-[var(--text-muted)]">IAX2: ${peer.iax_peer_outbound || 'fed_out'}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4">
+                            <span class="px-2 py-0.5 rounded font-mono font-black text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                ${peer.site_code}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">
+                            ${peer.host}:${peer.iax_port || 4569}
+                        </td>
+                        <td class="py-3 px-4">
+                            ${statusBadge}
+                        </td>
+                        <td class="py-3 px-4">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-mono text-xs font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                <span>${peer.extensionsCount || 0} ${isRtl ? 'تحويلة' : 'exts'}</span>
+                            </span>
+                        </td>
+                        <td class="py-3 px-4">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-mono text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" /></svg>
+                                <span>${peer.donglesCount || 0} ${isRtl ? 'شريحة' : 'dongles'}</span>
+                            </span>
+                        </td>
+                        <td class="py-3 px-4">
+                            <div class="flex items-center justify-center gap-1.5">
+                                <button type="button" onclick="syncFederationPeer(${peer.id})" title="${isRtl ? 'إعادة مزامنة التحويلات والخطوط' : 'Re-sync Extensions & Dongles'}" class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-cyan-400 hover:border-cyan-500/40 transition cursor-pointer">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                </button>
+                                <button type="button" onclick="qualifyFederationPeer(${peer.id})" title="${isRtl ? 'اختبار الاستجابة (Qualify Ping)' : 'Qualify Ping Test'}" class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-emerald-400 hover:border-emerald-500/40 transition cursor-pointer">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                </button>
+                                <button type="button" onclick="openEditPeerModal(${peer.id})" title="${isRtl ? 'تعديل الصلاحيات' : 'Edit Permissions'}" class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-amber-400 hover:border-amber-500/40 transition cursor-pointer">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </button>
+                                <button type="button" onclick="deleteFederationPeer(${peer.id})" title="${isRtl ? 'حذف الربط' : 'Delete Connection'}" class="p-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-500/40 transition cursor-pointer">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function fetchRemoteExtensionsDirectory() {
+            fetch('/api/config/federation/peers')
+                .then(() => {
+                    renderRemoteExtensionsGrid(loadedFederationPeersList);
+                })
+                .catch(err => console.error('fetchRemoteExtensionsDirectory error:', err));
+        }
+
+        function renderRemoteExtensionsGrid(peers) {
+            const grid = document.getElementById('fedRemoteExtensionsGrid');
+            if (!grid) return;
+
+            let allCards = [];
+            for (const peer of (peers || [])) {
+                allCards.push(`
+                    <div class="panel-surface p-3.5 rounded-xl border border-[var(--border-primary)] hover:border-amber-500/30 transition flex flex-col justify-between gap-3">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <span class="text-xs font-bold text-[var(--text-primary)] block">${peer.node_name || 'Site ' + peer.site_code}</span>
+                                <span class="text-[10px] text-[var(--text-muted)] font-mono">${peer.host}</span>
+                            </div>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/20 text-amber-400 font-mono">
+                                Site ${peer.site_code}
+                            </span>
+                        </div>
+                        <div class="p-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[11px] font-mono text-[var(--text-secondary)]">
+                            <span class="text-[10px] text-[var(--text-muted)] block uppercase mb-0.5">${isRtl ? 'نمط الاتصال الداخلي' : 'Dial Format'}:</span>
+                            <span class="text-amber-400 font-bold">${peer.site_code}XXX</span> ${isRtl ? '(مثال 20101)' : '(e.g. ' + peer.site_code + '101)'}
+                        </div>
+                    </div>
+                `);
+            }
+
+            if (allCards.length === 0) {
+                grid.innerHTML = `<div class="col-span-full py-8 text-center text-xs text-[var(--text-muted)]">${isRtl ? 'لا توجد سيرفرات مرتبطة مسجلة.' : 'No connected PBX nodes registered yet.'}</div>`;
+            } else {
+                grid.innerHTML = allCards.join('');
+            }
+        }
+
+        function filterRemoteExtensionsDirectory() {
+            const query = (document.getElementById('fedRemoteExtSearchInput')?.value || '').toLowerCase().trim();
+            const grid = document.getElementById('fedRemoteExtensionsGrid');
+            if (!grid) return;
+            grid.querySelectorAll('.panel-surface').forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = text.includes(query) ? '' : 'none';
+            });
+        }
+
+        function openConnectPbxModal() {
+            openModal('connectPbxModal');
+            const statusArea = document.getElementById('connBootstrapStatusArea');
+            if (statusArea) statusArea.classList.add('hidden');
+            const btn = document.getElementById('connBootstrapSubmitBtn');
+            if (btn) btn.disabled = false;
+        }
+
+        function submitBootstrapPbx(e) {
+            e.preventDefault();
+            const host = document.getElementById('connRemoteHost').value.trim();
+            const sshPort = parseInt(document.getElementById('connRemoteSshPort').value, 10) || 22;
+            const sshUser = document.getElementById('connRemoteSshUser').value.trim() || 'root';
+            const sshPassword = document.getElementById('connRemoteSshPass').value;
+            const siteCode = document.getElementById('connRemoteSiteCode').value.trim();
+            const nodeName = document.getElementById('connRemoteNodeName').value.trim();
+            const allowInternal = document.getElementById('connAllowInternal').checked ? 1 : 0;
+            const allowEgress = document.getElementById('connAllowEgress').checked ? 1 : 0;
+
+            const statusArea = document.getElementById('connBootstrapStatusArea');
+            const statusText = document.getElementById('connBootstrapStatusText');
+            const submitBtn = document.getElementById('connBootstrapSubmitBtn');
+
+            if (statusArea) statusArea.classList.remove('hidden');
+            if (statusText) statusText.textContent = isRtl ? 'جاري الاتصال بالسيرفر وإعداد النفق ومزامنة البيانات...' : 'Connecting via SSH, provisioning bilateral IAX2 link and syncing entities...';
+            if (submitBtn) submitBtn.disabled = true;
+
+            fetch('/api/config/federation/bootstrap', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    host,
+                    sshPort,
+                    sshUser,
+                    sshPassword,
+                    siteCode,
+                    nodeName,
+                    allowInternalDialing: allowInternal,
+                    allowOutboundEgress: allowEgress
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (submitBtn) submitBtn.disabled = false;
+                if (data.success) {
+                    showToast(isRtl ? `تم ربط السيرفر بنجاح! الاستجابة: ${data.latencyMs || 1}ms (${data.extensionsSynced || 0} تحويلة)` : `PBX connected successfully! Latency: ${data.latencyMs || 1}ms (${data.extensionsSynced || 0} exts)`, 'success');
+                    closeModal('connectPbxModal');
+                    fetchFederationSettings();
+                    fetchFederationPeers();
+                } else {
+                    if (statusText) statusText.textContent = data.error || 'Bootstrap failed';
+                    showToast(data.error || 'Bootstrap failed', 'error');
+                }
+            })
+            .catch(err => {
+                if (submitBtn) submitBtn.disabled = false;
+                if (statusText) statusText.textContent = err.message;
+                showToast(err.message, 'error');
+            });
+        }
+
+        async function openFederationSettingsModal() {
+            try {
+                const res = await fetch('/api/config/federation/settings');
+                const data = await res.json();
+                if (data.success && data.settings) {
+                    loadedFederationSettings = data.settings;
+                }
+            } catch (_) {}
+            if (loadedFederationSettings) {
+                const codeInp = document.getElementById('localSiteCodeInput');
+                if (codeInp) codeInp.value = loadedFederationSettings.local_site_code || '10';
+                const nameInp = document.getElementById('localNodeNameInput');
+                if (nameInp) nameInp.value = loadedFederationSettings.local_node_name || 'Main PBX';
+                const roleSel = document.getElementById('localPanelRoleSelect');
+                if (roleSel) roleSel.value = loadedFederationSettings.panel_role || 'local';
+            }
+            openModal('federationSettingsModal');
+        }
+
+        function saveFederationSettings(e) {
+            e.preventDefault();
+            const local_site_code = document.getElementById('localSiteCodeInput').value.trim();
+            const local_node_name = document.getElementById('localNodeNameInput').value.trim();
+            const panel_role = document.getElementById('localPanelRoleSelect').value;
+
+            fetch('/api/config/federation/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ local_site_code, local_node_name, panel_role })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(isRtl ? 'تم حفظ إعدادات السيرفر وتحديث النفق بنجاح' : 'Local PBX settings updated and IAX2 configuration reloaded', 'success');
+                    closeModal('federationSettingsModal');
+                    fetchFederationSettings();
+                    fetchFederationPeers();
+                } else {
+                    showToast(data.error || 'Failed to update settings', 'error');
+                }
+            })
+            .catch(err => showToast(err.message, 'error'));
+        }
+
+        function openEditPeerModal(peerId) {
+            const peer = loadedFederationPeersList.find(p => Number(p.id) === Number(peerId));
+            if (!peer) return;
+            document.getElementById('editPeerId').value = peer.id;
+            document.getElementById('editPeerNodeName').value = peer.node_name || '';
+            document.getElementById('editPeerHost').value = peer.host || '';
+            document.getElementById('editPeerAllowInternal').checked = Number(peer.allow_internal_dialing) !== 0;
+            document.getElementById('editPeerAllowEgress').checked = Number(peer.allow_outbound_egress) !== 0;
+            openModal('editPeerModal');
+        }
+
+        function savePeerEdit(e) {
+            e.preventDefault();
+            const id = document.getElementById('editPeerId').value;
+            const node_name = document.getElementById('editPeerNodeName').value.trim();
+            const host = document.getElementById('editPeerHost').value.trim();
+            const allow_internal_dialing = document.getElementById('editPeerAllowInternal').checked ? 1 : 0;
+            const allow_outbound_egress = document.getElementById('editPeerAllowEgress').checked ? 1 : 0;
+
+            fetch(`/api/config/federation/peers/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ node_name, host, allow_internal_dialing, allow_outbound_egress })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(isRtl ? 'تم تحديث بيانات السيرفر بنجاح' : 'Peer updated successfully', 'success');
+                    closeModal('editPeerModal');
+                    fetchFederationPeers();
+                } else {
+                    showToast(data.error || 'Failed to update peer', 'error');
+                }
+            })
+            .catch(err => showToast(err.message, 'error'));
+        }
+
+        function syncFederationPeer(peerId) {
+            showToast(isRtl ? 'جاري مزامنة التحويلات والخطوط من السيرفر...' : 'Syncing extensions & dongles from remote peer...', 'info');
+            fetch(`/api/config/federation/peers/${peerId}/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(isRtl ? `تمت المزامنة: ${data.extensionsCount || 0} تحويلة و ${data.donglesCount || 0} شريحة` : `Sync complete: ${data.extensionsCount || 0} extensions and ${data.donglesCount || 0} dongles`, 'success');
+                        fetchFederationPeers();
+                    } else {
+                        showToast(data.error || 'Sync failed', 'error');
+                    }
+                })
+                .catch(err => showToast(err.message, 'error'));
+        }
+
+        function qualifyFederationPeer(peerId) {
+            showToast(isRtl ? 'جاري فحص استجابة السيرفر (Qualify)...' : 'Checking peer latency (Qualify)...', 'info');
+            fetch(`/api/config/federation/peers/${peerId}/qualify`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        const lat = data.latencyMs ? `${data.latencyMs}ms` : data.status;
+                        showToast(isRtl ? `حالة السيرفر: ${data.status} (الاستجابة: ${lat})` : `Peer status: ${data.status} (${lat})`, data.status === 'online' ? 'success' : 'warning');
+                        fetchFederationPeers();
+                    } else {
+                        showToast(data.error || 'Qualify failed', 'error');
+                    }
+                })
+                .catch(err => showToast(err.message, 'error'));
+        }
+
+        function deleteFederationPeer(peerId) {
+            if (!confirm(isRtl ? 'هل أنت متأكد من حذف هذا السيرفر وإلغاء الربط بينهما؟' : 'Are you sure you want to disconnect and remove this PBX node?')) {
+                return;
+            }
+            fetch(`/api/config/federation/peers/${peerId}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(isRtl ? 'تم حذف السيرفر وتحديث إعدادات أستيركس بنجاح' : 'Peer removed and Asterisk reloaded successfully', 'success');
+                        fetchFederationPeers();
+                    } else {
+                        showToast(data.error || 'Delete failed', 'error');
+                    }
+                })
+                .catch(err => showToast(err.message, 'error'));
+        }
+
+        window.fetchFederationSettings = fetchFederationSettings;
+        window.fetchFederationPeers = fetchFederationPeers;
+        window.openConnectPbxModal = openConnectPbxModal;
+        window.submitBootstrapPbx = submitBootstrapPbx;
+        window.openFederationSettingsModal = openFederationSettingsModal;
+        window.saveFederationSettings = saveFederationSettings;
+        window.openEditPeerModal = openEditPeerModal;
+        window.savePeerEdit = savePeerEdit;
+        window.syncFederationPeer = syncFederationPeer;
+        window.qualifyFederationPeer = qualifyFederationPeer;
+        window.deleteFederationPeer = deleteFederationPeer;
+        window.filterRemoteExtensionsDirectory = filterRemoteExtensionsDirectory;
     </script>
 </body>
 </html>
