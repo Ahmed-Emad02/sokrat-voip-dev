@@ -70,3 +70,15 @@ test('views/config.ejs ensures DestinationSelect updates dialplan on category ch
     const closeAllModalsSnippet = content.substring(content.indexOf('function closeAllModals('), content.indexOf('function switchTab('));
     assert.ok(closeAllModalsSnippet.includes('inboundDongleInfoPopup'), 'closeAllModals must hide inboundDongleInfoPopup');
 });
+
+test('from-dongle-custom routes both specific DIDs and blank catch-all inbound routes to from-trunk', () => {
+    const customDialplan = fs.readFileSync('/etc/asterisk/extensions_custom.conf', 'utf8');
+    const installerDialplan = fs.readFileSync(path.join(__dirname, '../install.sh'), 'utf8');
+
+    for (const [name, content] of [['extensions_custom.conf', customDialplan], ['install.sh', installerDialplan]]) {
+        assert.ok(content.includes('[from-dongle-custom]'), `${name} must define [from-dongle-custom]`);
+        assert.ok(content.includes('Goto(from-trunk,${MY_SIM_NUMBER},1)'), `${name} must forward specific DIDs to from-trunk`);
+        assert.ok(content.includes('Goto(from-trunk,s,1)'), `${name} must forward blank/catch-all calls to from-trunk,s,1`);
+        assert.equal(content.includes('DIALPLAN_EXISTS(from-trunk,${MY_SIM_NUMBER},1)'), false, `${name} must not gate dongle routing on literal DIALPLAN_EXISTS matching`);
+    }
+});
