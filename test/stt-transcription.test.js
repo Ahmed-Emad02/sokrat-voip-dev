@@ -119,7 +119,7 @@ test('views/cdr.ejs renders cleanly without STT buttons or filter', async () => 
         }, 'Client script in cdr.ejs must have valid JS syntax');
     }
 });
-test('views/voicemails.ejs renders transcript filter, STT badges and transcript modal without errors', async () => {
+test('views/voicemails.ejs renders cleanly without STT buttons or transcript filter', async () => {
     const vmEjsPath = path.join(__dirname, '../views/voicemails.ejs');
     const moment = require('moment');
 
@@ -142,7 +142,6 @@ test('views/voicemails.ejs renders transcript filter, STT badges and transcript 
         filters: {
             searchCallerid: '',
             searchMailbox: '',
-            searchTranscript: 'urgent',
             startDate: '',
             endDate: '',
             page: 1,
@@ -166,9 +165,10 @@ test('views/voicemails.ejs renders transcript filter, STT badges and transcript 
         moment
     });
 
-    assert.ok(html.includes('id="vmSearchTranscript"'), 'voicemails.ejs must render vmSearchTranscript input');
-    assert.ok(html.includes('id="vmTranscriptModal"'), 'voicemails.ejs must render vmTranscriptModal');
-    assert.ok(html.includes('showVmTranscriptModal'), 'voicemails.ejs must wire showVmTranscriptModal handler');
+    assert.equal(html.includes('id="vmSearchTranscript"'), false, 'voicemails.ejs must not render vmSearchTranscript input');
+    assert.equal(html.includes('id="vmTranscriptModal"'), false, 'voicemails.ejs must not render vmTranscriptModal');
+    assert.equal(html.includes('showVmTranscriptModal'), false, 'voicemails.ejs must not wire showVmTranscriptModal handler');
+    assert.equal(html.includes('transcribeVoicemailNow'), false, 'voicemails.ejs must not wire transcribeVoicemailNow handler');
     const scriptMatches = html.match(/<script[\s\S]*?>([\s\S]*?)<\/script>/gi) || [];
     for (const s of scriptMatches) {
         const code = s.replace(/<script[\s\S]*?>/i, '').replace(/<\/script>/i, '');
@@ -176,7 +176,6 @@ test('views/voicemails.ejs renders transcript filter, STT badges and transcript 
             new Function(code);
         }, 'Client script in voicemails.ejs must have valid JS syntax');
     }
-    assert.ok(html.includes('transcribeVoicemailNow'), 'voicemails.ejs must wire transcribeVoicemailNow handler');
 });
 
 test('views/config.ejs renders AI Speech-to-Text Transcription Engine Card and parses scripts cleanly', async () => {
