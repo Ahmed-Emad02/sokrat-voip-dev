@@ -818,6 +818,9 @@ async function initAuthDb() {
     } catch (cgErr) {
         console.error('Callgroup boot sync error:', cgErr.message);
     }
+    try {
+        await loadClientNameFromDb();
+    } catch (_) {}
 }
 initAuthDb().catch(err => console.error('AUTH DB init error:', err));
 
@@ -2700,6 +2703,7 @@ app.use(async (req, res, next) => {
         reloadGreetingConfig();
         res.locals.greetingMode = greetingConfig.mode || 'none';
         res.locals.greetingExtensions = greetingConfig.extensions || [];
+        res.locals.clientName = cachedClientName || '';
         next();
     } catch (err) { next(err); }
 });
@@ -3250,6 +3254,87 @@ app.post('/api/settings/smtp', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+
+// --- CLIENT SETTINGS ROUTES ---
+let cachedClientName = '';
+
+async function loadClientNameFromDb() {
+    try {
+        const [rows] = await pool.query("SELECT setting_value FROM dashboard_settings WHERE setting_key = 'client_name'");
+        if (rows && rows.length > 0 && rows[0].setting_value !== null && rows[0].setting_value !== undefined) {
+            cachedClientName = String(rows[0].setting_value).trim();
+        } else {
+            cachedClientName = '';
+        }
+    } catch (err) {
+        try {
+            const conn = await mysql.createConnection({
+                host: process.env.DB_HOST || 'localhost',
+                user: process.env.DB_USER || 'admin',
+                password: process.env.DB_PASS || 'admin',
+                database: ASTERISK_DB
+            });
+            const [rows] = await conn.execute("SELECT setting_value FROM dashboard_settings WHERE setting_key = 'client_name'");
+            await conn.end();
+            if (rows && rows.length > 0 && rows[0].setting_value !== null && rows[0].setting_value !== undefined) {
+                cachedClientName = String(rows[0].setting_value).trim();
+            } else {
+                cachedClientName = '';
+            }
+        } catch (_) {}
+    }
+    return cachedClientName;
+}
+
+app.get('/api/settings/client', requireAuth, async (req, res) => {
+    try {
+        if (!cachedClientName) {
+            await loadClientNameFromDb();
+        }
+        res.json({ success: true, clientName: cachedClientName });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+const handleClientSettingsUpdate = async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        const rawName = (req.body && typeof req.body.clientName === 'string')
+            ? req.body.clientName
+            : (req.body && typeof req.body.client === 'string' ? req.body.client : '');
+        const clientName = rawName.trim();
+
+        try {
+            await pool.query(
+                "INSERT INTO dashboard_settings (setting_key, setting_value) VALUES ('client_name', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
+                [clientName, clientName]
+            );
+        } catch (poolErr) {
+            const conn = await mysql.createConnection({
+                host: process.env.DB_HOST || 'localhost',
+                user: process.env.DB_USER || 'admin',
+                password: process.env.DB_PASS || 'admin',
+                database: ASTERISK_DB
+            });
+            await conn.execute(
+                "INSERT INTO dashboard_settings (setting_key, setting_value) VALUES ('client_name', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
+                [clientName, clientName]
+            );
+            await conn.end();
+        }
+
+        cachedClientName = clientName;
+        res.json({ success: true, clientName: cachedClientName, message: 'Client name updated successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+app.post('/api/settings/client', requireAuth, handleClientSettingsUpdate);
+app.put('/api/settings/client', requireAuth, handleClientSettingsUpdate);
 
 // POST /api/auth/forgot-password and POST /forgot-password
 const forgotPasswordHandler = async (req, res) => {
