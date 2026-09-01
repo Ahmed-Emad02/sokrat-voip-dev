@@ -1784,7 +1784,8 @@ async function getTrunkStatusMap() {
 
             let activeCount = 0;
             const trunkNameLower = String(t.name || '').toLowerCase();
-            const channelIdLower = String(t.channelid || '').toLowerCase().replace('/$outnum$', '');
+            const channelIdLower = String(t.channelid || '').toLowerCase().replace('/$outnum$', '').replace('$outnum$', '');
+            const seenCalls = new Set();
 
             for (const chName of liveChannelNames) {
                 const chLower = chName.toLowerCase();
@@ -1792,7 +1793,12 @@ async function getTrunkStatusMap() {
                     (channelIdLower && chLower.includes(channelIdLower)) ||
                     chLower.includes(`tr-peer-${t.trunkid}`) ||
                     chLower.includes(`tr-trunk-${t.trunkid}`)) {
-                    activeCount++;
+                    const callIdMatch = chName.match(/-(?:[0-9a-f]{6,12}|\d+)$/i);
+                    const callId = callIdMatch ? callIdMatch[0] : chName;
+                    if (!seenCalls.has(callId)) {
+                        seenCalls.add(callId);
+                        activeCount++;
+                    }
                 }
             }
 
@@ -1829,11 +1835,17 @@ async function getTrunkStatusMap() {
                 const outLower = `fed_out_site${fp.site_code}`.toLowerCase();
                 const inLower = `fed_in_site${fp.site_code}`.toLowerCase();
                 const sitePrefix = String(fp.site_code);
+                const seenFedCalls = new Set();
 
                 for (const chName of liveChannelNames) {
                     const chLower = chName.toLowerCase();
                     if (chLower.includes(outLower) || chLower.includes(inLower) || chLower.includes(`peer_${sitePrefix}`)) {
-                        activeCount++;
+                        const callIdMatch = chName.match(/-(?:[0-9a-f]{6,12}|\d+)$/i);
+                        const callId = callIdMatch ? callIdMatch[0] : chName;
+                        if (!seenFedCalls.has(callId)) {
+                            seenFedCalls.add(callId);
+                            activeCount++;
+                        }
                     }
                 }
 
@@ -1898,11 +1910,15 @@ async function getLiveAsteriskChannelNames() {
         if (!stdout) return [];
         const channels = [];
         for (const line of stdout.split('\n')) {
-            const m = line.match(/^([^!]+)/);
-            if (m) {
-                const ch = m[1].trim();
-                if (ch.includes('/') && !ch.startsWith('!')) channels.push(ch);
-            }
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('!')) continue;
+            const parts = trimmed.split('!');
+            // parts[0]: channel name (e.g. SIP/103-00000001, SIP/HT841-00000002, IAX2/fed_out_site30-1234)
+            if (parts[0] && parts[0].includes('/')) channels.push(parts[0].trim());
+            // parts[6]: application data (e.g. SIP/HT841/01012345678, IAX2/fed_out_site30/102, Dongle/dongle0/010...)
+            if (parts[6] && parts[6].includes('/')) channels.push(parts[6].trim());
+            // parts[11]: bridged channel (e.g. SIP/HT841-00000002, IAX2/fed_out_site30-1234)
+            if (parts[11] && parts[11].includes('/')) channels.push(parts[11].trim());
         }
         return channels;
     } catch (err) {
