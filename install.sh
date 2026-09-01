@@ -150,7 +150,7 @@ git config --global http.postBuffer 524288000 2>/dev/null || true
 git config --global http.lowSpeedLimit 1000 2>/dev/null || true
 git config --global http.lowSpeedTime 300 2>/dev/null || true
 
-if [ -d "$INSTALL_DIR" ]; then
+if [ -d "$INSTALL_DIR/.git" ]; then
     echo "  Directory $INSTALL_DIR exists, maintaining local modifications..."
     cd "$INSTALL_DIR"
     git config http.postBuffer 524288000 2>/dev/null || true
@@ -170,7 +170,7 @@ fi
 # 3b — Clone / Update Sokrat VOICE (WebRTC Softphone)
 echo "  [3b] Cloning Sokrat VOICE (WebRTC Softphone) repository..."
 systemctl stop sokrat-softphone 2>/dev/null || true
-if [ -d "$SOFTPHONE_DIR" ]; then
+if [ -d "$SOFTPHONE_DIR/.git" ]; then
     echo "  Directory $SOFTPHONE_DIR exists, maintaining local modifications..."
     cd "$SOFTPHONE_DIR"
     git config http.postBuffer 524288000 2>/dev/null || true
@@ -192,8 +192,12 @@ fi
 # ──────────────────────────────────────────────
 # Step 4 — Install Dependencies
 # ──────────────────────────────────────────────
-echo "[4/14] Installing npm dependencies from package-lock.json..."
-npm ci --omit=dev
+echo "[4/14] Installing npm dependencies..."
+if [ -f package-lock.json ]; then
+    npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+else
+    npm install --omit=dev
+fi
 
 echo "  [4a] Installing Sokrat VOICE softphone npm dependencies..."
 if [ -d "$SOFTPHONE_DIR" ]; then
@@ -383,7 +387,7 @@ mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "DELETE FROM \`notifications\` WHE
 # Step 6b — Sokrat Push Gateway (mobile push-to-wake)
 # ──────────────────────────────────────────────
 echo "[6b/14] Installing Sokrat Push Gateway (mobile push-to-wake)..."
-if [ -d "$PUSH_GATEWAY_DIR" ]; then
+if [ -d "$PUSH_GATEWAY_DIR/.git" ]; then
     echo "  Updating sokrat-push-gateway..."
     cd "$PUSH_GATEWAY_DIR"
     git fetch origin
