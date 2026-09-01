@@ -10372,11 +10372,14 @@ app.delete('/api/config/ivrs/:id', async (req, res) => {
     }
 });
 
-// GET /api/config/routes/outbound - List Outbound Routes
+// GET /api/config/routes/outbound - List Outbound Routes in evaluation sequence order
 app.get('/api/config/routes/outbound', async (req, res) => {
     try {
         const [routesRows] = await pool.query(`
-            SELECT route_id, name FROM \`asterisk\`.\`outbound_routes\` ORDER BY route_id ASC
+            SELECT r.route_id, r.name, COALESCE(s.seq, 9999) AS seq
+            FROM \`asterisk\`.\`outbound_routes\` r
+            LEFT JOIN \`asterisk\`.\`outbound_route_sequence\` s ON s.route_id = r.route_id
+            ORDER BY COALESCE(s.seq, 9999) ASC, r.route_id ASC
         `);
         const [patternsRows] = await pool.query(`
             SELECT route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits
@@ -10389,7 +10392,7 @@ app.get('/api/config/routes/outbound', async (req, res) => {
             ORDER BY rt.seq ASC
         `);
 
-        // Group them
+        // Group them in sequence
         const routes = routesRows.map(r => {
             const route_id = r.route_id;
             const patterns = patternsRows
@@ -10411,6 +10414,7 @@ app.get('/api/config/routes/outbound', async (req, res) => {
             return {
                 route_id,
                 name: r.name,
+                seq: r.seq,
                 patterns,
                 trunks
             };
@@ -10422,6 +10426,34 @@ app.get('/api/config/routes/outbound', async (req, res) => {
     }
 });
 
+// POST /api/config/routes/outbound/reorder - Reorder Outbound Routes priority sequence
+app.post('/api/config/routes/outbound/reorder', async (req, res) => {
+    try {
+        const { route_ids } = req.body;
+        if (!Array.isArray(route_ids) || route_ids.length === 0) {
+            return res.status(400).json({ success: false, error: 'route_ids array is required.' });
+        }
+
+        const validIds = route_ids.map(id => parseInt(id, 10)).filter(id => !isNaN(id) && id > 0);
+        if (validIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid route IDs provided.' });
+        }
+
+        for (let seq = 0; seq < validIds.length; seq++) {
+            const routeId = validIds[seq];
+            await pool.query(`
+                INSERT INTO \`asterisk\`.\`outbound_route_sequence\` (route_id, seq)
+                VALUES (?, ?)
+                ON DUPLICATE KEY UPDATE seq = VALUES(seq)
+            `, [routeId, seq]);
+        }
+
+        reloadPbxConfig();
+        res.json({ success: true, message: 'Outbound routes priority reordered successfully.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 // POST /api/config/routes/outbound - Create Outbound Route
 app.post('/api/config/routes/outbound', async (req, res) => {

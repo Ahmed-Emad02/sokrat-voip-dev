@@ -45,3 +45,22 @@ test('views/config.ejs renders all 16 PBX tab sections as direct siblings at equ
     const depths = new Set(sectionReport.map(s => s.depthAtOpen));
     assert.equal(depths.size, 1, `All tab sections must open at the exact same DOM depth (got ${[...depths].join(', ')})`);
 });
+
+test('views/config.ejs and server.js provide drag and drop reordering for outbound routes', () => {
+    const configContent = fs.readFileSync(configEjsPath, 'utf8');
+    const serverPath = path.join(__dirname, '../server.js');
+    const serverContent = fs.readFileSync(serverPath, 'utf8');
+
+    // 1. UI Priority column & drag handles
+    assert.match(configContent, /<th[^>]*>.*(Priority|الأولوية).*<\/th>/i, 'config.ejs must render Priority column header');
+    assert.match(configContent, /renderOutboundRoutesTable/, 'config.ejs must define renderOutboundRoutesTable');
+    assert.match(configContent, /moveOutboundRoute/, 'config.ejs must define moveOutboundRoute');
+    assert.match(configContent, /saveOutboundRoutesOrder/, 'config.ejs must define saveOutboundRoutesOrder');
+    assert.match(configContent, /tr\.setAttribute\('draggable',\s*'true'\)/, 'Outbound route table rows must be draggable');
+    assert.match(configContent, /\/api\/config\/routes\/outbound\/reorder/, 'config.ejs must POST to reorder endpoint');
+
+    // 2. Server reorder endpoint & sequence ordering
+    assert.match(serverContent, /app\.post\('\/api\/config\/routes\/outbound\/reorder'/, 'server.js must expose POST /api/config/routes/outbound/reorder');
+    assert.match(serverContent, /outbound_route_sequence/, 'server.js must persist order to outbound_route_sequence');
+    assert.match(serverContent, /ORDER BY COALESCE\(s\.seq,\s*9999\)\s*ASC/, 'GET /api/config/routes/outbound must order by sequence');
+});
