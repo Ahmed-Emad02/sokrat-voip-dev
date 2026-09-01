@@ -1748,6 +1748,10 @@ async function getTrunkStatusMap() {
     try {
         const [trunks] = await pool.query("SELECT trunkid, name, tech, channelid, disabled, usercontext FROM `asterisk`.`trunks` WHERE LOWER(TRIM(tech)) IN ('sip', 'pjsip', 'iax', 'iax2') ORDER BY trunkid ASC");
         const iaxCliPresence = await getIax2StatusFromCliAsync();
+        let liveChannelNames = [];
+        try {
+            liveChannelNames = await getLiveAsteriskChannelNames();
+        } catch (_) {}
         const statusMap = {};
         for (const t of trunks) {
             let online = false;
@@ -1782,11 +1786,23 @@ async function getTrunkStatusMap() {
             const trunkNameLower = String(t.name || '').toLowerCase();
             const channelIdLower = String(t.channelid || '').toLowerCase().replace('/$outnum$', '');
 
-            for (const ext in activeCalls) {
-                const call = activeCalls[ext];
-                const ch = String(call?.channel || '').toLowerCase();
-                if (ch.includes(trunkNameLower) || (channelIdLower && ch.includes(channelIdLower))) {
+            for (const chName of liveChannelNames) {
+                const chLower = chName.toLowerCase();
+                if ((trunkNameLower && chLower.includes(trunkNameLower)) ||
+                    (channelIdLower && chLower.includes(channelIdLower)) ||
+                    chLower.includes(`tr-peer-${t.trunkid}`) ||
+                    chLower.includes(`tr-trunk-${t.trunkid}`)) {
                     activeCount++;
+                }
+            }
+
+            if (activeCount === 0) {
+                for (const ext in activeCalls) {
+                    const call = activeCalls[ext];
+                    const ch = String(call?.channel || '').toLowerCase();
+                    if ((trunkNameLower && ch.includes(trunkNameLower)) || (channelIdLower && ch.includes(channelIdLower))) {
+                        activeCount++;
+                    }
                 }
             }
 
@@ -1810,12 +1826,27 @@ async function getTrunkStatusMap() {
                 const trunkKey = `fed_${fp.id}`;
 
                 let activeCount = 0;
-                const outLower = outboundName.toLowerCase();
-                for (const ext in activeCalls) {
-                    const call = activeCalls[ext];
-                    const ch = String(call?.channel || '').toLowerCase();
-                    if (ch.includes(outLower)) {
+                const outLower = `fed_out_site${fp.site_code}`.toLowerCase();
+                const inLower = `fed_in_site${fp.site_code}`.toLowerCase();
+                const sitePrefix = String(fp.site_code);
+
+                for (const chName of liveChannelNames) {
+                    const chLower = chName.toLowerCase();
+                    if (chLower.includes(outLower) || chLower.includes(inLower) || chLower.includes(`peer_${sitePrefix}`)) {
                         activeCount++;
+                    }
+                }
+
+                if (activeCount === 0) {
+                    for (const ext in activeCalls) {
+                        const call = activeCalls[ext];
+                        const partner = String(call?.partner || '');
+                        const ch = String(call?.channel || '').toLowerCase();
+                        if (ch.includes(outLower) || ch.includes(inLower) || partner.startsWith(sitePrefix) || partner.startsWith(`9${sitePrefix}`)) {
+                            if (call?.state === 'In Call' || call?.state === 'Ringing') {
+                                activeCount++;
+                            }
+                        }
                     }
                 }
 
