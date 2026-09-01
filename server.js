@@ -9563,15 +9563,47 @@ function trunkProtocolTable(tech) {
 function normalizeTrunkPayload(body) {
     const requestedTech = String(body.tech || 'custom').trim().toLowerCase();
     const tech = requestedTech === 'iax' ? 'iax2' : requestedTech;
+    const name = String(body.name || '').trim();
+    let channelid = String(body.channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:');
+    if (!channelid && (tech === 'sip' || tech === 'iax2')) {
+        channelid = name;
+    }
+    const peerdetails = String(body.peerdetails || '');
+    const userdetails = String(body.userdetails || '');
     const has = key => Object.prototype.hasOwnProperty.call(body, key);
+
+    let host = has('host') ? String(body.host || '').trim() : undefined;
+    if (!host && peerdetails) {
+        const m = peerdetails.match(/^host\s*=\s*(.+)$/im);
+        if (m) host = m[1].trim();
+    }
+
+    let username = has('username') ? String(body.username || '').trim() : undefined;
+    if (!username && peerdetails) {
+        const m = peerdetails.match(/^username\s*=\s*(.+)$/im);
+        if (m) username = m[1].trim();
+    }
+
+    let secret = has('secret') ? String(body.secret || '').trim() : undefined;
+    if (!secret && peerdetails) {
+        const m = peerdetails.match(/^secret\s*=\s*(.+)$/im);
+        if (m) secret = m[1].trim();
+    }
+
+    let context = has('context') ? String(body.context || '').trim() : undefined;
+    if (!context && peerdetails) {
+        const m = peerdetails.match(/^context\s*=\s*(.+)$/im);
+        if (m) context = m[1].trim();
+    }
+
     return {
-        name: String(body.name || '').trim(),
+        name,
         tech,
-        channelid: String(body.channelid || '').trim().replace(/^dongle\/I:/, 'dongle/i:'),
-        host: has('host') ? String(body.host || '').trim() : undefined,
-        username: has('username') ? String(body.username || '').trim() : undefined,
-        secret: has('secret') ? String(body.secret || '').trim() : undefined,
-        context: has('context') ? String(body.context || '').trim() : undefined,
+        channelid,
+        host,
+        username,
+        secret,
+        context: context || 'from-trunk',
         register: String(body.register || '').trim(),
         usercontext: String(body.usercontext || '').trim(),
         outcid: String(body.outcid || '').trim(),
@@ -9584,8 +9616,8 @@ function normalizeTrunkPayload(body) {
         dialopts: String(body.dialopts || '').trim(),
         continue: String(body.continue || '').trim() === 'on' ? 'on' : 'off',
         failscript: String(body.failscript || '').trim(),
-        peerdetails: String(body.peerdetails || ''),
-        userdetails: String(body.userdetails || ''),
+        peerdetails,
+        userdetails,
         dialrules: normalizeTrunkDialRules(body.dialrules || body.dialpatterns)
     };
 }
@@ -9632,16 +9664,14 @@ function buildPeerDetails(input) {
         ['secret', input.secret],
         ['context', input.context]
     ]) {
-        if (value === undefined) continue;
-        if (value) details.set(keyword, value);
-        else details.delete(keyword);
+        if (value !== undefined && value !== '') {
+            details.set(keyword, value);
+        }
     }
-    if (!suppliedDetails) {
-        if (!details.has('type')) details.set('type', 'peer');
-        if (!details.has('context')) details.set('context', 'from-trunk');
-        if (!details.has('qualify')) details.set('qualify', 'yes');
-        if (input.tech === 'sip' && !details.has('insecure')) details.set('insecure', 'port,invite');
-    }
+    if (!details.has('type')) details.set('type', 'peer');
+    if (!details.has('context')) details.set('context', 'from-trunk');
+    if (!details.has('qualify')) details.set('qualify', 'yes');
+    if (input.tech === 'sip' && !details.has('insecure')) details.set('insecure', 'port,invite');
     return details;
 }
 

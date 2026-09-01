@@ -6325,8 +6325,8 @@ function isTabAllowed(tabName) {
                 sipIaxDiv.classList.remove('hidden');
                 if (cidSection) cidSection.classList.remove('hidden');
                 if (dialInput) dialInput.required = false;
-                if (hostInput) hostInput.required = true;
-                if (channelIdInput) channelIdInput.required = true;
+                if (hostInput) hostInput.required = false;
+                if (channelIdInput) channelIdInput.required = false;
             }
         }
 
@@ -6483,13 +6483,17 @@ function isTabAllowed(tabName) {
             const editId = document.getElementById('trunkEditId').value;
             const name = document.getElementById('trunkName').value.trim();
             const tech = document.getElementById('trunkTech').value;
-            const channelid = tech === 'custom'
+            let channelid = tech === 'custom'
                 ? document.getElementById('trunkDialString').value.trim()
                 : document.getElementById('trunkChannelId').value.trim();
-            const host = document.getElementById('trunkHost').value.trim();
-            const username = document.getElementById('trunkUsername').value.trim();
-            const secret = document.getElementById('trunkSecret').value.trim();
-            const context = document.getElementById('trunkContext').value.trim();
+            if (!channelid && tech !== 'custom') {
+                channelid = name;
+            }
+
+            let host = document.getElementById('trunkHost').value.trim();
+            let username = document.getElementById('trunkUsername').value.trim();
+            let secret = document.getElementById('trunkSecret').value.trim();
+            let context = document.getElementById('trunkContext').value.trim() || 'from-trunk';
             const register = document.getElementById('trunkRegister').value.trim();
             const outcid = document.getElementById('trunkOutcid').value.trim();
             const keepcid = document.getElementById('trunkKeepCid').value;
@@ -6502,6 +6506,24 @@ function isTabAllowed(tabName) {
             const usercontext = document.getElementById('trunkUserContext').value.trim();
             const peerdetails = document.getElementById('trunkPeerDetails').value.trim();
             const userdetails = document.getElementById('trunkUserDetails').value.trim();
+
+            if (!host && peerdetails) {
+                const m = peerdetails.match(/^host\s*=\s*(.+)$/im);
+                if (m) host = m[1].trim();
+            }
+            if (!username && peerdetails) {
+                const m = peerdetails.match(/^username\s*=\s*(.+)$/im);
+                if (m) username = m[1].trim();
+            }
+            if (!secret && peerdetails) {
+                const m = peerdetails.match(/^secret\s*=\s*(.+)$/im);
+                if (m) secret = m[1].trim();
+            }
+            if (!context && peerdetails) {
+                const m = peerdetails.match(/^context\s*=\s*(.+)$/im);
+                if (m) context = m[1].trim();
+            }
+
             const dialrules = getTrunkDialRulesFromForm();
             if (tech === 'custom' && channelid && Array.isArray(loadedTrunksList)) {
                 const existingTrunk = (loadedTrunksList || []).find(t => String(t.trunkid) !== String(editId) && String(t.tech || '').toLowerCase() === 'custom' && String(t.channelid || '').trim() === channelid);
