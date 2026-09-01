@@ -6326,38 +6326,6 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
     return devices;
 }
 
-// Local cache to throttle USSD phone number queries to avoid spamming the carrier networks
-let lastUssdQueryTimes = {}; // IMSI -> timestamp (Date)
-
-function extractPhoneNumber(text) {
-    if (!text) return null;
-    
-    // Convert Arabic numerals to standard English digits
-    const arabicDigits = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
-    let cleanText = String(text);
-    for (let i = 0; i < 10; i++) {
-        cleanText = cleanText.replace(arabicDigits[i], String(i));
-    }
-    
-    // Strip spaces, dashes, brackets, colons, equal signs
-    cleanText = cleanText.replace(/[\s\-\(\)\:\+\=]/g, '');
-    
-    // Look for 11 digits starting with 1xxxxxxxx or 01xxxxxxxx (which are standard Egyptian Mobile structures)
-    const match = cleanText.match(/\b(?:20)?(1[0125]\d{8})\b/);
-    if (match) {
-        return '+20' + match[1];
-    }
-    
-    // Fallback: search for any sequence of 10 or 11 digits
-    const generalMatch = cleanText.match(/\b(1[0125]\d{8})\b/) || cleanText.match(/\b(01[0125]\d{8})\b/);
-    if (generalMatch) {
-        let numStr = generalMatch[1];
-        if (numStr.startsWith('0')) numStr = numStr.substring(1);
-        return '+20' + numStr;
-    }
-    
-    return null;
-}
 
 // Read the hot-plug number mappings from Asterisk AstDB (sim_map, dongle_map, DONGLE_NUMBERS families) & MariaDB
 function getAstDbNumbers(callback) {
@@ -6518,13 +6486,6 @@ function startUssdLogMonitor() {
 const { spawn } = require('child_process');
 startUssdLogMonitor();
 
-function normalizeMsisdn(raw) {
-    let num = raw.replace(/[^0-9+]/g, '');
-    if (num.startsWith('+')) return num;
-    if (num.startsWith('00')) return '+' + num.slice(2);
-    if (num.startsWith('01')) return '+20' + num.slice(1);
-    return '+' + num;
-}
 
 function sendAtAndWait(dongleId, atCmd, timeoutMs, callback) {
     delete latestAtResponses[dongleId];
