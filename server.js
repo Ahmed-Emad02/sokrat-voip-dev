@@ -1882,6 +1882,18 @@ async function getTrunkStatusMap() {
         return {};
     }
 }
+
+let broadcastTrunksTimer = null;
+function broadcastTrunkStatus() {
+    if (broadcastTrunksTimer) return;
+    broadcastTrunksTimer = setTimeout(async () => {
+        broadcastTrunksTimer = null;
+        try {
+            const map = await getTrunkStatusMap();
+            io.emit('trunkStatus', map);
+        } catch (_) {}
+    }, 150);
+}
 let greetingConfig = { mode: 'none', extensions: [] };
 const VM_GREETING_CONFIG_PATH = path.join(__dirname, 'vm_greeting_config.json');
 function reloadGreetingConfig() {
@@ -2318,6 +2330,7 @@ function connectAMI() {
                     };
                     notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
                 }
+                broadcastTrunkStatus();
             }
 
             // State updates for existing calls — update partner and preserve start time
@@ -2352,6 +2365,7 @@ function connectAMI() {
                     notifyCrmLiveBroadcaster();
                     io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
                 }
+                broadcastTrunkStatus();
             }
 
             // Fallback catching: Ensure bridge entrances catch linked channel audio paths
@@ -2380,6 +2394,7 @@ function connectAMI() {
                     }
                 });
                 notifyCrmLiveBroadcaster();
+                broadcastTrunkStatus();
             }
 
             // Clean tear down when either party terminates the tracked call channel
@@ -2406,6 +2421,7 @@ function connectAMI() {
                         notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: e, callData: null });
                     }
                 });
+                broadcastTrunkStatus();
             }
         });
     });
@@ -2460,9 +2476,11 @@ async function reconcileActiveCallsWithAsterisk() {
                 notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: ext, callData: null });
             }
         }
+        broadcastTrunkStatus();
     } catch (_) {}
 }
 setInterval(reconcileActiveCallsWithAsterisk, 4000);
+setInterval(broadcastTrunkStatus, 2000);
 
 // Periodic SIPpeers + PJSIP contacts refresh to keep IPs current (every 30s)
 setInterval(() => {
