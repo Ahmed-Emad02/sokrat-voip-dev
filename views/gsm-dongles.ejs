@@ -985,6 +985,16 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         .sms-message-card {
             flex-shrink: 0;
         }
+
+        .light-theme .sms-inbox-scroll {
+            scrollbar-color: #991b1b transparent !important;
+        }
+        .light-theme .sms-inbox-scroll::-webkit-scrollbar-thumb {
+            background: #991b1b !important;
+        }
+        .light-theme .sms-inbox-scroll::-webkit-scrollbar-thumb:hover {
+            background: #7f1d1d !important;
+        }
         
         /* Light Theme Page-Specific Overrides for gsm-dongles.ejs */
         .light-theme .panel-surface {

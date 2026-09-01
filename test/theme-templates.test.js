@@ -59,7 +59,16 @@ test('views/sidebar.ejs includes light theme overrides for fallback classes', ()
     assert.ok(content.includes('.light-theme .text-zinc-200'), 'sidebar.ejs should define .light-theme .text-zinc-200 override');
     assert.ok(content.includes('.light-theme .bg-\\[\\#09090b\\]'), 'sidebar.ejs should define .light-theme .bg-[#09090b] override');
     assert.ok(content.includes('.light-theme .bg-black\\/40'), 'sidebar.ejs should define .light-theme .bg-black/40 override');
+    assert.ok(content.includes('.light-theme ::-webkit-scrollbar-thumb'), 'sidebar.ejs should define dark red scrollbar thumb for light theme');
+    assert.ok(content.includes('#991b1b'), 'sidebar.ejs should use dark red #991b1b for light theme scrollbar');
     assert.ok(content.includes('v1.0.4'), 'sidebar.ejs should display version v1.0.4');
+});
+
+test('views/gsm-dongles.ejs defines dark red scrollbar overrides for light theme', () => {
+    const gsmDonglesEjsPath = path.join(__dirname, '../views/gsm-dongles.ejs');
+    const content = fs.readFileSync(gsmDonglesEjsPath, 'utf8');
+    assert.ok(content.includes('.light-theme .sms-inbox-scroll::-webkit-scrollbar-thumb'), 'gsm-dongles.ejs should define light theme scrollbar override');
+    assert.ok(content.includes('#991b1b'), 'gsm-dongles.ejs should use dark red #991b1b for light theme scrollbars');
 });
 
 test('views/gsm-dongles.ejs includes complete light theme overrides for dialing state and other states', () => {

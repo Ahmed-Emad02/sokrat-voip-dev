@@ -1934,15 +1934,33 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         scrollbar-color: rgba(220, 38, 38, 0.35) transparent;
     }
 
-    /* Light Theme Scrollbars — keep the brand red, just a touch stronger for white backgrounds */
-    .light-theme ::-webkit-scrollbar-thumb {
-        background: rgba(220, 38, 38, 0.45);
+    /* Light Theme Scrollbars — Darker, rich deep red for high visibility on white/light backgrounds */
+    .light-theme ::-webkit-scrollbar-thumb,
+    .light-theme::-webkit-scrollbar-thumb {
+        background: #991b1b !important;
     }
-    .light-theme ::-webkit-scrollbar-thumb:hover {
-        background: rgba(220, 38, 38, 0.7);
+    .light-theme ::-webkit-scrollbar-thumb:hover,
+    .light-theme::-webkit-scrollbar-thumb:hover {
+        background: #7f1d1d !important;
     }
     .light-theme * {
-        scrollbar-color: rgba(220, 38, 38, 0.45) transparent;
+        scrollbar-color: #991b1b transparent !important;
+    }
+
+    .light-theme .custom-scrollbar::-webkit-scrollbar-thumb,
+    .light-theme .config-dropdown-options::-webkit-scrollbar-thumb,
+    .light-theme .sms-inbox-scroll::-webkit-scrollbar-thumb {
+        background: #991b1b !important;
+    }
+    .light-theme .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+    .light-theme .config-dropdown-options::-webkit-scrollbar-thumb:hover,
+    .light-theme .sms-inbox-scroll::-webkit-scrollbar-thumb:hover {
+        background: #7f1d1d !important;
+    }
+    .light-theme .custom-scrollbar,
+    .light-theme .config-dropdown-options,
+    .light-theme .sms-inbox-scroll {
+        scrollbar-color: #991b1b transparent !important;
     }
 </style>
 
