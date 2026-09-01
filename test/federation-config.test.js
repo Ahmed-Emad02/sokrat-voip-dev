@@ -122,7 +122,7 @@ test('Dialplan Engine: generateDialplanConfig implements hop limiter, direct dia
     assert.match(dialplan, /\[from-federation-site20\]/, 'Dialplan must define inbound handling context');
     assert.match(dialplan, /GotoIf\(\$\["\$\{DB\(FEDERATION\/PEER_20_EGRESS_ALLOWED\)\}" != "1"\]\?reject_egress\)/, 'Inbound must gate remote egress with AstDB permission');
     assert.match(dialplan, /Goto\(outbound-allroutes,\$\{EXTEN:4\},1\)/, 'Inbound must dispatch authorized egress to outbound-allroutes');
-    assert.match(dialplan, /Goto\(from-internal,\$\{EXTEN\},1\)/, 'Inbound must dispatch normal extensions to from-internal');
+    assert.match(dialplan, /Goto\(from-internal-additional,\$\{EXTEN\},1\)/, 'Inbound must dispatch normal extensions to from-internal-additional');
 });
 
 test('Format Helpers: formatRemoteDestination formats external dial destination correctly', () => {
