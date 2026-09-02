@@ -9487,7 +9487,7 @@ app.delete('/api/config/queues/:extension', async (req, res) => {
 
 // --- SYSTEM RECORDINGS MANAGEMENT APIs ---
 
-async function adjustRecordingVolume(recId, filename, gainDb) {
+async function processRecordingDsp(recId, filename, options = {}) {
     const cleanRel = String(filename || '').trim();
     if (!cleanRel) throw new Error('Invalid recording filename.');
     const relBase = cleanRel.endsWith('.wav') ? cleanRel.slice(0, -4) : cleanRel;
@@ -9508,37 +9508,196 @@ async function adjustRecordingVolume(recId, filename, gainDb) {
         }
     }
 
-    const targetGain = Math.max(-50, Math.min(20, parseInt(gainDb, 10) || 0));
-    const tmpWav = path.join('/tmp', `rec_adj_${recId}_${Date.now()}.wav`);
+    const { exec: execCb, execSync: execSyncFn } = require('child_process');
 
-    if (targetGain === 0) {
-        fs.copyFileSync(origPath, wavPath);
-    } else {
-        await new Promise((resolve, reject) => {
-            const cmd = `sox "${origPath}" -r 8000 -c 1 -b 16 "${tmpWav}" vol ${targetGain} dB`;
-            const { exec: execCb } = require('child_process');
-            execCb(cmd, (err, stdout, stderr) => {
-                if (err) return reject(new Error(`SoX volume adjustment failed: ${stderr || err.message}`));
-                resolve();
+    // Parse options
+    const gainDb = options.gainDb !== undefined && options.gainDb !== null && options.gainDb !== '' ? Math.max(-50, Math.min(20, parseInt(options.gainDb, 10) || 0)) : null;
+    const normDb = options.normDb !== undefined && options.normDb !== null && options.normDb !== '' ? Math.max(-50, Math.min(0, parseInt(options.normDb, 10) || 0)) : null;
+    const compand = ['broadcast', 'soft', 'off'].includes(options.compand) ? options.compand : 'off';
+    const bandpass = Boolean(options.bandpass);
+    const hissFilter = Boolean(options.hissFilter);
+    const bass = options.bass !== undefined && options.bass !== null && options.bass !== '' ? Math.max(-12, Math.min(12, parseInt(options.bass, 10) || 0)) : 0;
+    const treble = options.treble !== undefined && options.treble !== null && options.treble !== '' ? Math.max(-12, Math.min(12, parseInt(options.treble, 10) || 0)) : 0;
+    const tempo = options.tempo !== undefined && options.tempo !== null && options.tempo !== '' ? Math.max(0.7, Math.min(1.5, parseFloat(options.tempo) || 1.0)) : 1.0;
+    const trimSilence = Boolean(options.trimSilence);
+    const fadeIn = options.fadeIn !== undefined && options.fadeIn !== null && options.fadeIn !== '' ? Math.max(0, Math.min(2.0, parseFloat(options.fadeIn) || 0)) : 0;
+    const fadeOut = options.fadeOut !== undefined && options.fadeOut !== null && options.fadeOut !== '' ? Math.max(0, Math.min(2.0, parseFloat(options.fadeOut) || 0)) : 0;
+    const padLead = options.padLead !== undefined && options.padLead !== null && options.padLead !== '' ? Math.max(0, Math.min(3.0, parseFloat(options.padLead) || 0)) : 0;
+    const padTrail = options.padTrail !== undefined && options.padTrail !== null && options.padTrail !== '' ? Math.max(0, Math.min(3.0, parseFloat(options.padTrail) || 0)) : 0;
+    const generateCodecs = options.generateCodecs !== undefined ? Boolean(options.generateCodecs) : true;
+
+    // Is it a complete reset to original?
+    const isReset = options.resetToOriginal === true || (
+        (gainDb === null || gainDb === 0) &&
+        normDb === null &&
+        compand === 'off' &&
+        !bandpass &&
+        !hissFilter &&
+        bass === 0 &&
+        treble === 0 &&
+        Math.abs(tempo - 1.0) < 0.01 &&
+        !trimSilence &&
+        fadeIn === 0 &&
+        fadeOut === 0 &&
+        padLead === 0 &&
+        padTrail === 0
+    );
+
+    const tmp1 = path.join('/tmp', `dsp_step1_${recId}_${Date.now()}.wav`);
+    const tmp2 = path.join('/tmp', `dsp_step2_${recId}_${Date.now()}.wav`);
+
+    try {
+        if (isReset) {
+            fs.copyFileSync(origPath, wavPath);
+        } else {
+            // Build SoX arguments chain for Pass 1 (DSP & filters)
+            const dspEffects = [];
+
+            // 1. Silence trimming at start and end
+            if (trimSilence) {
+                dspEffects.push('silence 1 0.1 1% reverse silence 1 0.1 1% reverse');
+            }
+
+            // 2. Normalization / Leveling
+            if (normDb !== null) {
+                dspEffects.push(`norm ${normDb}`);
+            } else if (gainDb !== null && gainDb !== 0) {
+                dspEffects.push(`vol ${gainDb} dB`);
+            }
+
+            // 3. Bandpass (G.711 Telephony Sinc Filter)
+            if (bandpass) {
+                dspEffects.push('sinc 300-3400');
+            }
+
+            // 4. Hiss / Rumble Filter
+            if (hissFilter) {
+                dspEffects.push('highpass 200 lowpass 3500');
+            }
+
+            // 5. Compander (Broadcast or Soft Vocal Leveler)
+            if (compand === 'broadcast') {
+                dspEffects.push('compand 0.05,0.2 6:-60,-40,-20 -10 -60 0.05');
+            } else if (compand === 'soft') {
+                dspEffects.push('compand 0.1,0.3 6:-70,-50,-30 -15 -70 0.1');
+            }
+
+            // 6. Bass & Treble Equalization
+            if (bass !== 0) {
+                dspEffects.push(`bass ${bass > 0 ? '+' : ''}${bass}`);
+            }
+            if (treble !== 0) {
+                dspEffects.push(`treble ${treble > 0 ? '+' : ''}${treble}`);
+            }
+
+            // 7. Speech Pacing / Tempo (without pitch change)
+            if (Math.abs(tempo - 1.0) >= 0.02) {
+                dspEffects.push(`tempo -s ${tempo.toFixed(2)}`);
+            }
+
+            // 8. Lead & Trail Padding
+            if (padLead > 0 || padTrail > 0) {
+                dspEffects.push(`pad ${padLead.toFixed(2)} ${padTrail.toFixed(2)}`);
+            }
+
+            const pass1Cmd = `sox "${origPath}" -r 8000 -c 1 -b 16 "${tmp1}" ${dspEffects.join(' ')}`;
+            await new Promise((resolve, reject) => {
+                execCb(pass1Cmd, (err, stdout, stderr) => {
+                    if (err) return reject(new Error(`SoX Pass 1 failed: ${stderr || err.message}`));
+                    resolve();
+                });
             });
-        });
-        fs.copyFileSync(tmpWav, wavPath);
-        try { fs.unlinkSync(tmpWav); } catch (_) {}
+
+            // Pass 2: Fade In / Fade Out (requires known static file length)
+            if (fadeIn > 0 || fadeOut > 0) {
+                const pass2Cmd = `sox "${tmp1}" -r 8000 -c 1 -b 16 "${tmp2}" fade t ${fadeIn.toFixed(2)} 0 ${fadeOut.toFixed(2)}`;
+                await new Promise((resolve, reject) => {
+                    execCb(pass2Cmd, (err, stdout, stderr) => {
+                        if (err) return reject(new Error(`SoX Pass 2 fade failed: ${stderr || err.message}`));
+                        resolve();
+                    });
+                });
+                fs.copyFileSync(tmp2, wavPath);
+            } else {
+                fs.copyFileSync(tmp1, wavPath);
+            }
+        }
+
+        // Multi-codec generation for zero-transcoding Asterisk performance
+        if (generateCodecs && !isReset) {
+            const gsmPath = path.join(soundsDir, relBase + '.gsm');
+            const alawPath = path.join(soundsDir, relBase + '.alaw');
+            const ulawPath = path.join(soundsDir, relBase + '.ulaw');
+            const slnPath = path.join(soundsDir, relBase + '.sln');
+
+            try { execSyncFn(`sox "${wavPath}" -r 8000 -c 1 "${gsmPath}" 2>/dev/null || true`); } catch (_) {}
+            try { execSyncFn(`sox "${wavPath}" -r 8000 -c 1 -t al "${alawPath}" 2>/dev/null || true`); } catch (_) {}
+            try { execSyncFn(`sox "${wavPath}" -r 8000 -c 1 -t ul "${ulawPath}" 2>/dev/null || true`); } catch (_) {}
+            try { execSyncFn(`sox "${wavPath}" -r 8000 -c 1 -t raw -e signed-integer -b 16 "${slnPath}" 2>/dev/null || true`); } catch (_) {}
+        } else if (isReset) {
+            // Remove extra codec variants on reset
+            ['.gsm', '.alaw', '.ulaw', '.sln'].forEach(ext => {
+                const p = path.join(soundsDir, relBase + ext);
+                if (fs.existsSync(p)) try { fs.unlinkSync(p); } catch (_) {}
+            });
+        }
+
+        // Set ownership & permissions
+        try {
+            execSyncFn(`chown asterisk:asterisk "${soundsDir}/${relBase}".* 2>/dev/null; chmod 664 "${soundsDir}/${relBase}".* 2>/dev/null`);
+        } catch (_) {}
+
+        // Persist active DSP settings in AstDB
+        const activeSettings = isReset ? {} : {
+            gainDb,
+            normDb,
+            compand,
+            bandpass,
+            hissFilter,
+            bass,
+            treble,
+            tempo,
+            trimSilence,
+            fadeIn,
+            fadeOut,
+            padLead,
+            padTrail,
+            generateCodecs
+        };
+
+        const effectiveGain = normDb !== null ? normDb : (gainDb || 0);
+        try {
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put RECORDINGS ${recId}/gain ${effectiveGain}`]);
+            const safeJson = JSON.stringify(activeSettings).replace(/"/g, '\\"');
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put RECORDINGS ${recId}/dsp "${safeJson}"`]);
+        } catch (_) {}
+
+        // Get updated audio statistics
+        let statOutput = {};
+        try {
+            const rawStat = execSyncFn(`sox "${wavPath}" -n stat 2>&1`, { encoding: 'utf8' });
+            statOutput.length = (rawStat.match(/Length \(seconds\):\s+([\d\.]+)/) || [])[1] || '0';
+            statOutput.maxAmplitude = (rawStat.match(/Maximum amplitude:\s+([\d\.]+)/) || [])[1] || '0';
+            statOutput.rmsAmplitude = (rawStat.match(/RMS\s+amplitude:\s+([\d\.]+)/) || [])[1] || '0';
+        } catch (_) {}
+
+        return {
+            settings: activeSettings,
+            effectiveGain,
+            stat: statOutput
+        };
+    } finally {
+        if (fs.existsSync(tmp1)) try { fs.unlinkSync(tmp1); } catch (_) {}
+        if (fs.existsSync(tmp2)) try { fs.unlinkSync(tmp2); } catch (_) {}
     }
-
-    try {
-        const { execSync: execSyncFn } = require('child_process');
-        execSyncFn(`chown asterisk:asterisk "${wavPath}" "${origPath}" 2>/dev/null; chmod 664 "${wavPath}" "${origPath}" 2>/dev/null`);
-    } catch (_) {}
-
-    try {
-        await execFileAsync(ASTERISK_BIN, ['-rx', `database put RECORDINGS ${recId}/gain ${targetGain}`]);
-    } catch (_) {}
-
-    return targetGain;
 }
 
-// GET /api/config/recordings - List all system recordings
+async function adjustRecordingVolume(recId, filename, gainDb) {
+    const res = await processRecordingDsp(recId, filename, { gainDb: parseInt(gainDb, 10) || 0 });
+    return res.effectiveGain;
+}
+
+// GET /api/config/recordings - List all system recordings with DSP settings
 app.get('/api/config/recordings', async (req, res) => {
     try {
         const [recordings] = await pool.query(`
@@ -9549,18 +9708,24 @@ app.get('/api/config/recordings', async (req, res) => {
         `);
 
         let astdbGains = {};
+        let astdbDsp = {};
         try {
             const astdbOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'database show RECORDINGS']);
             for (const line of (astdbOutput || '').split('\n')) {
-                const m = line.match(/\/RECORDINGS\/(\d+)\/gain\s*:\s*(-?\d+)/);
-                if (m) astdbGains[m[1]] = parseInt(m[2], 10);
+                const mGain = line.match(/\/RECORDINGS\/(\d+)\/gain\s*:\s*(-?\d+)/);
+                if (mGain) astdbGains[mGain[1]] = parseInt(mGain[2], 10);
+                const mDsp = line.match(/\/RECORDINGS\/(\d+)\/dsp\s*:\s*(.+)$/);
+                if (mDsp) {
+                    try { astdbDsp[mDsp[1]] = JSON.parse(mDsp[2]); } catch (_) {}
+                }
             }
         } catch (_) {}
 
         const cleanRecordings = recordings.map(r => ({
             ...r,
             filename: String(r.filename),
-            gain_db: astdbGains[r.id] !== undefined ? astdbGains[r.id] : 0
+            gain_db: astdbGains[r.id] !== undefined ? astdbGains[r.id] : 0,
+            dsp_settings: astdbDsp[r.id] || null
         }));
         res.json({ success: true, recordings: cleanRecordings });
     } catch (error) {
@@ -9568,7 +9733,7 @@ app.get('/api/config/recordings', async (req, res) => {
     }
 });
 
-// POST /api/config/recordings/:id/volume - Adjust recording audio volume / headroom
+// POST /api/config/recordings/:id/volume - Quick adjust recording audio volume / headroom
 app.post('/api/config/recordings/:id/volume', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
@@ -9590,6 +9755,92 @@ app.post('/api/config/recordings/:id/volume', async (req, res) => {
             id,
             gainDb: appliedGain,
             message: `Volume for "${rows[0].displayname || relFile}" updated to ${appliedGain > 0 ? '+' : ''}${appliedGain} dB.`
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/config/recordings/:id/dsp - Advanced SoX DSP audio processing
+app.post('/api/config/recordings/:id/dsp', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ success: false, error: 'Invalid recording ID.' });
+
+        const [rows] = await pool.query('SELECT CAST(filename AS CHAR) AS filename, displayname FROM `asterisk`.`recordings` WHERE id = ?', [id]);
+        if (!rows.length || !rows[0].filename) return res.status(404).json({ success: false, error: 'Recording not found.' });
+
+        const relFile = String(rows[0].filename);
+        const result = await processRecordingDsp(id, relFile, req.body || {});
+
+        res.json({
+            success: true,
+            id,
+            ...result,
+            message: `Audio effects applied successfully to "${rows[0].displayname || relFile}".`
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/config/recordings/:id/info - Audio statistics and metadata
+app.get('/api/config/recordings/:id/info', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ success: false, error: 'Invalid recording ID.' });
+
+        const [rows] = await pool.query('SELECT id, displayname, CAST(filename AS CHAR) AS filename, description FROM `asterisk`.`recordings` WHERE id = ?', [id]);
+        if (!rows.length || !rows[0].filename) return res.status(404).json({ success: false, error: 'Recording not found.' });
+
+        const relFile = String(rows[0].filename);
+        const relBase = relFile.endsWith('.wav') ? relFile.slice(0, -4) : relFile;
+        const soundsDir = '/var/lib/asterisk/sounds';
+        const wavPath = path.join(soundsDir, relBase + '.wav');
+        const origPath = path.join(soundsDir, relBase + '.orig.wav');
+
+        let stat = {};
+        if (fs.existsSync(wavPath)) {
+            const { execSync: execSyncFn } = require('child_process');
+            try {
+                const rawStat = execSyncFn(`sox "${wavPath}" -n stat 2>&1`, { encoding: 'utf8' });
+                stat.length = parseFloat((rawStat.match(/Length \(seconds\):\s+([\d\.]+)/) || [])[1] || '0').toFixed(2);
+                stat.maxAmplitude = parseFloat((rawStat.match(/Maximum amplitude:\s+([\d\.]+)/) || [])[1] || '0').toFixed(4);
+                stat.rmsAmplitude = parseFloat((rawStat.match(/RMS\s+amplitude:\s+([\d\.]+)/) || [])[1] || '0').toFixed(4);
+                stat.volumeAdjustment = parseFloat((rawStat.match(/Volume adjustment:\s+([\d\.]+)/) || [])[1] || '0').toFixed(2);
+            } catch (_) {}
+        }
+
+        let gainDb = 0;
+        let dspSettings = null;
+        try {
+            const outGain = await execFileAsync(ASTERISK_BIN, ['-rx', `database get RECORDINGS ${id}/gain`]);
+            const mGain = (outGain || '').match(/(?:Value|Result):\s*(-?\d+)/i);
+            if (mGain) gainDb = parseInt(mGain[1], 10);
+
+            const outDsp = await execFileAsync(ASTERISK_BIN, ['-rx', `database get RECORDINGS ${id}/dsp`]);
+            const mDsp = (outDsp || '').match(/(?:Value|Result):\s*(.+)$/im);
+            if (mDsp) dspSettings = JSON.parse(mDsp[1]);
+        } catch (_) {}
+
+        const codecs = {
+            wav: fs.existsSync(wavPath),
+            orig: fs.existsSync(origPath),
+            gsm: fs.existsSync(path.join(soundsDir, relBase + '.gsm')),
+            alaw: fs.existsSync(path.join(soundsDir, relBase + '.alaw')),
+            ulaw: fs.existsSync(path.join(soundsDir, relBase + '.ulaw')),
+            sln: fs.existsSync(path.join(soundsDir, relBase + '.sln'))
+        };
+
+        res.json({
+            success: true,
+            id,
+            displayname: rows[0].displayname,
+            filename: relFile,
+            gainDb,
+            dspSettings,
+            codecs,
+            stat
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });

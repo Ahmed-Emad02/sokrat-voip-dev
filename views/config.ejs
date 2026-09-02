@@ -3352,6 +3352,296 @@ function isTabAllowed(tabName) {
             </form>
         </div>
     </div>
+    <!-- RECORDING STUDIO / SOX DSP MODAL -->
+    <div id="recordingStudioModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-4xl w-full flex flex-col text-[var(--text-primary)] max-h-[92vh] overflow-hidden shadow-2xl">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="p-2.5 bg-purple-500/10 text-purple-400 rounded-xl border border-purple-500/20 shrink-0">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                        </svg>
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="text-base font-extrabold text-[var(--text-primary)] truncate flex items-center gap-2">
+                            <span><%= isRtl ? 'استوديو معالجة الصوت المتقدم (SoX DSP)' : 'Audio Studio & Voice Optimization (SoX DSP)' %></span>
+                            <span id="dspTargetNameBadge" class="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 font-mono font-bold"></span>
+                        </h3>
+                        <p class="text-[11px] text-[var(--text-muted)] truncate"><%= isRtl ? 'تحسين وضوح الصوت، ضبط الهامش الديناميكي، معادلة الترددات، والتحويل إلى صيغ الهواتف' : 'Acoustic filters, dynamic leveler, frequency equalization & zero-transcoding codec export' %></p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModal('recordingStudioModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-red-500/40 flex items-center justify-center cursor-pointer transition-colors shrink-0">✕</button>
+            </div>
+
+            <!-- Body -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <input type="hidden" id="dspRecId" value="">
+                <input type="hidden" id="dspRecFilename" value="">
+
+                <!-- Audio Player Hero & Waveform Stats -->
+                <div class="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-primary)]/40 p-4 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <button type="button" id="dspPlayBtn" onclick="toggleStudioAudioPreview()" class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center hover:bg-emerald-500/25 transition cursor-pointer shrink-0">
+                                <svg id="dspPlayIcon" class="w-4 h-4 fill-emerald-400" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            </button>
+                            <div>
+                                <span id="dspDisplayTitle" class="text-sm font-extrabold text-[var(--text-primary)] block font-mono"></span>
+                                <span id="dspFileStatsText" class="text-[11px] text-[var(--text-muted)] font-mono">8000Hz • 16-bit Mono PCM</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 font-mono text-xs">
+                            <span class="px-2 py-1 rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)]">
+                                <%= isRtl ? 'المدة:' : 'Length:' %> <b id="dspStatDuration" class="text-white">-</b>
+                            </span>
+                            <span class="px-2 py-1 rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)]">
+                                <%= isRtl ? 'أعلى سعة:' : 'Peak:' %> <b id="dspStatPeak" class="text-white">-</b>
+                            </span>
+                            <span class="px-2 py-1 rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)]">
+                                <%= isRtl ? 'متوسط الطاقة:' : 'RMS:' %> <b id="dspStatRms" class="text-white">-</b>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1-Click Optimization Presets -->
+                <div>
+                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-2">
+                        <%= isRtl ? 'قوالب التحسين الجاهزة بنقرة واحدة (1-Click Presets)' : '1-Click Voice Optimization Presets' %>
+                    </span>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        <button type="button" onclick="applyDspPreset('dongle')" class="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15 text-left rtl:text-right transition cursor-pointer group">
+                            <span class="text-xs font-bold text-amber-400 block group-hover:underline">📱 <%= isRtl ? 'مخصص للدونجل' : 'GSM Dongle' %></span>
+                            <span class="text-[10px] text-[var(--text-muted)] block mt-0.5"><%= isRtl ? 'هامش -18dB + فلتر G.711' : 'Norm -18dB + G.711 bandpass' %></span>
+                        </button>
+                        <button type="button" onclick="applyDspPreset('broadcast')" class="p-3 rounded-xl border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/15 text-left rtl:text-right transition cursor-pointer group">
+                            <span class="text-xs font-bold text-blue-400 block group-hover:underline">🎙️ <%= isRtl ? 'تسوية إذاعية' : 'Radio Leveler' %></span>
+                            <span class="text-[10px] text-[var(--text-muted)] block mt-0.5"><%= isRtl ? 'ضغط ديناميكي + تضخيم الصوت' : 'Compand + Bass/Treble boost' %></span>
+                        </button>
+                        <button type="button" onclick="applyDspPreset('clean')" class="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/15 text-left rtl:text-right transition cursor-pointer group">
+                            <span class="text-xs font-bold text-emerald-400 block group-hover:underline">✂️ <%= isRtl ? 'تنظيف وقص الصمت' : 'Clean & Trim' %></span>
+                            <span class="text-[10px] text-[var(--text-muted)] block mt-0.5"><%= isRtl ? 'قص الصمت + تلاشي ناعم' : 'Trim dead air + Fade in/out' %></span>
+                        </button>
+                        <button type="button" onclick="applyDspPreset('reset')" class="p-3 rounded-xl border border-red-500/30 bg-red-500/5 hover:bg-red-500/15 text-left rtl:text-right transition cursor-pointer group">
+                            <span class="text-xs font-bold text-red-400 block group-hover:underline">🔄 <%= isRtl ? 'الملف الأصلي الخام' : 'Reset to Master' %></span>
+                            <span class="text-[10px] text-[var(--text-muted)] block mt-0.5"><%= isRtl ? 'إلغاء جميع الفلاتر والمؤثرات' : 'Revert to untouched .orig.wav' %></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- DSP Controls Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <!-- Column 1: Dynamics & Levels -->
+                    <div class="space-y-4 p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
+                        <div class="flex items-center gap-2 pb-2 border-b border-[var(--border-primary)]">
+                            <div class="w-2 h-2 rounded-full bg-amber-400"></div>
+                            <h4 class="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]"><%= isRtl ? 'مستويات الصوت والديناميكية' : 'Volume, Headroom & Dynamics' %></h4>
+                        </div>
+
+                        <!-- Peak Normalizer -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label for="dspNormDb" class="text-xs font-bold text-[var(--text-secondary)]"><%= isRtl ? 'الموازنة التلقائية للقمة (Peak Normalizer)' : 'Peak Normalizer (Norm)' %></label>
+                                <span class="text-[10px] text-amber-400 font-mono font-bold"><%= isRtl ? 'موصى به' : 'Recommended' %></span>
+                            </div>
+                            <select id="dspNormDb" class="config-input w-full text-xs">
+                                <option value=""><%= isRtl ? 'معطل (استخدام شريط الكسب اليدوي)' : 'Disabled (Use Manual Gain Slider)' %></option>
+                                <option value="-18" selected>-18 dBFS (<%= isRtl ? 'موصى به للبوابات والدونجل' : 'Recommended for Dongles' %>)</option>
+                                <option value="-12">-12 dBFS (<%= isRtl ? 'تخفيض معتدل' : 'Moderate Headroom' %>)</option>
+                                <option value="-6">-6 dBFS (<%= isRtl ? 'تخفيض خفيف' : 'Light Headroom' %>)</option>
+                                <option value="0">0 dBFS (<%= isRtl ? 'أقصى سعة قياسية' : 'Full Scale Ceiling' %>)</option>
+                            </select>
+                        </div>
+
+                        <!-- Manual Gain Slider -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label for="dspGainDb" class="text-xs font-bold text-[var(--text-secondary)]"><%= isRtl ? 'مستوى الكسب اليدوي (Manual Gain)' : 'Manual Gain Adjustment (Vol)' %></label>
+                                <span id="dspGainBadge" class="text-xs font-bold text-amber-400 font-mono">0 dB</span>
+                            </div>
+                            <input type="range" id="dspGainDb" min="-50" max="20" step="1" value="0"
+                                oninput="document.getElementById('dspGainBadge').textContent = (this.value > 0 ? '+' : '') + this.value + ' dB'; if(this.value != 0) document.getElementById('dspNormDb').value = '';"
+                                class="w-full accent-amber-500 bg-[var(--bg-primary)] h-1.5 rounded-lg cursor-pointer">
+                            <div class="flex justify-between text-[9px] font-mono text-[var(--text-muted)] mt-1">
+                                <span>-50 dB</span><span>0 dB</span><span>+20 dB</span>
+                            </div>
+                        </div>
+
+                        <!-- Voice Compander / Leveler -->
+                        <div>
+                            <label for="dspCompand" class="text-xs font-bold text-[var(--text-secondary)] block mb-1"><%= isRtl ? 'ضاغط ومسوي الصوت (Voice Compander / Leveler)' : 'Voice Leveler (Compand)' %></label>
+                            <select id="dspCompand" class="config-input w-full text-xs">
+                                <option value="off"><%= isRtl ? 'معطل (Off)' : 'Off (No compression)' %></option>
+                                <option value="broadcast"><%= isRtl ? 'بث إذاعي قوي (Broadcast - صوت موحد ومسموع)' : 'Broadcast (Tight, uniform vocal loudness)' %></option>
+                                <option value="soft"><%= isRtl ? 'تحسين صوتي خفيف (Soft Vocal Polish)' : 'Soft Vocal Polish (Gentle dynamic smoothing)' %></option>
+                            </select>
+                        </div>
+
+                        <!-- Fade In & Fade Out -->
+                        <div class="grid grid-cols-2 gap-3 pt-1">
+                            <div>
+                                <label for="dspFadeIn" class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1"><%= isRtl ? 'تلاشي البداية (Fade In)' : 'Fade In (sec)' %></label>
+                                <input type="number" id="dspFadeIn" min="0" max="2.0" step="0.05" value="0.05" class="config-input w-full text-xs font-mono">
+                            </div>
+                            <div>
+                                <label for="dspFadeOut" class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1"><%= isRtl ? 'تلاشي النهاية (Fade Out)' : 'Fade Out (sec)' %></label>
+                                <input type="number" id="dspFadeOut" min="0" max="2.0" step="0.05" value="0.05" class="config-input w-full text-xs font-mono">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 2: Clarity & EQ -->
+                    <div class="space-y-4 p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
+                        <div class="flex items-center gap-2 pb-2 border-b border-[var(--border-primary)]">
+                            <div class="w-2 h-2 rounded-full bg-blue-400"></div>
+                            <h4 class="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]"><%= isRtl ? 'الفلاتر ونقاء الصوت ومعادلة الترددات' : 'Clarity, Filters & Frequency EQ' %></h4>
+                        </div>
+
+                        <!-- Bandpass Filter -->
+                        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[var(--bg-primary)]/50 border border-[var(--border-primary)]">
+                            <div>
+                                <span class="text-xs font-bold text-[var(--text-primary)] block"><%= isRtl ? 'فلتر الاتصالات القياسي (G.711 Bandpass)' : 'G.711 Telecom Bandpass (300-3400 Hz)' %></span>
+                                <span class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'عزل ضوضاء الترددات غير الهاتفية وقص فرقعة المايك' : 'Cuts sub-bass rumble (<300Hz) & high hiss (>3.4kHz)' %></span>
+                            </div>
+                            <input type="checkbox" id="dspBandpass" checked class="w-4 h-4 accent-purple-500 rounded cursor-pointer">
+                        </div>
+
+                        <!-- Background Hiss Filter -->
+                        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[var(--bg-primary)]/50 border border-[var(--border-primary)]">
+                            <div>
+                                <span class="text-xs font-bold text-[var(--text-primary)] block"><%= isRtl ? 'فلتر إزالة صفير وهسيس الخلفية (Hiss / Rumble Filter)' : 'Hiss & Room Noise Filter' %></span>
+                                <span class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'فلترة أصوات أجهزة التكييف والمراوح في التسجيل' : 'Removes fan hum and air conditioning noise' %></span>
+                            </div>
+                            <input type="checkbox" id="dspHissFilter" class="w-4 h-4 accent-purple-500 rounded cursor-pointer">
+                        </div>
+
+                        <!-- Bass EQ -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label for="dspBass" class="text-xs font-bold text-[var(--text-secondary)]"><%= isRtl ? 'تضخيم/تخفيف الباس (Bass EQ)' : 'Bass Equalization' %></label>
+                                <span id="dspBassBadge" class="text-xs font-bold text-blue-400 font-mono">0 dB</span>
+                            </div>
+                            <input type="range" id="dspBass" min="-12" max="12" step="1" value="0"
+                                oninput="document.getElementById('dspBassBadge').textContent = (this.value > 0 ? '+' : '') + this.value + ' dB';"
+                                class="w-full accent-blue-500 bg-[var(--bg-primary)] h-1.5 rounded-lg cursor-pointer">
+                            <div class="flex justify-between text-[9px] font-mono text-[var(--text-muted)] mt-1"><span>-12 dB</span><span>0 dB</span><span>+12 dB</span></div>
+                        </div>
+
+                        <!-- Treble EQ -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label for="dspTreble" class="text-xs font-bold text-[var(--text-secondary)]"><%= isRtl ? 'حدة ووضوح الحروف (Treble EQ)' : 'Treble / Voice Presence' %></label>
+                                <span id="dspTrebleBadge" class="text-xs font-bold text-blue-400 font-mono">0 dB</span>
+                            </div>
+                            <input type="range" id="dspTreble" min="-12" max="12" step="1" value="0"
+                                oninput="document.getElementById('dspTrebleBadge').textContent = (this.value > 0 ? '+' : '') + this.value + ' dB';"
+                                class="w-full accent-blue-500 bg-[var(--bg-primary)] h-1.5 rounded-lg cursor-pointer">
+                            <div class="flex justify-between text-[9px] font-mono text-[var(--text-muted)] mt-1"><span>-12 dB</span><span>0 dB</span><span>+12 dB</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Column 3: Timing & Pacing -->
+                    <div class="space-y-4 p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
+                        <div class="flex items-center gap-2 pb-2 border-b border-[var(--border-primary)]">
+                            <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+                            <h4 class="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]"><%= isRtl ? 'السرعة وضبط فترات الصمت' : 'Timing, Speed & Silence Trimming' %></h4>
+                        </div>
+
+                        <!-- Auto-trim silence -->
+                        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[var(--bg-primary)]/50 border border-[var(--border-primary)]">
+                            <div>
+                                <span class="text-xs font-bold text-[var(--text-primary)] block"><%= isRtl ? 'قص الصمت تلقائيًا (Auto-Trim Silence)' : 'Auto-Trim Silence (Start & End)' %></span>
+                                <span class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'حذف الفراغات الصامتة في بداية ونهاية التسجيل' : 'Strips dead air before speech begins and after it ends' %></span>
+                            </div>
+                            <input type="checkbox" id="dspTrimSilence" checked class="w-4 h-4 accent-emerald-500 rounded cursor-pointer">
+                        </div>
+
+                        <!-- Tempo / Speech Pacing -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label for="dspTempo" class="text-xs font-bold text-[var(--text-secondary)]"><%= isRtl ? 'سرعة الإلقاء (Speech Tempo)' : 'Speech Pacing / Speed (Pitch-Preserved)' %></label>
+                                <span id="dspTempoBadge" class="text-xs font-bold text-emerald-400 font-mono">1.00x</span>
+                            </div>
+                            <input type="range" id="dspTempo" min="0.70" max="1.40" step="0.05" value="1.00"
+                                oninput="document.getElementById('dspTempoBadge').textContent = parseFloat(this.value).toFixed(2) + 'x';"
+                                class="w-full accent-emerald-500 bg-[var(--bg-primary)] h-1.5 rounded-lg cursor-pointer">
+                            <div class="flex justify-between text-[9px] font-mono text-[var(--text-muted)] mt-1"><span>0.70x</span><span>1.00x</span><span>1.40x</span></div>
+                        </div>
+
+                        <!-- Lead & Trail Padding -->
+                        <div class="grid grid-cols-2 gap-3 pt-1">
+                            <div>
+                                <label for="dspPadLead" class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1"><%= isRtl ? 'صمت قبل البدء (Start Pad)' : 'Start Pad (sec)' %></label>
+                                <input type="number" id="dspPadLead" min="0" max="3.0" step="0.1" value="0.2" class="config-input w-full text-xs font-mono">
+                            </div>
+                            <div>
+                                <label for="dspPadTrail" class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1"><%= isRtl ? 'صمت في النهاية (End Pad)' : 'End Pad (sec)' %></label>
+                                <input type="number" id="dspPadTrail" min="0" max="3.0" step="0.1" value="0.2" class="config-input w-full text-xs font-mono">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 4: Codecs & Asterisk Performance -->
+                    <div class="space-y-4 p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
+                        <div class="flex items-center gap-2 pb-2 border-b border-[var(--border-primary)]">
+                            <div class="w-2 h-2 rounded-full bg-purple-400"></div>
+                            <h4 class="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]"><%= isRtl ? 'أداء المقسم وتوليد الصيغ المباشرة' : 'PBX Performance & Multi-Codec Cache' %></h4>
+                        </div>
+
+                        <!-- Pre-render Multi-Codec -->
+                        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[var(--bg-primary)]/50 border border-[var(--border-primary)]">
+                            <div>
+                                <span class="text-xs font-bold text-[var(--text-primary)] block"><%= isRtl ? 'توليد الصيغ الأصلية (Multi-Codec Cache)' : 'Multi-Codec Direct Cache' %></span>
+                                <span class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'توليد صيغ GSM و ALAW و ULAW لمنع استهلاك معالج المقسم' : 'Pre-renders .gsm, .alaw, .ulaw for 0% CPU transcoding' %></span>
+                            </div>
+                            <input type="checkbox" id="dspGenerateCodecs" checked class="w-4 h-4 accent-purple-500 rounded cursor-pointer">
+                        </div>
+
+                        <!-- Codec Status Indicators -->
+                        <div>
+                            <span class="text-xs font-bold text-[var(--text-secondary)] block mb-2"><%= isRtl ? 'حالة الصيغ المولدة على القرص:' : 'Rendered Codec Files on Disk:' %></span>
+                            <div class="grid grid-cols-2 gap-2 text-xs font-mono" id="dspCodecPillsContainer">
+                                <div id="dspCodecWav" class="p-2 rounded bg-[var(--bg-primary)] border border-[var(--border-primary)] flex items-center justify-between">
+                                    <span>.wav (PCM)</span>
+                                    <span class="text-emerald-400 font-bold">✓</span>
+                                </div>
+                                <div id="dspCodecGsm" class="p-2 rounded bg-[var(--bg-primary)] border border-[var(--border-primary)] flex items-center justify-between">
+                                    <span>.gsm (Mobile)</span>
+                                    <span id="dspGsmStatus" class="text-[var(--text-muted)]">-</span>
+                                </div>
+                                <div id="dspCodecAlaw" class="p-2 rounded bg-[var(--bg-primary)] border border-[var(--border-primary)] flex items-center justify-between">
+                                    <span>.alaw (ISDN/SIP)</span>
+                                    <span id="dspAlawStatus" class="text-[var(--text-muted)]">-</span>
+                                </div>
+                                <div id="dspCodecUlaw" class="p-2 rounded bg-[var(--bg-primary)] border border-[var(--border-primary)] flex items-center justify-between">
+                                    <span>.ulaw (G.711u)</span>
+                                    <span id="dspUlawStatus" class="text-[var(--text-muted)]">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="flex items-center justify-between px-6 py-4 border-t border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <button type="button" onclick="closeModal('recordingStudioModal')" class="px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-card)] border border-[var(--border-primary)] cursor-pointer">
+                    <%= isRtl ? 'إلغاء' : 'Close' %>
+                </button>
+                <div class="flex items-center gap-2.5">
+                    <button type="button" onclick="resetRecordingStudioMaster()" class="px-3 py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 border border-red-500/30 flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span><%= isRtl ? 'استعادة الأصل' : 'Revert to Original' %></span>
+                    </button>
+                    <button type="button" id="dspApplyBtn" onclick="saveRecordingStudioDsp()" class="config-btn-primary px-5 py-2 text-xs flex items-center gap-2 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        <span><%= isRtl ? 'تطبيق وحفظ المؤثرات' : 'Apply & Save Audio DSP' %></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- MODAL: ADD MOH CATEGORY -->
     <div id="mohCategoryModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
@@ -4591,7 +4881,8 @@ function isTabAllowed(tabName) {
             'clientModal',
             'connectPbxModal',
             'editPeerModal',
-            'federationSettingsModal'
+            'federationSettingsModal',
+            'recordingStudioModal'
         ];
         function closeAllModals() {
             PBX_CONFIG_MODAL_IDS.forEach(id => {
@@ -5723,9 +6014,27 @@ function isTabAllowed(tabName) {
                         const currentGain = Number.isFinite(Number(rec.gain_db)) ? Number(rec.gain_db) : 0;
                         const gainBadgeText = (currentGain > 0 ? '+' : '') + currentGain + ' dB';
                         const gainColorClass = currentGain === 0 ? 'text-[var(--text-muted)]' : (currentGain < 0 ? 'text-amber-400' : 'text-emerald-400');
+                        let dspBadgesHtml = '';
+                        if (rec.dsp_settings && typeof rec.dsp_settings === 'object') {
+                            const d = rec.dsp_settings;
+                            const tags = [];
+                            if (d.normDb !== null && d.normDb !== undefined) tags.push(`Norm ${d.normDb}dB`);
+                            if (d.bandpass) tags.push('G.711');
+                            if (d.compand && d.compand !== 'off') tags.push(`Compand:${d.compand}`);
+                            if (d.trimSilence) tags.push('Trimmed');
+                            if (d.bass || d.treble) tags.push(`EQ:${d.bass > 0 ? '+' : ''}${d.bass || 0}B/${d.treble > 0 ? '+' : ''}${d.treble || 0}T`);
+                            if (d.tempo && Math.abs(d.tempo - 1.0) >= 0.02) tags.push(`${parseFloat(d.tempo).toFixed(2)}x`);
+                            if (d.generateCodecs) tags.push('Codecs');
+                            if (tags.length > 0) {
+                                dspBadgesHtml = '<div class="flex flex-wrap gap-1 mt-1">' + tags.map(t => `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-purple-500/15 text-purple-300 border border-purple-500/25">${escapeHtml(t)}</span>`).join('') + '</div>';
+                            }
+                        }
                         tr.innerHTML = `
                             <td class="py-3 px-4 font-mono font-bold text-[var(--text-muted)]">${rec.id}</td>
-                            <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${escapeHtml(rec.displayname || '-')}</td>
+                            <td class="py-3 px-4">
+                                <span class="font-bold text-[var(--text-primary)] block">${escapeHtml(rec.displayname || '-')}</span>
+                                ${dspBadgesHtml}
+                            </td>
                             <td class="py-3 px-4 font-mono text-xs text-blue-400 font-semibold">${escapeHtml(rec.filename || '-')}</td>
                             <td class="py-3 px-4">
                                 <div class="flex flex-col gap-1.5 min-w-[240px]">
@@ -5753,16 +6062,20 @@ function isTabAllowed(tabName) {
                                 </div>
                             </td>
                             <td class="py-3 px-4 text-center">
-                                <div class="flex items-center justify-center gap-2">
-                                    <button onclick="togglePlayRecording(${rec.id}, this)" class="px-2.5 py-1 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 rounded border border-emerald-500/30 flex items-center gap-1 cursor-pointer">
+                                <div class="flex items-center justify-center gap-1.5">
+                                    <button onclick="togglePlayRecording(${rec.id}, this)" class="px-2 py-1 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 rounded border border-emerald-500/30 flex items-center gap-1 cursor-pointer">
                                         <svg class="w-3 h-3 fill-emerald-400" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                                         <span><%= isRtl ? 'تشغيل' : 'Play' %></span>
                                     </button>
-                                    <a href="/api/config/recordings/audio/${rec.id}?download=1" class="btn-link px-2.5 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30 flex items-center gap-1 cursor-pointer">
+                                    <button type="button" onclick="openRecordingStudioModal(${rec.id})" class="px-2 py-1 text-xs font-semibold text-purple-400 hover:bg-purple-500/10 rounded border border-purple-500/30 flex items-center gap-1 cursor-pointer" title="<%= isRtl ? 'استوديو معالجة الصوت المتقدم (SoX DSP)' : 'Audio Studio & Advanced SoX DSP' %>">
+                                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                                        <span><%= isRtl ? 'الاستوديو' : 'Studio' %></span>
+                                    </button>
+                                    <a href="/api/config/recordings/audio/${rec.id}?download=1" class="btn-link px-2 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30 flex items-center gap-1 cursor-pointer">
                                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                                         <span><%= isRtl ? 'تحميل' : 'Download' %></span>
                                     </a>
-                                    <button type="button" onclick="deleteRecording(${rec.id})" class="px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded border border-red-500/30 cursor-pointer"><span><%= isRtl ? 'حذف' : 'Delete' %></span></button>
+                                    <button type="button" onclick="deleteRecording(${rec.id})" class="px-2 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded border border-red-500/30 cursor-pointer"><span><%= isRtl ? 'حذف' : 'Delete' %></span></button>
                                 </div>
                             </td>
                         `;
@@ -5979,6 +6292,280 @@ function isTabAllowed(tabName) {
         window.saveRecordingVolume = saveRecordingVolume;
         window.setRecordingGainQuick = setRecordingGainQuick;
 
+        let studioPreviewAudio = null;
+
+        async function openRecordingStudioModal(id) {
+            closeAllModals();
+            const rec = (loadedRecordingsList || []).find(r => String(r.id) === String(id));
+            if (!rec) return;
+
+            document.getElementById('dspRecId').value = id;
+            document.getElementById('dspRecFilename').value = rec.filename || '';
+            document.getElementById('dspDisplayTitle').textContent = rec.displayname || ('#' + id);
+            document.getElementById('dspTargetNameBadge').textContent = '#' + id + ' ' + (rec.displayname || '');
+
+            if (studioPreviewAudio) {
+                studioPreviewAudio.pause();
+                studioPreviewAudio = null;
+            }
+            const playIcon = document.getElementById('dspPlayIcon');
+            if (playIcon) playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+
+            // Reset UI controls to defaults before fetching
+            document.getElementById('dspNormDb').value = '-18';
+            document.getElementById('dspGainDb').value = '0';
+            document.getElementById('dspGainBadge').textContent = '0 dB';
+            document.getElementById('dspCompand').value = 'off';
+            document.getElementById('dspFadeIn').value = '0.05';
+            document.getElementById('dspFadeOut').value = '0.05';
+            document.getElementById('dspBandpass').checked = true;
+            document.getElementById('dspHissFilter').checked = false;
+            document.getElementById('dspBass').value = '0';
+            document.getElementById('dspBassBadge').textContent = '0 dB';
+            document.getElementById('dspTreble').value = '0';
+            document.getElementById('dspTrebleBadge').textContent = '0 dB';
+            document.getElementById('dspTrimSilence').checked = true;
+            document.getElementById('dspTempo').value = '1.00';
+            document.getElementById('dspTempoBadge').textContent = '1.00x';
+            document.getElementById('dspPadLead').value = '0.2';
+            document.getElementById('dspPadTrail').value = '0.2';
+            document.getElementById('dspGenerateCodecs').checked = true;
+
+            try {
+                const res = await fetch(`/api/config/recordings/${id}/info`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.stat) {
+                        document.getElementById('dspStatDuration').textContent = data.stat.length ? data.stat.length + 's' : '-';
+                        document.getElementById('dspStatPeak').textContent = data.stat.maxAmplitude ? data.stat.maxAmplitude : '-';
+                        document.getElementById('dspStatRms').textContent = data.stat.rmsAmplitude ? data.stat.rmsAmplitude : '-';
+                    }
+                    if (data.codecs) {
+                        document.getElementById('dspGsmStatus').innerHTML = data.codecs.gsm ? '<span class="text-emerald-400 font-bold">✓</span>' : '<span class="text-[var(--text-muted)]">-</span>';
+                        document.getElementById('dspAlawStatus').innerHTML = data.codecs.alaw ? '<span class="text-emerald-400 font-bold">✓</span>' : '<span class="text-[var(--text-muted)]">-</span>';
+                        document.getElementById('dspUlawStatus').innerHTML = data.codecs.ulaw ? '<span class="text-emerald-400 font-bold">✓</span>' : '<span class="text-[var(--text-muted)]">-</span>';
+                    }
+                    if (data.dspSettings && typeof data.dspSettings === 'object') {
+                        const s = data.dspSettings;
+                        if (s.normDb !== undefined && s.normDb !== null) document.getElementById('dspNormDb').value = String(s.normDb);
+                        if (s.gainDb !== undefined && s.gainDb !== null) {
+                            document.getElementById('dspGainDb').value = s.gainDb;
+                            document.getElementById('dspGainBadge').textContent = (s.gainDb > 0 ? '+' : '') + s.gainDb + ' dB';
+                        }
+                        if (s.compand) document.getElementById('dspCompand').value = s.compand;
+                        if (s.fadeIn !== undefined) document.getElementById('dspFadeIn').value = s.fadeIn;
+                        if (s.fadeOut !== undefined) document.getElementById('dspFadeOut').value = s.fadeOut;
+                        if (s.bandpass !== undefined) document.getElementById('dspBandpass').checked = Boolean(s.bandpass);
+                        if (s.hissFilter !== undefined) document.getElementById('dspHissFilter').checked = Boolean(s.hissFilter);
+                        if (s.bass !== undefined) {
+                            document.getElementById('dspBass').value = s.bass;
+                            document.getElementById('dspBassBadge').textContent = (s.bass > 0 ? '+' : '') + s.bass + ' dB';
+                        }
+                        if (s.treble !== undefined) {
+                            document.getElementById('dspTreble').value = s.treble;
+                            document.getElementById('dspTrebleBadge').textContent = (s.treble > 0 ? '+' : '') + s.treble + ' dB';
+                        }
+                        if (s.trimSilence !== undefined) document.getElementById('dspTrimSilence').checked = Boolean(s.trimSilence);
+                        if (s.tempo !== undefined) {
+                            document.getElementById('dspTempo').value = s.tempo;
+                            document.getElementById('dspTempoBadge').textContent = parseFloat(s.tempo).toFixed(2) + 'x';
+                        }
+                        if (s.padLead !== undefined) document.getElementById('dspPadLead').value = s.padLead;
+                        if (s.padTrail !== undefined) document.getElementById('dspPadTrail').value = s.padTrail;
+                        if (s.generateCodecs !== undefined) document.getElementById('dspGenerateCodecs').checked = Boolean(s.generateCodecs);
+                    }
+                }
+            } catch (_) {}
+
+            openModal('recordingStudioModal');
+        }
+
+        function toggleStudioAudioPreview() {
+            const id = document.getElementById('dspRecId').value;
+            if (!id) return;
+            const playIcon = document.getElementById('dspPlayIcon');
+            const url = `/api/config/recordings/audio/${id}?t=${Date.now()}`;
+
+            if (studioPreviewAudio) {
+                if (studioPreviewAudio.paused) {
+                    studioPreviewAudio.play();
+                    if (playIcon) playIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+                } else {
+                    studioPreviewAudio.pause();
+                    if (playIcon) playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+                }
+                return;
+            }
+
+            studioPreviewAudio = new Audio(url);
+            studioPreviewAudio.addEventListener('play', () => {
+                if (playIcon) playIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+            });
+            studioPreviewAudio.addEventListener('pause', () => {
+                if (playIcon) playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+            });
+            studioPreviewAudio.addEventListener('ended', () => {
+                if (playIcon) playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+                studioPreviewAudio = null;
+            });
+            studioPreviewAudio.play().catch(err => showToast('Playback error: ' + err.message, 'error'));
+        }
+
+        function applyDspPreset(preset) {
+            if (preset === 'dongle') {
+                document.getElementById('dspNormDb').value = '-18';
+                document.getElementById('dspGainDb').value = '0';
+                document.getElementById('dspGainBadge').textContent = '0 dB';
+                document.getElementById('dspCompand').value = 'off';
+                document.getElementById('dspFadeIn').value = '0.05';
+                document.getElementById('dspFadeOut').value = '0.05';
+                document.getElementById('dspBandpass').checked = true;
+                document.getElementById('dspHissFilter').checked = false;
+                document.getElementById('dspBass').value = '0';
+                document.getElementById('dspBassBadge').textContent = '0 dB';
+                document.getElementById('dspTreble').value = '0';
+                document.getElementById('dspTrebleBadge').textContent = '0 dB';
+                document.getElementById('dspTrimSilence').checked = true;
+                document.getElementById('dspTempo').value = '1.00';
+                document.getElementById('dspTempoBadge').textContent = '1.00x';
+                document.getElementById('dspPadLead').value = '0.2';
+                document.getElementById('dspPadTrail').value = '0.2';
+                document.getElementById('dspGenerateCodecs').checked = true;
+            } else if (preset === 'broadcast') {
+                document.getElementById('dspNormDb').value = '-12';
+                document.getElementById('dspGainDb').value = '0';
+                document.getElementById('dspGainBadge').textContent = '0 dB';
+                document.getElementById('dspCompand').value = 'broadcast';
+                document.getElementById('dspFadeIn').value = '0.05';
+                document.getElementById('dspFadeOut').value = '0.05';
+                document.getElementById('dspBandpass').checked = true;
+                document.getElementById('dspHissFilter').checked = false;
+                document.getElementById('dspBass').value = '2';
+                document.getElementById('dspBassBadge').textContent = '+2 dB';
+                document.getElementById('dspTreble').value = '1';
+                document.getElementById('dspTrebleBadge').textContent = '+1 dB';
+                document.getElementById('dspTrimSilence').checked = true;
+                document.getElementById('dspTempo').value = '1.00';
+                document.getElementById('dspTempoBadge').textContent = '1.00x';
+                document.getElementById('dspPadLead').value = '0.2';
+                document.getElementById('dspPadTrail').value = '0.2';
+                document.getElementById('dspGenerateCodecs').checked = true;
+            } else if (preset === 'clean') {
+                document.getElementById('dspNormDb').value = '-12';
+                document.getElementById('dspGainDb').value = '0';
+                document.getElementById('dspGainBadge').textContent = '0 dB';
+                document.getElementById('dspCompand').value = 'soft';
+                document.getElementById('dspFadeIn').value = '0.05';
+                document.getElementById('dspFadeOut').value = '0.05';
+                document.getElementById('dspBandpass').checked = true;
+                document.getElementById('dspHissFilter').checked = true;
+                document.getElementById('dspBass').value = '0';
+                document.getElementById('dspBassBadge').textContent = '0 dB';
+                document.getElementById('dspTreble').value = '0';
+                document.getElementById('dspTrebleBadge').textContent = '0 dB';
+                document.getElementById('dspTrimSilence').checked = true;
+                document.getElementById('dspTempo').value = '1.00';
+                document.getElementById('dspTempoBadge').textContent = '1.00x';
+                document.getElementById('dspPadLead').value = '0.2';
+                document.getElementById('dspPadTrail').value = '0.2';
+                document.getElementById('dspGenerateCodecs').checked = true;
+            } else if (preset === 'reset') {
+                resetRecordingStudioMaster();
+                return;
+            }
+            showToast('Preset loaded! Click "Apply & Save" to process audio.', 'info');
+        }
+
+        async function saveRecordingStudioDsp() {
+            const id = document.getElementById('dspRecId').value;
+            if (!id) return;
+            const applyBtn = document.getElementById('dspApplyBtn');
+            const isRtl = '<%= isRtl %>' === 'true';
+
+            const payload = {
+                normDb: document.getElementById('dspNormDb').value !== '' ? parseInt(document.getElementById('dspNormDb').value, 10) : null,
+                gainDb: parseInt(document.getElementById('dspGainDb').value, 10) || 0,
+                compand: document.getElementById('dspCompand').value,
+                fadeIn: parseFloat(document.getElementById('dspFadeIn').value) || 0,
+                fadeOut: parseFloat(document.getElementById('dspFadeOut').value) || 0,
+                bandpass: document.getElementById('dspBandpass').checked,
+                hissFilter: document.getElementById('dspHissFilter').checked,
+                bass: parseInt(document.getElementById('dspBass').value, 10) || 0,
+                treble: parseInt(document.getElementById('dspTreble').value, 10) || 0,
+                trimSilence: document.getElementById('dspTrimSilence').checked,
+                tempo: parseFloat(document.getElementById('dspTempo').value) || 1.0,
+                padLead: parseFloat(document.getElementById('dspPadLead').value) || 0,
+                padTrail: parseFloat(document.getElementById('dspPadTrail').value) || 0,
+                generateCodecs: document.getElementById('dspGenerateCodecs').checked
+            };
+
+            applyBtn.disabled = true;
+            applyBtn.innerHTML = `<span class="inline-block animate-spin">⏳</span> <span>${isRtl ? 'جاري معالجة الصوت...' : 'Processing audio...'}</span>`;
+
+            try {
+                const res = await fetch(`/api/config/recordings/${id}/dsp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || (isRtl ? 'تم تطبيق ومعالجة الصوت بنجاح' : 'Audio effects applied successfully!'), 'success');
+                    if (data.stat) {
+                        document.getElementById('dspStatDuration').textContent = data.stat.length ? data.stat.length + 's' : '-';
+                        document.getElementById('dspStatPeak').textContent = data.stat.maxAmplitude ? data.stat.maxAmplitude : '-';
+                        document.getElementById('dspStatRms').textContent = data.stat.rmsAmplitude ? data.stat.rmsAmplitude : '-';
+                    }
+                    if (studioPreviewAudio) {
+                        studioPreviewAudio.pause();
+                        studioPreviewAudio = null;
+                    }
+                    fetchRecordings();
+                } else {
+                    showToast(data.error || 'Failed to process DSP audio', 'error');
+                }
+            } catch (err) {
+                showToast(err.message || 'Error processing audio', 'error');
+            } finally {
+                applyBtn.disabled = false;
+                applyBtn.innerHTML = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> <span>${isRtl ? 'تطبيق وحفظ المؤثرات' : 'Apply & Save Audio DSP'}</span>`;
+            }
+        }
+
+        async function resetRecordingStudioMaster() {
+            const id = document.getElementById('dspRecId').value;
+            if (!id) return;
+            const isRtl = '<%= isRtl %>' === 'true';
+            if (!confirm(isRtl ? 'هل أنت متأكد من استعادة الملف الأصلي الخام وإلغاء جميع الفلاتر والمؤثرات؟' : 'Revert audio to untouched original master and clear all DSP effects?')) return;
+
+            try {
+                const res = await fetch(`/api/config/recordings/${id}/dsp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resetToOriginal: true })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(isRtl ? 'تمت استعادة الملف الأصلي بنجاح' : 'Reverted to original master audio', 'success');
+                    if (studioPreviewAudio) {
+                        studioPreviewAudio.pause();
+                        studioPreviewAudio = null;
+                    }
+                    openRecordingStudioModal(id);
+                    fetchRecordings();
+                } else {
+                    showToast(data.error || 'Failed to reset recording', 'error');
+                }
+            } catch (err) {
+                showToast(err.message || 'Error resetting recording', 'error');
+            }
+        }
+
+        window.openRecordingStudioModal = openRecordingStudioModal;
+        window.toggleStudioAudioPreview = toggleStudioAudioPreview;
+        window.applyDspPreset = applyDspPreset;
+        window.saveRecordingStudioDsp = saveRecordingStudioDsp;
+        window.resetRecordingStudioMaster = resetRecordingStudioMaster;
         // --- IVR MENUS ---
         let ivrEntryCounter = 0;
 

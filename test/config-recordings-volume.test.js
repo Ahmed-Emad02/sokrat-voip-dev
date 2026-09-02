@@ -50,13 +50,13 @@ test('server.js defines adjustRecordingVolume and POST /api/config/recordings/:i
     assert.ok(content.includes('database put RECORDINGS'), 'Must persist gain in AstDB');
     assert.ok(content.includes('.orig.wav'), 'Must maintain pristine original backup to avoid multi-generation distortion');
 });
+
 test('SoX volume adjustment accurately scales 16-bit linear PCM audio without clipping', () => {
     const { execSync } = require('child_process');
     const tmpOrig = '/tmp/test_scale_orig.wav';
     const tmpDest = '/tmp/test_scale_out.wav';
 
     try {
-        // Generate a 1-second 8kHz mono sine wave at full scale (0 dBFS)
         execSync(`sox -n -r 8000 -c 1 -b 16 "${tmpOrig}" synth 1.0 sine 440`);
         const origStat = execSync(`sox "${tmpOrig}" -n stat 2>&1`, { encoding: 'utf8' });
         const origPeakMatch = origStat.match(/Maximum amplitude:\s+([\d\.]+)/);
@@ -64,14 +64,12 @@ test('SoX volume adjustment accurately scales 16-bit linear PCM audio without cl
         const origPeak = parseFloat(origPeakMatch[1]);
         assert.ok(origPeak > 0.65, 'Original peak should be near 0.707 (-3 dBFS)');
 
-        // Scale by -18 dB
         execSync(`sox "${tmpOrig}" -r 8000 -c 1 -b 16 "${tmpDest}" vol -18 dB`);
         const scaledStat = execSync(`sox "${tmpDest}" -n stat 2>&1`, { encoding: 'utf8' });
         const scaledPeakMatch = scaledStat.match(/Maximum amplitude:\s+([\d\.]+)/);
         assert.ok(scaledPeakMatch, 'Should measure scaled peak amplitude');
         const scaledPeak = parseFloat(scaledPeakMatch[1]);
 
-        // -18 dB is roughly 10^(-18/20) = 0.12589 * 0.707 = ~0.088
         assert.ok(scaledPeak < 0.12 && scaledPeak > 0.07, `Scaled peak should be approx 0.088 (-18 dB), got ${scaledPeak}`);
     } finally {
         if (fs.existsSync(tmpOrig)) fs.unlinkSync(tmpOrig);
@@ -87,5 +85,75 @@ test('AstDB RECORDINGS family persists and parses gain values correctly', () => 
         assert.ok(out.includes('-18'), 'AstDB must return the stored gain of -18');
     } finally {
         execSync('asterisk -rx "database deltree RECORDINGS/99999"');
+    }
+});
+
+test('views/config.ejs renders recordingStudioModal with full DSP control suite', async () => {
+    const html = await ejs.renderFile(configEjsPath, {
+        currentPage: '/config',
+        currentLang: 'en',
+        isRtl: false,
+        currentUser: { username: 'admin', isRoot: true },
+        allowedTabs: ['recordings'],
+        isTabAllowed: (t) => t === 'recordings'
+    });
+
+    assert.ok(html.includes('id="recordingStudioModal"'), 'Must render recordingStudioModal backdrop');
+    assert.ok(html.includes('id="dspNormDb"'), 'Must render Peak Normalizer selector');
+    assert.ok(html.includes('id="dspCompand"'), 'Must render Voice Compander selector');
+    assert.ok(html.includes('id="dspBandpass"'), 'Must render G.711 Telephony Bandpass checkbox');
+    assert.ok(html.includes('id="dspHissFilter"'), 'Must render Hiss Filter checkbox');
+    assert.ok(html.includes('id="dspBass"'), 'Must render Bass EQ range slider');
+    assert.ok(html.includes('id="dspTreble"'), 'Must render Treble EQ range slider');
+    assert.ok(html.includes('id="dspTrimSilence"'), 'Must render Auto-trim silence checkbox');
+    assert.ok(html.includes('id="dspTempo"'), 'Must render Speech Pacing slider');
+    assert.ok(html.includes('id="dspGenerateCodecs"'), 'Must render Multi-Codec cache checkbox');
+    assert.ok(html.includes('onclick="openRecordingStudioModal('), 'Table rows must include Studio modal openers');
+});
+
+test('server.js defines processRecordingDsp and advanced DSP endpoints', () => {
+    const content = fs.readFileSync(serverJsPath, 'utf8');
+
+    assert.ok(content.includes('async function processRecordingDsp(recId, filename, options = {}) {'), 'Must define processRecordingDsp');
+    assert.ok(content.includes("app.post('/api/config/recordings/:id/dsp'"), 'Must define POST /dsp route');
+    assert.ok(content.includes("app.get('/api/config/recordings/:id/info'"), 'Must define GET /info route');
+    assert.ok(content.includes('database put RECORDINGS'), 'Must persist settings in AstDB');
+});
+
+test('SoX combined DSP pipeline successfully applies normalization, companding, sinc filtering, and multi-codec export', () => {
+    const { execSync } = require('child_process');
+    const tmpIn = '/tmp/test_full_dsp_in.wav';
+    const tmpOut = '/tmp/test_full_dsp_out.wav';
+    const tmpGsm = '/tmp/test_full_dsp_out.gsm';
+    const tmpAlaw = '/tmp/test_full_dsp_out.alaw';
+
+    try {
+        execSync(`sox -n -r 8000 -c 1 -b 16 "${tmpIn}" synth 2.0 sine 440 vol 0.9 pad 0.3 0.3`);
+
+        execSync(`sox "${tmpIn}" -r 8000 -c 1 -b 16 "${tmpOut}" ` +
+            `silence 1 0.1 1% reverse silence 1 0.1 1% reverse ` +
+            `norm -18 ` +
+            `sinc 300-3400 ` +
+            `compand 0.05,0.2 6:-60,-40,-20 -10 -60 0.05 ` +
+            `bass +2 ` +
+            `treble +1 ` +
+            `tempo -s 1.05 ` +
+            `pad 0.1 0.1`);
+
+        assert.ok(fs.existsSync(tmpOut), 'Processed WAV must exist');
+        const stat = execSync(`sox "${tmpOut}" -n stat 2>&1`, { encoding: 'utf8' });
+        const maxMatch = stat.match(/Maximum amplitude:\s+([\d\.]+)/);
+        assert.ok(maxMatch, 'Must measure max amplitude');
+        const peak = parseFloat(maxMatch[1]);
+        assert.ok(peak < 0.20 && peak > 0.05, `Peak should be near -18 dBFS, got ${peak}`);
+
+        execSync(`sox "${tmpOut}" -r 8000 -c 1 "${tmpGsm}"`);
+        execSync(`sox "${tmpOut}" -r 8000 -c 1 -t al "${tmpAlaw}"`);
+        assert.ok(fs.existsSync(tmpGsm) && fs.statSync(tmpGsm).size > 0, 'GSM file must exist');
+        assert.ok(fs.existsSync(tmpAlaw) && fs.statSync(tmpAlaw).size > 0, 'ALAW file must exist');
+    } finally {
+        [tmpIn, tmpOut, tmpGsm, tmpAlaw].forEach(f => {
+            if (fs.existsSync(f)) fs.unlinkSync(f);
+        });
     }
 });
