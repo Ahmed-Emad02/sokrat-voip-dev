@@ -426,6 +426,19 @@ ensure_db_column "storage_settings" "queue_provisioned" "TINYINT(1) DEFAULT 0"
 
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "INSERT IGNORE INTO \`storage_settings\` (\`id\`) VALUES (1);" 2>/dev/null || true
 
+# Push registration identity is one row per platform/install. Remove legacy rows
+# that cannot participate in the stable device identity contract before enforcing it.
+mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
+DELETE FROM mobile_devices WHERE device_uuid IS NULL OR device_uuid = '';
+DELETE old_device FROM mobile_devices old_device
+JOIN mobile_devices new_device
+  ON old_device.platform = new_device.platform
+ AND old_device.device_uuid = new_device.device_uuid
+ AND old_device.id < new_device.id;
+ALTER TABLE mobile_devices MODIFY device_uuid VARCHAR(128) NOT NULL;
+" 2>/dev/null || true
+ensure_db_index "mobile_devices" "uniq_platform_device" "UNIQUE KEY \`uniq_platform_device\` (\`platform\`, \`device_uuid\`)"
+
 # Older/partial Announcement module installs can lack the Pico TTS columns.
 # Use information_schema checks rather than version-specific ADD IF NOT EXISTS syntax.
 ANNOUNCEMENT_TABLE_EXISTS=$(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse \
@@ -492,25 +505,57 @@ systemctl daemon-reload
 systemctl enable --now sokrat-push-gateway.service
 echo "  push-gateway service enabled and started"
 
-# Install the Asterisk dialplan hook (macro-sokrat-push-hook) if not present
+# Install or update the Asterisk dialplan hooks. The linked ID deterministically
+# maps to the same UUID namespace used by the gateway.
 DIALPLAN_FILE=/etc/asterisk/extensions_custom.conf
 touch "$DIALPLAN_FILE"
-if ! grep -qF '[macro-sokrat-push-hook]' "$DIALPLAN_FILE"; then
-    cat >> "$DIALPLAN_FILE" << 'PUSHHOOK'
+python3 -c "import re; p='$DIALPLAN_FILE'; t=open(p).read(); t=re.sub(r'\n?\[(?:macro|sub)-sokrat-push-hook\].*?(?=\n\[|\Z)', '', t, flags=re.DOTALL); open(p,'w').write(t.rstrip()+'\\n')"
+cat >> "$DIALPLAN_FILE" << 'PUSHHOOK'
 
 [macro-sokrat-push-hook]
-exten => s,1,NoOp(=== Sokrat Push Wake-Up Hook ===)
-same => n,Set(_SOKRAT_CALLEE=${MACRO_EXTEN})
-same => n,Set(_SOKRAT_CALLER=${CALLERID(num)})
-same => n,Set(_SOKRAT_CALLER_NAME=${URIENCODE(${CALLERID(name)})})
-same => n,System(nohup /usr/bin/curl -s --max-time 1 "http://127.0.0.1:8095/api/push/incoming-call?callee=${_SOKRAT_CALLEE}&caller=${_SOKRAT_CALLER}&callerName=${_SOKRAT_CALLER_NAME}" >/dev/null 2>&1 &)
-same => n,MacroExit()
+exten => s,1,NoOp(=== Sokrat Push Wake-Up Hook (Macro) ===)
+same => n,GotoIf($["${SOKRAT_PUSH_SENT}"="1"]?done)
+same => n,Set(__SOKRAT_PUSH_SENT=1)
+same => n,Set(TARGET_EXT=${IF($["${ARG1}"!=""]?${ARG1}:${IF($["${MACRO_EXTEN}"!=""]?${MACRO_EXTEN}:${IF($["${CALLEE_EXT}"!=""]?${CALLEE_EXT}:${IF($["${DEXTEN}"!=""]?${DEXTEN}:${EXTTOCALL})})})})})
+same => n,ExecIf($["${TARGET_EXT}"=""]?Set(TARGET_EXT=${EXTEN}))
+same => n,Set(SOKRAT_LINKEDID=${FILTER(0-9A-Za-z.-,${CHANNEL(linkedid)})})
+same => n,Set(__SOKRAT_CALL_ID=${FILTER(0-9a-f-,${SHELL(/usr/bin/uuidgen --sha1 --namespace b32a7f28-4bcc-5a56-a51f-2ad6f65f746b --name ${SOKRAT_LINKEDID})})})
+same => n,Set(SOKRAT_CALLER_NUM=${IF($["${CALLERID(num)}" = ""]?0:${CALLERID(num)})})
+same => n,Set(SOKRAT_CALLER_NAME=${IF($["${CALLERID(name)}" = ""]?${SOKRAT_CALLER_NUM}:${CALLERID(name)})})
+same => n,Set(SOKRAT_ENC_CALLER=${URIENCODE(${SOKRAT_CALLER_NUM})})
+same => n,Set(SOKRAT_ENC_NAME=${URIENCODE(${SOKRAT_CALLER_NAME})})
+same => n,NoOp([callId=${SOKRAT_CALL_ID}] push macro callee=${TARGET_EXT} linkedid=${SOKRAT_LINKEDID})
+same => n,System(nohup /usr/bin/curl -s --max-time 2 "http://127.0.0.1:8095/api/push/incoming-call?callee=${TARGET_EXT}&caller=${SOKRAT_ENC_CALLER}&callerName=${SOKRAT_ENC_NAME}&callId=${SOKRAT_CALL_ID}" >/dev/null 2>&1 &)
+same => n(done),MacroExit()
+
+[sub-sokrat-push-hook]
+exten => s,1,NoOp(=== Sokrat mobile push wake-up hook ===)
+same => n,Set(TARGET_EXT=${IF($["${ARG1}"!=""]?${ARG1}:${IF($["${CALLEE_EXT}"!=""]?${CALLEE_EXT}:${IF($["${DEXTEN}"!=""]?${DEXTEN}:${EXTTOCALL})})})})
+same => n,ExecIf($["${TARGET_EXT}"=""]?Set(TARGET_EXT=${EXTEN}))
+same => n,GotoIf($["${TARGET_EXT}"!="150"]?done)
+same => n,GotoIf($["${SOKRAT_PUSH_SENT}"="1"]?done)
+same => n,Set(__SOKRAT_PUSH_SENT=1)
+same => n,Set(SOKRAT_LINKEDID=${FILTER(0-9A-Za-z.-,${CHANNEL(linkedid)})})
+same => n,Set(__SOKRAT_CALL_ID=${FILTER(0-9a-f-,${SHELL(/usr/bin/uuidgen --sha1 --namespace b32a7f28-4bcc-5a56-a51f-2ad6f65f746b --name ${SOKRAT_LINKEDID})})})
+same => n,Set(SOKRAT_CALLER_NUM=${IF($["${CALLERID(num)}" = ""]?0:${CALLERID(num)})})
+same => n,Set(SOKRAT_CALLER_NAME=${IF($["${CALLERID(name)}" = ""]?${SOKRAT_CALLER_NUM}:${CALLERID(name)})})
+same => n,Set(SOKRAT_ENC_CALLER=${URIENCODE(${SOKRAT_CALLER_NUM})})
+same => n,Set(SOKRAT_ENC_NAME=${URIENCODE(${SOKRAT_CALLER_NAME})})
+same => n,NoOp([callId=${SOKRAT_CALL_ID}] sending wake callee=${TARGET_EXT} linkedid=${SOKRAT_LINKEDID})
+same => n,System(nohup /usr/bin/curl -s --max-time 2 "http://127.0.0.1:8095/api/push/incoming-call?callee=${TARGET_EXT}&caller=${SOKRAT_ENC_CALLER}&callerName=${SOKRAT_ENC_NAME}&callId=${SOKRAT_CALL_ID}" >/dev/null 2>&1 &)
+same => n,Progress()
+same => n,Ringing()
+same => n,Set(SOKRAT_WAIT_COUNT=0)
+same => n(wait_contact),Set(SOKRAT_CONTACTS=${PJSIP_DIAL_CONTACTS(${TARGET_EXT})})
+same => n,GotoIf($["${SOKRAT_CONTACTS}"!=""]?ready)
+same => n,Wait(0.2)
+same => n,Set(SOKRAT_WAIT_COUNT=$[${SOKRAT_WAIT_COUNT}+1])
+same => n,GotoIf($[${SOKRAT_WAIT_COUNT}<25]?wait_contact)
+same => n(ready),NoOp([callId=${SOKRAT_CALL_ID}] contact wait iterations=${SOKRAT_WAIT_COUNT} contacts=${SOKRAT_CONTACTS})
+same => n(done),Return()
 PUSHHOOK
-    asterisk -rx "dialplan reload" 2>/dev/null || true
-    echo "  macro-sokrat-push-hook added and dialplan reloaded"
-else
-    echo "  macro-sokrat-push-hook already present, skipping"
-fi
+asterisk -rx "dialplan reload" 2>/dev/null || true
+echo "  Sokrat push hooks updated and dialplan reloaded"
 echo "  Sokrat Push Gateway installed"
 
 # ──────────────────────────────────────────────
@@ -639,11 +684,14 @@ else
     echo "  WSS transport already configured"
 fi
 
-# Patch IssabelPBX PJSIP generator to fix maxcontacts and inband_progress
+# Patch IssabelPBX PJSIP generator to fix maxcontacts, inband_progress, and remove_unavailable
 FUNCTIONS_FILE=/var/www/html/admin/modules/core/functions.inc.php
 if [ -f "$FUNCTIONS_FILE" ]; then
     if ! grep -q "case 'maxcontacts':" "$FUNCTIONS_FILE"; then
         sed -i "s/case 'max_contacts':/case 'maxcontacts':\n                        case 'max_contacts':/" "$FUNCTIONS_FILE"
+    fi
+    if ! grep -q "case 'remove_unavailable':" "$FUNCTIONS_FILE"; then
+        sed -i "s/case 'remove_existing':/case 'remove_existing':\n                        case 'remove_unavailable':/" "$FUNCTIONS_FILE"
     fi
     if ! grep -q "case 'inband_progress':" "$FUNCTIONS_FILE"; then
         sed -i "/case 'use_avpf':/i \                        case 'inband_progress':\n                        case 'inbandprogress':\n                            \$output1[]='inband_progress='.\$result2['data'];\n                            break;" "$FUNCTIONS_FILE"
@@ -651,15 +699,26 @@ if [ -f "$FUNCTIONS_FILE" ]; then
     if ! grep -q "\$devopts\['inband_progress'\]" "$FUNCTIONS_FILE"; then
         sed -i "/\$devopts\['use_avpf'\]\['value'\]='yes';/a \                \$devopts\['inband_progress'\]\['value'\]='yes';" "$FUNCTIONS_FILE"
     fi
-    echo "  IssabelPBX PJSIP generator patched for maxcontacts and inband_progress"
+    echo "  IssabelPBX PJSIP generator patched for maxcontacts, inband_progress, and remove_unavailable"
 fi
 
-# Ensure inband_progress=yes for WebRTC extensions in database
+# Ensure WebRTC extensions enforce single-contact policy without direct media
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
+UPDATE sip SET data='1' WHERE keyword IN ('maxcontacts','max_contacts') AND id IN (SELECT id FROM (SELECT id FROM sip WHERE keyword='webrtc' AND data='yes') AS w);
 INSERT INTO sip (id, keyword, data, flags)
 SELECT id, 'inband_progress', 'yes', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
 ON DUPLICATE KEY UPDATE data='yes';
+INSERT INTO sip (id, keyword, data, flags)
+SELECT id, 'remove_existing', 'yes', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
+ON DUPLICATE KEY UPDATE data='yes';
+INSERT INTO sip (id, keyword, data, flags)
+SELECT id, 'remove_unavailable', 'yes', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
+ON DUPLICATE KEY UPDATE data='yes';
+INSERT INTO sip (id, keyword, data, flags)
+SELECT id, 'direct_media', 'no', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
+ON DUPLICATE KEY UPDATE data='no';
 " 2>/dev/null || true
+/var/lib/asterisk/bin/retrieve_conf 2>/dev/null || true
 
 # Ensure Asterisk socket permissions allow sokrat-softphone service access
 if [ -f /etc/asterisk/asterisk.conf ]; then
@@ -1036,6 +1095,8 @@ exten => s,1,NoOp(--- SIP Client Incoming Leg & AI Denoise Hook ---)
 same => n,Set(CALLEE_EXT=${DEXTEN})
 same => n,ExecIf($["${CALLEE_EXT}" = ""]?Set(CALLEE_EXT=${EXTTOCALL}))
 same => n,ExecIf($["${CALLEE_EXT}" = ""]?Set(CALLEE_EXT=${CUT(CUT(CHANNEL,-,1),/,2)}))
+same => n,ExecIf($["${SOKRAT_CALL_ID}"!=""]?Set(PJSIP_HEADER(add,X-Sokrat-Call-ID)=${SOKRAT_CALL_ID}))
+same => n,ExecIf($["${SOKRAT_CALL_ID}"!=""]?NoOp([callId=${SOKRAT_CALL_ID}] injected X-Sokrat-Call-ID for callee=${CALLEE_EXT}))
 same => n,Set(CALLEE_DENOISE=${DB(AMPUSER/${CALLEE_EXT}/ai_denoise)})
 same => n,ExecIf($["${CALLEE_DENOISE}" = ""]?Set(CALLEE_EXT=${DB(DEVICE/${CALLEE_EXT}/user)}))
 same => n,ExecIf($["${CALLEE_DENOISE}" = ""]?Set(CALLEE_DENOISE=${DB(AMPUSER/${CALLEE_EXT}/ai_denoise)}))
