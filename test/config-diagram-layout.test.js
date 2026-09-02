@@ -106,7 +106,6 @@ test('config diagram renders view switcher and supports 4-quadrant radial topolo
     assert.ok(content.includes('function setDiagramViewMode('), 'Must define setDiagramViewMode');
     assert.ok(content.includes('function renderDiagramRadial()'), 'Must define renderDiagramRadial');
     assert.ok(content.includes('function renderDiagramPipeline()'), 'Must define renderDiagramPipeline');
-    assert.ok(content.includes('CORE ROUTING HUB'), 'Radial topology must render CORE ROUTING HUB central node');
 
     // Dedicated Config-Based Segmentation Area Headers (Every config type takes its own area)
     assert.ok(content.includes('EXTERNAL GATEWAYS (SIP TRUNKS)'), 'Must render External Gateways zone header');
