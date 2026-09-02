@@ -6121,11 +6121,13 @@ function isTabAllowed(tabName) {
                             if (d.bandpass) tags.push('G.711');
                             if (d.compand && d.compand !== 'off') tags.push(`Compand:${d.compand}`);
                             if (d.trimSilence) tags.push('Trimmed');
+                            if (d.enablePadLead && d.padLead > 0) tags.push(`Pre:${parseFloat(d.padLead).toFixed(2)}s`);
+                            if (d.enablePadTrail && d.padTrail > 0) tags.push(`Post:${parseFloat(d.padTrail).toFixed(2)}s`);
                             if (d.bass || d.treble) tags.push(`EQ:${d.bass > 0 ? '+' : ''}${d.bass || 0}B/${d.treble > 0 ? '+' : ''}${d.treble || 0}T`);
                             if (d.tempo && Math.abs(d.tempo - 1.0) >= 0.02) tags.push(`${parseFloat(d.tempo).toFixed(2)}x`);
                             if (d.generateCodecs) tags.push('Codecs');
                             if (tags.length > 0) {
-                                dspBadgesHtml = '<div class="flex flex-wrap gap-1 mt-1">' + tags.map(t => `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-purple-500/15 text-purple-300 border border-purple-500/25">${escapeHtml(t)}</span>`).join('') + '</div>';
+                                dspBadgesHtml = '<div class="flex flex-wrap gap-1 mt-1">' + tags.map(t => `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-black text-purple-200 bg-purple-900/60 hover:bg-purple-900/80 border border-purple-400/50 shadow-xs transition-colors">${escapeHtml(t)}</span>`).join('') + '</div>';
                             }
                         }
                         tr.innerHTML = `
