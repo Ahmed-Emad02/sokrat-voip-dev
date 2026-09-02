@@ -3432,24 +3432,35 @@ function isTabAllowed(tabName) {
                     </span>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                         <button type="button" onclick="applyDspPreset('dongle')" class="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15 text-left rtl:text-right transition cursor-pointer group">
-                            <span class="text-xs font-bold text-amber-400 block group-hover:underline">📱 <%= isRtl ? 'مخصص للدونجل' : 'GSM Dongle' %></span>
+                            <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5 group-hover:underline">
+                                <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                <%= isRtl ? 'مخصص للدونجل' : 'GSM Dongle' %>
+                            </span>
                             <span class="text-[10px] text-[var(--text-muted)] block mt-0.5"><%= isRtl ? 'هامش -18dB + فلتر G.711' : 'Norm -18dB + G.711 bandpass' %></span>
                         </button>
                         <button type="button" onclick="applyDspPreset('broadcast')" class="p-3 rounded-xl border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/15 text-left rtl:text-right transition cursor-pointer group">
-                            <span class="text-xs font-bold text-blue-400 block group-hover:underline">🎙️ <%= isRtl ? 'تسوية إذاعية' : 'Radio Leveler' %></span>
+                            <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5 group-hover:underline">
+                                <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                                <%= isRtl ? 'تسوية إذاعية' : 'Radio Leveler' %>
+                            </span>
                             <span class="text-[10px] text-[var(--text-muted)] block mt-0.5"><%= isRtl ? 'ضغط ديناميكي + تضخيم الصوت' : 'Compand + Bass/Treble boost' %></span>
                         </button>
                         <button type="button" onclick="applyDspPreset('clean')" class="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/15 text-left rtl:text-right transition cursor-pointer group">
-                            <span class="text-xs font-bold text-emerald-400 block group-hover:underline">✂️ <%= isRtl ? 'تنظيف وقص الصمت' : 'Clean & Trim' %></span>
+                            <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5 group-hover:underline">
+                                <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z"/></svg>
+                                <%= isRtl ? 'تنظيف وقص الصمت' : 'Clean & Trim' %>
+                            </span>
                             <span class="text-[10px] text-[var(--text-muted)] block mt-0.5"><%= isRtl ? 'قص الصمت + تلاشي ناعم' : 'Trim dead air + Fade in/out' %></span>
                         </button>
                         <button type="button" onclick="applyDspPreset('reset')" class="p-3 rounded-xl border border-red-500/30 bg-red-500/5 hover:bg-red-500/15 text-left rtl:text-right transition cursor-pointer group">
-                            <span class="text-xs font-bold text-red-400 block group-hover:underline">🔄 <%= isRtl ? 'الملف الأصلي الخام' : 'Reset to Master' %></span>
+                            <span class="text-xs font-bold text-red-400 flex items-center gap-1.5 group-hover:underline">
+                                <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                <%= isRtl ? 'الملف الأصلي الخام' : 'Reset to Master' %>
+                            </span>
                             <span class="text-[10px] text-[var(--text-muted)] block mt-0.5"><%= isRtl ? 'إلغاء جميع الفلاتر والمؤثرات' : 'Revert to untouched .orig.wav' %></span>
                         </button>
                     </div>
                 </div>
-
                 <!-- DSP Controls Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <!-- Column 1: Dynamics & Levels -->
@@ -6512,7 +6523,7 @@ function isTabAllowed(tabName) {
             };
 
             applyBtn.disabled = true;
-            applyBtn.innerHTML = `<span class="inline-block animate-spin">⏳</span> <span>${isRtl ? 'جاري معالجة الصوت...' : 'Processing audio...'}</span>`;
+            applyBtn.innerHTML = `<svg class="animate-spin h-3.5 w-3.5 text-white inline-block shrink-0 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> <span>${isRtl ? 'جاري معالجة الصوت...' : 'Processing audio...'}</span>`;
 
             try {
                 const res = await fetch(`/api/config/recordings/${id}/dsp`, {
@@ -9338,14 +9349,16 @@ function isTabAllowed(tabName) {
                 } else if (node.type === 'extension') {
                     const ext = node.data;
                     const isWebRtc = (ext.tech || '').toLowerCase() === 'pjsip';
-                    const deviceGlyph = isWebRtc ? '💻' : '📞';
+                    const deviceSvg = isWebRtc
+                        ? `<span class="ml-auto text-blue-300 inline-flex items-center" title="WebRTC Softphone"><svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg></span>`
+                        : `<span class="ml-auto text-blue-300 inline-flex items-center" title="Desk Phone"><svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg></span>`;
                     cardBodyHTML = `
                         <div class="flex items-center gap-2.5 min-w-0">
                             <div class="p-2 rounded-lg ${theme.iconBg} shrink-0">${svgIcon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5">
                                     <span class="text-xs font-black text-white truncate">${node.title}</span>
-                                    <span class="text-xs ml-auto" title="${isWebRtc ? 'WebRTC Softphone' : 'Desk Phone'}">${deviceGlyph}</span>
+                                    ${deviceSvg}
                                 </div>
                                 <div class="text-[10px] text-gray-200 truncate font-semibold mt-0.5">${node.subtitle}</div>
                             </div>
@@ -9368,7 +9381,7 @@ function isTabAllowed(tabName) {
                         </div>
                         <div class="mt-2 text-[10px] font-semibold space-y-0.5 p-2 rounded border ${theme.innerBorder} font-mono" style="background-color: ${theme.innerBg} !important; color: #ffffff !important;">
                             <div class="flex justify-between"><span>Patterns:</span> <span class="${theme.accentText} font-bold">${patterns.slice(0, 2).join(', ') || 'Any'}</span></div>
-                            <div class="flex justify-between"><span>Trunks:</span> <span class="text-white truncate max-w-[140px]">${(route.trunks || []).map(t => t.name || t.trunk_name).join(' ➜ ') || 'None'}</span></div>
+                            <div class="flex justify-between"><span>Trunks:</span> <span class="text-white truncate max-w-[140px]">${(route.trunks || []).map(t => t.name || t.trunk_name).join(' → ') || 'None'}</span></div>
                         </div>
                     `;
                 } else if (node.type === 'trunk') {
@@ -9991,14 +10004,16 @@ function isTabAllowed(tabName) {
                 } else if (node.type === 'extension') {
                     const ext = node.data;
                     const isWebRtc = (ext.tech || '').toLowerCase() === 'pjsip';
-                    const deviceGlyph = isWebRtc ? '💻' : '📞';
+                    const deviceSvg = isWebRtc
+                        ? `<span class="ml-auto text-blue-300 inline-flex items-center" title="WebRTC Softphone"><svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg></span>`
+                        : `<span class="ml-auto text-blue-300 inline-flex items-center" title="Desk Phone"><svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg></span>`;
                     cardBodyHTML = `
                         <div class="flex items-center gap-2.5 min-w-0">
                             <div class="p-2 rounded-lg ${theme.iconBg} shrink-0">${svgIcon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5">
                                     <span class="text-xs font-black text-white truncate" style="color: #ffffff !important;">${node.title}</span>
-                                    <span class="text-xs ml-auto" title="${isWebRtc ? 'WebRTC Softphone' : 'Desk Phone'}">${deviceGlyph}</span>
+                                    ${deviceSvg}
                                 </div>
                                 <div class="text-[10px] text-gray-200 truncate font-semibold mt-0.5" style="color: #f1f5f9 !important;">${node.subtitle}</div>
                             </div>
@@ -10021,7 +10036,7 @@ function isTabAllowed(tabName) {
                         </div>
                         <div class="mt-2 text-[10px] font-semibold space-y-0.5 p-2 rounded border ${theme.innerBorder} font-mono" style="background-color: ${theme.innerBg} !important; color: #ffffff !important;">
                             <div class="flex justify-between"><span>Patterns:</span> <span class="${theme.accentText} font-bold">${patterns.slice(0, 2).join(', ') || 'Any'}</span></div>
-                            <div class="flex justify-between"><span>Trunks:</span> <span class="text-white truncate max-w-[140px]" style="color: #ffffff !important;">${(route.trunks || []).map(t => t.name || t.trunk_name).join(' ➜ ') || 'None'}</span></div>
+                            <div class="flex justify-between"><span>Trunks:</span> <span class="text-white truncate max-w-[140px]" style="color: #ffffff !important;">${(route.trunks || []).map(t => t.name || t.trunk_name).join(' → ') || 'None'}</span></div>
                         </div>
                     `;
                 } else if (node.type === 'trunk') {
@@ -10455,13 +10470,13 @@ function isTabAllowed(tabName) {
                         
                         rulesHTML += `
                             <div class="inline-flex flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-mono my-1 mr-1.5">
-                                <span class="text-indigo-400 font-bold">🕐 ${timeStr}</span>
+                                <span class="text-indigo-400 font-bold inline-flex items-center gap-1"><svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${timeStr}</span>
                                 <span class="text-indigo-500/50">•</span>
-                                <span>📅 ${weekdayStr}</span>
+                                <span class="inline-flex items-center gap-1"><svg class="w-3 h-3 shrink-0 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${weekdayStr}</span>
                                 <span class="text-indigo-500/50">•</span>
-                                <span>📆 ${monthdayStr}</span>
+                                <span class="inline-flex items-center gap-1"><svg class="w-3 h-3 shrink-0 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>${monthdayStr}</span>
                                 <span class="text-indigo-500/50">•</span>
-                                <span>🗓️ ${monthStr}</span>
+                                <span class="inline-flex items-center gap-1"><svg class="w-3 h-3 shrink-0 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${monthStr}</span>
                             </div>
                         `;
                     });
