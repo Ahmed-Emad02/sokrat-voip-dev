@@ -1225,12 +1225,12 @@ function isTabAllowed(tabName) {
                     <div class="flex items-center gap-2 flex-wrap">
                         <!-- View Mode Switcher: Radial Topology vs Pipeline Flow -->
                         <div class="inline-flex items-center p-0.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1 shadow-sm shrink-0">
-                            <button type="button" id="btnDiagramViewRadial" onclick="setDiagramViewMode('radial')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="22"/><line x1="2" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="22" y2="12"/></svg>
+                            <button type="button" id="btnDiagramViewRadial" onclick="setDiagramViewMode('radial')" class="px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer bg-purple-600 text-white border border-purple-400 shadow-md">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="22"/><line x1="2" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="22" y2="12"/></svg>
                                 <span><%= isRtl ? 'المخطط الدائري (Radial)' : 'Radial Topology' %></span>
                             </button>
-                            <button type="button" id="btnDiagramViewPipeline" onclick="setDiagramViewMode('pipeline')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-muted)] hover:text-white border border-transparent">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h7"/></svg>
+                            <button type="button" id="btnDiagramViewPipeline" onclick="setDiagramViewMode('pipeline')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)] border border-transparent">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 6h16M4 12h16M4 18h7"/></svg>
                                 <span><%= isRtl ? 'مخطط التدفق (Pipeline)' : 'Pipeline Flow' %></span>
                             </button>
                         </div>
@@ -9649,11 +9649,11 @@ function isTabAllowed(tabName) {
             if (!btnRadial || !btnPipeline) return;
 
             if (diagramViewMode === 'radial') {
-                btnRadial.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm';
-                btnPipeline.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-muted)] hover:text-white border border-transparent';
+                btnRadial.className = 'px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer bg-purple-600 text-white border border-purple-400 shadow-md';
+                btnPipeline.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)] border border-transparent';
             } else {
-                btnPipeline.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm';
-                btnRadial.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-muted)] hover:text-white border border-transparent';
+                btnPipeline.className = 'px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer bg-blue-600 text-white border border-blue-400 shadow-md';
+                btnRadial.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)] border border-transparent';
             }
         }
 
