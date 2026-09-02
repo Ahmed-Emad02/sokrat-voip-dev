@@ -1130,6 +1130,20 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             </div>
 
             <div class="flex flex-wrap items-center gap-2.5">
+                <div class="inline-flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1">
+                    <button type="button" id="btn-view-grid" onclick="setDongleViewMode('grid')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        <span><%= t.viewGrid %></span>
+                    </button>
+                    <button type="button" id="btn-view-minimal" onclick="setDongleViewMode('minimal')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                        <span><%= t.viewMinimal %></span>
+                    </button>
+                </div>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold">
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <%= isRtl ? 'تحديث مباشر' : 'Live status' %>
+                </span>
                 <div class="px-3 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
                     <span class="text-[9px] uppercase tracking-wider text-[var(--text-muted)] block"><%= isRtl ? 'الأجهزة' : 'Devices' %></span>
                     <span id="gsm-device-total" class="text-sm font-black text-[var(--text-primary)] font-mono">0</span>
@@ -1153,32 +1167,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         <div class="flex flex-col gap-6 mb-6">
             <!-- Responsive GSM Dongle Fleet -->
             <section class="panel-surface rounded-2xl overflow-hidden shrink-0">
-                <div class="px-5 sm:px-6 py-4 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/20">
-                    <div>
-                        <h3 class="text-base font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                            <svg class="text-[var(--accent-color)]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 17h16M7 13h10M10 9h4M12 5v.01"/>
-                            </svg>
-                            <%= isRtl ? 'أجهزة GSM النشطة' : 'GSM Dongle Fleet' %>
-                        </h3>
-                    </div>
-                    <div class="flex items-center gap-2.5 flex-wrap">
-                        <div class="inline-flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1">
-                            <button type="button" id="btn-view-grid" onclick="setDongleViewMode('grid')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                                <span><%= t.viewGrid %></span>
-                            </button>
-                            <button type="button" id="btn-view-minimal" onclick="setDongleViewMode('minimal')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-                                <span><%= t.viewMinimal %></span>
-                            </button>
-                        </div>
-                        <span class="inline-flex self-start sm:self-auto items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold">
-                            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                            <%= isRtl ? 'تحديث مباشر' : 'Live status' %>
-                        </span>
-                    </div>
-                </div>
 
                 <!-- Action Buttons & Dongle State Legend -->
                 <div class="px-5 sm:px-6 py-3 bg-[var(--bg-card)]/80 border-b border-[var(--border-primary)]">
