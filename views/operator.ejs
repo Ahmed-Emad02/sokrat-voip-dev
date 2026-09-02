@@ -1496,28 +1496,107 @@ const isRtl = currentLang === 'ar';
             });
 
             function insertionBoundary(grid, x, y) {
-                let closest = null;
-                let closestDist = Infinity;
-                grid.querySelectorAll('article[id^="card-"]').forEach(card => {
-                    if (card === draggedCard) return;
-                    const box = card.getBoundingClientRect();
-                    const dx = x - (box.left + box.width / 2);
-                    const dy = y - (box.top + box.height / 2);
-                    const dist = Math.hypot(dx, dy);
-                    if (dist < closestDist) { closest = { card, dx, dy }; closestDist = dist; }
-                });
-                if (!closest) return null;
+                const cards = Array.from(grid.querySelectorAll('article[id^="card-"]'));
+                if (cards.length === 0) return null;
+                if (cards.length === 1 && cards[0] === draggedCard) return null;
+
                 const rtl = document.documentElement.dir === 'rtl';
-                const insertBefore = Math.abs(closest.dy) > Math.abs(closest.dx)
-                    ? closest.dy < 0
-                    : (rtl ? closest.dx > 0 : closest.dx < 0);
-                return insertBefore ? closest.card : closest.card.nextSibling;
+
+                // Partition cards in this grid into visual rows based on vertical overlap
+                const rows = [];
+                cards.forEach(card => {
+                    const box = card.getBoundingClientRect();
+                    const midY = (box.top + box.bottom) / 2;
+                    let row = rows.find(r => Math.abs(r.midY - midY) < box.height * 0.45);
+                    if (!row) {
+                        row = { top: box.top, bottom: box.bottom, midY, cards: [] };
+                        rows.push(row);
+                    } else {
+                        row.top = Math.min(row.top, box.top);
+                        row.bottom = Math.max(row.bottom, box.bottom);
+                        row.midY = (row.top + row.bottom) / 2;
+                    }
+                    row.cards.push({ card, box });
+                });
+
+                rows.sort((a, b) => a.midY - b.midY);
+                if (rows.length === 0) return null;
+
+                // Sort cards within each row by horizontal reading order
+                rows.forEach(r => {
+                    r.cards.sort((a, b) => rtl ? (b.box.left - a.box.left) : (a.box.left - b.box.left));
+                });
+
+                const firstRow = rows[0];
+                const lastRow = rows[rows.length - 1];
+
+                // If cursor is above the first row, insert before first card of first row
+                if (y < firstRow.top) {
+                    const firstCard = firstRow.cards[0].card;
+                    return firstCard === draggedCard ? firstCard.nextSibling : firstCard;
+                }
+
+                // If cursor is below the last row, append at end of grid
+                if (y > lastRow.bottom) {
+                    return null;
+                }
+
+                // Identify target row with gap-bridging midpoints
+                let targetRow = null;
+                for (let i = 0; i < rows.length; i++) {
+                    const r = rows[i];
+                    const nextRow = rows[i + 1];
+                    const rowBottom = nextRow ? (r.bottom + nextRow.top) / 2 : r.bottom + 20;
+                    const prevRow = rows[i - 1];
+                    const rowTop = prevRow ? (prevRow.bottom + r.top) / 2 : r.top - 20;
+
+                    if (y >= rowTop && y <= rowBottom) {
+                        targetRow = r;
+                        break;
+                    }
+                }
+                if (!targetRow) targetRow = lastRow;
+
+                // Determine horizontal slot within targetRow using directional hysteresis deadband
+                const rowCards = targetRow.cards;
+                const draggedIdx = rowCards.findIndex(item => item.card === draggedCard);
+
+                for (let i = 0; i < rowCards.length; i++) {
+                    const item = rowCards[i];
+                    if (item.card === draggedCard) continue;
+
+                    const box = item.box;
+                    const midX = (box.left + box.right) / 2;
+                    const deadband = box.width * 0.20; // 20% width hysteresis margin prevents oscillation
+
+                    let threshold = midX;
+                    if (draggedIdx !== -1) {
+                        if (draggedIdx < i) {
+                            threshold = rtl ? midX - deadband : midX + deadband;
+                        } else {
+                            threshold = rtl ? midX + deadband : midX - deadband;
+                        }
+                    }
+
+                    const isBefore = rtl ? x > threshold : x < threshold;
+                    if (isBefore) {
+                        return item.card === draggedCard ? item.card.nextSibling : item.card;
+                    }
+                }
+
+                // Cursor is past all cards in targetRow
+                const targetRowIdx = rows.indexOf(targetRow);
+                if (targetRowIdx < rows.length - 1) {
+                    const nextRowCard = rows[targetRowIdx + 1].cards[0].card;
+                    return nextRowCard === draggedCard ? nextRowCard.nextSibling : nextRowCard;
+                }
+
+                return null;
             }
 
             // Insertion jobs are batched to one per animation frame and flip-suppressed:
-            // when the cursor rests near an unstable boundary (e.g. swapping with a
-            // corner card), consecutive dragover events would otherwise alternate the
-            // insertion point several times per second, which reads as visual flicker.
+            // when the cursor rests near an unstable boundary, directional hysteresis and
+            // frame-coalescing prevent visual clipping/flickering.
             const FLIP_SUPPRESS_MS = 90;
             const FLIP_TRAVEL_PX = 6;
             let pendingDropJob = null;
