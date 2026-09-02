@@ -6603,10 +6603,29 @@ function startUssdLogMonitor() {
             const dongleId = atMatch[2].trim();
             let text = atMatch[3].trim();
             text = text.replace(/'$/, '').trim();
-            latestAtResponses[dongleId] = {
-                text: text,
-                timestamp: Date.now()
-            };
+
+            // Ignore unsolicited Huawei modem indications (^RSSI, ^MODE, ^DSFLOWRPT, ^BOOT, etc.)
+            if (text.startsWith('^')) {
+                return;
+            }
+
+            const isTerminal = /^(OK|ERROR|\+CME ERROR:.*|\+CMS ERROR:.*)$/m.test(text);
+            const prev = latestAtResponses[dongleId];
+            if (!prev || prev.completed || (Date.now() - prev.timestamp > 15000)) {
+                latestAtResponses[dongleId] = {
+                    text: text,
+                    lines: [text],
+                    timestamp: Date.now(),
+                    completed: isTerminal
+                };
+            } else {
+                prev.lines.push(text);
+                prev.text = prev.lines.join('\n');
+                prev.timestamp = Date.now();
+                if (isTerminal) {
+                    prev.completed = true;
+                }
+            }
         }
     }
 
@@ -6658,23 +6677,49 @@ const { spawn } = require('child_process');
 startUssdLogMonitor();
 
 
+// --- 3GPP TS 22.030 / TS 27.007 CALL FORWARDING MMI TRANSLATION ENGINE ---
+const {
+    parseMmiCallForwardingDetails,
+    parseMmiCallForwarding,
+    buildCallForwardingAtCommand,
+    formatCcfcResponse
+} = require('./lib/dongle-call-forwarding');
+
+// Ensure modems use numeric error reporting once on server startup
+try {
+    execFile(ASTERISK_BIN, ['-rx', 'dongle cmd dongle0 AT+CMEE=1'], () => {});
+    execFile(ASTERISK_BIN, ['-rx', 'dongle cmd dongle1 AT+CMEE=1'], () => {});
+} catch (_) {}
+
 function sendAtAndWait(dongleId, atCmd, timeoutMs, callback) {
     delete latestAtResponses[dongleId];
-    execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} ${atCmd}`], (err) => {
-        if (err) return callback({ error: err.message });
+    // Escape double quotes for Asterisk CLI argument
+    const cliAtCmd = String(atCmd || '').replace(/"/g, '\\"');
+    execFile(ASTERISK_BIN, ['-rx', `dongle cmd ${dongleId} ${cliAtCmd}`], (err) => {
+        if (err) return callback({ error: err.message, output: '' });
         const start = Date.now();
         function poll() {
             const resp = latestAtResponses[dongleId];
             if (resp) {
-                delete latestAtResponses[dongleId];
-                const text = resp.text || '';
-                const isOk = /OK/i.test(text) || text.includes('+CPBW');
-                return callback({ error: isOk ? null : ('AT response: ' + text), output: text });
+                if (resp.completed || (Date.now() - start >= 2500)) {
+                    delete latestAtResponses[dongleId];
+                    const text = resp.text || '';
+                    const isOk = /OK/i.test(text) || text.includes('+CPBW') || text.includes('+CCFC:');
+                    const isError = (/ERROR/i.test(text) && !text.includes('+CCFC:'));
+                    return callback({ error: isError ? ('AT response: ' + text) : null, output: text });
+                }
             }
-            if (Date.now() - start >= timeoutMs) return callback({ error: 'timeout', output: '' });
-            setTimeout(poll, 400);
+            if (Date.now() - start >= timeoutMs) {
+                const lastResp = latestAtResponses[dongleId];
+                delete latestAtResponses[dongleId];
+                if (lastResp && lastResp.text) {
+                    return callback({ error: null, output: lastResp.text });
+                }
+                return callback({ error: 'timeout', output: '' });
+            }
+            setTimeout(poll, 300);
         }
-        setTimeout(poll, 1500);
+        setTimeout(poll, 400);
     });
 }
 
@@ -7562,7 +7607,7 @@ app.post('/api/storage/purge', requireAuth, requireTabPermission('storage'), asy
     }
 });
 
-// API Endpoint to send USSD request
+// API Endpoint to send USSD request (with transparent MMI Call Forwarding support)
 app.post('/api/gsm-dongles/ussd', async (req, res) => {
     const { dongle, code } = req.body;
     if (!dongle || !code) {
@@ -7581,6 +7626,42 @@ app.post('/api/gsm-dongles/ussd', async (req, res) => {
         if (!isAllowed) {
             return res.status(403).json({ success: false, error: "Forbidden: You can only execute USSD requests on your assigned dongle." });
         }
+    }
+
+    // Check if the code is a Call Forwarding MMI code (e.g. **21*...#, *#21#, ##21#, etc.)
+    const mmiDetails = parseMmiCallForwardingDetails(code);
+    if (mmiDetails) {
+        sendAtAndWait(dongle, mmiDetails.atCmd, 15000, (atResult) => {
+            const rawOutput = (atResult && atResult.output) || '';
+            const errorMsg = atResult && atResult.error;
+            const logTime = new Date().toLocaleTimeString();
+
+            const formattedText = formatCcfcResponse(
+                rawOutput || errorMsg || '',
+                mmiDetails.serviceCode,
+                mmiDetails.action,
+                mmiDetails.number
+            );
+
+            const isSuccess = !errorMsg && !rawOutput.includes('ERROR') && (
+                rawOutput.includes('OK') || rawOutput.includes('+CCFC:')
+            );
+
+            io.emit('ussdResponse', {
+                dongleId: dongle,
+                text: formattedText,
+                logTime
+            });
+
+            return res.json({
+                success: isSuccess,
+                response: formattedText,
+                rawAtResponse: rawOutput,
+                error: isSuccess ? null : formattedText,
+                logTime
+            });
+        });
+        return;
     }
     
     // Clear previous response for this dongle
@@ -7619,6 +7700,69 @@ app.post('/api/gsm-dongles/ussd', async (req, res) => {
         
         setTimeout(checkResponse, pollInterval);
     });
+});
+
+// Dedicated API Endpoint for structured Call Forwarding operations
+app.post('/api/gsm-dongles/call-forwarding', async (req, res) => {
+    try {
+        const { dongle, scenario, action, number, delay } = req.body;
+        if (!dongle) {
+            return res.status(400).json({ success: false, error: "Dongle ID is required" });
+        }
+        if (!/^dongle[0-9]+$/.test(dongle)) {
+            return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
+        }
+        const allowedDongles = await getUserAllowedDongles(req);
+        if (allowedDongles !== null) {
+            const reqDongle = String(dongle).toLowerCase().trim();
+            if (!allowedDongles.includes(reqDongle)) {
+                return res.status(403).json({ success: false, error: "Forbidden: Access denied to this dongle." });
+            }
+        }
+
+        let cmdDetails;
+        try {
+            cmdDetails = buildCallForwardingAtCommand({ scenario, action, number, delay });
+        } catch (e) {
+            return res.status(400).json({ success: false, error: e.message });
+        }
+
+        sendAtAndWait(dongle, cmdDetails.atCmd, 15000, (atResult) => {
+            const rawOutput = (atResult && atResult.output) || '';
+            const errorMsg = atResult && atResult.error;
+            const logTime = new Date().toLocaleTimeString();
+
+            const formattedText = formatCcfcResponse(
+                rawOutput || errorMsg || '',
+                cmdDetails.scenario,
+                cmdDetails.action,
+                cmdDetails.number
+            );
+
+            const isSuccess = !errorMsg && !rawOutput.includes('ERROR') && (
+                rawOutput.includes('OK') || rawOutput.includes('+CCFC:')
+            );
+
+            io.emit('ussdResponse', {
+                dongleId: dongle,
+                text: formattedText,
+                logTime
+            });
+
+            return res.json({
+                success: isSuccess,
+                message: formattedText,
+                mmiCode: cmdDetails.mmiCode,
+                atCommand: cmdDetails.atCmd,
+                rawOutput,
+                error: isSuccess ? null : formattedText,
+                logTime
+            });
+        });
+    } catch (err) {
+        console.error("GSM CALL FORWARDING ERROR:", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 
@@ -9343,6 +9487,57 @@ app.delete('/api/config/queues/:extension', async (req, res) => {
 
 // --- SYSTEM RECORDINGS MANAGEMENT APIs ---
 
+async function adjustRecordingVolume(recId, filename, gainDb) {
+    const cleanRel = String(filename || '').trim();
+    if (!cleanRel) throw new Error('Invalid recording filename.');
+    const relBase = cleanRel.endsWith('.wav') ? cleanRel.slice(0, -4) : cleanRel;
+    const soundsDir = '/var/lib/asterisk/sounds';
+    const wavPath = path.join(soundsDir, relBase + '.wav');
+    const origPath = path.join(soundsDir, relBase + '.orig.wav');
+
+    if (!fs.existsSync(wavPath) && !fs.existsSync(origPath)) {
+        throw new Error('Recording file not found on disk.');
+    }
+
+    // Ensure pristine original backup exists before any modification
+    if (!fs.existsSync(origPath)) {
+        if (fs.existsSync(wavPath)) {
+            fs.copyFileSync(wavPath, origPath);
+        } else {
+            throw new Error('Original audio source missing.');
+        }
+    }
+
+    const targetGain = Math.max(-50, Math.min(20, parseInt(gainDb, 10) || 0));
+    const tmpWav = path.join('/tmp', `rec_adj_${recId}_${Date.now()}.wav`);
+
+    if (targetGain === 0) {
+        fs.copyFileSync(origPath, wavPath);
+    } else {
+        await new Promise((resolve, reject) => {
+            const cmd = `sox "${origPath}" -r 8000 -c 1 -b 16 "${tmpWav}" vol ${targetGain} dB`;
+            const { exec: execCb } = require('child_process');
+            execCb(cmd, (err, stdout, stderr) => {
+                if (err) return reject(new Error(`SoX volume adjustment failed: ${stderr || err.message}`));
+                resolve();
+            });
+        });
+        fs.copyFileSync(tmpWav, wavPath);
+        try { fs.unlinkSync(tmpWav); } catch (_) {}
+    }
+
+    try {
+        const { execSync: execSyncFn } = require('child_process');
+        execSyncFn(`chown asterisk:asterisk "${wavPath}" "${origPath}" 2>/dev/null; chmod 664 "${wavPath}" "${origPath}" 2>/dev/null`);
+    } catch (_) {}
+
+    try {
+        await execFileAsync(ASTERISK_BIN, ['-rx', `database put RECORDINGS ${recId}/gain ${targetGain}`]);
+    } catch (_) {}
+
+    return targetGain;
+}
+
 // GET /api/config/recordings - List all system recordings
 app.get('/api/config/recordings', async (req, res) => {
     try {
@@ -9352,10 +9547,52 @@ app.get('/api/config/recordings', async (req, res) => {
             WHERE displayname != '__invalid'
             ORDER BY id DESC
         `);
-        const cleanRecordings = recordings.map(r => ({ ...r, filename: String(r.filename) }));
+
+        let astdbGains = {};
+        try {
+            const astdbOutput = await execFileAsync(ASTERISK_BIN, ['-rx', 'database show RECORDINGS']);
+            for (const line of (astdbOutput || '').split('\n')) {
+                const m = line.match(/\/RECORDINGS\/(\d+)\/gain\s*:\s*(-?\d+)/);
+                if (m) astdbGains[m[1]] = parseInt(m[2], 10);
+            }
+        } catch (_) {}
+
+        const cleanRecordings = recordings.map(r => ({
+            ...r,
+            filename: String(r.filename),
+            gain_db: astdbGains[r.id] !== undefined ? astdbGains[r.id] : 0
+        }));
         res.json({ success: true, recordings: cleanRecordings });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/config/recordings/:id/volume - Adjust recording audio volume / headroom
+app.post('/api/config/recordings/:id/volume', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ success: false, error: 'Invalid recording ID.' });
+
+        const gainDb = parseInt(req.body.gainDb, 10);
+        if (isNaN(gainDb) || gainDb < -50 || gainDb > 20) {
+            return res.status(400).json({ success: false, error: 'Gain must be an integer between -50 dB and +20 dB.' });
+        }
+
+        const [rows] = await pool.query('SELECT CAST(filename AS CHAR) AS filename, displayname FROM `asterisk`.`recordings` WHERE id = ?', [id]);
+        if (!rows.length || !rows[0].filename) return res.status(404).json({ success: false, error: 'Recording not found.' });
+
+        const relFile = String(rows[0].filename);
+        const appliedGain = await adjustRecordingVolume(id, relFile, gainDb);
+
+        res.json({
+            success: true,
+            id,
+            gainDb: appliedGain,
+            message: `Volume for "${rows[0].displayname || relFile}" updated to ${appliedGain > 0 ? '+' : ''}${appliedGain} dB.`
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
@@ -9370,11 +9607,16 @@ app.delete('/api/config/recordings/:id', async (req, res) => {
             const relFile = String(rows[0].filename);
             if (relFile) {
                 const soundPath = path.join('/var/lib/asterisk/sounds', relFile + '.wav');
+                const origPath = path.join('/var/lib/asterisk/sounds', relFile + '.orig.wav');
                 if (fs.existsSync(soundPath)) {
                     try { fs.unlinkSync(soundPath); } catch (e) {}
                 }
+                if (fs.existsSync(origPath)) {
+                    try { fs.unlinkSync(origPath); } catch (e) {}
+                }
             }
             await pool.query('DELETE FROM `asterisk`.`recordings` WHERE id = ?', [id]);
+            try { await execFileAsync(ASTERISK_BIN, ['-rx', `database deltree RECORDINGS/${id}`]); } catch (_) {}
         }
         res.json({ success: true, message: 'Recording deleted successfully.' });
     } catch (error) {
@@ -13697,13 +13939,20 @@ function convertToWav(inputPath, outputPath) {
     });
 }
 
-async function saveRecordingToFS(wavPath, recordingName) {
+async function saveRecordingToFS(wavPath, recordingName, initialGainDb = 0) {
     const safeName = recordingName.replace(/[^a-zA-Z0-9_-]/g, '_');
     const destDir = '/var/lib/asterisk/sounds/custom';
     const destPath = destDir + '/' + safeName + '.wav';
+    const origPath = destDir + '/' + safeName + '.orig.wav';
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
     fs.copyFileSync(wavPath, destPath);
+    fs.copyFileSync(wavPath, origPath);
     fs.unlinkSync(wavPath);
+
+    try {
+        const { execSync: execSyncFn } = require('child_process');
+        execSyncFn(`chown asterisk:asterisk "${destPath}" "${origPath}" 2>/dev/null; chmod 664 "${destPath}" "${origPath}" 2>/dev/null`);
+    } catch (_) {}
 
     // Insert into recordings table
     const conn = await mysql.createConnection({
@@ -13713,11 +13962,21 @@ async function saveRecordingToFS(wavPath, recordingName) {
         database: ASTERISK_DB
     });
     const displayName = recordingName.replace(/[_]/g, ' ');
-    await conn.execute(
+    const [res] = await conn.execute(
         'INSERT INTO recordings (displayname, filename) VALUES (?, ?)',
         [displayName, 'custom/' + safeName]
     );
+    const newId = res.insertId;
     await conn.end();
+
+    const gainVal = parseInt(initialGainDb, 10);
+    if (newId && Number.isFinite(gainVal) && gainVal !== 0) {
+        try {
+            await adjustRecordingVolume(newId, 'custom/' + safeName, gainVal);
+        } catch (e) {
+            console.error('Failed to apply initial volume headroom:', e.message);
+        }
+    }
 
     // Reload Asterisk so it picks up the new sound
     require('child_process').exec('/usr/sbin/asterisk -rx "module reload sounds"', () => {});
@@ -13735,6 +13994,7 @@ app.post('/api/settings/recordings/upload', (req, res) => {
         }
         if (!req.file) return res.status(400).json({ success: false, error: 'No file provided' });
         const recordingName = req.body.name || path.basename(req.file.originalname, path.extname(req.file.originalname));
+        const gainDb = req.body.gainDb !== undefined ? parseInt(req.body.gainDb, 10) : 0;
 
         const rawPath = req.file.path;
         const safeName = recordingName.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -13747,7 +14007,7 @@ app.post('/api/settings/recordings/upload', (req, res) => {
             fs.unlinkSync(rawPath);
 
             // Save to Issabel filesystem + DB
-            await saveRecordingToFS(wavPath, recordingName);
+            await saveRecordingToFS(wavPath, recordingName, gainDb);
 
             res.json({ success: true, message: 'Recording "' + recordingName + '" uploaded successfully.' });
         } catch (convErr) {
@@ -14273,4 +14533,16 @@ app.get('/embed/crm/live', async (req, res) => {
         res.status(500).send('Embed Error: ' + err.message);
     }
 });
-server.listen(PORT, () => console.log(`Real-Time Enterprise Engine active on port ${PORT}`));
+if (require.main === module) {
+    server.listen(PORT, () => console.log(`Real-Time Enterprise Engine active on port ${PORT}`));
+}
+
+module.exports = {
+    app,
+    server,
+    parseMmiCallForwarding,
+    parseMmiCallForwardingDetails,
+    buildCallForwardingAtCommand,
+    formatCcfcResponse,
+    sendAtAndWait
+};

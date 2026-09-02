@@ -860,6 +860,21 @@ chmod +x /var/lib/asterisk/agi-bin/hijack_call.py
 chown asterisk:asterisk /var/lib/asterisk/agi-bin/hijack_call.py
 chmod +x "$INSTALL_DIR/scripts/trigger-intercom-code.js" 2>/dev/null || true
 echo "  hijack_call.py and scripts initialized."
+echo "  Initializing custom sound recordings directory and original master backups..."
+mkdir -p /var/lib/asterisk/sounds/custom
+chown -R asterisk:asterisk /var/lib/asterisk/sounds/custom 2>/dev/null || true
+chmod 775 /var/lib/asterisk/sounds/custom 2>/dev/null || true
+
+for wav in /var/lib/asterisk/sounds/custom/*.wav; do
+    [ -f "$wav" ] || continue
+    [[ "$wav" == *.orig.wav ]] && continue
+    orig="${wav%.wav}.orig.wav"
+    if [ ! -f "$orig" ]; then
+        cp "$wav" "$orig"
+        chown asterisk:asterisk "$orig" 2>/dev/null || true
+        chmod 664 "$orig" 2>/dev/null || true
+    fi
+done
 # Strip old [from-dongle-custom] and [ext-moh] before appending (ensures upgrades get the latest version)
 echo "  Stripping old [from-dongle-custom] and [ext-moh]..."
 python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\[from-dongle-custom\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);f=re.sub(r'\[ext-moh\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"

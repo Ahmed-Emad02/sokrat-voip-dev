@@ -799,47 +799,65 @@ function isTabAllowed(tabName) {
                             <label for="sysRecName" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم التسجيل (Display Name) *' : 'Recording Name *' %></label>
                             <input type="text" id="sysRecName" required placeholder="e.g. Welcome Announcement" class="config-input w-full">
                         </div>
+                         <div>
+                             <label for="sysRecFile" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'ملف الصوت *' : 'Audio File *' %></label>
+                             <input type="file" id="sysRecFile" accept="audio/*,.mpeg,.mpg" required class="w-full text-xs text-[var(--text-secondary)] file:mr-3 rtl:file:mr-0 rtl:file:ml-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-[var(--border-primary)] file:bg-[var(--bg-card)] file:text-xs file:font-bold file:text-[var(--text-primary)] hover:file:bg-[var(--bg-hover)] file:cursor-pointer transition cursor-pointer">
+                         </div>
                         <div>
-                            <label for="sysRecFile" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'ملف الصوت *' : 'Audio File *' %></label>
-                            <input type="file" id="sysRecFile" accept="audio/*,.mpeg,.mpg" required class="w-full text-xs text-[var(--text-secondary)] file:mr-3 rtl:file:mr-0 rtl:file:ml-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-[var(--border-primary)] file:bg-[var(--bg-card)] file:text-xs file:font-bold file:text-[var(--text-primary)] hover:file:bg-[var(--bg-hover)] file:cursor-pointer transition cursor-pointer">
+                            <label for="sysRecGain" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'مستوى الصوت الأولي / الهامش' : 'Initial Volume / Headroom' %></label>
+                            <select id="sysRecGain" class="config-input w-full text-xs">
+                                <option value="6">+6 dB</option>
+                                <option value="0"><%= isRtl ? '0 dB (المستوى القياسي الأصلي)' : '0 dB (Standard / Original)' %></option>
+                                <option value="-6">-6 dB</option>
+                                <option value="-12">-12 dB</option>
+                                <option value="-18" selected><%= isRtl ? '-18 dB (موصى به لبوابات GSM والدونجل)' : '-18 dB (Recommended for GSM Dongles)' %></option>
+                                <option value="-24">-24 dB</option>
+                                <option value="-30">-30 dB</option>
+                                <option value="-36">-36 dB</option>
+                                <option value="-42">-42 dB</option>
+                            </select>
+                            <span class="text-[10px] text-[var(--text-muted)] mt-1 block">
+                                <%= isRtl ? 'يمنع تشويش وتكسير الصوت عند تشغيل التسجيل في IVR عبر الدونجل.' : 'Prevents voice distortion when played through GSM dongles with high volume gain.' %>
+                            </span>
                         </div>
-                        <!-- Upload Progress Bar -->
-                        <div id="sysRecProgressWrap" class="hidden space-y-1">
-                            <div class="flex justify-between text-[11px] font-semibold text-[var(--text-muted)]">
-                                <span id="sysRecStatus">Uploading & converting...</span>
-                                <span id="sysRecPercent">0%</span>
-                            </div>
-                            <div class="w-full h-1.5 bg-[var(--bg-card)] rounded-full overflow-hidden">
-                                <div id="sysRecProgressBar" class="h-full bg-[var(--accent-color)] rounded-full transition-all duration-300" style="width:0%"></div>
-                            </div>
-                        </div>
-                        <button type="submit" id="sysRecSubmitBtn" class="config-btn-primary w-full py-2.5 text-xs flex items-center justify-center gap-2 cursor-pointer">
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                            <span><%= isRtl ? 'رفع وحفظ التسجيل' : 'Upload Recording' %></span>
-                        </button>
-                    </form>
-                </div>
-
-                <!-- Existing Recordings List Table -->
-                <div class="config-card p-6 lg:col-span-2">
-                    <div class="mb-5 pb-3 border-b border-[var(--border-primary)]">
-                        <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التسجيلات الصوتية المسجلة في المقسم' : 'System Recordings List' %></h2>
-                    </div>
-
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
-                                    <th class="py-3 px-4">ID</th>
-                                    <th class="py-3 px-4"><%= isRtl ? 'اسم التسجيل' : 'Recording Name' %></th>
-                                    <th class="py-3 px-4"><%= isRtl ? 'مسار الملف' : 'System Filename' %></th>
-                                    <th class="py-3 px-4 text-center"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
-                                </tr>
-                            </thead>
-                            <tbody id="recordings-table-body" class="divide-y divide-[var(--border-primary)] text-sm font-medium text-[var(--text-primary)]">
-                                <tr><td colspan="4" class="py-8 text-center text-[var(--text-muted)]">Loading recordings...</td></tr>
-                            </tbody>
-                        </table>
+                         <!-- Upload Progress Bar -->
+                         <div id="sysRecProgressWrap" class="hidden space-y-1">
+                             <div class="flex justify-between text-[11px] font-semibold text-[var(--text-muted)]">
+                                 <span id="sysRecStatus">Uploading & converting...</span>
+                                 <span id="sysRecPercent">0%</span>
+                             </div>
+                             <div class="w-full h-1.5 bg-[var(--bg-card)] rounded-full overflow-hidden">
+                                 <div id="sysRecProgressBar" class="h-full bg-[var(--accent-color)] rounded-full transition-all duration-300" style="width:0%"></div>
+                             </div>
+                         </div>
+                         <button type="submit" id="sysRecSubmitBtn" class="config-btn-primary w-full py-2.5 text-xs flex items-center justify-center gap-2 cursor-pointer">
+                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                             <span><%= isRtl ? 'رفع وحفظ التسجيل' : 'Upload Recording' %></span>
+                         </button>
+                     </form>
+                 </div>
+ 
+                 <!-- Existing Recordings List Table -->
+                 <div class="config-card p-6 lg:col-span-2">
+                     <div class="mb-5 pb-3 border-b border-[var(--border-primary)]">
+                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التسجيلات الصوتية المسجلة في المقسم' : 'System Recordings List' %></h2>
+                     </div>
+ 
+                     <div class="overflow-x-auto">
+                         <table class="w-full text-left border-collapse">
+                             <thead>
+                                 <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                                     <th class="py-3 px-4">ID</th>
+                                     <th class="py-3 px-4"><%= isRtl ? 'اسم التسجيل' : 'Recording Name' %></th>
+                                     <th class="py-3 px-4"><%= isRtl ? 'مسار الملف' : 'System Filename' %></th>
+                                    <th class="py-3 px-4 text-center min-w-[260px]"><%= isRtl ? 'مستوى الصوت / الهامش' : 'Volume / Headroom' %></th>
+                                     <th class="py-3 px-4 text-center"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
+                                 </tr>
+                             </thead>
+                             <tbody id="recordings-table-body" class="divide-y divide-[var(--border-primary)] text-sm font-medium text-[var(--text-primary)]">
+                                <tr><td colspan="5" class="py-8 text-center text-[var(--text-muted)]">Loading recordings...</td></tr>
+                             </tbody>
+                         </table>
                     </div>
                 </div>
 
@@ -5696,16 +5714,44 @@ function isTabAllowed(tabName) {
                     if (!tbody) return;
                     tbody.innerHTML = '';
                     if (list.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-[var(--text-muted)]">' + (isRtl ? 'لا توجد تسجيلات صوتية مسجلة.' : 'No system recordings found.') + '</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">' + (isRtl ? 'لا توجد تسجيلات صوتية مسجلة.' : 'No system recordings found.') + '</td></tr>';
                         return;
                     }
                     list.forEach(rec => {
                         const tr = document.createElement('tr');
                         tr.className = 'hover:bg-[var(--bg-hover)] transition-colors';
+                        const currentGain = Number.isFinite(Number(rec.gain_db)) ? Number(rec.gain_db) : 0;
+                        const gainBadgeText = (currentGain > 0 ? '+' : '') + currentGain + ' dB';
+                        const gainColorClass = currentGain === 0 ? 'text-[var(--text-muted)]' : (currentGain < 0 ? 'text-amber-400' : 'text-emerald-400');
                         tr.innerHTML = `
                             <td class="py-3 px-4 font-mono font-bold text-[var(--text-muted)]">${rec.id}</td>
                             <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${escapeHtml(rec.displayname || '-')}</td>
                             <td class="py-3 px-4 font-mono text-xs text-blue-400 font-semibold">${escapeHtml(rec.filename || '-')}</td>
+                            <td class="py-3 px-4">
+                                <div class="flex flex-col gap-1.5 min-w-[240px]">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="text-[10px] text-[var(--text-muted)] font-mono">${isRtl ? 'مستوى الكسب:' : 'Gain:'}</span>
+                                        <span id="recGainBadge_${rec.id}" class="font-mono font-bold text-xs ${gainColorClass}">${gainBadgeText}</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <input type="range" id="recGainRange_${rec.id}" min="-50" max="20" step="1" value="${currentGain}"
+                                            oninput="document.getElementById('recGainBadge_${rec.id}').textContent = (this.value > 0 ? '+' : '') + this.value + ' dB'; document.getElementById('recGainBadge_${rec.id}').className = 'font-mono font-bold text-xs ' + (this.value == 0 ? 'text-[var(--text-muted)]' : (this.value < 0 ? 'text-amber-400' : 'text-emerald-400'))"
+                                            onchange="saveRecordingVolume(${rec.id})"
+                                            class="w-full accent-amber-500 bg-[var(--bg-primary)] h-1.5 rounded-lg cursor-pointer">
+                                        <button type="button" onclick="saveRecordingVolume(${rec.id})" class="px-2 py-0.5 text-[11px] font-bold text-amber-400 hover:bg-amber-500/10 rounded border border-amber-500/30 shrink-0 cursor-pointer">
+                                            <span>${isRtl ? 'تطبيق' : 'Apply'}</span>
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center justify-between text-[9px] text-[var(--text-muted)] font-mono">
+                                        <button type="button" onclick="setRecordingGainQuick(${rec.id}, 0)" class="hover:text-white cursor-pointer">0dB</button>
+                                        <button type="button" onclick="setRecordingGainQuick(${rec.id}, -6)" class="hover:text-white cursor-pointer">-6dB</button>
+                                        <button type="button" onclick="setRecordingGainQuick(${rec.id}, -12)" class="hover:text-white cursor-pointer">-12dB</button>
+                                        <button type="button" onclick="setRecordingGainQuick(${rec.id}, -18)" class="hover:text-amber-400 text-amber-500/90 font-bold cursor-pointer" title="${isRtl ? 'موصى به للدونجل' : 'Recommended for Dongle'}">-18dB ★</button>
+                                        <button type="button" onclick="setRecordingGainQuick(${rec.id}, -24)" class="hover:text-white cursor-pointer">-24dB</button>
+                                        <button type="button" onclick="setRecordingGainQuick(${rec.id}, -30)" class="hover:text-white cursor-pointer">-30dB</button>
+                                    </div>
+                                </div>
+                            </td>
                             <td class="py-3 px-4 text-center">
                                 <div class="flex items-center justify-center gap-2">
                                     <button onclick="togglePlayRecording(${rec.id}, this)" class="px-2.5 py-1 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 rounded border border-emerald-500/30 flex items-center gap-1 cursor-pointer">
@@ -5744,7 +5790,10 @@ function isTabAllowed(tabName) {
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
             formData.append('name', nameInput.value.trim());
-
+            const gainSelect = document.getElementById('sysRecGain');
+            if (gainSelect) {
+                formData.append('gainDb', gainSelect.value || '0');
+            }
             submitBtn.disabled = true;
             progressWrap.classList.remove('hidden');
             progressBar.style.width = '0%';
@@ -5886,6 +5935,49 @@ function isTabAllowed(tabName) {
         window.togglePlayRecording = togglePlayRecording;
         window.deleteRecording = deleteRecording;
         window.setPlayBtnState = setPlayBtnState;
+        async function saveRecordingVolume(id) {
+            const input = document.getElementById('recGainRange_' + id);
+            if (!input) return;
+            const gainDb = parseInt(input.value, 10);
+            const isRtl = '<%= isRtl %>' === 'true';
+
+            try {
+                const res = await fetch(`/api/config/recordings/${id}/volume`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gainDb })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || (isRtl ? 'تم تحديث مستوى الصوت بنجاح' : 'Volume updated successfully'), 'success');
+                    const rec = (loadedRecordingsList || []).find(r => String(r.id) === String(id));
+                    if (rec) rec.gain_db = data.gainDb;
+                    const badge = document.getElementById('recGainBadge_' + id);
+                    if (badge) {
+                        badge.textContent = (data.gainDb > 0 ? '+' : '') + data.gainDb + ' dB';
+                        badge.className = 'font-mono font-bold text-xs ' + (data.gainDb === 0 ? 'text-[var(--text-muted)]' : (data.gainDb < 0 ? 'text-amber-400' : 'text-emerald-400'));
+                    }
+                } else {
+                    showToast(data.error || 'Failed to update volume', 'error');
+                }
+            } catch (err) {
+                showToast(err.message || 'Error updating volume', 'error');
+            }
+        }
+
+        function setRecordingGainQuick(id, gainDb) {
+            const input = document.getElementById('recGainRange_' + id);
+            const badge = document.getElementById('recGainBadge_' + id);
+            if (input) input.value = gainDb;
+            if (badge) {
+                badge.textContent = (gainDb > 0 ? '+' : '') + gainDb + ' dB';
+                badge.className = 'font-mono font-bold text-xs ' + (gainDb === 0 ? 'text-[var(--text-muted)]' : (gainDb < 0 ? 'text-amber-400' : 'text-emerald-400'));
+            }
+            saveRecordingVolume(id);
+        }
+
+        window.saveRecordingVolume = saveRecordingVolume;
+        window.setRecordingGainQuick = setRecordingGainQuick;
 
         // --- IVR MENUS ---
         let ivrEntryCounter = 0;
