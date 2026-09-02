@@ -1221,10 +1221,22 @@ function isTabAllowed(tabName) {
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'مخطط الإعدادات (Config Diagram)' : 'Config Diagram' %></h2>
                     </div>
                     <!-- Toolbar controls -->
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <!-- View Mode Switcher: Radial Topology vs Pipeline Flow -->
+                        <div class="inline-flex items-center p-0.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1 shadow-sm shrink-0">
+                            <button type="button" id="btnDiagramViewRadial" onclick="setDiagramViewMode('radial')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="22"/><line x1="2" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="22" y2="12"/></svg>
+                                <span><%= isRtl ? 'المخطط الدائري (Radial)' : 'Radial Topology' %></span>
+                            </button>
+                            <button type="button" id="btnDiagramViewPipeline" onclick="setDiagramViewMode('pipeline')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-muted)] hover:text-white border border-transparent">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h7"/></svg>
+                                <span><%= isRtl ? 'مخطط التدفق (Pipeline)' : 'Pipeline Flow' %></span>
+                            </button>
+                        </div>
+
                         <!-- Search input -->
                         <div class="relative">
-                            <input type="text" id="diagramSearch" oninput="filterDiagramNodes()" placeholder="<%= isRtl ? 'ابحث عن عنصر...' : 'Search node...' %>" class="config-input pl-8 pr-3 py-1.5 text-xs w-48 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg">
+                            <input type="text" id="diagramSearch" oninput="filterDiagramNodes()" placeholder="<%= isRtl ? 'ابحث عن عنصر...' : 'Search node...' %>" class="config-input pl-8 pr-3 py-1.5 text-xs w-44 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg">
                             <svg class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
@@ -8699,8 +8711,7 @@ function isTabAllowed(tabName) {
                 });
         }
         window.fetchDiagramData = fetchDiagramData;
-
-        function renderDiagram() {
+        function renderDiagramPipeline() {
             const svgNodes = document.getElementById('diagramNodes');
             const svgWires = document.getElementById('diagramConnections');
             const svg = document.getElementById('diagramSvg');
@@ -9498,8 +9509,747 @@ function isTabAllowed(tabName) {
                 });
             }
         }
-        window.renderDiagram = renderDiagram;
 
+        let diagramViewMode = 'radial';
+        try {
+            const savedMode = localStorage.getItem('diagram_view_mode');
+            if (savedMode === 'pipeline' || savedMode === 'radial') {
+                diagramViewMode = savedMode;
+            }
+        } catch (_) {}
+
+        function setDiagramViewMode(mode) {
+            diagramViewMode = mode;
+            try { localStorage.setItem('diagram_view_mode', mode); } catch (_) {}
+            updateDiagramViewSwitcherButtons();
+            renderDiagram();
+            sizeDiagramCanvas();
+            setTimeout(fitDiagramToScreen, 50);
+        }
+        window.setDiagramViewMode = setDiagramViewMode;
+
+        function updateDiagramViewSwitcherButtons() {
+            const btnRadial = document.getElementById('btnDiagramViewRadial');
+            const btnPipeline = document.getElementById('btnDiagramViewPipeline');
+            if (!btnRadial || !btnPipeline) return;
+
+            if (diagramViewMode === 'radial') {
+                btnRadial.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm';
+                btnPipeline.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-muted)] hover:text-white border border-transparent';
+            } else {
+                btnPipeline.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm';
+                btnRadial.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-muted)] hover:text-white border border-transparent';
+            }
+        }
+
+        // =========================================================================
+        // RADIAL TOPOLOGY VIEW ENGINE (Inspired by Reference Architecture Topology)
+        // 4-Quadrant Starburst Architecture centered around a CORE ROUTING HUB
+        // =========================================================================
+        function renderDiagramRadial() {
+            const svgNodes = document.getElementById('diagramNodes');
+            const svgWires = document.getElementById('diagramConnections');
+            const svg = document.getElementById('diagramSvg');
+            const canvas = document.getElementById('diagramCanvasContainer');
+            if (!svgNodes || !svgWires || !svg || !canvas || !diagramRawData) return;
+
+            svgNodes.innerHTML = '';
+            svgWires.innerHTML = '';
+
+            const cardWidth = 275;
+            const cardHeight = 125;
+
+            function formatDestination(dest) {
+                if (!dest) return isRtl ? 'غير محدد' : 'Not set';
+                if (dest.startsWith('ext-group,')) return `${isRtl ? 'مجموعة:' : 'Group:'} ${dest.split(',')[1]}`;
+                if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) return `${isRtl ? 'تحويلة:' : 'Extension:'} ${dest.split(',')[1]}`;
+                if (dest.startsWith('ivr-') || dest.startsWith('ext-ivr,')) {
+                    const ivrId = dest.startsWith('ext-ivr,') ? dest.split(',')[1] : dest.split(',')[0].replace('ivr-', '');
+                    const ivrObj = (diagramRawData.ivrs || []).find(i => String(i.id) === String(ivrId));
+                    return `IVR: ${ivrObj ? ivrObj.name : ivrId}`;
+                }
+                if (dest.startsWith('ext-queues,')) return `${isRtl ? 'طابور:' : 'Queue:'} ${dest.split(',')[1]}`;
+                if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) {
+                    const conditionId = dest.split(',')[1];
+                    const condition = (diagramRawData.timeconditions || []).find(tc => String(tc.timeconditions_id) === String(conditionId));
+                    return `${isRtl ? 'شرط زمني' : 'Time Condition'}: ${condition ? condition.displayname : conditionId}`;
+                }
+                if (dest.startsWith('ext-external-failover,') || dest.startsWith('from-internal,')) {
+                    const rawTarget = dest.split(',')[1] || '';
+                    const phone = rawTarget.split('/')[0].split('@')[0];
+                    const dongle = rawTarget.includes('/') ? rawTarget.split('/')[1] : (rawTarget.includes('@') ? rawTarget.split('@')[1] : '');
+                    if (phone) return `${isRtl ? 'رقم خارجي:' : 'External:'} ${phone}${dongle ? ' (' + dongle + ')' : ''}`;
+                }
+                return dest;
+            }
+
+            function resolveTargetNodeId(dest) {
+                if (!dest) return null;
+                if (dest.startsWith('ext-group,')) return 'ringgroup-' + dest.split(',')[1];
+                if (dest.startsWith('ext-queues,')) return 'queue-' + dest.split(',')[1];
+                if (dest.startsWith('from-did-direct,') || dest.startsWith('ext-local,')) return 'extension-' + dest.split(',')[1];
+                if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) return 'timecondition-' + dest.split(',')[1];
+                if (dest.startsWith('ivr-') || dest.startsWith('ext-ivr,')) {
+                    const ivrId = dest.startsWith('ext-ivr,') ? dest.split(',')[1] : dest.split(',')[0].replace('ivr-', '');
+                    return 'ivr-' + ivrId;
+                }
+                return null;
+            }
+
+            const inbound = diagramRawData.inbound || [];
+            const ringgroups = diagramRawData.ringgroups || [];
+            const extensions = diagramRawData.extensions || [];
+            const outbound = diagramRawData.outbound || [];
+            const trunks = diagramRawData.trunks || [];
+            const timeconditions = diagramRawData.timeconditions || [];
+            const queues = diagramRawData.queues || [];
+            const ivrs = diagramRawData.ivrs || [];
+
+            diagramNodesList = [];
+
+            // 1. Inbound Nodes
+            inbound.forEach((route, i) => {
+                diagramNodesList.push({
+                    id: 'inbound-' + (route.did || 'any') + '-' + i,
+                    type: 'inbound',
+                    title: route.did ? `DID: ${route.did}` : (isRtl ? 'أي رقم وارد' : 'Any DID'),
+                    subtitle: route.description || (isRtl ? 'مسار وارد' : 'Inbound Route'),
+                    desc: route.destination,
+                    data: route
+                });
+            });
+
+            // 2. Ring Groups Nodes
+            ringgroups.forEach(rg => {
+                diagramNodesList.push({
+                    id: 'ringgroup-' + rg.grpnum,
+                    type: 'ringgroup',
+                    title: `${isRtl ? 'مجموعة:' : 'Group:'} ${rg.grpnum}`,
+                    subtitle: rg.description || (isRtl ? 'مجموعة اتصال' : 'Ring Group'),
+                    desc: `${isRtl ? 'الاستراتيجية:' : 'Strategy:'} ${rg.strategy}`,
+                    data: rg
+                });
+            });
+
+            // 3. IVR Nodes
+            ivrs.forEach(ivr => {
+                const entriesCount = Array.isArray(ivr.entries) ? ivr.entries.length : 0;
+                diagramNodesList.push({
+                    id: 'ivr-' + ivr.id,
+                    type: 'ivr',
+                    title: `${isRtl ? 'الرد الآلي:' : 'IVR:'} ${ivr.name}`,
+                    subtitle: ivr.description || (isRtl ? 'قائمة الرد الآلي' : 'IVR Menu'),
+                    desc: `${isRtl ? 'خيارات:' : 'Options:'} ${entriesCount}`,
+                    data: ivr
+                });
+            });
+
+            // 4. Queues Nodes
+            queues.forEach(q => {
+                diagramNodesList.push({
+                    id: 'queue-' + q.extension,
+                    type: 'queue',
+                    title: `${isRtl ? 'طابور:' : 'Queue:'} ${q.extension}`,
+                    subtitle: q.descr || (isRtl ? 'طابور انتظار' : 'Call Queue'),
+                    desc: `${isRtl ? 'أقصى وقت:' : 'Max Wait:'} ${q.maxwait === '0' || !q.maxwait ? 'Unlimited' : q.maxwait + 's'}`,
+                    data: q
+                });
+            });
+
+            // 5. Extensions Nodes
+            extensions.forEach(ext => {
+                diagramNodesList.push({
+                    id: 'extension-' + ext.extension,
+                    type: 'extension',
+                    title: `${ext.extension} - ${ext.name || 'User'}`,
+                    subtitle: ext.tech ? ext.tech.toUpperCase() : 'SIP',
+                    desc: `CID: ${ext.outboundcid || 'Default'}`,
+                    data: ext
+                });
+            });
+
+            // 6. Outbound Routes Nodes
+            outbound.forEach(route => {
+                const patterns = Array.isArray(route.patterns) ? route.patterns : [];
+                const patternStr = patterns.map(p => p.pattern).filter(Boolean).join(', ');
+                diagramNodesList.push({
+                    id: 'outbound-' + route.route_id,
+                    type: 'outbound',
+                    title: route.name || (isRtl ? 'مسار صادر' : 'Outbound Route'),
+                    subtitle: (route.trunks || []).map(t => t.trunk_name || t.name).join(', ') || (isRtl ? 'بدون خطوط' : 'No trunks'),
+                    desc: patternStr || '',
+                    data: route
+                });
+            });
+
+            // 7. Trunks Nodes
+            trunks.forEach(tk => {
+                diagramNodesList.push({
+                    id: 'trunk-' + tk.trunkid,
+                    type: 'trunk',
+                    title: tk.name || `Trunk ${tk.trunkid}`,
+                    subtitle: (tk.tech || 'SIP').toUpperCase(),
+                    desc: tk.channelid || '',
+                    data: tk
+                });
+            });
+
+            // 8. Time Conditions Nodes
+            timeconditions.forEach(tc => {
+                const scheduleStr = tc.details ? tc.details.map(d => d.time + ' ' + d.name).join('; ') : '';
+                diagramNodesList.push({
+                    id: 'timecondition-' + tc.timeconditions_id,
+                    type: 'timecondition',
+                    title: tc.displayname || (isRtl ? 'شرط زمني' : 'Time Condition'),
+                    subtitle: tc.timegroup_name || (isRtl ? 'غير محدد' : 'No group'),
+                    desc: scheduleStr || '',
+                    data: tc
+                });
+            });
+
+            // Build Diagram Links
+            diagramLinks = [];
+
+            inbound.forEach((route, idx) => {
+                const dest = route.destination || '';
+                const targetId = resolveTargetNodeId(dest);
+                let wireType = 'inbound-dest';
+                if (dest.startsWith('timeconditions,') || dest.startsWith('ext-timeconditions,')) wireType = 'inbound-tc';
+                else if (dest.startsWith('ivr-') || dest.startsWith('ext-ivr,')) wireType = 'inbound-ivr';
+                if (targetId) {
+                    diagramLinks.push({ id: `link-inbound-${idx}`, source: 'inbound-' + (route.did || 'any') + '-' + idx, target: targetId, type: wireType });
+                }
+            });
+
+            timeconditions.forEach(tc => {
+                [tc.truegoto || '', tc.falsegoto || ''].forEach((dest, isFalse) => {
+                    const targetId = resolveTargetNodeId(dest);
+                    let wireType = isFalse ? 'tc-false' : 'tc-true';
+                    if (dest.startsWith('ivr-') || dest.startsWith('ext-ivr,')) wireType = 'tc-ivr';
+                    if (targetId) {
+                        diagramLinks.push({ id: 'link-tc-' + tc.timeconditions_id + '-' + (isFalse ? 'false' : 'true') + '-' + targetId, source: 'timecondition-' + tc.timeconditions_id, target: targetId, type: wireType });
+                    }
+                });
+            });
+
+            ivrs.forEach(ivr => {
+                (Array.isArray(ivr.entries) ? ivr.entries : []).forEach((entry, idx) => {
+                    const targetId = resolveTargetNodeId(entry.dest);
+                    if (targetId) {
+                        diagramLinks.push({ id: `link-ivr-${ivr.id}-entry-${entry.selection}-${idx}`, source: 'ivr-' + ivr.id, target: targetId, type: 'ivr-entry' });
+                    }
+                });
+                if (ivr.timeout_destination) {
+                    const targetId = resolveTargetNodeId(ivr.timeout_destination);
+                    if (targetId) diagramLinks.push({ id: `link-ivr-${ivr.id}-timeout`, source: 'ivr-' + ivr.id, target: targetId, type: 'ivr-timeout' });
+                }
+            });
+
+            ringgroups.forEach(rg => {
+                (Array.isArray(rg.grplist) ? rg.grplist : []).forEach(ext => {
+                    if (extensions.some(e => String(e.extension) === String(ext))) {
+                        diagramLinks.push({ id: `link-rg-${rg.grpnum}-${ext}`, source: 'ringgroup-' + rg.grpnum, target: 'extension-' + ext, type: 'rg-member' });
+                    }
+                });
+            });
+
+            queues.forEach(q => {
+                (Array.isArray(q.static_members) ? q.static_members : []).forEach(ext => {
+                    if (extensions.some(e => String(e.extension) === String(ext))) {
+                        diagramLinks.push({ id: `link-queue-${q.extension}-${ext}`, source: 'queue-' + q.extension, target: 'extension-' + ext, type: 'queue-member' });
+                    }
+                });
+                if (q.dest) {
+                    const targetId = resolveTargetNodeId(q.dest);
+                    if (targetId) diagramLinks.push({ id: `link-queue-${q.extension}-failover-${targetId}`, source: 'queue-' + q.extension, target: targetId, type: 'queue-failover' });
+                }
+                if (q.destcontinue) {
+                    const targetId = resolveTargetNodeId(q.destcontinue);
+                    if (targetId) diagramLinks.push({ id: `link-queue-${q.extension}-continue-${targetId}`, source: 'queue-' + q.extension, target: targetId, type: 'queue-continue' });
+                }
+            });
+
+            extensions.forEach(ext => {
+                outbound.forEach(route => {
+                    const patterns = Array.isArray(route.patterns) ? route.patterns : [];
+                    const hasRestrictedCid = patterns.some(p => String(p.cid) === String(ext.extension));
+                    const hasGlobalRoute = patterns.some(p => !p.cid || p.cid === '');
+                    if (hasRestrictedCid) {
+                        diagramLinks.push({ id: `link-ext-outbound-${ext.extension}-${route.route_id}`, source: 'extension-' + ext.extension, target: 'outbound-' + route.route_id, type: 'ext-route-restricted' });
+                    } else if (hasGlobalRoute) {
+                        diagramLinks.push({ id: `link-ext-outbound-global-${ext.extension}-${route.route_id}`, source: 'extension-' + ext.extension, target: 'outbound-' + route.route_id, type: 'ext-route-global' });
+                    }
+                });
+            });
+
+            outbound.forEach(route => {
+                (Array.isArray(route.trunks) ? route.trunks : []).forEach(tk => {
+                    const tkId = tk.trunk_id || tk.trunkid;
+                    const matchedTrunk = trunks.find(t => String(t.trunkid) === String(tkId) || (tk.trunk_name && String(t.name) === String(tk.trunk_name)));
+                    const targetTrunkId = matchedTrunk ? matchedTrunk.trunkid : tkId;
+                    if (targetTrunkId !== undefined && targetTrunkId !== null) {
+                        diagramLinks.push({ id: `link-outbound-${route.route_id}-trunk-${targetTrunkId}`, source: 'outbound-' + route.route_id, target: 'trunk-' + targetTrunkId, type: 'outbound-trunk' });
+                    }
+                });
+            });
+
+            // -------------------------------------------------------------
+            // RADIAL TOPOLOGY 4-QUADRANT GEOMETRY COMPUTATION
+            // -------------------------------------------------------------
+            const q1Trunks = diagramNodesList.filter(n => n.type === 'trunk');
+            const q2Outbound = diagramNodesList.filter(n => n.type === 'outbound');
+            const q3Apps = diagramNodesList.filter(n => ['inbound', 'timecondition', 'ivr', 'ringgroup', 'queue'].includes(n.type));
+            const q4Exts = diagramNodesList.filter(n => n.type === 'extension');
+
+            // Columns per quadrant
+            const q1Cols = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(q1Trunks.length))));
+            const q2Cols = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(q2Outbound.length))));
+            const q3Cols = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(q3Apps.length))));
+            const q4Cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(q4Exts.length))));
+
+            const q1Rows = Math.ceil(q1Trunks.length / q1Cols) || 1;
+            const q2Rows = Math.ceil(q2Outbound.length / q2Cols) || 1;
+            const q3Rows = Math.ceil(q3Apps.length / q3Cols) || 1;
+            const q4Rows = Math.ceil(q4Exts.length / q4Cols) || 1;
+
+            const maxTopRows = Math.max(q1Rows, q2Rows);
+            const maxBottomRows = Math.max(q3Rows, q4Rows);
+
+            const topHeight = Math.max(480, maxTopRows * (cardHeight + 20) + 120);
+            const bottomHeight = Math.max(480, maxBottomRows * (cardHeight + 20) + 160);
+            const H = Math.max(1600, topHeight + 360 + bottomHeight);
+
+            const leftWidth = Math.max(1050, Math.max(q1Cols, q3Cols) * (cardWidth + 28) + 140);
+            const rightWidth = Math.max(1050, Math.max(q2Cols, q4Cols) * (cardWidth + 28) + 140);
+            const W = Math.max(2700, leftWidth + 480 + rightWidth);
+
+            const CX = Math.round(W / 2);
+            const CY = Math.round(H / 2);
+
+            // Quadrant Placement logic
+            q1Trunks.forEach((n, i) => {
+                const c = i % q1Cols;
+                const r = Math.floor(i / q1Cols);
+                n.x = 90 + c * (cardWidth + 24);
+                n.y = 120 + r * (cardHeight + 20);
+            });
+
+            q2Outbound.forEach((n, i) => {
+                const c = i % q2Cols;
+                const r = Math.floor(i / q2Cols);
+                n.x = CX + 240 + c * (cardWidth + 28);
+                n.y = 120 + r * (cardHeight + 20);
+            });
+
+            q3Apps.forEach((n, i) => {
+                const c = i % q3Cols;
+                const r = Math.floor(i / q3Cols);
+                n.x = 90 + c * (cardWidth + 24);
+                n.y = CY + 85 + r * (cardHeight + 20);
+            });
+
+            q4Exts.forEach((n, i) => {
+                const c = i % q4Cols;
+                const r = Math.floor(i / q4Cols);
+                n.x = CX + 240 + c * (cardWidth + 24);
+                n.y = CY + 85 + r * (cardHeight + 20);
+            });
+
+            // Manual saved positions win
+            let savedRadial = null;
+            try { savedRadial = JSON.parse(localStorage.getItem('config_diagram_radial_layout_v1')); } catch (_) {}
+            if (savedRadial && typeof savedRadial === 'object') {
+                diagramNodesList.forEach(n => {
+                    if (savedRadial[n.id] && Number.isFinite(savedRadial[n.id].x) && Number.isFinite(savedRadial[n.id].y)) {
+                        n.x = savedRadial[n.id].x;
+                        n.y = savedRadial[n.id].y;
+                    }
+                });
+            }
+
+            svg.style.height = `${H}px`;
+            svg.style.width = `${W}px`;
+            svg.setAttribute('height', String(H));
+            svg.setAttribute('width', String(W));
+
+            diagramRenderCtx = {
+                cardWidth,
+                cardHeight,
+                makeWirePath: makeRadialWirePath
+            };
+            initDiagramNodeDragging();
+
+            // Arrowheads
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            defs.innerHTML = Object.entries(WIRE_COLORS).map(([type, color]) =>
+                `<marker id="arrow-rad-${type}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="${color}"/></marker>`
+            ).join('');
+            svgWires.appendChild(defs);
+
+            // -------------------------------------------------------------
+            // SVG BACKGROUND: CONCENTRIC ORBITS, CROSSHAIRS & CORE ROUTING HUB
+            // -------------------------------------------------------------
+            const bgGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            bgGroup.setAttribute('class', 'diagram-radial-backdrop pointer-events-none select-none');
+
+            // 1. Quadrant Crosshair lines
+            const crosshairStyle = 'stroke="rgba(148, 163, 184, 0.2)" stroke-width="1.5" stroke-dasharray="6 6"';
+            bgGroup.innerHTML += `
+                <line x1="60" y1="${CY}" x2="${CX - 90}" y2="${CY}" ${crosshairStyle} />
+                <line x1="${CX + 90}" y1="${CY}" x2="${W - 60}" y2="${CY}" ${crosshairStyle} />
+                <line x1="${CX}" y1="60" x2="${CX}" y2="${CY - 90}" ${crosshairStyle} />
+                <line x1="${CX}" y1="${CY + 90}" x2="${CX}" y2="${H - 60}" ${crosshairStyle} />
+            `;
+
+            // 2. Concentric Orbit Rings
+            [300, 560, 840].forEach(r => {
+                bgGroup.innerHTML += `<circle cx="${CX}" cy="${CY}" r="${r}" fill="none" stroke="rgba(56, 189, 248, 0.12)" stroke-width="1.5" stroke-dasharray="4 8" />`;
+            });
+
+            // 3. Spoke lines to Transit Waypoints
+            const waypoints = [
+                { id: 'gw-waypoint', x: CX - 220, y: CY - 140, label: 'Trunk Gateway Hub', color: '#0891b2' },
+                { id: 'ob-waypoint', x: CX + 220, y: CY - 140, label: 'Outbound Dial Hub', color: '#ea580c' },
+                { id: 'app-waypoint', x: CX - 220, y: CY + 140, label: 'Application Hub', color: '#9333ea' },
+                { id: 'ext-waypoint', x: CX + 220, y: CY + 140, label: 'Extension Distribution', color: '#0284c7' }
+            ];
+
+            waypoints.forEach(wp => {
+                bgGroup.innerHTML += `
+                    <line x1="${CX}" y1="${CY}" x2="${wp.x}" y2="${wp.y}" stroke="${wp.color}" stroke-opacity="0.35" stroke-width="2" stroke-dasharray="3 3" />
+                    <circle cx="${wp.x}" cy="${wp.y}" r="14" fill="#0f172a" stroke="${wp.color}" stroke-width="2" />
+                    <circle cx="${wp.x}" cy="${wp.y}" r="4" fill="${wp.color}" />
+                `;
+            });
+
+            // 4. Center CORE ROUTING HUB Node
+            bgGroup.innerHTML += `
+                <!-- Halo Outer Pulse -->
+                <circle cx="${CX}" cy="${CY}" r="52" fill="rgba(14, 165, 233, 0.08)" stroke="rgba(56, 189, 248, 0.4)" stroke-width="2" stroke-dasharray="4 4" />
+                <!-- Core Solid Circle -->
+                <circle cx="${CX}" cy="${CY}" r="36" fill="#0284c7" stroke="#38bdf8" stroke-width="3" filter="drop-shadow(0 0 16px rgba(56, 189, 248, 0.45))" />
+                <!-- Center PBX Fork Glyph -->
+                <g transform="translate(${CX - 12}, ${CY - 12}) scale(1.0)" stroke="#ffffff" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6" cy="6" r="3" fill="#ffffff" />
+                    <circle cx="18" cy="18" r="3" fill="#ffffff" />
+                    <circle cx="18" cy="6" r="3" fill="#ffffff" />
+                    <path d="M6 9v3a3 3 0 0 0 3 3h6" />
+                    <path d="M18 9v6" />
+                </g>
+                <!-- Hub Node Label -->
+                <text x="${CX}" y="${CY + 56}" text-anchor="middle" class="font-mono font-black uppercase text-xs fill-[var(--text-primary)]" style="letter-spacing: 2px;">CORE ROUTING HUB</text>
+            `;
+
+            // 5. Quadrant Section Headings
+            bgGroup.innerHTML += `
+                <text x="80" y="65" class="font-black uppercase text-lg fill-[var(--text-primary)] tracking-wider">EXTERNAL GATEWAYS (SIP TRUNKS)</text>
+                <text x="80" y="86" class="font-mono font-bold text-xs fill-cyan-400">Carrier Interconnects, GSM Dongles & Inbound Links</text>
+
+                <text x="${W - 80}" y="65" text-anchor="end" class="font-black uppercase text-lg fill-[var(--text-primary)] tracking-wider">ROUTING RULES (OUTBOUND)</text>
+                <text x="${W - 80}" y="86" text-anchor="end" class="font-mono font-bold text-xs fill-amber-400">Dial Patterns, CID Restrictions & Trunk Sequences</text>
+
+                <text x="80" y="${CY + 45}" class="font-black uppercase text-lg fill-[var(--text-primary)] tracking-wider">APPLICATION SERVERS (IVR & QUEUES)</text>
+                <text x="80" y="${CY + 66}" class="font-mono font-bold text-xs fill-purple-400">Inbound Routes, Digital Receptionist, Queues & Schedules</text>
+
+                <text x="${W - 80}" y="${CY + 45}" text-anchor="end" class="font-black uppercase text-lg fill-[var(--text-primary)] tracking-wider">INTERNAL USER EXTENSIONS</text>
+                <text x="${W - 80}" y="${CY + 66}" text-anchor="end" class="font-mono font-bold text-xs fill-blue-400">Desk Phones, WebRTC Softphones & Mobile Apps</text>
+            `;
+
+            // 6. Bottom Legends
+            bgGroup.innerHTML += `
+                <!-- Bottom-Left Legend -->
+                <g transform="translate(80, ${H - 100})">
+                    <rect x="0" y="0" width="360" height="75" rx="10" fill="rgba(15, 23, 42, 0.75)" stroke="rgba(148, 163, 184, 0.25)" />
+                    <text x="14" y="20" class="font-mono font-bold uppercase text-[10px] fill-white tracking-wider">CALL PATH LEGEND</text>
+                    <line x1="14" y1="36" x2="45" y2="36" stroke="#38bdf8" stroke-width="2.5" />
+                    <text x="52" y="40" class="font-mono text-[10px] fill-gray-300">Internal Extension Path</text>
+                    <line x1="14" y1="56" x2="45" y2="56" stroke="#fb923c" stroke-width="2.5" />
+                    <text x="52" y="60" class="font-mono text-[10px] fill-gray-300">Inbound Route Path</text>
+                    <line x1="185" y1="36" x2="215" y2="36" stroke="#f59e0b" stroke-width="2.5" />
+                    <text x="222" y="40" class="font-mono text-[10px] fill-gray-300">Outbound Route</text>
+                    <line x1="185" y1="56" x2="215" y2="56" stroke="#ef4444" stroke-width="2.5" stroke-dasharray="4 3" />
+                    <text x="222" y="60" class="font-mono text-[10px] fill-gray-300">Failover / Fallback</text>
+                </g>
+
+                <!-- Bottom-Right Legend -->
+                <g transform="translate(${W - 440}, ${H - 100})">
+                    <rect x="0" y="0" width="360" height="75" rx="10" fill="rgba(15, 23, 42, 0.75)" stroke="rgba(148, 163, 184, 0.25)" />
+                    <text x="14" y="20" class="font-mono font-bold uppercase text-[10px] fill-white tracking-wider">ENDPOINT DEVICE TYPES</text>
+                    <text x="14" y="42" class="text-xs">📞 <tspan class="font-mono text-[10px] fill-gray-300">Desk Phone (SIP/PJSIP)</tspan></text>
+                    <text x="14" y="62" class="text-xs">💻 <tspan class="font-mono text-[10px] fill-gray-300">WebRTC Softphone</tspan></text>
+                    <text x="190" y="42" class="text-xs">📱 <tspan class="font-mono text-[10px] fill-gray-300">Mobile Client</tspan></text>
+                    <text x="190" y="62" class="text-xs">🌐 <tspan class="font-mono text-[10px] fill-gray-300">Gateway Trunk</tspan></text>
+                </g>
+            `;
+
+            svgWires.appendChild(bgGroup);
+
+            // Radial Wire Path Calculation
+            function makeRadialWirePath(sourceNode, targetNode) {
+                const sIsLeft = sourceNode.x < CX;
+                const tIsLeft = targetNode.x < CX;
+
+                const sx = sIsLeft ? (sourceNode.x + cardWidth) : sourceNode.x;
+                const sy = sourceNode.y + cardHeight / 2;
+
+                const tx = tIsLeft ? (targetNode.x + cardWidth) : targetNode.x;
+                const ty = targetNode.y + cardHeight / 2;
+
+                // Control points curve toward the center hub or waypoint
+                const midX = (sx + tx) / 2;
+                const midY = (sy + ty) / 2;
+                const bendX = (midX + CX) / 2;
+                const bendY = (midY + CY) / 2;
+
+                const c1x = (sx + bendX) / 2;
+                const c1y = (sy + bendY) / 2;
+                const c2x = (tx + bendX) / 2;
+                const c2y = (ty + bendY) / 2;
+
+                return `M ${sx} ${sy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tx} ${ty}`;
+            }
+
+            // Render Curved Wires
+            diagramLinks.forEach(link => {
+                const sourceNode = diagramNodesList.find(n => n.id === link.source);
+                const targetNode = diagramNodesList.find(n => n.id === link.target);
+                if (!sourceNode || !targetNode) return;
+
+                const strokeColor = WIRE_COLORS[link.type] || '#38bdf8';
+                const isGlobalMesh = link.type === 'ext-route-global';
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('id', link.id);
+                path.setAttribute('class', 'diagram-wire transition-all duration-200');
+                path.setAttribute('d', makeRadialWirePath(sourceNode, targetNode));
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', strokeColor);
+                path.setAttribute('stroke-width', isGlobalMesh ? '1px' : '2px');
+                path.setAttribute('stroke-linecap', 'round');
+                if (FAILING_WIRES.has(link.type)) path.setAttribute('stroke-dasharray', '7 5');
+                if (!isGlobalMesh) path.setAttribute('marker-end', `url(#arrow-rad-${link.type})`);
+                path.setAttribute('data-type', link.type);
+                path.setAttribute('data-src', link.source);
+                path.setAttribute('data-tgt', link.target);
+                path.style.opacity = isGlobalMesh ? '0.16' : '0.55';
+
+                svgWires.appendChild(path);
+            });
+
+            // Render Nodes in Quadrants
+            diagramNodesList.forEach(node => {
+                let accentColorClass = 'border-emerald-500/20 hover:border-emerald-500';
+                let iconBgClass = 'bg-emerald-500/10 text-emerald-400';
+                let svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>`;
+
+                if (node.type === 'ringgroup') {
+                    accentColorClass = 'border-purple-500/20 hover:border-purple-500';
+                    iconBgClass = 'bg-purple-500/10 text-purple-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>`;
+                } else if (node.type === 'queue') {
+                    accentColorClass = 'border-amber-500/20 hover:border-amber-500';
+                    iconBgClass = 'bg-amber-500/10 text-amber-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>`;
+                } else if (node.type === 'extension') {
+                    accentColorClass = 'border-blue-500/20 hover:border-blue-500';
+                    iconBgClass = 'bg-blue-500/10 text-blue-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>`;
+                } else if (node.type === 'outbound') {
+                    accentColorClass = 'border-orange-500/20 hover:border-orange-500';
+                    iconBgClass = 'bg-orange-500/10 text-orange-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>`;
+                } else if (node.type === 'timecondition') {
+                    accentColorClass = 'border-yellow-500/20 hover:border-yellow-500';
+                    iconBgClass = 'bg-yellow-500/10 text-yellow-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+                } else if (node.type === 'ivr') {
+                    accentColorClass = 'border-purple-500/20 hover:border-purple-500';
+                    iconBgClass = 'bg-purple-500/10 text-purple-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>`;
+                } else if (node.type === 'trunk') {
+                    accentColorClass = 'border-cyan-500/20 hover:border-cyan-500';
+                    iconBgClass = 'bg-cyan-500/10 text-cyan-400';
+                    svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>`;
+                }
+
+                let cardBodyHTML = '';
+                if (node.type === 'inbound') {
+                    const route = node.data;
+                    cardBodyHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
+                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
+                            <div class="flex justify-between"><span>DID:</span> <span class="text-white">${route.did || 'Any'}</span></div>
+                            <div class="flex justify-between"><span>Dest:</span> <span class="text-emerald-400 truncate max-w-[150px]">${formatDestination(route.destination)}</span></div>
+                        </div>
+                    `;
+                } else if (node.type === 'ringgroup') {
+                    const rg = node.data;
+                    cardBodyHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
+                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
+                            <div class="flex justify-between"><span>Strategy:</span> <span class="text-purple-400 uppercase">${rg.strategy}</span></div>
+                            <div class="flex justify-between"><span>Time:</span> <span class="text-white">${rg.grptime}s</span></div>
+                        </div>
+                    `;
+                } else if (node.type === 'queue') {
+                    const q = node.data;
+                    cardBodyHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
+                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
+                            <div class="flex justify-between"><span>Strategy:</span> <span class="text-amber-400 uppercase">${q.strategy}</span></div>
+                            <div class="flex justify-between"><span>Max Wait:</span> <span class="text-white">${q.maxwait ? q.maxwait + 's' : 'Unlimited'}</span></div>
+                        </div>
+                    `;
+                } else if (node.type === 'ivr') {
+                    const ivr = node.data;
+                    cardBodyHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
+                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
+                            <div class="flex justify-between"><span>Entries:</span> <span class="text-blue-400">${(ivr.entries || []).length} keys</span></div>
+                            <div class="flex justify-between"><span>Timeout:</span> <span class="text-white truncate max-w-[140px]">${formatDestination(ivr.timeout_destination)}</span></div>
+                        </div>
+                    `;
+                } else if (node.type === 'extension') {
+                    const ext = node.data;
+                    const isWebRtc = (ext.tech || '').toLowerCase() === 'pjsip';
+                    const deviceGlyph = isWebRtc ? '💻' : '📞';
+                    cardBodyHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-black text-white truncate">${node.title}</span>
+                                    <span class="text-xs ml-auto" title="${isWebRtc ? 'WebRTC Softphone' : 'Desk Phone'}">${deviceGlyph}</span>
+                                </div>
+                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
+                            <div class="flex justify-between"><span>Context:</span> <span class="text-white">${ext.context || 'from-internal'}</span></div>
+                            <div class="flex justify-between"><span>Device:</span> <span class="text-blue-400 font-bold">${isWebRtc ? 'Softphone' : 'Desk Phone'}</span></div>
+                        </div>
+                    `;
+                } else if (node.type === 'outbound') {
+                    const route = node.data;
+                    const patterns = (route.patterns || []).map(p => p.pattern).filter(Boolean);
+                    cardBodyHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
+                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
+                            <div class="flex justify-between"><span>Patterns:</span> <span class="text-orange-400 font-bold">${patterns.slice(0, 2).join(', ') || 'Any'}</span></div>
+                            <div class="flex justify-between"><span>Trunks:</span> <span class="text-white truncate max-w-[140px]">${(route.trunks || []).map(t => t.name || t.trunk_name).join(' ➜ ') || 'None'}</span></div>
+                        </div>
+                    `;
+                } else if (node.type === 'trunk') {
+                    const tk = node.data;
+                    cardBodyHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
+                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
+                            <div class="flex justify-between"><span>Tech:</span> <span class="text-cyan-400 font-bold uppercase">${tk.tech}</span></div>
+                            <div class="flex justify-between"><span>Status:</span> <span class="${tk.disabled === 'on' ? 'text-red-400' : 'text-emerald-400'}">${tk.disabled === 'on' ? 'Disabled' : 'Active'}</span></div>
+                        </div>
+                    `;
+                } else if (node.type === 'timecondition') {
+                    const tc = node.data;
+                    cardBodyHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
+                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${tc.timegroup_name || 'Schedule'}</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
+                            <div class="flex justify-between"><span>True:</span> <span class="text-emerald-400 truncate max-w-[140px]">${formatDestination(tc.truegoto)}</span></div>
+                            <div class="flex justify-between"><span>False:</span> <span class="text-red-400 truncate max-w-[140px]">${formatDestination(tc.falsegoto)}</span></div>
+                        </div>
+                    `;
+                }
+
+                const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+                fo.setAttribute('x', node.x);
+                fo.setAttribute('y', node.y);
+                fo.setAttribute('width', cardWidth);
+                fo.setAttribute('height', cardHeight);
+                fo.setAttribute('class', 'overflow-visible');
+
+                fo.innerHTML = `
+                    <div data-node-id="${node.id}" data-node-type="${node.type}"
+                         onmouseenter="highlightNode('${node.id}')"
+                         onmouseleave="resetHighlight()"
+                         class="diagram-card w-full h-full bg-[#111115]/95 backdrop-blur-md border ${accentColorClass} rounded-xl p-3 flex flex-col transition duration-200 cursor-pointer relative select-none">
+                        <div class="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#1c1c24] bg-[#27272a]"></div>
+                        <div class="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#1c1c24] bg-[#27272a]"></div>
+                        ${cardBodyHTML}
+                    </div>
+                `;
+
+                svgNodes.appendChild(fo);
+            });
+
+            if (typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                anime({
+                    targets: '.diagram-wire',
+                    opacity: [0, (el) => parseFloat(el && el.style ? el.style.opacity : '0.55') || 0.55],
+                    easing: 'easeOutQuad',
+                    duration: 600,
+                    delay: anime.stagger(8)
+                });
+                anime({
+                    targets: '.diagram-card',
+                    opacity: [0, 1],
+                    scale: [0.94, 1],
+                    easing: 'easeOutCubic',
+                    duration: 400,
+                    delay: anime.stagger(20)
+                });
+            }
+        }
+
+        function renderDiagram() {
+            updateDiagramViewSwitcherButtons();
+            if (diagramViewMode === 'radial') {
+                renderDiagramRadial();
+            } else {
+                renderDiagramPipeline();
+            }
+        }
+        window.renderDiagram = renderDiagram;
         function highlightNode(nodeId) {
             const connections = document.querySelectorAll('.diagram-wire');
             const cards = document.querySelectorAll('.diagram-card');

@@ -94,3 +94,23 @@ test('light theme diagram cards are high-visibility and canvas fills the viewpor
     assert.ok(content.includes("window.addEventListener('resize'"), 'Canvas must resize with the window');
     assert.ok(content.includes('Math.max(560, Math.floor(available))'), 'Canvas height must track available space with a sane floor');
 });
+test('config diagram renders view switcher and supports 4-quadrant radial topology map', async () => {
+    const html = await renderDiagramTab();
+    const content = fs.readFileSync(configEjsPath, 'utf8');
+
+    // View Switcher controls in toolbar
+    assert.ok(html.includes('id="btnDiagramViewRadial"'), 'Must render Radial Topology view toggle button');
+    assert.ok(html.includes('id="btnDiagramViewPipeline"'), 'Must render Pipeline Flow view toggle button');
+
+    // Functions and state
+    assert.ok(content.includes('function setDiagramViewMode('), 'Must define setDiagramViewMode');
+    assert.ok(content.includes('function renderDiagramRadial()'), 'Must define renderDiagramRadial');
+    assert.ok(content.includes('function renderDiagramPipeline()'), 'Must define renderDiagramPipeline');
+    assert.ok(content.includes('CORE ROUTING HUB'), 'Radial topology must render CORE ROUTING HUB central node');
+
+    // 4 Quadrant Headers from reference image
+    assert.ok(content.includes('EXTERNAL GATEWAYS (SIP TRUNKS)'), 'Must render External Gateways quadrant header');
+    assert.ok(content.includes('ROUTING RULES (OUTBOUND)'), 'Must render Outbound Routing Rules quadrant header');
+    assert.ok(content.includes('APPLICATION SERVERS (IVR & QUEUES)'), 'Must render Application Servers quadrant header');
+    assert.ok(content.includes('INTERNAL USER EXTENSIONS'), 'Must render Internal User Extensions quadrant header');
+});
