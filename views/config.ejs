@@ -3572,20 +3572,100 @@ function isTabAllowed(tabName) {
                         </div>
                     </div>
 
-                    <!-- Column 3: Timing & Pacing -->
+                    <!-- Column 3: Timing & Silence Control -->
                     <div class="space-y-4 p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
                         <div class="flex items-center gap-2 pb-2 border-b border-[var(--border-primary)]">
                             <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
-                            <h4 class="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]"><%= isRtl ? 'السرعة وضبط فترات الصمت' : 'Timing, Speed & Silence Trimming' %></h4>
+                            <h4 class="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]"><%= isRtl ? 'السرعة وفترات الصمت قبل/بعد التسجيل' : 'Timing & Silence Padding (Pre/Post-Roll)' %></h4>
                         </div>
 
                         <!-- Auto-trim silence -->
                         <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[var(--bg-primary)]/50 border border-[var(--border-primary)]">
                             <div>
-                                <span class="text-xs font-bold text-[var(--text-primary)] block"><%= isRtl ? 'قص الصمت تلقائيًا (Auto-Trim Silence)' : 'Auto-Trim Silence (Start & End)' %></span>
-                                <span class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'حذف الفراغات الصامتة في بداية ونهاية التسجيل' : 'Strips dead air before speech begins and after it ends' %></span>
+                                <span class="text-xs font-bold text-[var(--text-primary)] block"><%= isRtl ? 'قص الصمت الأولي (Auto-Trim Silence)' : 'Auto-Trim Silence (Start & End)' %></span>
+                                <span class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'حذف الفراغات الصامتة القديمة قبل إضافة الصمت النقي الجديد' : 'Strips room noise/dead air before injecting clean silence' %></span>
                             </div>
                             <input type="checkbox" id="dspTrimSilence" checked class="w-4 h-4 accent-emerald-500 rounded cursor-pointer">
+                        </div>
+
+                        <!-- Silence Sequence Timeline Preview -->
+                        <div class="p-2.5 rounded-lg bg-[var(--bg-primary)] border border-emerald-500/20 text-[10px] font-mono">
+                            <div class="text-[9px] font-bold text-[var(--text-muted)] uppercase mb-1.5"><%= isRtl ? 'المخطط الزمني للتسجيل (Timeline Preview)' : 'Audio Timeline Structure' %></div>
+                            <div class="flex items-center justify-between gap-1 text-center font-bold">
+                                <div id="timelinePreRoll" class="flex-1 py-1 px-1.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 truncate transition-all">
+                                    <span>⏸️ <%= isRtl ? 'صمت البداية' : 'Pre' %>:</span> <span id="timelinePreRollVal">+0.20s</span>
+                                </div>
+                                <span class="text-[var(--text-muted)]">➜</span>
+                                <div class="flex-[1.5] py-1 px-1.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-300 truncate">
+                                    <span>🎙️ <%= isRtl ? 'محتوى الصوت' : 'Audio' %></span>
+                                </div>
+                                <span class="text-[var(--text-muted)]">➜</span>
+                                <div id="timelinePostRoll" class="flex-1 py-1 px-1.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 truncate transition-all">
+                                    <span>⏸️ <%= isRtl ? 'صمت النهاية' : 'Post' %>:</span> <span id="timelinePostRollVal">+0.20s</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Silence Before Recording (Pre-Roll Pad) -->
+                        <div class="p-3 rounded-lg bg-[var(--bg-primary)]/50 border border-[var(--border-primary)] space-y-2">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="dspEnablePadLead" checked onchange="syncStudioSilenceControls()" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer">
+                                    <label for="dspEnablePadLead" class="text-xs font-bold text-[var(--text-primary)] cursor-pointer"><%= isRtl ? 'إضافة صمت قبل بدء التسجيل (Pre-Roll)' : 'Silence Before Recording (Start Pad)' %></label>
+                                </div>
+                                <span id="dspPadLeadBadge" class="text-xs font-bold text-emerald-400 font-mono">0.20s</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 items-center">
+                                <input type="range" id="dspPadLeadRange" min="0" max="10" step="0.05" value="0.20"
+                                    oninput="syncStudioSilenceFromRange('lead')"
+                                    class="col-span-2 w-full accent-emerald-500 bg-[var(--bg-card)] h-1.5 rounded-lg cursor-pointer">
+                                <div class="flex items-center gap-1">
+                                    <input type="number" id="dspPadLead" min="0" max="10" step="0.05" value="0.2"
+                                        oninput="syncStudioSilenceFromInput('lead')"
+                                        class="config-input w-full text-xs font-mono py-1 px-2 text-center">
+                                    <span class="text-[10px] text-[var(--text-muted)] font-mono">s</span>
+                                </div>
+                            </div>
+                            <!-- Quick duration chips -->
+                            <div class="flex items-center gap-1.5 pt-0.5 text-[9px] font-mono">
+                                <span class="text-[var(--text-muted)]"><%= isRtl ? 'فترات سريعة:' : 'Quick:' %></span>
+                                <button type="button" onclick="setStudioSilenceQuick('lead', 0.2)" class="px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-300 border border-[var(--border-primary)] hover:border-emerald-500/40 cursor-pointer">0.2s</button>
+                                <button type="button" onclick="setStudioSilenceQuick('lead', 0.5)" class="px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-300 border border-[var(--border-primary)] hover:border-emerald-500/40 cursor-pointer">0.5s</button>
+                                <button type="button" onclick="setStudioSilenceQuick('lead', 1.0)" class="px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-300 border border-[var(--border-primary)] hover:border-emerald-500/40 cursor-pointer">1.0s</button>
+                                <button type="button" onclick="setStudioSilenceQuick('lead', 2.0)" class="px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-300 border border-[var(--border-primary)] hover:border-emerald-500/40 cursor-pointer">2.0s</button>
+                                <button type="button" onclick="setStudioSilenceQuick('lead', 3.0)" class="px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-300 border border-[var(--border-primary)] hover:border-emerald-500/40 cursor-pointer">3.0s</button>
+                            </div>
+                        </div>
+
+                        <!-- Silence After Recording (Post-Roll Pad) -->
+                        <div class="p-3 rounded-lg bg-[var(--bg-primary)]/50 border border-[var(--border-primary)] space-y-2">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="dspEnablePadTrail" checked onchange="syncStudioSilenceControls()" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer">
+                                    <label for="dspEnablePadTrail" class="text-xs font-bold text-[var(--text-primary)] cursor-pointer"><%= isRtl ? 'إضافة صمت بعد نهاية التسجيل (Post-Roll)' : 'Silence After Recording (End Pad)' %></label>
+                                </div>
+                                <span id="dspPadTrailBadge" class="text-xs font-bold text-emerald-400 font-mono">0.20s</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 items-center">
+                                <input type="range" id="dspPadTrailRange" min="0" max="10" step="0.05" value="0.20"
+                                    oninput="syncStudioSilenceFromRange('trail')"
+                                    class="col-span-2 w-full accent-emerald-500 bg-[var(--bg-card)] h-1.5 rounded-lg cursor-pointer">
+                                <div class="flex items-center gap-1">
+                                    <input type="number" id="dspPadTrail" min="0" max="10" step="0.05" value="0.2"
+                                        oninput="syncStudioSilenceFromInput('trail')"
+                                        class="config-input w-full text-xs font-mono py-1 px-2 text-center">
+                                    <span class="text-[10px] text-[var(--text-muted)] font-mono">s</span>
+                                </div>
+                            </div>
+                            <!-- Quick duration chips -->
+                            <div class="flex items-center gap-1.5 pt-0.5 text-[9px] font-mono">
+                                <span class="text-[var(--text-muted)]"><%= isRtl ? 'فترات سريعة:' : 'Quick:' %></span>
+                                <button type="button" onclick="setStudioSilenceQuick('trail', 0.2)" class="px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-300 border border-[var(--border-primary)] hover:border-emerald-500/40 cursor-pointer">0.2s</button>
+                                <button type="button" onclick="setStudioSilenceQuick('trail', 0.5)" class="px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-300 border border-[var(--border-primary)] hover:border-emerald-500/40 cursor-pointer">0.5s</button>
+                                <button type="button" onclick="setStudioSilenceQuick('trail', 1.0)" class="px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-300 border border-[var(--border-primary)] hover:border-emerald-500/40 cursor-pointer">1.0s</button>
+                                <button type="button" onclick="setStudioSilenceQuick('trail', 2.0)" class="px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-300 border border-[var(--border-primary)] hover:border-emerald-500/40 cursor-pointer">2.0s</button>
+                                <button type="button" onclick="setStudioSilenceQuick('trail', 3.0)" class="px-1.5 py-0.5 rounded bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-300 border border-[var(--border-primary)] hover:border-emerald-500/40 cursor-pointer">3.0s</button>
+                            </div>
                         </div>
 
                         <!-- Tempo / Speech Pacing -->
@@ -3598,18 +3678,6 @@ function isTabAllowed(tabName) {
                                 oninput="document.getElementById('dspTempoBadge').textContent = parseFloat(this.value).toFixed(2) + 'x';"
                                 class="w-full accent-emerald-500 bg-[var(--bg-primary)] h-1.5 rounded-lg cursor-pointer">
                             <div class="flex justify-between text-[9px] font-mono text-[var(--text-muted)] mt-1"><span>0.70x</span><span>1.00x</span><span>1.40x</span></div>
-                        </div>
-
-                        <!-- Lead & Trail Padding -->
-                        <div class="grid grid-cols-2 gap-3 pt-1">
-                            <div>
-                                <label for="dspPadLead" class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1"><%= isRtl ? 'صمت قبل البدء (Start Pad)' : 'Start Pad (sec)' %></label>
-                                <input type="number" id="dspPadLead" min="0" max="3.0" step="0.1" value="0.2" class="config-input w-full text-xs font-mono">
-                            </div>
-                            <div>
-                                <label for="dspPadTrail" class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1"><%= isRtl ? 'صمت في النهاية (End Pad)' : 'End Pad (sec)' %></label>
-                                <input type="number" id="dspPadTrail" min="0" max="3.0" step="0.1" value="0.2" class="config-input w-full text-xs font-mono">
-                            </div>
                         </div>
                     </div>
 
@@ -6350,10 +6418,14 @@ function isTabAllowed(tabName) {
             document.getElementById('dspTrimSilence').checked = true;
             document.getElementById('dspTempo').value = '1.00';
             document.getElementById('dspTempoBadge').textContent = '1.00x';
-            document.getElementById('dspPadLead').value = '0.2';
-            document.getElementById('dspPadTrail').value = '0.2';
+            document.getElementById('dspEnablePadLead').checked = true;
+            document.getElementById('dspEnablePadTrail').checked = true;
+            document.getElementById('dspPadLead').value = '0.20';
+            document.getElementById('dspPadLeadRange').value = '0.20';
+            document.getElementById('dspPadTrail').value = '0.20';
+            document.getElementById('dspPadTrailRange').value = '0.20';
             document.getElementById('dspGenerateCodecs').checked = true;
-
+            syncStudioSilenceControls();
             try {
                 const res = await fetch(`/api/config/recordings/${id}/info`);
                 if (res.ok) {
@@ -6393,8 +6465,17 @@ function isTabAllowed(tabName) {
                             document.getElementById('dspTempo').value = s.tempo;
                             document.getElementById('dspTempoBadge').textContent = parseFloat(s.tempo).toFixed(2) + 'x';
                         }
-                        if (s.padLead !== undefined) document.getElementById('dspPadLead').value = s.padLead;
-                        if (s.padTrail !== undefined) document.getElementById('dspPadTrail').value = s.padTrail;
+                        if (s.enablePadLead !== undefined) document.getElementById('dspEnablePadLead').checked = Boolean(s.enablePadLead);
+                        if (s.enablePadTrail !== undefined) document.getElementById('dspEnablePadTrail').checked = Boolean(s.enablePadTrail);
+                        if (s.padLead !== undefined) {
+                            document.getElementById('dspPadLead').value = s.padLead;
+                            document.getElementById('dspPadLeadRange').value = s.padLead;
+                        }
+                        if (s.padTrail !== undefined) {
+                            document.getElementById('dspPadTrail').value = s.padTrail;
+                            document.getElementById('dspPadTrailRange').value = s.padTrail;
+                        }
+                        syncStudioSilenceControls();
                         if (s.generateCodecs !== undefined) document.getElementById('dspGenerateCodecs').checked = Boolean(s.generateCodecs);
                     }
                 }
@@ -6402,6 +6483,76 @@ function isTabAllowed(tabName) {
 
             openModal('recordingStudioModal');
         }
+        function syncStudioSilenceControls() {
+            const enableLeadEl = document.getElementById('dspEnablePadLead');
+            const enableTrailEl = document.getElementById('dspEnablePadTrail');
+            if (!enableLeadEl || !enableTrailEl) return;
+
+            const isRtl = '<%= isRtl %>' === 'true';
+            const enableLead = enableLeadEl.checked;
+            const enableTrail = enableTrailEl.checked;
+
+            const leadVal = enableLead ? (parseFloat(document.getElementById('dspPadLead').value) || 0) : 0;
+            const trailVal = enableTrail ? (parseFloat(document.getElementById('dspPadTrail').value) || 0) : 0;
+
+            document.getElementById('dspPadLeadRange').disabled = !enableLead;
+            document.getElementById('dspPadLead').disabled = !enableLead;
+            document.getElementById('dspPadTrailRange').disabled = !enableTrail;
+            document.getElementById('dspPadTrail').disabled = !enableTrail;
+
+            document.getElementById('dspPadLeadBadge').textContent = enableLead ? leadVal.toFixed(2) + 's' : (isRtl ? 'معطل' : 'Off');
+            document.getElementById('dspPadTrailBadge').textContent = enableTrail ? trailVal.toFixed(2) + 's' : (isRtl ? 'معطل' : 'Off');
+
+            const preBox = document.getElementById('timelinePreRoll');
+            const preVal = document.getElementById('timelinePreRollVal');
+            if (preBox && preVal) {
+                preVal.textContent = enableLead ? `+${leadVal.toFixed(2)}s` : '0.00s';
+                preBox.style.opacity = enableLead ? '1' : '0.4';
+            }
+
+            const postBox = document.getElementById('timelinePostRoll');
+            const postVal = document.getElementById('timelinePostRollVal');
+            if (postBox && postVal) {
+                postVal.textContent = enableTrail ? `+${trailVal.toFixed(2)}s` : '0.00s';
+                postBox.style.opacity = enableTrail ? '1' : '0.4';
+            }
+        }
+
+        function syncStudioSilenceFromRange(type) {
+            if (type === 'lead') {
+                const val = parseFloat(document.getElementById('dspPadLeadRange').value) || 0;
+                document.getElementById('dspPadLead').value = val.toFixed(2);
+            } else {
+                const val = parseFloat(document.getElementById('dspPadTrailRange').value) || 0;
+                document.getElementById('dspPadTrail').value = val.toFixed(2);
+            }
+            syncStudioSilenceControls();
+        }
+
+        function syncStudioSilenceFromInput(type) {
+            if (type === 'lead') {
+                const val = Math.max(0, Math.min(10, parseFloat(document.getElementById('dspPadLead').value) || 0));
+                document.getElementById('dspPadLeadRange').value = val;
+            } else {
+                const val = Math.max(0, Math.min(10, parseFloat(document.getElementById('dspPadTrail').value) || 0));
+                document.getElementById('dspPadTrailRange').value = val;
+            }
+            syncStudioSilenceControls();
+        }
+
+        function setStudioSilenceQuick(type, seconds) {
+            if (type === 'lead') {
+                document.getElementById('dspEnablePadLead').checked = true;
+                document.getElementById('dspPadLead').value = seconds.toFixed(2);
+                document.getElementById('dspPadLeadRange').value = seconds;
+            } else {
+                document.getElementById('dspEnablePadTrail').checked = true;
+                document.getElementById('dspPadTrail').value = seconds.toFixed(2);
+                document.getElementById('dspPadTrailRange').value = seconds;
+            }
+            syncStudioSilenceControls();
+        }
+
 
         function toggleStudioAudioPreview() {
             const id = document.getElementById('dspRecId').value;
@@ -6451,9 +6602,13 @@ function isTabAllowed(tabName) {
                 document.getElementById('dspTrimSilence').checked = true;
                 document.getElementById('dspTempo').value = '1.00';
                 document.getElementById('dspTempoBadge').textContent = '1.00x';
-                document.getElementById('dspPadLead').value = '0.2';
-                document.getElementById('dspPadTrail').value = '0.2';
-                document.getElementById('dspGenerateCodecs').checked = true;
+                document.getElementById('dspEnablePadLead').checked = true;
+                document.getElementById('dspEnablePadTrail').checked = true;
+                document.getElementById('dspPadLead').value = '0.20';
+                document.getElementById('dspPadLeadRange').value = '0.20';
+                document.getElementById('dspPadTrail').value = '0.20';
+                document.getElementById('dspPadTrailRange').value = '0.20';
+                syncStudioSilenceControls();
             } else if (preset === 'broadcast') {
                 document.getElementById('dspNormDb').value = '-12';
                 document.getElementById('dspGainDb').value = '0';
@@ -6470,9 +6625,13 @@ function isTabAllowed(tabName) {
                 document.getElementById('dspTrimSilence').checked = true;
                 document.getElementById('dspTempo').value = '1.00';
                 document.getElementById('dspTempoBadge').textContent = '1.00x';
-                document.getElementById('dspPadLead').value = '0.2';
-                document.getElementById('dspPadTrail').value = '0.2';
-                document.getElementById('dspGenerateCodecs').checked = true;
+                document.getElementById('dspEnablePadLead').checked = true;
+                document.getElementById('dspEnablePadTrail').checked = true;
+                document.getElementById('dspPadLead').value = '0.20';
+                document.getElementById('dspPadLeadRange').value = '0.20';
+                document.getElementById('dspPadTrail').value = '0.20';
+                document.getElementById('dspPadTrailRange').value = '0.20';
+                syncStudioSilenceControls();
             } else if (preset === 'clean') {
                 document.getElementById('dspNormDb').value = '-12';
                 document.getElementById('dspGainDb').value = '0';
@@ -6489,9 +6648,13 @@ function isTabAllowed(tabName) {
                 document.getElementById('dspTrimSilence').checked = true;
                 document.getElementById('dspTempo').value = '1.00';
                 document.getElementById('dspTempoBadge').textContent = '1.00x';
-                document.getElementById('dspPadLead').value = '0.2';
-                document.getElementById('dspPadTrail').value = '0.2';
-                document.getElementById('dspGenerateCodecs').checked = true;
+                document.getElementById('dspEnablePadLead').checked = true;
+                document.getElementById('dspEnablePadTrail').checked = true;
+                document.getElementById('dspPadLead').value = '0.20';
+                document.getElementById('dspPadLeadRange').value = '0.20';
+                document.getElementById('dspPadTrail').value = '0.20';
+                document.getElementById('dspPadTrailRange').value = '0.20';
+                syncStudioSilenceControls();
             } else if (preset === 'reset') {
                 resetRecordingStudioMaster();
                 return;
@@ -6517,6 +6680,8 @@ function isTabAllowed(tabName) {
                 treble: parseInt(document.getElementById('dspTreble').value, 10) || 0,
                 trimSilence: document.getElementById('dspTrimSilence').checked,
                 tempo: parseFloat(document.getElementById('dspTempo').value) || 1.0,
+                enablePadLead: document.getElementById('dspEnablePadLead').checked,
+                enablePadTrail: document.getElementById('dspEnablePadTrail').checked,
                 padLead: parseFloat(document.getElementById('dspPadLead').value) || 0,
                 padTrail: parseFloat(document.getElementById('dspPadTrail').value) || 0,
                 generateCodecs: document.getElementById('dspGenerateCodecs').checked

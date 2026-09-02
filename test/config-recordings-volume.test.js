@@ -157,3 +157,47 @@ test('SoX combined DSP pipeline successfully applies normalization, companding, 
         });
     }
 });
+test('Recording studio supports controllable pre-roll and post-roll silence padding with SoX', () => {
+    const configContent = fs.readFileSync(configEjsPath, 'utf8');
+    const serverContent = fs.readFileSync(serverJsPath, 'utf8');
+
+    // UI assertions
+    assert.ok(configContent.includes('id="dspEnablePadLead"'), 'Must render pre-roll silence toggle');
+    assert.ok(configContent.includes('id="dspEnablePadTrail"'), 'Must render post-roll silence toggle');
+    assert.ok(configContent.includes('id="dspPadLeadRange"'), 'Must render pre-roll range slider');
+    assert.ok(configContent.includes('id="dspPadTrailRange"'), 'Must render post-roll range slider');
+    assert.ok(configContent.includes('id="dspPadLead"'), 'Must render pre-roll number input');
+    assert.ok(configContent.includes('id="dspPadTrail"'), 'Must render post-roll number input');
+    assert.ok(configContent.includes('syncStudioSilenceControls'), 'Must define syncStudioSilenceControls helper');
+    assert.ok(configContent.includes('setStudioSilenceQuick'), 'Must define setStudioSilenceQuick helper');
+    assert.ok(configContent.includes('id="timelinePreRoll"'), 'Must render visual timeline preview');
+
+    // Server assertions
+    assert.ok(serverContent.includes('enablePadLead'), 'Server must parse enablePadLead');
+    assert.ok(serverContent.includes('enablePadTrail'), 'Server must parse enablePadTrail');
+
+    // Real SoX execution with 0.5s pre-roll and 1.0s post-roll padding
+    const { execSync } = require('child_process');
+    const tmpIn = path.join('/tmp', `test_pad_in_${Date.now()}.wav`);
+    const tmpOut = path.join('/tmp', `test_pad_out_${Date.now()}.wav`);
+
+    try {
+        // Generate 1.0s sine wave
+        execSync(`sox -n -r 8000 -c 1 -b 16 "${tmpIn}" synth 1.0 sine 440 vol 0.5`);
+        const statIn = execSync(`sox "${tmpIn}" -n stat 2>&1`, { encoding: 'utf8' });
+        const lenIn = parseFloat((statIn.match(/Length \(seconds\):\s+([\d\.]+)/) || [])[1] || 0);
+        assert.ok(Math.abs(lenIn - 1.0) < 0.05, `Input length must be ~1.0s, got ${lenIn}`);
+
+        // Apply SoX pad 0.50 1.00 (0.5s pre-roll + 1.0s post-roll)
+        execSync(`sox "${tmpIn}" -r 8000 -c 1 -b 16 "${tmpOut}" pad 0.50 1.00`);
+        const statOut = execSync(`sox "${tmpOut}" -n stat 2>&1`, { encoding: 'utf8' });
+        const lenOut = parseFloat((statOut.match(/Length \(seconds\):\s+([\d\.]+)/) || [])[1] || 0);
+
+        // Total length should be 1.0 + 0.5 + 1.0 = 2.5s
+        assert.ok(Math.abs(lenOut - 2.5) < 0.05, `Padded audio length must be ~2.5s, got ${lenOut}`);
+    } finally {
+        [tmpIn, tmpOut].forEach(f => {
+            if (fs.existsSync(f)) fs.unlinkSync(f);
+        });
+    }
+});

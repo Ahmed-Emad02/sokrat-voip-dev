@@ -9522,8 +9522,12 @@ async function processRecordingDsp(recId, filename, options = {}) {
     const trimSilence = Boolean(options.trimSilence);
     const fadeIn = options.fadeIn !== undefined && options.fadeIn !== null && options.fadeIn !== '' ? Math.max(0, Math.min(2.0, parseFloat(options.fadeIn) || 0)) : 0;
     const fadeOut = options.fadeOut !== undefined && options.fadeOut !== null && options.fadeOut !== '' ? Math.max(0, Math.min(2.0, parseFloat(options.fadeOut) || 0)) : 0;
-    const padLead = options.padLead !== undefined && options.padLead !== null && options.padLead !== '' ? Math.max(0, Math.min(3.0, parseFloat(options.padLead) || 0)) : 0;
-    const padTrail = options.padTrail !== undefined && options.padTrail !== null && options.padTrail !== '' ? Math.max(0, Math.min(3.0, parseFloat(options.padTrail) || 0)) : 0;
+    const enablePadLead = options.enablePadLead !== undefined ? Boolean(options.enablePadLead) : (parseFloat(options.padLead) > 0);
+    const enablePadTrail = options.enablePadTrail !== undefined ? Boolean(options.enablePadTrail) : (parseFloat(options.padTrail) > 0);
+    const rawPadLead = options.padLead !== undefined && options.padLead !== null && options.padLead !== '' ? Math.max(0, Math.min(10.0, parseFloat(options.padLead) || 0)) : 0;
+    const rawPadTrail = options.padTrail !== undefined && options.padTrail !== null && options.padTrail !== '' ? Math.max(0, Math.min(10.0, parseFloat(options.padTrail) || 0)) : 0;
+    const padLead = enablePadLead ? rawPadLead : 0;
+    const padTrail = enablePadTrail ? rawPadTrail : 0;
     const generateCodecs = options.generateCodecs !== undefined ? Boolean(options.generateCodecs) : true;
 
     // Is it a complete reset to original?
@@ -9660,8 +9664,10 @@ async function processRecordingDsp(recId, filename, options = {}) {
             trimSilence,
             fadeIn,
             fadeOut,
-            padLead,
-            padTrail,
+            enablePadLead,
+            enablePadTrail,
+            padLead: rawPadLead || padLead,
+            padTrail: rawPadTrail || padTrail,
             generateCodecs
         };
 
