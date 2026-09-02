@@ -10,8 +10,15 @@ Run as root on a fresh Issabel 5 server:
 curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/install.sh | bash
 ```
 
-## Features
+## Quick Uninstall
 
+Run as root to remove Sokrat VoIP and restore Issabel default web GUI (database tables are preserved):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/uninstall.sh | bash
+```
+
+## Features
 - **Executive Dashboard** — KPI cards, inbound/outbound pie chart, date-range filtering
 - **CDR Analytics** — Search call detail records by date, extension, status, source, destination. Custom audio player with seekable slider, playback speed control, and download
 - **Extension Statistics** — Per-extension breakdown with disposition pie charts and daily call volume bar graphs. Console overview with sortable metrics for all extensions
