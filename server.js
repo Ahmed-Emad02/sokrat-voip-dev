@@ -7303,36 +7303,172 @@ function getDongleSiblingPorts(dongleId) {
     return [];
 }
 
-// API Endpoint to list /dev/ttyUSB* devices with dongle mapping
-app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, (req, res) => {
+// Helper function to parse live USB hardware via lsusb and sysfs
+function getLiveUsbStatus() {
     const { execSync } = require('child_process');
     const fs = require('fs');
+    const path = require('path');
+
+    let lsusbRaw = '';
+    try {
+        lsusbRaw = execSync('lsusb 2>/dev/null', { encoding: 'utf8', timeout: 5000 }).trim();
+    } catch (_) {}
+
+    const allUsbDevices = [];
+    const physicalModems = [];
+
+    const lines = lsusbRaw.split('\n').filter(Boolean);
+    for (const line of lines) {
+        const m = line.match(/^Bus\s+(\d+)\s+Device\s+(\d+):\s+ID\s+([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\s*(.*)$/);
+        if (m) {
+            const bus = m[1];
+            const device = m[2];
+            const vendorId = m[3].toLowerCase();
+            const productId = m[4].toLowerCase();
+            const rawDescription = m[5].trim();
+
+            let vendorName = '';
+            let modelName = '';
+            if (rawDescription.includes('Huawei')) {
+                vendorName = 'Huawei Technologies';
+                modelName = rawDescription.replace(/^Huawei Technologies Co\.,?\s*Ltd\.?\s*/i, '').trim() || 'GSM Modem';
+            } else {
+                const parts = rawDescription.split(/\s+/);
+                vendorName = parts.slice(0, 2).join(' ');
+                modelName = parts.slice(2).join(' ') || rawDescription;
+            }
+
+            const isModem = vendorId === '12d1' || vendorId === '19d2' || /modem|hsdpa|gsm|cellular|3g|4g|lte/i.test(rawDescription);
+
+            const devObj = {
+                bus,
+                device,
+                vendorId,
+                productId,
+                hardwareId: `${vendorId}:${productId}`,
+                vendorName,
+                modelName,
+                rawDescription,
+                isModem,
+                ttyPorts: []
+            };
+
+            allUsbDevices.push(devObj);
+            if (isModem) {
+                physicalModems.push(devObj);
+            }
+        }
+    }
+
+    // Map ttyUSB devices from /sys/bus/usb-serial/devices/
+    const ttyPortMap = {};
+    try {
+        const sysSerialPath = '/sys/bus/usb-serial/devices';
+        if (fs.existsSync(sysSerialPath)) {
+            const serialEntries = fs.readdirSync(sysSerialPath);
+            for (const portName of serialEntries) {
+                try {
+                    const devLink = fs.readlinkSync(path.join(sysSerialPath, portName));
+                    const fullDevDir = path.resolve(sysSerialPath, devLink, '../..');
+                    let busNum = '';
+                    let devNum = '';
+                    try {
+                        busNum = fs.readFileSync(path.join(fullDevDir, 'busnum'), 'utf8').trim().padStart(3, '0');
+                        devNum = fs.readFileSync(path.join(fullDevDir, 'devnum'), 'utf8').trim().padStart(3, '0');
+                    } catch (_) {
+                        const usbParent = path.resolve(fullDevDir, '..');
+                        busNum = fs.readFileSync(path.join(usbParent, 'busnum'), 'utf8').trim().padStart(3, '0');
+                        devNum = fs.readFileSync(path.join(usbParent, 'devnum'), 'utf8').trim().padStart(3, '0');
+                    }
+
+                    if (busNum && devNum) {
+                        ttyPortMap[portName] = { bus: busNum, device: devNum };
+                        const modem = physicalModems.find(m => m.bus === busNum && m.device === devNum);
+                        if (modem && !modem.ttyPorts.includes(portName)) {
+                            modem.ttyPorts.push(portName);
+                        }
+                    }
+                } catch (_) {}
+            }
+        }
+    } catch (_) {}
+
+    physicalModems.forEach(m => {
+        m.ttyPorts.sort((a, b) => {
+            const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
+            const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
+            return numA - numB;
+        });
+    });
+
+    // Parse dongle.conf
+    const confPortMap = {};
+    const configuredSlots = [];
+    try {
+        const conf = fs.readFileSync('/etc/asterisk/dongle.conf', 'utf8');
+        let currentSection = null;
+        for (const line of conf.split('\n')) {
+            const secMatch = line.match(/^\[([^\]]+)\]/);
+            if (secMatch) {
+                currentSection = secMatch[1].trim();
+                if (currentSection && currentSection !== 'general' && !configuredSlots.includes(currentSection)) {
+                    configuredSlots.push(currentSection);
+                }
+                continue;
+            }
+            if (!currentSection || currentSection === 'general') continue;
+            const audioMatch = line.match(/^\s*audio\s*=\s*\/dev\/(ttyUSB\d+)/i);
+            if (audioMatch) confPortMap[audioMatch[1]] = { dongleId: currentSection, portType: 'audio' };
+            const dataMatch = line.match(/^\s*data\s*=\s*\/dev\/(ttyUSB\d+)/i);
+            if (dataMatch) confPortMap[dataMatch[1]] = { dongleId: currentSection, portType: 'data' };
+        }
+    } catch (_) {}
+
+    physicalModems.forEach(m => {
+        const matchedSlots = new Set();
+        m.ttyPorts.forEach(p => {
+            if (confPortMap[p]) {
+                matchedSlots.add(confPortMap[p].dongleId);
+            }
+        });
+        m.boundSlots = Array.from(matchedSlots);
+        m.status = m.ttyPorts.length > 0 ? 'online' : 'error';
+    });
+
+    let ttyDevicesList = [];
+    try {
+        const rawTty = execSync('ls /dev/ | grep -i ttyusb', { encoding: 'utf8', timeout: 5000 }).trim();
+        const rawPorts = rawTty ? rawTty.split('\n').filter(Boolean) : [];
+        ttyDevicesList = rawPorts.map(p => ({
+            name: p,
+            dongleId: confPortMap[p] ? confPortMap[p].dongleId : null,
+            portType: confPortMap[p] ? confPortMap[p].portType : null,
+            busDevice: ttyPortMap[p] ? `${ttyPortMap[p].bus}:${ttyPortMap[p].device}` : null
+        }));
+    } catch (_) {}
+
+    return {
+        summary: {
+            totalUsbDevices: allUsbDevices.length,
+            totalModems: physicalModems.length,
+            totalTtyPorts: ttyDevicesList.length,
+            totalConfiguredSlots: configuredSlots.length
+        },
+        physicalModems,
+        allUsbDevices,
+        ttyDevices: ttyDevicesList,
+        configuredSlots,
+        confPortMap
+    };
+}
+
+// API Endpoint to list live USB hardware (lsusb) and /dev/ttyUSB* devices
+app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, (req, res) => {
     try {
         const dongleId = req.query.dongleId ? String(req.query.dongleId).trim() : null;
-        const raw = execSync('ls /dev/ | grep -i ttyusb', { encoding: 'utf8', timeout: 5000 }).trim();
-        const devices = raw ? raw.split('\n').filter(Boolean) : [];
+        const usbStatus = getLiveUsbStatus();
 
-        // Parse dongle.conf to map ports to dongle IDs
-        const portMap = {};
-        try {
-            const conf = fs.readFileSync('/etc/asterisk/dongle.conf', 'utf8');
-            let currentSection = null;
-            for (const line of conf.split('\n')) {
-                const secMatch = line.match(/^\[([^\]]+)\]/);
-                if (secMatch) { currentSection = secMatch[1]; continue; }
-                if (!currentSection || currentSection === 'general') continue;
-                const audioMatch = line.match(/^\s*audio\s*=\s*\/dev\/(ttyUSB\d+)/i);
-                if (audioMatch) portMap[audioMatch[1]] = { dongleId: currentSection, portType: 'audio' };
-                const dataMatch = line.match(/^\s*data\s*=\s*\/dev\/(ttyUSB\d+)/i);
-                if (dataMatch) portMap[dataMatch[1]] = { dongleId: currentSection, portType: 'data' };
-            }
-        } catch (_) {}
-
-        let enriched = devices.map(d => ({
-            name: d,
-            dongleId: portMap[d] ? portMap[d].dongleId : null,
-            portType: portMap[d] ? portMap[d].portType : null
-        }));
+        let enriched = usbStatus.ttyDevices;
 
         if (dongleId) {
             const siblingPortNames = getDongleSiblingPorts(dongleId);
@@ -7341,16 +7477,24 @@ app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, (req, res) => {
                 enriched = siblingPortNames.map(portName => {
                     return enrichedMap.get(portName) || {
                         name: portName,
-                        dongleId: portMap[portName] ? portMap[portName].dongleId : null,
-                        portType: portMap[portName] ? portMap[portName].portType : null
+                        dongleId: usbStatus.confPortMap[portName] ? usbStatus.confPortMap[portName].dongleId : null,
+                        portType: usbStatus.confPortMap[portName] ? usbStatus.confPortMap[portName].portType : null,
+                        busDevice: null
                     };
                 });
             }
         }
 
-        res.json({ success: true, devices: enriched });
+        res.json({
+            success: true,
+            summary: usbStatus.summary,
+            physicalModems: usbStatus.physicalModems,
+            allUsbDevices: usbStatus.allUsbDevices,
+            devices: enriched,
+            ttyDevices: usbStatus.ttyDevices
+        });
     } catch (e) {
-        res.json({ success: true, devices: [] });
+        res.json({ success: true, summary: { totalUsbDevices: 0, totalModems: 0, totalTtyPorts: 0, totalConfiguredSlots: 0 }, physicalModems: [], allUsbDevices: [], devices: [], ttyDevices: [] });
     }
 });
 // --- 5. STORAGE & BACKUPS MANAGEMENT APIs ---

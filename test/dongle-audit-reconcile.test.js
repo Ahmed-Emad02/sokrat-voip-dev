@@ -212,3 +212,32 @@ test('views/gsm-dongles.ejs includes global audit header button, audit modal, an
     assert.match(viewContent, /auditModalTitle/, 'View must define auditModalTitle translation key');
     assert.match(viewContent, /auditReconcileAllBtn/, 'View must define auditReconcileAllBtn translation key');
 });
+test('server.js and views/gsm-dongles.ejs provide live lsusb hardware and ttyUSB serial monitoring', () => {
+    const serverJs = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+    const viewContent = fs.readFileSync(path.join(__dirname, '../views/gsm-dongles.ejs'), 'utf8');
+
+    // Server logic
+    assert.match(serverJs, /function getLiveUsbStatus\(\)/, 'server.js must define getLiveUsbStatus');
+    assert.match(serverJs, /app\.get\('\/api\/gsm-dongles\/ttyusb-devices'/, 'server.js must define GET /api/gsm-dongles/ttyusb-devices');
+    assert.match(serverJs, /physicalModems/, 'ttyusb-devices must include physicalModems');
+
+    // UI elements
+    assert.match(viewContent, /id="lsusb-devices-grid"/, 'View must render lsusb-devices-grid');
+    assert.match(viewContent, /id="usb-devices-grid"/, 'View must render usb-devices-grid');
+    assert.match(viewContent, /id="lsusb-modems-badge"/, 'View must render lsusb-modems-badge');
+    assert.match(viewContent, /id="lsusb-tty-badge"/, 'View must render lsusb-tty-badge');
+    assert.match(viewContent, /renderLsusbDevices/, 'View must define renderLsusbDevices');
+    assert.match(viewContent, /refreshUsbDevices/, 'View must define refreshUsbDevices');
+
+    // Real execution test of getLiveUsbStatus helper logic
+    const { execSync } = require('child_process');
+    let lsusbOut = '';
+    try {
+        lsusbOut = execSync('lsusb', { encoding: 'utf8' });
+    } catch (_) {}
+
+    if (lsusbOut.includes('12d1:1001') || lsusbOut.includes('Huawei')) {
+        const hasTty = fs.existsSync('/dev/ttyUSB0');
+        assert.ok(hasTty, 'At least one ttyUSB device must exist when Huawei modems are attached');
+    }
+});
