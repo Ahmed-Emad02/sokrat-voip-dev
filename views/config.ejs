@@ -782,27 +782,29 @@ function isTabAllowed(tabName) {
 
         <!-- TAB 3: SYSTEM RECORDINGS MANAGEMENT -->
         <% if (isTabAllowed('recordings')) { %>
-        <div id="section-recordings" class="tab-section hidden">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                <!-- Upload New Recording Card -->
-                <div class="config-card p-6 lg:col-span-1 h-fit">
-                    <div class="mb-5 pb-3 border-b border-[var(--border-primary)]">
+        <div id="section-recordings" class="tab-section hidden space-y-6">
+            
+            <!-- 1. Upload New Recording Card (Full Width) -->
+            <div class="config-card p-6">
+                <div class="mb-5 pb-3 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
                         <h2 class="text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
                             <svg class="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
                             <span><%= isRtl ? 'رفع تسجيل صوتي جديد' : 'Upload System Recording' %></span>
                         </h2>
-                        <p class="text-xs text-[var(--text-muted)] mt-1"><%= isRtl ? 'صيغ الملفات المقبولة: MP3, WAV, M4A, OGG, FLAC (سيتم تحويلها تلقائيًا)' : 'Accepted formats: MP3, WAV, M4A, OGG, FLAC (auto-converted to 8kHz WAV)' %></p>
+                        <p class="text-xs text-[var(--text-muted)] mt-1"><%= isRtl ? 'صيغ الملفات المقبولة: MP3, WAV, M4A, OGG, FLAC (سيتم تحويلها تلقائيًا إلى 8kHz WAV)' : 'Accepted formats: MP3, WAV, M4A, OGG, FLAC (auto-converted to 8kHz WAV)' %></p>
                     </div>
-                    <form id="systemRecordingUploadForm" onsubmit="uploadSystemRecording(event)" class="space-y-4">
+                </div>
+                <form id="systemRecordingUploadForm" onsubmit="uploadSystemRecording(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                         <div>
                             <label for="sysRecName" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'اسم التسجيل (Display Name) *' : 'Recording Name *' %></label>
-                            <input type="text" id="sysRecName" required placeholder="e.g. Welcome Announcement" class="config-input w-full">
+                            <input type="text" id="sysRecName" required placeholder="e.g. Welcome Announcement" class="config-input w-full text-xs">
                         </div>
-                         <div>
-                             <label for="sysRecFile" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'ملف الصوت *' : 'Audio File *' %></label>
-                             <input type="file" id="sysRecFile" accept="audio/*,.mpeg,.mpg" required class="w-full text-xs text-[var(--text-secondary)] file:mr-3 rtl:file:mr-0 rtl:file:ml-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-[var(--border-primary)] file:bg-[var(--bg-card)] file:text-xs file:font-bold file:text-[var(--text-primary)] hover:file:bg-[var(--bg-hover)] file:cursor-pointer transition cursor-pointer">
-                         </div>
+                        <div>
+                            <label for="sysRecFile" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'ملف الصوت *' : 'Audio File *' %></label>
+                            <input type="file" id="sysRecFile" accept="audio/*,.mpeg,.mpg" required class="w-full text-xs text-[var(--text-secondary)] file:mr-3 rtl:file:mr-0 rtl:file:ml-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-[var(--border-primary)] file:bg-[var(--bg-card)] file:text-xs file:font-bold file:text-[var(--text-primary)] hover:file:bg-[var(--bg-hover)] file:cursor-pointer transition cursor-pointer">
+                        </div>
                         <div>
                             <label for="sysRecGain" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'مستوى الصوت الأولي / الهامش' : 'Initial Volume / Headroom' %></label>
                             <select id="sysRecGain" class="config-input w-full text-xs">
@@ -820,48 +822,53 @@ function isTabAllowed(tabName) {
                                 <%= isRtl ? 'يمنع تشويش وتكسير الصوت عند تشغيل التسجيل في IVR عبر الدونجل.' : 'Prevents voice distortion when played through GSM dongles with high volume gain.' %>
                             </span>
                         </div>
-                         <!-- Upload Progress Bar -->
-                         <div id="sysRecProgressWrap" class="hidden space-y-1">
-                             <div class="flex justify-between text-[11px] font-semibold text-[var(--text-muted)]">
-                                 <span id="sysRecStatus">Uploading & converting...</span>
-                                 <span id="sysRecPercent">0%</span>
-                             </div>
-                             <div class="w-full h-1.5 bg-[var(--bg-card)] rounded-full overflow-hidden">
-                                 <div id="sysRecProgressBar" class="h-full bg-[var(--accent-color)] rounded-full transition-all duration-300" style="width:0%"></div>
-                             </div>
-                         </div>
-                         <button type="submit" id="sysRecSubmitBtn" class="config-btn-primary w-full py-2.5 text-xs flex items-center justify-center gap-2 cursor-pointer">
-                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                             <span><%= isRtl ? 'رفع وحفظ التسجيل' : 'Upload Recording' %></span>
-                         </button>
-                     </form>
-                 </div>
- 
-                 <!-- Existing Recordings List Table -->
-                 <div class="config-card p-6 lg:col-span-2">
-                     <div class="mb-5 pb-3 border-b border-[var(--border-primary)]">
-                         <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التسجيلات الصوتية المسجلة في المقسم' : 'System Recordings List' %></h2>
-                     </div>
- 
-                     <div class="overflow-x-auto">
-                         <table class="w-full text-left border-collapse">
-                             <thead>
-                                 <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
-                                     <th class="py-3 px-4">ID</th>
-                                     <th class="py-3 px-4"><%= isRtl ? 'اسم التسجيل' : 'Recording Name' %></th>
-                                     <th class="py-3 px-4"><%= isRtl ? 'مسار الملف' : 'System Filename' %></th>
-                                    <th class="py-3 px-4 text-center min-w-[260px]"><%= isRtl ? 'مستوى الصوت / الهامش' : 'Volume / Headroom' %></th>
-                                     <th class="py-3 px-4 text-center"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
-                                 </tr>
-                             </thead>
-                             <tbody id="recordings-table-body" class="divide-y divide-[var(--border-primary)] text-sm font-medium text-[var(--text-primary)]">
-                                <tr><td colspan="5" class="py-8 text-center text-[var(--text-muted)]">Loading recordings...</td></tr>
-                             </tbody>
-                         </table>
+                    </div>
+                    <!-- Upload Progress Bar -->
+                    <div id="sysRecProgressWrap" class="hidden space-y-1">
+                        <div class="flex justify-between text-[11px] font-semibold text-[var(--text-muted)]">
+                            <span id="sysRecStatus">Uploading & converting...</span>
+                            <span id="sysRecPercent">0%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-[var(--bg-card)] rounded-full overflow-hidden">
+                            <div id="sysRecProgressBar" class="h-full bg-[var(--accent-color)] rounded-full transition-all duration-300" style="width:0%"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end pt-1">
+                        <button type="submit" id="sysRecSubmitBtn" class="config-btn-primary px-6 py-2.5 text-xs flex items-center justify-center gap-2 cursor-pointer">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                            <span><%= isRtl ? 'رفع وحفظ التسجيل' : 'Upload Recording' %></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 2. Existing Recordings List Table Card (Full Width) -->
+            <div class="config-card p-6">
+                <div class="mb-5 pb-3 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التسجيلات الصوتية المسجلة في المقسم' : 'System Recordings List' %></h2>
+                        <p class="text-xs text-[var(--text-muted)] mt-1"><%= isRtl ? 'إدارة التسجيلات الصوتية، مستويات الهامش لكل ملف، والاستوديو المتقدم لمعالجة الصوت' : 'Manage audio prompts, per-file headroom gain, and advanced DSP studio processing' %></p>
                     </div>
                 </div>
 
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                                <th class="py-3 px-4 w-16">ID</th>
+                                <th class="py-3 px-4 min-w-[200px]"><%= isRtl ? 'اسم التسجيل' : 'Recording Name' %></th>
+                                <th class="py-3 px-4 min-w-[200px]"><%= isRtl ? 'مسار الملف' : 'System Filename' %></th>
+                                <th class="py-3 px-4 text-center min-w-[280px]"><%= isRtl ? 'مستوى الصوت / الهامش' : 'Volume / Headroom' %></th>
+                                <th class="py-3 px-4 text-center min-w-[220px]"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordings-table-body" class="divide-y divide-[var(--border-primary)] text-sm font-medium text-[var(--text-primary)]">
+                            <tr><td colspan="5" class="py-8 text-center text-[var(--text-muted)]">Loading recordings...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
         </div>
         <% } %>
 
