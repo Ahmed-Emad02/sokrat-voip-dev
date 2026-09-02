@@ -6036,30 +6036,6 @@ function isTabAllowed(tabName) {
                                 dspBadgesHtml = '<div class="flex flex-wrap gap-1 mt-1">' + tags.map(t => `<span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-purple-500/15 text-purple-300 border border-purple-500/25">${escapeHtml(t)}</span>`).join('') + '</div>';
                             }
                         }
-
-                        const presetConfigs = [
-                            { val: 0, label: '0dB' },
-                            { val: -6, label: '-6dB' },
-                            { val: -12, label: '-12dB' },
-                            { val: -18, label: '-18dB ★', highlight: true, title: isRtl ? 'موصى به لبوابات GSM والدونجل' : 'Optimized for GSM Dongles' },
-                            { val: -24, label: '-24dB' },
-                            { val: -30, label: '-30dB' }
-                        ];
-
-                        const presetBtnsHtml = presetConfigs.map(p => {
-                            const isCurrent = currentGain === p.val;
-                            let btnClasses = 'px-2 py-1 rounded-md text-[10px] font-mono font-bold transition-all duration-150 cursor-pointer border ';
-                            if (isCurrent) {
-                                btnClasses += 'bg-amber-500/25 text-amber-300 border-amber-500/60 shadow-sm shadow-amber-500/10 ring-1 ring-amber-500/30';
-                            } else if (p.highlight) {
-                                btnClasses += 'bg-amber-500/10 text-amber-400 hover:text-amber-200 hover:bg-amber-500/20 border-amber-500/30 hover:border-amber-500/50';
-                            } else {
-                                btnClasses += 'bg-[var(--bg-card)]/90 text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-hover)] border-[var(--border-primary)] hover:border-white/20';
-                            }
-                            const titleAttr = p.title ? ` title="${escapeHtml(p.title)}"` : '';
-                            return `<button type="button" onclick="setRecordingGainQuick(${rec.id}, ${p.val})" class="${btnClasses}"${titleAttr}>${p.label}</button>`;
-                        }).join('');
-
                         tr.innerHTML = `
                             <td class="py-3 px-4 font-mono font-bold text-[var(--text-muted)]">${rec.id}</td>
                             <td class="py-3 px-4">
@@ -6068,7 +6044,7 @@ function isTabAllowed(tabName) {
                             </td>
                             <td class="py-3 px-4 font-mono text-xs text-blue-400 font-semibold">${escapeHtml(rec.filename || '-')}</td>
                             <td class="py-3 px-4">
-                                <div class="flex flex-col gap-2 min-w-[270px] p-2.5 rounded-xl bg-[var(--bg-primary)]/50 border border-[var(--border-primary)] shadow-inner">
+                                <div class="flex flex-col gap-2 min-w-[240px] p-2.5 rounded-xl bg-[var(--bg-primary)]/50 border border-[var(--border-primary)] shadow-inner">
                                     <div class="flex items-center justify-between gap-2">
                                         <span class="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">${isRtl ? 'مستوى الكسب' : 'Headroom Gain'}</span>
                                         <span id="recGainBadge_${rec.id}" class="font-mono font-bold text-xs ${gainColorClass} px-2 py-0.5 rounded bg-black/40 border border-white/5 shadow-sm">${gainBadgeText}</span>
@@ -6081,9 +6057,6 @@ function isTabAllowed(tabName) {
                                         <button type="button" onclick="saveRecordingVolume(${rec.id})" class="px-2.5 py-1 text-[11px] font-bold text-amber-400 hover:text-white hover:bg-amber-500/20 rounded-lg border border-amber-500/40 bg-amber-500/10 transition-all shrink-0 cursor-pointer shadow-sm active:scale-95">
                                             <span>${isRtl ? 'تطبيق' : 'Apply'}</span>
                                         </button>
-                                    </div>
-                                    <div class="flex items-center justify-between gap-1 pt-0.5 border-t border-[var(--border-primary)]/40 mt-0.5">
-                                        ${presetBtnsHtml}
                                     </div>
                                 </div>
                             </td>
