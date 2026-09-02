@@ -9556,8 +9556,8 @@ function isTabAllowed(tabName) {
             svgNodes.innerHTML = '';
             svgWires.innerHTML = '';
 
-            const cardWidth = 275;
-            const cardHeight = 125;
+            const cardWidth = 270;
+            const cardHeight = 130;
 
             function formatDestination(dest) {
                 if (!dest) return isRtl ? 'غير محدد' : 'Not set';
@@ -9794,68 +9794,103 @@ function isTabAllowed(tabName) {
             });
 
             // -------------------------------------------------------------
-            // RADIAL TOPOLOGY 4-QUADRANT GEOMETRY COMPUTATION
+            // DEDICATED CONFIG-BASED SEGMENTATION GEOMETRY (8 ZONES)
+            // Every config type takes its own dedicated area around the CORE ROUTING HUB
             // -------------------------------------------------------------
-            const q1Trunks = diagramNodesList.filter(n => n.type === 'trunk');
-            const q2Outbound = diagramNodesList.filter(n => n.type === 'outbound');
-            const q3Apps = diagramNodesList.filter(n => ['inbound', 'timecondition', 'ivr', 'ringgroup', 'queue'].includes(n.type));
-            const q4Exts = diagramNodesList.filter(n => n.type === 'extension');
+            const zTrunks = diagramNodesList.filter(n => n.type === 'trunk');
+            const zInbound = diagramNodesList.filter(n => n.type === 'inbound');
+            const zTimecond = diagramNodesList.filter(n => n.type === 'timecondition');
+            const zIvrs = diagramNodesList.filter(n => n.type === 'ivr');
+            const zQueues = diagramNodesList.filter(n => n.type === 'queue');
+            const zRinggroups = diagramNodesList.filter(n => n.type === 'ringgroup');
+            const zOutbound = diagramNodesList.filter(n => n.type === 'outbound');
+            const zExts = diagramNodesList.filter(n => n.type === 'extension');
 
-            // Columns per quadrant
-            const q1Cols = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(q1Trunks.length))));
-            const q2Cols = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(q2Outbound.length))));
-            const q3Cols = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(q3Apps.length))));
-            const q4Cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(q4Exts.length))));
+            // Columns per zone
+            const colsTrunks = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(zTrunks.length || 1))));
+            const colsInbound = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(zInbound.length || 1))));
+            const colsTimecond = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(zTimecond.length || 1))));
+            const colsIvrs = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(zIvrs.length || 1))));
+            const colsQueues = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(zQueues.length || 1))));
+            const colsRinggroups = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(zRinggroups.length || 1))));
+            const colsOutbound = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(zOutbound.length || 1))));
+            const colsExts = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(zExts.length || 1))));
 
-            const q1Rows = Math.ceil(q1Trunks.length / q1Cols) || 1;
-            const q2Rows = Math.ceil(q2Outbound.length / q2Cols) || 1;
-            const q3Rows = Math.ceil(q3Apps.length / q3Cols) || 1;
-            const q4Rows = Math.ceil(q4Exts.length / q4Cols) || 1;
+            const rowsTrunks = Math.ceil(zTrunks.length / colsTrunks) || 1;
+            const rowsInbound = Math.ceil(zInbound.length / colsInbound) || 1;
+            const rowsTimecond = Math.ceil(zTimecond.length / colsTimecond) || 1;
+            const rowsIvrs = Math.ceil(zIvrs.length / colsIvrs) || 1;
+            const rowsQueues = Math.ceil(zQueues.length / colsQueues) || 1;
+            const rowsRinggroups = Math.ceil(zRinggroups.length / colsRinggroups) || 1;
+            const rowsOutbound = Math.ceil(zOutbound.length / colsOutbound) || 1;
+            const rowsExts = Math.ceil(zExts.length / colsExts) || 1;
 
-            const maxTopRows = Math.max(q1Rows, q2Rows);
-            const maxBottomRows = Math.max(q3Rows, q4Rows);
+            const cardGapX = 24;
+            const cardGapY = 18;
 
-            const topHeight = Math.max(480, maxTopRows * (cardHeight + 20) + 120);
-            const bottomHeight = Math.max(480, maxBottomRows * (cardHeight + 20) + 160);
-            const H = Math.max(1600, topHeight + 360 + bottomHeight);
+            const zonePad = 28;
+            const headerH = 48;
 
-            const leftWidth = Math.max(1050, Math.max(q1Cols, q3Cols) * (cardWidth + 28) + 140);
-            const rightWidth = Math.max(1050, Math.max(q2Cols, q4Cols) * (cardWidth + 28) + 140);
-            const W = Math.max(2700, leftWidth + 480 + rightWidth);
+            function zoneDimensions(cols, rows, minW = 620, minH = 320) {
+                const w = Math.max(minW, zonePad * 2 + cols * cardWidth + (cols - 1) * cardGapX);
+                const h = Math.max(minH, headerH + zonePad + rows * cardHeight + (rows - 1) * cardGapY + zonePad);
+                return { w, h };
+            }
 
+            const dimTrunks = zoneDimensions(colsTrunks, rowsTrunks, 620, 320);
+            const dimInbound = zoneDimensions(colsInbound, rowsInbound, 620, 320);
+            const dimTimecond = zoneDimensions(colsTimecond, rowsTimecond, 620, 320);
+            const dimIvrs = zoneDimensions(colsIvrs, rowsIvrs, 620, 320);
+            const dimQueues = zoneDimensions(colsQueues, rowsQueues, 640, 340);
+            const dimRinggroups = zoneDimensions(colsRinggroups, rowsRinggroups, 640, 340);
+            const dimOutbound = zoneDimensions(colsOutbound, rowsOutbound, 680, 360);
+            const dimExts = zoneDimensions(colsExts, rowsExts, 920, 680);
+
+            const leftZoneW = Math.max(dimTrunks.w, dimInbound.w, dimTimecond.w, dimIvrs.w);
+            const rightZoneW = Math.max(dimOutbound.w, dimExts.w);
+            const bottomZoneW = Math.max(dimQueues.w, dimRinggroups.w);
+
+            const W = Math.max(3400, 80 + leftZoneW + 540 + rightZoneW + 80);
             const CX = Math.round(W / 2);
-            const CY = Math.round(H / 2);
 
-            // Quadrant Placement logic
-            q1Trunks.forEach((n, i) => {
-                const c = i % q1Cols;
-                const r = Math.floor(i / q1Cols);
-                n.x = 90 + c * (cardWidth + 24);
-                n.y = 120 + r * (cardHeight + 20);
+            const z1_y = 110;
+            const z2_y = z1_y + dimTrunks.h + 40;
+            const z3_y = z2_y + dimInbound.h + 40;
+            const z4_y = z3_y + dimTimecond.h + 40;
+            const leftTotalH = z4_y + dimIvrs.h + 80;
+
+            const z7_y = 110;
+            const z8_y = z7_y + dimOutbound.h + 40;
+            const rightTotalH = z8_y + dimExts.h + 80;
+
+            const CY = Math.round(Math.max(z2_y + dimInbound.h / 2, z8_y + 200));
+            const H = Math.max(2200, Math.max(leftTotalH, rightTotalH, CY + 550));
+
+            // Dedicated Configuration Zones
+            const ZONES = {
+                trunks: { x: 70, y: z1_y, w: leftZoneW, h: dimTrunks.h, color: '#06b6d4', bg: '#08252e', borderColor: '#0891b2', title: 'EXTERNAL GATEWAYS (SIP TRUNKS)', subtitle: 'Carrier Interconnects, GSM Dongles & Inbound Trunks', nodes: zTrunks, cols: colsTrunks },
+                inbound: { x: 70, y: z2_y, w: leftZoneW, h: dimInbound.h, color: '#10b981', bg: '#072b1e', borderColor: '#059669', title: 'INBOUND ROUTES (DIDs)', subtitle: 'Direct Inward Dialing Patterns & Entrypoints', nodes: zInbound, cols: colsInbound },
+                timeconditions: { x: 70, y: z3_y, w: leftZoneW, h: dimTimecond.h, color: '#f59e0b', bg: '#2e2407', borderColor: '#d97706', title: 'TIME CONDITIONS & SCHEDULES', subtitle: 'Calendar Routing & Timegroup Logic', nodes: zTimecond, cols: colsTimecond },
+                ivrs: { x: 70, y: z4_y, w: leftZoneW, h: dimIvrs.h, color: '#8b5cf6', bg: '#20133d', borderColor: '#7c3aed', title: 'APPLICATION SERVERS (IVR & QUEUES)', subtitle: 'Digital Receptionist & Interactive Voice Menus', nodes: zIvrs, cols: colsIvrs },
+
+                queues: { x: CX - bottomZoneW - 20, y: CY + 140, w: bottomZoneW, h: dimQueues.h, color: '#f97316', bg: '#2e1807', borderColor: '#ea580c', title: 'CALL QUEUES (ACD)', subtitle: 'Call Center Queues, Hunt Distribution & Max Wait', nodes: zQueues, cols: colsQueues },
+                ringgroups: { x: CX + 20, y: CY + 140, w: bottomZoneW, h: dimRinggroups.h, color: '#d946ef', bg: '#2e0a29', borderColor: '#c026d3', title: 'RING GROUPS (HUNT GROUPS)', subtitle: 'Group Ring Lists & Failover Strategies', nodes: zRinggroups, cols: colsRinggroups },
+
+                outbound: { x: W - rightZoneW - 70, y: z7_y, w: rightZoneW, h: dimOutbound.h, color: '#ea580c', bg: '#331407', borderColor: '#dc2626', title: 'ROUTING RULES (OUTBOUND)', subtitle: 'Dial Patterns, CID Filters & Trunk Output Sequences', nodes: zOutbound, cols: colsOutbound },
+                extensions: { x: W - rightZoneW - 70, y: z8_y, w: rightZoneW, h: dimExts.h, color: '#3b82f6', bg: '#0c1f3d', borderColor: '#2563eb', title: 'INTERNAL USER EXTENSIONS', subtitle: 'Desk Phones, WebRTC Softphones & Mobile Apps', nodes: zExts, cols: colsExts }
+            };
+
+            // Layout each node within its dedicated zone
+            Object.values(ZONES).forEach(zone => {
+                zone.nodes.forEach((n, idx) => {
+                    const col = idx % zone.cols;
+                    const row = Math.floor(idx / zone.cols);
+                    n.x = zone.x + zonePad + col * (cardWidth + cardGapX);
+                    n.y = zone.y + headerH + zonePad + row * (cardHeight + cardGapY);
+                });
             });
 
-            q2Outbound.forEach((n, i) => {
-                const c = i % q2Cols;
-                const r = Math.floor(i / q2Cols);
-                n.x = CX + 240 + c * (cardWidth + 28);
-                n.y = 120 + r * (cardHeight + 20);
-            });
-
-            q3Apps.forEach((n, i) => {
-                const c = i % q3Cols;
-                const r = Math.floor(i / q3Cols);
-                n.x = 90 + c * (cardWidth + 24);
-                n.y = CY + 85 + r * (cardHeight + 20);
-            });
-
-            q4Exts.forEach((n, i) => {
-                const c = i % q4Cols;
-                const r = Math.floor(i / q4Cols);
-                n.x = CX + 240 + c * (cardWidth + 24);
-                n.y = CY + 85 + r * (cardHeight + 20);
-            });
-
-            // Manual saved positions win
+            // Manual saved positions override
             let savedRadial = null;
             try { savedRadial = JSON.parse(localStorage.getItem('config_diagram_radial_layout_v1')); } catch (_) {}
             if (savedRadial && typeof savedRadial === 'object') {
@@ -9887,12 +9922,17 @@ function isTabAllowed(tabName) {
             svgWires.appendChild(defs);
 
             // -------------------------------------------------------------
-            // SVG BACKGROUND: CONCENTRIC ORBITS, CROSSHAIRS & CORE ROUTING HUB
+            // SVG BACKGROUND: DEDICATED CONFIG ZONES, ORBITS & CORE HUB
             // -------------------------------------------------------------
             const bgGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            bgGroup.setAttribute('class', 'diagram-radial-backdrop pointer-events-none select-none');
+            bgGroup.setAttribute('class', 'diagram-radial-backdrop select-none');
 
-            // 1. Quadrant Crosshair lines
+            // 1. Concentric Orbit Rings
+            [320, 600, 920].forEach(r => {
+                bgGroup.innerHTML += `<circle cx="${CX}" cy="${CY}" r="${r}" fill="none" stroke="rgba(56, 189, 248, 0.12)" stroke-width="1.5" stroke-dasharray="4 8" />`;
+            });
+
+            // 2. Crosshair Lines
             const crosshairStyle = 'stroke="rgba(148, 163, 184, 0.2)" stroke-width="1.5" stroke-dasharray="6 6"';
             bgGroup.innerHTML += `
                 <line x1="60" y1="${CY}" x2="${CX - 90}" y2="${CY}" ${crosshairStyle} />
@@ -9901,17 +9941,28 @@ function isTabAllowed(tabName) {
                 <line x1="${CX}" y1="${CY + 90}" x2="${CX}" y2="${H - 60}" ${crosshairStyle} />
             `;
 
-            // 2. Concentric Orbit Rings
-            [300, 560, 840].forEach(r => {
-                bgGroup.innerHTML += `<circle cx="${CX}" cy="${CY}" r="${r}" fill="none" stroke="rgba(56, 189, 248, 0.12)" stroke-width="1.5" stroke-dasharray="4 8" />`;
+            // 3. Render Dedicated Segmentation Zone Bounding Boxes & Header Banners
+            Object.values(ZONES).forEach(zone => {
+                bgGroup.innerHTML += `
+                    <!-- Zone Area Box -->
+                    <rect x="${zone.x}" y="${zone.y}" width="${zone.w}" height="${zone.h}" rx="18"
+                          fill="rgba(15, 23, 42, 0.45)" stroke="${zone.borderColor}" stroke-width="1.5" stroke-dasharray="6 6" stroke-opacity="0.55" />
+                    <!-- Zone Header Banner -->
+                    <g transform="translate(${zone.x + 20}, ${zone.y + 20})">
+                        <rect x="0" y="0" width="${zone.w - 40}" height="38" rx="8" fill="${zone.bg}" fill-opacity="0.85" stroke="${zone.borderColor}" stroke-width="1" stroke-opacity="0.7" />
+                        <circle cx="20" cy="19" r="6" fill="${zone.color}" />
+                        <text x="36" y="24" class="font-mono font-black uppercase text-xs fill-white tracking-wider">${zone.title}</text>
+                        <text x="${zone.w - 60}" y="24" text-anchor="end" class="font-mono font-bold text-[11px] fill-[var(--text-muted)]">${zone.nodes.length} items</text>
+                    </g>
+                `;
             });
 
-            // 3. Spoke lines to Transit Waypoints
+            // 4. Transit Waypoint Hubs (Hub Nodes)
             const waypoints = [
-                { id: 'gw-waypoint', x: CX - 220, y: CY - 140, label: 'Trunk Gateway Hub', color: '#0891b2' },
-                { id: 'ob-waypoint', x: CX + 220, y: CY - 140, label: 'Outbound Dial Hub', color: '#ea580c' },
-                { id: 'app-waypoint', x: CX - 220, y: CY + 140, label: 'Application Hub', color: '#9333ea' },
-                { id: 'ext-waypoint', x: CX + 220, y: CY + 140, label: 'Extension Distribution', color: '#0284c7' }
+                { x: CX - 220, y: CY - 140, color: '#0891b2' },
+                { x: CX + 220, y: CY - 140, color: '#ea580c' },
+                { x: CX - 220, y: CY + 140, color: '#9333ea' },
+                { x: CX + 220, y: CY + 140, color: '#0284c7' }
             ];
 
             waypoints.forEach(wp => {
@@ -9922,13 +9973,10 @@ function isTabAllowed(tabName) {
                 `;
             });
 
-            // 4. Center CORE ROUTING HUB Node
+            // 5. Center CORE ROUTING HUB Node
             bgGroup.innerHTML += `
-                <!-- Halo Outer Pulse -->
                 <circle cx="${CX}" cy="${CY}" r="52" fill="rgba(14, 165, 233, 0.08)" stroke="rgba(56, 189, 248, 0.4)" stroke-width="2" stroke-dasharray="4 4" />
-                <!-- Core Solid Circle -->
                 <circle cx="${CX}" cy="${CY}" r="36" fill="#0284c7" stroke="#38bdf8" stroke-width="3" filter="drop-shadow(0 0 16px rgba(56, 189, 248, 0.45))" />
-                <!-- Center PBX Fork Glyph -->
                 <g transform="translate(${CX - 12}, ${CY - 12}) scale(1.0)" stroke="#ffffff" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="6" cy="6" r="3" fill="#ffffff" />
                     <circle cx="18" cy="18" r="3" fill="#ffffff" />
@@ -9936,49 +9984,33 @@ function isTabAllowed(tabName) {
                     <path d="M6 9v3a3 3 0 0 0 3 3h6" />
                     <path d="M18 9v6" />
                 </g>
-                <!-- Hub Node Label -->
                 <text x="${CX}" y="${CY + 56}" text-anchor="middle" class="font-mono font-black uppercase text-xs fill-[var(--text-primary)]" style="letter-spacing: 2px;">CORE ROUTING HUB</text>
-            `;
-
-            // 5. Quadrant Section Headings
-            bgGroup.innerHTML += `
-                <text x="80" y="65" class="font-black uppercase text-lg fill-[var(--text-primary)] tracking-wider">EXTERNAL GATEWAYS (SIP TRUNKS)</text>
-                <text x="80" y="86" class="font-mono font-bold text-xs fill-cyan-400">Carrier Interconnects, GSM Dongles & Inbound Links</text>
-
-                <text x="${W - 80}" y="65" text-anchor="end" class="font-black uppercase text-lg fill-[var(--text-primary)] tracking-wider">ROUTING RULES (OUTBOUND)</text>
-                <text x="${W - 80}" y="86" text-anchor="end" class="font-mono font-bold text-xs fill-amber-400">Dial Patterns, CID Restrictions & Trunk Sequences</text>
-
-                <text x="80" y="${CY + 45}" class="font-black uppercase text-lg fill-[var(--text-primary)] tracking-wider">APPLICATION SERVERS (IVR & QUEUES)</text>
-                <text x="80" y="${CY + 66}" class="font-mono font-bold text-xs fill-purple-400">Inbound Routes, Digital Receptionist, Queues & Schedules</text>
-
-                <text x="${W - 80}" y="${CY + 45}" text-anchor="end" class="font-black uppercase text-lg fill-[var(--text-primary)] tracking-wider">INTERNAL USER EXTENSIONS</text>
-                <text x="${W - 80}" y="${CY + 66}" text-anchor="end" class="font-mono font-bold text-xs fill-blue-400">Desk Phones, WebRTC Softphones & Mobile Apps</text>
             `;
 
             // 6. Bottom Legends
             bgGroup.innerHTML += `
                 <!-- Bottom-Left Legend -->
                 <g transform="translate(80, ${H - 100})">
-                    <rect x="0" y="0" width="360" height="75" rx="10" fill="rgba(15, 23, 42, 0.75)" stroke="rgba(148, 163, 184, 0.25)" />
-                    <text x="14" y="20" class="font-mono font-bold uppercase text-[10px] fill-white tracking-wider">CALL PATH LEGEND</text>
+                    <rect x="0" y="0" width="420" height="75" rx="10" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(148, 163, 184, 0.25)" />
+                    <text x="14" y="20" class="font-mono font-bold uppercase text-[10px] fill-white tracking-wider">CALL PATH & ROUTING FLOW LEGEND</text>
                     <line x1="14" y1="36" x2="45" y2="36" stroke="#38bdf8" stroke-width="2.5" />
                     <text x="52" y="40" class="font-mono text-[10px] fill-gray-300">Internal Extension Path</text>
                     <line x1="14" y1="56" x2="45" y2="56" stroke="#fb923c" stroke-width="2.5" />
                     <text x="52" y="60" class="font-mono text-[10px] fill-gray-300">Inbound Route Path</text>
-                    <line x1="185" y1="36" x2="215" y2="36" stroke="#f59e0b" stroke-width="2.5" />
-                    <text x="222" y="40" class="font-mono text-[10px] fill-gray-300">Outbound Route</text>
-                    <line x1="185" y1="56" x2="215" y2="56" stroke="#ef4444" stroke-width="2.5" stroke-dasharray="4 3" />
-                    <text x="222" y="60" class="font-mono text-[10px] fill-gray-300">Failover / Fallback</text>
+                    <line x1="205" y1="36" x2="235" y2="36" stroke="#f59e0b" stroke-width="2.5" />
+                    <text x="242" y="40" class="font-mono text-[10px] fill-gray-300">Outbound Route</text>
+                    <line x1="205" y1="56" x2="235" y2="56" stroke="#ef4444" stroke-width="2.5" stroke-dasharray="4 3" />
+                    <text x="242" y="60" class="font-mono text-[10px] fill-gray-300">Failover / Fallback</text>
                 </g>
 
                 <!-- Bottom-Right Legend -->
-                <g transform="translate(${W - 440}, ${H - 100})">
-                    <rect x="0" y="0" width="360" height="75" rx="10" fill="rgba(15, 23, 42, 0.75)" stroke="rgba(148, 163, 184, 0.25)" />
+                <g transform="translate(${W - 460}, ${H - 100})">
+                    <rect x="0" y="0" width="380" height="75" rx="10" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(148, 163, 184, 0.25)" />
                     <text x="14" y="20" class="font-mono font-bold uppercase text-[10px] fill-white tracking-wider">ENDPOINT DEVICE TYPES</text>
                     <text x="14" y="42" class="text-xs">📞 <tspan class="font-mono text-[10px] fill-gray-300">Desk Phone (SIP/PJSIP)</tspan></text>
                     <text x="14" y="62" class="text-xs">💻 <tspan class="font-mono text-[10px] fill-gray-300">WebRTC Softphone</tspan></text>
-                    <text x="190" y="42" class="text-xs">📱 <tspan class="font-mono text-[10px] fill-gray-300">Mobile Client</tspan></text>
-                    <text x="190" y="62" class="text-xs">🌐 <tspan class="font-mono text-[10px] fill-gray-300">Gateway Trunk</tspan></text>
+                    <text x="200" y="42" class="text-xs">📱 <tspan class="font-mono text-[10px] fill-gray-300">Mobile Client</tspan></text>
+                    <text x="200" y="62" class="text-xs">🌐 <tspan class="font-mono text-[10px] fill-gray-300">Gateway Trunk</tspan></text>
                 </g>
             `;
 
@@ -9995,7 +10027,6 @@ function isTabAllowed(tabName) {
                 const tx = tIsLeft ? (targetNode.x + cardWidth) : targetNode.x;
                 const ty = targetNode.y + cardHeight / 2;
 
-                // Control points curve toward the center hub or waypoint
                 const midX = (sx + tx) / 2;
                 const midY = (sy + ty) / 2;
                 const bendX = (midX + CX) / 2;
@@ -10036,39 +10067,94 @@ function isTabAllowed(tabName) {
                 svgWires.appendChild(path);
             });
 
+            // -------------------------------------------------------------
+            // FULL-BLEED RICH COLOR THEMES (MATCHING GSM DONGLE STATUS CARDS)
+            // -------------------------------------------------------------
+            const CARD_THEMES = {
+                trunk: {
+                    bg: '#08252e',
+                    border: 'border-cyan-500/80 hover:border-cyan-400',
+                    innerBg: '#03171f',
+                    innerBorder: 'border-cyan-500/30',
+                    iconBg: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40',
+                    accentText: 'text-cyan-300'
+                },
+                inbound: {
+                    bg: '#072b1e',
+                    border: 'border-emerald-500/80 hover:border-emerald-400',
+                    innerBg: '#021a12',
+                    innerBorder: 'border-emerald-500/30',
+                    iconBg: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
+                    accentText: 'text-emerald-300'
+                },
+                timecondition: {
+                    bg: '#2e2407',
+                    border: 'border-amber-500/80 hover:border-amber-400',
+                    innerBg: '#1c1603',
+                    innerBorder: 'border-amber-500/30',
+                    iconBg: 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
+                    accentText: 'text-amber-300'
+                },
+                ivr: {
+                    bg: '#20133d',
+                    border: 'border-purple-500/80 hover:border-purple-400',
+                    innerBg: '#110a24',
+                    innerBorder: 'border-purple-500/30',
+                    iconBg: 'bg-purple-500/20 text-purple-300 border border-purple-500/40',
+                    accentText: 'text-purple-300'
+                },
+                queue: {
+                    bg: '#2e1807',
+                    border: 'border-orange-500/80 hover:border-orange-400',
+                    innerBg: '#1c0d02',
+                    innerBorder: 'border-orange-500/30',
+                    iconBg: 'bg-orange-500/20 text-orange-300 border border-orange-500/40',
+                    accentText: 'text-orange-300'
+                },
+                ringgroup: {
+                    bg: '#2e0a29',
+                    border: 'border-fuchsia-500/80 hover:border-fuchsia-400',
+                    innerBg: '#1c061a',
+                    innerBorder: 'border-fuchsia-500/30',
+                    iconBg: 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/40',
+                    accentText: 'text-fuchsia-300'
+                },
+                extension: {
+                    bg: '#0c1f3d',
+                    border: 'border-blue-500/80 hover:border-blue-400',
+                    innerBg: '#051226',
+                    innerBorder: 'border-blue-500/30',
+                    iconBg: 'bg-blue-500/20 text-blue-300 border border-blue-500/40',
+                    accentText: 'text-blue-300'
+                },
+                outbound: {
+                    bg: '#331407',
+                    border: 'border-rose-500/80 hover:border-rose-400',
+                    innerBg: '#1f0a03',
+                    innerBorder: 'border-rose-500/30',
+                    iconBg: 'bg-rose-500/20 text-rose-300 border border-rose-500/40',
+                    accentText: 'text-rose-300'
+                }
+            };
+
             // Render Nodes in Quadrants
             diagramNodesList.forEach(node => {
-                let accentColorClass = 'border-emerald-500/20 hover:border-emerald-500';
-                let iconBgClass = 'bg-emerald-500/10 text-emerald-400';
+                const theme = CARD_THEMES[node.type] || CARD_THEMES.trunk;
                 let svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>`;
 
                 if (node.type === 'ringgroup') {
-                    accentColorClass = 'border-purple-500/20 hover:border-purple-500';
-                    iconBgClass = 'bg-purple-500/10 text-purple-400';
                     svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>`;
                 } else if (node.type === 'queue') {
-                    accentColorClass = 'border-amber-500/20 hover:border-amber-500';
-                    iconBgClass = 'bg-amber-500/10 text-amber-400';
                     svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>`;
                 } else if (node.type === 'extension') {
-                    accentColorClass = 'border-blue-500/20 hover:border-blue-500';
-                    iconBgClass = 'bg-blue-500/10 text-blue-400';
                     svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>`;
                 } else if (node.type === 'outbound') {
-                    accentColorClass = 'border-orange-500/20 hover:border-orange-500';
-                    iconBgClass = 'bg-orange-500/10 text-orange-400';
                     svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>`;
                 } else if (node.type === 'timecondition') {
-                    accentColorClass = 'border-yellow-500/20 hover:border-yellow-500';
-                    iconBgClass = 'bg-yellow-500/10 text-yellow-400';
                     svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
                 } else if (node.type === 'ivr') {
-                    accentColorClass = 'border-purple-500/20 hover:border-purple-500';
-                    iconBgClass = 'bg-purple-500/10 text-purple-400';
                     svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>`;
                 } else if (node.type === 'trunk') {
-                    accentColorClass = 'border-cyan-500/20 hover:border-cyan-500';
-                    iconBgClass = 'bg-cyan-500/10 text-cyan-400';
                     svgIcon = `<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>`;
                 }
 
@@ -10077,59 +10163,59 @@ function isTabAllowed(tabName) {
                     const route = node.data;
                     cardBodyHTML = `
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="p-2 rounded-lg ${theme.iconBg} shrink-0">${svgIcon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
-                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                                <div class="text-[10px] text-gray-300 truncate font-semibold mt-0.5">${node.subtitle}</div>
                             </div>
                         </div>
-                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
-                            <div class="flex justify-between"><span>DID:</span> <span class="text-white">${route.did || 'Any'}</span></div>
-                            <div class="flex justify-between"><span>Dest:</span> <span class="text-emerald-400 truncate max-w-[150px]">${formatDestination(route.destination)}</span></div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 p-2 rounded border ${theme.innerBorder} font-mono" style="background-color: ${theme.innerBg} !important;">
+                            <div class="flex justify-between"><span>DID:</span> <span class="text-white font-bold">${route.did || 'Any'}</span></div>
+                            <div class="flex justify-between"><span>Dest:</span> <span class="${theme.accentText} truncate max-w-[150px]">${formatDestination(route.destination)}</span></div>
                         </div>
                     `;
                 } else if (node.type === 'ringgroup') {
                     const rg = node.data;
                     cardBodyHTML = `
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="p-2 rounded-lg ${theme.iconBg} shrink-0">${svgIcon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
-                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                                <div class="text-[10px] text-gray-300 truncate font-semibold mt-0.5">${node.subtitle}</div>
                             </div>
                         </div>
-                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
-                            <div class="flex justify-between"><span>Strategy:</span> <span class="text-purple-400 uppercase">${rg.strategy}</span></div>
-                            <div class="flex justify-between"><span>Time:</span> <span class="text-white">${rg.grptime}s</span></div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 p-2 rounded border ${theme.innerBorder} font-mono" style="background-color: ${theme.innerBg} !important;">
+                            <div class="flex justify-between"><span>Strategy:</span> <span class="${theme.accentText} font-bold uppercase">${rg.strategy}</span></div>
+                            <div class="flex justify-between"><span>Time:</span> <span class="text-white font-bold">${rg.grptime}s</span></div>
                         </div>
                     `;
                 } else if (node.type === 'queue') {
                     const q = node.data;
                     cardBodyHTML = `
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="p-2 rounded-lg ${theme.iconBg} shrink-0">${svgIcon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
-                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                                <div class="text-[10px] text-gray-300 truncate font-semibold mt-0.5">${node.subtitle}</div>
                             </div>
                         </div>
-                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
-                            <div class="flex justify-between"><span>Strategy:</span> <span class="text-amber-400 uppercase">${q.strategy}</span></div>
-                            <div class="flex justify-between"><span>Max Wait:</span> <span class="text-white">${q.maxwait ? q.maxwait + 's' : 'Unlimited'}</span></div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 p-2 rounded border ${theme.innerBorder} font-mono" style="background-color: ${theme.innerBg} !important;">
+                            <div class="flex justify-between"><span>Strategy:</span> <span class="${theme.accentText} font-bold uppercase">${q.strategy}</span></div>
+                            <div class="flex justify-between"><span>Max Wait:</span> <span class="text-white font-bold">${q.maxwait ? q.maxwait + 's' : 'Unlimited'}</span></div>
                         </div>
                     `;
                 } else if (node.type === 'ivr') {
                     const ivr = node.data;
                     cardBodyHTML = `
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="p-2 rounded-lg ${theme.iconBg} shrink-0">${svgIcon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
-                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                                <div class="text-[10px] text-gray-300 truncate font-semibold mt-0.5">${node.subtitle}</div>
                             </div>
                         </div>
-                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
-                            <div class="flex justify-between"><span>Entries:</span> <span class="text-blue-400">${(ivr.entries || []).length} keys</span></div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 p-2 rounded border ${theme.innerBorder} font-mono" style="background-color: ${theme.innerBg} !important;">
+                            <div class="flex justify-between"><span>Entries:</span> <span class="${theme.accentText} font-bold">${(ivr.entries || []).length} keys</span></div>
                             <div class="flex justify-between"><span>Timeout:</span> <span class="text-white truncate max-w-[140px]">${formatDestination(ivr.timeout_destination)}</span></div>
                         </div>
                     `;
@@ -10139,18 +10225,18 @@ function isTabAllowed(tabName) {
                     const deviceGlyph = isWebRtc ? '💻' : '📞';
                     cardBodyHTML = `
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="p-2 rounded-lg ${theme.iconBg} shrink-0">${svgIcon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5">
                                     <span class="text-xs font-black text-white truncate">${node.title}</span>
                                     <span class="text-xs ml-auto" title="${isWebRtc ? 'WebRTC Softphone' : 'Desk Phone'}">${deviceGlyph}</span>
                                 </div>
-                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                                <div class="text-[10px] text-gray-300 truncate font-semibold mt-0.5">${node.subtitle}</div>
                             </div>
                         </div>
-                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 p-2 rounded border ${theme.innerBorder} font-mono" style="background-color: ${theme.innerBg} !important;">
                             <div class="flex justify-between"><span>Context:</span> <span class="text-white">${ext.context || 'from-internal'}</span></div>
-                            <div class="flex justify-between"><span>Device:</span> <span class="text-blue-400 font-bold">${isWebRtc ? 'Softphone' : 'Desk Phone'}</span></div>
+                            <div class="flex justify-between"><span>Device:</span> <span class="${theme.accentText} font-bold">${isWebRtc ? 'WebRTC' : 'Desk Phone'}</span></div>
                         </div>
                     `;
                 } else if (node.type === 'outbound') {
@@ -10158,14 +10244,14 @@ function isTabAllowed(tabName) {
                     const patterns = (route.patterns || []).map(p => p.pattern).filter(Boolean);
                     cardBodyHTML = `
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="p-2 rounded-lg ${theme.iconBg} shrink-0">${svgIcon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
-                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                                <div class="text-[10px] text-gray-300 truncate font-semibold mt-0.5">${node.subtitle}</div>
                             </div>
                         </div>
-                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
-                            <div class="flex justify-between"><span>Patterns:</span> <span class="text-orange-400 font-bold">${patterns.slice(0, 2).join(', ') || 'Any'}</span></div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 p-2 rounded border ${theme.innerBorder} font-mono" style="background-color: ${theme.innerBg} !important;">
+                            <div class="flex justify-between"><span>Patterns:</span> <span class="${theme.accentText} font-bold">${patterns.slice(0, 2).join(', ') || 'Any'}</span></div>
                             <div class="flex justify-between"><span>Trunks:</span> <span class="text-white truncate max-w-[140px]">${(route.trunks || []).map(t => t.name || t.trunk_name).join(' ➜ ') || 'None'}</span></div>
                         </div>
                     `;
@@ -10173,30 +10259,30 @@ function isTabAllowed(tabName) {
                     const tk = node.data;
                     cardBodyHTML = `
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="p-2 rounded-lg ${theme.iconBg} shrink-0">${svgIcon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
-                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${node.subtitle}</div>
+                                <div class="text-[10px] text-gray-300 truncate font-semibold mt-0.5">${node.subtitle}</div>
                             </div>
                         </div>
-                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
-                            <div class="flex justify-between"><span>Tech:</span> <span class="text-cyan-400 font-bold uppercase">${tk.tech}</span></div>
-                            <div class="flex justify-between"><span>Status:</span> <span class="${tk.disabled === 'on' ? 'text-red-400' : 'text-emerald-400'}">${tk.disabled === 'on' ? 'Disabled' : 'Active'}</span></div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 p-2 rounded border ${theme.innerBorder} font-mono" style="background-color: ${theme.innerBg} !important;">
+                            <div class="flex justify-between"><span>Tech:</span> <span class="${theme.accentText} font-bold uppercase">${tk.tech}</span></div>
+                            <div class="flex justify-between"><span>Status:</span> <span class="${tk.disabled === 'on' ? 'text-red-400' : 'text-emerald-400'} font-bold">${tk.disabled === 'on' ? 'Disabled' : 'Active'}</span></div>
                         </div>
                     `;
                 } else if (node.type === 'timecondition') {
                     const tc = node.data;
                     cardBodyHTML = `
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="p-2 rounded-lg ${iconBgClass} shrink-0">${svgIcon}</div>
+                            <div class="p-2 rounded-lg ${theme.iconBg} shrink-0">${svgIcon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5"><span class="text-xs font-black text-white truncate">${node.title}</span></div>
-                                <div class="text-[10px] text-gray-400 truncate font-semibold mt-0.5">${tc.timegroup_name || 'Schedule'}</div>
+                                <div class="text-[10px] text-gray-300 truncate font-semibold mt-0.5">${tc.timegroup_name || 'Schedule'}</div>
                             </div>
                         </div>
-                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 bg-[#16161c] p-1.5 rounded border border-white/5 font-mono">
-                            <div class="flex justify-between"><span>True:</span> <span class="text-emerald-400 truncate max-w-[140px]">${formatDestination(tc.truegoto)}</span></div>
-                            <div class="flex justify-between"><span>False:</span> <span class="text-red-400 truncate max-w-[140px]">${formatDestination(tc.falsegoto)}</span></div>
+                        <div class="mt-2 text-[10px] text-gray-300 font-semibold space-y-0.5 p-2 rounded border ${theme.innerBorder} font-mono" style="background-color: ${theme.innerBg} !important;">
+                            <div class="flex justify-between"><span>True:</span> <span class="text-emerald-300 font-bold truncate max-w-[140px]">${formatDestination(tc.truegoto)}</span></div>
+                            <div class="flex justify-between"><span>False:</span> <span class="text-rose-300 font-bold truncate max-w-[140px]">${formatDestination(tc.falsegoto)}</span></div>
                         </div>
                     `;
                 }
@@ -10212,7 +10298,8 @@ function isTabAllowed(tabName) {
                     <div data-node-id="${node.id}" data-node-type="${node.type}"
                          onmouseenter="highlightNode('${node.id}')"
                          onmouseleave="resetHighlight()"
-                         class="diagram-card w-full h-full bg-[#111115]/95 backdrop-blur-md border ${accentColorClass} rounded-xl p-3 flex flex-col transition duration-200 cursor-pointer relative select-none">
+                         style="background-color: ${theme.bg} !important;"
+                         class="diagram-card w-full h-full border ${theme.border} rounded-2xl p-3.5 flex flex-col transition-all duration-200 cursor-pointer relative select-none shadow-lg">
                         <div class="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#1c1c24] bg-[#27272a]"></div>
                         <div class="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#1c1c24] bg-[#27272a]"></div>
                         ${cardBodyHTML}
@@ -10240,7 +10327,6 @@ function isTabAllowed(tabName) {
                 });
             }
         }
-
         function renderDiagram() {
             updateDiagramViewSwitcherButtons();
             if (diagramViewMode === 'radial') {

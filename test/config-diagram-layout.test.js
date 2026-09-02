@@ -108,9 +108,17 @@ test('config diagram renders view switcher and supports 4-quadrant radial topolo
     assert.ok(content.includes('function renderDiagramPipeline()'), 'Must define renderDiagramPipeline');
     assert.ok(content.includes('CORE ROUTING HUB'), 'Radial topology must render CORE ROUTING HUB central node');
 
-    // 4 Quadrant Headers from reference image
-    assert.ok(content.includes('EXTERNAL GATEWAYS (SIP TRUNKS)'), 'Must render External Gateways quadrant header');
-    assert.ok(content.includes('ROUTING RULES (OUTBOUND)'), 'Must render Outbound Routing Rules quadrant header');
-    assert.ok(content.includes('APPLICATION SERVERS (IVR & QUEUES)'), 'Must render Application Servers quadrant header');
-    assert.ok(content.includes('INTERNAL USER EXTENSIONS'), 'Must render Internal User Extensions quadrant header');
+    // Dedicated Config-Based Segmentation Area Headers (Every config type takes its own area)
+    assert.ok(content.includes('EXTERNAL GATEWAYS (SIP TRUNKS)'), 'Must render External Gateways zone header');
+    assert.ok(content.includes('INBOUND ROUTES (DIDs)'), 'Must render Inbound Routes zone header');
+    assert.ok(content.includes('TIME CONDITIONS & SCHEDULES'), 'Must render Time Conditions zone header');
+    assert.ok(content.includes('APPLICATION SERVERS (IVR & QUEUES)'), 'Must render IVR / App zone header');
+    assert.ok(content.includes('CALL QUEUES (ACD)'), 'Must render Call Queues zone header');
+    assert.ok(content.includes('RING GROUPS (HUNT GROUPS)'), 'Must render Ring Groups zone header');
+    assert.ok(content.includes('ROUTING RULES (OUTBOUND)'), 'Must render Outbound Routing Rules zone header');
+    assert.ok(content.includes('INTERNAL USER EXTENSIONS'), 'Must render Internal User Extensions zone header');
+
+    // Cards filled with category colors like GSM dongle cards
+    assert.ok(content.includes('CARD_THEMES'), 'Must define rich color themes for all node types');
+    assert.ok(content.includes('style="background-color: ${theme.bg} !important;"'), 'Cards must have full-bleed category color fills');
 });
