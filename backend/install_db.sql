@@ -438,3 +438,28 @@ CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_dongles` (
   UNIQUE KEY `idx_peer_dongle` (`peer_id`, `dongle_name`),
   KEY `idx_peer_id` (`peer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `extension_status_current` (
+  `extension` VARCHAR(20) NOT NULL PRIMARY KEY,
+  `status` ENUM('offline', 'idle', 'ringing', 'incall') NOT NULL DEFAULT 'offline',
+  `partner` VARCHAR(50) DEFAULT NULL,
+  `status_since` DATETIME NOT NULL,
+  `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `extension_status_logs` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `extension` VARCHAR(20) NOT NULL,
+  `status` ENUM('offline', 'idle', 'ringing', 'incall') NOT NULL,
+  `partner` VARCHAR(50) DEFAULT NULL,
+  `start_time` DATETIME NOT NULL,
+  `end_time` DATETIME NOT NULL,
+  `duration_seconds` INT UNSIGNED NOT NULL DEFAULT 0,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_ext_start_end` (`extension`, `start_time`, `end_time`),
+  INDEX `idx_ext_status` (`extension`, `status`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_start_time` (`start_time`),
+  INDEX `idx_end_time` (`end_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

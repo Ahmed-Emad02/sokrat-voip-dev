@@ -149,7 +149,9 @@ const tables = {
     sokratFederationSettings: tableName(ASTERISK_DB, 'sokrat_federation_settings'),
     sokratFederationPeers: tableName(ASTERISK_DB, 'sokrat_federation_peers'),
     sokratFederationRemoteExtensions: tableName(ASTERISK_DB, 'sokrat_federation_remote_extensions'),
-    sokratFederationRemoteDongles: tableName(ASTERISK_DB, 'sokrat_federation_remote_dongles')
+    sokratFederationRemoteDongles: tableName(ASTERISK_DB, 'sokrat_federation_remote_dongles'),
+    extensionStatusCurrent: tableName(ASTERISK_DB, 'extension_status_current'),
+    extensionStatusLogs: tableName(ASTERISK_DB, 'extension_status_logs')
 };
 
 function isInternalChannel(channel) {
@@ -453,6 +455,45 @@ async function initAuthDb() {
                 execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_SETTINGS ${row.dongle_name} ${val}`], () => {});
             }
         });
+    } catch (_) {}
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS ${tables.extensionStatusCurrent} (
+            extension VARCHAR(20) NOT NULL PRIMARY KEY,
+            status ENUM('offline', 'idle', 'ringing', 'incall') NOT NULL DEFAULT 'offline',
+            partner VARCHAR(50) DEFAULT NULL,
+            status_since DATETIME NOT NULL,
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS ${tables.extensionStatusLogs} (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            extension VARCHAR(20) NOT NULL,
+            status ENUM('offline', 'idle', 'ringing', 'incall') NOT NULL,
+            partner VARCHAR(50) DEFAULT NULL,
+            start_time DATETIME NOT NULL,
+            end_time DATETIME NOT NULL,
+            duration_seconds INT UNSIGNED NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_ext_start_end (extension, start_time, end_time),
+            INDEX idx_ext_status (extension, status),
+            INDEX idx_status (status),
+            INDEX idx_start_time (start_time),
+            INDEX idx_end_time (end_time)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+    try {
+        const [staleRows] = await conn.execute(`SELECT extension, status, partner, status_since FROM ${tables.extensionStatusCurrent} WHERE status != 'offline'`);
+        for (const row of staleRows) {
+            const startStr = moment(row.status_since).format('YYYY-MM-DD HH:mm:ss');
+            const endStr = moment().format('YYYY-MM-DD HH:mm:ss');
+            const durSec = Math.max(0, Math.round((Date.now() - new Date(row.status_since).getTime()) / 1000));
+            if (durSec >= 1) {
+                await conn.execute(`INSERT INTO ${tables.extensionStatusLogs} (extension, status, partner, start_time, end_time, duration_seconds) VALUES (?, ?, ?, ?, ?, ?)`, [row.extension, row.status, row.partner, startStr, endStr, durSec]);
+            }
+        }
+        await conn.execute(`UPDATE ${tables.extensionStatusCurrent} SET status = 'offline', partner = NULL, status_since = NOW() WHERE status != 'offline'`);
     } catch (_) {}
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS ${tables.employeeExtras} (
@@ -1594,6 +1635,108 @@ let pendingOffline = {};
 let isPeerListLoaded = false;
 let extensionLastRealtimeTime = {};
 
+// --- LIVE EXTENSION STATUS MACHINE & AUDIT LOGGER ---
+const extensionStatusCache = {};
+const pendingStatusTransition = {};
+
+function resolveExtensionState(ext) {
+    const cleanExt = String(ext || '').trim();
+    const isOnline = !!peerStatus[cleanExt];
+    if (!isOnline) {
+        return { status: 'offline', partner: null };
+    }
+    const call = activeCalls[cleanExt];
+    if (call) {
+        const cState = String(call.state || '').toLowerCase();
+        if (cState === 'in call' || cState === 'incall' || cState === 'up') {
+            return { status: 'incall', partner: call.partner && call.partner !== 'Connecting...' ? String(call.partner) : null };
+        }
+        if (cState === 'ringing' || cState === 'connecting...') {
+            return { status: 'ringing', partner: call.partner && call.partner !== 'Connecting...' ? String(call.partner) : null };
+        }
+    }
+    return { status: 'idle', partner: null };
+}
+
+async function trackExtensionStatusTransition(cleanExt) {
+    if (!cleanExt || !/^\d+$/.test(String(cleanExt))) return;
+    const ext = String(cleanExt);
+    const resolved = resolveExtensionState(ext);
+    const newStatus = resolved.status;
+    const partner = resolved.partner;
+    const now = new Date();
+
+    const cached = extensionStatusCache[ext];
+    if (cached && cached.status === newStatus && cached.partner === partner) {
+        return; // No change
+    }
+
+    const prevStatus = cached ? cached.status : null;
+    const prevSince = cached ? cached.since : null;
+    const prevPartner = cached ? cached.partner : null;
+
+    extensionStatusCache[ext] = {
+        status: newStatus,
+        partner: partner,
+        since: now
+    };
+
+    try {
+        if (prevStatus && prevSince) {
+            const durSec = Math.max(0, Math.round((now.getTime() - prevSince.getTime()) / 1000));
+            if (durSec >= 1) {
+                const startStr = moment(prevSince).format('YYYY-MM-DD HH:mm:ss');
+                const endStr = moment(now).format('YYYY-MM-DD HH:mm:ss');
+                await pool.query(
+                    `INSERT INTO ${tables.extensionStatusLogs} (extension, status, partner, start_time, end_time, duration_seconds) VALUES (?, ?, ?, ?, ?, ?)`,
+                    [ext, prevStatus, prevPartner, startStr, endStr, durSec]
+                );
+            }
+        }
+
+        const nowStr = moment(now).format('YYYY-MM-DD HH:mm:ss');
+        await pool.query(
+            `INSERT INTO ${tables.extensionStatusCurrent} (extension, status, partner, status_since, last_updated)
+             VALUES (?, ?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE status = VALUES(status), partner = VALUES(partner), status_since = VALUES(status_since), last_updated = NOW()`,
+            [ext, newStatus, partner, nowStr]
+        );
+    } catch (err) {
+        console.error(`[ExtensionStatusTracker] DB error for ${ext}:`, err.message);
+    }
+}
+
+function scheduleExtensionStatusTracking(ext) {
+    if (!ext || !/^\d+$/.test(String(ext))) return;
+    const cleanExt = String(ext);
+    clearTimeout(pendingStatusTransition[cleanExt]);
+    pendingStatusTransition[cleanExt] = setTimeout(() => {
+        delete pendingStatusTransition[cleanExt];
+        trackExtensionStatusTransition(cleanExt).catch(() => {});
+    }, 120);
+}
+
+async function closeAllOpenExtensionStatusIntervals() {
+    try {
+        const now = new Date();
+        const nowStr = moment(now).format('YYYY-MM-DD HH:mm:ss');
+        for (const ext in extensionStatusCache) {
+            const entry = extensionStatusCache[ext];
+            if (entry && entry.status !== 'offline' && entry.since) {
+                const durSec = Math.max(0, Math.round((now.getTime() - entry.since.getTime()) / 1000));
+                if (durSec >= 1) {
+                    const startStr = moment(entry.since).format('YYYY-MM-DD HH:mm:ss');
+                    await pool.query(
+                        `INSERT INTO ${tables.extensionStatusLogs} (extension, status, partner, start_time, end_time, duration_seconds) VALUES (?, ?, ?, ?, ?, ?)`,
+                        [ext, entry.status, entry.partner, startStr, nowStr, durSec]
+                    );
+                }
+            }
+        }
+        await pool.query(`UPDATE ${tables.extensionStatusCurrent} SET status = 'offline', partner = NULL, status_since = NOW() WHERE status != 'offline'`);
+    } catch (_) {}
+}
+
 function updateExtensionPresence(name) {
     if (!name) return;
     let hasPjsipContactOnline = false;
@@ -1609,6 +1752,7 @@ function updateExtensionPresence(name) {
         io.emit('peerStatus', peerStatus); notifyCrmLiveBroadcaster();
         getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
     }
+    scheduleExtensionStatusTracking(name);
 }
 
 function updateAllExtensionPresence() {
@@ -1626,6 +1770,7 @@ function updateAllExtensionPresence() {
         }
         let isOnline = (sipPresence[ext] === true) || (pjsipPresence[ext] === true) || hasPjsipContactOnline;
         peerStatus[ext] = isOnline;
+        scheduleExtensionStatusTracking(ext);
     }
     io.emit('peerStatus', peerStatus); notifyCrmLiveBroadcaster();
     getTrunkStatusMap().then(map => io.emit('trunkStatus', map));
@@ -2304,6 +2449,7 @@ function connectAMI() {
                         delete activeCalls[name];
                         notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: name, callData: null });
                     }
+                    scheduleExtensionStatusTracking(name);
                 }
             }
 
@@ -2329,6 +2475,7 @@ function connectAMI() {
                         channel: event.Channel
                     };
                     notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
+                    scheduleExtensionStatusTracking(exten);
                 }
                 broadcastTrunkStatus();
             }
@@ -2364,6 +2511,8 @@ function connectAMI() {
 
                     notifyCrmLiveBroadcaster();
                     io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
+                    scheduleExtensionStatusTracking(exten);
+                    if (isUp && partner && partner !== 'Connecting...') scheduleExtensionStatusTracking(partner);
                 }
                 broadcastTrunkStatus();
             }
@@ -2391,6 +2540,7 @@ function connectAMI() {
                             channel: ch
                         };
                         io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
+                        scheduleExtensionStatusTracking(exten);
                     }
                 });
                 notifyCrmLiveBroadcaster();
@@ -2419,6 +2569,7 @@ function connectAMI() {
                     if (activeCalls[e]) {
                         delete activeCalls[e];
                         notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: e, callData: null });
+                        scheduleExtensionStatusTracking(e);
                     }
                 });
                 broadcastTrunkStatus();
@@ -5194,13 +5345,56 @@ app.get('/api/ext-overview', async (req, res) => {
             }
         });
 
+        const [statusRows] = await pool.query(
+            `SELECT extension, status, SUM(duration_seconds) as total_sec
+             FROM ${tables.extensionStatusLogs}
+             WHERE end_time >= ? AND start_time <= ?
+             GROUP BY extension, status`,
+            [startDate, endDate]
+        );
+
+        const statusMap = {};
+        statusRows.forEach(r => {
+            if (!statusMap[r.extension]) {
+                statusMap[r.extension] = { offline: 0, idle: 0, ringing: 0, incall: 0 };
+            }
+            statusMap[r.extension][r.status] = parseInt(r.total_sec) || 0;
+        });
+
+        const nowMs = Date.now();
+        const startFilterMs = new Date(startDate).getTime();
+        const endFilterMs = new Date(endDate).getTime();
+
         const list = Object.values(employeeMetrics).map(emp => {
             emp.totalTalkSec = emp.inboundTalkSec + emp.outboundTalkSec;
             emp.uniqueContactCount = emp.uniqueNumbers.size;
             delete emp.uniqueNumbers;
+
+            const st = statusMap[emp.extension] || { offline: 0, idle: 0, ringing: 0, incall: 0 };
+            const resolved = resolveExtensionState(emp.extension);
+            emp.liveStatus = resolved.status;
+            emp.livePartner = resolved.partner;
+
+            const cached = extensionStatusCache[emp.extension];
+            if (cached && cached.since) {
+                const openStart = Math.max(startFilterMs, cached.since.getTime());
+                const openEnd = Math.min(endFilterMs, nowMs);
+                if (openEnd > openStart) {
+                    const openSec = Math.round((openEnd - openStart) / 1000);
+                    st[cached.status] = (st[cached.status] || 0) + openSec;
+                }
+            }
+
+            emp.idleSec = st.idle || 0;
+            emp.incallSec = st.incall || 0;
+            emp.ringingSec = st.ringing || 0;
+            emp.offlineSec = st.offline || 0;
+            emp.onlineSec = emp.idleSec + emp.incallSec + emp.ringingSec;
+            const totalTrackedSec = emp.onlineSec + emp.offlineSec;
+            emp.availabilityRate = totalTrackedSec > 0 ? Math.round((emp.onlineSec / totalTrackedSec) * 100) : (emp.online ? 100 : 0);
+
             return emp;
         });
-
         res.json(list);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -5343,10 +5537,109 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
             });
             if (stats.recentCalls.length >= 50) break;
         }
+        // Status tracking aggregation
+        const [statusAggRows] = await pool.query(
+            `SELECT status, SUM(duration_seconds) as total_sec, COUNT(*) as transitions_count
+             FROM ${tables.extensionStatusLogs}
+             WHERE extension = ? AND end_time >= ? AND start_time <= ?
+             GROUP BY status`,
+            [extension, startDate, endDate]
+        );
+
+        const statusTotals = { offline: 0, idle: 0, ringing: 0, incall: 0 };
+        statusAggRows.forEach(r => {
+            if (statusTotals[r.status] !== undefined) {
+                statusTotals[r.status] = parseInt(r.total_sec) || 0;
+            }
+        });
+
+        const nowMs = Date.now();
+        const startFilterMs = new Date(startDate).getTime();
+        const endFilterMs = new Date(endDate).getTime();
+        const cached = extensionStatusCache[extension];
+        if (cached && cached.since) {
+            const openStart = Math.max(startFilterMs, cached.since.getTime());
+            const openEnd = Math.min(endFilterMs, nowMs);
+            if (openEnd > openStart) {
+                const openSec = Math.round((openEnd - openStart) / 1000);
+                statusTotals[cached.status] = (statusTotals[cached.status] || 0) + openSec;
+            }
+        }
+
+        const onlineSec = statusTotals.idle + statusTotals.ringing + statusTotals.incall;
+        const totalTrackedSec = onlineSec + statusTotals.offline;
+        const availabilityRate = totalTrackedSec > 0 ? Math.round((onlineSec / totalTrackedSec) * 100) : (peerStatus[extension] ? 100 : 0);
+
+        stats.statusTotals = statusTotals;
+        stats.totalOnlineSec = onlineSec;
+        stats.totalIdleSec = statusTotals.idle;
+        stats.totalIncallSec = statusTotals.incall;
+        stats.totalRingingSec = statusTotals.ringing;
+        stats.totalOfflineSec = statusTotals.offline;
+        stats.availabilityRate = availabilityRate;
+        stats.liveStatus = resolveExtensionState(extension);
+
+        stats.statusBreakdown = [
+            { name: 'Idle', value: statusTotals.idle, color: '#f59e0b' },
+            { name: 'In Call', value: statusTotals.incall, color: '#15803d' },
+            { name: 'Ringing', value: statusTotals.ringing, color: '#7e22ce' },
+            { name: 'Offline', value: statusTotals.offline, color: '#71717a' }
+        ];
+
+        const [recentStatusLogs] = await pool.query(
+            `SELECT id, status, partner, start_time, end_time, duration_seconds
+             FROM ${tables.extensionStatusLogs}
+             WHERE extension = ? AND end_time >= ? AND start_time <= ?
+             ORDER BY start_time DESC
+             LIMIT 100`,
+            [extension, startDate, endDate]
+        );
+        stats.statusLogs = recentStatusLogs;
 
         res.json(stats);
     } catch (error) {
         res.status(500).json({ error: error.message });
+    }
+});
+
+// --- API: EXTENSION STATUS LOGS (PAGINATED DRILL-DOWN) ---
+app.get('/api/ext-status-logs/:extension', async (req, res) => {
+    try {
+        const { extension } = req.params;
+        const scopedExts = getUserScopedExtensions(req);
+        if (scopedExts && !scopedExts.includes(extension)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: You can only view status logs for your assigned extension.' });
+        }
+        const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
+        const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+        const statusFilter = req.query.status && req.query.status !== 'all' ? req.query.status : null;
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(10, parseInt(req.query.limit) || 25));
+        const offset = (page - 1) * limit;
+
+        const params = [extension, startDate, endDate];
+        let query = `SELECT SQL_CALC_FOUND_ROWS id, extension, status, partner, start_time, end_time, duration_seconds FROM ${tables.extensionStatusLogs} WHERE extension = ? AND end_time >= ? AND start_time <= ?`;
+        if (statusFilter) {
+            query += ' AND status = ?';
+            params.push(statusFilter);
+        }
+        query += ' ORDER BY start_time DESC LIMIT ? OFFSET ?';
+        params.push(limit, offset);
+
+        const [logs] = await pool.query(query, params);
+        const [[{ total }]] = await pool.query('SELECT FOUND_ROWS() as total');
+
+        res.json({
+            success: true,
+            extension,
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+            logs
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
@@ -15005,6 +15298,15 @@ app.get('/embed/crm/live', async (req, res) => {
     }
 });
 if (require.main === module) {
+    const handleGracefulShutdown = async (signal) => {
+        console.log(`[Server] Received ${signal}, closing open extension status intervals...`);
+        try {
+            await closeAllOpenExtensionStatusIntervals();
+        } catch (_) {}
+        process.exit(0);
+    };
+    process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
     server.listen(PORT, () => console.log(`Real-Time Enterprise Engine active on port ${PORT}`));
 }
 
@@ -15015,5 +15317,9 @@ module.exports = {
     parseMmiCallForwardingDetails,
     buildCallForwardingAtCommand,
     formatCcfcResponse,
-    sendAtAndWait
+    sendAtAndWait,
+    resolveExtensionState,
+    trackExtensionStatusTransition,
+    extensionStatusCache,
+    closeAllOpenExtensionStatusIntervals
 };

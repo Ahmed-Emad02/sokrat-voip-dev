@@ -25,6 +25,22 @@ const words = {
         online: "Online",
         offline: "Offline",
         agentStatus: "Agent Status",
+        liveStatus: "Live Status",
+        onlineDuration: "Online Time",
+        idleDuration: "Idle Time",
+        incallDuration: "In-Call Time",
+        offlineDuration: "Offline Time",
+        availability: "Availability",
+        statusAllocation: "Status Breakdown",
+        statusHistory: "Status Transition Logs",
+        stateIdle: "Idle",
+        stateInCall: "In Call",
+        stateRinging: "Ringing",
+        stateOffline: "Offline",
+        allStatuses: "All Statuses",
+        partnerParty: "Caller / Dest",
+        start: "Start",
+        end: "End",
         interactiveTable: "Click a row to inspect an extension."
     },
     ar: {
@@ -52,6 +68,22 @@ const words = {
         online: "متصل",
         offline: "غير متصل",
         agentStatus: "حالة الوكيل",
+        liveStatus: "الحالة الحالية",
+        onlineDuration: "وقت الاتصال",
+        idleDuration: "وقت الانتظار (متاح)",
+        incallDuration: "وقت المكالمات",
+        offlineDuration: "وقت عدم الاتصال",
+        availability: "نسبة التوافر",
+        statusAllocation: "توزيع الحالات",
+        statusHistory: "سجل تغير حالات الوكيل",
+        stateIdle: "متاح",
+        stateInCall: "في مكالمة",
+        stateRinging: "يرن",
+        stateOffline: "غير متصل",
+        allStatuses: "جميع الحالات",
+        partnerParty: "الطرف الآخر",
+        start: "البداية",
+        end: "النهاية",
         interactiveTable: "جدول ملخص أداء الموظفين (انقر فوق أي صف لعرض التحليلات العميقة)"
     }
 };
@@ -83,7 +115,111 @@ const isRtl = currentLang === 'ar';
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/moment.min.js"></script>
     <style>
+        /* --- LIVE STATUS BADGES (THEME AWARE) --- */
+        .status-badge-offline {
+            background-color: rgba(39, 39, 42, 0.75);
+            color: #a1a1aa;
+            border: 1px solid rgba(63, 63, 70, 0.4);
+        }
+        .light-theme .status-badge-offline {
+            background-color: #f4f4f5 !important;
+            color: #52525b !important;
+            border-color: #e4e4e7 !important;
+        }
+        .status-dot-offline {
+            background-color: #71717a;
+        }
+        .light-theme .status-dot-offline {
+            background-color: #a1a1aa !important;
+        }
+
+        .status-badge-idle {
+            background-color: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.25);
+        }
+        .light-theme .status-badge-idle {
+            background-color: #fffbeb !important;
+            color: #b45309 !important;
+            border-color: #fde68a !important;
+        }
+        .status-dot-idle {
+            background-color: #f59e0b;
+        }
+
+        .status-badge-incall {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+        .light-theme .status-badge-incall {
+            background-color: #ecfdf5 !important;
+            color: #047857 !important;
+            border-color: #a7f3d0 !important;
+        }
+        .status-dot-incall {
+            background-color: #10b981;
+        }
+
+        .status-badge-ringing {
+            background-color: rgba(168, 85, 247, 0.15);
+            color: #c084fc;
+            border: 1px solid rgba(168, 85, 247, 0.25);
+        }
+        .light-theme .status-badge-ringing {
+            background-color: #faf5ff !important;
+            color: #7e22ce !important;
+            border-color: #e9d5ff !important;
+        }
+        .status-dot-ringing {
+            background-color: #a855f7;
+        }
+        /* --- AVAILABILITY BADGES (THEME AWARE) --- */
+        .avail-badge-high {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+        .light-theme .avail-badge-high {
+            background-color: #ecfdf5 !important;
+            color: #047857 !important;
+            border-color: #a7f3d0 !important;
+        }
+
+        .avail-badge-mid {
+            background-color: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.25);
+        }
+        .light-theme .avail-badge-mid {
+            background-color: #fffbeb !important;
+            color: #b45309 !important;
+            border-color: #fde68a !important;
+        }
+
+        .avail-badge-low {
+            background-color: rgba(39, 39, 42, 0.75);
+            color: #a1a1aa;
+            border: 1px solid rgba(63, 63, 70, 0.4);
+        }
+        .light-theme .avail-badge-low {
+            background-color: #f4f4f5 !important;
+            color: #52525b !important;
+            border-color: #e4e4e7 !important;
+        }
+
+        .light-theme .recent-disp-fallback {
+            background-color: #f4f4f5 !important;
+            color: #52525b !important;
+            border-color: #e4e4e7 !important;
+        }
+
+        .light-theme .status-log-btn:not(.bg-\[var\(--accent-color\)\]) {
+            background-color: #f4f4f5 !important;
+            border: 1px solid #e4e4e7 !important;
+        }
         :root {
             --bg-primary: #09090b;
             --bg-secondary: #121212;
@@ -487,6 +623,84 @@ const isRtl = currentLang === 'ar';
                          : m + ':' + String(sec).padStart(2,'0');
         }
 
+        function fmtHumanDur(s) {
+            s = parseInt(s) || 0;
+            if (s <= 0) return '0m';
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            if (h > 0) return `${h}h ${m}m`;
+            if (m > 0) return `${m}m ${sec}s`;
+            return `${sec}s`;
+        }
+
+        function fmtDateTime(d) {
+            if (!d) return '-';
+            if (typeof moment === 'function') {
+                return moment(d).format('YYYY-MM-DD HH:mm:ss');
+            }
+            if (typeof d === 'string') {
+                return d.replace('T', ' ').replace(/\.\d+Z?$/, '').substring(0, 19);
+            }
+            const dt = new Date(d);
+            if (isNaN(dt.getTime())) return String(d);
+            return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0') +
+                ' ' + String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0') + ':' + String(dt.getSeconds()).padStart(2,'0');
+        }
+
+        function renderStatusBadge(status) {
+            status = String(status || 'offline').toLowerCase();
+            if (status === 'incall' || status === 'in call') {
+                return '<span class="status-badge status-badge-incall inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full status-dot-incall animate-pulse"></span><%= t.stateInCall %></span>';
+            } else if (status === 'ringing') {
+                return '<span class="status-badge status-badge-ringing inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full status-dot-ringing animate-ping"></span><%= t.stateRinging %></span>';
+            } else if (status === 'idle') {
+                return '<span class="status-badge status-badge-idle inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full status-dot-idle"></span><%= t.stateIdle %></span>';
+            } else {
+                return '<span class="status-badge status-badge-offline inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full status-dot-offline"></span><%= t.stateOffline %></span>';
+            }
+        }
+
+        let currentStatusLogs = [];
+        function filterStatusLogs(status) {
+            document.querySelectorAll('.status-log-btn').forEach(btn => {
+                const st = btn.getAttribute('data-status');
+                if (st === status) {
+                    btn.className = 'status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-[var(--accent-color)] text-white cursor-pointer';
+                } else {
+                    const colorMap = {
+                        idle: 'text-amber-400',
+                        incall: 'text-emerald-400',
+                        ringing: 'text-purple-400',
+                        offline: 'text-zinc-400'
+                    };
+                    btn.className = `status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-zinc-900 hover:bg-zinc-800 ${colorMap[st] || 'text-zinc-400'} cursor-pointer`;
+                }
+            });
+
+            const tbody = document.getElementById('statusLogsBody');
+            if (!tbody) return;
+
+            const filtered = status === 'all' 
+                ? currentStatusLogs 
+                : currentStatusLogs.filter(l => String(l.status || '').toLowerCase() === status);
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(log => `
+                <tr class="hover:bg-zinc-900/30 transition">
+                    <td class="p-3 whitespace-nowrap">${renderStatusBadge(log.status)}</td>
+                    <td class="p-3 text-zinc-300 font-mono whitespace-nowrap">${fmtDateTime(log.start_time)}</td>
+                    <td class="p-3 text-zinc-300 font-mono whitespace-nowrap">${fmtDateTime(log.end_time)}</td>
+                    <td class="p-3 font-bold text-[var(--accent-color)] font-mono whitespace-nowrap">${fmtHumanDur(log.duration_seconds)}</td>
+                    <td class="p-3 text-white font-mono whitespace-nowrap">${log.partner || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
         function renderOverview() {
             const panel = document.getElementById('detailPanel');
             const lang = '<%= currentLang %>';
@@ -529,31 +743,39 @@ const isRtl = currentLang === 'ar';
                         <table class="w-full text-start border-collapse">
                             <thead>
                                 <tr class="bg-black/40 text-zinc-400 text-xs font-black uppercase border-b border-[#27272a]">
-                                    <th class="p-4 tracking-wider text-start cursor-pointer hover:text-white transition select-none" onclick="sortOverview('extension')"><%= t.extension %> ${sortIndicator('extension')}</th>
-                                    <th class="p-4 tracking-wider text-start cursor-pointer hover:text-white transition select-none" onclick="sortOverview('name')"><%= t.employee %> ${sortIndicator('name')}</th>
-                                    <th class="p-4 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('totalCalls')"><%= t.totalCalls %> ${sortIndicator('totalCalls')}</th>
-                                    <th class="p-4 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('inboundCalls')"><%= t.inboundLabel %> ${sortIndicator('inboundCalls')}</th>
-                                    <th class="p-4 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('outboundCalls')"><%= t.outboundLabel %> ${sortIndicator('outboundCalls')}</th>
-                                    <th class="p-4 tracking-wider text-end cursor-pointer hover:text-white transition select-none" onclick="sortOverview('totalTalkSec')"><%= t.totalDuration %> ${sortIndicator('totalTalkSec')}</th>
+                                    <th class="p-3.5 tracking-wider text-start cursor-pointer hover:text-white transition select-none" onclick="sortOverview('extension')"><%= t.extension %> ${sortIndicator('extension')}</th>
+                                    <th class="p-3.5 tracking-wider text-start cursor-pointer hover:text-white transition select-none" onclick="sortOverview('name')"><%= t.employee %> ${sortIndicator('name')}</th>
+                                    <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('liveStatus')"><%= t.liveStatus %> ${sortIndicator('liveStatus')}</th>
+                                    <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('onlineSec')"><%= t.onlineDuration %> ${sortIndicator('onlineSec')}</th>
+                                    <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('idleSec')"><%= t.idleDuration %> ${sortIndicator('idleSec')}</th>
+                                    <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('totalCalls')"><%= t.totalCalls %> ${sortIndicator('totalCalls')}</th>
+                                    <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('inboundCalls')"><%= t.inboundLabel %> ${sortIndicator('inboundCalls')}</th>
+                                    <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('outboundCalls')"><%= t.outboundLabel %> ${sortIndicator('outboundCalls')}</th>
+                                    <th class="p-3.5 tracking-wider text-end cursor-pointer hover:text-white transition select-none" onclick="sortOverview('totalTalkSec')"><%= t.totalDuration %> ${sortIndicator('totalTalkSec')}</th>
+                                    <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('availabilityRate')"><%= t.availability %> ${sortIndicator('availabilityRate')}</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[#27272a]/20 text-sm font-mono">
             `;
 
             if (sorted.length === 0) {
-                html += `<tr><td colspan="6" class="p-8 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>`;
+                html += `<tr><td colspan="10" class="p-8 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>`;
             } else {
                 pageData.forEach(row => {
                     const talkMin = Math.round(row.totalTalkSec / 60);
                     
                     html += `
                         <tr class="hover:bg-zinc-900/50 cursor-pointer transition" onclick="selectExtension('${row.extension}')">
-                            <td class="p-4 text-[var(--accent-color)] font-black text-sm">${row.extension}</td>
-                            <td class="p-4 text-white font-sans font-bold text-sm">${row.name}</td>
-                            <td class="p-4 text-center text-white font-bold text-sm">${row.totalCalls}</td>
-                            <td class="p-4 text-center text-slate-300">${row.inboundCalls}</td>
-                            <td class="p-4 text-center text-slate-300">${row.outboundCalls}</td>
-                            <td class="p-4 text-end text-[var(--accent-color)] font-bold text-sm">${talkMin} <%= t.min %> <span class="text-[11px] text-zinc-500">(${row.totalTalkSec}s)</span></td>
+                            <td class="p-3.5 text-[var(--accent-color)] font-black text-sm">${row.extension}</td>
+                            <td class="p-3.5 text-white font-sans font-bold text-sm">${row.name}</td>
+                            <td class="p-3.5 text-center">${renderStatusBadge(row.liveStatus)}</td>
+                            <td class="p-3.5 text-center text-emerald-400 font-bold text-xs font-mono">${fmtHumanDur(row.onlineSec)}</td>
+                            <td class="p-3.5 text-center text-amber-400 font-bold text-xs font-mono">${fmtHumanDur(row.idleSec)}</td>
+                            <td class="p-3.5 text-center text-white font-bold text-sm">${row.totalCalls}</td>
+                            <td class="p-3.5 text-center text-slate-300 text-xs">${row.inboundCalls}</td>
+                            <td class="p-3.5 text-center text-slate-300 text-xs">${row.outboundCalls}</td>
+                            <td class="p-3.5 text-end text-[var(--accent-color)] font-bold text-sm">${talkMin} <%= t.min %> <span class="text-[11px] text-zinc-500">(${row.totalTalkSec}s)</span></td>
+                            <td class="p-3.5 text-center"><span class="px-2 py-0.5 rounded text-xs font-black ${(row.availabilityRate >= 75 ? 'avail-badge-high' : row.availabilityRate >= 40 ? 'avail-badge-mid' : 'avail-badge-low')}">${row.availabilityRate || 0}%</span></td>
                         </tr>
                     `;
                 });
@@ -636,6 +858,32 @@ const isRtl = currentLang === 'ar';
                 </div>
             </div>`;
 
+            // Live Status & Presence Telemetry Cards
+            html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 shrink-0">';
+            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/40 flex items-center justify-between ${rtl ? 'flex-row-reverse' : ''}">
+                <div>
+                    <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.liveStatus %></p>
+                    <div class="mt-1.5">${renderStatusBadge(data.liveStatus?.status)}</div>
+                </div>
+                <div class="${rtl ? 'text-start' : 'text-end'}">
+                    <span class="text-[10px] font-bold text-zinc-500 block uppercase"><%= t.availability %></span>
+                    <span class="text-base font-black text-emerald-400">${data.availabilityRate || 0}%</span>
+                </div>
+            </div>`;
+            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/40">
+                <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.onlineDuration %></p>
+                <p class="text-2xl font-black text-emerald-400 mt-1 font-mono">${fmtHumanDur(data.totalOnlineSec)}</p>
+            </div>`;
+            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/40">
+                <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.idleDuration %></p>
+                <p class="text-2xl font-black text-amber-400 mt-1 font-mono">${fmtHumanDur(data.totalIdleSec)}</p>
+            </div>`;
+            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/40">
+                <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.incallDuration %></p>
+                <p class="text-2xl font-black text-white mt-1 font-mono">${fmtHumanDur(data.totalIncallSec)}</p>
+            </div>`;
+            html += '</div>';
+
             // Stat Cards Grid
             html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6 shrink-0">';
             html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/30">
@@ -687,7 +935,11 @@ const isRtl = currentLang === 'ar';
             }
 
             // Charts Grid
-            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 shrink-0">';
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6 shrink-0">';
+            html += `<div class="panel-surface rounded-xl p-5 border border-[#27272a]/30">
+                <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider mb-4"><%= t.statusAllocation %></h4>
+                <div id="statusChart" class="w-full h-72 min-h-[280px]"></div>
+            </div>`;
             html += `<div class="panel-surface rounded-xl p-5 border border-[#27272a]/30">
                 <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider mb-4"><%= t.disposition %></h4>
                 <div id="dispositionChart" class="w-full h-72 min-h-[280px]"></div>
@@ -756,12 +1008,49 @@ const isRtl = currentLang === 'ar';
                 });
                 html += '</tbody></table></div></div>';
             }
+            // Status Transition History Log Table
+            html += `<div class="panel-surface rounded-xl border border-[#27272a]/30 overflow-hidden flex flex-col min-h-0 mt-6">
+                <div class="px-4 py-3 border-b border-[#27272a] bg-black/25 shrink-0 flex items-center justify-between flex-wrap gap-2 ${rtl ? 'flex-row-reverse' : ''}">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-[var(--accent-color)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider"><%= t.statusHistory %> (${(data.statusLogs || []).length})</h4>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <button type="button" onclick="filterStatusLogs('all')" class="status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-[var(--accent-color)] text-white cursor-pointer" data-status="all"><%= t.allStatuses %></button>
+                        <button type="button" onclick="filterStatusLogs('idle')" class="status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-zinc-900 hover:bg-zinc-800 text-amber-400 cursor-pointer" data-status="idle"><%= t.stateIdle %></button>
+                        <button type="button" onclick="filterStatusLogs('incall')" class="status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-zinc-900 hover:bg-zinc-800 text-emerald-400 cursor-pointer" data-status="incall"><%= t.stateInCall %></button>
+                        <button type="button" onclick="filterStatusLogs('ringing')" class="status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-zinc-900 hover:bg-zinc-800 text-purple-400 cursor-pointer" data-status="ringing"><%= t.stateRinging %></button>
+                        <button type="button" onclick="filterStatusLogs('offline')" class="status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-zinc-900 hover:bg-zinc-800 text-zinc-400 cursor-pointer" data-status="offline"><%= t.stateOffline %></button>
+                    </div>
+                </div>
+                <div class="overflow-y-auto max-h-72 min-h-[140px]">
+                    <table class="w-full text-start border-collapse">
+                        <thead>
+                            <tr class="bg-black/40 text-zinc-500 text-[9px] font-black uppercase border-b border-[#27272a]">
+                                <th class="p-3 tracking-wider text-start"><%= t.status %></th>
+                                <th class="p-3 tracking-wider text-start"><%= t.start %></th>
+                                <th class="p-3 tracking-wider text-start"><%= t.end %></th>
+                                <th class="p-3 tracking-wider text-start"><%= t.duration %></th>
+                                <th class="p-3 tracking-wider text-start"><%= t.partnerParty %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="statusLogsBody" class="divide-y divide-[#27272a]/10 text-xs font-mono">
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
             html += '</div>';
             panel.className = 'flex-1 panel-surface rounded-2xl overflow-y-auto min-h-0 p-6 flex flex-col';
             panel.innerHTML = html;
+            currentStatusLogs = data.statusLogs || [];
+            filterStatusLogs('all');
+            
 
             // Trigger ECharts rendering
             setTimeout(() => {
+                if (data.statusBreakdown && data.statusBreakdown.length) {
+                    initStatusChart(data.statusBreakdown);
+                }
                 if (data.dispositionData && data.dispositionData.length) {
                     initDispositionChart(data.dispositionData);
                 }
@@ -778,6 +1067,7 @@ const isRtl = currentLang === 'ar';
                     if (dispositionChart) dispositionChart.resize();
                     if (dailyChart) dailyChart.resize();
                     if (hourlyChart) hourlyChart.resize();
+                    if (statusChart) statusChart.resize();
                     if (durationChart) durationChart.resize();
                     if (typeof window.dismissLoadingOverlay === 'function') window.dismissLoadingOverlay();
                 });
@@ -788,7 +1078,8 @@ const isRtl = currentLang === 'ar';
                 { id: 'dispositionChart', chart: dispositionChart },
                 { id: 'dailyChart', chart: dailyChart },
                 { id: 'hourlyChart', chart: hourlyChart },
-                { id: 'durationChart', chart: durationChart }
+                { id: 'durationChart', chart: durationChart },
+                { id: 'statusChart', chart: statusChart },
             ];
             chartList.forEach(({ id, chart }) => {
                 if (!chart) return;
@@ -809,6 +1100,65 @@ const isRtl = currentLang === 'ar';
                 } catch (e) {
                     console.error('Error exporting chart image:', e);
                 }
+            });
+        }
+        let statusChart = null;
+        function initStatusChart(data) {
+            const container = document.getElementById('statusChart');
+            if (!container) return;
+            if (statusChart) statusChart.dispose();
+            const isLight = document.documentElement.classList.contains('light-theme');
+            statusChart = echarts.init(container, isLight ? null : 'dark');
+
+            const totalSec = data.reduce((sum, item) => sum + (item.value || 0), 0);
+            const statusColors = {
+                'Idle': '#f59e0b',
+                'In Call': '#15803d',
+                'Ringing': '#7e22ce',
+                'Offline': '#71717a'
+            };
+
+            statusChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: isLight ? '#ffffff' : '#18181b',
+                    borderColor: isLight ? '#e4e4e7' : '#27272a',
+                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 },
+                    formatter: function(params) {
+                        const pct = totalSec > 0 ? Math.round((params.value / totalSec) * 100) : 0;
+                        return `<b>${params.name}</b>: ${fmtDur(params.value)} (${pct}%)`;
+                    }
+                },
+                legend: {
+                    bottom: '0%',
+                    textStyle: { color: isLight ? '#09090b' : '#a1a1aa', fontSize: 10, fontWeight: 700 }
+                },
+                series: [{
+                    name: 'Status',
+                    type: 'pie',
+                    radius: ['40%', '68%'],
+                    center: ['50%', '45%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                        borderRadius: 6,
+                        borderColor: isLight ? '#ffffff' : '#18181b',
+                        borderWidth: 2,
+                        color: function(param) {
+                            return statusColors[param.name] || '#a1a1aa';
+                        }
+                    },
+                    label: { show: false },
+                    emphasis: {
+                        label: {
+                            show: true,
+                            fontSize: 12,
+                            fontWeight: 'bold',
+                            formatter: '{b}\n{d}%'
+                        }
+                    },
+                    data: data
+                }]
             });
         }
 
