@@ -702,15 +702,15 @@ if [ -f "$FUNCTIONS_FILE" ]; then
     echo "  IssabelPBX PJSIP generator patched for maxcontacts, inband_progress, and remove_unavailable"
 fi
 
-# Ensure WebRTC extensions enforce single-contact policy without direct media
+# Multi-device & zero-drop registration support for WebRTC extensions
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
-UPDATE sip SET data='1' WHERE keyword IN ('maxcontacts','max_contacts') AND id IN (SELECT id FROM (SELECT id FROM sip WHERE keyword='webrtc' AND data='yes') AS w);
+UPDATE sip SET data='10' WHERE keyword IN ('maxcontacts','max_contacts') AND id IN (SELECT id FROM (SELECT id FROM sip WHERE keyword='webrtc' AND data='yes') AS w);
 INSERT INTO sip (id, keyword, data, flags)
 SELECT id, 'inband_progress', 'yes', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
 ON DUPLICATE KEY UPDATE data='yes';
 INSERT INTO sip (id, keyword, data, flags)
-SELECT id, 'remove_existing', 'yes', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
-ON DUPLICATE KEY UPDATE data='yes';
+SELECT id, 'remove_existing', 'no', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
+ON DUPLICATE KEY UPDATE data='no';
 INSERT INTO sip (id, keyword, data, flags)
 SELECT id, 'remove_unavailable', 'yes', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
 ON DUPLICATE KEY UPDATE data='yes';
@@ -1519,12 +1519,14 @@ Listen 8443 https
     ErrorDocument 400 /ssl-redirect.html
     Alias /ssl-redirect.html /var/www/html/ssl-redirect.html
 
+    ProxyTimeout 86400
     ProxyPreserveHost On
     RequestHeader set X-Forwarded-Proto "https"
     RequestHeader set X-Forwarded-Port "8443"
 
     RewriteEngine On
     RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteCond %{REQUEST_URI} !^/ws [NC]
     RewriteRule /(.*) ws://127.0.0.1:8090/$1 [P,L]
     ProxyPass /ws ws://127.0.0.1:8088/ws
     ProxyPass /ssl-redirect.html !

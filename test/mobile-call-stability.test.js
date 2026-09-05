@@ -22,11 +22,11 @@ test('push hook polls for a WebRTC contact with a five-second bound', () => {
     assert.match(installer, /SOKRAT_WAIT_COUNT}<25/);
 });
 
-test('WebRTC configuration enforces one replaceable contact without direct media', () => {
+test('WebRTC configuration enforces multi-contact registration stability without direct media', () => {
     assert.match(server, /direct_media=no/);
-    assert.match(server, /max_contacts=1\\nremove_existing=yes\\nremove_unavailable=yes/);
+    assert.match(server, /max_contacts=10\\nremove_existing=no\\nremove_unavailable=yes/);
     assert.match(installer, /case 'remove_unavailable':/);
-    assert.match(installer, /UPDATE sip SET data='1' WHERE keyword IN \('maxcontacts','max_contacts'\)/);
+    assert.match(installer, /UPDATE sip SET data='10' WHERE keyword IN \('maxcontacts','max_contacts'\)/);
     assert.match(installer, /SELECT id, 'direct_media', 'no'/);
 });
 

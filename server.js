@@ -8838,10 +8838,9 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create')
     content = content.trim();
 
     if (action !== 'delete') {
-        const newBlock = `\n${startMarker}\n[${extNum}](+)\nwebrtc=yes\nice_support=yes\nuse_avpf=yes\nmedia_use_received_transport=yes\ndirect_media=no\nrtcp_mux=yes\nmedia_encryption=dtls\ndtls_cert_file=/etc/asterisk/keys/asterisk.pem\ndtls_private_key=/etc/asterisk/keys/asterisk.pem\ndtls_ca_file=/etc/asterisk/keys/asterisk.pem\ndtls_verify=fingerprint\ndtls_setup=actpass\n\n[${extNum}](+type=aor)\nmax_contacts=1\nremove_existing=yes\nremove_unavailable=yes\n${endMarker}`;
+        const newBlock = `\n${startMarker}\n[${extNum}](+)\nwebrtc=yes\nice_support=yes\nuse_avpf=yes\nmedia_use_received_transport=yes\ndirect_media=no\nrtcp_mux=yes\nmedia_encryption=dtls\ndtls_cert_file=/etc/asterisk/keys/asterisk.pem\ndtls_private_key=/etc/asterisk/keys/asterisk.pem\ndtls_ca_file=/etc/asterisk/keys/asterisk.pem\ndtls_verify=fingerprint\ndtls_setup=actpass\n\n[${extNum}](+type=aor)\nmax_contacts=10\nremove_existing=no\nremove_unavailable=yes\n${endMarker}`;
         content += (content ? '\n' : '') + newBlock;
     }
-
     try {
         fs.writeFileSync(pjsipPath, (content ? content.trim() + '\n' : ''), 'utf8');
     } catch (e) {
