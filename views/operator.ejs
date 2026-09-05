@@ -93,6 +93,57 @@ const isRtl = currentLang === 'ar';
             --status-offline: #71717a;
             --status-active: var(--accent-color);
         }
+
+        /* --- SOKRAT DUAL-RING ROTATING LOADER --- */
+        .loader {
+            --loader-color: currentColor;
+            --loader-thickness: 3px;
+            width: 60px;
+            height: 30px;
+            display: inline-grid;
+            vertical-align: middle;
+            --c: #0000 calc(100% - var(--loader-thickness)),
+                 var(--loader-color) calc(100% - calc(var(--loader-thickness) - 1px)) 96%,
+                 #0000;
+            background:
+                radial-gradient(farthest-side at bottom, var(--c)) 0 0,
+                radial-gradient(farthest-side at top   , var(--c)) 100% 100%;
+            background-size: calc(50% + 1.5px) 50%;
+            background-repeat: no-repeat;
+            animation: sokratLoaderRing 1.5s infinite linear;
+        }
+        .loader::before,
+        .loader::after {
+            content: "";
+            grid-area: 1/1;
+            background: inherit;
+            animation: inherit;
+            animation-duration: 2s;
+        }
+        .loader::after {
+            --s: -1;
+        }
+        @keyframes sokratLoaderRing {
+            100% { transform: rotate(calc(var(--s, 1) * 1turn)); }
+        }
+        /* Button-Sized Modifier */
+        .loader-btn {
+            width: 20px;
+            height: 10px;
+            --loader-thickness: 2px;
+            margin-inline-end: 0.35rem;
+            flex-shrink: 0;
+            display: inline-grid;
+        }
+        /* Extra Compact */
+        .loader-xs {
+            width: 16px;
+            height: 8px;
+            --loader-thickness: 1.6px;
+            margin-inline-end: 0.25rem;
+            flex-shrink: 0;
+            display: inline-grid;
+        }
         body { 
             background-color: var(--bg-primary); 
             font-family: 'Roboto', 'IBM Plex Sans Arabic', sans-serif; 
@@ -672,6 +723,7 @@ const isRtl = currentLang === 'ar';
 
                 var fedRemote = (isCentralRole && typeof federationRemoteExtensions !== 'undefined') ? federationRemoteExtensions : [];
                 var fedPeersList = (typeof federationPeers !== 'undefined') ? federationPeers : [];
+                var hasConnectedPbxs = (fedPeersList.length > 0);
                 var peerMap = {};
                 fedPeersList.forEach(function(p) { peerMap[p.id] = p; });
 
@@ -761,12 +813,14 @@ const isRtl = currentLang === 'ar';
                                         <% } %>
                                     </div>
                                     <div class="min-w-0 flex-1 <%= isRtl ? 'text-right' : 'text-left' %>">
-                                        <div class="flex items-baseline gap-2 min-w-0 flex-wrap">
+                                        <div class="flex items-center gap-2 min-w-0 flex-wrap">
                                             <span class="text-base font-bold text-white truncate" title="<%= emp.name %>"><%= emp.name %></span>
                                             <span class="extension-number text-xs font-mono font-black text-[var(--accent-color)] shrink-0"><%= emp.isRemote ? emp.dialAlias : emp.extension %></span>
+                                            <% if (hasConnectedPbxs) { %>
                                             <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold <%= emp.isRemote ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30' %>">
                                                 #<%= emp.siteCode %>
                                             </span>
+                                            <% } %>
                                         </div>
                                         <span class="employee-title <%= emp.title ? '' : 'employee-title-empty' %>" title="<%= emp.title || t.noTitle %>"><%= emp.title || t.noTitle %></span>
                                         <div class="flex items-center gap-1 flex-wrap mt-0.5">
@@ -1094,6 +1148,7 @@ const isRtl = currentLang === 'ar';
 
                 const trunkIds = Object.keys(localTrunksData);
                 const localSiteCode = '<%= (typeof federationSettings !== "undefined" && federationSettings.local_site_code) ? federationSettings.local_site_code : "10" %>';
+                const hasConnectedPbxs = <%= (typeof federationPeers !== 'undefined' && federationPeers.length > 0) ? 'true' : 'false' %>;
                 grid.innerHTML = '';
 
                 if (trunkIds.length === 0) {
@@ -1146,7 +1201,7 @@ const isRtl = currentLang === 'ar';
                                 <span class="text-[10px] font-mono text-[var(--text-muted)] block truncate mt-0.5">${escapeHtml(trunk.channelid || trunk.host || '-')}</span>
                             </div>
                             <div class="flex items-center gap-1.5 shrink-0">
-                                <span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border bg-amber-500/15 text-amber-400 border-amber-500/25">#${trunkSiteCode}</span>
+                                ${hasConnectedPbxs ? `<span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border bg-amber-500/15 text-amber-400 border-amber-500/25">#${trunkSiteCode}</span>` : ''}
                                 <span class="px-2 py-0.5 text-[10px] font-extrabold rounded border ${techBadgeClass}">${techDisplay}</span>
                             </div>
                         </div>
@@ -2117,7 +2172,7 @@ const isRtl = currentLang === 'ar';
 
             <!-- Bulk Action Toolbar -->
             <div class="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
-                <span class="text-xs font-bold text-slate-300"><%= isRtl ? 'تطبيق جماعي:' : 'Bulk Action:' %></span>
+                <span class="text-xs font-bold text-slate-900"><%= isRtl ? 'تطبيق جماعي:' : 'Bulk Action:' %></span>
                 <div class="flex items-center gap-2 flex-wrap">
                     <select id="bulkAutoAnswer" name="bulk_auto_answer" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-bold px-2.5 py-1.5 text-[var(--text-primary)] focus:outline-none focus:border-emerald-500">
                         <option value="" disabled selected><%= isRtl ? 'الرد التلقائي للكل' : 'Auto Answer for All' %></option>
@@ -2131,7 +2186,7 @@ const isRtl = currentLang === 'ar';
                         <option value="force_on"><%= isRtl ? '[مقفل] إجباري مفعل' : '[Locked] ON (Force)' %></option>
                         <option value="force_off"><%= isRtl ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)' %></option>
                     </select>
-                    <button type="button" onclick="applyBulkPolicies()" class="btn-primary px-3 py-1.5 text-xs font-bold whitespace-nowrap cursor-pointer">
+                    <button type="button" onclick="applyBulkPolicies(this)" class="btn-primary px-3 py-1.5 text-xs font-bold whitespace-nowrap cursor-pointer">
                         <%= isRtl ? 'تطبيق على الكل' : 'Apply to All' %>
                     </button>
                 </div>
@@ -2167,6 +2222,39 @@ const isRtl = currentLang === 'ar';
     </div>
 
     <script>
+        function setButtonLoading(btn, isLoading, loadingText) {
+            const el = typeof btn === 'string' ? document.querySelector(btn) : btn;
+            if (!el) return;
+
+            if (isLoading) {
+                if (!el.dataset.originalWidth) {
+                    el.dataset.originalWidth = el.offsetWidth + 'px';
+                }
+                el.style.minWidth = el.dataset.originalWidth;
+                if (!el.dataset.originalHtml) {
+                    el.dataset.originalHtml = el.innerHTML;
+                }
+                el.disabled = true;
+                el.classList.add('opacity-75', 'cursor-not-allowed');
+
+                const isRtl = document.documentElement.dir === 'rtl' || document.documentElement.getAttribute('dir') === 'rtl';
+                const label = loadingText || (isRtl ? 'جاري الحفظ...' : 'Saving...');
+                el.innerHTML = `
+                    <span class="loader loader-btn" aria-hidden="true"></span>
+                    <span>${String(label || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
+                `;
+            } else {
+                if (el.dataset.originalHtml) {
+                    el.innerHTML = el.dataset.originalHtml;
+                    delete el.dataset.originalHtml;
+                }
+                el.style.minWidth = '';
+                delete el.dataset.originalWidth;
+                el.disabled = false;
+                el.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+        window.setButtonLoading = setButtonLoading;
         function openPolicyManagerModal() {
             const modal = document.getElementById('policyManagerModal');
             if (modal) {
@@ -2197,27 +2285,29 @@ const isRtl = currentLang === 'ar';
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-zinc-800/30 transition';
                     tr.innerHTML = `
-                        <td class="py-2.5 px-3 font-mono font-bold text-white text-sm flex items-center gap-1.5">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            <span>${p.extension}</span>
+                        <td class="py-2.5 px-3 align-middle">
+                            <div class="flex items-center gap-1.5 font-mono font-bold text-white text-sm">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+                                <span>${p.extension}</span>
+                            </div>
                         </td>
-                        <td class="py-2.5 px-3 font-semibold text-zinc-300">${p.name || 'Ext ' + p.extension}</td>
-                        <td class="py-2.5 px-3">
+                        <td class="py-2.5 px-3 font-semibold text-zinc-300 align-middle">${p.name || 'Ext ' + p.extension}</td>
+                        <td class="py-2.5 px-3 align-middle">
                             <select id="policyAuto_${p.extension}" name="policy_auto_${p.extension}" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] policy-auto-${p.extension}">
                                 <option value="user_choice" ${p.auto_answer === 'user_choice' ? 'selected' : ''}>${isAr ? 'حر (اختيار الموظف)' : 'User Controlled'}</option>
                                 <option value="force_on" ${p.auto_answer === 'force_on' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري مفعل (قفل)' : '[Locked] ON (Force)'}</option>
                                 <option value="force_off" ${p.auto_answer === 'force_off' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)'}</option>
                             </select>
                         </td>
-                        <td class="py-2.5 px-3">
+                        <td class="py-2.5 px-3 align-middle">
                             <select id="policyDnd_${p.extension}" name="policy_dnd_${p.extension}" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] policy-dnd-${p.extension}">
                                 <option value="user_choice" ${p.dnd === 'user_choice' ? 'selected' : ''}>${isAr ? 'حر (اختيار الموظف)' : 'User Controlled'}</option>
                                 <option value="force_on" ${p.dnd === 'force_on' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري مفعل (قفل)' : '[Locked] ON (Force)'}</option>
                                 <option value="force_off" ${p.dnd === 'force_off' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)'}</option>
                             </select>
                         </td>
-                        <td class="py-2.5 px-3 text-right">
-                            <button type="button" onclick="saveWebRtcPolicy('${p.extension}')" class="btn-ghost py-1 px-2.5 text-xs text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/50 cursor-pointer">
+                        <td class="py-2.5 px-3 text-right align-middle">
+                            <button type="button" onclick="saveWebRtcPolicy('${p.extension}', this)" class="btn-ghost py-1 px-2.5 text-xs text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/50 cursor-pointer">
                                 ${isAr ? 'حفظ' : 'Save'}
                             </button>
                         </td>
@@ -2229,10 +2319,12 @@ const isRtl = currentLang === 'ar';
             }
         }
 
-        async function saveWebRtcPolicy(ext) {
+        async function saveWebRtcPolicy(ext, btn) {
             const autoSelect = document.querySelector(`.policy-auto-${ext}`);
             const dndSelect = document.querySelector(`.policy-dnd-${ext}`);
             if (!autoSelect || !dndSelect) return;
+            const isAr = document.documentElement.getAttribute('dir') === 'rtl';
+            if (btn) setButtonLoading(btn, true, isAr ? 'حفظ...' : 'Save...');
 
             try {
                 const res = await fetch(`/api/extension-policies/${ext}`, {
@@ -2259,13 +2351,17 @@ const isRtl = currentLang === 'ar';
                 }
             } catch (e) {
                 console.error(e);
+            } finally {
+                if (btn) setButtonLoading(btn, false);
             }
         }
 
-        async function applyBulkPolicies() {
+        async function applyBulkPolicies(btn) {
             const autoVal = document.getElementById('bulkAutoAnswer').value;
             const dndVal = document.getElementById('bulkDnd').value;
             if (!autoVal && !dndVal) return;
+            const isAr = document.documentElement.getAttribute('dir') === 'rtl';
+            if (btn) setButtonLoading(btn, true, isAr ? 'جاري التطبيق...' : 'Applying...');
 
             try {
                 const res = await fetch('/api/extension-policies-bulk', {
@@ -2287,6 +2383,8 @@ const isRtl = currentLang === 'ar';
                 }
             } catch (e) {
                 console.error(e);
+            } finally {
+                if (btn) setButtonLoading(btn, false);
             }
         }
     </script>

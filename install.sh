@@ -1264,40 +1264,42 @@ if [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ]; then
     echo "  func_rnnoise.so compiled and loaded into Asterisk"
 fi
 
-# 10c — Compile and Install chan_dongle
-echo "  [10c] Compiling chan_dongle..."
-if [ ! -f /usr/lib64/asterisk/modules/chan_dongle.so ] && [ ! -f /usr/lib/asterisk/modules/chan_dongle.so ]; then
-    cd /usr/src
-    if [ ! -d asterisk-chan-dongle ]; then
-        git clone https://github.com/wdoekes/asterisk-chan-dongle.git
-    fi
-    cd asterisk-chan-dongle
-    git pull origin master 2>/dev/null || true
-    ./bootstrap
-    ./configure --with-astversion=18.19.0
-    make
-    make install
-    echo "  chan_dongle compiled and installed"
-else
-    echo "  chan_dongle already installed"
+# 10c — Compile and Install chan_dongle (with Sokrat decline detection and SMS ME storage patches)
+echo "  [10c] Compiling and installing chan_dongle..."
+cd /usr/src
+if [ ! -d asterisk-chan-dongle ]; then
+    git clone https://github.com/wdoekes/asterisk-chan-dongle.git
 fi
+cd asterisk-chan-dongle
+git pull origin master 2>/dev/null || true
+if [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
+    if patch -p1 -N --dry-run < "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
+        patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch"
+        echo "  Applied Sokrat chan_dongle patch"
+    else
+        echo "  Sokrat chan_dongle patch already applied"
+    fi
+fi
+./bootstrap
+./configure --with-astversion=18.19.0
+make -j$(nproc 2>/dev/null || echo 1)
+make install
+echo "  chan_dongle compiled and installed"
 
 # 10d — Configure and apply dongle.conf
 echo "  [10d] Configuring and applying dongle.conf..."
-
-echo "  Configuring $NUM_DONGLES dongle(s)..."
-
-TEMP_CONF="/tmp/dongle.conf.tmp"
-rm -f "$TEMP_CONF"
-
-# Extract everything up to [dongle0] from repository template
-sed -n '1,/^\[dongle0\]/ { /^\[dongle0\]/! p }' "$INSTALL_DIR/dongle.conf" > "$TEMP_CONF"
-
-# Append device sections dynamically based on the input
-for ((i=0; i<NUM_DONGLES; i++)); do
-    audio_port=$((i * 3 + 1))
-    data_port=$((i * 3 + 2))
-    cat >> "$TEMP_CONF" << EOF
+if [ -f /etc/asterisk/dongle.conf ] && grep -q '^\[dongle0\]' /etc/asterisk/dongle.conf; then
+    echo "  /etc/asterisk/dongle.conf already exists, preserving existing port & SIM configuration..."
+    cp -a /etc/asterisk/dongle.conf /etc/asterisk/dongle.conf.bak-install 2>/dev/null || true
+else
+    echo "  Configuring $NUM_DONGLES dongle(s)..."
+    TEMP_CONF="/tmp/dongle.conf.tmp"
+    rm -f "$TEMP_CONF"
+    sed -n '1,/^\[dongle0\]/ { /^\[dongle0\]/! p }' "$INSTALL_DIR/dongle.conf" > "$TEMP_CONF"
+    for ((i=0; i<NUM_DONGLES; i++)); do
+        audio_port=$((i * 3 + 1))
+        data_port=$((i * 3 + 2))
+        cat >> "$TEMP_CONF" << EOF
 
 [dongle$i]
 txgain=3
@@ -1307,12 +1309,11 @@ data=/dev/ttyUSB$data_port
 imei=
 imsi=
 EOF
-done
-
-# Copy to Asterisk configuration folder
-cp "$TEMP_CONF" /etc/asterisk/dongle.conf
-rm -f "$TEMP_CONF"
-echo "  dongle.conf successfully generated with $NUM_DONGLES dongle(s) at /etc/asterisk/dongle.conf"
+    done
+    cp "$TEMP_CONF" /etc/asterisk/dongle.conf
+    rm -f "$TEMP_CONF"
+    echo "  dongle.conf successfully generated with $NUM_DONGLES dongle(s) at /etc/asterisk/dongle.conf"
+fi
 
 # 10d2 — Ensure /var/log/asterisk/full captures VERBOSE messages (required for SMS/USSD parsing)
 echo "  [10d2] Enabling verbose logging in Asterisk logger.conf..."

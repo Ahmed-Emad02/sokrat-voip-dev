@@ -125,8 +125,13 @@ function createCrmRouter(pool, options = {}) {
                     return res.status(401).json({ success: false, error: 'Unauthorized. Invalid, expired, or revoked integration credentials.' });
                 }
 
-                if (requiredScope && !client.scopes.includes(requiredScope)) {
-                    return res.status(403).json({ success: false, error: `Forbidden. Missing required scope: ${requiredScope}` });
+                if (requiredScope) {
+                    const hasScope = Array.isArray(requiredScope)
+                        ? requiredScope.some(s => client.scopes.includes(s))
+                        : client.scopes.includes(requiredScope);
+                    if (!hasScope) {
+                        return res.status(403).json({ success: false, error: `Forbidden. Missing required scope: ${Array.isArray(requiredScope) ? requiredScope.join(' or ') : requiredScope}` });
+                    }
                 }
 
                 req.crmClient = client;
@@ -275,20 +280,37 @@ function createCrmRouter(pool, options = {}) {
     });
 
     // 8. EMBED TICKET GENERATOR
-    router.post('/embed-tickets', requireCrmScope('live:read'), async (req, res) => {
-        const { crm_user_id, crm_user_name, supervisor_extension, requested_scopes } = req.body || {};
+    router.post('/embed-tickets', requireCrmScope(['live:read', 'softphone:use']), async (req, res) => {
+        const { crm_user_id, crm_user_name, supervisor_extension, requested_scopes, extension } = req.body || {};
 
         if (!crm_user_id || !crm_user_name) {
             return res.status(400).json({ success: false, error: 'Missing required parameters: crm_user_id, crm_user_name' });
         }
 
         try {
+            const requestedScopes = Array.isArray(requested_scopes)
+                ? requested_scopes
+                : ['softphone:use', 'live:read'];
+            const canIssueRequestedTicket = requestedScopes.some(scope =>
+                (scope === 'softphone:use' || scope === 'live:read') &&
+                req.crmClient.scopes.includes(scope)
+            );
+            if (!canIssueRequestedTicket) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Forbidden. Requested embed scope is not granted to this client.'
+                });
+            }
             const ticket = await createEmbedTicket(pool, req.crmClient, {
                 crmUserId: String(crm_user_id),
                 crmUserName: String(crm_user_name),
                 supervisorExtension: supervisor_extension ? String(supervisor_extension) : null,
-                requestedScopes: Array.isArray(requested_scopes) ? requested_scopes : ['live:read']
+                extension: extension ? String(extension) : null,
+                requestedScopes
             });
+            if (ticket.effectiveScopes.length === 0) {
+                throw new Error('Embed ticket was created without an effective scope');
+            }
 
             res.json({
                 ticket: ticket.rawTicket,

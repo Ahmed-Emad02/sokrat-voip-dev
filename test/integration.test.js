@@ -57,7 +57,7 @@ class MockPool {
             }
         }
 
-        if (sqlStr.includes('dashboard_crm_clients')) {
+        if (sqlStr.includes('dashboard_crm_clients') && !sqlStr.includes('dashboard_crm_embed_tickets')) {
             if (sqlStr.startsWith('INSERT')) {
                 const [clientId, name, secretHash, origin, cc, scopesStr] = params;
                 const id = this.clients.size + 1;
@@ -211,6 +211,56 @@ test('CRM REST Router health and pairing endpoints work correctly', async () => 
             headers: { 'Authorization': `Bearer ${pairData.client_secret}` }
         });
         assert.equal(shortCallRes.status, 200);
+
+        // 8. Softphone ticket endpoint grants the requested scope and returns a single-use ticket.
+        const ticketRes = await fetch(`${baseUrl}/embed-tickets`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${pairData.client_secret}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                crm_user_id: '42',
+                crm_user_name: 'CRM Agent',
+                extension: '150',
+                requested_scopes: ['softphone:use']
+            })
+        });
+        assert.equal(ticketRes.status, 200);
+        const ticketData = await ticketRes.json();
+        assert.match(ticketData.ticket, /^tkt_/);
+        assert.deepEqual(ticketData.effective_scopes, ['softphone:use']);
+
+        const consumed = await consumeEmbedTicket(pool, ticketData.ticket, 'softphone:use');
+        assert.ok(consumed);
+        assert.equal(await consumeEmbedTicket(pool, ticketData.ticket, 'softphone:use'), null);
+
+        // 9. Ticket endpoint is fail-closed for missing credentials and ungranted requested scopes.
+        const noAuthTicketRes = await fetch(`${baseUrl}/embed-tickets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ crm_user_id: '42', crm_user_name: 'CRM Agent' })
+        });
+        assert.equal(noAuthTicketRes.status, 401);
+
+        const client = pool.clients.get(pairData.client_id);
+        client.allowed_scopes = JSON.stringify(['live:read']);
+        const ticketCountBeforeDeniedRequest = pool.tickets.size;
+        const deniedTicketRes = await fetch(`${baseUrl}/embed-tickets`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${pairData.client_secret}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                crm_user_id: '42',
+                crm_user_name: 'CRM Agent',
+                extension: '150',
+                requested_scopes: ['softphone:use']
+            })
+        });
+        assert.equal(deniedTicketRes.status, 403);
+        assert.equal(pool.tickets.size, ticketCountBeforeDeniedRequest);
     } finally {
         server.close();
     }

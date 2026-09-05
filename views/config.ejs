@@ -82,6 +82,57 @@ function isTabAllowed(tabName) {
             --accent-color: #ef4444;
             --accent-hover: #dc2626;
         }
+
+        /* --- SOKRAT DUAL-RING ROTATING LOADER --- */
+        .loader {
+            --loader-color: currentColor;
+            --loader-thickness: 3px;
+            width: 60px;
+            height: 30px;
+            display: inline-grid;
+            vertical-align: middle;
+            --c: #0000 calc(100% - var(--loader-thickness)),
+                 var(--loader-color) calc(100% - calc(var(--loader-thickness) - 1px)) 96%,
+                 #0000;
+            background:
+                radial-gradient(farthest-side at bottom, var(--c)) 0 0,
+                radial-gradient(farthest-side at top   , var(--c)) 100% 100%;
+            background-size: calc(50% + 1.5px) 50%;
+            background-repeat: no-repeat;
+            animation: sokratLoaderRing 1.5s infinite linear;
+        }
+        .loader::before,
+        .loader::after {
+            content: "";
+            grid-area: 1/1;
+            background: inherit;
+            animation: inherit;
+            animation-duration: 2s;
+        }
+        .loader::after {
+            --s: -1;
+        }
+        @keyframes sokratLoaderRing {
+            100% { transform: rotate(calc(var(--s, 1) * 1turn)); }
+        }
+        /* Button-Sized Modifier */
+        .loader-btn {
+            width: 20px;
+            height: 10px;
+            --loader-thickness: 2px;
+            margin-inline-end: 0.35rem;
+            flex-shrink: 0;
+            display: inline-grid;
+        }
+        /* Extra Compact */
+        .loader-xs {
+            width: 16px;
+            height: 8px;
+            --loader-thickness: 1.6px;
+            margin-inline-end: 0.25rem;
+            flex-shrink: 0;
+            display: inline-grid;
+        }
         html.light-theme {
             --bg-primary: #f8fafc;
             --bg-secondary: #ffffff;
@@ -927,7 +978,7 @@ function isTabAllowed(tabName) {
                         <thead>
                             <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
                                 <th class="py-3 px-4"><%= isRtl ? 'الوصف' : 'Description' %></th>
-                                <th class="py-3 px-4"><%= isRtl ? 'رقم DID' : 'DID Number' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'رقم DID / هوية المتصل (CID)' : 'DID / CallerID' %></th>
                                 <th class="py-3 px-4"><%= isRtl ? 'الوجهة' : 'Destination' %></th>
                                 <th class="py-3 px-4 text-center"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
                             </tr>
@@ -2920,6 +2971,7 @@ function isTabAllowed(tabName) {
             <!-- Scrollable Body -->
             <form id="inboundForm" onsubmit="saveInboundRoute(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="inboundEditExt" value="">
+                <input type="hidden" id="inboundEditCid" value="">
                 <input type="hidden" id="inboundEditDesc" value="">
                 <input type="hidden" id="inboundEditDest" value="">
                 <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
@@ -2931,16 +2983,16 @@ function isTabAllowed(tabName) {
                                 <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                                 <%= isRtl ? 'شروط المطابقة والوصف' : 'Inbound Route Matching Rules' %>
                             </span>
-                            <span class="text-[10px] text-emerald-400/70 font-mono"><%= isRtl ? 'أساسي' : 'REQUIRED' %></span>
+                            <span class="text-[10px] text-emerald-400/70 font-mono"><%= isRtl ? 'قواعد التوجيه' : 'RULES' %></span>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                             <div>
-                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="inDescription"><%= isRtl ? 'وصف المسار *' : 'Description *' %></label>
-                                <input type="text" id="inDescription" required placeholder="e.g. Sales Inbound" class="config-input w-full text-xs">
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="inDescription"><%= isRtl ? 'وصف المسار' : 'Description' %></label>
+                                <input type="text" id="inDescription" placeholder="e.g. Sales Inbound (optional)" class="config-input w-full text-xs">
                             </div>
                             <div class="relative">
                                 <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="inExtension"><%= isRtl ? 'رقم DID (المستهدف)' : 'DID Number' %></label>
-                                <input type="text" id="inExtension" placeholder="e.g. 01012345678 (blank = ANY)" class="config-input w-full font-mono text-xs" autocomplete="off">
+                                <input type="text" id="inExtension" placeholder="e.g. 01012345678, _01., +20... (blank = ANY)" class="config-input w-full font-mono text-xs" autocomplete="off">
 
                                 <!-- DONGLE DID FLOATING POPUP FOR INBOUND ROUTES -->
                                 <div id="inboundDongleInfoPopup" class="fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4 z-[999999] hidden space-y-2 max-h-[320px] flex flex-col">
@@ -2953,6 +3005,11 @@ function isTabAllowed(tabName) {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="inCidNum"><%= isRtl ? 'رقم هوية المتصل (CallerID Number)' : 'CallerID Number' %></label>
+                            <input type="text" id="inCidNum" placeholder="e.g. 01012345678 or pattern (blank = ANY)" class="config-input w-full font-mono text-xs" autocomplete="off">
+                            <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تحديد رقم المتصل لتوجيه مخصص (اختياري - اتركه فارغاً لأي متصل)' : 'Route calls from a specific caller number (optional - leave blank for ANY)' %></p>
                         </div>
                     </div>
 
@@ -4016,6 +4073,39 @@ function isTabAllowed(tabName) {
         window.addEventListener('unhandledrejection', function(e) {
             console.error('[PBX Config Unhandled Rejection]:', e.reason);
         });
+        function setButtonLoading(btn, isLoading, loadingText) {
+            const el = typeof btn === 'string' ? document.querySelector(btn) : btn;
+            if (!el) return;
+
+            if (isLoading) {
+                if (!el.dataset.originalWidth) {
+                    el.dataset.originalWidth = el.offsetWidth + 'px';
+                }
+                el.style.minWidth = el.dataset.originalWidth;
+                if (!el.dataset.originalHtml) {
+                    el.dataset.originalHtml = el.innerHTML;
+                }
+                el.disabled = true;
+                el.classList.add('opacity-75', 'cursor-not-allowed');
+
+                const isRtl = document.documentElement.dir === 'rtl' || document.documentElement.getAttribute('dir') === 'rtl';
+                const label = loadingText || (isRtl ? 'جاري الحفظ...' : 'Saving...');
+                el.innerHTML = `
+                    <span class="loader loader-btn" aria-hidden="true"></span>
+                    <span>${String(label || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
+                `;
+            } else {
+                if (el.dataset.originalHtml) {
+                    el.innerHTML = el.dataset.originalHtml;
+                    delete el.dataset.originalHtml;
+                }
+                el.style.minWidth = '';
+                delete el.dataset.originalWidth;
+                el.disabled = false;
+                el.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+        window.setButtonLoading = setButtonLoading;
         const MAX_EMPLOYEE_PHOTO_BYTES = 50 * 1024 * 1024;
         let employeePhotoObjectUrl = null;
         let loadedTrunksList = [];
@@ -5061,12 +5151,8 @@ function isTabAllowed(tabName) {
         // --- RELOAD PBX CONFIG ---
         function reloadPbxConfig() {
             const btn = document.getElementById('reloadPbxBtn');
-            const icon = document.getElementById('reloadIcon');
-            const btnText = document.getElementById('reloadBtnText');
-            
-            btn.disabled = true;
-            icon.classList.add('animate-spin');
-            btnText.textContent = isRtl ? 'جاري تطبيق التغييرات...' : 'Applying PBX Config...';
+            if (!btn) return;
+            setButtonLoading(btn, true, isRtl ? 'جاري تطبيق التغييرات...' : 'Applying PBX Config...');
 
             fetch('/api/config/reload', { method: 'POST' })
                 .then(res => res.json())
@@ -5079,9 +5165,7 @@ function isTabAllowed(tabName) {
                 })
                 .catch(err => showToast('Network Error: ' + err.message, 'error'))
                 .finally(() => {
-                    btn.disabled = false;
-                    icon.classList.remove('animate-spin');
-                    btnText.textContent = isRtl ? 'تطبيق تغييرات المقسم (Apply PBX Changes)' : 'Apply PBX Configuration';
+                    setButtonLoading(btn, false);
                 });
         }
 
@@ -5333,12 +5417,9 @@ function isTabAllowed(tabName) {
             const vadGate = document.getElementById('extVadGate').value;
             const vadDb = document.getElementById('extVadDb').value;
             const saveButton = document.getElementById('extSaveBtn');
-            const saveText = document.getElementById('extSaveBtnText');
-            const originalText = saveText.textContent;
             let extensionCreated = false;
 
-            saveButton.disabled = true;
-            saveText.textContent = isRtl ? 'جاري الحفظ...' : 'Saving...';
+            if (saveButton) setButtonLoading(saveButton, true, isRtl ? 'جاري الحفظ...' : 'Saving...');
 
             try {
                 const response = await fetch(wasEdit ? '/api/config/extensions/' + extNum : '/api/config/extensions', {
@@ -5373,8 +5454,7 @@ function isTabAllowed(tabName) {
                     : '';
                 showToast(prefix + error.message, 'error');
             } finally {
-                saveButton.disabled = false;
-                saveText.textContent = originalText;
+                if (saveButton) setButtonLoading(saveButton, false);
             }
         }
 
@@ -5703,6 +5783,8 @@ function isTabAllowed(tabName) {
 
             const url = isEdit ? '/api/config/ringgroups/' + grpnum : '/api/config/ringgroups';
             const method = isEdit ? 'PUT' : 'POST';
+            const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
+            if (submitBtn) setButtonLoading(submitBtn, true);
 
             fetch(url, {
                 method,
@@ -5719,6 +5801,9 @@ function isTabAllowed(tabName) {
             })
             .catch(err => {
                 showToast(err.message || 'Request failed', 'error');
+            })
+            .finally(() => {
+                if (submitBtn) setButtonLoading(submitBtn, false);
             });
         }
         function deleteRingGroup(grpnum) {
@@ -6041,6 +6126,8 @@ function isTabAllowed(tabName) {
 
             const url = isEdit ? '/api/config/queues/' + extension : '/api/config/queues';
             const method = isEdit ? 'PUT' : 'POST';
+            const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
+            if (submitBtn) setButtonLoading(submitBtn, true);
 
             fetch(url, {
                 method,
@@ -6060,7 +6147,10 @@ function isTabAllowed(tabName) {
                     showToast(data.error, 'error');
                 }
             })
-            .catch(err => showToast(err.message, 'error'));
+            .catch(err => showToast(err.message, 'error'))
+            .finally(() => {
+                if (submitBtn) setButtonLoading(submitBtn, false);
+            });
         }
 
         function deleteQueue(extension) {
@@ -7128,6 +7218,8 @@ function isTabAllowed(tabName) {
 
             const url = editId ? `/api/config/ivrs/${editId}` : '/api/config/ivrs';
             const method = editId ? 'PUT' : 'POST';
+            const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
+            if (submitBtn) setButtonLoading(submitBtn, true);
 
             fetch(url, {
                 method: method,
@@ -7144,7 +7236,10 @@ function isTabAllowed(tabName) {
                     showToast(data.error || 'Failed to save IVR', 'error');
                 }
             })
-            .catch(err => showToast(err.message, 'error'));
+            .catch(err => showToast(err.message, 'error'))
+            .finally(() => {
+                if (submitBtn) setButtonLoading(submitBtn, false);
+            });
         }
 
         function deleteIvr(id) {
@@ -7405,6 +7500,8 @@ function isTabAllowed(tabName) {
 
             const url = editId ? '/api/config/trunks/' + editId : '/api/config/trunks';
             const method = editId ? 'PUT' : 'POST';
+            const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
+            if (submitBtn) setButtonLoading(submitBtn, true);
 
             fetch(url, {
                 method: method,
@@ -7424,6 +7521,10 @@ function isTabAllowed(tabName) {
                     closeModal('trunkModal');
                     fetchTrunks();
                 } else showToast(data.error, 'error');
+            })
+            .catch(err => showToast(err.message, 'error'))
+            .finally(() => {
+                if (submitBtn) setButtonLoading(submitBtn, false);
             });
         }
         function deleteTrunk(trunkid) {
@@ -7576,9 +7677,16 @@ function isTabAllowed(tabName) {
                         const extText = r.extension || '(ANY)';
                         const destText = formatDestination(r.destination);
 
+                        const cidBadge = r.cidnum
+                            ? `<div class="text-[10px] font-mono text-amber-400 font-semibold mt-0.5">CID: ${escapeHtml(r.cidnum)}</div>`
+                            : `<div class="text-[10px] font-mono text-[var(--text-muted)] mt-0.5">CID: ANY</div>`;
+
                         tr.innerHTML = `
                             <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${escapeHtml(r.description || '')}</td>
-                            <td class="py-3 px-4 font-mono font-bold text-emerald-400">${escapeHtml(extText)}</td>
+                            <td class="py-3 px-4 font-mono">
+                                <div class="font-bold text-emerald-400">${escapeHtml(extText)}</div>
+                                ${cidBadge}
+                            </td>
                             <td class="py-3 px-4 font-mono text-xs text-blue-400 font-semibold">${escapeHtml(destText)}</td>
                             <td class="py-3 px-4 text-center">
                                 <div class="flex items-center justify-center gap-2">
@@ -7596,7 +7704,7 @@ function isTabAllowed(tabName) {
         function editInboundRouteByIndex(idx) {
             const r = (loadedInboundRoutesList || [])[idx];
             if (r) {
-                editInboundRoute(r.extension || '', r.description || '', r.destination || '');
+                editInboundRoute(r.extension || '', r.cidnum || '', r.description || '', r.destination || '');
             } else {
                 openInboundModal();
             }
@@ -7605,7 +7713,7 @@ function isTabAllowed(tabName) {
         function deleteInboundRouteByIndex(idx) {
             const r = loadedInboundRoutesList[idx];
             if (!r) return;
-            deleteInboundRoute(r.extension || '', r.description || '', r.destination || '');
+            deleteInboundRoute(r.extension || '', r.cidnum || '', r.description || '', r.destination || '');
         }
 
 
@@ -7618,12 +7726,16 @@ function isTabAllowed(tabName) {
                 if (form) form.reset();
                 const editExt = document.getElementById('inboundEditExt');
                 if (editExt) editExt.value = "";
+                const editCid = document.getElementById('inboundEditCid');
+                if (editCid) editCid.value = "";
                 const editDesc = document.getElementById('inboundEditDesc');
                 if (editDesc) editDesc.value = "";
                 const editDest = document.getElementById('inboundEditDest');
                 if (editDest) editDest.value = "";
                 const inExt = document.getElementById('inExtension');
                 if (inExt) inExt.value = "";
+                const inCid = document.getElementById('inCidNum');
+                if (inCid) inCid.value = "";
                 const inDesc = document.getElementById('inDescription');
                 if (inDesc) inDesc.value = "";
                 const inDest = document.getElementById('inDestination');
@@ -7641,7 +7753,7 @@ function isTabAllowed(tabName) {
             }
         }
 
-        function editInboundRoute(extension, description, destination) {
+        function editInboundRoute(extension, cidnum, description, destination) {
             try {
                 openModal('inboundModal');
                 const title = document.getElementById('inboundModalTitle');
@@ -7650,12 +7762,16 @@ function isTabAllowed(tabName) {
                 if (form) form.reset();
                 const editExt = document.getElementById('inboundEditExt');
                 if (editExt) editExt.value = extension || '';
+                const editCid = document.getElementById('inboundEditCid');
+                if (editCid) editCid.value = cidnum || '';
                 const editDesc = document.getElementById('inboundEditDesc');
                 if (editDesc) editDesc.value = description || '';
                 const editDest = document.getElementById('inboundEditDest');
                 if (editDest) editDest.value = destination || '';
                 const inExt = document.getElementById('inExtension');
                 if (inExt) inExt.value = extension || '';
+                const inCid = document.getElementById('inCidNum');
+                if (inCid) inCid.value = cidnum || '';
                 const inDesc = document.getElementById('inDescription');
                 if (inDesc) inDesc.value = description || '';
                 const inDest = document.getElementById('inDestination');
@@ -7675,50 +7791,55 @@ function isTabAllowed(tabName) {
         }
 
         function saveInboundRoute(e) {
-            e.preventDefault();
             const editExt = document.getElementById('inboundEditExt').value;
+            const editCid = document.getElementById('inboundEditCid') ? document.getElementById('inboundEditCid').value : '';
             const editDesc = document.getElementById('inboundEditDesc').value;
             const editDest = document.getElementById('inboundEditDest').value;
             
             const description = document.getElementById('inDescription').value.trim();
             const extension = document.getElementById('inExtension').value.trim();
+            const cidnum = document.getElementById('inCidNum') ? document.getElementById('inCidNum').value.trim() : '';
             const destination = document.getElementById('inDestination').value.trim();
 
             if (!destination) {
                 showToast(isRtl ? 'يرجى اختيار الوجهة.' : 'Please select a destination.', 'error');
                 return;
             }
-            if (extension && Array.isArray(loadedInboundRoutesList)) {
-                const normExt = extension.trim();
+
+            const isEdit = (editDesc !== '' || editExt !== '' || editCid !== '' || editDest !== '');
+            if (Array.isArray(loadedInboundRoutesList)) {
+                const normExt = extension;
+                const normCid = cidnum;
                 const existingRoute = (loadedInboundRoutesList || []).find(r => {
                     const origExt = (editExt || '').trim();
-                    const origDesc = (editDesc || '').trim();
-                    if (origExt || origDesc) {
-                        if (String(r.extension || '').trim() === origExt && String(r.description || '').trim() === origDesc) {
+                    const origCid = (editCid || '').trim();
+                    if (isEdit) {
+                        if (String(r.extension || '').trim() === origExt && String(r.cidnum || '').trim() === origCid) {
                             return false;
                         }
                     }
                     const rExt = String(r.extension || '').trim();
-                    if (!rExt) return false;
-                    if (rExt === normExt) return true;
-                    const alt1 = normExt.startsWith('+20') ? ('0' + normExt.substring(3)) : (normExt.startsWith('01') ? ('+20' + normExt.substring(1)) : normExt);
-                    const alt2 = normExt.startsWith('+') ? normExt.substring(1) : ('+' + normExt);
-                    return rExt === alt1 || rExt === alt2;
+                    const rCid = String(r.cidnum || '').trim();
+                    return rExt === normExt && rCid === normCid;
                 });
                 if (existingRoute) {
-                    showToast(isRtl ? ("تحذير: رقم DID " + extension + " مستخدم بالفعل في مسار وارد آخر (" + (existingRoute.description || existingRoute.extension) + ")") : ("Warning: DID number " + extension + " already exists in another inbound route (" + (existingRoute.description || existingRoute.extension) + ")"), "warning");
+                    showToast(isRtl ? ("تحذير: المسار الوارد لهذا الرقم DID وهاتف المتصل CID موجود بالفعل (" + (existingRoute.description || existingRoute.extension || 'Route') + ")") : ("Warning: An inbound route for this DID/CID combination already exists (" + (existingRoute.description || existingRoute.extension || 'Route') + ")"), "warning");
                 }
             }
 
             const url = '/api/config/routes/inbound';
-            const method = (editDesc || editExt || editDest) ? 'PUT' : 'POST';
+            const method = isEdit ? 'PUT' : 'POST';
             
-            const bodyData = { description, extension, destination };
+            const bodyData = { description, extension, cidnum, destination };
             if (method === 'PUT') {
                 bodyData.originalExtension = editExt;
+                bodyData.originalCidnum = editCid;
                 bodyData.originalDescription = editDesc;
                 bodyData.originalDestination = editDest;
             }
+
+            const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
+            if (submitBtn) setButtonLoading(submitBtn, true);
 
             fetch(url, {
                 method,
@@ -7736,16 +7857,20 @@ function isTabAllowed(tabName) {
                     closeModal('inboundModal');
                     fetchInboundRoutes();
                 } else showToast(data.error, 'error');
+            })
+            .catch(err => showToast(err.message, 'error'))
+            .finally(() => {
+                if (submitBtn) setButtonLoading(submitBtn, false);
             });
         }
 
-        function deleteInboundRoute(extension, description, destination) {
-            const label = description || extension || 'Inbound Route';
+        function deleteInboundRoute(extension, cidnum, description, destination) {
+            const label = description || (extension ? `${extension}${cidnum ? ' / ' + cidnum : ''}` : 'Inbound Route');
             if (!confirm(isRtl ? `حذف المسار الوارد '${label}'؟` : `Delete inbound route '${label}'?`)) return;
             fetch('/api/config/routes/inbound', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ extension, description, destination })
+                body: JSON.stringify({ extension, cidnum, description, destination })
             })
             .then(res => res.json())
             .then(data => {
@@ -7753,7 +7878,8 @@ function isTabAllowed(tabName) {
                     showToast(data.message, 'success');
                     fetchInboundRoutes();
                 } else showToast(data.error, 'error');
-            });
+            })
+            .catch(err => showToast(err.message, 'error'));
         }
         window.fetchInboundRoutes = fetchInboundRoutes;
         window.editInboundRouteByIndex = editInboundRouteByIndex;
@@ -8195,6 +8321,9 @@ function isTabAllowed(tabName) {
             const url = editId ? '/api/config/routes/outbound/' + editId : '/api/config/routes/outbound';
             const method = editId ? 'PUT' : 'POST';
 
+            const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
+            if (submitBtn) setButtonLoading(submitBtn, true);
+
             fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
@@ -8211,6 +8340,10 @@ function isTabAllowed(tabName) {
                     closeModal('outboundModal');
                     fetchOutboundRoutes();
                 } else showToast(data.error, 'error');
+            })
+            .catch(err => showToast(err.message, 'error'))
+            .finally(() => {
+                if (submitBtn) setButtonLoading(submitBtn, false);
             });
         }
 
@@ -11056,6 +11189,8 @@ function isTabAllowed(tabName) {
             
             const method = editMode ? 'PUT' : 'POST';
             const url = editMode ? `/api/config/timegroups/${id}` : '/api/config/timegroups';
+            const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
+            if (submitBtn) setButtonLoading(submitBtn, true);
             
             fetch(url, {
                 method,
@@ -11074,6 +11209,9 @@ function isTabAllowed(tabName) {
             })
             .catch(err => {
                 showToast('Failed to connect to server.', 'error');
+            })
+            .finally(() => {
+                if (submitBtn) setButtonLoading(submitBtn, false);
             });
         }
 
@@ -11283,6 +11421,8 @@ function isTabAllowed(tabName) {
 
             const method = editMode ? 'PUT' : 'POST';
             const url = editMode ? `/api/config/timeconditions/${id}` : '/api/config/timeconditions';
+            const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
+            if (submitBtn) setButtonLoading(submitBtn, true);
 
             fetch(url, {
                 method,
@@ -11301,6 +11441,9 @@ function isTabAllowed(tabName) {
             })
             .catch(err => {
                 showToast('Failed to connect to server.', 'error');
+            })
+            .finally(() => {
+                if (submitBtn) setButtonLoading(submitBtn, false);
             });
         }
 
@@ -11863,6 +12006,8 @@ function isTabAllowed(tabName) {
 
             const method = editMode ? 'PUT' : 'POST';
             const url = editMode ? '/api/config/announcements/' + id : '/api/config/announcements';
+            const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
+            if (submitBtn) setButtonLoading(submitBtn, true);
 
             fetch(url, {
                 method,
@@ -11881,6 +12026,9 @@ function isTabAllowed(tabName) {
             })
             .catch(err => {
                 showToast('Failed to connect to server.', 'error');
+            })
+            .finally(() => {
+                if (submitBtn) setButtonLoading(submitBtn, false);
             });
         }
         window.saveAnnouncement = saveAnnouncement;

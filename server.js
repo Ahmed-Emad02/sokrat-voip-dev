@@ -8397,11 +8397,13 @@ function reloadPbxConfig(callback) {
                     return callback ? callback({ success: false, error: fallbackError.message }) : null;
                 }
                 console.log('PBX Reload success (fallback)');
+                pool.query("UPDATE `asterisk`.`admin` SET `value` = 'false' WHERE `variable` = 'need_reload'").catch(() => {});
                 return callback ? callback({ success: true }) : null;
             });
             return;
         }
         console.log('PBX Reload success');
+        pool.query("UPDATE `asterisk`.`admin` SET `value` = 'false' WHERE `variable` = 'need_reload'").catch(() => {});
         return callback ? callback({ success: true }) : null;
     });
 }
@@ -10705,12 +10707,29 @@ function sanitizeAmiValue(raw) {
     return String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
 }
 
-// Helper to clean DID number string while preserving international + prefix and verbatim digits
+// Helper to clean lead phone number string preserving E.164 + and digits only
+function normalizeLeadPhone(raw) {
+    if (!raw) return '';
+    let phone = String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
+    phone = phone.replace(/(?!^\+)[^\d]/g, '');
+    return phone;
+}
+
+// Helper to clean DID number string while preserving Asterisk patterns (_01., _X., [0-9]), + prefix, and wildcards
 function normalizeDidNumber(raw) {
     if (!raw) return '';
     let ext = String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
-    ext = ext.replace(/(?!^\+)[^\d]/g, '');
+    // Strip FreePBX disallowed chars (<>) and invalid punctuation/quotes, preserve pattern syntax: _ + ! . [ ] X Z N and digits
+    ext = ext.replace(/[<>"'`\\]/g, '').replace(/\s+/g, '');
     return ext;
+}
+
+// Helper to clean Caller ID number/pattern or telco text
+function normalizeCidNumber(raw) {
+    if (!raw) return '';
+    let cid = String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
+    cid = cid.replace(/[<>"'`\\]/g, '').replace(/\s+/g, '');
+    return cid;
 }
 
 // --- 4. INBOUND & OUTBOUND ROUTES MANAGEMENT APIs ---
@@ -10718,9 +10737,9 @@ function normalizeDidNumber(raw) {
 app.get('/api/config/routes/inbound', async (req, res) => {
     try {
         const [routes] = await pool.query(`
-            SELECT cidnum, extension, destination, description
+            SELECT cidnum, extension, destination, description, alertinfo, ringing, mohclass, grppre, delay_answer, pricid
             FROM \`asterisk\`.\`incoming\`
-            ORDER BY description ASC
+            ORDER BY extension ASC, cidnum ASC
         `);
         res.json({ success: true, routes });
     } catch (error) {
@@ -10731,101 +10750,138 @@ app.get('/api/config/routes/inbound', async (req, res) => {
 // POST /api/config/routes/inbound - Create Inbound Route
 app.post('/api/config/routes/inbound', async (req, res) => {
     try {
-        const { description, extension, destination } = req.body;
-        if (!description || !description.trim()) {
-            return res.status(400).json({ success: false, error: 'Route Description is required.' });
-        }
+        const { description, extension, destination, cidnum, alertinfo, ringing, grppre, pricid, delay_answer } = req.body;
         if (!destination || !destination.trim()) {
             return res.status(400).json({ success: false, error: 'Destination is required.' });
         }
 
-        const desc = String(description).trim();
         const ext = normalizeDidNumber(extension);
-        const cid = ''; // Default cidnum to empty string
+        const cid = normalizeCidNumber(cidnum);
         const dest = String(destination).trim();
+        const desc = description !== undefined && description !== null && String(description).trim() !== ''
+            ? String(description).trim()
+            : (ext ? (cid ? `Route ${ext} / ${cid}` : `Route for ${ext}`) : (cid ? `Route for CID ${cid}` : 'Any DID / Any CID'));
+        const alertInfoVal = String(alertinfo || '').trim();
+        const ringingVal = String(ringing || '').trim();
+        const grpPreVal = String(grppre || '').trim();
+        const priCidVal = String(pricid || '').trim();
+        const delayAnswerVal = parseInt(delay_answer, 10) || 0;
 
         let warningMessage = null;
         if (ext) {
             const [otherDid] = await pool.query(
-                'SELECT description, extension FROM `asterisk`.`incoming` WHERE extension = ? AND description != ?',
-                [ext, desc]
+                'SELECT description, extension, cidnum FROM `asterisk`.`incoming` WHERE extension = ? AND cidnum = ?',
+                [ext, cid]
             );
-            if (otherDid.length > 0) {
-                warningMessage = `Warning: DID number '${ext}' already exists in another inbound route ('${otherDid[0].description || otherDid[0].extension}')`;
+            if (otherDid.length > 0 && otherDid[0].description !== desc) {
+                warningMessage = `Route for DID '${ext || '(ANY)'}' and CID '${cid || '(ANY)'}' already exists ('${otherDid[0].description || otherDid[0].extension}'); updating configuration.`;
             }
         }
 
         const [existing] = await pool.query(
-            'SELECT extension FROM `asterisk`.`incoming` WHERE extension = ? AND description = ?',
-            [ext, desc]
+            'SELECT extension, cidnum FROM `asterisk`.`incoming` WHERE extension = ? AND cidnum = ?',
+            [ext, cid]
         );
         if (existing.length > 0) {
             await pool.query(`
                 UPDATE \`asterisk\`.\`incoming\`
-                SET destination = ?, mohclass = 'default'
-                WHERE extension = ? AND description = ?
-            `, [dest, ext, desc]);
+                SET destination = ?, description = ?, alertinfo = ?, ringing = ?, grppre = ?, pricid = ?, delay_answer = ?, mohclass = 'default'
+                WHERE extension = ? AND cidnum = ?
+            `, [dest, desc, alertInfoVal, ringingVal, grpPreVal, priCidVal, delayAnswerVal, ext, cid]);
         } else {
             await pool.query(`
                 INSERT INTO \`asterisk\`.\`incoming\`
-                (cidnum, extension, destination, answer, wait, privacyman, mohclass, description, grppre, delay_answer, pricid, pmmaxretries, pmminlength)
-                VALUES (?, ?, ?, NULL, NULL, 0, 'default', ?, '', 0, '', '3', '10')
-            `, [cid, ext, dest, desc]);
+                (cidnum, extension, destination, privacyman, pmmaxretries, pmminlength, alertinfo, ringing, mohclass, description, grppre, delay_answer, pricid)
+                VALUES (?, ?, ?, 0, '3', '10', ?, ?, 'default', ?, ?, ?, ?)
+            `, [cid, ext, dest, alertInfoVal, ringingVal, desc, grpPreVal, delayAnswerVal, priCidVal]);
         }
 
         reloadPbxConfig();
         res.json({
             success: true,
             warningMessage: warningMessage || undefined,
-            message: `Inbound Route '${desc}' saved successfully.`
+            message: `Inbound Route '${desc || ext || 'Route'}' saved successfully.`
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// PUT /api/config/routes/inbound - Update Inbound Route
 app.put('/api/config/routes/inbound', async (req, res) => {
     try {
-        const { originalExtension, originalDescription, originalDestination, description, extension, destination } = req.body;
-        if (!description || !description.trim()) {
-            return res.status(400).json({ success: false, error: 'Route Description is required.' });
-        }
+        const {
+            originalExtension, originalCidnum, originalDescription, originalDestination,
+            description, extension, destination, cidnum, alertinfo, ringing, grppre, pricid, delay_answer
+        } = req.body;
         if (!destination || !destination.trim()) {
             return res.status(400).json({ success: false, error: 'Destination is required.' });
         }
 
-        const desc = String(description).trim();
         const ext = normalizeDidNumber(extension);
+        const cid = normalizeCidNumber(cidnum);
         const dest = String(destination).trim();
+        const desc = description !== undefined && description !== null && String(description).trim() !== ''
+            ? String(description).trim()
+            : (ext ? (cid ? `Route ${ext} / ${cid}` : `Route for ${ext}`) : (cid ? `Route for CID ${cid}` : 'Any DID / Any CID'));
         const origExt = normalizeDidNumber(originalExtension);
         const rawOrigExt = String(originalExtension || '').trim();
-        const origDesc = String(originalDescription || '').trim();
-        const origDest = String(originalDestination || '').trim();
+        const origCid = normalizeCidNumber(originalCidnum);
+        const rawOrigCid = String(originalCidnum || '').trim();
+        const alertInfoVal = String(alertinfo || '').trim();
+        const ringingVal = String(ringing || '').trim();
+        const grpPreVal = String(grppre || '').trim();
+        const priCidVal = String(pricid || '').trim();
+        const delayAnswerVal = parseInt(delay_answer, 10) || 0;
 
-        let warningMessage = null;
-        if (ext) {
-            const [otherDid] = await pool.query(
-                'SELECT description, extension FROM `asterisk`.`incoming` WHERE extension = ? AND description != ? AND extension != ?',
-                [ext, origDesc, origExt]
+        // If composite key (ext, cid) is changing, check if destination key already exists
+        if ((ext !== origExt && ext !== rawOrigExt) || (cid !== origCid && cid !== rawOrigCid)) {
+            const [conflict] = await pool.query(
+                'SELECT description, extension, cidnum FROM `asterisk`.`incoming` WHERE extension = ? AND cidnum = ?',
+                [ext, cid]
             );
-            if (otherDid.length > 0) {
-                warningMessage = `Warning: DID number '${ext}' already exists in another inbound route ('${otherDid[0].description || otherDid[0].extension}')`;
+            if (conflict.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: `A route for DID '${ext || '(ANY)'}' and CID '${cid || '(ANY)'}' already exists ('${conflict[0].description || conflict[0].extension}').`
+                });
             }
         }
 
+        // Update incoming table
         await pool.query(`
             UPDATE \`asterisk\`.\`incoming\`
-            SET description = ?, extension = ?, destination = ?
+            SET description = ?, extension = ?, cidnum = ?, destination = ?,
+                alertinfo = ?, ringing = ?, grppre = ?, pricid = ?, delay_answer = ?, mohclass = 'default'
             WHERE (extension = ? OR extension = ? OR (extension IS NULL AND ? = ''))
-              AND (description = ? OR (description IS NULL AND ? = ''))
-              AND (destination = ? OR (destination IS NULL AND ? = ''))
+              AND (cidnum = ? OR cidnum = ? OR (cidnum IS NULL AND ? = ''))
             LIMIT 1
-        `, [desc, ext, dest, origExt, rawOrigExt, origExt, origDesc, origDesc, origDest, origDest]);
+        `, [
+            desc, ext, cid, dest,
+            alertInfoVal, ringingVal, grpPreVal, priCidVal, delayAnswerVal,
+            origExt, rawOrigExt, origExt,
+            origCid, rawOrigCid, origCid
+        ]);
+
+        // Sync auxiliary tables if key changed
+        if (ext !== origExt || cid !== origCid) {
+            await pool.query(`
+                UPDATE \`asterisk\`.\`callrecording_module\`
+                SET extension = ?, cidnum = ?
+                WHERE (extension = ? OR extension = ?) AND (cidnum = ? OR cidnum = ?) AND display = 'did'
+            `, [ext, cid, origExt, rawOrigExt, origCid, rawOrigCid]).catch(() => {});
+
+            await pool.query(`
+                UPDATE \`asterisk\`.\`cidlookup_incoming\`
+                SET extension = ?, cidnum = ?
+                WHERE (extension = ? OR extension = ?) AND (cidnum = ? OR cidnum = ?)
+            `, [ext, cid, origExt, rawOrigExt, origCid, rawOrigCid]).catch(() => {});
+        }
 
         reloadPbxConfig();
         res.json({
             success: true,
-            warningMessage: warningMessage || undefined,
-            message: `Inbound Route '${desc}' updated successfully.`
+            message: `Inbound Route '${desc || ext || 'Route'}' updated successfully.`
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -10835,19 +10891,28 @@ app.put('/api/config/routes/inbound', async (req, res) => {
 // DELETE /api/config/routes/inbound - Delete Inbound Route
 app.delete('/api/config/routes/inbound', async (req, res) => {
     try {
-        const { extension, description, destination } = req.body;
+        const { extension, cidnum, description, destination } = req.body;
         const rawExt = String(extension || '').trim();
         const normExt = normalizeDidNumber(rawExt);
-        const desc = String(description || '').trim();
-        const dest = String(destination || '').trim();
+        const rawCid = String(cidnum || '').trim();
+        const normCid = normalizeCidNumber(rawCid);
 
         await pool.query(`
             DELETE FROM \`asterisk\`.\`incoming\`
             WHERE (extension = ? OR extension = ? OR (extension IS NULL AND ? = ''))
-              AND (description = ? OR (description IS NULL AND ? = ''))
-              AND (destination = ? OR (destination IS NULL AND ? = ''))
+              AND (cidnum = ? OR cidnum = ? OR (cidnum IS NULL AND ? = ''))
             LIMIT 1
-        `, [rawExt, normExt, rawExt, desc, desc, dest, dest]);
+        `, [rawExt, normExt, rawExt, rawCid, normCid, rawCid]);
+
+        await pool.query(`
+            DELETE FROM \`asterisk\`.\`callrecording_module\`
+            WHERE (extension = ? OR extension = ?) AND (cidnum = ? OR cidnum = ?) AND display = 'did'
+        `, [rawExt, normExt, rawCid, normCid]).catch(() => {});
+
+        await pool.query(`
+            DELETE FROM \`asterisk\`.\`cidlookup_incoming\`
+            WHERE (extension = ? OR extension = ?) AND (cidnum = ? OR cidnum = ?)
+        `, [rawExt, normExt, rawCid, normCid]).catch(() => {});
 
         reloadPbxConfig();
         res.json({ success: true, message: 'Inbound Route deleted successfully.' });
@@ -12865,10 +12930,15 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
             getAstDbMap('DONGLE_NUMBERS')
         ]);
 
-        const [routes] = await pool.query('SELECT extension, destination, description FROM `asterisk`.`incoming`');
+        const [routes] = await pool.query('SELECT cidnum, extension, destination, description FROM `asterisk`.`incoming`');
         const routeMap = {};
         for (const r of routes) {
-            if (r.extension) routeMap[r.extension.trim()] = r;
+            if (r.extension) {
+                const extKey = r.extension.trim();
+                if (!routeMap[extKey] || !r.cidnum) {
+                    routeMap[extKey] = r;
+                }
+            }
         }
 
         const confDongles = parseDongleConfGain().dongles;
@@ -14117,7 +14187,7 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
             if (!line) continue;
             const cols = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
             const rawPhone = phoneIdx >= 0 ? cols[phoneIdx] : cols[0];
-            const cleanPhone = normalizeDidNumber(rawPhone);
+            const cleanPhone = normalizeLeadPhone(rawPhone);
             if (!cleanPhone) continue;
 
             const [dncCheck] = await pool.query('SELECT phone_number FROM `asterisk`.`dialer_dnc` WHERE phone_number = ?', [cleanPhone]);
@@ -14906,7 +14976,7 @@ app.get('/embed/crm/live', async (req, res) => {
     }
 
     try {
-        const result = await consumeEmbedTicket(pool, ticket);
+        const result = await consumeEmbedTicket(pool, ticket, 'live:read');
         if (!result) {
             return res.status(403).send('Invalid, expired, or already consumed embed ticket');
         }
