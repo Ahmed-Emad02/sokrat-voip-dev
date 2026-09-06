@@ -82,6 +82,28 @@ function isTabAllowed(tabName) {
             --accent-color: #ef4444;
             --accent-hover: #dc2626;
         }
+        @keyframes trunkGlowPulse {
+            0%, 100% {
+                background-color: rgba(239, 68, 68, 0.22);
+                box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.85), 0 0 16px rgba(239, 68, 68, 0.35);
+            }
+            50% {
+                background-color: rgba(239, 68, 68, 0.12);
+                box-shadow: inset 0 0 0 1.5px rgba(239, 68, 68, 0.5), 0 0 6px rgba(239, 68, 68, 0.15);
+            }
+        }
+        .trunk-highlighted-red {
+            background-color: rgba(239, 68, 68, 0.22) !important;
+            border-left: 4px solid #ef4444 !important;
+            border-right: 4px solid #ef4444 !important;
+            animation: trunkGlowPulse 2.4s ease-in-out infinite;
+            transition: background-color 700ms ease, border-color 700ms ease, box-shadow 700ms ease !important;
+        }
+        .light-theme .trunk-highlighted-red {
+            background-color: #fee2e2 !important;
+            border-left: 4px solid #dc2626 !important;
+            border-right: 4px solid #dc2626 !important;
+        }
 
         /* --- SOKRAT DUAL-RING ROTATING LOADER --- */
         .loader {
@@ -4125,7 +4147,7 @@ function isTabAllowed(tabName) {
         let modalPatternsList = [];
         let modalTrunksSequence = [];
         let editingPatternIndex = -1;
-
+        let rtcpTimer = null;
         // --- DYNAMIC NESTED PBX DESTINATION SELECTOR COMPONENT (DestinationSelect) ---
         let destinationSelectCounter = 0;
         class DestinationSelect {
@@ -5105,22 +5127,22 @@ function isTabAllowed(tabName) {
             }
             stopRtcpTimer();
             if (tabId === 'extensions') fetchExtensions();
-            if (tabId === 'ringgroups') { fetchRecordings(); fetchRingGroups(); fetchExtensions(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchMohData(); fetchFederationPeers(); }
-            if (tabId === 'queues') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchAnnouncements(); fetchFederationPeers(); }
-            if (tabId === 'ivr') { fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); fetchFederationPeers(); }
-            if (tabId === 'recordings') fetchRecordings();
-            if (tabId === 'trunks') fetchTrunks();
-            if (tabId === 'outbound') { fetchOutboundRoutes(); fetchTrunks(); fetchFederationPeers(); }
-            if (tabId === 'timegroups') fetchTimeGroups();
-            if (tabId === 'timeconditions') { fetchTimeConditions(); fetchTimeGroups(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchAnnouncements(); fetchFederationPeers(); }
-            if (tabId === 'announcements') { fetchAnnouncements(); fetchRecordings(); fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchFederationPeers(); }
-            if (tabId === 'voicemail') fetchVoicemailExtensions();
-            if (tabId === 'modem') { fetchModemConfig(); loadAudioGlobals(); loadSttSettings(); fetchRtcpDiagnostics(); startRtcpTimer(); }
-            if (tabId === 'terminal') initTtyTerminal();
-            if (tabId === 'diagram') { sizeDiagramCanvas(); fetchDiagramData(); }
-            if (tabId === 'inbound') { fetchExtensions(); fetchRingGroups(); fetchQueues(); fetchIvrs(); fetchTimeConditions(); fetchAnnouncements(); fetchInboundRoutes(); fetchDongleMappingsTab(); fetchFederationPeers(); }
-            if (tabId === 'federation') { fetchFederationSettings(); fetchFederationPeers(); }
-            if (tabId === 'dongles') { switchTab('inbound'); return; }
+            else if (tabId === 'ringgroups') { fetchRingGroups(); ensureAllConfigListsLoaded(); }
+            else if (tabId === 'queues') { fetchQueues(); ensureAllConfigListsLoaded(); }
+            else if (tabId === 'ivr') { fetchIvrs(); ensureAllConfigListsLoaded(); }
+            else if (tabId === 'recordings') fetchRecordings();
+            else if (tabId === 'trunks') fetchTrunks();
+            else if (tabId === 'outbound') { fetchOutboundRoutes(); fetchTrunks(); }
+            else if (tabId === 'timegroups') fetchTimeGroups();
+            else if (tabId === 'timeconditions') { fetchTimeConditions(); fetchTimeGroups(); ensureAllConfigListsLoaded(); }
+            else if (tabId === 'announcements') { fetchAnnouncements(); ensureAllConfigListsLoaded(); }
+            else if (tabId === 'voicemail') fetchVoicemailExtensions();
+            else if (tabId === 'modem') { fetchModemConfig(); loadAudioGlobals(); loadSttSettings(); fetchRtcpDiagnostics(); startRtcpTimer(); }
+            else if (tabId === 'terminal') initTtyTerminal();
+            else if (tabId === 'diagram') { sizeDiagramCanvas(); fetchDiagramData(); }
+            else if (tabId === 'inbound') { fetchInboundRoutes(); fetchDongleMappingsTab(); ensureAllConfigListsLoaded(); }
+            else if (tabId === 'federation') { fetchFederationSettings(); fetchFederationPeers(); }
+            else if (tabId === 'dongles') { switchTab('inbound'); return; }
             if (typeof enhanceSelectElements === 'function') setTimeout(enhanceSelectElements, 100);
         }
         window.switchTab = switchTab;
@@ -5815,7 +5837,8 @@ function isTabAllowed(tabName) {
                         showToast(data.message, 'success');
                         fetchRingGroups();
                     } else showToast(data.error, 'error');
-                });
+                })
+                .catch(err => showToast(err.message || 'Failed to delete ring group', 'error'));
         }
         window.openRingGroupModal = openRingGroupModal;
         window.editRingGroup = editRingGroup;
@@ -7314,9 +7337,26 @@ function isTabAllowed(tabName) {
                         tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">' + (isRtl ? 'لا توجد خطوط ربط.' : 'No trunks found.') + '</td></tr>';
                         return;
                     }
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const highlightTrunk = urlParams.get('highlightTrunk') || urlParams.get('trunkId') || urlParams.get('highlight');
+                    let highlightedRow = null;
+
                     list.forEach(t => {
                         const tr = document.createElement('tr');
-                        tr.className = 'hover:bg-[var(--bg-hover)] transition-colors';
+                        tr.id = 'trunk-row-' + t.trunkid;
+                        tr.dataset.trunkId = String(t.trunkid);
+
+                        const isHighlighted = highlightTrunk && (
+                            String(t.trunkid) === String(highlightTrunk) ||
+                            String(t.name).toLowerCase() === String(highlightTrunk).toLowerCase()
+                        );
+
+                        if (isHighlighted) {
+                            tr.className = 'trunk-highlighted-red transition-all duration-300';
+                            highlightedRow = tr;
+                        } else {
+                            tr.className = 'hover:bg-[var(--bg-hover)] transition-colors';
+                        }
                         const techUpper = String(t.tech || 'custom').toUpperCase();
                         let techBadgeClass = 'bg-slate-500/15 text-slate-300 border-slate-500/20';
                         if (techUpper === 'SIP') techBadgeClass = 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20';
@@ -7339,6 +7379,26 @@ function isTabAllowed(tabName) {
                         `;
                         tbody.appendChild(tr);
                     });
+
+                    if (highlightedRow) {
+                        setTimeout(() => {
+                            highlightedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 150);
+
+                        setTimeout(() => {
+                            if (highlightedRow && highlightedRow.parentNode) {
+                                highlightedRow.classList.remove('trunk-highlighted-red');
+                                highlightedRow.className = 'hover:bg-[var(--bg-hover)] transition-all duration-700';
+                                try {
+                                    const cleanUrl = new URL(window.location.href);
+                                    cleanUrl.searchParams.delete('highlightTrunk');
+                                    cleanUrl.searchParams.delete('trunkId');
+                                    cleanUrl.searchParams.delete('highlight');
+                                    window.history.replaceState({}, '', cleanUrl.toString());
+                                } catch (_) {}
+                            }
+                        }, 5000);
+                    }
                 })
                 .catch(err => console.error(err));
         }
@@ -7540,7 +7600,8 @@ function isTabAllowed(tabName) {
                         }
                         fetchTrunks();
                     } else showToast(data.error, 'error');
-                });
+                })
+                .catch(err => showToast(err.message || 'Failed to delete trunk', 'error'));
         }
         window.fetchTrunks = fetchTrunks;
         window.editTrunkByIndex = editTrunkByIndex;
@@ -7791,6 +7852,7 @@ function isTabAllowed(tabName) {
         }
 
         function saveInboundRoute(e) {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
             const editExt = document.getElementById('inboundEditExt').value;
             const editCid = document.getElementById('inboundEditCid') ? document.getElementById('inboundEditCid').value : '';
             const editDesc = document.getElementById('inboundEditDesc').value;
@@ -8356,7 +8418,8 @@ function isTabAllowed(tabName) {
                         showToast(data.message, 'success');
                         fetchOutboundRoutes();
                     } else showToast(data.error, 'error');
-                });
+                })
+                .catch(err => showToast(err.message || 'Failed to delete outbound route', 'error'));
         }
         window.fetchOutboundRoutes = fetchOutboundRoutes;
         window.editOutboundRouteByIndex = editOutboundRouteByIndex;
@@ -8521,7 +8584,7 @@ function isTabAllowed(tabName) {
         }
 
         // Initialize on load
-        document.addEventListener('DOMContentLoaded', () => {
+        function initConfigPage() {
             const tabButtons = ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram', 'announcements', 'modem', 'dongles', 'terminal'];
             let defaultTab = null;
             for (const t of tabButtons) {
@@ -8660,7 +8723,13 @@ function isTabAllowed(tabName) {
                     if (!inPopup.classList.contains('hidden')) window.positionInboundDonglePopup();
                 });
             }
-        });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initConfigPage);
+        } else {
+            initConfigPage();
+        }
 
         // --- 7. VOICEMAIL CONFIGURATION ---
 
@@ -11226,7 +11295,8 @@ function isTabAllowed(tabName) {
                     } else {
                         showToast(data.error || 'Failed to delete Time Group.', 'error');
                     }
-                });
+                })
+                .catch(err => showToast(err.message || 'Failed to delete Time Group', 'error'));
         }
         window.fetchTimeGroups = fetchTimeGroups;
         window.renderTimeGroupsTable = renderTimeGroupsTable;
@@ -11458,7 +11528,8 @@ function isTabAllowed(tabName) {
                     } else {
                         showToast(data.error || 'Failed to delete Time Condition.', 'error');
                     }
-                });
+                })
+                .catch(err => showToast(err.message || 'Failed to delete Time Condition', 'error'));
         }
         window.fetchTimeConditions = fetchTimeConditions;
         window.renderTimeConditionsTable = renderTimeConditionsTable;
@@ -12044,7 +12115,8 @@ function isTabAllowed(tabName) {
                     } else {
                         showToast(data.error || 'Failed to delete Announcement.', 'error');
                     }
-                });
+                })
+                .catch(err => showToast(err.message || 'Failed to delete Announcement', 'error'));
         }
         window.deleteAnnouncement = deleteAnnouncement;
         // --- MODEM CONF (DONGLE VOLUME GAIN) CLIENT LOGIC ---
@@ -12711,7 +12783,7 @@ function isTabAllowed(tabName) {
             }
         }
         window.fetchDongleStateReports = fetchDongleStateReports;
-        let rtcpTimer = null;
+        rtcpTimer = null;
         function startRtcpTimer() {
             stopRtcpTimer();
             rtcpTimer = setInterval(fetchRtcpDiagnostics, 3000);
