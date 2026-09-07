@@ -1,8 +1,14 @@
 <%
 const words = {
     en: {
-        title: "Storage & Backups", subtitle: "Management Console",
+        title: "SysMon", subtitle: "Management Console",
+        tabResources: "Resources & Telemetry",
+        tabServices: "Core Services",
+        tabStorage: "Storage & Backups",
+        cpuOverview: "CPU & System Load",
+        ramOverview: "RAM & Memory Usage",
         diskOverview: "Server Storage Overview",
+        asteriskOverview: "Asterisk Telephony Core",
         recordingsStorage: "Call Recordings Size",
         dbStorage: "CDR Database Metrics",
         retentionPolicy: "Auto-Purge Retention",
@@ -36,11 +42,49 @@ const words = {
         saving: "Saving...",
         savedSuccess: "Settings saved successfully",
         success: "Operation completed successfully",
-        failed: "Operation failed"
+        failed: "Operation failed",
+        flushCachesBtn: "Flush RAM Caches",
+        reloadAsteriskBtn: "Reload Asterisk Config",
+        refreshRate: "Refresh Rate:",
+        refresh1s: "1s (Live)",
+        refresh2s: "2s (Fast)",
+        refresh5s: "5s (Normal)",
+        refresh10s: "10s (Slow)",
+        refreshPaused: "Paused",
+        confirmRestartTitle: "Confirm Service Restart",
+        confirmRestartDesc: "Restarting this service may temporarily disconnect active calls or database queries. Are you sure you want to proceed?",
+        restartBtn: "Restart",
+        reloadBtn: "Reload",
+        stopBtn: "Stop",
+        usbControllersTitle: "USB Host Controllers & Hardware Bus Topology",
+        pciControllersLabel: "PCI Host Controllers & Kernel Drivers",
+        usbDevicesLabel: "Connected USB Hardware & Modem Endpoints",
+        busPathLabel: "Bus Path:",
+        driversLabel: "Kernel Drivers:",
+        ttysLabel: "Serial TTY Ports:",
+        powerLabel: "Power Allocation:",
+        startBtn: "Start",
+        running: "Running",
+        stopped: "Stopped",
+        chartCpuRam: "CPU & RAM Real-Time Telemetry (%)",
+        chartNetChannels: "Network Traffic (KB/s) & Active Calls",
+        hardwareSpecs: "Host & Hardware Specifications",
+        quickActions: "Quick Maintenance Actions",
+        flushCachesDesc: "Frees cached pagecache and dentries from RAM",
+        reloadAsteriskDesc: "Re-reads dialplan and chan_dongle configs without dropping calls",
+        systemHealthy: "System Healthy",
+        reclaimingMemory: "Flushing RAM caches...",
+        reloadingAsterisk: "Reloading Asterisk core..."
     },
     ar: {
-        title: "التخزين والنسخ الاحتياطي", subtitle: "إدارة النظام",
+        title: "SysMon", subtitle: "لوحة التحكم",
+        tabResources: "مراقبة الموارد والأداء",
+        tabServices: "إدارة الخدمات الأساسية",
+        tabStorage: "التخزين والنسخ الاحتياطي",
+        cpuOverview: "المعالج وحمل النظام",
+        ramOverview: "الذاكرة العشوائية RAM",
         diskOverview: "نظرة عامة على مساحة التخزين",
+        asteriskOverview: "محرك الاتصال أستريسك",
         recordingsStorage: "حجم تسجيلات المكالمات",
         dbStorage: "مقاييس قاعدة بيانات CDR",
         retentionPolicy: "سياسة الاحتفاظ والحذف التلقائي",
@@ -74,7 +118,39 @@ const words = {
         saving: "جاري الحفظ...",
         savedSuccess: "تم حفظ الإعدادات بنجاح",
         success: "تمت العملية بنجاح",
-        failed: "فشلت العملية"
+        failed: "فشلت العملية",
+        flushCachesBtn: "تفريغ ذاكرة التخزين المؤقت",
+        reloadAsteriskBtn: "إعادة تحميل إعدادات أستريسك",
+        refreshRate: "معدل التحديث:",
+        refresh1s: "1 ثانية (مباشر)",
+        refresh2s: "2 ثانية (سريع)",
+        refresh5s: "5 ثوانٍ (عادي)",
+        refresh10s: "10 ثوانٍ (هادئ)",
+        refreshPaused: "إيقاف مؤقت",
+        confirmRestartTitle: "تأكيد إعادة تشغيل الخدمة",
+        confirmRestartDesc: "إعادة تشغيل هذه الخدمة قد يقطع المكالمات النشطة أو استعلامات قاعدة البيانات مؤقتاً. هل أنت متأكد من المتابعة؟",
+        restartBtn: "إعادة تشغيل",
+        reloadBtn: "إعادة تحميل",
+        stopBtn: "إيقاف",
+        startBtn: "تشغيل",
+        running: "قيد التشغيل",
+        stopped: "متوقف",
+        chartCpuRam: "مؤشرات المعالج والذاكرة في الوقت الفعلي (%)",
+        chartNetChannels: "حركة مرور الشبكة والمكالمات النشطة",
+        hardwareSpecs: "مواصفات الخادم والعتاد",
+        usbControllersTitle: "متحكمات USB وبنية النواقل الفيزيائية (PCI & Bus)",
+        pciControllersLabel: "متحكمات PCI المضيفة وتعريفات النواة",
+        usbDevicesLabel: "عتاد ومودمات USB المتصلة بالنواقل",
+        busPathLabel: "مسار الناقل:",
+        driversLabel: "تعريفات النواة:",
+        ttysLabel: "منافذ TTY التسلسلية:",
+        powerLabel: "تخصيص الطاقة:",
+        quickActions: "إجراءات الصيانة السريعة",
+        flushCachesDesc: "تحرير الذاكرة المؤقتة (Pagecache) من ذاكرة RAM بأمان",
+        reloadAsteriskDesc: "إعادة قراءة خطط الاتصال وشرائح GSM دون قطع المكالمات",
+        systemHealthy: "النظام بحالة ممتازة",
+        reclaimingMemory: "جاري تفريغ الذاكرة المؤقتة...",
+        reloadingAsterisk: "جاري إعادة تحميل أستريسك..."
     }
 };
 const t = words[currentLang] || words['en'];
@@ -95,12 +171,13 @@ const isRtl = currentLang === 'ar';
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sokrat VOIP - Storage & Backups</title>
+    <title>Sokrat VOIP - <%= t.title %></title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Roboto:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <style>
@@ -157,6 +234,33 @@ const isRtl = currentLang === 'ar';
         }
         body { font-family: 'Roboto', 'IBM Plex Sans Arabic', sans-serif; background-color: var(--bg-primary); color: var(--text-primary); }
         .panel-surface { background-color: var(--bg-secondary); border: 1px solid var(--border-primary); }
+        .storage-tab-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1rem;
+            border-radius: 0.75rem;
+            font-size: 0.8125rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            transition: all 150ms ease;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .storage-tab-btn:hover {
+            color: var(--text-primary);
+            background-color: var(--bg-hover);
+        }
+        .storage-tab-btn.active {
+            color: #ffffff;
+            background-color: var(--accent-color);
+            border-color: var(--accent-border);
+            box-shadow: 0 4px 14px 0 rgba(229, 62, 62, 0.3);
+        }
+        body.light-theme .storage-tab-btn.active {
+            color: #ffffff !important;
+            background-color: var(--accent-color) !important;
+        }
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
@@ -167,20 +271,76 @@ const isRtl = currentLang === 'ar';
         <!-- Header Section -->
         <div class="mb-6 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-                <h2 class="text-3xl font-extrabold text-white tracking-tight"><%= t.title %> <span class="text-[var(--accent-color)]"><%= t.subtitle %></span></h2>
+                <div class="flex items-center gap-3">
+                    <h2 class="text-3xl font-extrabold text-white tracking-tight"><%= t.title %> <span class="text-[var(--accent-color)]"><%= t.subtitle %></span></h2>
+                    <span id="system-health-pill" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span id="system-health-text"><%= t.systemHealthy %></span>
+                    </span>
+                </div>
             </div>
             
-            <div class="flex items-center gap-3">
-                <button onclick="fetchStorageInfo()" class="panel-surface hover:bg-[var(--bg-hover)] text-white border border-[var(--border-primary)] rounded-xl px-4 py-2 text-xs font-bold flex items-center gap-2 cursor-pointer transition">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                    <%= isRtl ? 'تحديث البيانات' : 'Refresh Metrics' %>
+            <div class="flex items-center gap-3 flex-wrap">
+                <!-- Refresh Rate Selector -->
+                <div class="flex items-center gap-2 panel-surface px-3 py-1.5 rounded-xl border border-[var(--border-primary)]">
+                    <span class="text-xs font-bold text-[var(--text-muted)]"><%= t.refreshRate %></span>
+                    <select id="telemetryRefreshRate" onchange="updateRefreshInterval(this.value)" class="bg-transparent text-xs font-bold text-white border-none cursor-pointer focus:outline-none">
+                        <option value="1000" class="bg-[var(--bg-secondary)] text-white"><%= t.refresh1s %></option>
+                        <option value="2000" class="bg-[var(--bg-secondary)] text-white"><%= t.refresh2s %></option>
+                        <option value="5000" selected class="bg-[var(--bg-secondary)] text-white"><%= t.refresh5s %></option>
+                        <option value="10000" class="bg-[var(--bg-secondary)] text-white"><%= t.refresh10s %></option>
+                        <option value="0" class="bg-[var(--bg-secondary)] text-white"><%= t.refreshPaused %></option>
+                    </select>
+                </div>
+
+                <button onclick="triggerImmediateRefresh()" class="panel-surface hover:bg-[var(--bg-hover)] text-white border border-[var(--border-primary)] rounded-xl px-4 py-2 text-xs font-bold flex items-center gap-2 cursor-pointer transition">
+                    <svg id="refresh-spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span><%= isRtl ? 'تحديث البيانات' : 'Refresh Metrics' %></span>
                 </button>
             </div>
         </div>
 
-        <!-- Top Metrics Cards Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-            <!-- Card 1: Server Disk Usage -->
+        <!-- Top Metrics Cards Grid (Persistent across tabs) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+            <!-- Card 1: CPU & Load -->
+            <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.cpuOverview %></span>
+                    <div class="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-baseline justify-between mb-1">
+                        <span id="stat-cpu-pct" class="text-2xl font-black text-white font-mono">- %</span>
+                        <span id="stat-cpu-load" class="text-xs text-[var(--text-muted)] font-mono">Load: -</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                        <div id="stat-cpu-bar" class="h-full bg-purple-500 transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: RAM Memory -->
+            <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.ramOverview %></span>
+                    <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M6 5v3"/><path d="M10 5v3"/><path d="M14 5v3"/><path d="M18 5v3"/><rect x="2" y="8" width="20" height="8" rx="2"/></svg>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-baseline justify-between mb-1">
+                        <span id="stat-ram-pct" class="text-2xl font-black text-white font-mono">- %</span>
+                        <span id="stat-ram-avail" class="text-xs text-[var(--text-muted)] font-mono">- free</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                        <div id="stat-ram-bar" class="h-full bg-emerald-500 transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Server Root Storage -->
             <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
                 <div class="flex items-center justify-between mb-3">
                     <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.diskOverview %></span>
@@ -199,244 +359,1120 @@ const isRtl = currentLang === 'ar';
                 </div>
             </div>
 
-            <!-- Card 2: Call Recordings Storage -->
+            <!-- Card 4: Asterisk PBX Core -->
             <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
                 <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.recordingsStorage %></span>
-                    <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11a7 7 0 0 1-7 7m0 0a7 7 0 0 1-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 0 1-3-3V5a3 3 0 1 1 6 0v6a3 3 0 0 1-3 3z"/></svg>
-                    </div>
-                </div>
-                <div>
-                    <span id="recordings-size-text" class="text-2xl font-black text-white font-mono block mb-1">- MB</span>
-                    <span id="recordings-count-text" class="text-xs text-[var(--text-muted)] block">- files</span>
-                </div>
-            </div>
-
-            <!-- Card 3: CDR Database Metrics -->
-            <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.dbStorage %></span>
-                    <div class="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-                    </div>
-                </div>
-                <div>
-                    <span id="cdr-rows-text" class="text-2xl font-black text-white font-mono block mb-1">- calls</span>
-                    <span id="cdr-size-text" class="text-xs text-[var(--text-muted)] block">- DB size</span>
-                </div>
-            </div>
-
-            <!-- Card 4: Retention Policy -->
-            <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.retentionPolicy %></span>
+                    <span class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider"><%= t.asteriskOverview %></span>
                     <div class="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                     </div>
                 </div>
                 <div>
-                    <span id="retention-days-text" class="text-2xl font-black text-white font-mono block mb-1">90 Days</span>
-                    <span id="retention-status-text" class="text-xs text-emerald-400 font-bold block"><%= t.active %></span>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span id="stat-asterisk-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                        <span id="stat-asterisk-status" class="text-lg font-black text-white font-mono">Online</span>
+                    </div>
+                    <span id="stat-asterisk-sub" class="text-xs text-[var(--text-muted)] block">- channels active</span>
                 </div>
             </div>
         </div>
 
-        <!-- Main Workspace Grid: PC Export & Google Drive Sync -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <!-- Sub-Tab Navigation Bar -->
+        <div class="flex items-center gap-2 border-b border-[var(--border-primary)] mb-6 pb-2">
+            <button type="button" onclick="switchStorageTab('resources')" id="tab-btn-resources" class="storage-tab-btn active">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <span><%= t.tabResources %></span>
+            </button>
+            <button type="button" onclick="switchStorageTab('services')" id="tab-btn-services" class="storage-tab-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                <span><%= t.tabServices %></span>
+            </button>
+            <button type="button" onclick="switchStorageTab('storage')" id="tab-btn-storage" class="storage-tab-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span><%= t.tabStorage %></span>
+            </button>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 1: SERVER RESOURCES & TELEMETRY                           -->
+        <!-- ============================================================= -->
+        <div id="panel-resources" class="flex flex-col gap-6">
             
-            <!-- Panel 1: Export Call History & Recordings to PC (ZIP Download) -->
-            <div class="panel-surface rounded-2xl p-6 flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center gap-3 border-b border-[var(--border-primary)] pb-4 mb-5">
-                        <div class="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <!-- Real-Time Sliding Telemetry Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Chart 1: CPU & RAM Utilization -->
+                <div class="panel-surface rounded-2xl p-5 flex flex-col">
+                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-4">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                            <h3 class="text-sm font-bold text-white"><%= t.chartCpuRam %></h3>
                         </div>
-                        <div>
-                            <h3 class="text-base font-bold text-white"><%= t.pcExportTitle %></h3>
-                            <p class="text-xs text-[var(--text-muted)]"><%= t.pcExportDesc %></p>
-                        </div>
+                        <span class="text-xs text-[var(--text-muted)] font-mono" id="chart-cpu-ram-legend">CPU: 0% | RAM: 0%</span>
                     </div>
+                    <div id="cpuRamChart" style="height: 240px; width: 100%;"></div>
+                </div>
 
-                    <form id="pcExportForm" onsubmit="handlePcExport(event)" class="flex flex-col gap-4">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="exportStartDate"><%= t.startDate %></label>
-                                <input type="date" id="exportStartDate" name="exportStartDate" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="exportEndDate"><%= t.endDate %></label>
-                                <input type="date" id="exportEndDate" name="exportEndDate" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full">
-                            </div>
+                <!-- Chart 2: Network Traffic & Asterisk Concurrent Calls -->
+                <div class="panel-surface rounded-2xl p-5 flex flex-col">
+                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-4">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                            <h3 class="text-sm font-bold text-white"><%= t.chartNetChannels %></h3>
                         </div>
-
-                        <div>
-                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="exportExtension"><%= t.extension %></label>
-                            <select id="exportExtension" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full cursor-pointer">
-                                <option value="" selected><%= t.allExtensions %></option>
-                                <% roster.forEach(emp => { %>
-                                    <option value="<%= emp.extension %>"><%= emp.extension %> - <%= emp.name %></option>
-                                <% }) %>
-                            </select>
-                        </div>
-
-                        <div class="flex flex-col gap-2 pt-1">
-                            <label class="inline-flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-[var(--text-primary)]" for="includeCsv">
-                                <input type="checkbox" id="includeCsv" checked class="w-4 h-4 accent-emerald-500 rounded">
-                                <span><%= t.includeCsv %></span>
-                            </label>
-                            <label class="inline-flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-[var(--text-primary)]">
-                                <input type="checkbox" id="includeAudio" checked class="w-4 h-4 accent-emerald-500 rounded">
-                                <span><%= t.includeAudio %></span>
-                            </label>
-                        </div>
-
-                        <div class="pt-4 border-t border-[var(--border-primary)]/50 mt-2">
-                            <button type="submit" id="downloadZipBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl py-3 px-4 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                <span><%= t.downloadZipBtn %></span>
-                            </button>
-                        </div>
-                    </form>
+                        <span class="text-xs text-[var(--text-muted)] font-mono" id="chart-net-legend">RX: 0 KB/s | TX: 0 KB/s</span>
+                    </div>
+                    <div id="netChannelsChart" style="height: 240px; width: 100%;"></div>
                 </div>
             </div>
 
-            <!-- Panel 2: Google Drive Cloud Backup -->
-            <div class="panel-surface rounded-2xl p-6 flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-4 mb-5 gap-3">
-                        <div class="flex items-center gap-3">
-                            <div class="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11 12 4 5 11"/><path d="M12 4v12"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
+            <!-- Quick Maintenance Actions & Server Specifications -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Quick Actions Panel -->
+                <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 border-b border-[var(--border-primary)] pb-3 mb-4">
+                            <svg class="text-[var(--accent-color)]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                            <h3 class="text-sm font-bold text-white"><%= t.quickActions %></h3>
+                        </div>
+                        <div class="flex flex-col gap-3">
+                            <!-- Flush RAM Caches Button -->
+                            <div class="p-3 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col gap-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-white"><%= t.flushCachesBtn %></span>
+                                    <span class="text-[10px] text-purple-400 font-mono">sync + drop_caches</span>
+                                </div>
+                                <p class="text-[11px] text-[var(--text-muted)]"><%= t.flushCachesDesc %></p>
+                                <button type="button" onclick="executeDropCaches()" id="dropCachesBtn" class="mt-1 w-full bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg py-2 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    <span><%= t.flushCachesBtn %></span>
+                                </button>
                             </div>
-                            <div>
-                                <h3 class="text-base font-bold text-white"><%= t.gdriveTitle %></h3>
-                                <p class="text-xs text-[var(--text-muted)]"><%= t.gdriveDesc %></p>
+
+                            <!-- Asterisk Core Reload Button -->
+                            <div class="p-3 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col gap-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-white"><%= t.reloadAsteriskBtn %></span>
+                                    <span class="text-[10px] text-emerald-400 font-mono">core reload</span>
+                                </div>
+                                <p class="text-[11px] text-[var(--text-muted)]"><%= t.reloadAsteriskDesc %></p>
+                                <button type="button" onclick="executeAsteriskReload()" id="reloadAsteriskBtn" class="mt-1 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg py-2 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                    <span><%= t.reloadAsteriskBtn %></span>
+                                </button>
                             </div>
                         </div>
-                        <span id="gdrive-status-badge" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 shrink-0"><%= t.disabled %></span>
                     </div>
+                </div>
 
-                    <form id="gdriveSetupForm" onsubmit="handleGdriveSave(event)" class="flex flex-col gap-4">
-                        <div class="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-[var(--border-primary)]">
-                            <span class="text-xs font-bold text-[var(--text-primary)]"><%= t.gdriveEnable %></span>
-                            <input type="checkbox" id="gdriveEnabled" class="w-4 h-4 accent-blue-500 rounded cursor-pointer">
+                <!-- Hardware Specifications Breakdown -->
+                <div class="lg:col-span-2 panel-surface rounded-2xl p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-4">
+                            <div class="flex items-center gap-2">
+                                <svg class="text-blue-400" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                                <h3 class="text-sm font-bold text-white"><%= t.hardwareSpecs %></h3>
+                            </div>
+                            <span id="spec-uptime" class="text-xs font-mono text-zinc-400">-</span>
                         </div>
 
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div class="p-3 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col gap-1">
+                                <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase">Processor Model & Cores</span>
+                                <span id="spec-cpu-model" class="font-bold text-white font-mono">-</span>
+                                <span id="spec-cpu-cores" class="text-[11px] text-[var(--text-secondary)] font-mono">- Cores Active</span>
+                            </div>
+
+                            <div class="p-3 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col gap-1">
+                                <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase">Memory Breakdown (RAM & Swap)</span>
+                                <div class="flex items-center justify-between font-mono">
+                                    <span class="text-[var(--text-muted)]">Buffers/Cached:</span>
+                                    <span id="spec-mem-cached" class="text-white">-</span>
+                                </div>
+                                <div class="flex items-center justify-between font-mono">
+                                    <span class="text-[var(--text-muted)]">Swap Used:</span>
+                                    <span id="spec-mem-swap" class="text-white">-</span>
+                                </div>
+                            </div>
+
+                            <div class="p-3 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col gap-1">
+                                <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase">Asterisk Telephony Telemetry</span>
+                                <div class="flex items-center justify-between font-mono">
+                                    <span class="text-[var(--text-muted)]">Version:</span>
+                                    <span id="spec-asterisk-ver" class="text-white">-</span>
+                                </div>
+                                <div class="flex items-center justify-between font-mono">
+                                    <span class="text-[var(--text-muted)]">Processed Calls:</span>
+                                    <span id="spec-asterisk-calls" class="text-white">-</span>
+                                </div>
+                            </div>
+
+                            <div class="p-3 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col gap-1">
+                                <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase">Sokrat VoIP Runtime Engine</span>
+                                <div class="flex items-center justify-between font-mono">
+                                    <span class="text-[var(--text-muted)]">Node Version:</span>
+                                    <span id="spec-node-ver" class="text-white">-</span>
+                                </div>
+                                <div class="flex items-center justify-between font-mono">
+                                    <span class="text-[var(--text-muted)]">Process RSS / Heap:</span>
+                                    <span id="spec-node-mem" class="text-white">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <!-- USB Host Controllers & Hardware Bus Topology (PCI & Buses) -->
+            <div class="panel-surface rounded-2xl p-5 flex flex-col">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-[var(--border-primary)] pb-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <div class="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                        </div>
                         <div>
-                            <label for="gdriveFolderName" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.gdriveFolder %></label>
-                            <input type="text" id="gdriveFolderName" value="Sokrat-VoIP-Backups" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full font-mono">
+                            <h3 class="text-sm font-bold text-white"><%= t.usbControllersTitle %></h3>
+                            <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'بنية متحكمات PCI ونواقل USB ومنافذ المودم الفيزيائية لشرائح هواوي' : 'PCI host controllers, root hubs, bus hierarchy & physical modem endpoints for Huawei dongles' %></p>
                         </div>
+                    </div>
+                    <span id="usb-summary-badge" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 shrink-0 font-mono">-</span>
+                </div>
 
-                        <div>
-                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="gdriveSchedule"><%= t.gdriveSchedule %></label>
-                            <select id="gdriveSchedule" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full cursor-pointer">
-                                <option value="daily" selected>Daily (At 02:00 AM)</option>
-                                <option value="weekly">Weekly (Sunday at 02:00 AM)</option>
-                                <option value="monthly">Monthly (1st of month)</option>
-                                <option value="manual">Manual Only</option>
-                            </select>
-                        </div>
+                <!-- PCI Controllers Sub-Section -->
+                <div class="mb-5">
+                    <span class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider block mb-3"><%= t.pciControllersLabel %></span>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="pci-controllers-container">
+                        <div class="p-4 rounded-xl bg-black/20 border border-[var(--border-primary)] text-xs text-[var(--text-muted)]">Loading PCI controllers...</div>
+                    </div>
+                </div>
 
-                        <div>
-                            <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="gdriveCreds"><%= t.gdriveCreds %></label>
-                            <textarea id="gdriveCreds" rows="3" placeholder='{"type": "service_account", "project_id": "...", ...}' class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl p-3 text-xs font-mono text-[var(--text-primary)] w-full"></textarea>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-primary)]/50">
-                            <button type="submit" id="saveGdriveBtn" class="bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2.5 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
-                                <span><%= t.saveGdriveBtn %></span>
-                            </button>
-                            <button type="button" onclick="syncGdriveNow()" id="syncGdriveBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl py-2.5 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                                <span><%= t.syncGdriveBtn %></span>
-                            </button>
-                        </div>
-                    </form>
+                <!-- Connected Hardware Devices & Huawei Modems on Bus -->
+                <div>
+                    <span class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider block mb-3"><%= t.usbDevicesLabel %></span>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="usb-devices-container">
+                        <div class="p-4 rounded-xl bg-black/20 border border-[var(--border-primary)] text-xs text-[var(--text-muted)]">Loading USB bus topology...</div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Lower Section: Retention & Auto-Purge Manager -->
-        <div class="panel-surface rounded-2xl p-6">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4 mb-5">
-                <div class="flex items-center gap-3">
-                    <div class="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    </div>
+        <!-- ============================================================= -->
+        <!-- TAB 2: CORE SERVICES MANAGEMENT                               -->
+        <!-- ============================================================= -->
+        <div id="panel-services" class="hidden flex flex-col gap-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-bold text-white"><%= t.tabServices %></h3>
+                    <p class="text-xs text-[var(--text-muted)]"><%= isRtl ? 'مراقبة وإعادة تشغيل الخدمات الحيوية المسؤولة عن الاتصالات والويب وقواعد البيانات' : 'Inspect and control vital daemon processes powering VoIP signaling, database, and web routing' %></p>
+                </div>
+                <button type="button" onclick="fetchServicesStatus()" class="panel-surface hover:bg-[var(--bg-hover)] text-white border border-[var(--border-primary)] rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-2 cursor-pointer transition">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/></svg>
+                    <span><%= isRtl ? 'تحديث الخدمات' : 'Refresh Services' %></span>
+                </button>
+            </div>
+
+            <!-- Services Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="services-grid-container">
+                <!-- Populated dynamically via renderServicesCards() -->
+                <div class="p-6 text-center text-zinc-500 font-mono text-xs col-span-full">Loading services telemetry...</div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 3: STORAGE & BACKUPS (PC Export, GDrive, Retention)       -->
+        <!-- ============================================================= -->
+        <div id="panel-storage" class="hidden flex flex-col gap-6">
+            
+            <!-- Main Workspace Grid: PC Export & Google Drive Sync -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- Panel 1: Export Call History & Recordings to PC (ZIP Download) -->
+                <div class="panel-surface rounded-2xl p-6 flex flex-col justify-between">
                     <div>
-                        <h3 class="text-base font-bold text-white"><%= t.purgeTitle %></h3>
-                        <p class="text-xs text-[var(--text-muted)]"><%= t.purgeDesc %></p>
+                        <div class="flex items-center gap-3 border-b border-[var(--border-primary)] pb-4 mb-5">
+                            <div class="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-bold text-white"><%= t.pcExportTitle %></h3>
+                                <p class="text-xs text-[var(--text-muted)]"><%= t.pcExportDesc %></p>
+                            </div>
+                        </div>
+
+                        <form id="pcExportForm" onsubmit="handlePcExport(event)" class="flex flex-col gap-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="exportStartDate"><%= t.startDate %></label>
+                                    <input type="date" id="exportStartDate" name="exportStartDate" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="exportEndDate"><%= t.endDate %></label>
+                                    <input type="date" id="exportEndDate" name="exportEndDate" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="exportExtension"><%= t.extension %></label>
+                                <select id="exportExtension" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full cursor-pointer">
+                                    <option value="" selected><%= t.allExtensions %></option>
+                                    <% roster.forEach(emp => { %>
+                                        <option value="<%= emp.extension %>"><%= emp.extension %> - <%= emp.name %></option>
+                                    <% }) %>
+                                </select>
+                            </div>
+
+                            <div class="flex flex-col gap-2 pt-1">
+                                <label class="inline-flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-[var(--text-primary)]" for="includeCsv">
+                                    <input type="checkbox" id="includeCsv" checked class="w-4 h-4 accent-emerald-500 rounded">
+                                    <span><%= t.includeCsv %></span>
+                                </label>
+                                <label class="inline-flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-[var(--text-primary)]" for="includeAudio">
+                                    <input type="checkbox" id="includeAudio" checked class="w-4 h-4 accent-emerald-500 rounded">
+                                    <span><%= t.includeAudio %></span>
+                                </label>
+                            </div>
+
+                            <div class="pt-4 border-t border-[var(--border-primary)]/50 mt-2">
+                                <button type="submit" id="downloadZipBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl py-3 px-4 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    <span><%= t.downloadZipBtn %></span>
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-3">
-                    <button onclick="savePurgePolicy()" id="savePurgeBtn" class="bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl px-4 py-2 text-xs cursor-pointer transition">
-                        <%= t.savePurgeBtn %>
-                    </button>
-                    <button onclick="runPurgeNow()" id="runPurgeBtn" class="bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-xl px-4 py-2 text-xs flex items-center gap-2 cursor-pointer transition">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                        <%= t.runPurgeBtn %>
-                    </button>
+                <!-- Panel 2: Google Drive Cloud Backup -->
+                <div class="panel-surface rounded-2xl p-6 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-4 mb-5 gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11 12 4 5 11"/><path d="M12 4v12"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
+                                </div>
+                                <div>
+                                    <h3 class="text-base font-bold text-white"><%= t.gdriveTitle %></h3>
+                                    <p class="text-xs text-[var(--text-muted)]"><%= t.gdriveDesc %></p>
+                                </div>
+                            </div>
+                            <span id="gdrive-status-badge" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 shrink-0"><%= t.disabled %></span>
+                        </div>
+
+                        <form id="gdriveSetupForm" onsubmit="handleGdriveSave(event)" class="flex flex-col gap-4">
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-[var(--border-primary)]">
+                                <span class="text-xs font-bold text-[var(--text-primary)]"><%= t.gdriveEnable %></span>
+                                <input type="checkbox" id="gdriveEnabled" class="w-4 h-4 accent-blue-500 rounded cursor-pointer">
+                            </div>
+
+                            <div>
+                                <label for="gdriveFolderName" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.gdriveFolder %></label>
+                                <input type="text" id="gdriveFolderName" value="Sokrat-VoIP-Backups" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full font-mono">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="gdriveSchedule"><%= t.gdriveSchedule %></label>
+                                <select id="gdriveSchedule" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-sm text-[var(--text-primary)] w-full cursor-pointer">
+                                    <option value="daily" selected>Daily (At 02:00 AM)</option>
+                                    <option value="weekly">Weekly (Sunday at 02:00 AM)</option>
+                                    <option value="monthly">Monthly (1st of month)</option>
+                                    <option value="manual">Manual Only</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="gdriveCreds"><%= t.gdriveCreds %></label>
+                                <textarea id="gdriveCreds" rows="3" placeholder='{"type": "service_account", "project_id": "...", ...}' class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl p-3 text-xs font-mono text-[var(--text-primary)] w-full"></textarea>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-primary)]/50">
+                                <button type="submit" id="saveGdriveBtn" class="bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2.5 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
+                                    <span><%= t.saveGdriveBtn %></span>
+                                </button>
+                                <button type="button" onclick="syncGdriveNow()" id="syncGdriveBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl py-2.5 px-3 text-xs flex items-center justify-center gap-2 cursor-pointer transition">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                    <span><%= t.syncGdriveBtn %></span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                <div class="flex flex-col gap-2">
-                    <div class="flex items-center justify-between text-xs font-bold text-[var(--text-secondary)]">
-                        <span><%= t.purgeDaysLabel %></span>
-                        <span id="purge-days-val" class="font-mono text-amber-400 font-bold text-sm">90 Days</span>
+            <!-- Lower Section: Retention & Auto-Purge Manager -->
+            <div class="panel-surface rounded-2xl p-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border-primary)] pb-4 mb-5">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-white"><%= t.purgeTitle %></h3>
+                            <p class="text-xs text-[var(--text-muted)]"><%= t.purgeDesc %></p>
+                        </div>
                     </div>
-                    <input type="range" id="purgeDaysSlider" min="7" max="1095" step="1" value="90" oninput="document.getElementById('purge-days-val').textContent = this.value + ' Days'" class="w-full cursor-pointer accent-amber-500">
+                    <button type="button" onclick="runPurgeNow()" id="runPurgeBtn" class="panel-surface hover:bg-red-500/10 text-red-400 border border-red-500/30 rounded-xl px-4 py-2 text-xs font-bold flex items-center gap-2 cursor-pointer transition shrink-0">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        <span><%= t.runPurgeBtn %></span>
+                    </button>
                 </div>
-                <div class="p-3.5 rounded-xl bg-black/20 border border-[var(--border-primary)] text-xs text-[var(--text-muted)] space-y-1">
-                    <div class="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                        <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                        </svg>
-                        <span><%= isRtl ? 'تنبيه أمان الحذف:' : 'Purge Safety Notice:' %></span>
+
+                <div class="flex flex-col gap-4">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between mb-2">
+                                <label for="purgeDaysSlider" class="text-xs font-bold text-[var(--text-secondary)] uppercase"><%= t.purgeDaysLabel %></label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="purgeDaysInput" min="1" max="3650" value="90" oninput="updatePurgeDays(this.value)" class="w-24 px-3 py-1 bg-black/40 border border-[var(--border-primary)] rounded-lg text-sm font-black text-amber-400 font-mono text-center focus:outline-none focus:border-amber-500">
+                                    <span class="text-xs font-bold text-[var(--text-muted)]"><%= isRtl ? 'يوم' : 'Days' %></span>
+                                </div>
+                            </div>
+                            <input type="range" id="purgeDaysSlider" min="7" max="3650" step="1" value="90" oninput="updatePurgeDays(this.value)" class="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                        </div>
+
+                        <button type="button" onclick="savePurgePolicy()" class="bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-3 px-6 text-xs flex items-center justify-center gap-2 cursor-pointer transition shrink-0">
+                            <span><%= t.savePurgeBtn %></span>
+                        </button>
                     </div>
-                    <p>Audio recording files (`.wav`, `.gsm`, `.mp3`) older than the selected threshold will be permanently deleted from `/var/spool/asterisk/monitor/`. CDR database call logs remain untouched.</p>
+
+                    <!-- Quick Preset Buttons -->
+                    <div class="flex items-center gap-2 flex-wrap pt-3 border-t border-[var(--border-primary)]/40">
+                        <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase"><%= isRtl ? 'المهل السريعة:' : 'Quick Presets:' %></span>
+                        <button type="button" onclick="updatePurgeDays(30)" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 cursor-pointer transition">30d (1m)</button>
+                        <button type="button" onclick="updatePurgeDays(90)" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 cursor-pointer transition">90d (3m)</button>
+                        <button type="button" onclick="updatePurgeDays(180)" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 cursor-pointer transition">180d (6m)</button>
+                        <button type="button" onclick="updatePurgeDays(365)" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 cursor-pointer transition">365d (1y)</button>
+                        <button type="button" onclick="updatePurgeDays(730)" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 cursor-pointer transition">730d (2y)</button>
+                        <button type="button" onclick="updatePurgeDays(1095)" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 cursor-pointer transition">1095d (3y)</button>
+                        <button type="button" onclick="updatePurgeDays(1825)" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 cursor-pointer transition">1825d (5y)</button>
+                        <button type="button" onclick="updatePurgeDays(3650)" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 cursor-pointer transition">3650d (10y)</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ============================================================= -->
+    <!-- SERVICE RESTART CONFIRMATION MODAL                            -->
+    <!-- ============================================================= -->
+    <div id="serviceConfirmModal" class="fixed inset-0 z-[250] flex items-center justify-center bg-black/75 backdrop-blur-sm opacity-0 invisible transition-all duration-200 p-4" style="pointer-events:none">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div class="p-6">
+                <div class="flex items-center gap-3 text-amber-400 mb-3">
+                    <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </div>
+                    <h3 class="text-base font-extrabold text-white" id="serviceConfirmModalTitle"><%= t.confirmRestartTitle %></h3>
+                </div>
+                <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-6" id="serviceConfirmModalDesc"><%= t.confirmRestartDesc %></p>
+                <div class="grid grid-cols-2 gap-3">
+                    <button type="button" onclick="closeServiceConfirmModal()" class="bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2.5 px-4 text-xs cursor-pointer transition">
+                        <%= isRtl ? 'إلغاء' : 'Cancel' %>
+                    </button>
+                    <button type="button" id="confirmServiceActionBtn" class="bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl py-2.5 px-4 text-xs cursor-pointer transition">
+                        <%= isRtl ? 'تأكيد' : 'Confirm' %>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Client-Side Javascript -->
+    <!-- Telemetry & Storage Management Client Script -->
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchStorageInfo();
-            // Set default date range to last 30 days
-            const end = new Date();
-            const start = new Date();
-            start.setDate(start.getDate() - 30);
-            document.getElementById('exportEndDate').value = end.toISOString().split('T')[0];
-            document.getElementById('exportStartDate').value = start.toISOString().split('T')[0];
-            flatpickr("input[type='date'], input[name='startDate'], input[name='endDate'], input#exportStartDate, input#exportEndDate", {
-                enableTime: true,
-                dateFormat: "Y-m-d H:i:S",
-                altInput: true,
-                altFormat: "m/d/Y h:i K",
-                time_24hr: false,
-                allowInput: true,
-                scrollInputIntoView: false,
-                appendTo: document.body,
-                monthSelectorType: "dropdown",
-                onReady: function(selectedDates, dateStr, instance) {
-                    if (instance.altInput) {
-                        var origId = instance.input.id || (instance.input.name ? instance.input.name + 'Input' : 'datePicker_' + Math.random().toString(36).substring(2, 7));
-                        if (origId.endsWith('_raw')) origId = origId.replace(/_raw$/, '');
-                        instance.input.id = origId + '_raw';
-                        instance.altInput.id = origId;
-                        instance.altInput.name = (instance.input.name || origId) + '_display';
-                        instance.altInput.setAttribute('autocomplete', 'off');
-                        var ariaLabel = instance.input.getAttribute('aria-label') || instance.input.name || origId;
-                        instance.altInput.setAttribute('aria-label', ariaLabel);
+        // State & Polling Variables
+        let telemetryPollTimer = null;
+        let currentPollInterval = 5000;
+        let cpuRamChartInstance = null;
+        let netChannelsChartInstance = null;
+        let pendingServiceAction = null;
+
+        // Chart Data Buffers (Sliding 20 points)
+        const MAX_POINTS = 20;
+        const timeLabels = [];
+        const cpuData = [];
+        const ramData = [];
+        const netRxData = [];
+        const netTxData = [];
+        const channelsData = [];
+
+        function initSystemStoragePage() {
+            // Restore saved active tab or URL param
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetTab = urlParams.get('tab') || localStorage.getItem('activeStorageTab') || 'resources';
+            switchStorageTab(targetTab);
+            const savedRate = localStorage.getItem('telemetryRefreshRate');
+            if (savedRate !== null) {
+                currentPollInterval = parseInt(savedRate, 10);
+            } else {
+                currentPollInterval = 5000;
+            }
+            const refreshSelect = document.getElementById('telemetryRefreshRate');
+            if (refreshSelect) refreshSelect.value = String(currentPollInterval);
+
+
+            // Initialize ECharts
+            initTelemetryCharts();
+
+            // Date Pickers initialization
+            if (window.flatpickr) {
+                flatpickr("input[type='date'], input[name='startDate'], input[name='endDate'], input#exportStartDate, input#exportEndDate", {
+                    dateFormat: "Y-m-d",
+                    altInput: true,
+                    altFormat: "F j, Y",
+                    allowInput: true,
+                    onReady: function(selectedDates, dateStr, instance) {
+                        if (instance.altInput) {
+                            var origId = instance.input.id || (instance.input.name ? instance.input.name + 'Input' : 'datePicker_' + Math.random().toString(36).substring(2, 7));
+                            if (origId.endsWith('_raw')) origId = origId.replace(/_raw$/, '');
+                            instance.input.id = origId + '_raw';
+                            instance.altInput.id = origId;
+                            instance.altInput.name = (instance.input.name || origId) + '_display';
+                            instance.altInput.setAttribute('autocomplete', 'off');
+                            var ariaLabel = instance.input.getAttribute('aria-label') || instance.input.name || origId;
+                            instance.altInput.setAttribute('aria-label', ariaLabel);
+                        }
                     }
+                });
+            }
+
+            // Fetch initial telemetry and services data
+            fetchTelemetryMetrics();
+            fetchServicesStatus();
+            fetchStorageInfo();
+
+            // Start polling timer
+            startTelemetryPolling();
+
+            // Handle window resize for charts
+            window.addEventListener('resize', () => {
+                if (cpuRamChartInstance) cpuRamChartInstance.resize();
+                if (netChannelsChartInstance) netChannelsChartInstance.resize();
+            });
+
+            // Pause polling when tab is hidden
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    stopTelemetryPolling();
+                } else {
+                    fetchTelemetryMetrics();
+                    startTelemetryPolling();
                 }
             });
-        });
+        }
 
+        // Resilient DOM ready guard
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initSystemStoragePage);
+        } else {
+            initSystemStoragePage();
+        }
+
+        // Tab Switching Handler
+        function switchStorageTab(tabId) {
+            const tabs = ['resources', 'services', 'storage'];
+            if (!tabs.includes(tabId)) tabId = 'resources';
+
+            localStorage.setItem('activeStorageTab', tabId);
+
+            tabs.forEach(t => {
+                const panel = document.getElementById('panel-' + t);
+                const btn = document.getElementById('tab-btn-' + t);
+                if (panel) {
+                    if (t === tabId) panel.classList.remove('hidden');
+                    else panel.classList.add('hidden');
+                }
+                if (btn) {
+                    if (t === tabId) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                }
+            });
+
+            if (tabId === 'resources') {
+                setTimeout(() => {
+                    if (cpuRamChartInstance) cpuRamChartInstance.resize();
+                    if (netChannelsChartInstance) netChannelsChartInstance.resize();
+                }, 100);
+            }
+            if (tabId === 'services') {
+                fetchServicesStatus();
+            }
+        }
+
+        // Initialize ECharts
+        function initTelemetryCharts() {
+            const chart1El = document.getElementById('cpuRamChart');
+            const chart2El = document.getElementById('netChannelsChart');
+
+            const isDark = !document.documentElement.classList.contains('light-theme');
+            const textColor = isDark ? '#a1a1aa' : '#71717a';
+            const splitColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+
+            if (chart1El && window.echarts) {
+                cpuRamChartInstance = echarts.init(chart1El);
+                cpuRamChartInstance.setOption({
+                    animation: false,
+                    tooltip: { trigger: 'axis' },
+                    grid: { top: 20, right: 15, bottom: 25, left: 35 },
+                    xAxis: {
+                        type: 'category',
+                        data: timeLabels,
+                        axisLabel: { color: textColor, fontSize: 10 },
+                        axisLine: { lineStyle: { color: splitColor } }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        min: 0,
+                        max: 100,
+                        axisLabel: { color: textColor, fontSize: 10, formatter: '{value}%' },
+                        splitLine: { lineStyle: { color: splitColor } }
+                    },
+                    series: [
+                        {
+                            name: 'CPU',
+                            type: 'line',
+                            smooth: true,
+                            showSymbol: false,
+                            data: cpuData,
+                            lineStyle: { width: 2, color: '#a855f7' },
+                            areaStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: 'rgba(168, 85, 247, 0.35)' },
+                                    { offset: 1, color: 'rgba(168, 85, 247, 0.02)' }
+                                ])
+                            }
+                        },
+                        {
+                            name: 'RAM',
+                            type: 'line',
+                            smooth: true,
+                            showSymbol: false,
+                            data: ramData,
+                            lineStyle: { width: 2, color: '#10b981' },
+                            areaStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: 'rgba(16, 185, 129, 0.35)' },
+                                    { offset: 1, color: 'rgba(16, 185, 129, 0.02)' }
+                                ])
+                            }
+                        }
+                    ]
+                });
+            }
+
+            if (chart2El && window.echarts) {
+                netChannelsChartInstance = echarts.init(chart2El);
+                netChannelsChartInstance.setOption({
+                    animation: false,
+                    tooltip: { trigger: 'axis' },
+                    grid: { top: 20, right: 35, bottom: 25, left: 40 },
+                    xAxis: {
+                        type: 'category',
+                        data: timeLabels,
+                        axisLabel: { color: textColor, fontSize: 10 },
+                        axisLine: { lineStyle: { color: splitColor } }
+                    },
+                    yAxis: [
+                        {
+                            type: 'value',
+                            name: 'KB/s',
+                            axisLabel: { color: textColor, fontSize: 10 },
+                            splitLine: { lineStyle: { color: splitColor } }
+                        },
+                        {
+                            type: 'value',
+                            name: 'Calls',
+                            min: 0,
+                            minInterval: 1,
+                            axisLabel: { color: '#f59e0b', fontSize: 10 },
+                            splitLine: { show: false }
+                        }
+                    ],
+                    series: [
+                        {
+                            name: 'Net RX (KB/s)',
+                            type: 'line',
+                            smooth: true,
+                            showSymbol: false,
+                            data: netRxData,
+                            lineStyle: { width: 2, color: '#3b82f6' }
+                        },
+                        {
+                            name: 'Net TX (KB/s)',
+                            type: 'line',
+                            smooth: true,
+                            showSymbol: false,
+                            data: netTxData,
+                            lineStyle: { width: 2, color: '#06b6d4' }
+                        },
+                        {
+                            name: 'Active Calls',
+                            type: 'line',
+                            yAxisIndex: 1,
+                            smooth: true,
+                            showSymbol: false,
+                            data: channelsData,
+                            lineStyle: { width: 2, color: '#f59e0b', type: 'dashed' }
+                        }
+                    ]
+                });
+            }
+        }
+
+        // Fetch Live Telemetry Metrics
+        async function fetchTelemetryMetrics() {
+            try {
+                const res = await fetch('/api/system/resources');
+                const data = await res.json();
+                if (!data.success) return;
+
+                // 1. CPU & Load
+                const cpuPct = data.cpu ? data.cpu.usagePct : 0;
+                const cpuLoad = (data.cpu && data.cpu.loadAvg) ? data.cpu.loadAvg.join(', ') : '-';
+                const cores = data.cpu ? data.cpu.cores : 1;
+
+                document.getElementById('stat-cpu-pct').textContent = cpuPct + ' %';
+                document.getElementById('stat-cpu-load').textContent = 'Load: ' + cpuLoad;
+                document.getElementById('stat-cpu-bar').style.width = Math.min(100, Math.max(0, cpuPct)) + '%';
+
+                // 2. RAM Memory
+                const ramPct = data.memory ? data.memory.usedPct : 0;
+                const availGb = data.memory ? (data.memory.availableBytes / (1024 * 1024 * 1024)).toFixed(1) : 0;
+                const totalGb = data.memory ? (data.memory.totalBytes / (1024 * 1024 * 1024)).toFixed(1) : 0;
+
+                document.getElementById('stat-ram-pct').textContent = ramPct + ' %';
+                document.getElementById('stat-ram-avail').textContent = availGb + ' GB free / ' + totalGb + ' GB';
+                const ramBar = document.getElementById('stat-ram-bar');
+                ramBar.style.width = Math.min(100, Math.max(0, ramPct)) + '%';
+                if (ramPct > 85) ramBar.className = 'h-full bg-red-500 transition-all duration-500';
+                else if (ramPct > 70) ramBar.className = 'h-full bg-amber-500 transition-all duration-500';
+                else ramBar.className = 'h-full bg-emerald-500 transition-all duration-500';
+
+                // 3. Disk Root Usage
+                if (data.disk) {
+                    const diskUsedPct = data.disk.usedPct || 0;
+                    document.getElementById('disk-used-pct').textContent = diskUsedPct + ' %';
+                    document.getElementById('disk-free-text').textContent = (data.disk.freeGb || 0) + ' GB free';
+                    document.getElementById('disk-progress-bar').style.width = diskUsedPct + '%';
+                }
+
+                // 4. Asterisk Telephony Core
+                if (data.asterisk) {
+                    const isOnline = data.asterisk.status === 'online';
+                    const statDot = document.getElementById('stat-asterisk-dot');
+                    const statStatus = document.getElementById('stat-asterisk-status');
+                    statStatus.textContent = isOnline ? 'Online' : 'Offline';
+                    statStatus.className = isOnline ? 'text-lg font-black text-white font-mono' : 'text-lg font-black text-red-400 font-mono';
+                    statDot.className = isOnline ? 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0' : 'w-2.5 h-2.5 rounded-full bg-red-500 shrink-0';
+                    document.getElementById('stat-asterisk-sub').textContent = (data.asterisk.activeChannels || 0) + ' channels | ' + (data.asterisk.activeCalls || 0) + ' active calls';
+                }
+
+                // 5. Hardware Specifications Breakdown
+                if (data.cpu) {
+                    document.getElementById('spec-cpu-model').textContent = data.cpu.model || '-';
+                    document.getElementById('spec-cpu-cores').textContent = (data.cpu.cores || 1) + ' CPU Cores Active';
+                }
+                if (data.memory) {
+                    const cachedMb = Math.round((data.memory.cachedBytes + data.memory.buffersBytes) / (1024 * 1024));
+                    const swapUsedMb = Math.round(data.memory.swapUsedBytes / (1024 * 1024));
+                    const swapTotalMb = Math.round(data.memory.swapTotalBytes / (1024 * 1024));
+                    document.getElementById('spec-mem-cached').textContent = cachedMb + ' MB';
+                    document.getElementById('spec-mem-swap').textContent = swapUsedMb + ' MB / ' + swapTotalMb + ' MB';
+                }
+                if (data.asterisk) {
+                    document.getElementById('spec-asterisk-ver').textContent = data.asterisk.version || '-';
+                    document.getElementById('spec-asterisk-calls').textContent = (data.asterisk.callsProcessed || 0) + ' calls';
+                }
+                if (data.node) {
+                    document.getElementById('spec-node-ver').textContent = data.node.version + ' (PID: ' + data.node.pid + ')';
+                    document.getElementById('spec-node-mem').textContent = data.node.memoryRssMb + ' MB / ' + data.node.memoryHeapUsedMb + ' MB';
+                }
+                if (data.systemUptimeSec) {
+                    const hours = Math.floor(data.systemUptimeSec / 3600);
+                    const mins = Math.floor((data.systemUptimeSec % 3600) / 60);
+                    document.getElementById('spec-uptime').textContent = 'System Uptime: ' + hours + 'h ' + mins + 'm';
+                }
+                // 5b. Render USB Host Controllers & Hardware Bus Topology
+                if (data.usb) {
+                    renderUsbTopology(data.usb);
+                }
+
+                // 6. Push to sliding chart series
+                const nowLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                timeLabels.push(nowLabel);
+                cpuData.push(cpuPct);
+                ramData.push(ramPct);
+
+                const rxKb = data.network ? Math.round(data.network.rxBytesPerSec / 1024) : 0;
+                const txKb = data.network ? Math.round(data.network.txBytesPerSec / 1024) : 0;
+                netRxData.push(rxKb);
+                netTxData.push(txKb);
+                channelsData.push(data.asterisk ? data.asterisk.activeCalls || 0 : 0);
+
+                if (timeLabels.length > MAX_POINTS) {
+                    timeLabels.shift();
+                    cpuData.shift();
+                    ramData.shift();
+                    netRxData.shift();
+                    netTxData.shift();
+                    channelsData.shift();
+                }
+
+                document.getElementById('chart-cpu-ram-legend').textContent = 'CPU: ' + cpuPct + '% | RAM: ' + ramPct + '%';
+                document.getElementById('chart-net-legend').textContent = 'RX: ' + rxKb + ' KB/s | TX: ' + txKb + ' KB/s';
+
+                if (cpuRamChartInstance) {
+                    cpuRamChartInstance.setOption({
+                        xAxis: { data: timeLabels },
+                        series: [{ data: cpuData }, { data: ramData }]
+                    });
+                }
+                if (netChannelsChartInstance) {
+                    netChannelsChartInstance.setOption({
+                        xAxis: { data: timeLabels },
+                        series: [{ data: netRxData }, { data: netTxData }, { data: channelsData }]
+                    });
+                }
+
+            } catch (err) {
+                console.error('Failed to fetch telemetry:', err);
+            }
+        }
+
+        // Fetch Core Services Status
+        async function fetchServicesStatus() {
+            try {
+                const res = await fetch('/api/system/services');
+                const data = await res.json();
+                if (!data.success || !data.services) return;
+                renderServicesCards(data.services);
+            } catch (err) {
+                console.error('Failed to fetch services:', err);
+            }
+        }
+
+        // Render Services Cards into DOM
+        function renderServicesCards(services) {
+            const container = document.getElementById('services-grid-container');
+            if (!container) return;
+
+            let html = '';
+            services.forEach(s => {
+                const isActive = s.activeState === 'active';
+                const isRunning = s.subState === 'running';
+
+                let badgeClass = 'bg-zinc-800 text-zinc-400 border-zinc-700';
+                let dotClass = 'bg-zinc-500';
+                let statusLabel = s.activeState;
+
+                if (isActive) {
+                    badgeClass = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+                    dotClass = 'bg-emerald-500 animate-pulse';
+                    statusLabel = '<%= t.running %>';
+                } else if (s.activeState === 'failed') {
+                    badgeClass = 'bg-red-500/15 text-red-400 border-red-500/30';
+                    dotClass = 'bg-red-500';
+                    statusLabel = '<%= t.failed %>';
+                } else {
+                    badgeClass = 'bg-zinc-800 text-zinc-400 border-zinc-700';
+                    dotClass = 'bg-zinc-500';
+                    statusLabel = '<%= t.stopped %>';
+                }
+
+                html += `
+                <div class="panel-surface rounded-2xl p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-start justify-between gap-3 mb-3">
+                            <div>
+                                <h4 class="text-sm font-bold text-white">${escapeHtml(s.name)}</h4>
+                                <span class="text-[10px] text-[var(--text-muted)] font-mono">${escapeHtml(s.unit)}</span>
+                            </div>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${badgeClass} shrink-0">
+                                <span class="w-1.5 h-1.5 rounded-full ${dotClass}"></span>
+                                <span>${escapeHtml(statusLabel)}</span>
+                            </span>
+                        </div>
+                        <p class="text-xs text-[var(--text-muted)] mb-4">${escapeHtml(s.desc)}</p>
+
+                        <div class="p-3 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col gap-1.5 text-xs font-mono mb-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[var(--text-muted)]">Main PID:</span>
+                                <span class="text-white">${s.pid > 0 ? s.pid : '-'}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[var(--text-muted)]">Memory RSS:</span>
+                                <span class="text-white">${s.memoryMb ? s.memoryMb + ' MB' : '-'}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[var(--text-muted)]">Active Since:</span>
+                                <span class="text-white truncate max-w-[180px]">${escapeHtml(s.activeSince || '-')}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 pt-3 border-t border-[var(--border-primary)]">
+                        ${s.id === 'asterisk' ? `
+                            <button type="button" onclick="handleServiceAction('asterisk', 'reload')" class="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                <span><%= t.reloadBtn %></span>
+                            </button>
+                            <button type="button" onclick="confirmServiceAction('asterisk', 'restart', 'Asterisk PBX Core')" class="flex-1 bg-red-600/80 hover:bg-red-500 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                <span><%= t.restartBtn %></span>
+                            </button>
+                        ` : s.id === 'database' ? `
+                            <button type="button" onclick="confirmServiceAction('database', 'restart', 'MariaDB / MySQL')" class="w-full bg-amber-600/80 hover:bg-amber-500 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                <span><%= t.restartBtn %></span>
+                            </button>
+                        ` : s.id === 'stt-worker' ? `
+                            ${isActive ? `
+                                <button type="button" onclick="handleServiceAction('stt-worker', 'restart')" class="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2 px-3 text-xs cursor-pointer transition"><%= t.restartBtn %></button>
+                                <button type="button" onclick="handleServiceAction('stt-worker', 'stop')" class="flex-1 bg-red-600/80 hover:bg-red-500 text-white font-bold rounded-xl py-2 px-3 text-xs cursor-pointer transition"><%= t.stopBtn %></button>
+                            ` : `
+                                <button type="button" onclick="handleServiceAction('stt-worker', 'start')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl py-2 px-3 text-xs cursor-pointer transition"><%= t.startBtn %></button>
+                            `}
+                        ` : `
+                            <button type="button" onclick="handleServiceAction('${s.id}', 'restart')" class="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                <span><%= t.restartBtn %></span>
+                            </button>
+                        `}
+                    </div>
+                </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+        // Render USB Host Controllers & Hardware Bus Topology
+        function renderUsbTopology(usb) {
+            if (!usb) return;
+
+            // Summary badge
+            const pciCount = usb.pciControllers ? usb.pciControllers.length : 0;
+            const rootCount = usb.rootHubs ? usb.rootHubs.length : 0;
+            const devCount = usb.devices ? usb.devices.length : 0;
+            const badge = document.getElementById('usb-summary-badge');
+            if (badge) {
+                badge.textContent = `${pciCount} PCI Controller(s) | ${rootCount} Root Hub(s) | ${devCount} USB Device(s)`;
+            }
+
+            // 1. PCI Host Controllers
+            const pciContainer = document.getElementById('pci-controllers-container');
+            if (pciContainer && usb.pciControllers) {
+                let pciHtml = '';
+                usb.pciControllers.forEach(p => {
+                    pciHtml += `
+                    <div class="p-3.5 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <span class="px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-400 font-mono font-bold text-[11px] border border-cyan-500/30">[${escapeHtml(p.slot)}]</span>
+                                <span class="text-[10px] font-mono text-[var(--text-muted)]">IRQ ${escapeHtml(p.irq || '-')}</span>
+                            </div>
+                            <h4 class="text-xs font-bold text-white mb-2 leading-snug">${escapeHtml(p.description)}</h4>
+                        </div>
+                        <div class="flex items-center justify-between text-[11px] font-mono pt-2 border-t border-[var(--border-primary)]/40 text-[var(--text-secondary)]">
+                            <span>Driver: <strong class="text-emerald-400">${escapeHtml(p.driver || 'unbound')}</strong></span>
+                            <span>Mem: ${escapeHtml(p.memory || '-')}</span>
+                        </div>
+                    </div>
+                    `;
+                });
+                pciContainer.innerHTML = pciHtml || '<div class="text-xs text-[var(--text-muted)]">No PCI USB controllers detected</div>';
+            }
+
+            // 2. Connected Devices & Huawei Modems on Bus
+            const usbContainer = document.getElementById('usb-devices-container');
+            if (usbContainer && usb.devices) {
+                let usbHtml = '';
+                usb.devices.forEach(d => {
+                    const isModem = (d.vendorId === '12d1' || (d.ttys && d.ttys.length > 0) || (d.interfaces && d.interfaces.some(i => i.driver === 'option')));
+                    const cardBorder = isModem ? 'border-cyan-500/40 bg-cyan-950/10' : 'border-[var(--border-primary)] bg-black/20';
+
+                    let ttyBadges = '';
+                    if (d.ttys && d.ttys.length > 0) {
+                        ttyBadges = d.ttys.map(t => `<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono font-bold">/dev/${escapeHtml(t)}</span>`).join(' ');
+                    } else {
+                        ttyBadges = '<span class="text-[10px] text-[var(--text-muted)] font-mono">None</span>';
+                    }
+
+                    let driverBadges = '';
+                    if (d.interfaces && d.interfaces.length > 0) {
+                        const uniqueDrivers = [...new Set(d.interfaces.map(i => i.driver).filter(Boolean))];
+                        driverBadges = uniqueDrivers.map(drv => `<span class="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] font-mono">${escapeHtml(drv)}</span>`).join(' ');
+                    } else {
+                        driverBadges = '<span class="text-[10px] text-[var(--text-muted)] font-mono">unbound</span>';
+                    }
+
+                    usbHtml += `
+                    <div class="p-3.5 rounded-xl border ${cardBorder} flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <span class="px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-400 font-mono font-bold text-[10px] border border-purple-500/30">Bus Path: ${escapeHtml(d.busPath)}</span>
+                                <span class="text-[10px] font-mono text-[var(--text-muted)]">${escapeHtml(d.vendorProduct)}</span>
+                            </div>
+                            <h4 class="text-xs font-bold text-white mb-2 leading-snug flex items-center gap-1.5">
+                                ${isModem ? '<span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0"></span>' : ''}
+                                <span>${escapeHtml(d.name)}</span>
+                            </h4>
+                            <div class="flex items-center gap-3 text-[10px] font-mono text-[var(--text-secondary)] mb-3">
+                                <span>Speed: <strong class="text-white">${escapeHtml(d.speed)}</strong></span>
+                                <span>Power: <strong class="text-white">${escapeHtml(d.maxPower)}</strong></span>
+                            </div>
+                        </div>
+
+                        <div class="pt-2.5 border-t border-[var(--border-primary)]/40 flex flex-col gap-2">
+                            <div>
+                                <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1">Kernel Drivers:</span>
+                                <div class="flex items-center gap-1 flex-wrap">${driverBadges}</div>
+                            </div>
+                            <div>
+                                <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1">Serial Ports:</span>
+                                <div class="flex items-center gap-1 flex-wrap">${ttyBadges}</div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                });
+                usbContainer.innerHTML = usbHtml || '<div class="text-xs text-[var(--text-muted)]">No USB devices detected on bus</div>';
+            }
+        }
+
+
+        // HTML escaping helper
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Confirm Modal for Critical Actions
+        function confirmServiceAction(serviceId, action, serviceName) {
+            pendingServiceAction = { serviceId, action };
+            const modal = document.getElementById('serviceConfirmModal');
+            document.getElementById('serviceConfirmModalTitle').textContent = '<%= t.confirmRestartTitle %>: ' + serviceName;
+            modal.classList.remove('opacity-0', 'invisible');
+            modal.style.pointerEvents = 'auto';
+
+            document.getElementById('confirmServiceActionBtn').onclick = () => {
+                closeServiceConfirmModal();
+                handleServiceAction(serviceId, action);
+            };
+        }
+
+        function closeServiceConfirmModal() {
+            const modal = document.getElementById('serviceConfirmModal');
+            modal.classList.add('opacity-0', 'invisible');
+            modal.style.pointerEvents = 'none';
+            pendingServiceAction = null;
+        }
+
+        // Execute Service Action API call
+        async function handleServiceAction(serviceId, action) {
+            try {
+                showToast(`Executing ${action} on ${serviceId}...`, 'info');
+                const res = await fetch('/api/system/service-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ serviceId, action })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || 'Action executed successfully', 'success');
+                    setTimeout(() => {
+                        fetchServicesStatus();
+                        fetchTelemetryMetrics();
+                    }, 2000);
+                } else {
+                    showToast(data.error || 'Action failed', 'error');
+                }
+            } catch (err) {
+                showToast('Network error: ' + err.message, 'error');
+            }
+        }
+
+        // Flush RAM Caches
+        async function executeDropCaches() {
+            const btn = document.getElementById('dropCachesBtn');
+            if (btn) btn.disabled = true;
+            showToast('<%= t.reclaimingMemory %>', 'info');
+
+            try {
+                const res = await fetch('/api/system/drop-caches', { method: 'POST' });
+                const data = await res.json();
+                if (btn) btn.disabled = false;
+                if (data.success) {
+                    showToast(data.message || 'Caches flushed successfully', 'success');
+                    fetchTelemetryMetrics();
+                } else {
+                    showToast(data.error || 'Failed to flush caches', 'error');
+                }
+            } catch (err) {
+                if (btn) btn.disabled = false;
+                showToast('Error: ' + err.message, 'error');
+            }
+        }
+
+        // Asterisk Core Reload
+        async function executeAsteriskReload() {
+            const btn = document.getElementById('reloadAsteriskBtn');
+            if (btn) btn.disabled = true;
+            showToast('<%= t.reloadingAsterisk %>', 'info');
+
+            try {
+                const res = await fetch('/api/system/asterisk-reload', { method: 'POST' });
+                const data = await res.json();
+                if (btn) btn.disabled = false;
+                if (data.success) {
+                    showToast(data.message || 'Asterisk reloaded successfully', 'success');
+                    fetchTelemetryMetrics();
+                } else {
+                    showToast(data.error || 'Reload failed', 'error');
+                }
+            } catch (err) {
+                if (btn) btn.disabled = false;
+                showToast('Error: ' + err.message, 'error');
+            }
+        }
+
+        // Polling Timer Management
+        function startTelemetryPolling() {
+            stopTelemetryPolling();
+            if (currentPollInterval > 0) {
+                telemetryPollTimer = setInterval(fetchTelemetryMetrics, currentPollInterval);
+            }
+        }
+
+        function stopTelemetryPolling() {
+            if (telemetryPollTimer) {
+                clearInterval(telemetryPollTimer);
+                telemetryPollTimer = null;
+            }
+        }
+
+        function updateRefreshInterval(val) {
+            currentPollInterval = parseInt(val, 10);
+            if (isNaN(currentPollInterval)) currentPollInterval = 5000;
+            localStorage.setItem('telemetryRefreshRate', String(currentPollInterval));
+            startTelemetryPolling();
+        }
+
+        function triggerImmediateRefresh() {
+            const spinner = document.getElementById('refresh-spinner');
+            if (spinner) spinner.classList.add('animate-spin');
+            Promise.all([fetchTelemetryMetrics(), fetchServicesStatus(), fetchStorageInfo()]).finally(() => {
+                setTimeout(() => {
+                    if (spinner) spinner.classList.remove('animate-spin');
+                }, 500);
+            });
+        }
+
+        // Existing Storage & Backups Functions
         function fetchStorageInfo() {
             fetch('/api/storage/info')
                 .then(res => res.json())
@@ -445,32 +1481,29 @@ const isRtl = currentLang === 'ar';
                     
                     // 1. Disk usage
                     const usedPct = data.disk ? data.disk.usedPct : 0;
+                    const freeGb = data.disk ? data.disk.freeGb : 0;
                     document.getElementById('disk-used-pct').textContent = usedPct + ' %';
-                    document.getElementById('disk-free-text').textContent = (data.disk ? data.disk.freeGb : 0) + ' GB free';
+                    document.getElementById('disk-free-text').textContent = freeGb + ' GB free';
                     document.getElementById('disk-progress-bar').style.width = usedPct + '%';
                     
-                    // 2. Recordings
-                    document.getElementById('recordings-size-text').textContent = data.recordings ? data.recordings.sizeMb + ' MB' : '0 MB';
-                    document.getElementById('recordings-count-text').textContent = data.recordings ? data.recordings.count + ' files' : '0 files';
-                    
-                    // 3. Database
-                    document.getElementById('cdr-rows-text').textContent = data.db ? data.db.totalRows.toLocaleString() + ' calls' : '0 calls';
-                    document.getElementById('cdr-size-text').textContent = data.db ? data.db.dbSizeMb + ' MB DB size' : '0 MB DB size';
-                    
-                    // 4. Retention & Google Drive
+                    // 2. Recordings & Database
                     if (data.settings) {
-                        document.getElementById('retention-days-text').textContent = data.settings.auto_purge_days + ' Days';
-                        document.getElementById('purgeDaysSlider').value = data.settings.auto_purge_days;
-                        document.getElementById('purge-days-val').textContent = data.settings.auto_purge_days + ' Days';
+                        const purgeDaysSlider = document.getElementById('purgeDaysSlider');
+                        const purgeDaysInput = document.getElementById('purgeDaysInput');
+                        if (purgeDaysSlider) purgeDaysSlider.value = data.settings.auto_purge_days;
+                        if (purgeDaysInput) purgeDaysInput.value = data.settings.auto_purge_days;
 
-                        document.getElementById('gdriveEnabled').checked = !!data.settings.gdrive_enabled;
-                        document.getElementById('gdriveFolderName').value = data.settings.gdrive_folder_name || 'Sokrat-VoIP-Backups';
-                        document.getElementById('gdriveSchedule').value = data.settings.auto_backup_schedule || 'daily';
-                        if (data.settings.gdrive_credentials) {
-                            document.getElementById('gdriveCreds').value = data.settings.gdrive_credentials;
+                        const gdriveEnabled = document.getElementById('gdriveEnabled');
+                        const gdriveFolderName = document.getElementById('gdriveFolderName');
+                        const gdriveSchedule = document.getElementById('gdriveSchedule');
+                        const gdriveCreds = document.getElementById('gdriveCreds');
+
+                        if (gdriveEnabled) gdriveEnabled.checked = !!data.settings.gdrive_enabled;
+                        if (gdriveFolderName) gdriveFolderName.value = data.settings.gdrive_folder_name || 'Sokrat-VoIP-Backups';
+                        if (gdriveSchedule) gdriveSchedule.value = data.settings.auto_backup_schedule || 'daily';
+                        if (gdriveCreds && data.settings.gdrive_credentials) {
+                            gdriveCreds.value = data.settings.gdrive_credentials;
                         }
-
-                        const badge = document.getElementById('gdrive-status-badge');
                         if (badge) {
                             badge.textContent = data.settings.gdrive_enabled ? 'Active' : 'Disabled';
                             badge.className = data.settings.gdrive_enabled 
@@ -495,8 +1528,6 @@ const isRtl = currentLang === 'ar';
             const includeCsv = document.getElementById('includeCsv').checked;
 
             const url = `/api/storage/export/pc?startDate=${startDate}&endDate=${endDate}&extension=${extension}&includeAudio=${includeAudio}&includeCsv=${includeCsv}`;
-            
-            // Trigger direct browser download
             window.location.href = url;
 
             setTimeout(() => {
@@ -545,7 +1576,9 @@ const isRtl = currentLang === 'ar';
         }
 
         function savePurgePolicy() {
-            const days = document.getElementById('purgeDaysSlider').value;
+            const input = document.getElementById('purgeDaysInput');
+            const slider = document.getElementById('purgeDaysSlider');
+            const days = input ? input.value : (slider ? slider.value : 90);
             fetch('/api/storage/purge-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -559,6 +1592,16 @@ const isRtl = currentLang === 'ar';
                 } else showToast(data.error || '<%= t.failed %>', 'error');
             });
         }
+        function updatePurgeDays(val) {
+            const parsed = parseInt(val, 10);
+            if (isNaN(parsed) || parsed < 1) return;
+            const days = Math.min(3650, parsed);
+            const slider = document.getElementById('purgeDaysSlider');
+            const input = document.getElementById('purgeDaysInput');
+            if (slider) slider.value = days;
+            if (input) input.value = days;
+        }
+
 
         function runPurgeNow() {
             if (!confirm('Permanently delete audio recordings older than the specified days?')) return;
@@ -574,47 +1617,6 @@ const isRtl = currentLang === 'ar';
                     } else showToast(data.error || 'Cleanup failed', 'error');
                 });
         }
-    </script>
-    <script>
-        (function() {
-            function forceMonthSelect() {
-                document.querySelectorAll('.flatpickr-current-month').forEach(function(el) {
-                    var sel = el.querySelector('.flatpickr-monthDropdown-months');
-                    var cur = el.querySelector('.cur-month');
-                    if (!sel) return;
-                    if (cur) cur.style.setProperty('display', 'none', 'important');
-                    sel.style.setProperty('display', 'inline-block', 'important');
-                    sel.style.setProperty('pointer-events', 'auto', 'important');
-                    sel.style.setProperty('cursor', 'pointer', 'important');
-                    sel.style.setProperty('opacity', '1', 'important');
-                });
-            }
-            document.addEventListener('click', function(e) {
-                var el = e.target.closest('.flatpickr-current-month');
-                if (!el) return;
-                var sel = el.querySelector('.flatpickr-monthDropdown-months');
-                if (!sel) return;
-                if (e.target === sel) return;
-                e.preventDefault();
-                e.stopPropagation();
-                if (typeof sel.showPicker === 'function') {
-                    sel.showPicker();
-                } else {
-                    try { sel.click(); } catch(_) {}
-                }
-            }, true);
-            forceMonthSelect();
-            var pollTimer = setInterval(function() { forceMonthSelect(); }, 100);
-            setTimeout(function() { clearInterval(pollTimer); }, 3000);
-            var obs = new MutationObserver(function(muts) {
-                muts.forEach(function(mut) {
-                    mut.addedNodes.forEach(function(n) {
-                        if (n.nodeType === 1 && n.querySelectorAll) forceMonthSelect();
-                    });
-                });
-            });
-            obs.observe(document.body, { childList: true, subtree: true });
-        })();
     </script>
 </body>
 </html>

@@ -3,11 +3,13 @@ const mysql = require('mysql2/promise');
 const moment = require('moment');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const zlib = require('zlib');
 const net = require('net');
 const http = require('http');
 const https = require('https');
 const { Server } = require('socket.io');
-const { exec, execFile } = require('child_process');
+const { exec, execFile, execSync } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 const execFileAsync = (file, args, options) => new Promise((resolve, reject) => {
@@ -276,20 +278,82 @@ const CDR_HISTORY_FILTERS_SQL = `
     )
 `;
 app.set('view engine', 'ejs');
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/public', express.static(path.join(__dirname, 'public')));
-app.use('/photos', express.static(path.join(__dirname, 'public', 'photos')));
+const staticCacheOptions = { maxAge: '7d', etag: true };
+app.use(express.static(path.join(__dirname, 'public'), staticCacheOptions));
+app.use('/public', express.static(path.join(__dirname, 'public'), staticCacheOptions));
+app.use('/photos', express.static(path.join(__dirname, 'public', 'photos'), staticCacheOptions));
 app.get('/favicon.ico', (req, res) => {
     res.setHeader('Content-Type', 'image/x-icon');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     res.sendFile(path.join(__dirname, 'public', 'favicon.ico'), (err) => {
         if (err) res.status(204).end();
     });
 });
 app.get('/favicon.png', (req, res) => {
     res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     res.sendFile(path.join(__dirname, 'public', 'favicon.png'), (err) => {
         if (err) res.status(204).end();
     });
+});
+
+// --- NATIVE ZERO-DEPENDENCY GZIP/DEFLATE COMPRESSION MIDDLEWARE ---
+app.use((req, res, next) => {
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    if (!acceptEncoding.includes('gzip') && !acceptEncoding.includes('deflate')) {
+        return next();
+    }
+
+    const originalSend = res.send;
+    res.send = function(body) {
+        if (!body) return originalSend.call(this, body);
+
+        // Ensure Content-Type is established (strings default to html in Express)
+        if (!res.getHeader('Content-Type')) {
+            if (typeof body === 'string') {
+                const trimmed = body.trimStart();
+                if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                } else {
+                    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                }
+            } else if (typeof body === 'object' && !Buffer.isBuffer(body)) {
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            }
+        }
+
+        const contentType = String(res.getHeader('Content-Type') || '').toLowerCase();
+        const isCompressible = (
+            contentType.includes('text/html') ||
+            contentType.includes('application/json') ||
+            contentType.includes('text/css') ||
+            contentType.includes('application/javascript') ||
+            contentType.includes('text/javascript')
+        );
+
+        if (!isCompressible || res.getHeader('Content-Encoding')) {
+            return originalSend.call(this, body);
+        }
+
+        const buf = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'object' ? JSON.stringify(body) : String(body));
+        if (buf.length < 1024) {
+            return originalSend.call(this, body);
+        }
+
+        try {
+            const useGzip = acceptEncoding.includes('gzip');
+            const compressed = useGzip ? zlib.gzipSync(buf, { level: 6 }) : zlib.deflateSync(buf, { level: 6 });
+            if (compressed && compressed.length < buf.length) {
+                res.setHeader('Content-Encoding', useGzip ? 'gzip' : 'deflate');
+                res.setHeader('Content-Length', compressed.length);
+                res.removeHeader('ETag');
+                return originalSend.call(this, compressed);
+            }
+        } catch (_) {}
+
+        return originalSend.call(this, body);
+    };
+    next();
 });
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -2873,87 +2937,107 @@ function autoHealDongles() {
 setInterval(autoHealDongles, 3000);
 applyDongleHotplugMappingDefaults();
 
+// --- IN-MEMORY CACHES FOR FAST ZERO-DATABASE GLOBAL MIDDLEWARE ---
+let cachedBaseRoster = null;
+let cachedBaseRosterTimestamp = 0;
+let cachedEmployeeGroupNames = [];
+let cachedEmployeeGroupTimestamp = 0;
+let cachedFedSettings = { local_site_code: '10', local_node_name: 'Main PBX', panel_role: 'local' };
+let cachedFedPeers = [];
+let cachedFedRemoteExts = [];
+let cachedFedTimestamp = 0;
 
 app.use(async (req, res, next) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    if (req.path.startsWith('/api/') || req.xhr) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else {
+        res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
+    }
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     try {
-        const [users] = await pool.query(`
-            SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group, ee.is_group_admin
-            FROM ${tables.users} u
-            LEFT JOIN ${tables.employeeExtras} ee ON u.extension = ee.extension
-        `);
-
-        let devices = [];
-        try {
-            const [devRows] = await pool.query(`SELECT id as extension, description as name FROM ${tables.devices}`);
-            devices = devRows;
-        } catch (_) {}
-
-        let sipExts = [];
-        try {
-            const [sRows] = await pool.query(`SELECT DISTINCT id as extension FROM ${tables.sip} WHERE keyword = 'secret' AND id REGEXP '^[0-9]{2,5}$'`);
-            sipExts = sRows;
-        } catch (_) {}
-
-        let psExts = [];
-        try {
-            const [psRows] = await pool.query(`SELECT DISTINCT id as extension FROM ${tables.psEndpoints} WHERE id REGEXP '^[0-9]{2,5}$'`);
-            psExts = psRows;
-        } catch (_) {}
-        let cdrChannels = [];
-        try {
-            const [cRows] = await pool.query(`
-                SELECT DISTINCT channel, dstchannel
-                FROM ${tables.cdr}
-                WHERE calldate >= NOW() - INTERVAL 180 DAY
+        const now = Date.now();
+        let roster = cachedBaseRoster;
+        if (!roster || (now - cachedBaseRosterTimestamp > 15000)) {
+            const [users] = await pool.query(`
+                SELECT u.extension, u.name, ee.photo, ee.title, ee.emp_group, ee.is_group_admin
+                FROM ${tables.users} u
+                LEFT JOIN ${tables.employeeExtras} ee ON u.extension = ee.extension
             `);
-            cdrChannels = cRows;
-        } catch (_) {}
 
-        const extMap = new Map();
+            let devices = [];
+            try {
+                const [devRows] = await pool.query(`SELECT id as extension, description as name FROM ${tables.devices}`);
+                devices = devRows;
+            } catch (_) {}
 
-        users.forEach(u => {
-            if (u.extension && /^\d+$/.test(u.extension)) {
-                extMap.set(u.extension, {
-                    extension: u.extension,
-                    name: u.name || u.extension,
-                    photo: u.photo,
-                    title: u.title,
-                    emp_group: u.emp_group,
-                    is_group_admin: Boolean(u.is_group_admin === 1 || u.is_group_admin === true || u.is_group_admin === '1')
-                });
-            }
-        });
+            let sipExts = [];
+            try {
+                const [sRows] = await pool.query(`SELECT DISTINCT id as extension FROM ${tables.sip} WHERE keyword = 'secret' AND id REGEXP '^[0-9]{2,5}$'`);
+                sipExts = sRows;
+            } catch (_) {}
 
-        devices.forEach(d => {
-            if (d.extension && /^\d+$/.test(d.extension) && !extMap.has(d.extension)) {
-                extMap.set(d.extension, { extension: d.extension, name: d.name || d.extension, photo: null, title: null, emp_group: null });
-            }
-        });
+            let psExts = [];
+            try {
+                const [psRows] = await pool.query(`SELECT DISTINCT id as extension FROM ${tables.psEndpoints} WHERE id REGEXP '^[0-9]{2,5}$'`);
+                psExts = psRows;
+            } catch (_) {}
 
-        sipExts.forEach(s => {
-            if (s.extension && /^\d+$/.test(s.extension) && !extMap.has(s.extension)) {
-                extMap.set(s.extension, { extension: s.extension, name: 'Extension ' + s.extension, photo: null, title: null, emp_group: null });
-            }
-        });
+            let cdrChannels = [];
+            try {
+                const [cRows] = await pool.query(`
+                    SELECT DISTINCT channel, dstchannel
+                    FROM ${tables.cdr}
+                    WHERE calldate >= NOW() - INTERVAL 180 DAY
+                `);
+                cdrChannels = cRows;
+            } catch (_) {}
 
-        psExts.forEach(p => {
-            if (p.extension && /^\d+$/.test(p.extension) && !extMap.has(p.extension)) {
-                extMap.set(p.extension, { extension: p.extension, name: 'Extension ' + p.extension, photo: null, title: null, emp_group: null });
-            }
-        });
+            const extMap = new Map();
 
-        cdrChannels.forEach(r => {
-            [getEndpointExtensionFromChannel(r.channel), getEndpointExtensionFromChannel(r.dstchannel)].forEach(ext => {
-                if (ext && /^\d{2,5}$/.test(ext) && !extMap.has(ext)) {
-                    extMap.set(ext, { extension: ext, name: 'Extension ' + ext, photo: null, title: null, emp_group: null });
+            users.forEach(u => {
+                if (u.extension && /^\d+$/.test(u.extension)) {
+                    extMap.set(u.extension, {
+                        extension: u.extension,
+                        name: u.name || u.extension,
+                        photo: u.photo,
+                        title: u.title,
+                        emp_group: u.emp_group,
+                        is_group_admin: Boolean(u.is_group_admin === 1 || u.is_group_admin === true || u.is_group_admin === '1')
+                    });
                 }
             });
-        });
 
-        const roster = Array.from(extMap.values()).sort((a, b) => parseInt(a.extension, 10) - parseInt(b.extension, 10));
+            devices.forEach(d => {
+                if (d.extension && /^\d+$/.test(d.extension) && !extMap.has(d.extension)) {
+                    extMap.set(d.extension, { extension: d.extension, name: d.name || d.extension, photo: null, title: null, emp_group: null });
+                }
+            });
+
+            sipExts.forEach(s => {
+                if (s.extension && /^\d+$/.test(s.extension) && !extMap.has(s.extension)) {
+                    extMap.set(s.extension, { extension: s.extension, name: 'Extension ' + s.extension, photo: null, title: null, emp_group: null });
+                }
+            });
+
+            psExts.forEach(p => {
+                if (p.extension && /^\d+$/.test(p.extension) && !extMap.has(p.extension)) {
+                    extMap.set(p.extension, { extension: p.extension, name: 'Extension ' + p.extension, photo: null, title: null, emp_group: null });
+                }
+            });
+
+            cdrChannels.forEach(r => {
+                [getEndpointExtensionFromChannel(r.channel), getEndpointExtensionFromChannel(r.dstchannel)].forEach(ext => {
+                    if (ext && /^\d{2,5}$/.test(ext) && !extMap.has(ext)) {
+                        extMap.set(ext, { extension: ext, name: 'Extension ' + ext, photo: null, title: null, emp_group: null });
+                    }
+                });
+            });
+
+            roster = Array.from(extMap.values()).sort((a, b) => parseInt(a.extension, 10) - parseInt(b.extension, 10));
+            cachedBaseRoster = roster;
+            cachedBaseRosterTimestamp = now;
+        }
         let onlineMap = {};
         for (let e of roster) {
             let online = peerStatus[e.extension] || false;
@@ -2988,12 +3072,14 @@ app.use(async (req, res, next) => {
             }
             if (Object.keys(peerStatus).length) console.log('DB fallback found peers:', Object.keys(peerStatus));
         }
-        let employeeGroupNames = [];
-        try {
-            const [groupRows] = await pool.query(`SELECT name FROM ${tables.employeeGroups} ORDER BY name ASC`);
-            employeeGroupNames = groupRows.map(g => String(g.name)).filter(Boolean);
-        } catch (_) {}
-        res.locals.employeeGroups = employeeGroupNames;
+        if (!cachedEmployeeGroupNames.length || (now - cachedEmployeeGroupTimestamp > 30000)) {
+            try {
+                const [groupRows] = await pool.query(`SELECT name FROM ${tables.employeeGroups} ORDER BY name ASC`);
+                cachedEmployeeGroupNames = groupRows.map(g => String(g.name)).filter(Boolean);
+                cachedEmployeeGroupTimestamp = now;
+            } catch (_) {}
+        }
+        res.locals.employeeGroups = cachedEmployeeGroupNames;
         res.locals.roster = roster.map(emp => ({ 
             ...emp, 
             online: onlineMap[emp.extension] || false,
@@ -3012,20 +3098,20 @@ app.use(async (req, res, next) => {
         res.locals.greetingMode = greetingConfig.mode || 'none';
         res.locals.greetingExtensions = greetingConfig.extensions || [];
         res.locals.clientName = cachedClientName || '';
-        let fedSettings = { local_site_code: '10', local_node_name: 'Main PBX', panel_role: 'local' };
-        let fedPeers = [];
-        let fedRemoteExts = [];
-        try {
-            const [sRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
-            if (sRows && sRows[0]) fedSettings = sRows[0];
-            const [pRows] = await pool.query('SELECT id, node_name, host, site_code, status FROM `asterisk`.`sokrat_federation_peers`');
-            fedPeers = pRows || [];
-            const [reRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_remote_extensions`');
-            fedRemoteExts = reRows || [];
-        } catch (_) {}
-        res.locals.federationSettings = fedSettings;
-        res.locals.federationPeers = fedPeers;
-        res.locals.federationRemoteExtensions = fedRemoteExts;
+        if (now - cachedFedTimestamp > 30000) {
+            try {
+                const [sRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
+                if (sRows && sRows[0]) cachedFedSettings = sRows[0];
+                const [pRows] = await pool.query('SELECT id, node_name, host, site_code, status FROM `asterisk`.`sokrat_federation_peers`');
+                cachedFedPeers = pRows || [];
+                const [reRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_remote_extensions`');
+                cachedFedRemoteExts = reRows || [];
+                cachedFedTimestamp = now;
+            } catch (_) {}
+        }
+        res.locals.federationSettings = cachedFedSettings;
+        res.locals.federationPeers = cachedFedPeers;
+        res.locals.federationRemoteExtensions = cachedFedRemoteExts;
         next();
     } catch (err) { next(err); }
 });
@@ -7850,10 +7936,522 @@ app.get('/api/storage/info', requireAuth, requireTabPermission('storage'), async
             if (sRows.length > 0) settings = sRows[0];
         } catch (_) {}
 
-        res.json({ success: true, disk, recordings, db, settings });
+        const cpu = getSystemCpuMetrics();
+        const memory = getSystemMemoryMetrics();
+        res.json({ success: true, disk, recordings, db, settings, cpu, memory });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
+});
+
+// --- SYSTEM RESOURCE MONITORING & TELEMETRY APIs ---
+let lastSystemCpuSample = { idle: 0, total: 0, time: 0 };
+let lastSystemNetSample = { rxTotal: 0, txTotal: 0, time: 0 };
+
+function getSystemCpuMetrics() {
+    let idle = 0;
+    let total = 0;
+    try {
+        const content = fs.readFileSync('/proc/stat', 'utf8');
+        const firstLine = content.split('\n')[0];
+        const parts = firstLine.trim().split(/\s+/).slice(1).map(Number);
+        idle = parts[3] + (parts[4] || 0);
+        total = parts.reduce((a, b) => a + b, 0);
+    } catch (_) {}
+
+    let usagePct = 0;
+    const now = Date.now();
+    if (lastSystemCpuSample.total > 0 && total > lastSystemCpuSample.total) {
+        const idleDiff = idle - lastSystemCpuSample.idle;
+        const totalDiff = total - lastSystemCpuSample.total;
+        usagePct = totalDiff > 0 ? parseFloat((100 * (1 - idleDiff / totalDiff)).toFixed(1)) : 0;
+    } else {
+        const load1 = os.loadavg()[0] || 0;
+        const cpus = os.cpus().length || 1;
+        usagePct = parseFloat(Math.min(100, Math.max(0, (load1 / cpus) * 100)).toFixed(1));
+    }
+    lastSystemCpuSample = { idle, total, time: now };
+
+    const cpus = os.cpus();
+    const loadAvg = os.loadavg().map(v => parseFloat(v.toFixed(2)));
+    return {
+        usagePct: Math.max(0, Math.min(100, usagePct)),
+        loadAvg,
+        cores: cpus.length,
+        model: (cpus[0] && cpus[0].model) ? cpus[0].model.trim() : 'Generic CPU'
+    };
+}
+
+function getSystemMemoryMetrics() {
+    const map = {};
+    try {
+        const lines = fs.readFileSync('/proc/meminfo', 'utf8').split('\n');
+        for (const line of lines) {
+            const match = line.match(/^([A-Za-z0-9_()]+):\s+(\d+)\s*kB/);
+            if (match) map[match[1]] = parseInt(match[2], 10) * 1024;
+        }
+    } catch (_) {}
+
+    const total = map['MemTotal'] || (os.totalmem() || 0);
+    const free = map['MemFree'] || (os.freemem() || 0);
+    const available = map['MemAvailable'] || free;
+    const buffers = map['Buffers'] || 0;
+    const cached = map['Cached'] || 0;
+    const used = Math.max(0, total - available);
+    const usedPct = total > 0 ? parseFloat(((used / total) * 100).toFixed(1)) : 0;
+
+    const swapTotal = map['SwapTotal'] || 0;
+    const swapFree = map['SwapFree'] || 0;
+    const swapUsed = Math.max(0, swapTotal - swapFree);
+    const swapUsedPct = swapTotal > 0 ? parseFloat(((swapUsed / swapTotal) * 100).toFixed(1)) : 0;
+
+    return {
+        totalBytes: total,
+        freeBytes: free,
+        availableBytes: available,
+        usedBytes: used,
+        usedPct,
+        buffersBytes: buffers,
+        cachedBytes: cached,
+        swapTotalBytes: swapTotal,
+        swapUsedBytes: swapUsed,
+        swapFreeBytes: swapFree,
+        swapUsedPct
+    };
+}
+
+function getSystemNetworkMetrics() {
+    let rxTotal = 0;
+    let txTotal = 0;
+    const ifaces = [];
+    try {
+        const lines = fs.readFileSync('/proc/net/dev', 'utf8').split('\n').slice(2);
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            const [iface, data] = trimmed.split(':');
+            if (!iface || !data) continue;
+            const name = iface.trim();
+            if (name === 'lo') continue;
+            const parts = data.trim().split(/\s+/).map(Number);
+            const rxBytes = parts[0] || 0;
+            const txBytes = parts[8] || 0;
+            rxTotal += rxBytes;
+            txTotal += txBytes;
+            ifaces.push({ name, rxBytes, txBytes });
+        }
+    } catch (_) {}
+
+    const now = Date.now();
+    let rxRate = 0;
+    let txRate = 0;
+    if (lastSystemNetSample.time > 0 && now > lastSystemNetSample.time) {
+        const dtSec = Math.max(0.1, (now - lastSystemNetSample.time) / 1000);
+        rxRate = Math.round(Math.max(0, rxTotal - lastSystemNetSample.rxTotal) / dtSec);
+        txRate = Math.round(Math.max(0, txTotal - lastSystemNetSample.txTotal) / dtSec);
+    }
+    lastSystemNetSample = { rxTotal, txTotal, time: now };
+
+    return {
+        rxBytesPerSec: rxRate,
+        txBytesPerSec: txRate,
+        interfaces: ifaces
+    };
+}
+
+function getAsteriskMetrics() {
+    let status = 'offline';
+    let uptime = 'Unknown';
+    let version = 'Unknown';
+    let activeChannels = 0;
+    let activeCalls = 0;
+    let callsProcessed = 0;
+
+    try {
+        const chOut = execSync('asterisk -rx "core show channels count" 2>/dev/null', { encoding: 'utf8', timeout: 4000 });
+        status = 'online';
+        const chM = chOut.match(/(\d+)\s+active\s+channel/i);
+        if (chM) activeChannels = parseInt(chM[1], 10);
+        const caM = chOut.match(/(\d+)\s+active\s+call/i);
+        if (caM) activeCalls = parseInt(caM[1], 10);
+        const cpM = chOut.match(/(\d+)\s+call.*processed/i);
+        if (cpM) callsProcessed = parseInt(cpM[1], 10);
+    } catch (_) {}
+
+    try {
+        const upOut = execSync('asterisk -rx "core show uptime" 2>/dev/null', { encoding: 'utf8', timeout: 4000 });
+        const upM = upOut.match(/System uptime:\s+(.+)/i);
+        if (upM) uptime = upM[1].trim();
+    } catch (_) {}
+
+    try {
+        const vOut = execSync('asterisk -rx "core show version" 2>/dev/null', { encoding: 'utf8', timeout: 4000 });
+        const vM = vOut.match(/Asterisk\s+([0-9\.\-]+[a-zA-Z0-9_\-]*)/i);
+        if (vM) version = vM[1];
+    } catch (_) {}
+
+    return {
+        status,
+        uptime,
+        version,
+        activeChannels,
+        activeCalls,
+        callsProcessed
+    };
+}
+
+function getCoreServicesStatus() {
+    const services = [
+        { id: 'asterisk', name: 'Asterisk PBX Core', unit: 'asterisk.service', desc: 'Core Telephony, SIP/PJSIP & GSM Drivers' },
+        { id: 'sokrat-voip', name: 'Sokrat VoIP Dashboard', unit: 'sokrat-voip.service', desc: 'Real-Time Softphone & Admin Engine' },
+        { id: 'database', name: 'MariaDB / MySQL', unit: 'mariadb.service', fallbackUnit: 'mysqld.service', desc: 'CDR Database & PBX Configuration' },
+        { id: 'httpd', name: 'HTTP Web Server', unit: 'httpd.service', fallbackUnit: 'nginx.service', desc: 'Web Server & Reverse Proxy' },
+        { id: 'stt-worker', name: 'STT AI Worker', unit: 'stt-worker.service', desc: 'Background Audio Transcription' }
+    ];
+
+    return services.map(s => {
+        let activeUnit = s.unit;
+        let props = {};
+        try {
+            let out = execSync(`systemctl show ${s.unit} --property=ActiveState,SubState,MainPID,ActiveEnterTimestamp,MemoryCurrent 2>/dev/null`, { encoding: 'utf8', timeout: 3000 });
+            for (const line of out.trim().split('\n')) {
+                const [k, ...v] = line.split('=');
+                if (k) props[k.trim()] = v.join('=').trim();
+            }
+            if (props.ActiveState === 'inactive' && s.fallbackUnit) {
+                const fbOut = execSync(`systemctl show ${s.fallbackUnit} --property=ActiveState,SubState,MainPID,ActiveEnterTimestamp,MemoryCurrent 2>/dev/null`, { encoding: 'utf8', timeout: 3000 });
+                const fbProps = {};
+                for (const line of fbOut.trim().split('\n')) {
+                    const [k, ...v] = line.split('=');
+                    if (k) fbProps[k.trim()] = v.join('=').trim();
+                }
+                if (fbProps.ActiveState === 'active') {
+                    activeUnit = s.fallbackUnit;
+                    props = fbProps;
+                }
+            }
+        } catch (_) {}
+
+        const pid = parseInt(props.MainPID, 10) || 0;
+        const memBytes = parseInt(props.MemoryCurrent, 10) || 0;
+        const memoryMb = (memBytes > 0 && memBytes < 1e13) ? parseFloat((memBytes / (1024 * 1024)).toFixed(1)) : null;
+
+        return {
+            id: s.id,
+            name: s.name,
+            unit: activeUnit,
+            desc: s.desc,
+            activeState: props.ActiveState || 'unknown',
+            subState: props.SubState || 'unknown',
+            pid,
+            activeSince: props.ActiveEnterTimestamp || null,
+            memoryMb
+        };
+    });
+}
+function getUsbHardwareDetails() {
+    const pciControllers = [];
+    try {
+        const lspciOut = execSync('lspci -v -nn 2>/dev/null', { encoding: 'utf8', timeout: 3000 });
+        const blocks = lspciOut.split(/\n(?=[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F])/);
+        for (const block of blocks) {
+            if (/usb/i.test(block)) {
+                const lines = block.trim().split('\n');
+                const header = lines[0];
+                const slotMatch = header.match(/^([0-9a-fA-F:\.]+)\s+([^:]+):\s+(.+)$/);
+                if (slotMatch) {
+                    const slot = slotMatch[1];
+                    const className = slotMatch[2];
+                    const desc = slotMatch[3];
+                    let driver = '';
+                    let kernelModules = '';
+                    let irq = '';
+                    let memory = '';
+                    for (const line of lines.slice(1)) {
+                        const drvMatch = line.match(/Kernel driver in use:\s*(.+)/i);
+                        if (drvMatch) driver = drvMatch[1].trim();
+                        const modMatch = line.match(/Kernel modules:\s*(.+)/i);
+                        if (modMatch) kernelModules = modMatch[1].trim();
+                        const irqMatch = line.match(/Interrupt:\s*IRQ\s*(\d+)/i) || line.match(/IRQ\s*(\d+)/i);
+                        if (irqMatch) irq = irqMatch[1].trim();
+                        const memMatch = line.match(/Memory at\s*([0-9a-fA-F]+)/i);
+                        if (memMatch) memory = memMatch[1].trim();
+                    }
+                    pciControllers.push({
+                        slot,
+                        class: className.trim(),
+                        description: desc.trim(),
+                        driver,
+                        kernelModules,
+                        irq,
+                        memory
+                    });
+                }
+            }
+        }
+    } catch (_) {}
+
+    const devices = [];
+    const rootHubs = [];
+    try {
+        const sysEntries = fs.readdirSync('/sys/bus/usb/devices');
+        for (const entry of sysEntries) {
+            if (entry.includes(':')) continue;
+            const devPath = path.join('/sys/bus/usb/devices', entry);
+            const readSafe = (file) => {
+                try { return fs.readFileSync(path.join(devPath, file), 'utf8').trim(); } catch (_) { return null; }
+            };
+            const idVendor = readSafe('idVendor');
+            const idProduct = readSafe('idProduct');
+            if (!idVendor || !idProduct) continue;
+
+            const busnum = readSafe('busnum');
+            const devnum = readSafe('devnum');
+            const speed = readSafe('speed');
+            const maxPower = readSafe('bMaxPower');
+            const manufacturer = readSafe('manufacturer') || '';
+            const product = readSafe('product') || '';
+            const version = readSafe('version');
+            const maxchild = parseInt(readSafe('maxchild') || '0', 10);
+
+            const interfaces = [];
+            const ttys = [];
+            try {
+                const subdirs = fs.readdirSync(devPath);
+                for (const sub of subdirs) {
+                    if (sub.startsWith(entry + ':')) {
+                        const subPath = path.join(devPath, sub);
+                        let ifaceDriver = '';
+                        try {
+                            const driverLink = fs.readlinkSync(path.join(subPath, 'driver'));
+                            ifaceDriver = path.basename(driverLink);
+                        } catch (_) {}
+                        try {
+                            const subEntries = fs.readdirSync(subPath);
+                            for (const item of subEntries) {
+                                if (item.startsWith('ttyUSB')) {
+                                    ttys.push(item);
+                                } else if (item === 'tty') {
+                                    try {
+                                        const ttySub = fs.readdirSync(path.join(subPath, 'tty'));
+                                        ttys.push(...ttySub);
+                                    } catch (_) {}
+                                }
+                            }
+                        } catch (_) {}
+                        interfaces.push({
+                            interface: sub.replace(entry + ':', ''),
+                            driver: ifaceDriver || 'unbound'
+                        });
+                    }
+                }
+            } catch (_) {}
+
+            const isRoot = entry.startsWith('usb');
+            const isHub = maxchild > 0;
+            const devObj = {
+                busPath: entry,
+                busNum: busnum,
+                devNum: devnum,
+                vendorId: idVendor,
+                productId: idProduct,
+                vendorProduct: idVendor + ':' + idProduct,
+                name: (manufacturer + ' ' + product).trim() || 'USB Device',
+                speed: speed ? speed + ' Mbps' : 'unknown',
+                maxPower: maxPower || '0mA',
+                version: version ? 'USB ' + version : '',
+                isRootHub: isRoot,
+                isHub,
+                portsCount: maxchild,
+                interfaces,
+                ttys
+            };
+            if (isRoot) rootHubs.push(devObj);
+            else devices.push(devObj);
+        }
+    } catch (_) {}
+
+    return {
+        pciControllers,
+        rootHubs,
+        devices
+    };
+}
+
+
+// GET /api/system/resources - Live real-time resource telemetry
+app.get('/api/system/resources', requireAuth, requireTabPermission('storage'), async (req, res) => {
+    try {
+        const cpu = getSystemCpuMetrics();
+        const memory = getSystemMemoryMetrics();
+        const network = getSystemNetworkMetrics();
+        const asterisk = getAsteriskMetrics();
+        const usb = getUsbHardwareDetails();
+
+        let disk = { totalGb: 0, usedGb: 0, freeGb: 0, usedPct: 0 };
+        try {
+            const dfOut = execSync('df -k / | tail -n 1', { encoding: 'utf8' }).trim();
+            const parts = dfOut.split(/\s+/);
+            if (parts.length >= 5) {
+                const totalKb = parseInt(parts[1], 10) || 0;
+                const usedKb = parseInt(parts[2], 10) || 0;
+                const freeKb = parseInt(parts[3], 10) || 0;
+                disk.totalGb = (totalKb / 1024 / 1024).toFixed(1);
+                disk.usedGb = (usedKb / 1024 / 1024).toFixed(1);
+                disk.freeGb = (freeKb / 1024 / 1024).toFixed(1);
+                disk.usedPct = parseInt(parts[4].replace('%', ''), 10) || Math.round((usedKb / totalKb) * 100);
+            }
+        } catch (_) {}
+
+        const nodeMem = process.memoryUsage();
+        const node = {
+            version: process.version,
+            pid: process.pid,
+            memoryRssMb: parseFloat((nodeMem.rss / (1024 * 1024)).toFixed(1)),
+            memoryHeapUsedMb: parseFloat((nodeMem.heapUsed / (1024 * 1024)).toFixed(1)),
+            uptimeSec: Math.round(process.uptime())
+        };
+
+        res.json({
+            success: true,
+            cpu,
+            memory,
+            disk,
+            network,
+            asterisk,
+            node,
+            usb,
+            systemUptimeSec: Math.round(os.uptime())
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/system/services - Query system services lifecycle status
+app.get('/api/system/services', requireAuth, requireTabPermission('storage'), async (req, res) => {
+    try {
+        const services = getCoreServicesStatus();
+        res.json({ success: true, services });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/system/service-action - Control core service lifecycle (Super Admin only)
+app.post('/api/system/service-action', requireAuth, (req, res) => {
+    if (!isSuperAdmin(req)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Super Admin privileges required' });
+    }
+    const { serviceId, action } = req.body || {};
+    const allowedServices = ['asterisk', 'sokrat-voip', 'database', 'httpd', 'stt-worker'];
+    const allowedActions = ['restart', 'reload', 'start', 'stop'];
+
+    if (!serviceId || !allowedServices.includes(serviceId)) {
+        return res.status(400).json({ success: false, error: 'Invalid or unsupported serviceId' });
+    }
+    if (!action || !allowedActions.includes(action)) {
+        return res.status(400).json({ success: false, error: 'Invalid or unsupported action' });
+    }
+    if (action === 'reload' && serviceId !== 'asterisk') {
+        return res.status(400).json({ success: false, error: 'Reload action only supported for Asterisk' });
+    }
+
+    if (serviceId === 'asterisk') {
+        if (action === 'reload') {
+            exec('asterisk -rx "core reload"', (err, stdout, stderr) => {
+                if (err) return res.status(500).json({ success: false, error: stderr || err.message });
+                return res.json({ success: true, message: 'Asterisk configuration reloaded successfully' });
+            });
+            return;
+        }
+        if (action === 'restart') {
+            exec('systemctl restart asterisk', (err, stdout, stderr) => {
+                if (err) return res.status(500).json({ success: false, error: stderr || err.message });
+                return res.json({ success: true, message: 'Asterisk PBX restarted successfully' });
+            });
+            return;
+        }
+        execFile('systemctl', [action, 'asterisk'], (err, stdout, stderr) => {
+            if (err) return res.status(500).json({ success: false, error: stderr || err.message });
+            return res.json({ success: true, message: `Asterisk PBX ${action}ed successfully` });
+        });
+        return;
+    }
+
+    if (serviceId === 'sokrat-voip') {
+        if (action !== 'restart') {
+            return res.status(400).json({ success: false, error: 'Only restart is supported for Sokrat VoIP engine' });
+        }
+        res.json({ success: true, message: 'Sokrat VoIP engine restarting in 1 second...' });
+        setTimeout(() => {
+            exec('systemctl restart sokrat-voip', () => {});
+        }, 1000);
+        return;
+    }
+
+    if (serviceId === 'database') {
+        const unit = fs.existsSync('/usr/lib/systemd/system/mariadb.service') || fs.existsSync('/etc/systemd/system/mariadb.service') ? 'mariadb' : 'mysqld';
+        execFile('systemctl', [action, unit], (err, stdout, stderr) => {
+            if (err) return res.status(500).json({ success: false, error: stderr || err.message });
+            return res.json({ success: true, message: `Database service (${unit}) ${action}ed successfully` });
+        });
+        return;
+    }
+
+    if (serviceId === 'httpd') {
+        execFile('systemctl', [action, 'httpd'], (err, stdout, stderr) => {
+            if (err) return res.status(500).json({ success: false, error: stderr || err.message });
+            return res.json({ success: true, message: `HTTP server ${action}ed successfully` });
+        });
+        return;
+    }
+
+    if (serviceId === 'stt-worker') {
+        execFile('systemctl', [action, 'stt-worker'], (err, stdout, stderr) => {
+            if (err) return res.status(500).json({ success: false, error: stderr || err.message });
+            return res.json({ success: true, message: `STT Worker service ${action}ed successfully` });
+        });
+        return;
+    }
+});
+
+// POST /api/system/drop-caches - Flush system RAM buffers & page cache (Super Admin only)
+app.post('/api/system/drop-caches', requireAuth, (req, res) => {
+    if (!isSuperAdmin(req)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Super Admin privileges required' });
+    }
+    try {
+        const beforeMem = getSystemMemoryMetrics();
+        execSync('sync && echo 3 > /proc/sys/vm/drop_caches', { timeout: 5000 });
+        const afterMem = getSystemMemoryMetrics();
+        const reclaimedBytes = Math.max(0, afterMem.availableBytes - beforeMem.availableBytes);
+        const reclaimedMb = (reclaimedBytes / (1024 * 1024)).toFixed(1);
+        res.json({
+            success: true,
+            message: `Memory caches cleared successfully. Reclaimed ~${reclaimedMb} MB.`,
+            reclaimedMb: parseFloat(reclaimedMb),
+            memory: afterMem
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/system/asterisk-reload - Safe Asterisk PBX dialplan and config reload
+app.post('/api/system/asterisk-reload', requireAuth, requireTabPermission('storage'), (req, res) => {
+    exec('/var/lib/asterisk/bin/retrieve_conf && asterisk -rx "core reload"', (err, stdout, stderr) => {
+        if (err) {
+            exec('asterisk -rx "core reload"', (fallbackErr, fbOut) => {
+                if (fallbackErr) {
+                    return res.status(500).json({ success: false, error: fallbackErr.message });
+                }
+                return res.json({ success: true, message: 'Asterisk core configuration reloaded successfully' });
+            });
+            return;
+        }
+        res.json({ success: true, message: 'PBX configuration and Asterisk core reloaded successfully' });
+    });
 });
 
 // 3. GET /api/storage/export/pc - Package CDR CSV & recordings audio into a downloadable ZIP
@@ -8014,7 +8612,7 @@ app.post('/api/storage/gdrive/sync', requireAuth, requireTabPermission('storage'
 // 6. POST /api/storage/purge-settings - Save retention days threshold
 app.post('/api/storage/purge-settings', requireAuth, requireTabPermission('storage'), async (req, res) => {
     try {
-        const days = Math.min(1095, Math.max(1, parseInt(req.body.auto_purge_days, 10) || 90));
+        const days = Math.min(3650, Math.max(1, parseInt(req.body.auto_purge_days, 10) || 90));
         await pool.query(`
             INSERT INTO \`asterisk\`.\`storage_settings\` (id, auto_purge_days)
             VALUES (1, ?)
@@ -10747,6 +11345,33 @@ app.get('/api/config/trunks', async (req, res) => {
             FROM \`asterisk\`.\`trunks\`
             ORDER BY trunkid ASC
         `);
+        // Build dongle to SIM number mapping for custom dongle trunks
+        const dongleSimMap = new Map();
+        try {
+            const astDbMappings = await new Promise(resolve => getAstDbNumbers(resolve));
+            const stdout = await new Promise(resolve => getDevicesOutputCached((err, out) => resolve(out || '')));
+            if (stdout) {
+                const parsedDevices = parseDevicesOutput(stdout, false, astDbMappings);
+                const enriched = await enrichDongleRouting(parsedDevices);
+                for (const d of enriched) {
+                    const num = (d.Number && d.Number !== 'Unknown' && d.Number !== '-' && d.Number !== 'None') ? d.Number : (d.phoneNumber || null);
+                    const dongleEntry = {
+                        dongleId: d.ID || null,
+                        simNumber: num,
+                        imei: d.IMEI || null,
+                        imsi: d.IMSI || null,
+                        customTrunks: Array.isArray(d.customTrunks) ? d.customTrunks : []
+                    };
+                    if (d.ID) dongleSimMap.set(String(d.ID).toLowerCase(), dongleEntry);
+                    if (d.IMEI) dongleSimMap.set(String(d.IMEI).replace(/\s+/g, '').toLowerCase(), dongleEntry);
+                    if (d.IMSI) dongleSimMap.set(String(d.IMSI).replace(/\s+/g, '').toLowerCase(), dongleEntry);
+                    for (const ct of dongleEntry.customTrunks) {
+                        dongleSimMap.set(`trunk:${ct.trunkId}`, dongleEntry);
+                    }
+                }
+            }
+        } catch (_) {}
+
 
         for (const trunk of trunks) {
             const [ruleRows] = await pool.query(
@@ -10824,6 +11449,24 @@ app.get('/api/config/trunks', async (req, res) => {
                 if (value) trunk.dialopts = value[1].trim();
             } catch (_) {
                 // No per-trunk override: Issabel uses the global dial options.
+            }
+            // Dongle SIM Information
+            trunk.simNumber = null;
+            trunk.dongleId = null;
+            const tKey = `trunk:${trunk.trunkid}`;
+            if (dongleSimMap.has(tKey)) {
+                const entry = dongleSimMap.get(tKey);
+                trunk.simNumber = entry.simNumber;
+                trunk.dongleId = entry.dongleId;
+            } else if (trunk.channelid && String(trunk.channelid).toLowerCase().includes('dongle/')) {
+                const ch = String(trunk.channelid).toLowerCase();
+                for (const [key, entry] of dongleSimMap.entries()) {
+                    if (key && key.length >= 4 && ch.includes(key)) {
+                        trunk.simNumber = entry.simNumber;
+                        trunk.dongleId = entry.dongleId;
+                        break;
+                    }
+                }
             }
         }
         res.json({ success: true, trunks });
@@ -12879,6 +13522,42 @@ function formatBytes(bytes) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
+function getAudioDurationSeconds(filePath) {
+    try {
+        const ext = path.extname(filePath).toLowerCase();
+        const stat = fs.statSync(filePath);
+        if (ext === '.wav' && stat.size >= 44) {
+            const buffer = Buffer.alloc(44);
+            const fd = fs.openSync(filePath, 'r');
+            fs.readSync(fd, buffer, 0, 44, 0);
+            fs.closeSync(fd);
+            if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WAVE') {
+                const byteRate = buffer.readUInt32LE(28);
+                const dataSize = stat.size - 44;
+                if (byteRate > 0) return Math.round(dataSize / byteRate);
+                const sampleRate = buffer.readUInt32LE(24);
+                const channels = buffer.readUInt16LE(22);
+                const bitsPerSample = buffer.readUInt16LE(34);
+                if (sampleRate > 0 && channels > 0 && bitsPerSample > 0) {
+                    return Math.round(dataSize / (sampleRate * channels * (bitsPerSample / 8)));
+                }
+            }
+        }
+        if (ext === '.gsm') return Math.round(stat.size / 1625);
+        if (ext === '.alaw' || ext === '.ulaw' || ext === '.sln') {
+            return Math.round(stat.size / (ext === '.sln' ? 16000 : 8000));
+        }
+    } catch (_) {}
+    return null;
+}
+
+function formatSecondsToTime(s) {
+    if (!s || isNaN(s) || s <= 0) return '0:00';
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return m + ':' + String(sec).padStart(2, '0');
+}
+
 
 // GET /api/config/moh - List all MoH Categories and Audio Files
 app.get('/api/config/moh', requireAuth, async (req, res) => {
@@ -12905,10 +13584,13 @@ app.get('/api/config/moh', requireAuth, async (req, res) => {
                             const ext = path.extname(file).toLowerCase();
                             const validExts = ['.wav', '.mp3', '.gsm', '.ogg', '.sln', '.alaw', '.ulaw'];
                             if (validExts.includes(ext) || ext === '') {
+                                const durSec = getAudioDurationSeconds(fullPath);
                                 filesList.push({
                                     filename: file,
                                     size: stat.size,
                                     sizeFormatted: formatBytes(stat.size),
+                                    duration: durSec,
+                                    durationFormatted: durSec ? formatSecondsToTime(durSec) : '--:--',
                                     ext: ext || 'wav',
                                     format: (ext ? ext.substring(1) : 'wav').toUpperCase(),
                                     streamUrl: `/api/config/moh/stream/${encodeURIComponent(cat.name)}/${encodeURIComponent(file)}`

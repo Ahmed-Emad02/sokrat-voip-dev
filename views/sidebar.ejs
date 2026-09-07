@@ -18,8 +18,8 @@ const sidebarWords = {
         vmGreetingResetConfirm: "Reset to default Asterisk voicemail prompts?",
         vmGreetingChangeMode: "Changing mode will save a new greeting. Continue?",
         vmSelectAll: "Select All",
-        dashLink: "Dashboard", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Auto-Dialer", contactsLink: "Address Book", usersLink: "Users", storageLink: "Backups", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Setup Password Reset Email", aiSttSettings: "Cloud AI Speech-to-Text & API Keys", aiSttModalTitle: "Cloud AI Speech-to-Text & API Keys", netInfo: "Show Network Info", logoutLabel: "Sign Out", collapseLink: "Collapse Sidebar", expandLink: "Expand Sidebar", userLabel: "USER:", versionLabel: "VERSION:", clientLabel: "client", clientSettings: "Client", clientModalTitle: "Client Settings", clientNameLabel: "Client Name", clientPlaceholder: "Enter client name", clientSaveSuccess: "Client name saved successfully", clientSaveFailed: "Failed to save client name",
-        settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
+        dashLink: "Dashboard", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Auto-Dialer", contactsLink: "Address Book", usersLink: "Users", storageLink: "SysMon", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Server SMTP",
+        logoutLabel: "Sign Out", aiSttSettings: "Cloud AI Speech-to-Text", aiSttModalTitle: "Cloud AI Speech-to-Text API Keys", netInfo: "Network Interfaces", settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
         recTitle: "Add a Recording", recName: "Recording Name", recPlaceholder: "e.g. welcome_greeting", recFile: "Audio File", recNote: "Accepted: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (max 50MB)", recUploadStatus: "Uploading...", recCancel: "Cancel", recUpload: "Upload", recComplete: "Complete!", recFailed: "Failed", recSelectFileErr: "Please select a file", recNameErr: "Please enter a recording name",
         timeSettings: "Time Settings", timeModalTitle: "Time & Timezone", currentTime: "Current Time", timezone: "Timezone", searchTimezone: "Search timezone...", ntpSync: "NTP Synchronization", setManually: "Set Manually", dateLabel: "Date", timeLabel: "Time", saveSettings: "Save Settings", saving: "Saving...", savedSuccess: "Time settings saved successfully", saveFailed: "Failed to save time settings", timezoneChanged: "Timezone changed", ntpToggled: "NTP toggled", timeSetManually: "Time set manually", loadingTimezone: "Loading...",
         defaultFilters: "Default Filters", defaultFiltersDesc: "Configure default filters applied on login", dashDefaultFilters: "Dashboard Defaults", cdrDefaultFilters: "Call History Defaults", datePresetLabel: "Default Date Range", presetToday: "Today", presetYesterday: "Yesterday", presetThisWeek: "This Week", presetLast7Days: "Last 7 Days", presetThisMonth: "This Month", presetLast30Days: "Last 30 Days", defaultTargetExt: "Default Extension", defaultStatusLabel: "Default Status", defaultDirectionLabel: "Default Direction", defaultScopeLabel: "Default Scope", defaultPerPageLabel: "Default Rows Per Page", saveDefaultsBtn: "Save Default Filters", resetDefaultsBtn: "Reset to System Defaults", savedDefaultsSuccess: "Default filters saved successfully."
@@ -42,8 +42,8 @@ const sidebarWords = {
         vmGreetingResetConfirm: "إعادة تعيين ترحيب البريد الصوتي للافتراضي؟",
         vmGreetingChangeMode: "تغيير الوضع سيحفظ ترحيباً جديداً. هل تريد المتابعة؟",
         vmSelectAll: "اختر الكل",
-        dashLink: "لوحة التحكم", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", softphoneLink: "هاتف Sokrat VOICE", configLink: "الإعدادات", dialerLink: "المتصل الآلي", contactsLink: "دفتر العناوين", usersLink: "المستخدمين", storageLink: "النسخ الاحتياطي", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعداد البريد لإعادة تعيين كلمة المرور", aiSttSettings: "إعدادات مفاتيح ومزود الذكاء الاصطناعي", aiSttModalTitle: "إعدادات مفاتيح الذكاء الاصطناعي والتفريغ الصوتي", netInfo: "معلومات الشبكة", logoutLabel: "تسجيل الخروج", collapseLink: "تصغير القائمة", expandLink: "توسيع القائمة", userLabel: "المستخدم:", versionLabel: "الإصدار:", clientLabel: "عميل", clientSettings: "عميل", clientModalTitle: "إعدادات العميل", clientNameLabel: "اسم العميل", clientPlaceholder: "أدخل اسم العميل", clientSaveSuccess: "تم حفظ اسم العميل بنجاح", clientSaveFailed: "فشل حفظ اسم العميل",
-        settingsSubtitle: "التفضيلات وعناصر تحكم النظام", preferencesLabel: "التفضيلات", systemLabel: "النظام", appearanceLabel: "المظهر", darkModeLabel: "الوضع الداكن", lightModeLabel: "الوضع الفاتح",
+        dashLink: "لوحة التحكم", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", softphoneLink: "هاتف Sokrat VOICE", configLink: "الإعدادات", dialerLink: "المتصل الآلي", contactsLink: "دفتر العناوين", usersLink: "المستخدمين", storageLink: "SysMon", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعدادات SMTP",
+        logoutLabel: "تسجيل الخروج", aiSttSettings: "تحويل الصوت لنصوص بالذكاء الاصطناعي", aiSttModalTitle: "مفاتيح API لتحويل الصوت لنصوص", netInfo: "بطاقات الشبكة", settingsSubtitle: "التفضيلات وعناصر تحكم النظام", preferencesLabel: "التفضيلات", systemLabel: "النظام", appearanceLabel: "المظهر", darkModeLabel: "الوضع الداكن", lightModeLabel: "الوضع الفاتح",
         recTitle: "إضافة تسجيل صوتي", recName: "اسم التسجيل", recPlaceholder: "مثال: welcome_greeting", recFile: "ملف الصوت", recNote: "المرفقات المقبولة: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (الحد الأقصى 50 ميجابايت)", recUploadStatus: "جاري الرفع...", recCancel: "إلغاء", recUpload: "رفع", recComplete: "اكتمل الرفع!", recFailed: "فشل الرفع", recSelectFileErr: "يرجى اختيار ملف", recNameErr: "يرجى إدخال اسم التسجيل",
         timeSettings: "إعدادات الوقت", timeModalTitle: "الوقت والمنطقة الزمنية", currentTime: "الوقت الحالي", timezone: "المنطقة الزمنية", searchTimezone: "ابحث عن المنطقة الزمنية...", ntpSync: "مزامنة NTP", setManually: "ضبط يدوي", dateLabel: "التاريخ", timeLabel: "الوقت", saveSettings: "حفظ الإعدادات", saving: "جاري الحفظ...", savedSuccess: "تم حفظ إعدادات الوقت بنجاح", saveFailed: "فشل حفظ إعدادات الوقت", timezoneChanged: "تم تغيير المنطقة الزمنية", ntpToggled: "تم تبديل NTP", timeSetManually: "تم ضبط الوقت يدوياً", loadingTimezone: "جارٍ التحميل...",
         defaultFilters: "الفلاتر الافتراضية", defaultFiltersDesc: "تحديد الفلاتر الافتراضية المطبقة عند تسجيل الدخول", dashDefaultFilters: "افتراضيات لوحة التحكم", cdrDefaultFilters: "افتراضيات سجل المكالمات", datePresetLabel: "الفترة الزمنية الافتراضية", presetToday: "اليوم", presetYesterday: "أمس", presetThisWeek: "هذا الأسبوع", presetLast7Days: "آخر 7 أيام", presetThisMonth: "هذا الشهر", presetLast30Days: "آخر 30 يوم", defaultTargetExt: "التحويلة الافتراضية", defaultStatusLabel: "حالة المكالمة الافتراضية", defaultDirectionLabel: "اتجاه المكالمة الافتراضي", defaultScopeLabel: "نطاق المكالمة الافتراضي", defaultPerPageLabel: "عدد الصفوف الافتراضي في الصفحة", saveDefaultsBtn: "حفظ الفلاتر الافتراضية", resetDefaultsBtn: "استعادة الإعدادات الأصلية", savedDefaultsSuccess: "تم حفظ الفلاتر الافتراضية بنجاح."
@@ -73,7 +73,7 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         animation: smoothBarMove 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
     }
 </style>
-<div id="theme-loading-overlay" class="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-[#050507] transition-all duration-300 pointer-events-none overflow-hidden">
+<div id="theme-loading-overlay" class="fixed inset-0 z-[9999999] flex flex-col items-center justify-center bg-[#050507] transition-all duration-300 pointer-events-none overflow-hidden" style="visibility: visible;">
     <div class="flex flex-col items-center justify-center gap-6">
         <img id="loadingLogo" src="/logo_light_text.png" alt="Sokrat VOIP" class="w-44 h-44 object-contain transition-all duration-300">
         <div class="w-52 h-1 bg-zinc-800/80 rounded-full overflow-hidden relative">
@@ -110,25 +110,105 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         if (overlayDismissed) return;
         overlayDismissed = true;
         const elapsed = Date.now() - overlayStartTime;
-        const remaining = Math.max(0, 250 - elapsed);
+        const remaining = Math.max(0, 180 - elapsed);
         setTimeout(() => {
             const overlay = document.getElementById('theme-loading-overlay');
             if (!overlay) return;
             overlay.style.opacity = '0';
             overlay.style.pointerEvents = 'none';
+            overlay.style.visibility = 'hidden';
             overlay.style.transform = 'translateY(-100%)';
-            setTimeout(() => { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
         }, remaining);
     };
+
+    window.showPageLoading = function(targetLabel) {
+        const overlay = document.getElementById('theme-loading-overlay');
+        if (!overlay) return;
+        overlayDismissed = false;
+
+        const theme = localStorage.getItem('theme') || 'dark';
+        overlay.style.backgroundColor = (theme === 'light') ? '#f9fafb' : '#050507';
+        overlay.style.visibility = 'visible';
+        overlay.style.transform = 'none';
+        overlay.style.pointerEvents = 'auto';
+        overlay.style.transition = 'opacity 120ms ease';
+        overlay.style.opacity = '1';
+
+        clearTimeout(window._loadingSafetyTimer);
+        window._loadingSafetyTimer = setTimeout(() => {
+            window.dismissLoadingOverlay();
+        }, 4000);
+    };
+
+    window.addEventListener('pageshow', function(e) {
+        window.dismissLoadingOverlay();
+    });
 
     if (document.readyState === 'complete') {
         window.dismissLoadingOverlay();
     } else {
         window.addEventListener('load', window.dismissLoadingOverlay);
         document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(window.dismissLoadingOverlay, 300);
+            setTimeout(window.dismissLoadingOverlay, 250);
         });
     }
+
+    // --- INSTANT 0ms VISUAL FEEDBACK ON NAVIGATION BUTTON/LINK PRESS ---
+    function handleNavigationTrigger(e) {
+        if (!e || !e.target) return;
+        const target = e.target.nodeType === 1 ? e.target : (e.target.parentElement || null);
+        if (!target || typeof target.closest !== 'function') return;
+        const link = target.closest('a[href]');
+        if (!link) return;
+        const href = link.getAttribute('href');
+        if (!href || href.startsWith('#') || href.startsWith('javascript:') || link.hasAttribute('download') || link.getAttribute('target') === '_blank') return;
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+
+        try {
+            const targetUrl = new URL(link.href, window.location.origin);
+            if (targetUrl.origin !== window.location.origin) return;
+            if (targetUrl.pathname === window.location.pathname && targetUrl.search === window.location.search) return;
+
+            const label = link.getAttribute('title') || link.querySelector('.sidebar-text')?.textContent?.trim() || link.innerText?.trim() || '';
+            window.showPageLoading(label);
+        } catch (_) {}
+    }
+    document.addEventListener('click', handleNavigationTrigger, { capture: true });
+
+    // --- SPECULATIVE HOVER & TOUCH PREFETCHING (0ms Network Transit) ---
+    const prefetchedTabUrls = new Set();
+    function prefetchTabTarget(rawHref) {
+        if (!rawHref || prefetchedTabUrls.has(rawHref)) return;
+        try {
+            const u = new URL(rawHref, window.location.origin);
+            if (u.origin !== window.location.origin) return;
+            if (u.pathname === window.location.pathname && u.search === window.location.search) return;
+            if (u.pathname.startsWith('/api/') || u.pathname.startsWith('/logout') || u.pathname.startsWith('/vm-audio/')) return;
+
+            prefetchedTabUrls.add(rawHref);
+            const prefetchLink = document.createElement('link');
+            prefetchLink.rel = 'prefetch';
+            prefetchLink.href = u.href;
+            prefetchLink.as = 'document';
+            document.head.appendChild(prefetchLink);
+        } catch (_) {}
+    }
+
+    document.addEventListener('pointerenter', function(e) {
+        if (!e || !e.target) return;
+        const target = e.target.nodeType === 1 ? e.target : (e.target.parentElement || null);
+        if (!target || typeof target.closest !== 'function') return;
+        const link = target.closest('.nav-item, a[href]');
+        if (link) prefetchTabTarget(link.getAttribute('href'));
+    }, { capture: true, passive: true });
+
+    document.addEventListener('touchstart', function(e) {
+        if (!e || !e.target) return;
+        const target = e.target.nodeType === 1 ? e.target : (e.target.parentElement || null);
+        if (!target || typeof target.closest !== 'function') return;
+        const link = target.closest('.nav-item, a[href]');
+        if (link) prefetchTabTarget(link.getAttribute('href'));
+    }, { capture: true, passive: true });
 </script>
 <!-- Google Fonts Import for Plus Jakarta Sans & Cairo -->
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -1477,24 +1557,38 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         margin-top: 0.1rem;
     }
     .settings-theme-switch {
-        background: rgba(153, 27, 27, 0.35) !important;
-        border: 1px solid rgba(239, 68, 68, 0.3) !important;
-        border-radius: 999px !important;
-        flex: 0 0 auto;
-        height: 1.35rem;
-        padding: 0 !important;
-        position: relative;
-        width: 2.5rem;
+        position: relative !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        flex-shrink: 0 !important;
+        width: 44px !important;
+        height: 24px !important;
+        padding: 2px !important;
+        background-color: var(--accent-color, #dc2626) !important;
+        border: 1px solid var(--accent-color, #dc2626) !important;
+        border-radius: 9999px !important;
+        cursor: pointer !important;
+        transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease !important;
+        box-shadow: 0 0 10px var(--accent-transparent, rgba(239, 68, 68, 0.3));
+        outline: none !important;
+    }
+    .settings-theme-switch:focus-visible {
+        box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-color) !important;
     }
     .settings-switch-thumb {
-        background: var(--text-primary);
-        border-radius: 999px;
-        height: 1rem;
-        left: 0.12rem;
-        position: absolute;
-        top: 0.12rem;
-        transition: transform 180ms ease;
-        width: 1rem;
+        display: inline-block !important;
+        width: 18px !important;
+        height: 18px !important;
+        border-radius: 9999px !important;
+        background-color: #ffffff !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15) !important;
+        pointer-events: none !important;
+        transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+    .light-theme .settings-theme-switch {
+        background-color: #cbd5e1 !important;
+        border-color: #94a3b8 !important;
+        box-shadow: none !important;
     }
     .settings-segmented {
         background: var(--bg-secondary);
@@ -1684,16 +1778,22 @@ function can(tab) { return isSuper || allowed.includes(tab); }
             animation: none !important;
         }
     }
-    /* Flatpickr Calendar — unified theme using CSS variables */
+    /* Flatpickr Calendar — Unified Minimal Redesign (No Overlaps, No Clipping) */
     .flatpickr-calendar {
         background: var(--bg-secondary) !important;
         border: 1px solid var(--border-primary) !important;
-        border-radius: 1rem !important;
-        font-family: inherit !important;
-        padding: 0.5rem !important;
-        width: 310px !important;
-    }
-    .light-theme .flatpickr-calendar {
+        border-radius: 1.125rem !important; /* 18px */
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.07) !important;
+        backdrop-filter: blur(24px) !important;
+        -webkit-backdrop-filter: blur(24px) !important;
+        font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif !important;
+        padding: 14px 16px 14px !important;
+        width: 336px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        z-index: 999999 !important;
+        animation: none !important;
+        transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
     .flatpickr-calendar.arrowTop:before,
     .flatpickr-calendar.arrowTop:after,
@@ -1701,180 +1801,319 @@ function can(tab) { return isSuper || allowed.includes(tab); }
     .flatpickr-calendar.arrowBottom:after {
         display: none !important;
     }
+
+    /* Top Header: Navigation & Month/Year Selectors */
     .flatpickr-months {
+        position: relative !important;
+        display: flex !important;
         align-items: center !important;
-        padding: 0.25rem 0.5rem !important;
+        justify-content: space-between !important;
+        padding: 2px 4px 12px !important;
+        height: 38px !important;
+        border-bottom: 1px solid var(--border-primary) !important;
+        margin-bottom: 8px !important;
+        box-sizing: border-box !important;
     }
     .flatpickr-months .flatpickr-month {
-        color: var(--text-primary) !important;
-        fill: var(--text-primary) !important;
-        font-weight: 800 !important;
-        font-size: 1.1rem !important;
+        position: static !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        height: 38px !important;
+        overflow: visible !important;
+        order: 2 !important;
+        flex: 1 !important;
     }
     .flatpickr-months .flatpickr-prev-month,
     .flatpickr-months .flatpickr-next-month {
-        color: var(--accent-color) !important;
-        fill: var(--accent-color) !important;
-        padding: 0.5rem !important;
+        position: static !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 30px !important;
+        height: 30px !important;
+        padding: 0 !important;
+        border-radius: 8px !important;
+        background: rgba(255, 255, 255, 0.04) !important;
+        border: 1px solid var(--border-primary) !important;
+        color: var(--text-secondary) !important;
+        fill: var(--text-secondary) !important;
+        transition: all 0.15s ease !important;
+        cursor: pointer !important;
+        z-index: 10 !important;
     }
-    .flatpickr-months .flatpickr-prev-month:hover svg,
-    .flatpickr-months .flatpickr-next-month:hover svg {
-        fill: var(--accent-hover) !important;
+    .flatpickr-months .flatpickr-prev-month {
+        order: 1 !important;
+    }
+    .flatpickr-months .flatpickr-next-month {
+        order: 3 !important;
+    }
+    .flatpickr-months .flatpickr-prev-month:hover,
+    .flatpickr-months .flatpickr-next-month:hover {
+        background: var(--bg-hover) !important;
+        border-color: var(--border-accent) !important;
+        color: var(--text-primary) !important;
+        fill: var(--text-primary) !important;
+    }
+    .flatpickr-months .flatpickr-prev-month svg,
+    .flatpickr-months .flatpickr-next-month svg {
+        width: 12px !important;
+        height: 12px !important;
+    }
+
+    /* Clean Typographic Month & Year display */
+    .flatpickr-current-month {
+        position: static !important;
+        width: auto !important;
+        left: auto !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+        height: 32px !important;
+        line-height: normal !important;
+        transform: none !important;
     }
     .flatpickr-current-month select.flatpickr-monthDropdown-months {
-        background: var(--bg-card) !important;
-        border: 1px solid var(--border-accent) !important;
-        border-radius: 0.35rem !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 6px !important;
         color: var(--text-primary) !important;
+        font-family: inherit !important;
         font-weight: 800 !important;
-        font-size: 0.9rem !important;
-        padding: 1px 4px !important;
+        font-size: 0.95rem !important;
+        padding: 3px 8px !important;
         cursor: pointer !important;
-        appearance: auto !important;
-        -webkit-appearance: menulist !important;
-        max-width: 120px !important;
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        margin: 0 !important;
+        outline: none !important;
+        transition: background 0.15s ease, color 0.15s ease !important;
     }
-    .flatpickr-current-month .flatpickr-monthDropdown-months option {
+    .flatpickr-current-month select.flatpickr-monthDropdown-months:hover {
+        background: var(--bg-hover) !important;
+    }
+    .flatpickr-current-month select.flatpickr-monthDropdown-months option {
         background-color: var(--bg-secondary) !important;
         color: var(--text-primary) !important;
         font-weight: 700 !important;
     }
-    .flatpickr-current-month .numInputWrapper input.cur-year {
-        color: var(--text-primary) !important;
-        font-weight: 700 !important;
-        font-size: 0.9rem !important;
+    .flatpickr-current-month .numInputWrapper {
+        width: auto !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        position: relative !important;
     }
+    .flatpickr-current-month .numInputWrapper input.cur-year {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 6px !important;
+        color: var(--text-primary) !important;
+        font-family: inherit !important;
+        font-weight: 700 !important;
+        font-size: 0.95rem !important;
+        padding: 3px 6px !important;
+        margin: 0 !important;
+        width: 52px !important;
+        cursor: text !important;
+        text-align: left !important;
+        transition: background 0.15s ease !important;
+    }
+    .flatpickr-current-month .numInputWrapper input.cur-year:hover,
+    .flatpickr-current-month .numInputWrapper input.cur-year:focus {
+        background: var(--bg-hover) !important;
+        outline: none !important;
+    }
+    .flatpickr-current-month .numInputWrapper span.arrowUp,
+    .flatpickr-current-month .numInputWrapper span.arrowDown {
+        display: none !important;
+    }
+
+    /* Weekday Labels Grid (7 Columns Exact Alignment) */
     .flatpickr-weekdays {
-        margin-top: 0.5rem !important;
-        margin-bottom: 0.25rem !important;
+        width: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        margin: 4px 0 6px !important;
+        height: 26px !important;
+        overflow: hidden !important;
+    }
+    .flatpickr-weekdays .flatpickr-weekdaycontainer {
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: repeat(7, 1fr) !important;
+        justify-items: center !important;
     }
     span.flatpickr-weekday {
         color: var(--text-muted) !important;
-        font-weight: 700 !important;
-        font-size: 0.75rem !important;
+        font-weight: 800 !important;
+        font-size: 0.7rem !important;
+        letter-spacing: 0.06em !important;
+        text-transform: uppercase !important;
+        text-align: center !important;
+        width: 36px !important;
+    }
+
+    /* Days Container & Day Cells Grid */
+    .flatpickr-innerContainer,
+    .flatpickr-rContainer,
+    .flatpickr-days {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        overflow: visible !important;
+    }
+    .dayContainer {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        display: grid !important;
+        grid-template-columns: repeat(7, 1fr) !important;
+        justify-items: center !important;
+        gap: 2px 0 !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
     }
     .flatpickr-day {
+        width: 36px !important;
+        height: 36px !important;
+        max-width: 36px !important;
+        line-height: 36px !important;
+        flex-basis: auto !important;
+        border-radius: 10px !important;
+        margin: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
         color: var(--text-primary) !important;
-        border-radius: 50% !important;
+        font-size: 0.85rem !important;
         font-weight: 600 !important;
-        font-size: 0.9rem !important;
-        height: 38px !important;
-        line-height: 38px !important;
+        border: 1.5px solid transparent !important;
+        transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease !important;
     }
     .flatpickr-day.prevMonthDay,
     .flatpickr-day.nextMonthDay {
         color: var(--text-muted) !important;
-        opacity: 0.4 !important;
+        opacity: 0.25 !important;
     }
     .flatpickr-day.prevMonthDay:hover,
     .flatpickr-day.nextMonthDay:hover {
         background: var(--bg-hover) !important;
-        color: var(--text-secondary) !important;
+        opacity: 0.6 !important;
     }
     .flatpickr-day:hover {
         background: var(--bg-hover) !important;
+        color: #ffffff !important;
         border-color: transparent !important;
+        transform: translateY(-1px) !important;
     }
     .flatpickr-day.today {
         border-color: var(--accent-color) !important;
-        color: var(--text-primary) !important;
+        background: transparent !important;
+        color: var(--accent-color) !important;
+        font-weight: 800 !important;
+    }
+    .flatpickr-day.today:hover {
+        background: var(--accent-transparent, rgba(239, 68, 68, 0.15)) !important;
+        color: var(--accent-color) !important;
     }
     .flatpickr-day.selected,
     .flatpickr-day.startRange,
     .flatpickr-day.endRange,
-    .flatpickr-day.selected.inRange,
-    .flatpickr-day.startRange.inRange,
-    .flatpickr-day.endRange.inRange,
-    .flatpickr-day.selected:focus,
-    .flatpickr-day.startRange:focus,
-    .flatpickr-day.endRange:focus,
     .flatpickr-day.selected:hover,
-    .flatpickr-day.startRange:hover,
-    .flatpickr-day.endRange:hover,
-    .flatpickr-day.prevMonthDay.selected,
-    .flatpickr-day.nextMonthDay.selected {
+    .flatpickr-day.selected:focus {
         background: var(--accent-color) !important;
         border-color: var(--accent-color) !important;
         color: #ffffff !important;
         font-weight: 800 !important;
-    }
-    .light-theme .flatpickr-day.selected,
-    .light-theme .flatpickr-day.startRange,
-    .light-theme .flatpickr-day.endRange,
-    .light-theme .flatpickr-day.selected:hover,
-    .light-theme .flatpickr-day.startRange:hover,
-    .light-theme .flatpickr-day.endRange:hover {
+        box-shadow: 0 4px 14px var(--accent-transparent, rgba(239, 68, 68, 0.35)) !important;
+        transform: scale(1.04) !important;
     }
     .flatpickr-day.flatpickr-disabled,
     .flatpickr-day.flatpickr-disabled:hover {
         color: var(--text-muted) !important;
-        opacity: 0.3 !important;
+        opacity: 0.2 !important;
+        cursor: not-allowed !important;
     }
+
+    /* Time Picker Footer (No Overlaps, Minimal Vibe) */
     .flatpickr-time {
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         gap: 6px !important;
         border-top: 1px solid var(--border-primary) !important;
-        margin-top: 0.5rem !important;
-        padding: 6px 10px !important;
-        background: var(--bg-primary) !important;
-        border-radius: 0.75rem !important;
+        margin-top: 10px !important;
+        padding: 10px 8px 2px !important;
+        background: transparent !important;
         height: 48px !important;
         max-height: 48px !important;
-        overflow: hidden !important;
         box-sizing: border-box !important;
+        overflow: visible !important;
     }
     .flatpickr-time .numInputWrapper {
-        flex: 0 0 54px !important;
+        flex: 0 0 50px !important;
+        width: 50px !important;
         height: 36px !important;
         position: relative !important;
+        display: flex !important;
+        align-items: center !important;
     }
     .flatpickr-time .numInputWrapper input.numInput {
-        background: var(--bg-card) !important;
+        background: rgba(255, 255, 255, 0.04) !important;
         border: 1px solid var(--border-primary) !important;
-        border-radius: 0.5rem !important;
+        border-radius: 9px !important;
         color: var(--text-primary) !important;
         font-family: 'JetBrains Mono', monospace !important;
-        font-weight: 800 !important;
+        font-weight: 700 !important;
         font-size: 0.95rem !important;
         text-align: center !important;
         height: 36px !important;
-        line-height: normal !important;
+        line-height: 36px !important;
         padding: 0 !important;
         margin: 0 !important;
         box-sizing: border-box !important;
         width: 100% !important;
+        transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease !important;
     }
     .flatpickr-time .numInputWrapper input.numInput:focus {
         border-color: var(--accent-color) !important;
         outline: none !important;
-        background: var(--bg-hover) !important;
+        background: rgba(255, 255, 255, 0.07) !important;
+        box-shadow: 0 0 0 2px var(--accent-transparent, rgba(239, 68, 68, 0.2)) !important;
     }
     .flatpickr-time .flatpickr-time-separator {
-        color: var(--text-primary) !important;
-        font-weight: 900 !important;
-        font-size: 1.2rem !important;
+        color: var(--text-secondary) !important;
+        font-weight: 700 !important;
+        font-size: 1.1rem !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         height: 36px !important;
-        width: 12px !important;
+        width: 8px !important;
+        line-height: 36px !important;
+        user-select: none !important;
     }
     .flatpickr-time .flatpickr-am-pm {
-        background: var(--bg-card) !important;
+        background: rgba(255, 255, 255, 0.04) !important;
         border: 1px solid var(--border-primary) !important;
-        border-radius: 0.5rem !important;
+        border-radius: 9px !important;
         color: var(--text-primary) !important;
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
         font-weight: 800 !important;
-        font-size: 0.85rem !important;
+        font-size: 0.82rem !important;
+        letter-spacing: 0.05em !important;
         height: 36px !important;
+        line-height: 36px !important;
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
-        width: 54px !important;
+        width: 50px !important;
         cursor: pointer !important;
         box-sizing: border-box !important;
+        user-select: none !important;
+        transition: all 0.15s ease !important;
     }
     .flatpickr-time .flatpickr-am-pm:hover {
         background: var(--bg-hover) !important;
@@ -1885,15 +2124,84 @@ function can(tab) { return isSuper || allowed.includes(tab); }
     .flatpickr-time .numInputWrapper span.arrowDown {
         display: none !important;
     }
+
+    /* Input field styling with clean focus state */
     .flatpickr-input[readonly], .flatpickr-input.flatpickr-mobile {
-        background-color: var(--bg-primary) !important;
+        background-color: var(--bg-card) !important;
         border: 1px solid var(--border-primary) !important;
-        border-radius: 0.5rem !important;
+        border-radius: 0.65rem !important;
         color: var(--text-primary) !important;
         font-family: 'JetBrains Mono', monospace !important;
         font-weight: 700 !important;
         font-size: 0.875rem !important;
-        padding: 0.5rem 0.75rem !important;
+        padding: 0.55rem 0.85rem !important;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease !important;
+    }
+    .flatpickr-input:focus,
+    .flatpickr-input.active {
+        border-color: var(--accent-color) !important;
+        outline: none !important;
+        background-color: var(--bg-hover) !important;
+        box-shadow: 0 0 0 3px var(--accent-transparent, rgba(239, 68, 68, 0.15)) !important;
+    }
+
+    /* Light Theme Flatpickr Styles */
+    .light-theme .flatpickr-calendar {
+        background: #ffffff !important;
+        border-color: #e2e8f0 !important;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+    }
+    .light-theme .flatpickr-months {
+        border-bottom-color: #f1f5f9 !important;
+    }
+    .light-theme .flatpickr-months .flatpickr-prev-month,
+    .light-theme .flatpickr-months .flatpickr-next-month {
+        background: #f8fafc !important;
+        border-color: #e2e8f0 !important;
+        color: #475569 !important;
+        fill: #475569 !important;
+    }
+    .light-theme .flatpickr-months .flatpickr-prev-month:hover,
+    .light-theme .flatpickr-months .flatpickr-next-month:hover,
+    .light-theme .flatpickr-current-month select.flatpickr-monthDropdown-months:hover,
+    .light-theme .flatpickr-current-month .numInputWrapper input.cur-year:hover,
+    .light-theme .flatpickr-current-month .numInputWrapper input.cur-year:focus,
+    .light-theme .flatpickr-day:hover {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+    }
+    .light-theme .flatpickr-current-month select.flatpickr-monthDropdown-months option {
+        background: #ffffff !important;
+        color: #0f172a !important;
+    }
+    .light-theme .flatpickr-day {
+        color: #0f172a !important;
+    }
+    .light-theme .flatpickr-time {
+        border-top-color: #f1f5f9 !important;
+    }
+    .light-theme .flatpickr-time .numInputWrapper input.numInput,
+    .light-theme .flatpickr-time .flatpickr-am-pm {
+        background: #f8fafc !important;
+        border-color: #e2e8f0 !important;
+        color: #0f172a !important;
+    }
+    .light-theme .flatpickr-time .numInputWrapper input.numInput:focus {
+        background: #ffffff !important;
+    }
+
+    /* RTL Direction Support */
+    [dir="rtl"] .flatpickr-months .flatpickr-prev-month {
+        order: 3 !important;
+    }
+    [dir="rtl"] .flatpickr-months .flatpickr-next-month {
+        order: 1 !important;
+    }
+    [dir="rtl"] .flatpickr-months .flatpickr-prev-month svg {
+        transform: rotate(180deg) !important;
+    }
+    [dir="rtl"] .flatpickr-months .flatpickr-next-month svg {
+        transform: rotate(180deg) !important;
     }
 
     /* Custom calendar icon for datetime inputs */
@@ -1910,7 +2218,6 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         padding-left: 36px !important;
         padding-right: 12px !important;
     }
-
     /* Global modern scrollbars */
     ::-webkit-scrollbar {
         width: 6px;
@@ -1988,12 +2295,20 @@ function can(tab) { return isSuper || allowed.includes(tab); }
         const logo = document.getElementById('brandLogo');
         const modeLabel = document.getElementById('themeModeLabel');
         if (thumb) {
-            thumb.classList.toggle('translate-x-5', isLight);
-            thumb.classList.toggle('translate-x-0', !isLight);
+            thumb.classList.toggle('translate-x-0', isLight);
+            thumb.classList.toggle('translate-x-5', !isLight);
         }
         if (track) {
-            track.style.backgroundColor = isLight ? '#e4e4e7' : 'rgba(204, 9, 12, 0.3)';
             track.setAttribute('aria-checked', String(!isLight));
+            if (isLight) {
+                track.style.backgroundColor = '#cbd5e1';
+                track.style.borderColor = '#94a3b8';
+                track.style.boxShadow = 'none';
+            } else {
+                track.style.backgroundColor = 'var(--accent-color, #dc2626)';
+                track.style.borderColor = 'var(--accent-color, #dc2626)';
+                track.style.boxShadow = '0 0 10px var(--accent-transparent, rgba(239, 68, 68, 0.3))';
+            }
         }
         if (modeLabel) {
             modeLabel.textContent = isLight ? modeLabel.dataset.lightLabel : modeLabel.dataset.darkLabel;
@@ -2365,9 +2680,10 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
                <%= curPage === '/storage' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="7 10 12 15 17 10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                    <line x1="6" y1="6" x2="6.01" y2="6"/>
+                    <line x1="6" y1="18" x2="6.01" y2="18"/>
                 </svg>
                 <span class="sidebar-text"><%= sbT.storageLink %></span>
             </a>
@@ -2459,7 +2775,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     </span>
                 </div>
                 <button id="themeToggleBtn" type="button" onclick="toggleTheme(event)" class="settings-theme-switch cursor-pointer" role="switch" aria-checked="true" aria-label="<%= sbT.themeLabel %>">
-                    <span id="themeThumb" class="settings-switch-thumb translate-x-0"></span>
+                    <span id="themeThumb" class="settings-switch-thumb translate-x-5"></span>
                 </button>
             </div>
 
@@ -2539,13 +2855,13 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% if (isSuper) { %>
             <button type="button" onclick="openSttApiKeyModal()" class="settings-action cursor-pointer">
                 <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg></span>
-                <span class="settings-action-label"><%= sbT.aiSttSettings %></span>
+                <span class="settings-action-label"><%= sbT.aiSttSettings || (currentLang === 'ar' ? 'تحويل الصوت لنصوص بالذكاء الاصطناعي' : 'Cloud AI Speech-to-Text') %></span>
                 <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
             </button>
             <% } %>
             <button type="button" onclick="openNetworkModal()" class="settings-action cursor-pointer">
                 <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M8 9h8M8 15h8"></path><circle cx="8" cy="9" r=".5" fill="currentColor"></circle><circle cx="8" cy="15" r=".5" fill="currentColor"></circle></svg></span>
-                <span class="settings-action-label"><%= sbT.netInfo %></span>
+                <span class="settings-action-label"><%= sbT.netInfo || (currentLang === 'ar' ? 'بطاقات الشبكة' : 'Network Interfaces') %></span>
                 <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
             </button>
             <% if (isSuper) { %>
@@ -2571,7 +2887,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 
         <a href="/logout" class="settings-signout">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5M21 12H9"></path></svg>
-            <span><%= sbT.logoutLabel %></span>
+            <span><%= sbT.logoutLabel || (currentLang === 'ar' ? 'تسجيل الخروج' : 'Sign Out') %></span>
         </a>
     </div>
 </div>
@@ -2724,7 +3040,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
                 </div>
                 <div>
-                    <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]"><%= sbT.aiSttModalTitle %></h3>
+                    <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]"><%= sbT.aiSttModalTitle || (currentLang === 'ar' ? 'مفاتيح API لتحويل الصوت لنصوص' : 'Cloud AI Speech-to-Text API Keys') %></h3>
                     <p class="text-[10px] text-[var(--text-muted)] font-mono"><%= isRtl ? 'Groq / OpenAI / Deepgram / Custom AI' : 'Groq / OpenAI / Deepgram / Custom' %></p>
                 </div>
             </div>
