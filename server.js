@@ -8745,9 +8745,13 @@ function updateVoicemailConf(extNum, displayName, vmVal) {
 }
 
 // Helper function to sync extension astdb recording & user settings
-async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'both', vadGateVal = '1', vadDbVal = 'off') {
-    const techUpper = (tech || 'sip').toUpperCase();
-    const techLower = (tech || 'sip').toLowerCase();
+async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'both', vadGateVal = '1', vadDbVal = 'off', customDial = null) {
+    let techUpper = (tech || 'sip').toUpperCase();
+    let techLower = (tech || 'sip').toLowerCase();
+    let dialTarget = customDial && String(customDial).trim() ? String(customDial).trim() : `${techUpper}/${extNum}`;
+    if (dialTarget.toUpperCase().startsWith('PJSIP/')) {
+        techLower = 'pjsip';
+    }
     const validDenoise = ['both', 'rx', 'tx', 'off'].includes(denoiseVal) ? denoiseVal : 'both';
     const validVadGate = (vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
     const validVadDb = (vadDbVal !== undefined && vadDbVal !== null) ? String(vadDbVal).trim() : 'off';
@@ -8770,7 +8774,7 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
         `database put AMPUSER ${extNum}/vad_gate ${validVadGate}`,
         `database put AMPUSER ${extNum}/vad_db ${validVadDb}`,
         `database put DEVICE/${extNum} default_user "${extNum}"`,
-        `database put DEVICE/${extNum} dial "${techUpper}/${extNum}"`,
+        `database put DEVICE/${extNum} dial "${dialTarget}"`,
         `database put DEVICE/${extNum} tech "${techLower}"`,
         `database put DEVICE/${extNum} user "${extNum}"`,
         `database put DEVICE/${extNum} type "fixed"`
@@ -8789,12 +8793,12 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
 async function syncAllExtensionsAstdb() {
     try {
         const [extensions] = await pool.query(`
-            SELECT u.extension, u.name, u.voicemail, COALESCE(d.tech, 'sip') AS tech
+            SELECT u.extension, u.name, u.voicemail, COALESCE(d.tech, 'sip') AS tech, d.dial
             FROM \`asterisk\`.\`users\` u
             LEFT JOIN \`asterisk\`.\`devices\` d ON d.id = u.extension
         `);
         for (const ext of extensions) {
-            await setExtensionAstdbDefaults(ext.extension, ext.name || ext.extension, ext.voicemail || 'novm', ext.tech || 'sip');
+            await setExtensionAstdbDefaults(ext.extension, ext.name || ext.extension, ext.voicemail || 'novm', ext.tech || 'sip', undefined, undefined, undefined, ext.dial);
         }
         console.log(`AstDB sync complete for ${extensions.length} extension(s).`);
     } catch (err) {
@@ -9075,7 +9079,7 @@ app.post('/api/config/extensions', async (req, res) => {
         const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
         const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
         const vadDbVal = (vad_db !== undefined ? vad_db : (vadDb || 'off'));
-        await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech, denoiseVal, vadGateVal, vadDbVal);
+        await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech, denoiseVal, vadGateVal, vadDbVal, devDial);
         let isGroupAdmin = 0;
         if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
             const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
