@@ -205,7 +205,8 @@ test('views/sidebar.ejs renders Issabel GUI port 3000 button strictly for root u
         allowedTabs: ['storage']
     });
     assert.equal(htmlRoot.includes('id="issabelWebGuiBtn"'), true, 'Root user must see Issabel GUI button');
-    assert.ok(htmlRoot.includes(':3000'), 'Button must link to port 3000');
+    assert.ok(htmlRoot.includes('openIssabelAutoLogin'), 'Button must trigger openIssabelAutoLogin');
+    assert.ok(htmlRoot.includes(':3000'), 'Auto-login script must target port 3000');
 });
 
 test('server.js handleClientSettingsUpdate synchronizes system hostname with client name', () => {
