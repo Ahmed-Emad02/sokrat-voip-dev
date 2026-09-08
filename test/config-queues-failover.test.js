@@ -380,3 +380,17 @@ test('server.js implements Issabel-parity collision checks in queue endpoints', 
     assert.ok(serverCode.includes("SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?"));
     assert.ok(serverCode.includes("rawName.slice(0, 35)"));
 });
+
+test('server.js registers extension conflicts audit API and does not auto-provision queue 300', () => {
+    const serverCode = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+    assert.ok(serverCode.includes("app.get('/api/config/extension-conflicts'"), 'Must register /api/config/extension-conflicts endpoint');
+    assert.ok(serverCode.includes("detectExtensionConflicts"), 'Must define detectExtensionConflicts function');
+    assert.equal(serverCode.includes("queueExtension = '300'"), false, 'Must not auto-provision queue 300');
+});
+
+test('views/config.ejs renders global extension conflict banner', () => {
+    const configCode = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
+    assert.ok(configCode.includes('id="extensionConflictBanner"'), 'Must render extensionConflictBanner container');
+    assert.ok(configCode.includes('id="extensionConflictDesc"'), 'Must render extensionConflictDesc text element');
+    assert.ok(configCode.includes('checkExtensionConflicts'), 'Must include checkExtensionConflicts client function');
+});

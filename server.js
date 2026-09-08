@@ -872,70 +872,9 @@ async function initAuthDb() {
     }
     console.log('AUTH: Dashboard users table ready');
 
-    // Auto-provision default ACD queue 300 (autodialer-queue) ONLY once on initial setup if no queues exist
     try {
-        const [sRows] = await conn.execute('SELECT queue_provisioned FROM storage_settings WHERE id = 1');
-        const isProvisioned = sRows.length > 0 && sRows[0].queue_provisioned === 1;
-
-        if (!isProvisioned) {
-            const [qCount] = await conn.execute('SELECT COUNT(*) AS cnt FROM `asterisk`.`queues_config`');
-            if (qCount[0].cnt === 0) {
-                const queueExtension = '300';
-                const queueName = 'autodialer-queue';
-                const failDestination = 'app-blackhole,hangup,1';
-
-                await conn.beginTransaction();
-                try {
-                    await conn.execute(`
-                        INSERT INTO \`asterisk\`.\`queues_config\`
-                        (extension, descr, grppre, alertinfo, joinannounce_id, ringing, agentannounce_id, maxwait, password, ivr_id, callback_id, dest, destcontinue, cwignore, qregex, queuewait, use_queue_context, togglehint, qnoanswer, callconfirm, callconfirm_id, monitor_type, monitor_heard, monitor_spoken)
-                        VALUES (?, ?, '', '', 0, 0, 0, '0', '', 'none', 'none', ?, ?, 0, '', 0, 0, 0, 0, 0, 0, '', 0, 0)
-                    `, [queueExtension, queueName, failDestination, failDestination]);
-
-                    const [deviceRows] = await conn.execute(
-                        'SELECT dial FROM `asterisk`.`devices` WHERE id = ?',
-                        ['101']
-                    );
-                    const memberInterface = deviceRows[0]?.dial || 'SIP/101';
-                    const queueDetails = [
-                        ['strategy', 'ringall'],
-                        ['autofill', 'yes'],
-                        ['ringinuse', 'yes'],
-                        ['musicclass', 'default'],
-                        ['music', 'default'],
-                        ['timeout', '15'],
-                        ['retry', '5'],
-                        ['maxwait', '0'],
-                        ['goto', failDestination],
-                        ['servicelevel', '30'],
-                        ['joinempty', 'yes'],
-                        ['leavewhenempty', 'no'],
-                        ['monitor-join', 'yes'],
-                        ['wrapuptime', '0'],
-                        ['maxlen', '0'],
-                        ['member', memberInterface]
-                    ];
-
-                    for (const [keyword, data] of queueDetails) {
-                        await conn.execute(
-                            'INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, 0)',
-                            [queueExtension, keyword, data]
-                        );
-                    }
-
-                    await conn.commit();
-                    reloadPbxConfig();
-                    console.log(`QUEUE: Auto-provisioned default ACD queue ${queueExtension} (${queueName}) with member ${memberInterface}`);
-                } catch (error) {
-                    await conn.rollback();
-                    throw error;
-                }
-            }
-            await conn.execute('UPDATE storage_settings SET queue_provisioned = 1 WHERE id = 1');
-        }
-    } catch (qErr) {
-        console.error('QUEUE auto-provision error:', qErr.message);
-    }
+        await conn.execute('UPDATE storage_settings SET queue_provisioned = 1 WHERE id = 1');
+    } catch (_) {}
     try {
         await initCrmTables(conn);
     } catch (crmErr) {
@@ -10572,6 +10511,48 @@ async function syncAstDbQueueAgents(num, dynmembers) {
         console.error(`AstDB QPENALTY sync error for queue ${num}:`, e.message);
     }
 }
+
+// --- EXTENSION CONFLICT AUDIT & DETECTION ---
+async function detectExtensionConflicts() {
+    const conflicts = [];
+    try {
+        const q = `
+            SELECT u.extension, u.name as entity1, q.descr as entity2, 'Extension vs Queue' as conflict_type 
+            FROM \`asterisk\`.\`users\` u 
+            INNER JOIN \`asterisk\`.\`queues_config\` q ON u.extension = q.extension
+            UNION
+            SELECT u.extension, u.name as entity1, r.description as entity2, 'Extension vs Ring Group' as conflict_type
+            FROM \`asterisk\`.\`users\` u 
+            INNER JOIN \`asterisk\`.\`ringgroups\` r ON u.extension = r.grpnum
+            UNION
+            SELECT q.extension, q.descr as entity1, r.description as entity2, 'Queue vs Ring Group' as conflict_type
+            FROM \`asterisk\`.\`queues_config\` q
+            INNER JOIN \`asterisk\`.\`ringgroups\` r ON q.extension = r.grpnum;
+        `;
+        const [rows] = await pool.query(q);
+        for (const row of rows) {
+            conflicts.push({
+                extension: String(row.extension).trim(),
+                conflictType: row.conflict_type,
+                entity1: row.entity1 || 'Unknown',
+                entity2: row.entity2 || 'Unknown',
+                message: `Number ${row.extension} collision: assigned to "${row.entity1 || row.extension}" AND "${row.entity2 || row.extension}" (${row.conflict_type})`
+            });
+        }
+    } catch (err) {
+        console.error('[Conflict Audit] Error:', err.message);
+    }
+    return conflicts;
+}
+
+app.get('/api/config/extension-conflicts', requireAuth, async (req, res) => {
+    try {
+        const conflicts = await detectExtensionConflicts();
+        res.json({ success: true, hasConflicts: conflicts.length > 0, conflicts });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 // GET /api/config/queues - List all Queues
 app.get('/api/config/queues', async (req, res) => {
