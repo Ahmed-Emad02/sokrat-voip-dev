@@ -44,6 +44,16 @@ CREATE TABLE IF NOT EXISTS `dashboard_settings` (
   `setting_key` VARCHAR(100) PRIMARY KEY,
   `setting_value` TEXT DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT IGNORE INTO `dashboard_settings` (`setting_key`, `setting_value`) VALUES
+  ('alert_telegram_enabled', 'true'),
+  ('alert_telegram_bot_token', '8742498784:AAF49-2KCi7kT24ZnGpdKuxO4CweqyqHELc'),
+  ('alert_telegram_chat_id', '8996079391'),
+  ('alert_email_enabled', 'false'),
+  ('alert_email_recipients', ''),
+  ('alert_healthchecks_url', 'https://hc-ping.com/b8b5b103-e272-4666-bb37-561780de64f3'),
+  ('alert_auto_restart', 'true'),
+  ('alert_check_interval_sec', '30'),
+  ('alert_monitored_services', '["asterisk","database","sokrat-voip","httpd"]');
 
 CREATE TABLE IF NOT EXISTS `dashboard_groups` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,

@@ -49,6 +49,20 @@ if [ -f /etc/systemd/system/sokrat-push-gateway.service ]; then
     systemctl daemon-reload
 fi
 echo "  Sokrat Push Gateway service stopped and unit file removed."
+if systemctl is-active sokrat-watchdog &>/dev/null || systemctl is-enabled sokrat-watchdog &>/dev/null; then
+    systemctl stop sokrat-watchdog 2>/dev/null || true
+    systemctl disable sokrat-watchdog 2>/dev/null || true
+fi
+if [ -f /etc/systemd/system/sokrat-watchdog.service ]; then
+    rm -f /etc/systemd/system/sokrat-watchdog.service
+    systemctl daemon-reload
+fi
+echo "  Sokrat watchdog service stopped and unit file removed."
+if systemctl is-active webmin &>/dev/null || systemctl is-enabled webmin &>/dev/null; then
+    systemctl stop webmin 2>/dev/null || true
+    systemctl disable webmin 2>/dev/null || true
+fi
+echo "  Webmin service stopped and disabled."
 
 # 2. Restore Apache configuration to default Issabel behavior
 echo "[2/5] Restoring Apache web server configuration..."

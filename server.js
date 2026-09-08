@@ -453,6 +453,22 @@ async function initAuthDb() {
             setting_value TEXT DEFAULT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    const defaultAlertSettings = [
+        ['alert_telegram_enabled', 'true'],
+        ['alert_telegram_bot_token', '8742498784:AAF49-2KCi7kT24ZnGpdKuxO4CweqyqHELc'],
+        ['alert_telegram_chat_id', '8996079391'],
+        ['alert_email_enabled', 'false'],
+        ['alert_email_recipients', ''],
+        ['alert_healthchecks_url', 'https://hc-ping.com/b8b5b103-e272-4666-bb37-561780de64f3'],
+        ['alert_auto_restart', 'true'],
+        ['alert_check_interval_sec', '30'],
+        ['alert_monitored_services', JSON.stringify(['asterisk', 'database', 'sokrat-voip', 'httpd'])]
+    ];
+    for (const [k, v] of defaultAlertSettings) {
+        try {
+            await conn.execute('INSERT IGNORE INTO dashboard_settings (setting_key, setting_value) VALUES (?, ?)', [k, v]);
+        } catch (_) {}
+    }
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dashboard_groups (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -3658,6 +3674,297 @@ app.post('/api/settings/smtp', async (req, res) => {
 
         await conn.end();
         res.json({ success: true, message: 'SMTP settings updated successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// --- SYSTEM ALERTS & MONITORING ROUTES (Super Admin Only) ---
+app.get('/api/settings/alerts', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        const [rows] = await conn.execute(
+            "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key LIKE 'alert_%' OR setting_key IN ('smtp_email', 'smtp_password')"
+        );
+        await conn.end();
+
+        const map = {};
+        rows.forEach(r => { map[r.setting_key] = r.setting_value; });
+
+        let monitoredServices = ['asterisk', 'database', 'sokrat-voip', 'httpd'];
+        if (map['alert_monitored_services']) {
+            try {
+                const parsed = JSON.parse(map['alert_monitored_services']);
+                if (Array.isArray(parsed)) monitoredServices = parsed;
+            } catch (_) {}
+        }
+
+        res.json({
+            success: true,
+            telegram_enabled: map['alert_telegram_enabled'] === 'true',
+            telegram_bot_token: map['alert_telegram_bot_token'] || '',
+            telegram_chat_id: map['alert_telegram_chat_id'] || '',
+            email_enabled: map['alert_email_enabled'] === 'true',
+            email_recipients: map['alert_email_recipients'] || '',
+            healthchecks_url: map['alert_healthchecks_url'] || '',
+            auto_restart: map['alert_auto_restart'] !== 'false',
+            check_interval_sec: parseInt(map['alert_check_interval_sec'] || '30', 10),
+            monitored_services: monitoredServices,
+            has_smtp: Boolean(map['smtp_email'] && map['smtp_password'])
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/settings/alerts', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        const {
+            telegram_enabled,
+            telegram_bot_token,
+            telegram_chat_id,
+            email_enabled,
+            email_recipients,
+            healthchecks_url,
+            auto_restart,
+            check_interval_sec,
+            monitored_services
+        } = req.body || {};
+
+        // Validate Healthchecks URL if provided
+        if (healthchecks_url && String(healthchecks_url).trim()) {
+            const trimmedUrl = String(healthchecks_url).trim();
+            if (!/^https?:\/\//i.test(trimmedUrl)) {
+                return res.status(400).json({ success: false, error: 'Healthchecks ping URL must begin with http:// or https://' });
+            }
+        }
+
+        const interval = parseInt(check_interval_sec, 10);
+        const validInterval = (!isNaN(interval) && interval >= 10 && interval <= 300) ? interval : 30;
+        const validServices = Array.isArray(monitored_services) ? monitored_services : ['asterisk', 'database', 'sokrat-voip', 'httpd'];
+
+        const settingsToSave = [
+            ['alert_telegram_enabled', telegram_enabled ? 'true' : 'false'],
+            ['alert_telegram_bot_token', String(telegram_bot_token || '').trim()],
+            ['alert_telegram_chat_id', String(telegram_chat_id || '').trim()],
+            ['alert_email_enabled', email_enabled ? 'true' : 'false'],
+            ['alert_email_recipients', String(email_recipients || '').trim()],
+            ['alert_healthchecks_url', String(healthchecks_url || '').trim()],
+            ['alert_auto_restart', auto_restart !== false ? 'true' : 'false'],
+            ['alert_check_interval_sec', String(validInterval)],
+            ['alert_monitored_services', JSON.stringify(validServices)]
+        ];
+
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+
+        for (const [key, val] of settingsToSave) {
+            await conn.execute(
+                'INSERT INTO dashboard_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+                [key, val, val]
+            );
+        }
+        await conn.end();
+
+        res.json({ success: true, message: 'System alert settings saved successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/settings/alerts/test-telegram', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        let { bot_token, chat_id } = req.body || {};
+
+        if (!bot_token || !chat_id) {
+            const conn = await mysql.createConnection({
+                host: process.env.DB_HOST || 'localhost',
+                user: process.env.DB_USER || 'admin',
+                password: process.env.DB_PASS || 'admin',
+                database: ASTERISK_DB
+            });
+            const [rows] = await conn.execute(
+                "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key IN ('alert_telegram_bot_token', 'alert_telegram_chat_id', 'client_name')"
+            );
+            await conn.end();
+            let clientName = '';
+            rows.forEach(r => {
+                if (r.setting_key === 'alert_telegram_bot_token' && !bot_token) bot_token = r.setting_value;
+                if (r.setting_key === 'alert_telegram_chat_id' && !chat_id) chat_id = r.setting_value;
+                if (r.setting_key === 'client_name' && r.setting_value) clientName = r.setting_value;
+            });
+        }
+
+        if (!bot_token || !chat_id) {
+            return res.status(400).json({ success: false, error: 'Telegram Bot Token and Chat ID are required' });
+        }
+
+        const hostname = os.hostname() || 'pbx-node';
+        const clientLabel = (typeof clientName !== 'undefined' && clientName) ? clientName : hostname;
+        const text = `🔔 <b>[Sokrat VoIP Alert] Test Notification</b>\n\n`
+            + `<b>Client:</b> ${clientLabel}\n`
+            + `<b>Host:</b> ${hostname}\n`
+            + `<b>Time:</b> ${new Date().toISOString().replace('T', ' ').slice(0, 19)}\n`
+            + `<b>Status:</b> ✅ Telegram alert integration is functioning properly!`;
+        const tgRes = await axios.post(`https://api.telegram.org/bot${bot_token.trim()}/sendMessage`, {
+            chat_id: chat_id.trim(),
+            text,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true
+        }, { timeout: 10000 });
+
+        res.json({ success: true, message: 'Test message sent to Telegram successfully', result: tgRes.data });
+    } catch (err) {
+        const errDetail = err.response && err.response.data ? JSON.stringify(err.response.data) : err.message;
+        res.status(500).json({ success: false, error: `Telegram dispatch failed: ${errDetail}` });
+    }
+});
+
+app.post('/api/settings/alerts/test-email', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        let { recipients } = req.body || {};
+
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        const [rows] = await conn.execute(
+            "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key IN ('alert_email_recipients', 'smtp_email', 'smtp_password', 'client_name')"
+        );
+        await conn.end();
+
+        let smtpEmail = '';
+        let smtpEncPassword = '';
+        let clientName = '';
+        rows.forEach(r => {
+            if (r.setting_key === 'alert_email_recipients' && !recipients) recipients = r.setting_value;
+            if (r.setting_key === 'smtp_email') smtpEmail = r.setting_value;
+            if (r.setting_key === 'smtp_password') smtpEncPassword = r.setting_value;
+            if (r.setting_key === 'client_name' && r.setting_value) clientName = r.setting_value;
+        });
+        if (!recipients) {
+            return res.status(400).json({ success: false, error: 'No recipient email addresses specified' });
+        }
+        if (!smtpEmail || !smtpEncPassword) {
+            return res.status(400).json({ success: false, error: 'SMTP settings are not configured. Please configure Password Reset Email (SMTP) first.' });
+        }
+
+        const smtpPassword = decrypt(smtpEncPassword);
+        if (!smtpPassword) {
+            return res.status(500).json({ success: false, error: 'Failed to decrypt SMTP credentials' });
+        }
+
+        const transporterConfig = smtpEmail.endsWith('@gmail.com')
+            ? { service: 'gmail', auth: { user: smtpEmail, pass: smtpPassword } }
+            : {
+                host: process.env.SMTP_HOST || 'smtp.gmail.com',
+                port: parseInt(process.env.SMTP_PORT || '587', 10),
+                secure: process.env.SMTP_SECURE === 'true',
+                auth: { user: smtpEmail, pass: smtpPassword },
+                tls: { rejectUnauthorized: false }
+            };
+
+        const transporter = nodemailer.createTransport(transporterConfig);
+        const hostname = os.hostname() || 'pbx-node';
+
+        await transporter.sendMail({
+            from: `"Sokrat VoIP System" <${smtpEmail}>`,
+            to: recipients,
+            subject: `🔔 [TEST] [${clientName || hostname}] Sokrat VoIP Alert System on ${hostname}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px;">
+                    <div style="max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; padding: 20px;">
+                        <h3 style="color: #0f172a; margin-top: 0;">Sokrat VoIP Test Alert</h3>
+                        <p style="color: #334155;">This email confirms that your PBX email alerting configuration is operating properly.</p>
+                        <p style="color: #64748b; font-size: 13px;">Host: <strong>${hostname}</strong><br>Time: <strong>${new Date().toISOString()}</strong></p>
+                    </div>
+                </div>
+            `
+        });
+
+        res.json({ success: true, message: 'Test email dispatched successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/settings/alerts/test-heartbeat', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        let { url } = req.body || {};
+
+        if (!url) {
+            const conn = await mysql.createConnection({
+                host: process.env.DB_HOST || 'localhost',
+                user: process.env.DB_USER || 'admin',
+                password: process.env.DB_PASS || 'admin',
+                database: ASTERISK_DB
+            });
+            const [rows] = await conn.execute("SELECT setting_value FROM dashboard_settings WHERE setting_key = 'alert_healthchecks_url'");
+            await conn.end();
+            if (rows.length > 0 && rows[0].setting_value) {
+                url = rows[0].setting_value;
+            }
+        }
+
+        if (!url || !/^https?:\/\//i.test(url)) {
+            return res.status(400).json({ success: false, error: 'Valid Healthchecks.io ping URL is required' });
+        }
+
+        const pingRes = await axios.get(url.trim(), { timeout: 8000 });
+        res.json({ success: true, status: pingRes.status, message: `Healthchecks.io ping received HTTP ${pingRes.status}` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: `Heartbeat ping failed: ${err.message}` });
+    }
+});
+
+app.get('/api/settings/alerts/watchdog-status', requireAuth, (req, res) => {
+    try {
+        const out = execSync('systemctl show sokrat-watchdog.service --property=ActiveState,SubState,MainPID,ActiveEnterTimestamp 2>/dev/null', {
+            encoding: 'utf8',
+            timeout: 3000
+        });
+        const props = {};
+        for (const line of out.trim().split('\n')) {
+            const [k, ...v] = line.split('=');
+            if (k) props[k.trim()] = v.join('=').trim();
+        }
+        const pid = parseInt(props.MainPID, 10) || 0;
+        res.json({
+            success: true,
+            status: {
+                active: props.ActiveState === 'active',
+                activeState: props.ActiveState || 'unknown',
+                subState: props.SubState || 'unknown',
+                pid,
+                activeSince: props.ActiveEnterTimestamp || null
+            }
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

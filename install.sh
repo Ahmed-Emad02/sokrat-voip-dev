@@ -24,6 +24,59 @@ echo "============================================"
 # Collect required interactive input BEFORE any system checks or package installations.
 # When the installer is piped to Bash, stdin contains the script, so read from the
 # controlling terminal (or another terminal-backed descriptor) instead.
+collect_client_name() {
+    local input_fd
+    local user_val=""
+    local default_name="sokrat"
+
+    if [[ -n "${CLIENT_NAME:-}" ]]; then
+        return 0
+    fi
+
+    local current_host
+    current_host=$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo "")
+    if [[ -n "$current_host" && "$current_host" != "localhost" && "$current_host" != "issabel" && "$current_host" != "issabel.local" ]]; then
+        default_name="$current_host"
+    fi
+
+    if [[ -t 0 ]]; then
+        input_fd=0
+    elif { exec 3<>/dev/tty; } 2>/dev/null; then
+        input_fd=3
+    elif [[ -t 1 ]] && { exec 3<>/proc/self/fd/1; } 2>/dev/null; then
+        input_fd=3
+    elif [[ -t 2 ]] && { exec 3<>/proc/self/fd/2; } 2>/dev/null; then
+        input_fd=3
+    else
+        CLIENT_NAME="$default_name"
+        return 0
+    fi
+
+    while true; do
+        printf "Enter the client name for this server [default: %s]: " "$default_name"
+        if ! IFS= read -r -u "$input_fd" user_val; then
+            if [[ "$input_fd" -eq 3 ]]; then
+                exec 3>&-
+            fi
+            CLIENT_NAME="$default_name"
+            break
+        fi
+
+        user_val="$(echo "$user_val" | xargs)"
+        if [[ -z "$user_val" ]]; then
+            CLIENT_NAME="$default_name"
+            break
+        fi
+
+        CLIENT_NAME="$user_val"
+        break
+    done
+
+    if [[ "$input_fd" -eq 3 ]]; then
+        exec 3>&-
+    fi
+}
+
 collect_dongle_count() {
     local input_fd
     local user_val=""
@@ -80,10 +133,20 @@ collect_dongle_count() {
     fi
 }
 
+collect_client_name
+echo " Client name: $CLIENT_NAME"
 collect_dongle_count
 echo " GSM dongles selected: $NUM_DONGLES"
 echo "============================================"
 echo ""
+
+# Configure machine hostname from client name
+SYSTEM_HOSTNAME=$(echo "$CLIENT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g' | sed -E 's/^-+|-+$//g')
+if [[ -z "$SYSTEM_HOSTNAME" ]]; then
+    SYSTEM_HOSTNAME="sokrat"
+fi
+echo "Configuring machine hostname to '$SYSTEM_HOSTNAME'..."
+hostnamectl set-hostname "$SYSTEM_HOSTNAME" 2>/dev/null || hostname "$SYSTEM_HOSTNAME" 2>/dev/null || true
 
 # ──────────────────────────────────────────────
 # Step 1 — System Packages + Disable Fail2Ban
@@ -287,6 +350,15 @@ fi
 echo "[6/14] Initializing database tables..."
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk < "$INSTALL_DIR/backend/install_db.sql"
 
+# Seed client_name into dashboard_settings
+if [[ -n "${CLIENT_NAME:-}" ]]; then
+    mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
+    INSERT INTO \`dashboard_settings\` (\`setting_key\`, \`setting_value\`)
+    VALUES ('client_name', '$CLIENT_NAME')
+    ON DUPLICATE KEY UPDATE \`setting_value\` = '$CLIENT_NAME';
+    " 2>/dev/null || true
+fi
+
 # Schema migration statements for re-installations on existing databases
 ensure_db_column() {
     local tbl="$1"
@@ -362,6 +434,17 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_settings\` (
 
 INSERT IGNORE INTO \`sokrat_federation_settings\` (\`id\`, \`local_site_code\`, \`local_node_name\`, \`panel_role\`)
 VALUES (1, '10', 'Main PBX', 'local');
+
+INSERT IGNORE INTO \`dashboard_settings\` (\`setting_key\`, \`setting_value\`) VALUES
+  ('alert_telegram_enabled', 'true'),
+  ('alert_telegram_bot_token', '8742498784:AAF49-2KCi7kT24ZnGpdKuxO4CweqyqHELc'),
+  ('alert_telegram_chat_id', '8996079391'),
+  ('alert_email_enabled', 'false'),
+  ('alert_email_recipients', ''),
+  ('alert_healthchecks_url', 'https://hc-ping.com/b8b5b103-e272-4666-bb37-561780de64f3'),
+  ('alert_auto_restart', 'true'),
+  ('alert_check_interval_sec', '30'),
+  ('alert_monitored_services', '[\"asterisk\",\"database\",\"sokrat-voip\",\"httpd\"]');
 
 CREATE TABLE IF NOT EXISTS \`sokrat_federation_peers\` (
   \`id\` INT AUTO_INCREMENT PRIMARY KEY,
@@ -1643,6 +1726,57 @@ systemctl daemon-reload
 systemctl enable --now sokrat-stt 2>/dev/null || true
 echo "  Sokrat Cloud AI STT worker daemon enabled and started"
 
+# Provision Sokrat System Watchdog & Alert Daemon
+echo "  Provisioning Sokrat System Watchdog & Alert Daemon..."
+cat > /etc/systemd/system/sokrat-watchdog.service << 'UNIT'
+[Unit]
+Description=Sokrat VoIP System Watchdog & Alert Daemon
+After=network.target mysqld.service mariadb.service
+Wants=mysqld.service mariadb.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/sokrat-voip
+ExecStart=/usr/bin/node scripts/system-watchdog.js
+Restart=always
+RestartSec=10
+User=root
+Environment=NODE_ENV=production
+Environment=LANG=en_US.UTF-8
+Environment=LC_ALL=en_US.UTF-8
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now sokrat-watchdog.service 2>/dev/null || true
+echo "  Sokrat system watchdog daemon enabled and started"
+
+# Provision Webmin Local Control Panel on Port 3001
+echo "  Configuring Webmin Control Panel (Port 3001)..."
+if [ ! -f /etc/yum.repos.d/webmin.repo ]; then
+    cat > /etc/yum.repos.d/webmin.repo << 'EOF'
+[webmin-noarch]
+name=Webmin - noarch
+baseurl=https://download.webmin.com/download/newkey/yum
+enabled=1
+gpgcheck=1
+gpgkey=https://download.webmin.com/developers-key.asc
+EOF
+    rpm --import https://download.webmin.com/developers-key.asc 2>/dev/null || true
+fi
+if ! rpm -q webmin &>/dev/null; then
+    dnf install -y webmin 2>/dev/null || true
+fi
+if [ -f /etc/webmin/miniserv.conf ]; then
+    sed -i 's/^port=.*/port=3001/' /etc/webmin/miniserv.conf
+    sed -i 's/^listen=.*/listen=3001/' /etc/webmin/miniserv.conf
+    grep -q "referrers_none=" /etc/webmin/miniserv.conf || echo "referrers_none=1" >> /etc/webmin/miniserv.conf
+    systemctl daemon-reload
+    systemctl enable --now webmin 2>/dev/null || true
+    echo "  Webmin Control Panel active on port 3001"
+fi
+
 # ──────────────────────────────────────────────
 # Step 13 — Set timezone to Africa/Cairo
 # ──────────────────────────────────────────────
@@ -1668,8 +1802,12 @@ echo ""
 echo "--- Sokrat VOICE Softphone Service ---"
 systemctl status sokrat-softphone --no-pager -l | head -12
 echo ""
+echo "--- Webmin Control Panel Service ---"
+systemctl status webmin --no-pager -l 2>/dev/null | head -10 || true
+echo ""
 echo "============================================"
 echo " Installation complete!"
 echo " Access Sokrat VOIP Dashboard on: http://<machine_ip>/"
 echo " Access Sokrat VOICE Softphone on: https://<machine_ip>/phone/ or https://<machine_ip>:8443/"
+echo " Access Webmin Control Panel on: https://<machine_ip>:3001/"
 echo "============================================"
