@@ -146,7 +146,9 @@ if [[ -z "$SYSTEM_HOSTNAME" ]]; then
     SYSTEM_HOSTNAME="sokrat"
 fi
 echo "Configuring machine hostname to '$SYSTEM_HOSTNAME'..."
-hostnamectl set-hostname "$SYSTEM_HOSTNAME" 2>/dev/null || hostname "$SYSTEM_HOSTNAME" 2>/dev/null || true
+echo "$SYSTEM_HOSTNAME" > /etc/hostname 2>/dev/null || true
+hostname "$SYSTEM_HOSTNAME" 2>/dev/null || true
+hostnamectl set-hostname "$SYSTEM_HOSTNAME" 2>/dev/null || true
 
 # ──────────────────────────────────────────────
 # Step 1 — System Packages + Disable Fail2Ban

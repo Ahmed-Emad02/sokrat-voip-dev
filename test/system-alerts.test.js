@@ -155,3 +155,38 @@ test('Watchdog detects service failure, formats Telegram alert, and handles auto
     assert.equal(cfg.telegramEnabled, true);
     assert.equal(cfg.telegramChatId, '8996079391');
 });
+
+test('views/sidebar.ejs renders User and Version labels in English and Arabic', async () => {
+    const htmlEn = await ejs.renderFile(sidebarViewPath, {
+        currentLang: 'en',
+        currentPage: '/storage',
+        isRtl: false,
+        isSuperAdmin: true,
+        isRootUser: false,
+        currentUser: 'root',
+        allowedTabs: ['storage']
+    });
+
+    assert.ok(htmlEn.includes('User') && htmlEn.includes('Version'), 'Must render User and Version labels in English');
+    assert.ok(htmlEn.includes('v1.0.4'), 'Must render version text v1.0.4');
+
+    const htmlAr = await ejs.renderFile(sidebarViewPath, {
+        currentLang: 'ar',
+        currentPage: '/storage',
+        isRtl: true,
+        isSuperAdmin: true,
+        isRootUser: false,
+        currentUser: 'root',
+        allowedTabs: ['storage']
+    });
+
+    assert.ok(htmlAr.includes('المستخدم') && htmlAr.includes('الإصدار'), 'Must render User and Version labels in Arabic');
+});
+
+test('server.js handleClientSettingsUpdate synchronizes system hostname with client name', () => {
+    const serverCode = fs.readFileSync(serverJsPath, 'utf8');
+
+    assert.ok(serverCode.includes("fs.writeFileSync('/etc/hostname'"), 'Must write persistent /etc/hostname');
+    assert.ok(serverCode.includes("execFile('hostname'"), 'Must set live hostname via hostname binary');
+    assert.ok(serverCode.includes("hostnamectl"), 'Must set hostname via hostnamectl');
+});

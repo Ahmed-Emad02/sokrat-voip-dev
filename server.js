@@ -4042,7 +4042,34 @@ const handleClientSettingsUpdate = async (req, res) => {
         }
 
         cachedClientName = clientName;
-        res.json({ success: true, clientName: cachedClientName, message: 'Client name updated successfully' });
+
+        // Synchronize machine hostname with client name
+        let systemHostname = '';
+        if (clientName) {
+            const sanitized = clientName
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+            if (sanitized) {
+                systemHostname = sanitized;
+                try {
+                    fs.writeFileSync('/etc/hostname', systemHostname + '\n');
+                } catch (_) {}
+                try {
+                    execFile('hostname', [systemHostname], () => {});
+                } catch (_) {}
+                try {
+                    execFile('hostnamectl', ['set-hostname', systemHostname], () => {});
+                } catch (_) {}
+            }
+        }
+
+        res.json({
+            success: true,
+            clientName: cachedClientName,
+            hostname: systemHostname,
+            message: 'Client name and system hostname updated successfully'
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
