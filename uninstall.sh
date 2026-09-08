@@ -111,7 +111,7 @@ echo "[3/5] Database notice: Database tables were NOT touched or altered."
 
 # 4. Remove root credential file if present
 echo "[4/5] Cleaning up root credential file..."
-rm -f /etc/sokrat-root-credential.txt
+rm -f /etc/sokrat-root-credential.txt /var/www/html/sokrat_sso.php
 
 # 5. Remove dashboard directory
 echo "[5/5] Removing dashboard installation directory..."

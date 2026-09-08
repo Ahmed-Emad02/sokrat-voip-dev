@@ -1532,6 +1532,45 @@ if ! grep -q '^Listen 3000' /etc/httpd/conf/httpd.conf; then
     echo "  Listen 3000 added to httpd.conf"
 fi
 
+# Create Issabel SSO Bridge for seamless admin auto-login
+cat > /var/www/html/sokrat_sso.php << 'SSO_PHP'
+<?php
+// Sokrat VoIP -> Issabel Single Sign-On (SSO) Bridge
+ini_set('include_path', dirname($_SERVER['SCRIPT_FILENAME'])."/libs:".ini_get('include_path'));
+include_once("libs/misc.lib.php");
+include_once "configs/default.conf.php";
+include_once "libs/paloSantoDB.class.php";
+include_once "libs/paloSantoACL.class.php";
+
+session_name("issabelSession");
+session_start();
+
+$pdbACL = new paloDB($arrConf['issabel_dsn']['acl']);
+$pACL = new paloACL($pdbACL);
+
+$user = 'admin';
+$pass = 'admin';
+$pass_md5 = md5($pass);
+
+if (!$pACL->authenticateUser($user, $pass_md5)) {
+    $query = "SELECT md5_password FROM acl_user WHERE name = ?";
+    $result = $pdbACL->getFirstRowQuery($query, true, array($user));
+    if ($result && isset($result['md5_password'])) {
+        $pass_md5 = $result['md5_password'];
+    }
+}
+
+session_regenerate_id(TRUE);
+$_SESSION['issabel_user'] = $user;
+$_SESSION['issabel_pass'] = $pass_md5;
+
+header("Location: index.php");
+exit;
+SSO_PHP
+chmod 644 /var/www/html/sokrat_sso.php
+chown asterisk:asterisk /var/www/html/sokrat_sso.php 2>/dev/null || true
+echo "  Issabel SSO bridge installed at /var/www/html/sokrat_sso.php"
+
 # Remove HTTPS redirect from Issabel vhost (would break proxy)
 sed -i '/RewriteEngine On/,/RewriteRule/d' /etc/httpd/conf.d/issabel.conf 2>/dev/null || true
 echo "  Issabel HTTPS redirect removed"

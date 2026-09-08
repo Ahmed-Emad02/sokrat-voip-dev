@@ -205,7 +205,7 @@ test('views/sidebar.ejs renders Issabel GUI port 3000 button strictly for root u
         allowedTabs: ['storage']
     });
     assert.equal(htmlRoot.includes('id="issabelWebGuiBtn"'), true, 'Root user must see Issabel GUI button');
-    assert.ok(htmlRoot.includes('openIssabelAutoLogin'), 'Button must trigger openIssabelAutoLogin');
+    assert.ok(htmlRoot.includes('sokrat_sso.php'), 'Button must trigger sokrat_sso.php');
     assert.ok(htmlRoot.includes(':3000'), 'Auto-login script must target port 3000');
 });
 

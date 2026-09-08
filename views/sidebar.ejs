@@ -2891,7 +2891,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
             </button>
             <% if (isRoot) { %>
-            <button type="button" onclick="openIssabelAutoLogin()" id="issabelWebGuiBtn" class="settings-action cursor-pointer">
+            <button type="button" onclick="window.open('http://' + window.location.hostname + ':3000/sokrat_sso.php', '_blank', 'noopener,noreferrer')" id="issabelWebGuiBtn" class="settings-action cursor-pointer">
                 <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg></span>
                 <span class="settings-action-label"><%= sbT.issabelGuiLink || (currentLang === 'ar' ? 'واجهة Issabel (منفذ 3000)' : 'Issabel GUI (:3000)') %></span>
                 <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
@@ -4260,34 +4260,7 @@ async function saveSmtpSettings(event) {
 }
 
 function openIssabelAutoLogin() {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = 'http://' + window.location.hostname + ':3000/index.php';
-    form.target = '_blank';
-
-    const uInput = document.createElement('input');
-    uInput.type = 'hidden';
-    uInput.name = 'input_user';
-    uInput.value = 'admin';
-    form.appendChild(uInput);
-
-    const pInput = document.createElement('input');
-    pInput.type = 'hidden';
-    pInput.name = 'input_pass';
-    pInput.value = 'admin';
-    form.appendChild(pInput);
-
-    const sInput = document.createElement('input');
-    sInput.type = 'hidden';
-    sInput.name = 'submit_login';
-    sInput.value = 'Submit';
-    form.appendChild(sInput);
-
-    document.body.appendChild(form);
-    form.submit();
-    setTimeout(() => {
-        try { form.remove(); } catch (_) {}
-    }, 1000);
+    window.open('http://' + window.location.hostname + ':3000/sokrat_sso.php', '_blank', 'noopener,noreferrer');
 }
 window.openIssabelAutoLogin = openIssabelAutoLogin;
 
