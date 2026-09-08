@@ -352,38 +352,6 @@ function checkHostResources(options = {}) {
         }
     } catch (_) {}
 
-    // 4. PBX Extension Collision Check
-    try {
-        const q = `
-            SELECT u.extension, u.name as entity1, q.descr as entity2, 'Extension vs Queue' as conflict_type 
-            FROM users u 
-            INNER JOIN queues_config q ON u.extension = q.extension
-            UNION
-            SELECT u.extension, u.name as entity1, r.description as entity2, 'Extension vs Ring Group' as conflict_type
-            FROM users u 
-            INNER JOIN ringgroups r ON u.extension = r.grpnum
-            UNION
-            SELECT q.extension, q.descr as entity1, r.description as entity2, 'Queue vs Ring Group' as conflict_type
-            FROM queues_config q
-            INNER JOIN ringgroups r ON q.extension = r.grpnum;
-        `;
-        const out = execSync(`mysql -u ${DB_CONFIG.user} -p${DB_CONFIG.password} ${DB_CONFIG.database} -e "${q.replace(/\n/g, ' ')}" 2>/dev/null`, { encoding: 'utf8', timeout: 3000 }).trim();
-        const lines = out.split('\n');
-        if (lines.length > 1) {
-            const conflictRows = lines.slice(1);
-            for (const cRow of conflictRows) {
-                const parts = cRow.split('\t');
-                if (parts.length >= 4) {
-                    const [ext, e1, e2, cType] = parts;
-                    issues.push({
-                        type: 'conflict_' + ext,
-                        name: 'PBX Extension Conflict',
-                        error: `Number ${ext} collision: assigned to "${e1 || ext}" AND "${e2 || ext}" (${cType}) in Asterisk dialplan.`
-                    });
-                }
-            }
-        }
-    } catch (_) {}
 
     return issues;
 }
