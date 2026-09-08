@@ -7004,7 +7004,8 @@ async function getDonglesForExtension(extension) {
             FROM \`asterisk\`.\`outbound_route_patterns\` p
             JOIN \`asterisk\`.\`outbound_routes\` r ON r.route_id = p.route_id
             LEFT JOIN \`asterisk\`.\`outbound_route_sequence\` s ON s.route_id = r.route_id
-            ORDER BY s.seq ASC, r.route_id ASC
+            GROUP BY p.route_id, p.match_cid
+            ORDER BY COALESCE(MIN(s.seq), 9999) ASC, r.route_id ASC
         `);
 
         const specificRouteIds = patterns
@@ -12378,10 +12379,11 @@ app.delete('/api/config/ivrs/:id', async (req, res) => {
 app.get('/api/config/routes/outbound', async (req, res) => {
     try {
         const [routesRows] = await pool.query(`
-            SELECT r.route_id, r.name, COALESCE(s.seq, 9999) AS seq
+            SELECT r.route_id, r.name, COALESCE(MIN(s.seq), 9999) AS seq
             FROM \`asterisk\`.\`outbound_routes\` r
             LEFT JOIN \`asterisk\`.\`outbound_route_sequence\` s ON s.route_id = r.route_id
-            ORDER BY COALESCE(s.seq, 9999) ASC, r.route_id ASC
+            GROUP BY r.route_id, r.name
+            ORDER BY seq ASC, r.route_id ASC
         `);
         const [patternsRows] = await pool.query(`
             SELECT route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits
@@ -12441,12 +12443,12 @@ app.post('/api/config/routes/outbound/reorder', async (req, res) => {
             return res.status(400).json({ success: false, error: 'No valid route IDs provided.' });
         }
 
+        await pool.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE 1');
         for (let seq = 0; seq < validIds.length; seq++) {
             const routeId = validIds[seq];
             await pool.query(`
                 INSERT INTO \`asterisk\`.\`outbound_route_sequence\` (route_id, seq)
                 VALUES (?, ?)
-                ON DUPLICATE KEY UPDATE seq = VALUES(seq)
             `, [routeId, seq]);
         }
 
@@ -12499,8 +12501,9 @@ app.post('/api/config/routes/outbound', async (req, res) => {
 
         // 4. Insert sequence position (next available seq)
         const [seqRow] = await pool.query('SELECT COALESCE(MAX(seq), -1) + 1 AS nextSeq FROM `asterisk`.`outbound_route_sequence`');
-        const nextSeq = seqRow[0].nextSeq;
+        const nextSeq = seqRow[0]?.nextSeq || 0;
 
+        await pool.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE route_id = ?', [routeId]);
         await pool.query(`
             INSERT INTO \`asterisk\`.\`outbound_route_sequence\` (route_id, seq)
             VALUES (?, ?)
