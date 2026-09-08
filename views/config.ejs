@@ -12231,7 +12231,12 @@ function isTabAllowed(tabName) {
                                 if (otherCur) otherCur.textContent = '0:00';
                             }
                         }
-                        audio.play();
+                        const p = audio.play();
+                        if (p && typeof p.catch === 'function') {
+                            p.catch(err => {
+                                if (err.name !== 'AbortError') console.warn('[Audio Player] Play error:', err);
+                            });
+                        }
                         currentlyPlayingCustomAudio = audio;
                         iconPlay?.classList.add('hidden');
                         iconPause?.classList.remove('hidden');

@@ -709,7 +709,12 @@ function fmtDur(s) {
                                 if (otherCur) otherCur.textContent = '0:00';
                             }
                         }
-                        audio.play();
+                        const p = audio.play();
+                        if (p && typeof p.catch === 'function') {
+                            p.catch(err => {
+                                if (err.name !== 'AbortError') console.warn('[Audio Player] Play error:', err);
+                            });
+                        }
                         currentlyPlaying = audio;
                         iconPlay.classList.add('hidden');
                         iconPause.classList.remove('hidden');
