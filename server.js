@@ -10643,14 +10643,26 @@ app.post('/api/config/queues', async (req, res) => {
         if (!num || !/^\d+$/.test(num)) {
             return res.status(400).json({ success: false, error: 'Valid numeric Queue number is required.' });
         }
-        const name = String(descr || '').trim();
-        if (!name) {
+        const rawName = String(descr || '').trim();
+        if (!rawName) {
             return res.status(400).json({ success: false, error: 'Queue Name is required.' });
         }
+        const name = rawName.slice(0, 35);
 
-        const [existing] = await pool.query('SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?', [num]);
-        if (existing.length > 0) {
+        // Check Queue collision
+        const [existingQ] = await pool.query('SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?', [num]);
+        if (existingQ.length > 0) {
             return res.status(400).json({ success: false, error: `Queue ${num} already exists.` });
+        }
+        // Check User/Extension collision (mimicking Issabel framework_check_extension_usage)
+        const [existingUser] = await pool.query('SELECT extension FROM `asterisk`.`users` WHERE extension = ?', [num]);
+        if (existingUser.length > 0) {
+            return res.status(400).json({ success: false, error: `Extension ${num} is already in use by a User/Extension.` });
+        }
+        // Check Ring Group collision
+        const [existingRg] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
+        if (existingRg.length > 0) {
+            return res.status(400).json({ success: false, error: `Number ${num} is already in use by a Ring Group.` });
         }
 
         const ringStrategy = strategy || 'rrmemory';
@@ -10749,9 +10761,15 @@ app.put('/api/config/queues/:extension', async (req, res) => {
             strategy, autofill, skip_busy
         } = req.body;
 
-        const name = String(descr || '').trim();
-        if (!name) {
+        const rawName = String(descr || '').trim();
+        if (!rawName) {
             return res.status(400).json({ success: false, error: 'Queue Name is required.' });
+        }
+        const name = rawName.slice(0, 35);
+
+        const [existing] = await pool.query('SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?', [num]);
+        if (existing.length === 0) {
+            return res.status(404).json({ success: false, error: `Queue ${num} not found.` });
         }
 
         const ringStrategy = strategy || 'rrmemory';
@@ -10847,6 +10865,10 @@ app.put('/api/config/queues/:extension', async (req, res) => {
 app.delete('/api/config/queues/:extension', async (req, res) => {
     try {
         const num = String(req.params.extension).trim();
+        const [existing] = await pool.query('SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?', [num]);
+        if (existing.length === 0) {
+            return res.status(404).json({ success: false, error: `Queue ${num} not found.` });
+        }
         await pool.query('DELETE FROM `asterisk`.`queues_config` WHERE extension = ?', [num]);
         await pool.query('DELETE FROM `asterisk`.`queues_details` WHERE id = ?', [num]);
         try {

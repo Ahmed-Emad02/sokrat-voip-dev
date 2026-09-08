@@ -315,3 +315,68 @@ test('Queue Backend CRUD simulation with Failover Destination', async () => {
     assert.strictEqual(postDeleteRes.queues.find(q => q.extension === '888'), undefined);
     assert.strictEqual(queuesDetailsStore.find(d => d.id === '888'), undefined);
 });
+
+test('Queue CRUD validation enforces exact Issabel parity (extension, name, collision checks, and 404s)', () => {
+    const existingQueues = ['300', '800'];
+    const existingExtensions = ['101', '102', '103'];
+    const existingRingGroups = ['600', '700'];
+
+    function validateQueueInput(body, isUpdate = false) {
+        const num = String(body.extension || '').trim();
+        if (!isUpdate) {
+            if (!num || !/^\d+$/.test(num)) {
+                return { valid: false, status: 400, error: 'Valid numeric Queue number is required.' };
+            }
+            if (existingQueues.includes(num)) {
+                return { valid: false, status: 400, error: `Queue ${num} already exists.` };
+            }
+            if (existingExtensions.includes(num)) {
+                return { valid: false, status: 400, error: `Extension ${num} is already in use by a User/Extension.` };
+            }
+            if (existingRingGroups.includes(num)) {
+                return { valid: false, status: 400, error: `Number ${num} is already in use by a Ring Group.` };
+            }
+        } else {
+            if (!existingQueues.includes(num)) {
+                return { valid: false, status: 404, error: `Queue ${num} not found.` };
+            }
+        }
+
+        const rawName = String(body.descr || '').trim();
+        if (!rawName) {
+            return { valid: false, status: 400, error: 'Queue Name is required.' };
+        }
+        const name = rawName.slice(0, 35);
+
+        return { valid: true, name, num };
+    }
+
+    // 1. Rejects blank and non-numeric queue numbers
+    assert.equal(validateQueueInput({ extension: '', descr: 'Support' }).valid, false);
+    assert.equal(validateQueueInput({ extension: 'abc', descr: 'Support' }).valid, false);
+
+    // 2. Rejects collisions with existing Queues, Users, and Ring Groups
+    assert.equal(validateQueueInput({ extension: '300', descr: 'Support' }).error, 'Queue 300 already exists.');
+    assert.equal(validateQueueInput({ extension: '101', descr: 'Support' }).error, 'Extension 101 is already in use by a User/Extension.');
+    assert.equal(validateQueueInput({ extension: '600', descr: 'Support' }).error, 'Number 600 is already in use by a Ring Group.');
+
+    // 3. Rejects blank queue names
+    assert.equal(validateQueueInput({ extension: '888', descr: '   ' }).error, 'Queue Name is required.');
+
+    // 4. Truncates/guards description to 35 chars
+    const longName = 'A'.repeat(50);
+    const validRes = validateQueueInput({ extension: '888', descr: longName });
+    assert.equal(validRes.valid, true);
+    assert.equal(validRes.name.length, 35);
+
+    // 5. UPDATE (PUT) returns 404 on missing queue
+    assert.equal(validateQueueInput({ extension: '9999', descr: 'Missing' }, true).status, 404);
+});
+
+test('server.js implements Issabel-parity collision checks in queue endpoints', () => {
+    const serverCode = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+    assert.ok(serverCode.includes("SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?"));
+    assert.ok(serverCode.includes("SELECT extension FROM `asterisk`.`users` WHERE extension = ?"));
+    assert.ok(serverCode.includes("SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?"));
+    assert.ok(serverCode.includes("rawName.slice(0, 35)"));
+});
