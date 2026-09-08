@@ -183,6 +183,31 @@ test('views/sidebar.ejs renders User and Version labels in English and Arabic', 
     assert.ok(htmlAr.includes('المستخدم') && htmlAr.includes('الإصدار'), 'Must render User and Version labels in Arabic');
 });
 
+test('views/sidebar.ejs renders Issabel GUI port 3000 button strictly for root user only', async () => {
+    const htmlAdmin = await ejs.renderFile(sidebarViewPath, {
+        currentLang: 'en',
+        currentPage: '/storage',
+        isRtl: false,
+        isSuperAdmin: true,
+        isRootUser: false,
+        currentUser: 'admin',
+        allowedTabs: ['storage']
+    });
+    assert.equal(htmlAdmin.includes('id="issabelWebGuiBtn"'), false, 'Non-root admin must not see Issabel GUI button');
+
+    const htmlRoot = await ejs.renderFile(sidebarViewPath, {
+        currentLang: 'en',
+        currentPage: '/storage',
+        isRtl: false,
+        isSuperAdmin: true,
+        isRootUser: true,
+        currentUser: 'root',
+        allowedTabs: ['storage']
+    });
+    assert.equal(htmlRoot.includes('id="issabelWebGuiBtn"'), true, 'Root user must see Issabel GUI button');
+    assert.ok(htmlRoot.includes(':3000'), 'Button must link to port 3000');
+});
+
 test('server.js handleClientSettingsUpdate synchronizes system hostname with client name', () => {
     const serverCode = fs.readFileSync(serverJsPath, 'utf8');
 
