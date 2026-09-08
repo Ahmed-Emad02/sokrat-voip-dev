@@ -9864,6 +9864,52 @@ app.post('/api/extension-policies-bulk', requireAuth, async (req, res) => {
     }
 });
 
+
+// --- STRICT PBX EXTENSION / NUMBER COLLISION GUARD ---
+async function checkNumberCollision(number, entityType, currentId = null) {
+    const num = String(number || '').trim();
+    if (!num || !/^\d+$/.test(num)) {
+        return 'A valid numeric number is required.';
+    }
+
+    // 1. Check Users / Extensions table
+    const [userRows] = await pool.query(
+        'SELECT extension, name FROM `asterisk`.`users` WHERE extension = ?',
+        [num]
+    );
+    if (userRows.length > 0) {
+        if (entityType !== 'extension' || String(currentId).trim() !== num) {
+            const userName = userRows[0].name ? ` (${userRows[0].name})` : '';
+            return `Cannot assign number ${num}: already used by User/Extension ${num}${userName}. Duplicate numbers are strictly restricted.`;
+        }
+    }
+
+    // 2. Check Queues table
+    const [queueRows] = await pool.query(
+        'SELECT extension, descr FROM `asterisk`.`queues_config` WHERE extension = ?',
+        [num]
+    );
+    if (queueRows.length > 0) {
+        if (entityType !== 'queue' || String(currentId).trim() !== num) {
+            const qDescr = queueRows[0].descr ? ` (${queueRows[0].descr})` : '';
+            return `Cannot assign number ${num}: already used by Call Queue ${num}${qDescr}. Duplicate numbers are strictly restricted.`;
+        }
+    }
+
+    // 3. Check Ring Groups table
+    const [rgRows] = await pool.query(
+        'SELECT grpnum, description FROM `asterisk`.`ringgroups` WHERE grpnum = ?',
+        [num]
+    );
+    if (rgRows.length > 0) {
+        if (entityType !== 'ringgroup' || String(currentId).trim() !== num) {
+            const rgDescr = rgRows[0].description ? ` (${rgRows[0].description})` : '';
+            return `Cannot assign number ${num}: already used by Ring Group ${num}${rgDescr}. Duplicate numbers are strictly restricted.`;
+        }
+    }
+
+    return null;
+}
 // POST /api/config/extensions - Create new Generic SIP Extension
 app.post('/api/config/extensions', async (req, res) => {
     try {
@@ -9887,10 +9933,10 @@ app.post('/api/config/extensions', async (req, res) => {
         const devTech = isWebRTC ? 'pjsip' : 'sip';
         const devDial = isWebRTC ? `PJSIP/${extNum}` : `SIP/${extNum}`;
 
-        // Check if extension already exists
-        const [existing] = await pool.query('SELECT extension FROM `asterisk`.`users` WHERE extension = ?', [extNum]);
-        if (existing.length > 0) {
-            return res.status(400).json({ success: false, error: `Extension ${extNum} already exists.` });
+        // Strict number collision check across Users, Queues, and Ring Groups
+        const collisionError = await checkNumberCollision(extNum, 'extension');
+        if (collisionError) {
+            return res.status(400).json({ success: false, error: collisionError });
         }
 
         // 1. Insert into users with recording='out=always|in=always'
@@ -10434,9 +10480,9 @@ app.post('/api/config/ringgroups', async (req, res) => {
         const postDest = (postdest && postdest.trim()) ? postdest.trim() : `ext-group,${num},1`;
         const mohRinging = (ringing && String(ringing).trim()) ? String(ringing).trim() : 'Ring';
 
-        const [existing] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
-        if (existing.length > 0) {
-            return res.status(400).json({ success: false, error: `Ring Group ${num} already exists.` });
+        const collisionError = await checkNumberCollision(num, 'ringgroup');
+        if (collisionError) {
+            return res.status(400).json({ success: false, error: collisionError });
         }
 
         // Defaults: skip busy agent -> cwignore='CHECKED', record calls -> recording='always'
@@ -10466,6 +10512,11 @@ app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
         const annMsgId = parseInt(annmsg_id, 10) || 0;
         const postDest = (postdest && postdest.trim()) ? postdest.trim() : `ext-group,${num},1`;
         const mohRinging = (ringing && String(ringing).trim()) ? String(ringing).trim() : 'Ring';
+
+        const [existing] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
+        if (existing.length === 0) {
+            return res.status(404).json({ success: false, error: `Ring Group ${num} not found.` });
+        }
 
         await pool.query(`
             UPDATE \`asterisk\`.\`ringgroups\`
@@ -10631,20 +10682,9 @@ app.post('/api/config/queues', async (req, res) => {
         }
         const name = rawName.slice(0, 35);
 
-        // Check Queue collision
-        const [existingQ] = await pool.query('SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?', [num]);
-        if (existingQ.length > 0) {
-            return res.status(400).json({ success: false, error: `Queue ${num} already exists.` });
-        }
-        // Check User/Extension collision (mimicking Issabel framework_check_extension_usage)
-        const [existingUser] = await pool.query('SELECT extension FROM `asterisk`.`users` WHERE extension = ?', [num]);
-        if (existingUser.length > 0) {
-            return res.status(400).json({ success: false, error: `Extension ${num} is already in use by a User/Extension.` });
-        }
-        // Check Ring Group collision
-        const [existingRg] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
-        if (existingRg.length > 0) {
-            return res.status(400).json({ success: false, error: `Number ${num} is already in use by a Ring Group.` });
+        const collisionError = await checkNumberCollision(num, 'queue');
+        if (collisionError) {
+            return res.status(400).json({ success: false, error: collisionError });
         }
 
         const ringStrategy = strategy || 'rrmemory';

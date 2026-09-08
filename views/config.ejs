@@ -5918,6 +5918,20 @@ function isTabAllowed(tabName) {
 
             if (saveButton) setButtonLoading(saveButton, true, isRtl ? 'جاري الحفظ...' : 'Saving...');
 
+            if (!wasEdit) {
+                const qMatch = (loadedQueuesList || []).find(q => String(q.extension) === extNum);
+                if (qMatch) {
+                    showToast(isRtl ? `الرقم ${extNum} مستخدم بالفعل لطابور (${qMatch.descr || extNum}). غير مسموح بتكرار الأرقام.` : `Cannot create: Number ${extNum} is already assigned to Queue "${qMatch.descr || extNum}". Duplicate numbers are strictly restricted.`, 'error');
+                    if (saveButton) setButtonLoading(saveButton, false);
+                    return;
+                }
+                const rgMatch = (loadedRingGroupsList || []).find(rg => String(rg.grpnum) === extNum);
+                if (rgMatch) {
+                    showToast(isRtl ? `الرقم ${extNum} مستخدم بالفعل لمجموعة اتصال (${rgMatch.description || extNum}). غير مسموح بتكرار الأرقام.` : `Cannot create: Number ${extNum} is already assigned to Ring Group "${rgMatch.description || extNum}". Duplicate numbers are strictly restricted.`, 'error');
+                    if (saveButton) setButtonLoading(saveButton, false);
+                    return;
+                }
+            }
             try {
                 const response = await fetch(wasEdit ? '/api/config/extensions/' + extNum : '/api/config/extensions', {
                     method: wasEdit ? 'PUT' : 'POST',
@@ -6271,9 +6285,21 @@ function isTabAllowed(tabName) {
                 showToast(isRtl ? 'يرجى تحديد أو كتابة رقم تحويلة واحد على الأقل' : 'Please enter or select at least one Extension.', 'error');
                 return;
             }
-            if (!isEdit && loadedRingGroupsList && (loadedRingGroupsList || []).some(rg => String(rg.grpnum) === String(grpnum))) {
-                showToast((isRtl ? 'رقم مجموعة الاتصال ' : 'Ring Group ') + grpnum + (isRtl ? ' موجود بالفعل. يرجى اختيار رقم آخر.' : ' already exists. Please choose a different number.'), 'error');
-                return;
+            if (!isEdit) {
+                if (loadedRingGroupsList && (loadedRingGroupsList || []).some(rg => String(rg.grpnum) === String(grpnum))) {
+                    showToast((isRtl ? 'رقم مجموعة الاتصال ' : 'Ring Group ') + grpnum + (isRtl ? ' موجود بالفعل. يرجى اختيار رقم آخر.' : ' already exists. Please choose a different number.'), 'error');
+                    return;
+                }
+                const extMatch = (loadedExtensionsList || []).find(ext => String(ext.extension) === String(grpnum));
+                if (extMatch) {
+                    showToast(isRtl ? `الرقم ${grpnum} مستخدم بالفعل لتحويلة (${extMatch.name || grpnum}). غير مسموح بتكرار الأرقام.` : `Cannot create: Number ${grpnum} is already in use by Extension "${extMatch.name || grpnum}". Duplicate numbers are strictly restricted.`, 'error');
+                    return;
+                }
+                const qMatch = (loadedQueuesList || []).find(q => String(q.extension) === String(grpnum));
+                if (qMatch) {
+                    showToast(isRtl ? `الرقم ${grpnum} مستخدم بالفعل لطابور (${qMatch.descr || grpnum}). غير مسموح بتكرار الأرقام.` : `Cannot create: Number ${grpnum} is already in use by Queue "${qMatch.descr || grpnum}". Duplicate numbers are strictly restricted.`, 'error');
+                    return;
+                }
             }
 
             const postdest = isEdit ? document.getElementById('rgPostDestination').value.trim() : (`ext-group,${grpnum},1`);
@@ -6622,6 +6648,31 @@ function isTabAllowed(tabName) {
             const dest = document.getElementById('queueDestination').value.trim() || 'app-blackhole,hangup,1';
             const destcontinue = document.getElementById('queueContinueDestination').value.trim() || 'app-blackhole,hangup,1';
 
+            if (!extension || !/^\d+$/.test(extension)) {
+                showToast(isRtl ? 'يرجى إدخال رقم طابور صحيح' : 'Please enter a valid numeric Queue number.', 'error');
+                return;
+            }
+            if (!descr) {
+                showToast(isRtl ? 'يرجى إدخال اسم للطابور' : 'Please enter a Queue Name.', 'error');
+                return;
+            }
+            if (!isEdit) {
+                const qMatch = (loadedQueuesList || []).find(q => String(q.extension) === String(extension));
+                if (qMatch) {
+                    showToast(isRtl ? `طابور الانتظار ${extension} موجود بالفعل` : `Queue ${extension} already exists. Duplicate numbers are strictly restricted.`, 'error');
+                    return;
+                }
+                const extMatch = (loadedExtensionsList || []).find(ext => String(ext.extension) === String(extension));
+                if (extMatch) {
+                    showToast(isRtl ? `الرقم ${extension} مستخدم بالفعل لتحويلة (${extMatch.name || extension}). غير مسموح بتكرار الأرقام.` : `Cannot create: Number ${extension} is already in use by Extension "${extMatch.name || extension}". Duplicate numbers are strictly restricted.`, 'error');
+                    return;
+                }
+                const rgMatch = (loadedRingGroupsList || []).find(rg => String(rg.grpnum) === String(extension));
+                if (rgMatch) {
+                    showToast(isRtl ? `الرقم ${extension} مستخدم بالفعل لمجموعة اتصال (${rgMatch.description || extension}). غير مسموح بتكرار الأرقام.` : `Cannot create: Number ${extension} is already in use by Ring Group "${rgMatch.description || extension}". Duplicate numbers are strictly restricted.`, 'error');
+                    return;
+                }
+            }
             const url = isEdit ? '/api/config/queues/' + extension : '/api/config/queues';
             const method = isEdit ? 'PUT' : 'POST';
             const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
