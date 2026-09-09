@@ -706,6 +706,9 @@ async function initAuthDb() {
             KEY idx_enabled (enabled)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    try {
+        await syncAllCampaignLeadsToAddressBook(conn);
+    } catch (_) {}
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS storage_settings (
             id INT PRIMARY KEY DEFAULT 1,
@@ -9539,6 +9542,30 @@ function escapeSql(str) {
     return String(str || '').replace(/'/g, "''").trim();
 }
 
+async function syncAllCampaignLeadsToAddressBook(dbConn) {
+    try {
+        const executor = dbConn || pool;
+        const [leads] = await executor.query('SELECT first_name, last_name, phone_number FROM `asterisk`.`dialer_leads`');
+        if (leads && leads.length > 0) {
+            for (const lead of leads) {
+                const fNameEsc = escapeSql(lead.first_name || '');
+                const lNameEsc = escapeSql(lead.last_name || '');
+                const phoneEsc = escapeSql(lead.phone_number);
+                if (!phoneEsc) continue;
+                await runSqlite(`
+                    INSERT INTO contact (name, last_name, telefono, iduser, directory, status)
+                    SELECT '${fNameEsc}', '${lNameEsc}', '${phoneEsc}', 1, 'external', 'isPublic'
+                    WHERE NOT EXISTS (SELECT 1 FROM contact WHERE telefono = '${phoneEsc}');
+                    UPDATE contact SET name = '${fNameEsc}', last_name = '${lNameEsc}' WHERE telefono = '${phoneEsc}';
+                `);
+            }
+            console.log(`[AddressBook Sync] Synced ${leads.length} campaign lead(s) to SQLite Address Book.`);
+        }
+    } catch (err) {
+        console.warn('[AddressBook Sync] Startup sync warning:', err.message);
+    }
+}
+
 app.get('/contacts', requireAuth, async (req, res) => {
     try {
         const stdout = await runSqliteQuery("SELECT id, name, last_name, telefono FROM contact ORDER BY name ASC, last_name ASC;");
@@ -15409,8 +15436,9 @@ async function runDialerPacerCycle() {
                         `Variable: DIAL_TARGET=${cleanDialTarget}`,
                         `Variable: ORIGINATION_CALLER_ID=${cidNum}`,
                         `Variable: TARGET_AGENT=${cleanAgent}`,
-                        `Variable: __SIPADDHEADER51=Call-Info: <sip:127.0.0.1>;answer-after=0`,
-                        `Variable: __PJSIP_HEADER(add,Call-Info)=<sip:127.0.0.1>;answer-after=0`
+                        `Variable: PJSIP_AUTOANSWER=1`,
+                        `Variable: __ALERT_INFO=info=alert-autoanswer`,
+                        `Variable: __SIPADDHEADER=Call-Info: <sip:127.0.0.1>;answer-after=0`
                     ].join('\r\n');
 
                     amiClient.write(`Action: Originate\r\nActionID: ${cleanAttemptUuid}\r\nChannel: ${agentChannel}\r\nContext: from-autodialer-progressive\r\nExten: s\r\nPriority: 1\r\nCallerID: ${callerIdHeader}\r\n${varHeaders}\r\n\r\n`);
@@ -16010,9 +16038,9 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
                 const fNameEsc = escapeSql(firstName);
                 const lNameEsc = escapeSql(lastName);
                 const phoneEsc = escapeSql(cleanPhone);
-                await runSqliteCmd(`
-                    INSERT INTO contact (name, last_name, telefono, directory, status)
-                    SELECT '${fNameEsc}', '${lNameEsc}', '${phoneEsc}', 'external', 'isPublic'
+                await runSqlite(`
+                    INSERT INTO contact (name, last_name, telefono, iduser, directory, status)
+                    SELECT '${fNameEsc}', '${lNameEsc}', '${phoneEsc}', 1, 'external', 'isPublic'
                     WHERE NOT EXISTS (SELECT 1 FROM contact WHERE telefono = '${phoneEsc}');
                     UPDATE contact SET name = '${fNameEsc}', last_name = '${lNameEsc}' WHERE telefono = '${phoneEsc}';
                 `);

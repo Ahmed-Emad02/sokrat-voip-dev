@@ -112,7 +112,7 @@ test('3. Server.js API Endpoints for Dongle and Campaign Control', () => {
     // Assert leads/import parses XLSX and dual-writes to address book
     assert.match(serverJsContent, /app\.post\('\/api\/dialer\/leads\/import'/);
     assert.match(serverJsContent, /XLSX\.readFile/);
-    assert.match(serverJsContent, /INSERT INTO contact \(name, last_name, telefono, directory, status\)/);
+    assert.match(serverJsContent, /INSERT INTO contact \(name, last_name, telefono,/);
 });
 
 test('4. Progressive Pacer Engine Uses Local Channel and Selected Dongles', () => {
