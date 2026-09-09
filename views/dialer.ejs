@@ -59,7 +59,7 @@ const isRtl = currentLang === 'ar';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sokrat VOIP — <%= t.title %></title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
         .config-input {
             background-color: var(--bg-card) !important;
@@ -476,13 +476,12 @@ const isRtl = currentLang === 'ar';
             document.getElementById('campOriginationCid').value = camp.origination_caller_id || '101';
             document.getElementById('campMaxDials').value = camp.max_concurrent_dials || 1;
             document.getElementById('campWrapupSec').value = camp.wrapup_time_sec || 15;
-            renderDonglesCheckboxes(Array.isArray(camp.allowed_dongles) ? camp.allowed_dongles : []);
             const fileGroup = document.getElementById('campLeadsFileGroup');
             if (fileGroup) fileGroup.style.display = 'none';
             renderDonglesCheckboxes(Array.isArray(camp.allowed_dongles) ? camp.allowed_dongles : []);
             renderAgentsCheckboxes(Array.isArray(camp.assigned_agents) ? camp.assigned_agents : []);
             openModal('createCampaignModal');
-
+        }
         async function saveCampaign(e) {
             e.preventDefault();
             const editId = document.getElementById('editCampId').value;
