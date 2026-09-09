@@ -2,41 +2,51 @@
 const words = {
     en: {
         title: "Auto-Dialer Center", subtitle: "Campaigns & Pacing",
-        desc: "Real-time outbound campaign management, pacing engine, and DNC registry",
+        desc: "Progressive outbound campaigns with WebRTC agent distribution, GSM dongle routing, and Address Book sync",
         createCampaign: "Create Campaign", campaignName: "Campaign Name",
-        mode: "Dialer Mode", progressive: "Progressive (Power 1:1)", predictive: "Predictive (Paced)",
-        outboundRoute: "Outbound Route", originationCallerId: "Origination Caller ID / Extension",
-        queueName: "ACD Queue", maxDials: "Max Concurrent Dials",
-        pacingRatio: "Pacing Ratio", wrapupTime: "Wrap-Up Time (sec)", maxWait: "Max Queue Wait (sec)",
-        amdToggle: "Answering Machine Detection (AMD)", saveCampaign: "Save Campaign",
-        cancel: "Cancel", importLeads: "Import Leads CSV", chooseFile: "Choose CSV File",
-        upload: "Upload Leads", campaigns: "Active Campaigns", leads: "Lead Inventory",
+        mode: "Dialer Mode", progressive: "Progressive (Power 1:1)",
+        outboundRoute: "Outbound Route", originationCallerId: "Origination Caller ID / Ext",
+        allowedDongles: "Allowed GSM Dongles", assignedAgents: "Assigned Agents (Distribution)",
+        allDongles: "All Dongles / Route Default", allAgents: "All Online Agents",
+        maxDials: "Max Concurrent Dials", wrapupTime: "Wrap-Up Time (sec)",
+        saveCampaign: "Save Campaign", updateCampaign: "Update Campaign", cancel: "Cancel",
+        importLeads: "Import Leads (CSV / XLSX)", chooseFile: "Choose CSV or Excel (.xlsx) File",
+        upload: "Upload & Sync Leads", campaigns: "Active Campaigns", leads: "Lead Inventory",
         attempts: "Attempt Logs", dnc: "Do Not Call (DNC) List", addDnc: "Add to DNC",
         phoneNumber: "Phone Number", reason: "Reason", actions: "Actions",
         status: "Status", total: "Total", pending: "Pending", connected: "Connected",
-        dialing: "Dialing", failed: "Failed/Machine", start: "Start", pause: "Pause", stop: "Stop",
-        downloadTemplate: "Download CSV Template", templateNote: "Columns: phone_number, first_name, last_name, company",
-        selectQueue: "— Select ACD Queue —", selectQueueHint: "Queue must exist on PBX",
-        predictiveQueueRequired: "Queue is required for Predictive mode"
+        dialing: "Dialing", failed: "Failed/No-Ans", start: "Start", pause: "Pause", resetLeads: "Reset Leads",
+        deleteCamp: "Delete", viewLeads: "View Leads", editCamp: "Edit",
+        downloadTemplate: "Download 2-Column Template",
+        templateNote2Col: "File must contain 2 columns: Name, Phone Number (.csv or .xlsx)",
+        addressBookNote: "Every lead will be automatically synchronized with the Address Book for instant caller ID resolution.",
+        noCampaigns: "No campaigns configured. Click 'Create Campaign' to launch a new progressive dialer campaign.",
+        noLeads: "No leads loaded in this campaign yet.",
+        searchLeads: "Search leads by name or phone..."
     },
     ar: {
-        title: "مركز الاتصال الآلي", subtitle: "الحملات ومحرك الاتصال",
-        desc: "إدارة حملات الاتصال الخارجي والمحرك الآلي وسجل عدم الاتصال",
+        title: "مركز الاتصال الآلي", subtitle: "الحملات والتوزيع",
+        desc: "حملات اتصال تصاعدية مباشرة مع توزيع الموظفين عبر WebRTC واختيار شرائح GSM ومزامنة دفتر العناوين",
         createCampaign: "إنشاء حملة", campaignName: "اسم الحملة",
-        mode: "نوع المتصل", progressive: "تصاعدي (Power 1:1)", predictive: "تنبؤي (Paced)",
-        outboundRoute: "مسار الاتصال الخارجي", originationCallerId: "معرف/تحويلة البدء",
-        queueName: "طابور الاتصال (ACD)", maxDials: "الحد الأقصى للمكالمات المتزامنة",
-        pacingRatio: "معدل السرعة (Pacing Ratio)", wrapupTime: "وقت إنهاء المكالمة (ثواني)", maxWait: "أقصى انتظار بالطابور (ثواني)",
-        amdToggle: "كشف أجهزة الرد الآلي (AMD)", saveCampaign: "حفظ الحملة",
-        cancel: "إلغاء", importLeads: "استيراد ملف الأرقام CSV", chooseFile: "اختر ملف CSV",
-        upload: "رفع الأرقام", campaigns: "الحملات النشطة", leads: "قائمة الأرقام",
+        mode: "نوع المتصل", progressive: "تصاعدي (Progressive 1:1)",
+        outboundRoute: "مسار الاتصال الخارجي", originationCallerId: "معرف/تحويلة المتصل",
+        allowedDongles: "شرائح GSM المسموح بها", assignedAgents: "الموظفون المعينون (التوزيع)",
+        allDongles: "جميع الشرائح / المسار الافتراضي", allAgents: "جميع الموظفين المتصلين",
+        maxDials: "الحد الأقصى للمكالمات المتزامنة", wrapupTime: "وقت إنهاء المكالمة (ثواني)",
+        saveCampaign: "حفظ الحملة", updateCampaign: "تحديث الحملة", cancel: "إلغاء",
+        importLeads: "استيراد الأرقام (CSV / XLSX)", chooseFile: "اختر ملف CSV أو إكسيل (.xlsx)",
+        upload: "رفع ومزامنة الأرقام", campaigns: "الحملات النشطة", leads: "قائمة الأرقام",
         attempts: "سجل المحاولات", dnc: "سجل حظر الاتصال (DNC)", addDnc: "إضافة للحظر",
         phoneNumber: "رقم الهاتف", reason: "السبب", actions: "الإجراءات",
-        status: "الحالة", total: "الإجمالي", pending: "قيد الانتظار", connected: "متصل",
-        dialing: "جاري الاتصال", failed: "فشل/آلي", start: "بدء", pause: "إيقاف مؤقت", stop: "إيقاف",
-        downloadTemplate: "تحميل نموذج CSV", templateNote: "الأعمدة: phone_number, first_name, last_name, company",
-        selectQueue: "— اختر طابور الاتصال —", selectQueueHint: "يجب أن يكون الطابور موجوداً على التبادل",
-        predictiveQueueRequired: "الطابور مطلوب للوضع التنبؤي"
+        status: "الحالة", total: "الإجمالي", pending: "قيد الانتظار", connected: "تم الاتصال",
+        dialing: "جاري الاتصال", failed: "فشل/لا رد", start: "بدء", pause: "إيقاف مؤقت", resetLeads: "إعادة ضبط الأرقام",
+        deleteCamp: "حذف", viewLeads: "عرض الأرقام", editCamp: "تعديل",
+        downloadTemplate: "تحميل نموذج الملف (عمودين)",
+        templateNote2Col: "يجب أن يحتوي الملف على عمودين: الاسم، ورقم الهاتف (.csv أو .xlsx)",
+        addressBookNote: "تتم مزامنة جميع الأرقام تلقائياً مع دفتر العناوين لإظهار اسم العميل فور وروده على الهاتف.",
+        noCampaigns: "لا توجد حملات حالياً. انقر على 'إنشاء حملة' لإعداد حملة جديدة.",
+        noLeads: "لا توجد أرقام مسجلة في هذه الحملة بعد.",
+        searchLeads: "البحث في الأرقام بالاسم أو الهاتف..."
     }
 };
 const currentLang = typeof lang !== 'undefined' ? lang : 'en';
@@ -65,6 +75,21 @@ const isRtl = currentLang === 'ar';
             border-color: var(--accent-color) !important;
             box-shadow: 0 0 0 2px var(--accent-transparent) !important;
         }
+        .checkbox-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 0.375rem;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-primary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .checkbox-pill:hover {
+            border-color: var(--accent-color);
+        }
     </style>
 </head>
 <body class="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen flex flex-col md:flex-row m-0 p-0 font-sans">
@@ -76,10 +101,16 @@ const isRtl = currentLang === 'ar';
                 <h1 class="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h1>
                 <p class="text-xs text-[var(--text-muted)] mt-1"><%= t.desc %></p>
             </div>
-            <button type="button" onclick="openCreateCampaignModal()" class="config-btn-primary px-4 py-2 text-xs cursor-pointer flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                <span><%= t.createCampaign %></span>
-            </button>
+            <div class="flex items-center gap-2">
+                <a href="/api/dialer/leads/template" class="config-btn-secondary px-3 py-2 text-xs flex items-center gap-1.5" title="<%= t.downloadTemplate %>">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    <span><%= t.downloadTemplate %></span>
+                </a>
+                <button type="button" onclick="openCreateCampaignModal()" class="config-btn-primary px-4 py-2 text-xs cursor-pointer flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    <span><%= t.createCampaign %></span>
+                </button>
+            </div>
         </div>
 
         <!-- CAMPAIGNS GRID -->
@@ -87,14 +118,14 @@ const isRtl = currentLang === 'ar';
             <div class="col-span-full text-center py-8 text-[var(--text-muted)] text-sm font-semibold">Loading campaigns...</div>
         </div>
 
-        <!-- DNC LIST & DISPOSITIONS -->
+        <!-- DNC LIST & ATTEMPT LOGS -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= t.dnc %></h3>
                     <button type="button" onclick="openAddDncModal()" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.addDnc %></button>
                 </div>
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto max-h-64 overflow-y-auto">
                     <table class="w-full text-left text-xs">
                         <thead>
                             <tr class="border-b border-[var(--border-primary)] text-[var(--text-muted)] uppercase">
@@ -119,83 +150,142 @@ const isRtl = currentLang === 'ar';
         </div>
     </div>
 
-    <!-- MODAL 1: CREATE CAMPAIGN -->
+    <!-- MODAL 1: CREATE / EDIT CAMPAIGN -->
     <div id="createCampaignModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-lg w-full p-6 text-[var(--text-primary)]">
-            <h3 class="text-base font-extrabold mb-4"><%= t.createCampaign %></h3>
-            <form onsubmit="saveCampaign(event)" class="space-y-3">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-xl w-full p-6 text-[var(--text-primary)] max-h-[90vh] overflow-y-auto">
+            <h3 id="modalCampTitle" class="text-base font-extrabold mb-4"><%= t.createCampaign %></h3>
+            <form onsubmit="saveCampaign(event)" class="space-y-3.5">
+                <input type="hidden" id="editCampId">
                 <div>
                     <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campName"><%= t.campaignName %></label>
-                    <input type="text" id="campName" required maxlength="100" class="config-input w-full">
+                    <input type="text" id="campName" required maxlength="100" class="config-input w-full" placeholder="e.g. Real Estate VIP Leads">
                 </div>
                 <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campMode"><%= t.mode %></label>
-                        <select id="campMode" class="config-input w-full">
-                            <option value="progressive"><%= t.progressive %></option>
-                            <option value="predictive"><%= t.predictive %></option>
-                        </select>
-                    </div>
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campOutboundRoute"><%= t.outboundRoute %></label>
                         <select id="campOutboundRoute" class="config-input w-full">
-                            <option value="">— Default (from-internal) —</option>
+                            <option value="">— <%= t.allDongles %> —</option>
                         </select>
                     </div>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campOriginationCid"><%= t.originationCallerId %></label>
                         <input type="text" id="campOriginationCid" value="101" class="config-input w-full">
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campQueueName"><%= t.queueName %></label>
-                        <select id="campQueueName" class="config-input w-full">
-                            <option value=""><%= t.selectQueue %></option>
-                        </select>
-                        <p class="text-[10px] text-[var(--text-muted)] mt-0.5"><%= t.selectQueueHint %></p>
-                    </div>
                 </div>
-                <div class="grid grid-cols-3 gap-3">
+
+                <!-- ALLOWED GSM DONGLES CHECKBOXES -->
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.allowedDongles %></label>
+                    <div id="campDonglesRoster" class="flex flex-wrap gap-2 p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg min-h-[46px]">
+                        <span class="text-xs text-[var(--text-muted)] italic">Loading available GSM dongles...</span>
+                    </div>
+                    <p class="text-[10px] text-[var(--text-muted)] mt-1">Select which dongles can place outbound calls. Uncheck all to use outbound route default.</p>
+                </div>
+
+                <!-- ASSIGNED AGENTS DISTRIBUTION CHECKBOXES -->
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.assignedAgents %></label>
+                    <div id="campAgentsRoster" class="flex flex-wrap gap-2 p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg min-h-[46px]">
+                        <span class="text-xs text-[var(--text-muted)] italic">Loading PBX agent extensions...</span>
+                    </div>
+                    <p class="text-[10px] text-[var(--text-muted)] mt-1">Select which extensions will receive bridged calls. Uncheck all to distribute to all online agents.</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campMaxDials"><%= t.maxDials %></label>
-                        <input type="number" id="campMaxDials" value="5" min="1" max="50" class="config-input w-full">
+                        <input type="number" id="campMaxDials" value="1" min="1" max="20" class="config-input w-full">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campWrapupSec"><%= t.wrapupTime %></label>
                         <input type="number" id="campWrapupSec" value="15" min="0" max="300" class="config-input w-full">
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campMaxWait"><%= t.maxWait %></label>
-                        <input type="number" id="campMaxWait" value="5" min="1" max="60" class="config-input w-full">
-                    </div>
                 </div>
-                <div class="flex items-center gap-2 pt-2">
-                    <input type="checkbox" id="campAmd" checked class="w-4 h-4 rounded">
-                    <label for="campAmd" class="text-xs font-bold"><%= t.amdToggle %></label>
-                </div>
+
                 <div class="flex justify-end gap-2 pt-4 border-t border-[var(--border-primary)]">
                     <button type="button" onclick="closeModal('createCampaignModal')" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.cancel %></button>
-                    <button type="submit" class="config-btn-primary px-4 py-1.5 text-xs"><%= t.saveCampaign %></button>
+                    <button type="submit" id="saveCampSubmitBtn" class="config-btn-primary px-4 py-1.5 text-xs"><%= t.saveCampaign %></button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- MODAL 2: IMPORT LEADS CSV -->
+    <!-- MODAL 2: IMPORT LEADS (CSV / XLSX) -->
     <div id="importLeadsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
         <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-md w-full p-6 text-[var(--text-primary)]">
-            <h3 class="text-base font-extrabold mb-2"><%= t.importLeads %></h3>
-            <form onsubmit="uploadLeadsCsv(event)" class="space-y-4">
+            <h3 class="text-base font-extrabold mb-1"><%= t.importLeads %></h3>
+            <p class="text-xs text-[var(--text-muted)] mb-3"><%= t.addressBookNote %></p>
+            <form onsubmit="uploadLeadsFile(event)" class="space-y-4">
                 <input type="hidden" id="importCampaignId">
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="leadsCsvFile"><%= t.chooseFile %></label>
-                    <input type="file" id="leadsCsvFile" accept=".csv" required class="config-input w-full text-xs">
-                    <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= t.templateNote %> <a href="/api/dialer/leads/template" class="text-amber-400 underline hover:text-amber-300"><%= t.downloadTemplate %></a></p>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="leadsFile"><%= t.chooseFile %></label>
+                    <input type="file" id="leadsFile" accept=".csv,.xlsx,.xls" required class="config-input w-full text-xs cursor-pointer">
+                    <p class="text-[10px] text-amber-400 mt-1.5 flex items-center gap-1">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span><%= t.templateNote2Col %></span>
+                    </p>
                 </div>
-                <div class="flex justify-end gap-2 pt-4 border-t border-[var(--border-primary)]">
+                <div class="flex justify-end gap-2 pt-3 border-t border-[var(--border-primary)]">
                     <button type="button" onclick="closeModal('importLeadsModal')" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.cancel %></button>
-                    <button type="submit" class="config-btn-primary px-4 py-1.5 text-xs"><%= t.upload %></button>
+                    <button type="submit" id="uploadLeadsBtn" class="config-btn-primary px-4 py-1.5 text-xs flex items-center gap-1">
+                        <span><%= t.upload %></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 3: VIEW LEADS INVENTORY -->
+    <div id="viewLeadsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-2xl w-full p-6 text-[var(--text-primary)] max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-[var(--border-primary)] mb-3">
+                <div>
+                    <h3 id="viewLeadsTitle" class="text-base font-extrabold"><%= t.leads %></h3>
+                    <span id="viewLeadsCount" class="text-xs text-[var(--text-muted)] font-mono">0 leads</span>
+                </div>
+                <button type="button" onclick="closeModal('viewLeadsModal')" class="text-zinc-400 hover:text-white cursor-pointer text-lg font-bold">✕</button>
+            </div>
+            <div class="mb-3">
+                <input type="text" id="leadsSearchInput" oninput="filterLeadsTable()" class="config-input w-full text-xs" placeholder="<%= t.searchLeads %>">
+            </div>
+            <div class="flex-1 overflow-y-auto border border-[var(--border-primary)] rounded-lg">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-[var(--bg-card)] sticky top-0 border-b border-[var(--border-primary)]">
+                        <tr class="text-[var(--text-muted)] uppercase">
+                            <th class="py-2.5 px-3">Name</th>
+                            <th class="py-2.5 px-3">Phone</th>
+                            <th class="py-2.5 px-3">Status</th>
+                            <th class="py-2.5 px-3 text-center">Attempts</th>
+                            <th class="py-2.5 px-3">Last Called</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leadsTableBody" class="divide-y divide-[var(--border-primary)]">
+                        <tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">No leads found.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pt-3 flex justify-end">
+                <button type="button" onclick="closeModal('viewLeadsModal')" class="config-btn-secondary px-4 py-1.5 text-xs"><%= t.cancel %></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: ADD DNC -->
+    <div id="addDncModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-sm w-full p-5 text-[var(--text-primary)]">
+            <h3 class="text-sm font-extrabold mb-3"><%= t.addDnc %></h3>
+            <form onsubmit="addDncNumber(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.phoneNumber %></label>
+                    <input type="text" id="dncPhoneInput" required class="config-input w-full font-mono text-xs" placeholder="01012345678">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.reason %></label>
+                    <input type="text" id="dncReasonInput" class="config-input w-full text-xs" placeholder="Customer request / opt-out">
+                </div>
+                <div class="flex justify-end gap-2 pt-2 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('addDncModal')" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.cancel %></button>
+                    <button type="submit" class="config-btn-primary px-3 py-1.5 text-xs"><%= t.addDnc %></button>
                 </div>
             </form>
         </div>
@@ -203,8 +293,73 @@ const isRtl = currentLang === 'ar';
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        let cachedDongles = [];
+        let cachedExtensions = [];
+        let currentLoadedLeads = [];
+
         function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
         function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        async function loadDongles() {
+            try {
+                const res = await fetch('/api/dialer/dongles');
+                const data = await res.json();
+                cachedDongles = data.dongles || [];
+                renderDonglesCheckboxes();
+            } catch (_) {}
+        }
+
+        async function loadExtensions() {
+            try {
+                const res = await fetch('/api/config/extensions');
+                const data = await res.json();
+                cachedExtensions = data.extensions || [];
+                renderAgentsCheckboxes();
+            } catch (_) {}
+        }
+
+        function renderDonglesCheckboxes(selectedArray = []) {
+            const container = document.getElementById('campDonglesRoster');
+            if (!container) return;
+            container.innerHTML = '';
+            if (cachedDongles.length === 0) {
+                container.innerHTML = '<span class="text-xs text-[var(--text-muted)] italic">No GSM dongles detected on PBX.</span>';
+                return;
+            }
+            cachedDongles.forEach(d => {
+                const isChecked = selectedArray.includes(d.id);
+                const label = document.createElement('label');
+                label.className = 'checkbox-pill';
+                label.innerHTML = `
+                    <input type="checkbox" name="dongleCheckbox" value="${d.id}" ${isChecked ? 'checked' : ''} class="w-3.5 h-3.5 rounded text-amber-500">
+                    <span class="font-mono font-bold">${d.id}</span>
+                    <span class="text-[10px] text-[var(--text-muted)]">(${d.provider}${d.number ? ' - ' + d.number : ''})</span>
+                `;
+                container.appendChild(label);
+            });
+        }
+
+        function renderAgentsCheckboxes(selectedArray = []) {
+            const container = document.getElementById('campAgentsRoster');
+            if (!container) return;
+            container.innerHTML = '';
+            if (cachedExtensions.length === 0) {
+                container.innerHTML = '<span class="text-xs text-[var(--text-muted)] italic">No extensions found on PBX.</span>';
+                return;
+            }
+            cachedExtensions.forEach(ext => {
+                const num = String(ext.extension).trim();
+                const isChecked = selectedArray.includes(num);
+                const label = document.createElement('label');
+                label.className = 'checkbox-pill';
+                label.innerHTML = `
+                    <input type="checkbox" name="agentCheckbox" value="${num}" ${isChecked ? 'checked' : ''} class="w-3.5 h-3.5 rounded text-amber-500">
+                    <span class="font-mono font-bold">${num}</span>
+                    <span class="text-[10px] text-[var(--text-muted)] truncate max-w-[90px]">(${ext.name || num})</span>
+                `;
+                container.appendChild(label);
+            });
+        }
 
         async function loadCampaigns() {
             const res = await fetch('/api/dialer/campaigns');
@@ -213,33 +368,52 @@ const isRtl = currentLang === 'ar';
             container.innerHTML = '';
 
             if (!data.campaigns || data.campaigns.length === 0) {
-                container.innerHTML = '<div class="col-span-full text-center py-8 text-[var(--text-muted)] text-sm font-semibold">No campaigns found. Create your first campaign.</div>';
+                container.innerHTML = `<div class="col-span-full text-center py-8 text-[var(--text-muted)] text-sm font-semibold">${<%- JSON.stringify(t.noCampaigns) %>}</div>`;
                 return;
             }
 
             data.campaigns.forEach(c => {
                 const s = c.stats || {};
+                const allowedDongles = Array.isArray(c.allowed_dongles) ? c.allowed_dongles : [];
+                const assignedAgents = Array.isArray(c.assigned_agents) ? c.assigned_agents : [];
+
+                const dongleBadges = allowedDongles.length > 0
+                    ? allowedDongles.map(d => `<span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">${d}</span>`).join(' ')
+                    : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allDongles) %>}</span>`;
+
+                const agentBadges = assignedAgents.length > 0
+                    ? assignedAgents.map(a => `<span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">${a}</span>`).join(' ')
+                    : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allAgents) %>}</span>`;
+
                 const card = document.createElement('div');
                 card.className = 'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 flex flex-col justify-between';
                 card.innerHTML = `
                     <div>
                         <div class="flex items-center justify-between mb-2">
-                            <h4 class="text-base font-extrabold text-[var(--text-primary)]">${c.name}</h4>
+                            <h4 class="text-base font-extrabold text-[var(--text-primary)] truncate">${c.name}</h4>
                             <span class="px-2 py-0.5 text-[10px] font-extrabold rounded uppercase ${c.status === 'running' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-500/20 text-slate-400'}">${c.status}</span>
                         </div>
-                        <p class="text-xs text-[var(--text-muted)] mb-3">Mode: <strong>${c.mode}</strong> | Queue: <strong>${c.queue_name}</strong></p>
+                        <div class="space-y-1.5 mb-3 text-xs">
+                            <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[var(--text-muted)] text-[10px] uppercase font-bold">Dongles:</span> ${dongleBadges}</div>
+                            <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[var(--text-muted)] text-[10px] uppercase font-bold">Agents:</span> ${agentBadges}</div>
+                        </div>
                         <div class="grid grid-cols-4 gap-2 mb-4 text-center">
-                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">Total</span><span class="text-sm font-black">${s.total_leads || 0}</span></div>
-                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">Pending</span><span class="text-sm font-black text-amber-400">${s.pending_leads || 0}</span></div>
-                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">Connected</span><span class="text-sm font-black text-emerald-400">${s.connected_leads || 0}</span></div>
-                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">Dialing</span><span class="text-sm font-black text-blue-400">${s.dialing_leads || 0}</span></div>
+                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.total) %>}</span><span class="text-sm font-black">${s.total_leads || 0}</span></div>
+                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.pending) %>}</span><span class="text-sm font-black text-amber-400">${s.pending_leads || 0}</span></div>
+                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.connected) %>}</span><span class="text-sm font-black text-emerald-400">${s.connected_leads || 0}</span></div>
+                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.failed) %>}</span><span class="text-sm font-black text-rose-400">${s.failed_leads || 0}</span></div>
                         </div>
                     </div>
-                    <div class="flex flex-wrap gap-2 pt-3 border-t border-[var(--border-primary)]">
-                        <button onclick="controlCampaign(${c.id}, 'start')" class="px-2.5 py-1 text-xs font-bold bg-emerald-600 text-white rounded cursor-pointer">Start</button>
-                        <button onclick="controlCampaign(${c.id}, 'pause')" class="px-2.5 py-1 text-xs font-bold bg-amber-600 text-white rounded cursor-pointer">Pause</button>
-                        <button onclick="controlCampaign(${c.id}, 'stop')" class="px-2.5 py-1 text-xs font-bold bg-rose-600 text-white rounded cursor-pointer">Stop</button>
-                        <button onclick="openImportModal(${c.id})" class="px-2.5 py-1 text-xs font-bold bg-blue-600 text-white rounded cursor-pointer ml-auto">Import CSV</button>
+                    <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-[var(--border-primary)]">
+                        ${c.status === 'running'
+                            ? `<button onclick="controlCampaign(${c.id}, 'pause')" class="px-2.5 py-1 text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white rounded cursor-pointer">${<%- JSON.stringify(t.pause) %>}</button>`
+                            : `<button onclick="controlCampaign(${c.id}, 'start')" class="px-2.5 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded cursor-pointer">${<%- JSON.stringify(t.start) %>}</button>`
+                        }
+                        <button onclick="controlCampaign(${c.id}, 'reset')" class="px-2.5 py-1 text-xs font-bold bg-zinc-700 hover:bg-zinc-600 text-white rounded cursor-pointer" title="Reset non-connected leads to pending">${<%- JSON.stringify(t.resetLeads) %>}</button>
+                        <button onclick="openImportModal(${c.id})" class="px-2.5 py-1 text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white rounded cursor-pointer">+ Import</button>
+                        <button onclick="openViewLeadsModal(${c.id}, '${escapeHtml(c.name)}')" class="px-2.5 py-1 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded cursor-pointer">${<%- JSON.stringify(t.viewLeads) %>}</button>
+                        <button onclick="openEditCampaignModal(${JSON.stringify(c).replace(/"/g, '&quot;')})" class="px-2 py-1 text-xs font-bold bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded cursor-pointer">${<%- JSON.stringify(t.editCamp) %>}</button>
+                        <button onclick="controlCampaign(${c.id}, 'delete')" class="px-2 py-1 text-xs font-bold text-rose-400 hover:text-rose-300 ml-auto cursor-pointer">${<%- JSON.stringify(t.deleteCamp) %>}</button>
                     </div>
                 `;
                 container.appendChild(card);
@@ -247,74 +421,228 @@ const isRtl = currentLang === 'ar';
         }
 
         async function loadOutboundRoutes() {
-            const res = await fetch('/api/config/routes/outbound');
+            try {
+                const res = await fetch('/api/config/routes/outbound');
+                const data = await res.json();
+                const select = document.getElementById('campOutboundRoute');
+                if (data.routes && select) {
+                    select.innerHTML = '<option value="">— ' + <%- JSON.stringify(t.allDongles) %> + ' —</option>';
+                    data.routes.forEach(r => {
+                        const opt = document.createElement('option');
+                        opt.value = r.route_id;
+                        opt.textContent = `${r.name} (#${r.route_id})`;
+                        select.appendChild(opt);
+                    });
+                }
+            } catch (_) {}
+        }
+
+        function openCreateCampaignModal() {
+            document.getElementById('editCampId').value = '';
+            document.getElementById('modalCampTitle').textContent = <%- JSON.stringify(t.createCampaign) %>;
+            document.getElementById('saveCampSubmitBtn').textContent = <%- JSON.stringify(t.saveCampaign) %>;
+            document.getElementById('campName').value = '';
+            document.getElementById('campOutboundRoute').value = '';
+            document.getElementById('campOriginationCid').value = '101';
+            document.getElementById('campMaxDials').value = '1';
+            document.getElementById('campWrapupSec').value = '15';
+            renderDonglesCheckboxes([]);
+            renderAgentsCheckboxes([]);
+            openModal('createCampaignModal');
+        }
+
+        function openEditCampaignModal(camp) {
+            document.getElementById('editCampId').value = camp.id;
+            document.getElementById('modalCampTitle').textContent = <%- JSON.stringify(t.updateCampaign) %>;
+            document.getElementById('saveCampSubmitBtn').textContent = <%- JSON.stringify(t.updateCampaign) %>;
+            document.getElementById('campName').value = camp.name || '';
+            document.getElementById('campOutboundRoute').value = camp.outbound_route_id || '';
+            document.getElementById('campOriginationCid').value = camp.origination_caller_id || '101';
+            document.getElementById('campMaxDials').value = camp.max_concurrent_dials || 1;
+            document.getElementById('campWrapupSec').value = camp.wrapup_time_sec || 15;
+            renderDonglesCheckboxes(Array.isArray(camp.allowed_dongles) ? camp.allowed_dongles : []);
+            renderAgentsCheckboxes(Array.isArray(camp.assigned_agents) ? camp.assigned_agents : []);
+            openModal('createCampaignModal');
+        }
+
+        async function saveCampaign(e) {
+            e.preventDefault();
+            const editId = document.getElementById('editCampId').value;
+            const selectedDongles = Array.from(document.querySelectorAll('input[name="dongleCheckbox"]:checked')).map(cb => cb.value);
+            const selectedAgents = Array.from(document.querySelectorAll('input[name="agentCheckbox"]:checked')).map(cb => cb.value);
+
+            const body = {
+                name: document.getElementById('campName').value,
+                outbound_route_id: document.getElementById('campOutboundRoute').value || null,
+                allowed_dongles: selectedDongles,
+                assigned_agents: selectedAgents,
+                origination_caller_id: document.getElementById('campOriginationCid').value || '101',
+                max_concurrent_dials: parseInt(document.getElementById('campMaxDials').value, 10) || 1,
+                wrapup_time_sec: parseInt(document.getElementById('campWrapupSec').value, 10) || 15
+            };
+
+            const url = editId ? `/api/dialer/campaigns/${editId}` : '/api/dialer/campaigns';
+            const method = editId ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
             const data = await res.json();
-            const select = document.getElementById('campOutboundRoute');
-            if (data.routes) {
-                data.routes.forEach(r => {
-                    const opt = document.createElement('option');
-                    opt.value = r.route_id;
-                    opt.textContent = `${r.name} (#${r.route_id})`;
-                    select.appendChild(opt);
-                });
+            if (data.success) {
+                closeModal('createCampaignModal');
+                loadCampaigns();
+            } else {
+                alert(data.error);
             }
         }
 
-        async function loadDnc() {
-            const res = await fetch('/api/dialer/dnc');
+        async function controlCampaign(id, action) {
+            if (action === 'delete' && !confirm('Are you sure you want to delete this campaign and all its leads?')) return;
+            const res = await fetch(`/api/dialer/campaigns/${id}/control`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action })
+            });
             const data = await res.json();
-            const tbody = document.getElementById('dncTableBody');
+            if (data.success) loadCampaigns(); else alert(data.error);
+        }
+
+        function openImportModal(id) {
+            document.getElementById('importCampaignId').value = id;
+            document.getElementById('leadsFile').value = '';
+            openModal('importLeadsModal');
+        }
+
+        async function uploadLeadsFile(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('leadsFile');
+            if (!fileInput.files || !fileInput.files[0]) return;
+
+            const btn = document.getElementById('uploadLeadsBtn');
+            btn.disabled = true;
+            btn.textContent = 'Uploading & Syncing...';
+
+            const formData = new FormData();
+            formData.append('campaign_id', document.getElementById('importCampaignId').value);
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const res = await fetch('/api/dialer/leads/import', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    closeModal('importLeadsModal');
+                    alert(data.message);
+                    loadCampaigns();
+                } else {
+                    alert(data.error);
+                }
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = <%- JSON.stringify(t.upload) %>;
+            }
+        }
+
+        async function openViewLeadsModal(campaignId, campaignName) {
+            document.getElementById('viewLeadsTitle').textContent = `${campaignName} — ${<%- JSON.stringify(t.leads) %>}`;
+            document.getElementById('leadsTableBody').innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">Loading leads...</td></tr>';
+            openModal('viewLeadsModal');
+
+            try {
+                const res = await fetch(`/api/dialer/leads/${campaignId}`);
+                const data = await res.json();
+                currentLoadedLeads = data.leads || [];
+                document.getElementById('viewLeadsCount').textContent = `${currentLoadedLeads.length} leads loaded`;
+                renderLeadsTable(currentLoadedLeads);
+            } catch (err) {
+                document.getElementById('leadsTableBody').innerHTML = `<tr><td colspan="5" class="py-6 text-center text-rose-400">${err.message}</td></tr>`;
+            }
+        }
+
+        function renderLeadsTable(leads) {
+            const tbody = document.getElementById('leadsTableBody');
             tbody.innerHTML = '';
-            if (!data.dnc || data.dnc.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-[var(--text-muted)]">No DNC entries found.</td></tr>';
+            if (leads.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">No leads found.</td></tr>';
                 return;
             }
-            data.dnc.forEach(d => {
+            leads.forEach(l => {
+                const fullName = (l.first_name ? `${l.first_name} ${l.last_name || ''}` : l.phone_number).trim();
+                const statusColor = l.status === 'connected' ? 'text-emerald-400' : (l.status === 'dialing' ? 'text-blue-400' : (l.status === 'pending' ? 'text-amber-400' : 'text-rose-400'));
                 const tr = document.createElement('tr');
+                tr.className = 'hover:bg-zinc-900/40';
                 tr.innerHTML = `
-                    <td class="py-2 px-3 font-mono font-bold">${d.phone_number}</td>
-                    <td class="py-2 px-3 text-[var(--text-muted)]">${d.reason || '-'}</td>
-                    <td class="py-2 px-3 text-right"><button onclick="removeDnc('${d.phone_number}')" class="text-rose-400 hover:text-rose-300 font-bold">Remove</button></td>
+                    <td class="py-2.5 px-3 font-bold text-white">${escapeHtml(fullName)}</td>
+                    <td class="py-2.5 px-3 font-mono text-zinc-300">${escapeHtml(l.phone_number)}</td>
+                    <td class="py-2.5 px-3 font-mono text-[10px] font-bold uppercase ${statusColor}">${escapeHtml(l.status)}</td>
+                    <td class="py-2.5 px-3 text-center font-mono">${l.attempts || 0}</td>
+                    <td class="py-2.5 px-3 text-zinc-400 text-[11px] font-mono">${l.last_called_at ? new Date(l.last_called_at).toLocaleString() : '—'}</td>
                 `;
                 tbody.appendChild(tr);
             });
         }
 
-        function openCreateCampaignModal() { openModal('createCampaignModal'); }
-        function openImportModal(id) { document.getElementById('importCampaignId').value = id; openModal('importLeadsModal'); }
-
-        async function saveCampaign(e) {
-            e.preventDefault();
-            const body = {
-                name: document.getElementById('campName').value,
-                mode: document.getElementById('campMode').value,
-                outbound_route_id: document.getElementById('campOutboundRoute').value,
-                origination_caller_id: document.getElementById('campOriginationCid').value,
-                queue_name: document.getElementById('campQueueName').value,
-                max_concurrent_dials: document.getElementById('campMaxDials').value,
-                wrapup_time_sec: document.getElementById('campWrapupSec').value,
-                max_queue_wait_sec: document.getElementById('campMaxWait').value,
-                amd_enabled: document.getElementById('campAmd').checked
-            };
-            const res = await fetch('/api/dialer/campaigns', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
-            const data = await res.json();
-            if (data.success) { closeModal('createCampaignModal'); loadCampaigns(); } else { alert(data.error); }
+        function filterLeadsTable() {
+            const query = (document.getElementById('leadsSearchInput').value || '').toLowerCase().trim();
+            if (!query) {
+                renderLeadsTable(currentLoadedLeads);
+                return;
+            }
+            const filtered = currentLoadedLeads.filter(l => {
+                const name = (l.first_name ? `${l.first_name} ${l.last_name || ''}` : '').toLowerCase();
+                const phone = String(l.phone_number || '').toLowerCase();
+                return name.includes(query) || phone.includes(query);
+            });
+            renderLeadsTable(filtered);
         }
 
-        async function controlCampaign(id, action) {
-            const res = await fetch(`/api/dialer/campaigns/${id}/control`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action }) });
-            const data = await res.json();
-            if (data.success) loadCampaigns(); else alert(data.error);
+        async function loadDnc() {
+            try {
+                const res = await fetch('/api/dialer/dnc');
+                const data = await res.json();
+                const tbody = document.getElementById('dncTableBody');
+                tbody.innerHTML = '';
+                if (!data.dnc || data.dnc.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-[var(--text-muted)]">No DNC entries found.</td></tr>';
+                    return;
+                }
+                data.dnc.forEach(d => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="py-2 px-3 font-mono font-bold">${escapeHtml(d.phone_number)}</td>
+                        <td class="py-2 px-3 text-[var(--text-muted)]">${escapeHtml(d.reason || '-')}</td>
+                        <td class="py-2 px-3 text-right"><button onclick="removeDnc('${escapeHtml(d.phone_number)}')" class="text-rose-400 hover:text-rose-300 font-bold">Remove</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (_) {}
         }
 
-        async function uploadLeadsCsv(e) {
+        function openAddDncModal() {
+            document.getElementById('dncPhoneInput').value = '';
+            document.getElementById('dncReasonInput').value = '';
+            openModal('addDncModal');
+        }
+
+        async function addDncNumber(e) {
             e.preventDefault();
-            const formData = new FormData();
-            formData.append('campaign_id', document.getElementById('importCampaignId').value);
-            formData.append('file', document.getElementById('leadsCsvFile').files[0]);
-            const res = await fetch('/api/dialer/leads/import', { method: 'POST', body: formData });
+            const phone_number = document.getElementById('dncPhoneInput').value;
+            const reason = document.getElementById('dncReasonInput').value;
+            const res = await fetch('/api/dialer/dnc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone_number, reason })
+            });
             const data = await res.json();
-            if (data.success) { closeModal('importLeadsModal'); alert(data.message); loadCampaigns(); } else { alert(data.error); }
+            if (data.success) {
+                closeModal('addDncModal');
+                loadDnc();
+            } else {
+                alert(data.error);
+            }
         }
 
         async function removeDnc(phone) {
@@ -323,24 +651,38 @@ const isRtl = currentLang === 'ar';
             const data = await res.json();
             if (data.success) loadDnc(); else alert(data.error);
         }
-        async function loadQueues() {
-            const res = await fetch('/api/config/queues');
-            const data = await res.json();
-            const select = document.getElementById('campQueueName');
-            if (data.queues) {
-                data.queues.forEach(q => {
-                    const opt = document.createElement('option');
-                    opt.value = q.extension;
-                    opt.textContent = `${q.extension} ${q.descr ? '— ' + q.descr : ''}`;
-                    select.appendChild(opt);
-                });
-            }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         }
+
+        // Live Attempt Logs via Socket.io
+        const socket = io();
+        socket.on('dialerAttemptUpdate', (data) => {
+            const container = document.getElementById('attemptsContainer');
+            if (!container) return;
+            const div = document.createElement('div');
+            div.className = 'p-2 bg-[var(--bg-card)] rounded-lg text-xs flex items-center justify-between border border-[var(--border-primary)]';
+            div.innerHTML = `
+                <span class="font-mono font-bold">${escapeHtml(data.leadPhone || '')}</span>
+                <span class="text-[10px] text-[var(--text-muted)] font-mono">${escapeHtml(data.dongleId || 'default')}</span>
+                <span class="text-[10px] font-bold uppercase ${data.status === 'connected' ? 'text-emerald-400' : (data.status === 'dialing' ? 'text-blue-400' : 'text-amber-400')}">${escapeHtml(data.status || '')}</span>
+            `;
+            if (container.firstElementChild && container.firstElementChild.textContent.includes('No active attempt')) {
+                container.innerHTML = '';
+            }
+            container.insertBefore(div, container.firstChild);
+            if (container.children.length > 30) {
+                container.removeChild(container.lastChild);
+            }
+        });
 
         document.addEventListener('DOMContentLoaded', () => {
             loadCampaigns();
             loadOutboundRoutes();
-            loadQueues();
+            loadDongles();
+            loadExtensions();
             loadDnc();
         });
     </script>
