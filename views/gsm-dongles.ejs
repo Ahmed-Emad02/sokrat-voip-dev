@@ -113,7 +113,17 @@ const words = {
         cfSeconds: "seconds",
         cfDefaultSec: "seconds (Default)",
         btnCallForwarding: "Call Forwarding",
-        legendCallForwardingDesc: "Configures 3GPP Call Forwarding (always, busy, no answer, unreachable)."
+        legendCallForwardingDesc: "Configures 3GPP Call Forwarding (always, busy, no answer, unreachable).",
+        atDiagTitle: "AT Diagnostics (Root)",
+        atDiagModalTitle: "Modem AT Diagnostic Console",
+        atDiagModalSubtitle: "Direct cellular baseband command execution & AI-assisted explanation",
+        atDiagRunBtn: "Execute",
+        atDiagRunning: "Querying baseband...",
+        atDiagShortcuts: "Quick Diagnostic Shortcuts:",
+        atDiagCustomLabel: "Custom AT Command:",
+        atDiagCustomPlaceholder: "Enter AT command (e.g. AT^CARDLOCK?, AT^SYSINFO)...",
+        atDiagExplanationTitle: "Diagnostic Explanation & Analysis",
+        atDiagRawOutputTitle: "Raw Baseband Response"
     },
     ar: {
         title: "شرائح الاتصال", subtitle: "GSM",
@@ -226,7 +236,17 @@ const words = {
         cfSeconds: "ثواني",
         cfDefaultSec: "ثانية (الافتراضي)",
         btnCallForwarding: "تحويل المكالمات",
-        legendCallForwardingDesc: "ضبط تحويل المكالمات عبر الشبكة الخلوية 3GPP (كلي، مشغول، لا رد، غير متاح)."
+        legendCallForwardingDesc: "ضبط تحويل المكالمات عبر الشبكة الخلوية 3GPP (كلي، مشغول، لا رد، غير متاح).",
+        atDiagTitle: "فحص وتشخيص AT (خاص بـ root)",
+        atDiagModalTitle: "لوحة الفحص والتشخيص المباشر للمودم (AT)",
+        atDiagModalSubtitle: "تنفيذ مباشر لأوامر الشبكة وقراءة استجابة الشريحة مع التفسير الذكي",
+        atDiagRunBtn: "تنفيذ",
+        atDiagRunning: "جاري الاستعلام...",
+        atDiagShortcuts: "اختصارات التشخيص السريعة:",
+        atDiagCustomLabel: "أمر مخصص:",
+        atDiagCustomPlaceholder: "أدخل أمر AT (مثال: AT^CARDLOCK?, AT^SYSINFO)...",
+        atDiagExplanationTitle: "التحليل والتفسير الفني للاستجابة",
+        atDiagRawOutputTitle: "الاستجابة الخام من المودم"
     }
 };
 const t = words[currentLang] || words['en'];
@@ -310,13 +330,42 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
         
+        .terminal-container {
+            background-color: var(--bg-card, #09090b);
+            border: 1px solid var(--border-primary, #27272a);
+        }
         .terminal-screen {
-            background-color: #ffffff !important;
-            color: #000000 !important;
+            background-color: var(--bg-card, #09090b) !important;
+            color: var(--text-primary, #f4f4f5) !important;
             border: none;
             font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
             max-height: 100%;
             overflow-y: auto;
+        }
+        #terminal-placeholder {
+            background-color: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid var(--border-primary, #27272a) !important;
+            color: var(--text-muted, #71717a) !important;
+        }
+        .ussd-resp-box {
+            background-color: rgba(255, 255, 255, 0.04) !important;
+            border: 1px solid var(--border-primary, #27272a) !important;
+            color: #f4f4f5 !important;
+        }
+        .ussd-resp-time {
+            color: #a1a1aa !important;
+        }
+        .ussd-resp-text {
+            color: #34d399 !important;
+        }
+        .ussd-cmd-line {
+            color: #71717a !important;
+            border-top: 1px solid var(--border-primary, #27272a) !important;
+        }
+        .ussd-err-box {
+            background-color: rgba(239, 68, 68, 0.1) !important;
+            border: 1px solid rgba(239, 68, 68, 0.25) !important;
+            color: #f87171 !important;
         }
         .log-screen {
             background-color: #050505;
@@ -1123,18 +1172,42 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         .light-theme [class*="border-[#27272a]"] {
             border-color: #cbd5e1 !important;
         }
+        .light-theme .terminal-container {
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+        }
         .light-theme .terminal-screen {
             background-color: #ffffff !important;
             border: none !important;
-            color: #000000 !important;
+            color: #0f172a !important;
         }
         .light-theme #terminal-screen div {
-            color: #000000 !important;
+            color: inherit !important;
         }
         .light-theme #terminal-placeholder {
             color: #64748b !important;
             background-color: #f8fafc !important;
             border-color: #e2e8f0 !important;
+        }
+        .light-theme .ussd-resp-box {
+            background-color: #f8fafc !important;
+            border-color: #e2e8f0 !important;
+            color: #0f172a !important;
+        }
+        .light-theme .ussd-resp-time {
+            color: #64748b !important;
+        }
+        .light-theme .ussd-resp-text {
+            color: #047857 !important;
+        }
+        .light-theme .ussd-cmd-line {
+            color: #64748b !important;
+            border-color: #e2e8f0 !important;
+        }
+        .light-theme .ussd-err-box {
+            background-color: #fef2f2 !important;
+            border-color: #fecaca !important;
+            color: #b91c1c !important;
         }
         .light-theme .ussd-term-btn {
             background-color: #ffffff !important;
@@ -1483,9 +1556,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         </form>
                     </div>
                     <!-- USSD Terminal Display -->
-                    <div class="flex flex-col flex-1 min-h-[220px] bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm">
-                        <div class="terminal-screen p-4 flex-1 overflow-y-auto text-xs text-black font-mono flex flex-col gap-2 rounded-xl bg-white select-text" id="terminal-screen">
-                            <div class="text-zinc-500 font-mono text-xs select-none p-3.5 rounded-lg border border-zinc-200 bg-zinc-50" id="terminal-placeholder">
+                    <div class="terminal-container flex flex-col flex-1 min-h-[220px] rounded-xl overflow-hidden shadow-sm">
+                        <div class="terminal-screen p-4 flex-1 overflow-y-auto text-xs font-mono flex flex-col gap-2 rounded-xl select-text" id="terminal-screen">
+                            <div class="font-mono text-xs select-none p-3.5 rounded-lg" id="terminal-placeholder">
                                 <%= t.terminalPlaceholder %>
                             </div>
                         </div>
@@ -1890,12 +1963,118 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         </div>
     </div>
 
+    <!-- AT Diagnostics (Root Only) Modal -->
+    <div id="at-diag-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-200 p-4">
+        <div id="at-diag-modal-card" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-2xl scale-95 opacity-0 transition-all duration-200 flex flex-col max-h-[90vh] overflow-hidden shadow-2xl">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b border-[var(--border-primary)] px-5 py-4 shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <span class="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)] flex items-center gap-2">
+                            <span><%= t.atDiagModalTitle %></span>
+                            <span id="at-diag-target-badge" class="bg-[var(--accent-color)] text-white font-mono text-[10px] px-2 py-0.5 rounded-md uppercase">dongle0</span>
+                        </h3>
+                        <p class="text-[11px] text-[var(--text-muted)]"><%= t.atDiagModalSubtitle %></p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeAtDiagModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+
+            <!-- Modal Scrollable Content -->
+            <div class="p-5 overflow-y-auto space-y-4 flex-1">
+                <!-- Command Shortcuts Bar -->
+                <div>
+                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2 text-center"><%= t.atDiagShortcuts %></label>
+                    <div class="flex flex-wrap items-center justify-center gap-1.5" id="at-diag-shortcuts-container">
+                        <button type="button" onclick="executeAtDiag('AT^CARDLOCK?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-amber-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT^CARDLOCK?</button>
+                        <button type="button" onclick="executeAtDiag('AT^SYSINFO')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-blue-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT^SYSINFO</button>
+                        <button type="button" onclick="executeAtDiag('AT+CREG?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-purple-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT+CREG?</button>
+                        <button type="button" onclick="executeAtDiag('AT+CSQ')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-emerald-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT+CSQ</button>
+                        <button type="button" onclick="executeAtDiag('AT+COPS?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-sky-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT+COPS?</button>
+                        <button type="button" onclick="executeAtDiag('AT^SYSCFG?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-rose-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT^SYSCFG?</button>
+                        <button type="button" onclick="executeAtDiag('AT+CPIN?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-teal-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT+CPIN?</button>
+                        <div class="flex items-center justify-center gap-1.5 w-full pt-2 border-t border-[var(--border-primary)]/50 mt-1 flex-wrap">
+                            <button type="button" onclick="executeAtDiag('AT^SYSCFG=14,2,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-bold bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30 transition cursor-pointer" title="Lock modem to 3G Only (WCDMA / UMTS)">Lock 3G Only</button>
+                            <button type="button" onclick="executeAtDiag('AT^SYSCFG=13,1,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 transition cursor-pointer" title="Lock modem to 2G Only (GSM / GPRS)">Lock 2G Only</button>
+                            <button type="button" onclick="executeAtDiag('AT^SYSCFG=2,2,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition cursor-pointer" title="Auto mode: 3G Preferred with automatic fallback to 2G (Recommended default)">Auto 3G/2G (Default)</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Command Input -->
+                <form onsubmit="handleCustomAtSubmit(event)" class="flex gap-2">
+                    <div class="relative flex-1">
+                        <input type="text" id="at-diag-input" placeholder="<%= t.atDiagCustomPlaceholder %>" class="w-full bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2 text-xs font-mono font-bold focus:outline-none focus:border-[var(--accent-color)] transition" autocomplete="off" />
+                    </div>
+                    <button type="submit" id="at-diag-submit-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[var(--accent-color)] hover:bg-[var(--accent-color)]/90 transition cursor-pointer flex items-center gap-1.5 shrink-0">
+                        <span id="at-diag-submit-text"><%= t.atDiagRunBtn %></span>
+                    </button>
+                </form>
+
+                <!-- Loading State -->
+                <div id="at-diag-loading" class="hidden py-8 flex flex-col items-center justify-center gap-3">
+                    <div class="w-7 h-7 border-2 border-[var(--accent-color)] border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-xs text-[var(--text-muted)] font-mono animate-pulse"><%= t.atDiagRunning %></span>
+                </div>
+
+                <!-- Structured Explanation Section -->
+                <div id="at-diag-result-section" class="space-y-3 hidden">
+                    <div class="p-4 sm:p-5 rounded-2xl border transition-all" id="at-diag-explanation-card">
+                        <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                            <span class="text-xs font-black uppercase tracking-wider text-[var(--text-secondary)]"><%= t.atDiagExplanationTitle %></span>
+                            <span id="at-diag-badge" class="px-3 py-1 rounded-full text-xs font-black tracking-wide shadow-sm text-black"></span>
+                        </div>
+                        <h4 id="at-diag-summary" class="text-base sm:text-lg font-black text-[var(--text-primary)] mb-3 leading-snug"></h4>
+                        <ul id="at-diag-details" class="space-y-2 text-xs sm:text-sm text-[var(--text-primary)] list-disc list-inside mb-4 font-semibold"></ul>
+                        <div id="at-diag-recommendation-box" class="p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 font-black shadow-sm text-black">
+                            <span id="at-diag-recommendation-icon" class="shrink-0 mt-0.5 text-amber-500">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
+                                </svg>
+                            </span>
+                            <span id="at-diag-recommendation" class="font-black text-black leading-relaxed"></span>
+                        </div>
+                    </div>
+
+                    <!-- Raw Baseband Output Console -->
+                    <div class="rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] overflow-hidden shadow-sm">
+                        <div class="flex items-center justify-between px-3.5 py-2 bg-[var(--bg-hover)] border-b border-[var(--border-primary)] text-xs font-mono text-[var(--text-secondary)]">
+                            <span class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span id="at-diag-cmd-executed" class="font-bold">AT</span>
+                            </span>
+                            <button type="button" onclick="copyAtDiagOutput()" class="hover:text-[var(--text-primary)] transition cursor-pointer flex items-center gap-1">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                <span>Copy</span>
+                            </button>
+                        </div>
+                        <pre id="at-diag-raw-output" class="p-3.5 text-xs sm:text-sm font-mono font-bold whitespace-pre-wrap overflow-x-auto max-h-48 leading-relaxed select-all text-emerald-700 dark:text-emerald-400 bg-[var(--bg-card)]"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-end px-5 py-3 border-t border-[var(--border-primary)] shrink-0 bg-[var(--bg-card)]">
+                <button type="button" onclick="closeAtDiagModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-hover)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] transition cursor-pointer">
+                    <%= t.close %>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- WebSockets Real-time streaming -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
         let loadedDevices = <%- JSON.stringify(devices || []) %>;
         window.loadedDevices = loadedDevices;
         const isRtl = <%= isRtl %>;
+        const isRootUser = <%- Boolean(typeof isRootUser !== 'undefined' && isRootUser || typeof currentUser !== 'undefined' && currentUser === 'root') %>;
+        window.isRootUser = isRootUser;
         window.isRtl = isRtl;
         function escapeHtml(str) {
             if (str === null || str === undefined) return '';
@@ -2254,10 +2433,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             </div>
 
                             <div class="flex items-center justify-center gap-1.5 md:flex-1 text-center">
-                                <button type="button" id="forwardBtn-${escapeHtml(id)}" data-dongle-action="call-forwarding" class="dongle-action-button dongle-action-secondary cursor-pointer px-2 py-1.5 h-8 rounded-lg text-xs font-bold flex items-center gap-1" title="${escapeHtml(words.btnCallForwarding || (isRtl ? 'تحويل المكالمات' : 'Call Forwarding'))}">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l5 5-5 5"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v7a4 4 0 004 4h12"/></svg>
-                                    <span>${escapeHtml(words.btnCallForwarding || (isRtl ? 'تحويل' : 'Forward'))}</span>
-                                </button>
+                                ${isRootUser ? `
+                                <button type="button" onclick="openAtDiagConsole('${escapeHtml(id)}')" class="dongle-action-button dongle-action-secondary cursor-pointer px-2 py-1.5 h-8 rounded-lg text-xs font-bold flex items-center gap-1 text-purple-400 hover:text-purple-300" title="${escapeHtml(words.atDiagTitle || 'AT Diagnostics')}">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                                    <span>AT >_</span>
+                                </button>` : ''}
                                 <button type="button" id="reloadBtn-${escapeHtml(id)}" data-dongle-action="reload" class="dongle-action-button dongle-action-primary cursor-pointer px-2.5 py-1.5 h-8 rounded-lg text-xs font-bold flex items-center gap-1.5" title="${escapeHtml(words.refreshBtn)}">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
                                     <span>${escapeHtml(words.refreshBtn)}</span>
@@ -2326,15 +2506,39 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                 </div>
 
                                 ${renderDongleRouting(dev)}
+                                ${isRootUser ? `
+                                <div class="mt-2.5 p-3 rounded-xl bg-[var(--bg-primary)]/70 border border-[var(--border-primary)] flex flex-col gap-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-black uppercase text-purple-400 tracking-wider flex items-center gap-1.5">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                                            <span>${isRtl ? 'فحص وتشخيص AT (خاص بـ root)' : 'AT Diagnostics (Root Only)'}</span>
+                                        </span>
+                                        <span class="text-[9px] font-mono text-[var(--text-muted)] font-bold">${escapeHtml(id)}</span>
+                                    </div>
+                                    <div class="grid grid-cols-4 gap-1.5 w-full">
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^CARDLOCK?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-amber-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check SIM Lock & remaining attempts counter">^CARDLOCK?</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSINFO')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-blue-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check network service state, domain & roaming">^SYSINFO</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CREG?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-purple-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check GSM network registration status">+CREG?</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CSQ')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-emerald-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check signal quality RSSI / dBm">+CSQ</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+COPS?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-sky-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check current cellular operator">+COPS?</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-rose-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check 2G/3G mode and band preferences">^SYSCFG?</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CPIN?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-teal-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check SIM PIN readiness">+CPIN?</button>
+                                        <button type="button" onclick="openAtDiagConsole('${escapeHtml(id)}')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-bold bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-400 transition cursor-pointer flex items-center justify-center gap-1" title="Open interactive AT console">
+                                            <span>${isRtl ? 'وحدة التحكم' : 'Console'}</span> &rarr;
+                                        </button>
+                                    </div>
+                                    <div class="pt-2 border-t border-[var(--border-primary)]/60 grid grid-cols-3 gap-1.5 w-full">
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG=14,2,3FFFFFFF,2,4')" class="w-full py-1.5 rounded-lg text-[10px] font-mono font-black text-center bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30 transition cursor-pointer truncate" title="Lock modem to 3G Only (WCDMA / UMTS)">Lock 3G</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG=13,1,3FFFFFFF,2,4')" class="w-full py-1.5 rounded-lg text-[10px] font-mono font-black text-center bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 transition cursor-pointer truncate" title="Lock modem to 2G Only (GSM / GPRS)">Lock 2G</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG=2,2,3FFFFFFF,2,4')" class="w-full py-1.5 rounded-lg text-[10px] font-mono font-black text-center bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition cursor-pointer truncate" title="Auto: 3G Preferred, 2G Fallback (Recommended default)">Auto 3G/2G</button>
+                                    </div>
+                                </div>` : ''}
                             </div>
                             <div class="dongle-card-footer px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
                                 <span class="text-[10px] font-extrabold text-[var(--text-muted)] flex items-center gap-1.5 shrink-0">
                                     <span style="color:${signal.activeColor}">●</span> ${escapeHtml(signal.level)} · ${signal.rssi}/31
                                 </span>
                                 <div class="flex flex-wrap items-center gap-1.5">
-                                    <button type="button" id="forwardBtn-${escapeHtml(id)}" data-dongle-action="call-forwarding" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnCallForwarding || (isRtl ? 'تحويل المكالمات' : 'Call Forwarding'))}">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l5 5-5 5"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v7a4 4 0 004 4h12"/></svg>
-                                    </button>
                                     <button type="button" id="editPortsBtn-${escapeHtml(id)}" data-dongle-action="edit-ports" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnEditPorts)}">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/><circle cx="7" cy="12" r="3"/><path d="M17 7l4 4-4 4"/></svg>
                                     </button>
@@ -2354,6 +2558,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     <button type="button" id="virtualReplugBtn-${escapeHtml(id)}" data-dongle-action="virtual-replug" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center" title="${escapeHtml(words.btnVirtualReplug)}">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22v-5"/><path d="M9 8V2h6v6"/><path d="M6 13V8h12v5a6 6 0 0 1-12 0z"/></svg>
                                     </button>
+                                    ${isRootUser ? `
+                                    <button type="button" id="atDiagBtn-${escapeHtml(id)}" onclick="openAtDiagConsole('${escapeHtml(id)}')" class="dongle-action-button dongle-action-secondary cursor-pointer w-8 h-8 p-0 rounded-lg flex items-center justify-center text-purple-400 hover:text-purple-300" title="${escapeHtml(words.atDiagTitle || 'AT Diagnostics')}">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                                    </button>` : ''}
                                 </div>
                             </div>`;
                     }
@@ -2403,11 +2611,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 lastUssdTime = now;
                 
                 const respLine = document.createElement('div');
-                respLine.className = 'text-black font-semibold bg-zinc-100 p-2.5 rounded-lg border border-zinc-200 mt-1 whitespace-pre-wrap leading-relaxed select-text';
+                respLine.className = 'ussd-resp-box font-semibold p-2.5 rounded-lg border mt-1 whitespace-pre-wrap leading-relaxed select-text';
                 
                 const displayLabel = isLive ? ' (Live Event)' : '';
                 const displayText = normalizedText || '(Empty Response / Terminated by Network)';
-                respLine.innerHTML = `<span class="text-zinc-600 font-normal font-mono">[${logTime}]${displayLabel}</span> <span class="text-black font-mono">${displayText}</span>`;
+                respLine.innerHTML = `<span class="ussd-resp-time font-normal font-mono">[${logTime}]${displayLabel}</span> <span class="ussd-resp-text font-mono">${displayText}</span>`;
                 
                 terminalScreen.appendChild(respLine);
                 terminalScreen.scrollTop = terminalScreen.scrollHeight;
@@ -3450,6 +3658,187 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 }
             };
 
+            // --- ROOT AT DIAGNOSTICS CLIENT LOGIC ---
+            let activeAtDiagDongleId = '';
+            const atDiagModal = document.getElementById('at-diag-modal');
+            const atDiagModalCard = document.getElementById('at-diag-modal-card');
+            const atDiagTargetBadge = document.getElementById('at-diag-target-badge');
+            const atDiagInput = document.getElementById('at-diag-input');
+            const atDiagLoading = document.getElementById('at-diag-loading');
+            const atDiagResultSection = document.getElementById('at-diag-result-section');
+            const atDiagExplanationCard = document.getElementById('at-diag-explanation-card');
+            const atDiagBadge = document.getElementById('at-diag-badge');
+            const atDiagSummary = document.getElementById('at-diag-summary');
+            const atDiagDetails = document.getElementById('at-diag-details');
+            const atDiagRecommendation = document.getElementById('at-diag-recommendation');
+            const atDiagRecommendationBox = document.getElementById('at-diag-recommendation-box');
+            const atDiagCmdExecuted = document.getElementById('at-diag-cmd-executed');
+            const atDiagRawOutput = document.getElementById('at-diag-raw-output');
+            const atDiagSubmitBtn = document.getElementById('at-diag-submit-btn');
+
+            window.openAtDiagConsole = function(dongleId) {
+                if (!isRootUser) return;
+                activeAtDiagDongleId = String(dongleId || '').toLowerCase().trim();
+                if (atDiagTargetBadge) atDiagTargetBadge.textContent = activeAtDiagDongleId;
+                if (atDiagModal && atDiagModalCard) {
+                    atDiagModal.classList.remove('opacity-0', 'pointer-events-none');
+                    atDiagModalCard.classList.remove('scale-95', 'opacity-0');
+                    atDiagModalCard.classList.add('scale-100', 'opacity-100');
+                }
+                if (atDiagInput) {
+                    atDiagInput.value = '';
+                    setTimeout(() => atDiagInput.focus(), 100);
+                }
+            };
+
+            window.closeAtDiagModal = function() {
+                if (atDiagModal && atDiagModalCard) {
+                    atDiagModal.classList.add('opacity-0', 'pointer-events-none');
+                    atDiagModalCard.classList.remove('scale-100', 'opacity-100');
+                    atDiagModalCard.classList.add('scale-95', 'opacity-0');
+                }
+            };
+
+            if (atDiagModal) {
+                atDiagModal.addEventListener('click', (e) => {
+                    if (e.target === atDiagModal) closeAtDiagModal();
+                });
+            }
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && atDiagModal && !atDiagModal.classList.contains('opacity-0')) {
+                    closeAtDiagModal();
+                }
+            });
+
+            window.runAtDiag = function(dongleId, command) {
+                if (!isRootUser) return;
+                activeAtDiagDongleId = String(dongleId || '').toLowerCase().trim();
+                openAtDiagConsole(activeAtDiagDongleId);
+                executeAtDiag(command);
+            };
+
+            window.executeAtDiag = function(command) {
+                if (!isRootUser || !activeAtDiagDongleId) return;
+                const cmd = String(command || '').trim();
+                if (!cmd) return;
+
+                if (atDiagInput) atDiagInput.value = cmd;
+                if (atDiagLoading) atDiagLoading.classList.remove('hidden');
+                if (atDiagResultSection) atDiagResultSection.classList.add('hidden');
+                if (atDiagSubmitBtn) atDiagSubmitBtn.disabled = true;
+
+                fetch(`/api/gsm-dongles/at-diagnostic/${encodeURIComponent(activeAtDiagDongleId)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: cmd })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (atDiagLoading) atDiagLoading.classList.add('hidden');
+                    if (atDiagSubmitBtn) atDiagSubmitBtn.disabled = false;
+
+                    if (!data.success) {
+                        showToast(activeAtDiagDongleId, data.error || 'Diagnostic command failed', 'error');
+                        return;
+                    }
+
+                    renderAtDiagResult(data);
+                })
+                .catch(err => {
+                    if (atDiagLoading) atDiagLoading.classList.add('hidden');
+                    if (atDiagSubmitBtn) atDiagSubmitBtn.disabled = false;
+                    showToast(activeAtDiagDongleId, 'Network error executing AT diagnostic: ' + err.message, 'error');
+                });
+            };
+
+            window.handleCustomAtSubmit = function(e) {
+                e.preventDefault();
+                const cmd = atDiagInput ? atDiagInput.value.trim() : '';
+                if (cmd) executeAtDiag(cmd);
+            };
+
+            function renderAtDiagResult(data) {
+                if (!atDiagResultSection) return;
+                const exp = data.explanation || {};
+                const sev = exp.severity || 'info';
+
+                // Card border & background
+                if (atDiagExplanationCard) {
+                    if (sev === 'success') {
+                        atDiagExplanationCard.className = 'p-4 sm:p-5 rounded-2xl border bg-emerald-500/15 border-emerald-500/40 text-[var(--text-primary)] shadow-sm';
+                    } else if (sev === 'danger') {
+                        atDiagExplanationCard.className = 'p-4 sm:p-5 rounded-2xl border bg-rose-500/15 border-rose-500/40 text-[var(--text-primary)] shadow-sm';
+                    } else if (sev === 'warning') {
+                        atDiagExplanationCard.className = 'p-4 sm:p-5 rounded-2xl border bg-amber-500/15 border-amber-500/40 text-[var(--text-primary)] shadow-sm';
+                    } else {
+                        atDiagExplanationCard.className = 'p-4 sm:p-5 rounded-2xl border bg-sky-500/15 border-sky-500/40 text-[var(--text-primary)] shadow-sm';
+                    }
+                }
+
+                // Badge
+                if (atDiagBadge) {
+                    atDiagBadge.textContent = exp.badge || data.command;
+                    if (sev === 'success') {
+                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-emerald-500/25 text-black border border-emerald-500/50 shadow-sm';
+                    } else if (sev === 'danger') {
+                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-rose-500/25 text-black border border-rose-500/50 shadow-sm';
+                    } else if (sev === 'warning') {
+                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-amber-500/25 text-black border border-amber-500/50 shadow-sm';
+                    } else {
+                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-sky-500/25 text-black border border-sky-500/50 shadow-sm';
+                    }
+                }
+                // Summary
+                if (atDiagSummary) atDiagSummary.textContent = exp.summary || '';
+
+                // Details
+                if (atDiagDetails) {
+                    atDiagDetails.innerHTML = '';
+                    const details = Array.isArray(exp.details) ? exp.details : [exp.details].filter(Boolean);
+                    details.forEach(d => {
+                        const li = document.createElement('li');
+                        li.className = 'text-xs sm:text-sm text-[var(--text-primary)] font-semibold leading-relaxed';
+                        li.textContent = d;
+                        atDiagDetails.appendChild(li);
+                    });
+                }
+
+                // Recommendation
+                if (atDiagRecommendationBox && atDiagRecommendation) {
+                    if (exp.recommendation) {
+                        atDiagRecommendation.textContent = exp.recommendation;
+                        atDiagRecommendationBox.classList.remove('hidden');
+                        if (sev === 'danger') {
+                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-rose-500/20 border border-rose-500/40 text-black font-black';
+                        } else if (sev === 'warning') {
+                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-amber-500/20 border border-amber-500/40 text-black font-black';
+                        } else if (sev === 'success') {
+                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-emerald-500/20 border border-emerald-500/40 text-black font-black';
+                        } else {
+                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-sky-500/20 border border-sky-500/40 text-black font-black';
+                        }
+                    } else {
+                        atDiagRecommendationBox.classList.add('hidden');
+                    }
+                }
+                // Raw Command and Output
+                if (atDiagCmdExecuted) atDiagCmdExecuted.textContent = data.command;
+                if (atDiagRawOutput) atDiagRawOutput.textContent = data.rawOutput || '(No response text)';
+
+                atDiagResultSection.classList.remove('hidden');
+            }
+
+            window.copyAtDiagOutput = function() {
+                if (!atDiagRawOutput) return;
+                const text = atDiagRawOutput.textContent;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast(activeAtDiagDongleId || 'Modem', 'AT output copied to clipboard', 'success');
+                    });
+                }
+            };
+
             // Edit SIM phone number mapping action
             window.editSimNumber = function(dongleId, imsi, currentVal) {
                 if ((!currentVal || currentVal === 'Unknown' || currentVal === '-') && dongleId) {
@@ -3631,7 +4020,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const terminalScreen = document.getElementById('terminal-screen');
                 if (!terminalScreen) return;
                 terminalScreen.innerHTML = `
-                    <div class="text-zinc-500 font-mono text-xs select-none p-3.5 rounded-lg border border-zinc-200 bg-zinc-50" id="terminal-placeholder">
+                    <div class="font-mono text-xs select-none p-3.5 rounded-lg border" id="terminal-placeholder">
                         ${words.terminalPlaceholder}
                     </div>`;
             };
@@ -3665,7 +4054,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 }
                 
                 const cmdLine = document.createElement('div');
-                cmdLine.className = 'text-zinc-500 mt-2 border-t border-zinc-900 pt-2';
+                cmdLine.className = 'ussd-cmd-line mt-2 pt-2 text-xs font-mono';
                 cmdLine.textContent = `[${new Date().toLocaleTimeString()}] > exec-ussd -d ${target} -c ${code}`;
                 terminalScreen.appendChild(cmdLine);
                 terminalScreen.scrollTop = terminalScreen.scrollHeight;
@@ -3682,7 +4071,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         showToast(target + ' (USSD / MMI)', data.response, 'success');
                     } else {
                         const respLine = document.createElement('div');
-                        respLine.className = 'text-rose-700 font-bold bg-rose-50 p-2.5 rounded-lg border border-rose-200 mt-1';
+                        respLine.className = 'ussd-err-box font-bold p-2.5 rounded-lg border mt-1';
                         respLine.textContent = `[System Error] ${data.error || words.sendUssdError}`;
                         terminalScreen.scrollTop = terminalScreen.scrollHeight;
                         showToast(target + ' (Error)', data.error || words.sendUssdError, 'error');
@@ -3690,7 +4079,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 })
                 .catch(err => {
                     const errorLine = document.createElement('div');
-                    errorLine.className = 'text-rose-700 font-bold bg-rose-50 p-2.5 rounded-lg border border-rose-200 mt-1';
+                    errorLine.className = 'ussd-err-box font-bold p-2.5 rounded-lg border mt-1';
                     errorLine.textContent = `[Network Error] ${err.message}`;
                     terminalScreen.appendChild(errorLine);
                     terminalScreen.scrollTop = terminalScreen.scrollHeight;
@@ -3829,7 +4218,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     const scenarioLabel = scenarioEl && scenarioEl.selectedIndex >= 0 ? scenarioEl.options[scenarioEl.selectedIndex].text : scenario;
                     const actionLabel = actionEl && actionEl.selectedIndex >= 0 ? actionEl.options[actionEl.selectedIndex].text : action;
                     const cmdLine = document.createElement('div');
-                    cmdLine.className = 'text-zinc-500 mt-2 border-t border-zinc-900 pt-2';
+                    cmdLine.className = 'ussd-cmd-line mt-2 pt-2 text-xs font-mono';
                     cmdLine.textContent = `[${new Date().toLocaleTimeString()}] > exec-forwarding -d ${target} -s ${scenario} (${scenarioLabel}) -a ${action} ${number ? ('-n ' + number) : ''}`;
                     terminalScreen.appendChild(cmdLine);
                     terminalScreen.scrollTop = terminalScreen.scrollHeight;
@@ -3854,7 +4243,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         } else {
                             const errText = data.error || data.message || (isRtl ? 'فشل إرسال كود التحويل' : 'Failed to execute call forwarding');
                             const respLine = document.createElement('div');
-                            respLine.className = 'text-rose-400 font-bold bg-rose-950/10 p-2 rounded border border-rose-900/20 mt-1';
+                            respLine.className = 'ussd-err-box font-bold p-2.5 rounded-lg border mt-1';
                             respLine.textContent = `[System Error] ${errText}`;
                             terminalScreen.appendChild(respLine);
                             terminalScreen.scrollTop = terminalScreen.scrollHeight;
@@ -3863,7 +4252,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     })
                     .catch(err => {
                         const errorLine = document.createElement('div');
-                        errorLine.className = 'text-rose-500 font-bold mt-1';
+                        errorLine.className = 'ussd-err-box font-bold p-2.5 rounded-lg border mt-1';
                         errorLine.textContent = `[Network Error] ${err.message}`;
                         terminalScreen.appendChild(errorLine);
                         terminalScreen.scrollTop = terminalScreen.scrollHeight;
