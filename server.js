@@ -12279,11 +12279,16 @@ function sanitizeAmiValue(raw) {
     return String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
 }
 
-// Helper to take lead phone number string verbatim as entered in template
+// Helper to clean lead phone number string preserving E.164 + and digits only
 function normalizeLeadPhone(raw) {
     if (!raw) return '';
     let phone = String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
     phone = phone.replace(/^['"=]+/, '').replace(/["']+$/, '').trim();
+    phone = phone.replace(/(?!^\+)[^\d]/g, '');
+    // Auto-restore leading 0 if Excel stripped it on Egyptian mobile (10 digits starting with 10, 11, 12, 15)
+    if (phone.length === 10 && /^1[0125]\d{8}$/.test(phone)) {
+        phone = '0' + phone;
+    }
     return phone;
 }
 
@@ -15761,7 +15766,7 @@ app.get('/api/dialer/leads/template', (req, res) => {
         res.setHeader('Content-Disposition', 'attachment; filename="leads_template.csv"');
         return res.send(csvContent);
     }
-    // Default: Native Excel .xlsx template with Phone Number column formatted explicitly as Text ('@')
+    // Default: Native Excel .xlsx template with Column B pre-formatted as Text ('@') across 5,000 rows
     if (XLSX) {
         const wb = XLSX.utils.book_new();
         const wsData = [
@@ -15771,18 +15776,20 @@ app.get('/api/dialer/leads/template', (req, res) => {
         ];
         const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-        // Format column B cells explicitly as String type and Text number format '@'
-        const range = XLSX.utils.decode_range(ws['!ref']);
-        for (let R = 0; R <= range.e.r; ++R) {
-            const cellAddr = XLSX.utils.encode_cell({ r: R, c: 1 });
-            if (ws[cellAddr]) {
-                ws[cellAddr].t = 's'; // string type
-                ws[cellAddr].z = '@'; // text format in Excel
+        // Pre-format Column B (Phone Number) as explicit Text ('@') for 5,000 rows
+        // so typing new numbers in rows 4, 5, 6... in Excel preserves the leading 0
+        for (let r = 1; r <= 5000; r++) {
+            const cellAddr = XLSX.utils.encode_cell({ r, c: 1 });
+            if (!ws[cellAddr]) {
+                ws[cellAddr] = { t: 's', v: '', z: '@' };
+            } else {
+                ws[cellAddr].t = 's';
+                ws[cellAddr].z = '@';
             }
         }
+        ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 5000, c: 1 } });
         ws['!cols'] = [{ wch: 25 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(wb, ws, 'Leads Template');
-
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename="leads_template.xlsx"');

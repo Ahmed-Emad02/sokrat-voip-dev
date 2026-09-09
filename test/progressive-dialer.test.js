@@ -53,10 +53,13 @@ test('1. CSV and XLSX 2-Column Lead Parser with Normalization', async () => {
     fs.unlinkSync(csvTmpPath);
     fs.unlinkSync(xlsxTmpPath);
 
-    // Verify verbatim phone number parsing as entered in template
+    // Verify phone number parsing with safety net for stripped zeros
     assert.match(serverJsContent, /function normalizeLeadPhone\(raw\)/);
-    assert.match(serverJsContent, /phone\.replace\(\/\^\[\'\"=\]\+\/,\s*\'\'\)\.replace\(\/\[\"\'\]\+\$\/,\s*\'\'\)\.trim\(\)/);
-    // Verify XLSX template generator forces text format '@' and string type 's'
+    assert.match(serverJsContent, /phone\.length === 10 && \/\^1\[0125\]\\d\{8\}\$\/\.test\(phone\)/);
+    assert.match(serverJsContent, /phone = '0' \+ phone/);
+
+    // Verify XLSX template generator forces text format '@' and string type 's' across 5000 rows
+    assert.match(serverJsContent, /r <= 5000/);
     assert.match(serverJsContent, /ws\[cellAddr\]\.t = 's'/);
     assert.match(serverJsContent, /ws\[cellAddr\]\.z = '@'/);
     assert.match(serverJsContent, /bookType: 'xlsx'/);
