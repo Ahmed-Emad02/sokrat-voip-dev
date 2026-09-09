@@ -12283,8 +12283,14 @@ function sanitizeAmiValue(raw) {
 function normalizeLeadPhone(raw) {
     if (!raw) return '';
     let phone = String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
+    phone = phone.replace(/^['"=]+/, '').replace(/["']+$/, '');
     phone = phone.replace(/(?!^\+)[^\d]/g, '');
-    if (phone.length === 10 && /^[12]/.test(phone)) {
+    // Auto-restore leading zero stripped by Excel:
+    // 1. 10-digit Egyptian mobile starting with 1 (e.g. 1012345678 -> 01012345678)
+    if (phone.length === 10 && /^1\d{9}$/.test(phone)) {
+        phone = '0' + phone;
+    } else if (phone.length === 9 && /^[23]\d{8}$/.test(phone)) {
+        // 2. 9-digit landline (e.g. 2xxxxxxx -> 02xxxxxxx)
         phone = '0' + phone;
     }
     return phone;
@@ -15756,10 +15762,48 @@ app.post('/api/dialer/campaigns/:id/control', async (req, res) => {
 
 // GET /api/dialer/leads/template - Download CSV Template (MUST be before :campaignId or Express shadows it)
 app.get('/api/dialer/leads/template', (req, res) => {
-    const csvContent = '\ufeffName,Phone Number\nAhmed Hassan,01001111111\nMazen Ali,01099998888\n';
+    const format = String(req.query.format || '').toLowerCase();
+
+    if (format === 'csv') {
+        // In CSV, use ="010..." syntax so Excel preserves leading zero when opened as CSV
+        const csvContent = '\ufeffName,Phone Number\nAhmed Hassan,="01001111111"\nMazen Ali,="01099998888"\n';
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="leads_template.csv"');
+        return res.send(csvContent);
+    }
+
+    // Default: Native Excel .xlsx template with Phone Number column formatted explicitly as Text ('@')
+    if (XLSX) {
+        const wb = XLSX.utils.book_new();
+        const wsData = [
+            ['Name', 'Phone Number'],
+            ['Ahmed Hassan', '01001111111'],
+            ['Mazen Ali', '01099998888']
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // Format column B cells explicitly as String type and Text number format '@'
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let R = 0; R <= range.e.r; ++R) {
+            const cellAddr = XLSX.utils.encode_cell({ r: R, c: 1 });
+            if (ws[cellAddr]) {
+                ws[cellAddr].t = 's'; // string type
+                ws[cellAddr].z = '@'; // text format in Excel
+            }
+        }
+        ws['!cols'] = [{ wch: 25 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Leads Template');
+
+        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="leads_template.xlsx"');
+        return res.send(buffer);
+    }
+
+    const fallbackCsv = '\ufeffName,Phone Number\nAhmed Hassan,="01001111111"\nMazen Ali,="01099998888"\n';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="leads_template.csv"');
-    res.send(csvContent);
+    res.send(fallbackCsv);
 });
 
 // GET /api/dialer/leads/:campaignId

@@ -52,6 +52,15 @@ test('1. CSV and XLSX 2-Column Lead Parser with Normalization', async () => {
 
     fs.unlinkSync(csvTmpPath);
     fs.unlinkSync(xlsxTmpPath);
+
+    // Verify leading-zero auto-restoration function
+    assert.match(serverJsContent, /phone\.length === 10 && \/\^1\\d\{9\}\$\/\.test\(phone\)/);
+    assert.match(serverJsContent, /phone = '0' \+ phone/);
+
+    // Verify XLSX template generator forces text format '@' and string type 's'
+    assert.match(serverJsContent, /ws\[cellAddr\]\.t = 's'/);
+    assert.match(serverJsContent, /ws\[cellAddr\]\.z = '@'/);
+    assert.match(serverJsContent, /bookType: 'xlsx'/);
 });
 
 test('2. Dual-Write to SQLite Address Book (/var/www/db/address_book.db)', () => {
