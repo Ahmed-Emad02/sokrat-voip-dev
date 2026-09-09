@@ -12279,20 +12279,11 @@ function sanitizeAmiValue(raw) {
     return String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
 }
 
-// Helper to clean lead phone number string preserving E.164 + and digits only
+// Helper to take lead phone number string verbatim as entered in template
 function normalizeLeadPhone(raw) {
     if (!raw) return '';
     let phone = String(raw).replace(/[\r\n\0;\x00-\x1F]/g, '').trim();
-    phone = phone.replace(/^['"=]+/, '').replace(/["']+$/, '');
-    phone = phone.replace(/(?!^\+)[^\d]/g, '');
-    // Auto-restore leading zero stripped by Excel:
-    // 1. 10-digit Egyptian mobile starting with 1 (e.g. 1012345678 -> 01012345678)
-    if (phone.length === 10 && /^1\d{9}$/.test(phone)) {
-        phone = '0' + phone;
-    } else if (phone.length === 9 && /^[23]\d{8}$/.test(phone)) {
-        // 2. 9-digit landline (e.g. 2xxxxxxx -> 02xxxxxxx)
-        phone = '0' + phone;
-    }
+    phone = phone.replace(/^['"=]+/, '').replace(/["']+$/, '').trim();
     return phone;
 }
 
@@ -15765,13 +15756,11 @@ app.get('/api/dialer/leads/template', (req, res) => {
     const format = String(req.query.format || '').toLowerCase();
 
     if (format === 'csv') {
-        // In CSV, use ="010..." syntax so Excel preserves leading zero when opened as CSV
-        const csvContent = '\ufeffName,Phone Number\nAhmed Hassan,="01001111111"\nMazen Ali,="01099998888"\n';
+        const csvContent = '\ufeffName,Phone Number\nAhmed Hassan,01001111111\nMazen Ali,01099998888\n';
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', 'attachment; filename="leads_template.csv"');
         return res.send(csvContent);
     }
-
     // Default: Native Excel .xlsx template with Phone Number column formatted explicitly as Text ('@')
     if (XLSX) {
         const wb = XLSX.utils.book_new();

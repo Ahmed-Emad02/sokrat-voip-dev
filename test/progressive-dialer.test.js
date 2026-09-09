@@ -53,10 +53,9 @@ test('1. CSV and XLSX 2-Column Lead Parser with Normalization', async () => {
     fs.unlinkSync(csvTmpPath);
     fs.unlinkSync(xlsxTmpPath);
 
-    // Verify leading-zero auto-restoration function
-    assert.match(serverJsContent, /phone\.length === 10 && \/\^1\\d\{9\}\$\/\.test\(phone\)/);
-    assert.match(serverJsContent, /phone = '0' \+ phone/);
-
+    // Verify verbatim phone number parsing as entered in template
+    assert.match(serverJsContent, /function normalizeLeadPhone\(raw\)/);
+    assert.match(serverJsContent, /phone\.replace\(\/\^\[\'\"=\]\+\/,\s*\'\'\)\.replace\(\/\[\"\'\]\+\$\/,\s*\'\'\)\.trim\(\)/);
     // Verify XLSX template generator forces text format '@' and string type 's'
     assert.match(serverJsContent, /ws\[cellAddr\]\.t = 's'/);
     assert.match(serverJsContent, /ws\[cellAddr\]\.z = '@'/);
