@@ -202,6 +202,18 @@ const isRtl = currentLang === 'ar';
                     </div>
                 </div>
 
+                <!-- LEADS FILE UPLOAD DIRECTLY IN CREATE CAMPAIGN MODAL -->
+                <div id="campLeadsFileGroup" class="pt-2 border-t border-[var(--border-primary)]">
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campLeadsFile">
+                        <%= isRtl ? 'ملف الأرقام (CSV أو XLSX) - اختياري' : 'Import Leads File (CSV or XLSX) - Optional' %>
+                    </label>
+                    <input type="file" id="campLeadsFile" accept=".csv,.xlsx,.xls" class="config-input w-full text-xs cursor-pointer">
+                    <p class="text-[10px] text-amber-400 mt-1 flex items-center gap-1">
+                        <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span><%= t.templateNote2Col %> (<%= t.addressBookNote %>)</span>
+                    </p>
+                </div>
+
                 <div class="flex justify-end gap-2 pt-4 border-t border-[var(--border-primary)]">
                     <button type="button" onclick="closeModal('createCampaignModal')" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.cancel %></button>
                     <button type="submit" id="saveCampSubmitBtn" class="config-btn-primary px-4 py-1.5 text-xs"><%= t.saveCampaign %></button>
@@ -446,6 +458,10 @@ const isRtl = currentLang === 'ar';
             document.getElementById('campOriginationCid').value = '101';
             document.getElementById('campMaxDials').value = '1';
             document.getElementById('campWrapupSec').value = '15';
+            const fileGroup = document.getElementById('campLeadsFileGroup');
+            if (fileGroup) fileGroup.style.display = 'block';
+            const fileInput = document.getElementById('campLeadsFile');
+            if (fileInput) fileInput.value = '';
             renderDonglesCheckboxes([]);
             renderAgentsCheckboxes([]);
             openModal('createCampaignModal');
@@ -461,9 +477,11 @@ const isRtl = currentLang === 'ar';
             document.getElementById('campMaxDials').value = camp.max_concurrent_dials || 1;
             document.getElementById('campWrapupSec').value = camp.wrapup_time_sec || 15;
             renderDonglesCheckboxes(Array.isArray(camp.allowed_dongles) ? camp.allowed_dongles : []);
+            const fileGroup = document.getElementById('campLeadsFileGroup');
+            if (fileGroup) fileGroup.style.display = 'none';
+            renderDonglesCheckboxes(Array.isArray(camp.allowed_dongles) ? camp.allowed_dongles : []);
             renderAgentsCheckboxes(Array.isArray(camp.assigned_agents) ? camp.assigned_agents : []);
             openModal('createCampaignModal');
-        }
 
         async function saveCampaign(e) {
             e.preventDefault();
@@ -491,6 +509,29 @@ const isRtl = currentLang === 'ar';
             });
             const data = await res.json();
             if (data.success) {
+                const campaignId = editId || data.id;
+                const leadsFileInput = document.getElementById('campLeadsFile');
+                if (!editId && leadsFileInput && leadsFileInput.files && leadsFileInput.files[0] && campaignId) {
+                    const submitBtn = document.getElementById('saveCampSubmitBtn');
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Uploading & Syncing Leads...';
+                    const formData = new FormData();
+                    formData.append('campaign_id', campaignId);
+                    formData.append('file', leadsFileInput.files[0]);
+                    try {
+                        const importRes = await fetch('/api/dialer/leads/import', { method: 'POST', body: formData });
+                        const importData = await importRes.json();
+                        if (importData.success) {
+                            alert(`Campaign created and ${importData.imported} lead(s) imported successfully into campaign and Address Book!`);
+                        } else {
+                            alert(`Campaign created, but lead import error: ${importData.error}`);
+                        }
+                    } catch (uploadErr) {
+                        alert(`Campaign created, but upload error: ${uploadErr.message}`);
+                    } finally {
+                        submitBtn.disabled = false;
+                    }
+                }
                 closeModal('createCampaignModal');
                 loadCampaigns();
             } else {

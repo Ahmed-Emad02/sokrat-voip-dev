@@ -15580,25 +15580,36 @@ async function finalizeAttempt(attemptUuid, terminalStatus, causeCode = 0) {
 // GET /api/dialer/dongles - Available GSM dongles from Asterisk
 app.get('/api/dialer/dongles', async (req, res) => {
     try {
-        const { stdout } = await execAsync('/usr/sbin/asterisk -rx "dongle show devices" 2>/dev/null', { timeout: 3000 });
+        const stdout = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
         const dongles = [];
         if (stdout) {
-            const lines = stdout.split('\n').filter(Boolean);
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line || line.startsWith('===') || line.startsWith('ID')) continue;
-                const parts = line.split(/\s+/);
-                if (parts.length >= 3) {
-                    const id = parts[0];
-                    const state = parts[2];
-                    const provider = parts[6] || 'GSM';
-                    const number = parts[parts.length - 1] || '';
-                    dongles.push({
-                        id,
-                        state,
-                        provider: provider !== 'NONE' ? provider : 'GSM',
-                        number: number !== 'Unknown' ? number : ''
-                    });
+            const lines = stdout.trim().split('\n');
+            if (lines.length > 1) {
+                const header = lines[0];
+                const colNames = ['ID', 'Group', 'State', 'RSSI', 'Mode', 'Submode', 'Provider Name', 'Model', 'Firmware', 'IMEI', 'IMSI', 'Number'];
+                const indices = colNames.map(name => header.indexOf(name));
+                indices.push(header.length + 100);
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (!line.trim() || line.startsWith('-----') || line.includes('ID')) continue;
+                    const row = {};
+                    for (let j = 0; j < colNames.length; j++) {
+                        const start = indices[j];
+                        const end = indices[j + 1];
+                        if (start !== -1 && start < line.length) {
+                            row[colNames[j]] = line.substring(start, Math.min(end, line.length)).trim();
+                        } else {
+                            row[colNames[j]] = '';
+                        }
+                    }
+                    if (row.ID && row.ID.startsWith('dongle')) {
+                        dongles.push({
+                            id: row.ID,
+                            state: row.State,
+                            provider: row['Provider Name'] || 'GSM',
+                            number: (row.Number && row.Number !== 'Unknown') ? row.Number : ''
+                        });
+                    }
                 }
             }
         }
