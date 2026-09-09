@@ -160,17 +160,11 @@ const isRtl = currentLang === 'ar';
                     <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campName"><%= t.campaignName %></label>
                     <input type="text" id="campName" required maxlength="100" class="config-input w-full" placeholder="e.g. Real Estate VIP Leads">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campOutboundRoute"><%= t.outboundRoute %></label>
-                        <select id="campOutboundRoute" class="config-input w-full">
-                            <option value="">— <%= t.allDongles %> —</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campOriginationCid"><%= t.originationCallerId %></label>
-                        <input type="text" id="campOriginationCid" value="101" class="config-input w-full">
-                    </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campOutboundRoute"><%= t.outboundRoute %></label>
+                    <select id="campOutboundRoute" class="config-input w-full">
+                        <option value="">— <%= t.allDongles %> —</option>
+                    </select>
                 </div>
 
                 <!-- ALLOWED GSM DONGLES CHECKBOXES -->
@@ -455,7 +449,6 @@ const isRtl = currentLang === 'ar';
             document.getElementById('saveCampSubmitBtn').textContent = <%- JSON.stringify(t.saveCampaign) %>;
             document.getElementById('campName').value = '';
             document.getElementById('campOutboundRoute').value = '';
-            document.getElementById('campOriginationCid').value = '101';
             document.getElementById('campMaxDials').value = '1';
             document.getElementById('campWrapupSec').value = '15';
             const fileGroup = document.getElementById('campLeadsFileGroup');
@@ -473,7 +466,6 @@ const isRtl = currentLang === 'ar';
             document.getElementById('saveCampSubmitBtn').textContent = <%- JSON.stringify(t.updateCampaign) %>;
             document.getElementById('campName').value = camp.name || '';
             document.getElementById('campOutboundRoute').value = camp.outbound_route_id || '';
-            document.getElementById('campOriginationCid').value = camp.origination_caller_id || '101';
             document.getElementById('campMaxDials').value = camp.max_concurrent_dials || 1;
             document.getElementById('campWrapupSec').value = camp.wrapup_time_sec || 15;
             const fileGroup = document.getElementById('campLeadsFileGroup');
@@ -493,7 +485,6 @@ const isRtl = currentLang === 'ar';
                 outbound_route_id: document.getElementById('campOutboundRoute').value || null,
                 allowed_dongles: selectedDongles,
                 assigned_agents: selectedAgents,
-                origination_caller_id: document.getElementById('campOriginationCid').value || '101',
                 max_concurrent_dials: parseInt(document.getElementById('campMaxDials').value, 10) || 1,
                 wrapup_time_sec: parseInt(document.getElementById('campWrapupSec').value, 10) || 15
             };
