@@ -1,8 +1,8 @@
 <%
 const words = {
     en: {
-        title: "Auto-Dialer Center", subtitle: "Campaigns & Pacing",
-        desc: "Progressive outbound campaigns with WebRTC agent distribution, GSM dongle routing, and Address Book sync",
+        title: "Campaigns", subtitle: "",
+        desc: "",
         createCampaign: "Create Campaign", campaignName: "Campaign Name",
         mode: "Dialer Mode", progressive: "Progressive (Power 1:1)",
         outboundRoute: "Outbound Route", originationCallerId: "Origination Caller ID / Ext",
@@ -25,8 +25,8 @@ const words = {
         searchLeads: "Search leads by name or phone..."
     },
     ar: {
-        title: "مركز الاتصال الآلي", subtitle: "الحملات والتوزيع",
-        desc: "حملات اتصال تصاعدية مباشرة مع توزيع الموظفين عبر WebRTC واختيار شرائح GSM ومزامنة دفتر العناوين",
+        title: "الحملات", subtitle: "",
+        desc: "",
         createCampaign: "إنشاء حملة", campaignName: "اسم الحملة",
         mode: "نوع المتصل", progressive: "تصاعدي (Progressive 1:1)",
         outboundRoute: "مسار الاتصال الخارجي", originationCallerId: "معرف/تحويلة المتصل",
@@ -97,9 +97,14 @@ const isRtl = currentLang === 'ar';
 
     <div class="flex-1 p-6 md:p-8 overflow-y-auto">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-                <h1 class="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h1>
-                <p class="text-xs text-[var(--text-muted)] mt-1"><%= t.desc %></p>
+            <div class="flex items-center gap-2.5">
+                <div class="p-2 rounded-xl bg-[var(--accent-transparent)] border border-[var(--border-primary)] text-[var(--accent-color)]">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 11l18-5v12L3 14v-3z"/>
+                        <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight"><%= t.title %></h1>
             </div>
             <div class="flex items-center gap-2">
                 <a href="/api/dialer/leads/template" class="config-btn-secondary px-3 py-2 text-xs flex items-center gap-1.5" title="<%= t.downloadTemplate %>">
