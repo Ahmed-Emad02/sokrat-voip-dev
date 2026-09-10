@@ -1929,11 +1929,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 </div>
 
                 <!-- Detailed Comparison Table -->
-                <div class="rounded-xl border border-[var(--border-primary)] overflow-hidden bg-[var(--bg-card)]">
-                    <div class="overflow-x-auto">
+                <div class="rounded-xl border border-[var(--border-primary)] overflow-hidden bg-[var(--bg-card)] flex flex-col">
+                    <div class="overflow-x-auto overflow-y-auto max-h-[440px]" style="scrollbar-width: thin;">
                         <table class="w-full text-start text-xs border-collapse">
-                            <thead>
-                                <tr class="bg-black/30 border-b border-[var(--border-primary)] text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">
+                            <thead class="sticky top-0 z-10 bg-[var(--bg-card)] shadow-sm">
+                                <tr class="bg-black/40 border-b border-[var(--border-primary)] text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">
                                     <th class="px-3.5 py-2.5 text-start"><%= t.auditTableSlot %></th>
                                     <th class="px-3.5 py-2.5 text-start"><%= t.auditTableConfig %></th>
                                     <th class="px-3.5 py-2.5 text-start"><%= t.auditTableLive %></th>
