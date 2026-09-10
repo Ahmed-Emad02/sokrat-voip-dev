@@ -23,7 +23,19 @@ const words = {
         viewGrid: "Card View",
         viewCompact: "Compact View",
         viewMinimal: "Minimal View",
-        dropHere: "Drop extensions here"
+        dropHere: "Drop extensions here",
+        transferTo: "Transfer To...",
+        transferModalTitle: "Transfer Call",
+        transferModalSubtitle: "Select destination extension or enter custom number",
+        transferSourceLabel: "Transferring call on extension:",
+        transferDestLabel: "Destination Extension:",
+        transferCustomInputPlaceholder: "Enter custom extension, queue, ring group, or phone...",
+        transferBtnSubmit: "Transfer Call",
+        transferringBtn: "Transferring...",
+        transferSuccess: "Call successfully transferred",
+        transferSelectColleague: "Or select an extension from roster:",
+        cannotTransferToSelf: "Cannot transfer call to the same extension",
+        noActiveCallToTransfer: "No active call found on this extension"
     },
     ar: {
         title: "لوحة", subtitle: "المراقبة المباشرة",
@@ -48,7 +60,19 @@ const words = {
         viewGrid: "عرض البطاقات",
         viewCompact: "عرض مدمج",
         viewMinimal: "عرض مصغر",
-        dropHere: "أفلت التحويلات هنا"
+        dropHere: "أفلت التحويلات هنا",
+        transferTo: "تحويل إلى... (Transfer)",
+        transferModalTitle: "تحويل المكالمة",
+        transferModalSubtitle: "اختر التحويلة المطلوبة أو أدخل رقماً مخصصاً",
+        transferSourceLabel: "تحويل المكالمة الجارية على تحويلة:",
+        transferDestLabel: "التحويلة الهدف:",
+        transferCustomInputPlaceholder: "أدخل رقم تحويلة، طابور، مجموعة رنين أو رقم خارجي...",
+        transferBtnSubmit: "تأكيد التحويل",
+        transferringBtn: "جاري التحويل...",
+        transferSuccess: "تم تحويل المكالمة بنجاح",
+        transferSelectColleague: "أو اختر تحويلة مباشرة من القائمة:",
+        cannotTransferToSelf: "لا يمكن تحويل المكالمة إلى نفس التحويلة",
+        noActiveCallToTransfer: "لا توجد مكالمة نشطة على هذه التحويلة للتحويل"
     }
 };
 const t = words[currentLang];
@@ -866,6 +890,7 @@ const isRtl = currentLang === 'ar';
                                         <option value="whisper"><%= isRtl ? 'همس (Whisper)' : 'Whisper' %></option>
                                         <option value="barge"><%= isRtl ? 'تدخل (Barge)' : 'Barge' %></option>
                                         <option value="hijack" class="text-amber-400 font-bold"><%= isRtl ? 'سحب المكالمة (Hijack)' : 'Hijack Call' %></option>
+                                        <option value="transfer" class="text-sky-400 font-bold"><%= t.transferTo %></option>
                                         <option value="hangup" class="text-rose-400 font-bold"><%= isRtl ? 'إنهاء المكالمة' : 'End Call' %></option>
                                     </select>
                                 </div>
@@ -1078,6 +1103,7 @@ const isRtl = currentLang === 'ar';
                             updateCardStateClass(ext, online, callState);
                         }
                         if (window.refreshIntercomRosterIfOpen) window.refreshIntercomRosterIfOpen();
+                        if (window.refreshTransferRosterIfOpen) window.refreshTransferRosterIfOpen();
                     });
                 }
             });
@@ -1225,6 +1251,35 @@ const isRtl = currentLang === 'ar';
                 document.getElementById('dialerLeadName').textContent = (data.lead.first_name || '') + ' ' + (data.lead.last_name || data.lead.phone_number || '');
                 document.getElementById('dialerLeadPhone').textContent = data.lead.phone_number || '';
                 document.getElementById('dialerLeadCompany').textContent = data.lead.company || 'N/A';
+
+                const customFieldsContainer = document.getElementById('dialerLeadCustomFields');
+                customFieldsContainer.replaceChildren();
+                const customData = data.lead.custom_data && typeof data.lead.custom_data === 'object' && !Array.isArray(data.lead.custom_data)
+                    ? data.lead.custom_data
+                    : {};
+                let renderedCustomFieldCount = 0;
+                if (Array.isArray(data.lead_fields)) {
+                    data.lead_fields.forEach((field) => {
+                        if (!field || typeof field !== 'object' || Array.isArray(field)) return;
+                        const key = typeof field.key === 'string' ? field.key.trim() : '';
+                        const label = typeof field.label === 'string' ? field.label.trim() : '';
+                        if (!key || !label) return;
+
+                        const row = document.createElement('div');
+                        row.className = 'flex items-baseline justify-between gap-3 text-xs';
+                        const labelElement = document.createElement('span');
+                        labelElement.className = 'text-[10px] text-[var(--text-muted)] uppercase font-bold shrink-0';
+                        labelElement.textContent = label;
+                        const valueElement = document.createElement('span');
+                        valueElement.className = 'text-sm text-[var(--text-secondary)] text-right break-words';
+                        const rawValue = customData[key];
+                        valueElement.textContent = rawValue === null || rawValue === undefined || rawValue === '' ? '—' : String(rawValue);
+                        row.append(labelElement, valueElement);
+                        customFieldsContainer.appendChild(row);
+                        renderedCustomFieldCount += 1;
+                    });
+                }
+                customFieldsContainer.classList.toggle('hidden', renderedCustomFieldCount === 0);
                 document.getElementById('dialerLeadModal').classList.remove('hidden');
             });
 
@@ -1251,6 +1306,7 @@ const isRtl = currentLang === 'ar';
                 const { extension, callData } = data;
                 localCallStatus[extension] = callData;
                 if (window.refreshIntercomRosterIfOpen) window.refreshIntercomRosterIfOpen();
+                if (window.refreshTransferRosterIfOpen) window.refreshTransferRosterIfOpen();
                 const card = document.getElementById('card-' + extension);
                 const badge = document.getElementById('badge-' + extension);
                 const status = document.getElementById('status-' + extension);
@@ -1329,6 +1385,10 @@ const isRtl = currentLang === 'ar';
                     launchSipUrl('sip:224' + extension);
                 } else if (action === 'hijack') {
                     launchSipUrl('sip:225' + extension);
+                } else if (action === 'transfer') {
+                    if (typeof openTransferModal === 'function') {
+                        openTransferModal(extension);
+                    }
                 } else if (action === 'hangup') {
                     if (confirm('<%= isRtl ? "هل أنت متأكد من إنهاء المكالمة؟" : "Are you sure you want to end this call?" %>')) {
                         fetch('/api/hangup/' + extension, { method: 'POST' })
@@ -1841,6 +1901,7 @@ const isRtl = currentLang === 'ar';
                     </div>
                 </div>
             </div>
+            <div id="dialerLeadCustomFields" class="hidden space-y-2 mt-3 pt-3 border-t border-[var(--border-primary)]"></div>
 
             <div class="space-y-2">
                 <span class="text-[11px] font-bold text-[var(--text-muted)] uppercase block mb-2"><%= isRtl ? 'تسجيل نتيجة المكالمة (Disposition)' : 'Log Call Disposition' %></span>
@@ -1885,7 +1946,7 @@ const isRtl = currentLang === 'ar';
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.684A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.316z"/></svg>
                     </span>
                     <div>
-                        <h3 class="text-base font-extrabold text-white"><%= t.intercomModalTitle %></h3>
+                        <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= t.intercomModalTitle %></h3>
                         <p class="text-xs text-[var(--text-muted)]"><%= t.intercomDesc %></p>
                     </div>
                 </div>
@@ -1894,7 +1955,7 @@ const isRtl = currentLang === 'ar';
 
             <!-- Host Extension Selector -->
             <div class="mb-4 bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border-primary)] flex items-center justify-between gap-3">
-                <label for="intercomCallerSelect" class="text-xs font-bold text-slate-300 shrink-0 flex items-center gap-1.5">
+                <label for="intercomCallerSelect" class="text-xs font-bold text-[var(--text-secondary)] shrink-0 flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                     <%= t.hostExt %>
                 </label>
@@ -1908,11 +1969,11 @@ const isRtl = currentLang === 'ar';
             <!-- Filter and Select All Bar -->
             <div class="flex items-center justify-between gap-3 mb-3">
                 <div class="relative flex-1">
-                    <input type="text" id="intercomSearch" oninput="filterIntercomList()" placeholder="<%= t.searchPlaceholder %>" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500">
+                    <input type="text" id="intercomSearch" oninput="filterIntercomList()" placeholder="<%= t.searchPlaceholder %>" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-primary)] placeholder:[var(--text-muted)] focus:outline-none focus:border-emerald-500">
                 </div>
                 <label class="flex items-center gap-2 cursor-pointer bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 hover:border-emerald-500/50 transition">
-                    <input type="checkbox" id="intercomSelectAll" onchange="toggleSelectAllIntercom(this.checked)" class="rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500 bg-zinc-800">
-                    <span class="text-xs font-extrabold text-slate-200 whitespace-nowrap"><%= t.selectAllAvailable %></span>
+                    <input type="checkbox" id="intercomSelectAll" onchange="toggleSelectAllIntercom(this.checked)" class="rounded border-[var(--border-primary)] text-emerald-500 focus:ring-emerald-500 bg-[var(--bg-card)]">
+                    <span class="text-xs font-extrabold text-[var(--text-primary)] whitespace-nowrap"><%= t.selectAllAvailable %></span>
                 </label>
             </div>
 
@@ -1925,7 +1986,7 @@ const isRtl = currentLang === 'ar';
             <div class="border-t border-[var(--border-primary)] pt-4 mt-3 flex items-center justify-between gap-3">
                 <span id="intercomSelectionStatus" class="text-xs font-bold text-emerald-400">0 selected</span>
                 <div class="flex items-center gap-2">
-                    <button type="button" onclick="closeIntercomModal()" class="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl transition cursor-pointer"><%= t.close %></button>
+                    <button type="button" onclick="closeIntercomModal()" class="px-4 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-hover)] hover:bg-[var(--border-primary)] border border-[var(--border-primary)] rounded-xl transition cursor-pointer"><%= t.close %></button>
                     <button type="button" id="startIntercomBtn" onclick="submitIntercomCall()" class="px-5 py-2 text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1.1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
                         <span id="startIntercomBtnText"><%= t.startIntercom %></span>
@@ -2051,26 +2112,26 @@ const isRtl = currentLang === 'ar';
                     const item = document.createElement('div');
                     item.className = 'flex items-center justify-between p-2.5 rounded-xl border transition-all ' + 
                         (isAvailable 
-                            ? (isChecked ? 'bg-emerald-950/40 border-emerald-500/50 text-white' : 'bg-[#18181b] border-[#27272a] hover:border-zinc-700 text-slate-200')
-                            : 'bg-zinc-900/60 border-zinc-900 opacity-60 text-zinc-500 cursor-not-allowed');
+                            ? (isChecked ? 'bg-emerald-500/15 border-emerald-500/50 text-[var(--text-primary)]' : 'bg-[var(--bg-card)] border-[var(--border-primary)] hover:border-[var(--border-accent)] text-[var(--text-primary)]')
+                            : 'bg-[var(--bg-hover)]/60 border-[var(--border-primary)] opacity-60 text-[var(--text-muted)] cursor-not-allowed');
 
                     let badgeHtml = '';
                     if (!isOnline) {
-                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">' + (isRtl ? 'غير متصل' : 'Offline') + '</span>';
+                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-500/15 text-zinc-500 border border-zinc-500/30">' + (isRtl ? 'غير متصل' : 'Offline') + '</span>';
                     } else if (callState === 'In Call' || callState === 'incall') {
-                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">' + (isRtl ? 'في مكالمة' : 'In Call') + '</span>';
+                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30">' + (isRtl ? 'في مكالمة' : 'In Call') + '</span>';
                     } else if (callState === 'Ringing' || callState === 'ringing') {
-                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-950 text-purple-400 border border-purple-800">' + (isRtl ? 'يرن' : 'Ringing') + '</span>';
+                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/15 text-purple-500 border border-purple-500/30">' + (isRtl ? 'يرن' : 'Ringing') + '</span>';
                     } else {
-                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800/60">' + (isRtl ? 'متاح' : 'Available') + '</span>';
+                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">' + (isRtl ? 'متاح' : 'Available') + '</span>';
                     }
 
                     item.innerHTML = `
                         <div class="flex items-center gap-3 min-w-0 flex-1">
-                            <input type="checkbox" id="intercom_chk_${emp.extension}" name="intercom_extension" aria-label="Select extension ${emp.extension}" ${isChecked ? 'checked' : ''} ${isAvailable ? '' : 'disabled'} onchange="toggleIntercomExtension('${emp.extension}', this.checked)" class="rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500 bg-zinc-800 disabled:opacity-40 cursor-pointer">
+                            <input type="checkbox" id="intercom_chk_${emp.extension}" name="intercom_extension" aria-label="Select extension ${emp.extension}" ${isChecked ? 'checked' : ''} ${isAvailable ? '' : 'disabled'} onchange="toggleIntercomExtension('${emp.extension}', this.checked)" class="rounded border-[var(--border-primary)] text-emerald-500 focus:ring-emerald-500 bg-[var(--bg-card)] disabled:opacity-40 cursor-pointer">
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2">
-                                    <span class="text-xs font-bold truncate ${isAvailable ? 'text-white' : 'text-zinc-400'}">${emp.name}</span>
+                                    <span class="text-xs font-bold truncate ${isAvailable ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}">${emp.name}</span>
                                     <span class="text-[11px] font-mono font-black text-amber-400">#${emp.extension}</span>
                                 </div>
                             </div>
@@ -2149,6 +2210,295 @@ const isRtl = currentLang === 'ar';
         })();
     </script>
 
+    <!-- Transfer Call Modal -->
+    <div id="transferModal" class="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-lg w-full p-6 text-[var(--text-primary)] animate-fade-in flex flex-col max-h-[90vh]">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-4">
+                <div class="flex items-center gap-2.5">
+                    <span class="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                    </span>
+                    <div>
+                        <h3 class="text-base font-extrabold text-[var(--text-primary)]"><%= t.transferModalTitle %></h3>
+                        <p class="text-xs text-[var(--text-muted)]"><%= t.transferModalSubtitle %></p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeTransferModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 cursor-pointer">&#10005;</button>
+            </div>
+
+            <!-- Active Call Info Banner -->
+            <div class="mb-4 bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border-primary)] flex flex-col gap-1 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="text-[var(--text-muted)]"><%= t.transferSourceLabel %></span>
+                    <span id="transferSourceExtDisplay" class="font-mono font-bold text-sky-400 text-sm">--</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-[var(--text-muted)]"><%= t.connectedWith %></span>
+                    <span id="transferPartnerDisplay" class="font-mono font-bold text-emerald-400 truncate max-w-[200px]">--</span>
+                </div>
+            </div>
+
+            <!-- Custom Destination Input -->
+            <div class="mb-3">
+                <label for="transferTargetInput" class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5 flex items-center justify-between">
+                    <span><%= t.transferDestLabel %></span>
+                    <span class="text-[10px] text-[var(--text-muted)] font-normal"><%= isRtl ? 'تحويلة، طابور، مجموعة رنين أو رقم خارجي' : 'Extension, Queue, Ring Group, or PSTN' %></span>
+                </label>
+                <div class="relative">
+                    <input type="text" id="transferTargetInput"
+                           placeholder="<%= t.transferCustomInputPlaceholder %>"
+                           class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-[var(--text-primary)] placeholder:[var(--text-muted)] focus:outline-none focus:border-sky-500 transition"
+                           autocomplete="off" />
+                    <button type="button" onclick="clearTransferTargetInput()" class="absolute <%= isRtl ? 'left-2.5' : 'right-2.5' %> top-2 text-zinc-400 hover:text-zinc-200 text-xs p-1">
+                        &#10005;
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search & Quick Selection from Roster -->
+            <div class="flex items-center justify-between gap-2 mb-2 mt-1">
+                <span class="text-xs font-bold text-[var(--text-secondary)]"><%= t.transferSelectColleague %></span>
+                <div class="relative flex-1 max-w-[180px]">
+                    <input type="text" id="transferRosterSearch" oninput="filterTransferRoster()" placeholder="<%= t.searchPlaceholder %>" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1 text-xs text-[var(--text-primary)] placeholder:[var(--text-muted)] focus:outline-none focus:border-sky-500">
+                </div>
+            </div>
+
+            <!-- Scrollable Extension Roster List -->
+            <div id="transferRosterList" class="flex-1 overflow-y-auto space-y-1.5 pr-1 my-1 max-h-[220px]">
+                <!-- Populated dynamically via JS -->
+            </div>
+
+            <!-- Status banner / error message -->
+            <div id="transferModalStatus" class="text-xs font-bold text-rose-400 min-h-[1.25rem] mt-2 truncate"></div>
+
+            <!-- Modal Footer -->
+            <div class="border-t border-[var(--border-primary)] pt-4 mt-2 flex items-center justify-end gap-2">
+                <button type="button" onclick="closeTransferModal()" class="px-4 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-hover)] hover:bg-[var(--border-primary)] border border-[var(--border-primary)] rounded-xl transition cursor-pointer"><%= t.close %></button>
+                <button type="button" id="submitTransferBtn" onclick="submitCallTransfer()" class="px-5 py-2 text-xs font-extrabold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    <span id="submitTransferBtnText"><%= t.transferBtnSubmit %></span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function() {
+            const rosterData = <%- JSON.stringify(roster) %>;
+            let currentTransferSourceExt = null;
+            let selectedTargetExt = '';
+
+            window.openTransferModal = function(sourceExt) {
+                currentTransferSourceExt = String(sourceExt || '').trim();
+                selectedTargetExt = '';
+                const modal = document.getElementById('transferModal');
+                if (!modal) return;
+
+                document.getElementById('transferSourceExtDisplay').textContent = currentTransferSourceExt;
+
+                // Lookup caller / partner from localCallStatus
+                const live = (typeof localCallStatus !== 'undefined' && localCallStatus[currentTransferSourceExt]) ? localCallStatus[currentTransferSourceExt] : null;
+                const partnerText = live?.partner || (document.getElementById('partner-' + currentTransferSourceExt)?.textContent?.trim() || '--');
+                document.getElementById('transferPartnerDisplay').textContent = partnerText;
+
+                document.getElementById('transferTargetInput').value = '';
+                document.getElementById('transferRosterSearch').value = '';
+                document.getElementById('transferModalStatus').textContent = '';
+                document.getElementById('submitTransferBtn').disabled = false;
+
+                renderTransferRoster();
+                modal.classList.remove('hidden');
+                setTimeout(() => {
+                    document.getElementById('transferTargetInput').focus();
+                }, 100);
+            };
+
+            window.closeTransferModal = function() {
+                const modal = document.getElementById('transferModal');
+                if (modal) modal.classList.add('hidden');
+                currentTransferSourceExt = null;
+                selectedTargetExt = '';
+            };
+
+            window.clearTransferTargetInput = function() {
+                document.getElementById('transferTargetInput').value = '';
+                selectedTargetExt = '';
+                renderTransferRoster();
+                document.getElementById('transferTargetInput').focus();
+            };
+
+            window.filterTransferRoster = function() {
+                renderTransferRoster();
+            };
+
+            window.selectTransferTarget = function(ext) {
+                selectedTargetExt = String(ext || '').trim();
+                document.getElementById('transferTargetInput').value = selectedTargetExt;
+                document.getElementById('transferModalStatus').textContent = '';
+                renderTransferRoster();
+            };
+
+            function renderTransferRoster() {
+                const list = document.getElementById('transferRosterList');
+                if (!list) return;
+
+                const query = (document.getElementById('transferRosterSearch')?.value || '').toLowerCase().trim();
+                const typedVal = (document.getElementById('transferTargetInput')?.value || '').trim();
+                const isAr = document.documentElement.dir === 'rtl';
+
+                list.replaceChildren();
+
+                rosterData.forEach(emp => {
+                    // Do not show the source extension itself as a transfer destination
+                    if (emp.extension === currentTransferSourceExt) return;
+
+                    const matchesSearch = !query ||
+                        emp.extension.toLowerCase().includes(query) ||
+                        (emp.name || '').toLowerCase().includes(query) ||
+                        (emp.emp_group || '').toLowerCase().includes(query);
+
+                    if (!matchesSearch) return;
+
+                    const isOnline = (typeof localPeerStatus !== 'undefined' && localPeerStatus[emp.extension] === true) || emp.online;
+                    const callState = (typeof localCallStatus !== 'undefined' && localCallStatus[emp.extension]) ? localCallStatus[emp.extension].state : null;
+                    const isBusy = callState === 'In Call' || callState === 'incall';
+                    const isRinging = callState === 'Ringing' || callState === 'ringing';
+
+                    let badgeHtml = '';
+                    if (!isOnline) {
+                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-500/15 text-zinc-500 border border-zinc-500/30">' + (isAr ? 'غير متصل' : 'Offline') + '</span>';
+                    } else if (isBusy) {
+                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30">' + (isAr ? 'في مكالمة' : 'In Call') + '</span>';
+                    } else if (isRinging) {
+                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/15 text-purple-500 border border-purple-500/30">' + (isAr ? 'يرن' : 'Ringing') + '</span>';
+                    } else {
+                        badgeHtml = '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">' + (isAr ? 'متاح' : 'Available') + '</span>';
+                    }
+
+                    const isSelected = (typedVal === emp.extension) || (selectedTargetExt === emp.extension);
+
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center justify-between p-2 rounded-xl border transition cursor-pointer ' +
+                        (isSelected
+                            ? 'bg-sky-500/15 border-sky-500/60 ring-1 ring-sky-500/40'
+                            : 'bg-[var(--bg-card)] border-[var(--border-primary)] hover:border-sky-500/40 hover:bg-[var(--bg-hover)]');
+
+                    row.onclick = () => window.selectTransferTarget(emp.extension);
+
+                    row.innerHTML = `
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="w-7 h-7 rounded-lg bg-[var(--bg-hover)] border border-[var(--border-primary)] flex items-center justify-center text-xs font-bold text-[var(--text-primary)] shrink-0">
+                                ${emp.name ? emp.name.charAt(0).toUpperCase() : '#'}
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-xs font-bold text-[var(--text-primary)] truncate">${emp.name || emp.extension}</div>
+                                <div class="text-[10px] font-mono text-[var(--text-muted)] flex items-center gap-1.5">
+                                    <span>ext: ${emp.extension}</span>
+                                    ${emp.emp_group && emp.emp_group !== '___ungrouped___' ? `<span class="text-[var(--text-muted)]">&bull;</span><span class="truncate">${emp.emp_group}</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="shrink-0 flex items-center gap-2">
+                            ${badgeHtml}
+                        </div>
+                    `;
+
+                    list.appendChild(row);
+                });
+
+                if (list.children.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'text-center py-6 text-xs text-[var(--text-muted)]';
+                    empty.textContent = isAr ? 'لا توجد تحويلات مطابقة للبحث' : 'No matching extensions found';
+                    list.appendChild(empty);
+                }
+            }
+
+            window.submitCallTransfer = function() {
+                const targetInput = document.getElementById('transferTargetInput');
+                const targetExt = (targetInput?.value || selectedTargetExt || '').trim();
+                const statusEl = document.getElementById('transferModalStatus');
+                const btn = document.getElementById('submitTransferBtn');
+                const btnText = document.getElementById('submitTransferBtnText');
+                const isAr = document.documentElement.dir === 'rtl';
+
+                statusEl.textContent = '';
+
+                if (!currentTransferSourceExt) {
+                    statusEl.textContent = isAr ? 'خطأ: لم يتم تحديد التحويلة المصدر' : 'Error: No source extension identified';
+                    return;
+                }
+
+                if (!targetExt) {
+                    statusEl.textContent = isAr ? 'يرجى اختيار أو إدخال التحويلة الهدف' : 'Please select or enter destination extension';
+                    targetInput?.focus();
+                    return;
+                }
+
+                if (targetExt === currentTransferSourceExt) {
+                    statusEl.textContent = isAr ? 'لا يمكن تحويل المكالمة إلى نفس التحويلة' : 'Cannot transfer call to the same extension';
+                    targetInput?.focus();
+                    return;
+                }
+
+                btn.disabled = true;
+                btnText.textContent = isAr ? 'جاري التحويل...' : 'Transferring...';
+
+                fetch('/api/transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sourceExtension: currentTransferSourceExt,
+                        targetExtension: targetExt
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.success) {
+                        closeTransferModal();
+                    } else {
+                        statusEl.textContent = (data && data.error) ? data.error : (isAr ? 'فشل تحويل المكالمة' : 'Failed to transfer call');
+                    }
+                })
+                .catch(err => {
+                    statusEl.textContent = (isAr ? 'خطأ في الاتصال: ' : 'Network error: ') + err.message;
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btnText.textContent = isAr ? 'تأكيد التحويل' : 'Transfer Call';
+                });
+            };
+
+            window.refreshTransferRosterIfOpen = function() {
+                const modal = document.getElementById('transferModal');
+                if (modal && !modal.classList.contains('hidden')) {
+                    renderTransferRoster();
+                }
+            };
+
+            // Sync typing in input with roster highlighting
+            document.addEventListener('DOMContentLoaded', () => {
+                const input = document.getElementById('transferTargetInput');
+                if (input) {
+                    input.addEventListener('input', () => {
+                        selectedTargetExt = input.value.trim();
+                        renderTransferRoster();
+                    });
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            submitCallTransfer();
+                        }
+                    });
+                }
+            });
+        })();
+    </script>
+
     <!-- WebRTC Extension Policies Modal (Super Admin Only) -->
     <% if (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) { %>
     <div id="policyManagerModal" class="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
@@ -2182,6 +2532,11 @@ const isRtl = currentLang === 'ar';
                         <option value="force_on"><%= isRtl ? '[مقفل] إجباري مفعل' : '[Locked] ON (Force)' %></option>
                         <option value="force_off"><%= isRtl ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)' %></option>
                     </select>
+                    <select id="bulkCancel" name="bulk_cancel" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-bold px-2.5 py-1.5 text-[var(--text-primary)] focus:outline-none focus:border-emerald-500">
+                        <option value="" disabled selected><%= isRtl ? 'قفل إنهاء الرنين للكل' : 'Lock Ring Cancel for All' %></option>
+                        <option value="0"><%= isRtl ? 'مسموح الإنهاء' : 'Allow Cancel (Normal)' %></option>
+                        <option value="1"><%= isRtl ? '[مقفل] ممنوع الإنهاء أثناء الرنين' : '[Locked] Block Cancel' %></option>
+                    </select>
                     <button type="button" onclick="applyBulkPolicies(this)" class="btn-primary px-3 py-1.5 text-xs font-bold whitespace-nowrap cursor-pointer">
                         <%= isRtl ? 'تطبيق على الكل' : 'Apply to All' %>
                     </button>
@@ -2197,12 +2552,12 @@ const isRtl = currentLang === 'ar';
                             <th class="py-2.5 px-3"><%= isRtl ? 'الاسم' : 'Name' %></th>
                             <th class="py-2.5 px-3"><%= isRtl ? 'الرد التلقائي' : 'Auto Answer' %></th>
                             <th class="py-2.5 px-3"><%= isRtl ? 'عدم الإزعاج (DND)' : 'DND' %></th>
+                            <th class="py-2.5 px-3"><%= isRtl ? 'منع إنهاء الرنين الصادر' : 'Block Ring Cancel' %></th>
                             <th class="py-2.5 px-3 text-right"><%= isRtl ? 'إجراء' : 'Action' %></th>
-                        </tr>
                     </thead>
                     <tbody id="policyManagerTbody" class="divide-y divide-[var(--border-primary)]">
                         <tr>
-                            <td colspan="5" class="py-6 text-center text-zinc-500 font-bold"><%= isRtl ? 'جاري تحميل تحويلات WebRTC...' : 'Loading WebRTC extensions...' %></td>
+                            <td colspan="6" class="py-6 text-center text-zinc-500 font-bold"><%= isRtl ? 'جاري تحميل تحويلات WebRTC...' : 'Loading WebRTC extensions...' %></td>
                         </tr>
                     </tbody>
                 </table>
@@ -2271,7 +2626,7 @@ const isRtl = currentLang === 'ar';
                 const res = await fetch('/api/extension-policies');
                 const data = await res.json();
                 if (!data.success || !data.policies || data.policies.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-zinc-500">No WebRTC extensions found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-zinc-500">No WebRTC extensions found.</td></tr>';
                     return;
                 }
                 tbody.innerHTML = '';
@@ -2302,6 +2657,12 @@ const isRtl = currentLang === 'ar';
                                 <option value="force_off" ${p.dnd === 'force_off' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)'}</option>
                             </select>
                         </td>
+                        <td class="py-2.5 px-3 align-middle">
+                            <select id="policyCancel_${p.extension}" name="policy_cancel_${p.extension}" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] policy-cancel-${p.extension}">
+                                <option value="0" ${!p.disable_outbound_ringing_cancel ? 'selected' : ''}>${isAr ? 'مسموح الإنهاء' : 'Allow Cancel'}</option>
+                                <option value="1" ${p.disable_outbound_ringing_cancel ? 'selected' : ''}>${isAr ? '[مقفل] ممنوع الإنهاء أثناء الرنين' : '[Locked] Block Cancel'}</option>
+                            </select>
+                        </td>
                         <td class="py-2.5 px-3 text-right align-middle">
                             <button type="button" onclick="saveWebRtcPolicy('${p.extension}', this)" class="btn-ghost py-1 px-2.5 text-xs text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/50 cursor-pointer">
                                 ${isAr ? 'حفظ' : 'Save'}
@@ -2311,13 +2672,14 @@ const isRtl = currentLang === 'ar';
                     tbody.appendChild(tr);
                 });
             } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-red-400">Failed to load WebRTC extension policies.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-red-400">Failed to load WebRTC extension policies.</td></tr>';
             }
         }
 
         async function saveWebRtcPolicy(ext, btn) {
             const autoSelect = document.querySelector(`.policy-auto-${ext}`);
             const dndSelect = document.querySelector(`.policy-dnd-${ext}`);
+            const cancelSelect = document.querySelector(`.policy-cancel-${ext}`);
             if (!autoSelect || !dndSelect) return;
             const isAr = document.documentElement.getAttribute('dir') === 'rtl';
             if (btn) setButtonLoading(btn, true, isAr ? 'حفظ...' : 'Save...');
@@ -2328,7 +2690,8 @@ const isRtl = currentLang === 'ar';
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         auto_answer: autoSelect.value,
-                        dnd: dndSelect.value
+                        dnd: dndSelect.value,
+                        disable_outbound_ringing_cancel: cancelSelect ? parseInt(cancelSelect.value, 10) : 0
                     })
                 });
                 const data = await res.json();
@@ -2355,7 +2718,8 @@ const isRtl = currentLang === 'ar';
         async function applyBulkPolicies(btn) {
             const autoVal = document.getElementById('bulkAutoAnswer').value;
             const dndVal = document.getElementById('bulkDnd').value;
-            if (!autoVal && !dndVal) return;
+            const cancelVal = document.getElementById('bulkCancel').value;
+            if (!autoVal && !dndVal && !cancelVal) return;
             const isAr = document.documentElement.getAttribute('dir') === 'rtl';
             if (btn) setButtonLoading(btn, true, isAr ? 'جاري التطبيق...' : 'Applying...');
 
@@ -2364,8 +2728,9 @@ const isRtl = currentLang === 'ar';
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        auto_answer: autoVal || 'user_choice',
-                        dnd: dndVal || 'user_choice'
+                        auto_answer: autoVal || undefined,
+                        dnd: dndVal || undefined,
+                        disable_outbound_ringing_cancel: cancelVal ? parseInt(cancelVal, 10) : undefined
                     })
                 });
                 const data = await res.json();

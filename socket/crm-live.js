@@ -3,7 +3,7 @@
  */
 
 const { verifyEmbedSession, logCrmAudit } = require('../lib/integration-auth');
-const { executeCallSpy, executeCallHangup, executeCallHijack } = require('../lib/call-control');
+const { executeCallSpy, executeCallHangup, executeCallHijack, executeCallTransfer } = require('../lib/call-control');
 function registerCrmLiveSocket(io, pool, dependencies = {}) {
     const { getPeerStatus, getActiveCalls, getAmiClient, ASTERISK_BIN } = dependencies;
     const crmNamespace = io.of('/crm-live');
@@ -123,13 +123,13 @@ function registerCrmLiveSocket(io, pool, dependencies = {}) {
                 return cb({ success: false, error: 'Session expired or client revoked' });
             }
 
-            const { action, targetExtension, supervisorExtension: customSupExt } = data || {};
+            const { action, targetExtension, destinationExtension, supervisorExtension: customSupExt } = data || {};
             if (!action || !targetExtension) {
                 return cb({ success: false, error: 'Missing action or targetExtension' });
             }
 
             const supervisorExt = customSupExt || currentSession.supervisor_extension;
-            if (!supervisorExt && action !== 'hangup') {
+            if (!supervisorExt && action !== 'hangup' && action !== 'transfer') {
                 return cb({ success: false, error: 'No supervisor extension provided for live control action' });
             }
 
@@ -167,6 +167,16 @@ function registerCrmLiveSocket(io, pool, dependencies = {}) {
                     await executeCallHijack(pool, ami, ASTERISK_BIN, {
                         supervisorExt: String(supervisorExt),
                         targetExt: target,
+                        activeCallsObj: getActiveCalls
+                    });
+                } else if (action === 'transfer') {
+                    const dst = String(destinationExtension || '').trim();
+                    if (!dst || !/^\+?\d{2,15}$/.test(dst)) {
+                        return cb({ success: false, error: 'Invalid destination extension format' });
+                    }
+                    await executeCallTransfer(pool, ami, ASTERISK_BIN, {
+                        sourceExt: target,
+                        destinationExt: dst,
                         activeCallsObj: getActiveCalls
                     });
                 } else {

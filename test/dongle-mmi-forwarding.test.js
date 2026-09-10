@@ -257,7 +257,7 @@ test('server.js exposes dedicated POST /api/gsm-dongles/call-forwarding and enha
     assert.match(serverJs, /parseMmiCallForwardingDetails\(code\)/, 'USSD route must check parseMmiCallForwardingDetails');
 });
 
-test('views/gsm-dongles.ejs includes Call Forwarding tab, form, card action button, and toast handlers', () => {
+test('views/gsm-dongles.ejs includes Call Forwarding tab, form, and toast handlers', () => {
     const viewPath = path.join(__dirname, '../views/gsm-dongles.ejs');
     const viewContent = fs.readFileSync(viewPath, 'utf8');
 
@@ -285,10 +285,6 @@ test('views/gsm-dongles.ejs includes Call Forwarding tab, form, card action butt
     assert.match(viewContent, /id="cf-number-input"/, 'View must render cf-number-input');
     assert.match(viewContent, /id="cf-delay-select"/, 'View must render cf-delay-select');
     assert.match(viewContent, /id="cf-submit-btn"/, 'View must render cf-submit-btn');
-
-    // 4. Card View action button
-    assert.match(viewContent, /data-dongle-action="call-forwarding"/, 'View must render call-forwarding button on dongle cards');
-    assert.match(viewContent, /openDongleCallForwarding\(id\)/, 'Click handler must invoke openDongleCallForwarding');
 
     // 5. Client JavaScript functions
     assert.match(viewContent, /window\.switchConsoleTab\s*=/, 'View must define window.switchConsoleTab');

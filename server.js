@@ -448,10 +448,12 @@ async function initAuthDb() {
             extension VARCHAR(20) PRIMARY KEY,
             auto_answer ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
             dnd ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
+            disable_outbound_ringing_cancel TINYINT(1) NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    try { await conn.execute('ALTER TABLE extension_policies ADD COLUMN disable_outbound_ringing_cancel TINYINT(1) NOT NULL DEFAULT 0 AFTER dnd'); } catch (_) {}
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dashboard_settings (
             setting_key VARCHAR(100) PRIMARY KEY,
@@ -618,11 +620,14 @@ async function initAuthDb() {
             wrapup_time_sec INT DEFAULT 15,
             max_queue_wait_sec INT DEFAULT 5,
             auto_answer TINYINT(1) DEFAULT 0,
+            lead_fields TEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `allowed_dongles` TEXT DEFAULT NULL AFTER `outbound_route_id`"); } catch (_) {}
     try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `assigned_agents` TEXT DEFAULT NULL AFTER `allowed_dongles`"); } catch (_) {}
+    try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `mask_phone_numbers` TINYINT(1) DEFAULT 0 AFTER `auto_answer`"); } catch (_) {}
+    try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `lead_fields` TEXT DEFAULT NULL AFTER `mask_phone_numbers`"); } catch (_) {}
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dialer_leads (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -10078,6 +10083,7 @@ app.get('/api/extension-policies', requireAuth, async (req, res) => {
             SELECT u.extension, u.name, 
                    COALESCE(ep.auto_answer, 'user_choice') AS auto_answer,
                    COALESCE(ep.dnd, 'user_choice') AS dnd,
+                   COALESCE(ep.disable_outbound_ringing_cancel, 0) AS disable_outbound_ringing_cancel,
                    ep.updated_at
             FROM \`asterisk\`.\`users\` u
             LEFT JOIN \`asterisk\`.\`devices\` d ON d.id = u.extension
@@ -10092,6 +10098,23 @@ app.get('/api/extension-policies', requireAuth, async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+
+// GET /api/extension-policy/:extension - Get policy for single extension
+app.get('/api/extension-policy/:extension', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const ext = String(req.params.extension || '').trim();
+    if (!ext) return res.json({ success: true, policy: { extension: '', auto_answer: 'user_choice', dnd: 'user_choice', disable_outbound_ringing_cancel: 0 } });
+    try {
+        const [rows] = await pool.query('SELECT extension, auto_answer, dnd, COALESCE(disable_outbound_ringing_cancel, 0) AS disable_outbound_ringing_cancel FROM `asterisk`.`extension_policies` WHERE extension = ?', [ext]);
+        if (rows.length > 0) {
+            return res.json({ success: true, policy: rows[0] });
+        }
+        res.json({ success: true, policy: { extension: ext, auto_answer: 'user_choice', dnd: 'user_choice', disable_outbound_ringing_cancel: 0 } });
+    } catch (_) {
+        res.json({ success: true, policy: { extension: ext, auto_answer: 'user_choice', dnd: 'user_choice', disable_outbound_ringing_cancel: 0 } });
+    }
+});
+
 // POST /api/extension-policies/:extension - Update policy for single extension
 app.post('/api/extension-policies/:extension', requireAuth, async (req, res) => {
     try {
@@ -10101,12 +10124,13 @@ app.post('/api/extension-policies/:extension', requireAuth, async (req, res) => 
         const extension = String(req.params.extension || '').trim();
         const auto_answer = ['user_choice', 'force_on', 'force_off'].includes(req.body.auto_answer) ? req.body.auto_answer : 'user_choice';
         const dnd = ['user_choice', 'force_on', 'force_off'].includes(req.body.dnd) ? req.body.dnd : 'user_choice';
+        const disable_cancel = (req.body.disable_outbound_ringing_cancel === 1 || req.body.disable_outbound_ringing_cancel === '1' || req.body.disable_outbound_ringing_cancel === true) ? 1 : 0;
 
         await pool.query(`
-            INSERT INTO \`asterisk\`.\`extension_policies\` (extension, auto_answer, dnd)
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd)
-        `, [extension, auto_answer, dnd]);
+            INSERT INTO \`asterisk\`.\`extension_policies\` (extension, auto_answer, dnd, disable_outbound_ringing_cancel)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd), disable_outbound_ringing_cancel = VALUES(disable_outbound_ringing_cancel)
+        `, [extension, auto_answer, dnd, disable_cancel]);
 
         res.json({ success: true, message: `Policy updated for extension ${extension}` });
     } catch (err) {
@@ -10120,9 +10144,11 @@ app.post('/api/extension-policies-bulk', requireAuth, async (req, res) => {
         if (!isSuperAdmin(req)) {
             return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
         }
-        const { extensions, auto_answer, dnd } = req.body;
-        const autoAnswerVal = ['user_choice', 'force_on', 'force_off'].includes(auto_answer) ? auto_answer : 'user_choice';
-        const dndVal = ['user_choice', 'force_on', 'force_off'].includes(dnd) ? dnd : 'user_choice';
+        const { extensions, auto_answer, dnd, disable_outbound_ringing_cancel } = req.body;
+        const autoAnswerVal = ['user_choice', 'force_on', 'force_off'].includes(auto_answer) ? auto_answer : null;
+        const dndVal = ['user_choice', 'force_on', 'force_off'].includes(dnd) ? dnd : null;
+        const hasCancel = (disable_outbound_ringing_cancel !== undefined && disable_outbound_ringing_cancel !== null && disable_outbound_ringing_cancel !== '');
+        const disableCancelVal = hasCancel ? ((disable_outbound_ringing_cancel === 1 || disable_outbound_ringing_cancel === '1' || disable_outbound_ringing_cancel === true) ? 1 : 0) : null;
 
         let targetExts = [];
         if (Array.isArray(extensions) && extensions.length > 0) {
@@ -10133,11 +10159,16 @@ app.post('/api/extension-policies-bulk', requireAuth, async (req, res) => {
         }
 
         for (const ext of targetExts) {
+            const [cur] = await pool.query('SELECT auto_answer, dnd, disable_outbound_ringing_cancel FROM `asterisk`.`extension_policies` WHERE extension = ?', [ext]);
+            const finalAuto = autoAnswerVal !== null ? autoAnswerVal : (cur[0]?.auto_answer || 'user_choice');
+            const finalDnd = dndVal !== null ? dndVal : (cur[0]?.dnd || 'user_choice');
+            const finalCancel = disableCancelVal !== null ? disableCancelVal : (cur[0]?.disable_outbound_ringing_cancel || 0);
+
             await pool.query(`
-                INSERT INTO \`asterisk\`.\`extension_policies\` (extension, auto_answer, dnd)
-                VALUES (?, ?, ?)
-                ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd)
-            `, [ext, autoAnswerVal, dndVal]);
+                INSERT INTO \`asterisk\`.\`extension_policies\` (extension, auto_answer, dnd, disable_outbound_ringing_cancel)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd), disable_outbound_ringing_cancel = VALUES(disable_outbound_ringing_cancel)
+            `, [ext, finalAuto, finalDnd, finalCancel]);
         }
 
         res.json({ success: true, count: targetExts.length, message: `Policies updated for ${targetExts.length} extension(s)` });
@@ -12319,6 +12350,107 @@ function normalizeLeadPhone(raw) {
     return phone;
 }
 
+// Campaign lead field definitions are kept as a small, ordered JSON document.
+// Keep keys stable and conservative because they are also used as object keys
+// in imported/manual lead custom_data.
+const MAX_DIALER_LEAD_FIELDS = 50;
+const MAX_DIALER_FIELD_KEY_LENGTH = 64;
+const MAX_DIALER_FIELD_LABEL_LENGTH = 100;
+const MAX_DIALER_CUSTOM_VALUE_LENGTH = 2000;
+
+function parseJsonObject(raw) {
+    if (!raw || typeof raw !== 'string') return raw;
+    try { return JSON.parse(raw); } catch (_) { return null; }
+}
+
+function normalizeDialerFieldKey(raw) {
+    const key = String(raw || '').trim()
+        .replace(/[^A-Za-z0-9_-]+/g, '_')
+        .replace(/^[_-]+|[_-]+$/g, '')
+        .slice(0, MAX_DIALER_FIELD_KEY_LENGTH);
+    if (!key || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(key)) return '';
+    return key;
+}
+
+function normalizeDialerFieldDefinitions(raw) {
+    const parsed = parseJsonObject(raw);
+    if (!Array.isArray(parsed)) return [];
+    const definitions = [];
+    const seenKeys = new Set();
+    const reservedKeys = new Set([
+        'name', 'phone', 'phone_number', 'first_name', 'last_name', 'company',
+        'status', 'attempts', 'disposition'
+    ]);
+    for (const item of parsed) {
+        if (!item || typeof item !== 'object') continue;
+        const key = normalizeDialerFieldKey(item.key);
+        const label = String(item.label || item.key || '').replace(/[\r\n\0]/g, ' ').trim().slice(0, MAX_DIALER_FIELD_LABEL_LENGTH);
+        if (!key || !label || reservedKeys.has(key.toLowerCase()) || seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        definitions.push({ key, label });
+        if (definitions.length >= MAX_DIALER_LEAD_FIELDS) break;
+    }
+    return definitions;
+}
+
+function normalizeDialerCustomData(raw, definitions = []) {
+    const parsed = parseJsonObject(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const allowed = new Map(normalizeDialerFieldDefinitions(definitions).map(field => [field.key, field]));
+    const output = {};
+    for (const [rawKey, rawValue] of Object.entries(parsed)) {
+        const key = normalizeDialerFieldKey(rawKey);
+        if (!key || (allowed.size > 0 && !allowed.has(key)) || Object.prototype.hasOwnProperty.call(output, key)) continue;
+        let value = rawValue;
+        if (value === null || value === undefined) value = '';
+        else if (typeof value === 'object') {
+            try { value = JSON.stringify(value); } catch (_) { value = ''; }
+        } else {
+            value = String(value);
+        }
+        output[key] = String(value).replace(/[\r\n\0]/g, ' ').trim().slice(0, MAX_DIALER_CUSTOM_VALUE_LENGTH);
+        if (Object.keys(output).length >= MAX_DIALER_LEAD_FIELDS) break;
+    }
+    return output;
+}
+
+function dialerHeaderToken(raw) {
+    return String(raw || '').toLowerCase().replace(/[\s_.-]+/g, '');
+}
+
+function findDialerHeaderIndex(headers, aliases) {
+    const aliasSet = new Set(aliases.map(dialerHeaderToken));
+    return headers.findIndex(header => aliasSet.has(dialerHeaderToken(header)));
+}
+
+async function getCampaignLeadFields(campaignId, dbConn = pool) {
+    const [rows] = await dbConn.query('SELECT lead_fields FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [campaignId]);
+    return rows.length > 0 ? normalizeDialerFieldDefinitions(rows[0].lead_fields) : [];
+}
+
+async function syncDialerLeadToAddressBook(firstName, lastName, phoneNumber) {
+    const fNameEsc = escapeSql(firstName || '');
+    const lNameEsc = escapeSql(lastName || '');
+    const phoneEsc = escapeSql(phoneNumber || '');
+    if (!phoneEsc) return;
+    await runSqlite(`
+        INSERT INTO contact (name, last_name, telefono, iduser, directory, status)
+        SELECT '${fNameEsc}', '${lNameEsc}', '${phoneEsc}', 1, 'external', 'isPublic'
+        WHERE NOT EXISTS (SELECT 1 FROM contact WHERE telefono = '${phoneEsc}');
+        UPDATE contact SET name = '${fNameEsc}', last_name = '${lNameEsc}' WHERE telefono = '${phoneEsc}';
+    `);
+}
+
+// Mask phone number for agent privacy: first 3 digits and last 3 digits visible, middle masked
+function maskPhoneNumber(raw) {
+    if (!raw) return '';
+    const phone = String(raw).trim();
+    if (phone.length <= 6) return phone;
+    const first = phone.slice(0, 3);
+    const last = phone.slice(-3);
+    const middle = '*'.repeat(phone.length - 6);
+    return `${first}${middle}${last}`;
+}
 // Helper to clean DID number string while preserving Asterisk patterns (_01., _X., [0-9]), + prefix, and wildcards
 function normalizeDidNumber(raw) {
     if (!raw) return '';
@@ -15140,7 +15272,43 @@ app.get('/api/federation/v1/live-state', async (req, res) => {
 
 let isDialerLeader = false;
 let dialerLeaderLockConnection = null;
+const dialerRecentAttempts = [];
 
+function broadcastDialerAttempt(attemptUuid, status, extra = {}) {
+    const payload = {
+        attemptUuid,
+        leadPhone: extra.leadPhone || '',
+        dongleId: extra.dongleId || 'default',
+        agentExtension: extra.agentExtension || '',
+        status: status,
+        timestamp: new Date().toISOString()
+    };
+    if (extra.leadPhone) {
+        dialerRecentAttempts.unshift(payload);
+        if (dialerRecentAttempts.length > 50) dialerRecentAttempts.pop();
+        if (typeof io !== 'undefined' && io) io.emit('dialerAttemptUpdate', payload);
+    } else {
+        pool.query(`
+            SELECT a.dongle_id, a.agent_extension, a.status, l.phone_number, c.mask_phone_numbers
+            FROM \`asterisk\`.\`dialer_call_attempts\` a
+            LEFT JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = a.lead_id
+            LEFT JOIN \`asterisk\`.\`dialer_campaigns\` c ON c.id = a.campaign_id
+            WHERE a.attempt_uuid = ?
+        `, [attemptUuid]).then(([rows]) => {
+            if (rows.length > 0) {
+                const rawPhone = rows[0].phone_number || '';
+                payload.leadPhone = rawPhone;
+                payload.dongleId = rows[0].dongle_id || 'default';
+                payload.agentExtension = rows[0].agent_extension || '';
+                payload.status = status;
+                dialerRecentAttempts.unshift(payload);
+                if (dialerRecentAttempts.length > 50) dialerRecentAttempts.pop();
+                if (typeof io !== 'undefined' && io) io.emit('dialerAttemptUpdate', payload);
+            }
+        }).catch(() => {});
+    }
+    if (typeof io !== 'undefined' && io) io.emit('campaignStatsUpdate', { attemptUuid, status });
+}
 async function acquireDialerLeaderLock() {
     try {
         const conn = await mysql.createConnection({
@@ -15156,6 +15324,7 @@ async function acquireDialerLeaderLock() {
             console.log('DIALER ENGINE: Leader lock acquired successfully.');
             await reconcileStaleAttempts();
             setInterval(runDialerPacerCycle, 1000);
+            setInterval(reconcileStaleAttempts, 30000);
         } else {
             isDialerLeader = false;
             await conn.end();
@@ -15228,6 +15397,10 @@ async function claimNextLeadAtomic(campaignId) {
         `, [attemptUuid, attemptUuid, campaignId, lead.id]);
 
         await conn.commit();
+        broadcastDialerAttempt(attemptUuid, 'dialing', {
+            leadPhone: lead.phone_number,
+            dongleId: 'default'
+        });
         return { attemptUuid, lead };
     } catch (err) {
         await conn.rollback();
@@ -15260,9 +15433,43 @@ async function runDialerPacerCycle() {
         const [campaigns] = await pool.query("SELECT * FROM `asterisk`.`dialer_campaigns` WHERE status = 'running' AND (mode = 'progressive' OR mode IS NULL)");
         if (campaigns.length === 0) return;
 
+        // Batch pre-fetch all agent states to avoid N+1 query storms
+        const [allAgentStates] = await pool.query('SELECT extension, state, wrapup_until FROM `asterisk`.`dialer_agent_states`');
+        const agentStateMap = new Map();
+        for (const s of allAgentStates) {
+            agentStateMap.set(String(s.extension).trim(), s);
+        }
+
+        // Batch pre-fetch active attempt counts grouped by dongle/trunk
+        const [activeTrunkRows] = await pool.query(`
+            SELECT dongle_id, COUNT(*) AS cnt
+            FROM \`asterisk\`.\`dialer_call_attempts\`
+            WHERE active_flag = 1
+            GROUP BY dongle_id
+        `);
+        const activeTrunkMap = new Map();
+        for (const row of activeTrunkRows) {
+            if (row.dongle_id) activeTrunkMap.set(String(row.dongle_id).trim().toLowerCase(), row.cnt);
+        }
+
+        const [roster] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY CAST(extension AS UNSIGNED) ASC');
+        const liveChannels = await getLiveAsteriskChannelNames();
+
         for (const camp of campaigns) {
             const campId = camp.id;
             const maxCap = camp.max_concurrent_dials || 5;
+
+            const [inflightRows] = await pool.query('SELECT COUNT(*) AS cnt FROM `asterisk`.`dialer_call_attempts` WHERE campaign_id = ? AND active_flag = 1', [campId]);
+            const countInflight = inflightRows[0]?.cnt || 0;
+
+            // Auto-complete campaign when all leads are dialed and no calls are in-flight
+            const [pendingRows] = await pool.query('SELECT COUNT(*) AS cnt FROM `asterisk`.`dialer_leads` WHERE campaign_id = ? AND status = "pending"', [campId]);
+            const countPending = pendingRows[0]?.cnt || 0;
+            if (countPending === 0 && countInflight === 0) {
+                await pool.query("UPDATE `asterisk`.`dialer_campaigns` SET status = 'completed' WHERE id = ?", [campId]);
+                if (typeof io !== 'undefined' && io) io.emit('campaignStatusChange', { campaignId: campId, status: 'completed' });
+                continue;
+            }
 
             // 1. Resolve Assigned Agents Distribution
             let assignedAgentSet = null;
@@ -15278,7 +15485,6 @@ async function runDialerPacerCycle() {
                 }
             }
 
-            const [roster] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY CAST(extension AS UNSIGNED) ASC');
             let availableAgents = [];
             for (const emp of roster) {
                 const ext = String(emp.extension).trim();
@@ -15289,9 +15495,9 @@ async function runDialerPacerCycle() {
                 const isOnline = peerStatus[ext] || false;
                 const isCall = activeCalls[ext] || false;
 
-                const [astates] = await pool.query('SELECT state, wrapup_until FROM `asterisk`.`dialer_agent_states` WHERE extension = ?', [ext]);
-                const astate = astates[0] ? astates[0].state : 'idle';
-                const wrapupUntil = astates[0]?.wrapup_until ? new Date(astates[0].wrapup_until).getTime() : 0;
+                const astateObj = agentStateMap.get(ext);
+                const astate = astateObj ? astateObj.state : 'idle';
+                const wrapupUntil = astateObj?.wrapup_until ? new Date(astateObj.wrapup_until).getTime() : 0;
 
                 let isWrapupExpired = false;
                 if (astate === 'wrapup' && wrapupUntil > 0 && Date.now() >= wrapupUntil) {
@@ -15304,9 +15510,6 @@ async function runDialerPacerCycle() {
                     availableAgents.push(ext);
                 }
             }
-
-            const [inflightRows] = await pool.query('SELECT COUNT(*) AS cnt FROM `asterisk`.`dialer_call_attempts` WHERE campaign_id = ? AND active_flag = 1', [campId]);
-            const countInflight = inflightRows[0]?.cnt || 0;
 
             // 2. Resolve Allowed Dongles & Outbound Trunk Allocation
             let allowedDongleSet = null;
@@ -15322,7 +15525,6 @@ async function runDialerPacerCycle() {
                 }
             }
 
-            const liveChannels = await getLiveAsteriskChannelNames();
             let freeDonglesList = [];
             let freeDonglesCount = maxCap;
 
@@ -15330,12 +15532,7 @@ async function runDialerPacerCycle() {
                 // Check free channels on explicitly allowed dongles
                 for (const dId of allowedDongleSet) {
                     const isOccupied = liveChannels.some(chan => chan.toLowerCase().startsWith(`dongle/${dId}-`));
-                    const [activeOnTrunk] = await pool.query(`
-                        SELECT COUNT(*) AS cnt
-                        FROM \`asterisk\`.\`dialer_call_attempts\`
-                        WHERE active_flag = 1 AND dongle_id = ?
-                    `, [dId]);
-                    const ledgerInUse = activeOnTrunk[0]?.cnt || 0;
+                    const ledgerInUse = activeTrunkMap.get(dId) || 0;
                     if (!isOccupied && ledgerInUse < 1) {
                         freeDonglesList.push(dId);
                     }
@@ -15365,12 +15562,7 @@ async function runDialerPacerCycle() {
                             }
                         }
                     }
-                    const [activeOnTrunk] = await pool.query(`
-                        SELECT COUNT(*) AS cnt
-                        FROM \`asterisk\`.\`dialer_call_attempts\`
-                        WHERE active_flag = 1 AND (dongle_id = ? OR (dongle_id IS NULL AND campaign_id = ?))
-                    `, [tId, campId]);
-                    const ledgerInUse = activeOnTrunk[0]?.cnt || 0;
+                    const ledgerInUse = activeTrunkMap.get(tId) || 0;
                     if (!isOccupied && ledgerInUse < 1) {
                         totalFreeTrunkChannels++;
                         if (trunkInfo && trunkInfo.tech === 'dongle') {
@@ -15405,16 +15597,28 @@ async function runDialerPacerCycle() {
                         VALUES (?, 'reserved', ?, ?)
                         ON DUPLICATE KEY UPDATE state = 'reserved', current_lead_id = VALUES(current_lead_id), current_attempt_uuid = VALUES(current_attempt_uuid)
                     `, [assignedAgent, lead.id, attemptUuid]);
+                    // Save assigned agent on call attempt immediately for clean lifecycle teardown
+                    await pool.query('UPDATE `asterisk`.`dialer_call_attempts` SET agent_extension = ? WHERE attempt_uuid = ?', [assignedAgent, attemptUuid]);
+                    agentStateMap.set(assignedAgent, { extension: assignedAgent, state: 'reserved' });
                 }
 
                 if (selectedDongle) {
                     await pool.query('UPDATE `asterisk`.`dialer_call_attempts` SET dongle_id = ? WHERE attempt_uuid = ?', [selectedDongle, attemptUuid]);
+                    activeTrunkMap.set(selectedDongle, 1);
                 }
+
+                const cleanPhone = sanitizeAmiValue(lead.phone_number);
+                const displayedPhone = camp.mask_phone_numbers ? maskPhoneNumber(lead.phone_number) : cleanPhone;
+
+                broadcastDialerAttempt(attemptUuid, 'dialing', {
+                    leadPhone: cleanPhone,
+                    dongleId: selectedDongle || 'default',
+                    agentExtension: assignedAgent
+                });
 
                 if (amiClient) {
                     const outboundContext = camp.outbound_route_id ? `outrt-${camp.outbound_route_id}` : 'from-internal';
                     const cidNum = sanitizeAmiValue(camp.origination_caller_id || '101');
-                    const cleanPhone = sanitizeAmiValue(lead.phone_number);
                     const cleanAttemptUuid = sanitizeAmiValue(attemptUuid);
                     const cleanAgent = sanitizeAmiValue(assignedAgent);
                     const leadFullName = (lead.first_name ? `${lead.first_name} ${lead.last_name || ''}` : lead.phone_number).trim();
@@ -15423,25 +15627,25 @@ async function runDialerPacerCycle() {
                     // Direct dongle targeting if selected, else outbound route
                     const cleanDialTarget = selectedDongle ? `Dongle/${selectedDongle}/${cleanPhone}` : '';
 
-                    // Agent channel: Local channel ensures PJSIP WebRTC softphone is called seamlessly
-                    const agentChannel = `Local/${cleanAgent}@from-internal/n`;
+                    // Agent channel: route through autodialer-agent-setup to set PJSIP
+                    // auto-answer SIP headers via dialplan HASH() before entering from-internal
+                    const agentChannel = `Local/${cleanAgent}@autodialer-agent-setup/n`;
                     const callerIdHeader = `"${cleanLeadName}" <${cleanPhone}>`;
+                    const effectiveCallerId = camp.mask_phone_numbers ? `"${cleanLeadName}" <${displayedPhone}>` : callerIdHeader;
 
                     const varHeaders = [
                         `Variable: ATTEMPT_UUID=${cleanAttemptUuid}`,
                         `Variable: LEAD_ID=${lead.id}`,
-                        `Variable: LEAD_PHONE=${cleanPhone}`,
+                        `Variable: LEAD_PHONE=${displayedPhone}`,
+                        `Variable: DIAL_NUM=${cleanPhone}`,
                         `Variable: LEAD_NAME=${cleanLeadName}`,
                         `Variable: OUTBOUND_CONTEXT=${outboundContext}`,
                         `Variable: DIAL_TARGET=${cleanDialTarget}`,
                         `Variable: ORIGINATION_CALLER_ID=${cidNum}`,
-                        `Variable: TARGET_AGENT=${cleanAgent}`,
-                        `Variable: PJSIP_AUTOANSWER=1`,
-                        `Variable: __ALERT_INFO=info=alert-autoanswer`,
-                        `Variable: __SIPADDHEADER=Call-Info: <sip:127.0.0.1>;answer-after=0`
+                        `Variable: TARGET_AGENT=${cleanAgent}`
                     ].join('\r\n');
 
-                    amiClient.write(`Action: Originate\r\nActionID: ${cleanAttemptUuid}\r\nChannel: ${agentChannel}\r\nContext: from-autodialer-progressive\r\nExten: s\r\nPriority: 1\r\nCallerID: ${callerIdHeader}\r\n${varHeaders}\r\n\r\n`);
+                    amiClient.write(`Action: Originate\r\nActionID: ${cleanAttemptUuid}\r\nChannel: ${agentChannel}\r\nContext: from-autodialer-progressive\r\nExten: s\r\nPriority: 1\r\nCallerID: ${effectiveCallerId}\r\n${varHeaders}\r\n\r\n`);
                 }
             }
         }
@@ -15450,16 +15654,41 @@ async function runDialerPacerCycle() {
     }
 }
 
+async function emitDialerLeadPop(agentExtension, attemptUuid, lead, campaignId, fieldDefinitions = null) {
+    try {
+        const leadFields = fieldDefinitions || await getCampaignLeadFields(campaignId);
+        lead.custom_data = normalizeDialerCustomData(lead.custom_data, leadFields);
+        io.emit('dialerLeadPop', {
+            agentExtension,
+            attemptUuid,
+            lead,
+            leadFields,
+            fieldDefinitions: leadFields,
+            lead_fields: leadFields,
+            campaignLeadFields: leadFields
+        });
+    } catch (_) {}
+}
+
 function handleDialerAmiEvents(event) {
     if (!event) return;
+    // 1. Capture early uniqueid mapping from VarSet (ATTEMPT_UUID)
+    if (event.Event === 'VarSet' && event.Variable === 'ATTEMPT_UUID' && event.Value && event.Uniqueid) {
+        pool.query('UPDATE `asterisk`.`dialer_call_attempts` SET uniqueid = ? WHERE attempt_uuid = ? AND (uniqueid IS NULL OR uniqueid = "")', [event.Uniqueid, event.Value]).catch(() => {});
+    }
 
     const dId = extractDongleIdFromChannel(event.Channel || event.Channel1 || event.Channel2 || '');
     const aUuid = event.AttemptUUID || (event.ActionID && event.ActionID.startsWith('att_') ? event.ActionID : null);
     if (dId && aUuid) {
         pool.query('UPDATE `asterisk`.`dialer_call_attempts` SET dongle_id = ? WHERE attempt_uuid = ? AND active_flag = 1', [dId, aUuid]).catch(() => {});
     }
+
+    // 2. OriginateResponse handling
     if (event.Event === 'OriginateResponse' && event.ActionID && event.ActionID.startsWith('att_')) {
         const attemptUuid = event.ActionID;
+        if (event.Uniqueid) {
+            pool.query('UPDATE `asterisk`.`dialer_call_attempts` SET uniqueid = ? WHERE attempt_uuid = ? AND (uniqueid IS NULL OR uniqueid = "")', [event.Uniqueid, attemptUuid]).catch(() => {});
+        }
         const responseStatus = event.Response || '';
         const reason = parseInt(event.Reason || '0', 10);
 
@@ -15469,25 +15698,60 @@ function handleDialerAmiEvents(event) {
         }
     }
 
-    if (event.Event === 'UserEvent' && event.UserEvent === 'AutoDialerEvent') {
-        const attemptUuid = event.AttemptUUID;
-        const status = event.Status;
-        if (!attemptUuid) return;
-
-        if (status === 'LeadAnswered') {
-            updateAttemptStatus(attemptUuid, 'lead_answered', event.Uniqueid, event.Linkedid, event.Channel);
-        } else if (status === 'AmdPassed') {
-            updateAttemptStatus(attemptUuid, 'amd_passed', event.Uniqueid, event.Linkedid, event.Channel);
-        } else if (status === 'AgentAnswered') {
-            updateAttemptStatus(attemptUuid, 'agent_bridged', event.Uniqueid, event.Linkedid, event.Channel, event.Agent);
-        } else if (status === 'ProgressiveCompleted') {
-            const dialStatus = String(event.DialStatus || '').toUpperCase();
-            const termStatus = dialStatus === 'ANSWER' ? 'completed' : (dialStatus === 'BUSY' ? 'busy' : (dialStatus === 'NOANSWER' ? 'no_answer' : 'failed'));
-            finalizeAttempt(attemptUuid, termStatus, 0);
-        } else if (status === 'Abandoned') {
-            finalizeAttempt(attemptUuid, 'abandoned', 0);
-        } else if (status === 'Machine') {
-            finalizeAttempt(attemptUuid, 'machine', 0);
+    // 3. Dialplan Custom UserEvents (DialerProgressiveConnect & DialerProgressiveHangup)
+    if (event.Event === 'UserEvent') {
+        if (event.UserEvent === 'DialerProgressiveConnect') {
+            const attemptUuid = event.AttemptUUID;
+            const agentExt = event.AgentExtension;
+            const leadId = event.LeadID;
+            if (attemptUuid) {
+                updateAttemptStatus(attemptUuid, 'agent_bridged', event.Uniqueid, event.Linkedid, event.Channel, agentExt);
+                if (agentExt) {
+                    pool.query(`
+                        INSERT INTO \`asterisk\`.\`dialer_agent_states\` (extension, state, current_lead_id, current_attempt_uuid)
+                        VALUES (?, 'in_call', ?, ?)
+                        ON DUPLICATE KEY UPDATE state = 'in_call', current_lead_id = VALUES(current_lead_id), current_attempt_uuid = VALUES(current_attempt_uuid)
+                    `, [agentExt, leadId || null, attemptUuid]).catch(() => {});
+                }
+                if (leadId) {
+                    pool.query('SELECT l.*, c.lead_fields AS campaign_lead_fields FROM `asterisk`.`dialer_leads` l LEFT JOIN `asterisk`.`dialer_campaigns` c ON c.id = l.campaign_id WHERE l.id = ?', [leadId]).then(([lRows]) => {
+                        if (lRows.length > 0) {
+                            const lead = lRows[0];
+                            const fieldDefinitions = normalizeDialerFieldDefinitions(lead.campaign_lead_fields);
+                            delete lead.campaign_lead_fields;
+                            emitDialerLeadPop(agentExt, attemptUuid, lead, lead.campaign_id, fieldDefinitions);
+                        }
+                    }).catch(() => {});
+                }
+            }
+        } else if (event.UserEvent === 'DialerProgressiveHangup') {
+            const attemptUuid = event.AttemptUUID;
+            if (attemptUuid) {
+                const dialStatus = String(event.DialStatus || '').toUpperCase();
+                const cause = parseInt(event.Cause || '0', 10);
+                const termStatus = dialStatus === 'ANSWER' ? 'completed' : (dialStatus === 'BUSY' ? 'busy' : (dialStatus === 'NOANSWER' ? 'no_answer' : 'failed'));
+                finalizeAttempt(attemptUuid, termStatus, cause);
+            }
+        } else if (event.UserEvent === 'AutoDialerEvent') {
+            const attemptUuid = event.AttemptUUID;
+            const status = event.Status;
+            if (attemptUuid) {
+                if (status === 'LeadAnswered') {
+                    updateAttemptStatus(attemptUuid, 'lead_answered', event.Uniqueid, event.Linkedid, event.Channel);
+                } else if (status === 'AmdPassed') {
+                    updateAttemptStatus(attemptUuid, 'amd_passed', event.Uniqueid, event.Linkedid, event.Channel);
+                } else if (status === 'AgentAnswered') {
+                    updateAttemptStatus(attemptUuid, 'agent_bridged', event.Uniqueid, event.Linkedid, event.Channel, event.Agent);
+                } else if (status === 'ProgressiveCompleted') {
+                    const dialStatus = String(event.DialStatus || '').toUpperCase();
+                    const termStatus = dialStatus === 'ANSWER' ? 'completed' : (dialStatus === 'BUSY' ? 'busy' : (dialStatus === 'NOANSWER' ? 'no_answer' : 'failed'));
+                    finalizeAttempt(attemptUuid, termStatus, 0);
+                } else if (status === 'Abandoned') {
+                    finalizeAttempt(attemptUuid, 'abandoned', 0);
+                } else if (status === 'Machine') {
+                    finalizeAttempt(attemptUuid, 'machine', 0);
+                }
+            }
         }
     }
 
@@ -15518,37 +15782,40 @@ function handleDialerAmiEvents(event) {
                         `, [agentExt, att.lead_id, att.attempt_uuid]).catch(() => {});
                     }
 
-                    pool.query('SELECT * FROM `asterisk`.`dialer_leads` WHERE id = ?', [att.lead_id]).then(([lRows]) => {
+                    pool.query('SELECT l.*, c.lead_fields AS campaign_lead_fields FROM `asterisk`.`dialer_leads` l LEFT JOIN `asterisk`.`dialer_campaigns` c ON c.id = l.campaign_id WHERE l.id = ?', [att.lead_id]).then(([lRows]) => {
                         if (lRows.length > 0) {
-                            io.emit('dialerLeadPop', {
-                                agentExtension: agentExt,
-                                attemptUuid: att.attempt_uuid,
-                                lead: lRows[0]
-                            });
+                            const lead = lRows[0];
+                            const fieldDefinitions = normalizeDialerFieldDefinitions(lead.campaign_lead_fields);
+                            delete lead.campaign_lead_fields;
+                            emitDialerLeadPop(agentExt, att.attempt_uuid, lead, att.campaign_id, fieldDefinitions);
                         }
                     }).catch(() => {});
-                }
-            }).catch(() => {});
-        }
-    }
+                 }
+             }).catch(() => {});
+         }
+     }
 
-    if (event.Event === 'Hangup') {
-        const uniqueid = event.Uniqueid;
-        const cause = parseInt(event.Cause || '0', 10);
-        if (uniqueid) {
-            pool.query(`
-                SELECT attempt_uuid, status FROM \`asterisk\`.\`dialer_call_attempts\` WHERE (uniqueid = ? OR linkedid = ?) AND active_flag = 1
-            `, [uniqueid, uniqueid]).then(([rows]) => {
-                if (rows.length > 0) {
-                    const att = rows[0];
-                    if (att.status === 'agent_bridged' || att.status === 'queued' || att.status === 'amd_passed') {
-                        finalizeAttempt(att.attempt_uuid, att.status === 'agent_bridged' ? 'completed' : 'failed', cause);
-                    }
-                }
-            }).catch(() => {});
-        }
-    }
-}
+     if (event.Event === 'Hangup') {
+         const uniqueid = event.Uniqueid;
+         const cause = parseInt(event.Cause || '0', 10);
+         if (uniqueid) {
+             pool.query(`
+                 SELECT attempt_uuid, status FROM \`asterisk\`.\`dialer_call_attempts\` WHERE (uniqueid = ? OR linkedid = ?) AND active_flag = 1
+             `, [uniqueid, uniqueid]).then(([rows]) => {
+                 if (rows.length > 0) {
+                     const att = rows[0];
+                     if (att.status === 'agent_bridged' || att.status === 'queued' || att.status === 'amd_passed') {
+                         finalizeAttempt(att.attempt_uuid, att.status === 'agent_bridged' ? 'completed' : 'failed', cause);
+                     } else {
+                         // Agent did not answer or call aborted before bridge
+                         finalizeAttempt(att.attempt_uuid, 'no_answer', cause);
+                     }
+                 }
+             }).catch(() => {});
+         }
+     }
+ }
+
 
 async function updateAttemptStatus(attemptUuid, status, uniqueid = null, linkedid = null, channel = null, agentExt = null) {
     try {
@@ -15561,6 +15828,7 @@ async function updateAttemptStatus(attemptUuid, status, uniqueid = null, linkedi
         params.push(attemptUuid);
 
         await pool.query(`UPDATE \`asterisk\`.\`dialer_call_attempts\` SET ${updates.join(', ')} WHERE attempt_uuid = ? AND active_flag = 1`, params);
+        broadcastDialerAttempt(attemptUuid, status);
     } catch (err) {
         console.error('updateAttemptStatus error:', err.message);
     }
@@ -15592,7 +15860,7 @@ async function finalizeAttempt(attemptUuid, terminalStatus, causeCode = 0) {
 
         if (att.agent_extension) {
             const [cRows] = await pool.query('SELECT wrapup_time_sec FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [att.campaign_id]);
-            const wrapupSec = cRows[0]?.wrapup_time_sec || 15;
+            const wrapupSec = (terminalStatus === 'completed') ? (cRows[0]?.wrapup_time_sec || 15) : 3;
             const wrapupUntil = new Date(Date.now() + wrapupSec * 1000);
 
             await pool.query(`
@@ -15601,10 +15869,34 @@ async function finalizeAttempt(attemptUuid, terminalStatus, causeCode = 0) {
                 ON DUPLICATE KEY UPDATE state = 'wrapup', wrapup_until = VALUES(wrapup_until), current_lead_id = NULL, current_attempt_uuid = NULL
             `, [att.agent_extension, wrapupUntil]);
         }
+
+        broadcastDialerAttempt(attemptUuid, terminalStatus);
     } catch (err) {
         console.error('finalizeAttempt error:', err.message);
     }
 }
+
+// GET /api/dialer/attempts/recent - Recent attempt ledger logs for live monitoring
+app.get('/api/dialer/attempts/recent', async (req, res) => {
+    try {
+        if (dialerRecentAttempts.length > 0) {
+            return res.json({ success: true, attempts: dialerRecentAttempts.slice(0, 30) });
+        }
+        const [attempts] = await pool.query(`
+            SELECT a.attempt_uuid AS attemptUuid, l.phone_number AS leadPhone,
+                   COALESCE(a.dongle_id, 'default') AS dongleId,
+                   COALESCE(a.agent_extension, '') AS agentExtension,
+                   a.status, a.created_at AS timestamp
+            FROM \`asterisk\`.\`dialer_call_attempts\` a
+            LEFT JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = a.lead_id
+            ORDER BY a.created_at DESC
+            LIMIT 30
+        `);
+        res.json({ success: true, attempts });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message, attempts: [] });
+    }
+});
 // GET /api/dialer/dongles - Available GSM dongles from Asterisk
 app.get('/api/dialer/dongles', async (req, res) => {
     try {
@@ -15672,6 +15964,8 @@ app.get('/api/dialer/campaigns', async (req, res) => {
             } catch (_) {
                 c.assigned_agents = c.assigned_agents ? String(c.assigned_agents).split(',') : [];
             }
+            c.mask_phone_numbers = c.mask_phone_numbers ? 1 : 0;
+            c.lead_fields = normalizeDialerFieldDefinitions(c.lead_fields);
         }
         res.json({ success: true, campaigns });
     } catch (err) {
@@ -15680,9 +15974,23 @@ app.get('/api/dialer/campaigns', async (req, res) => {
 });
 
 // POST /api/dialer/campaigns
-app.post('/api/dialer/campaigns', async (req, res) => {
+app.get('/api/dialer/campaigns/:id', async (req, res) => {
     try {
-        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials } = req.body;
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
+        const [rows] = await pool.query('SELECT * FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [id]);
+        if (rows.length === 0) return res.status(404).json({ success: false, error: 'Campaign not found' });
+        const campaign = rows[0];
+        campaign.lead_fields = normalizeDialerFieldDefinitions(campaign.lead_fields);
+        res.json({ success: true, campaign, lead_fields: campaign.lead_fields });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+app.post('/api/dialer/campaigns', async (req, res) => {
+
+    try {
+        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields } = req.body;
         if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Campaign name is required' });
 
         const cidNum = origination_caller_id ? sanitizeAmiValue(origination_caller_id) : '101';
@@ -15712,7 +16020,13 @@ app.post('/api/dialer/campaigns', async (req, res) => {
             parseInt(max_concurrent_dials, 10) || 1
         ]);
 
-        res.json({ success: true, id: r.insertId, message: 'Campaign created successfully' });
+        if (mask_phone_numbers !== undefined) {
+            await pool.query('UPDATE `asterisk`.`dialer_campaigns` SET mask_phone_numbers = ? WHERE id = ?', [mask_phone_numbers ? 1 : 0, r.insertId]);
+        }
+        const cleanLeadFields = normalizeDialerFieldDefinitions(lead_fields);
+        await pool.query('UPDATE `asterisk`.`dialer_campaigns` SET lead_fields = ? WHERE id = ?', [JSON.stringify(cleanLeadFields), r.insertId]);
+
+        res.json({ success: true, id: r.insertId, lead_fields: cleanLeadFields, message: 'Campaign created successfully' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -15722,7 +16036,7 @@ app.post('/api/dialer/campaigns', async (req, res) => {
 app.put('/api/dialer/campaigns/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
-        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials } = req.body;
+        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields } = req.body;
         if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Campaign name is required' });
 
         let cleanDongles = null;
@@ -15739,7 +16053,8 @@ app.put('/api/dialer/campaigns/:id', async (req, res) => {
         await pool.query(`
             UPDATE \`asterisk\`.\`dialer_campaigns\`
             SET name = ?, outbound_route_id = ?, allowed_dongles = ?, assigned_agents = ?,
-                origination_caller_id = ?, wrapup_time_sec = ?, max_concurrent_dials = ?
+                origination_caller_id = ?, wrapup_time_sec = ?, max_concurrent_dials = ?,
+                mask_phone_numbers = ?
             WHERE id = ?
         `, [
             name.trim(),
@@ -15749,9 +16064,12 @@ app.put('/api/dialer/campaigns/:id', async (req, res) => {
             origination_caller_id ? sanitizeAmiValue(origination_caller_id) : '101',
             parseInt(wrapup_time_sec, 10) || 15,
             parseInt(max_concurrent_dials, 10) || 1,
+            mask_phone_numbers ? 1 : 0,
             id
         ]);
-        res.json({ success: true, message: 'Campaign updated successfully' });
+        const cleanLeadFields = normalizeDialerFieldDefinitions(lead_fields);
+        await pool.query('UPDATE `asterisk`.`dialer_campaigns` SET lead_fields = ? WHERE id = ?', [JSON.stringify(cleanLeadFields), id]);
+        res.json({ success: true, lead_fields: cleanLeadFields, message: 'Campaign updated successfully' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -15796,11 +16114,23 @@ app.post('/api/dialer/campaigns/:id/control', async (req, res) => {
 });
 
 // GET /api/dialer/leads/template - Download CSV Template (MUST be before :campaignId or Express shadows it)
-app.get('/api/dialer/leads/template', (req, res) => {
+app.get('/api/dialer/leads/template', async (req, res) => {
     const format = String(req.query.format || '').toLowerCase();
+    let leadFields = [];
+    const campaignId = parseInt(req.query.campaign_id, 10);
+    if (Number.isInteger(campaignId) && campaignId > 0) {
+        try { leadFields = await getCampaignLeadFields(campaignId); } catch (_) {}
+    }
+    const headers = ['Name', 'Phone Number', ...leadFields.map(field => field.label)];
+    const csvCell = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const csvRows = [
+        headers,
+        ['Ahmed Hassan', '01001111111', ...leadFields.map(() => '')],
+        ['Mazen Ali', '01099998888', ...leadFields.map(() => '')]
+    ];
 
     if (format === 'csv') {
-        const csvContent = '\ufeffName,Phone Number\nAhmed Hassan,01001111111\nMazen Ali,01099998888\n';
+        const csvContent = '\ufeff' + csvRows.map(row => row.map(csvCell).join(',')).join('\n') + '\n';
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', 'attachment; filename="leads_template.csv"');
         return res.send(csvContent);
@@ -15808,26 +16138,19 @@ app.get('/api/dialer/leads/template', (req, res) => {
     // Default: Native Excel .xlsx template with Column B pre-formatted as Text ('@') across 5,000 rows
     if (XLSX) {
         const wb = XLSX.utils.book_new();
-        const wsData = [
-            ['Name', 'Phone Number'],
-            ['Ahmed Hassan', '01001111111'],
-            ['Mazen Ali', '01099998888']
-        ];
+        const wsData = csvRows;
         const ws = XLSX.utils.aoa_to_sheet(wsData);
+        const columnCount = headers.length;
 
         // Pre-format Column B (Phone Number) as explicit Text ('@') for 5,000 rows
         // so typing new numbers in rows 4, 5, 6... in Excel preserves the leading 0
         for (let r = 1; r <= 5000; r++) {
             const cellAddr = XLSX.utils.encode_cell({ r, c: 1 });
-            if (!ws[cellAddr]) {
-                ws[cellAddr] = { t: 's', v: '', z: '@' };
-            } else {
-                ws[cellAddr].t = 's';
-                ws[cellAddr].z = '@';
-            }
+            if (!ws[cellAddr]) ws[cellAddr] = { t: 's', v: '', z: '@' };
+            else { ws[cellAddr].t = 's'; ws[cellAddr].z = '@'; }
         }
-        ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 5000, c: 1 } });
-        ws['!cols'] = [{ wch: 25 }, { wch: 20 }];
+        ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 5000, c: columnCount - 1 } });
+        ws['!cols'] = headers.map((header, index) => ({ wch: index === 1 ? 20 : Math.max(15, Math.min(30, String(header).length + 3)) }));
         XLSX.utils.book_append_sheet(wb, ws, 'Leads Template');
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -15835,21 +16158,123 @@ app.get('/api/dialer/leads/template', (req, res) => {
         return res.send(buffer);
     }
 
-    const fallbackCsv = '\ufeffName,Phone Number\nAhmed Hassan,="01001111111"\nMazen Ali,="01099998888"\n';
+    const fallbackCsv = '\ufeff' + csvRows.map(row => row.map(value => `="${String(value ?? '').replace(/"/g, '""')}"`).join(',')).join('\n') + '\n';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="leads_template.csv"');
     res.send(fallbackCsv);
 });
 
-// GET /api/dialer/leads/:campaignId
+// GET /api/dialer/leads/:campaignId (Supports pagination, search, and status filter)
 app.get('/api/dialer/leads/:campaignId', async (req, res) => {
     try {
         const campaignId = parseInt(req.params.campaignId, 10);
         if (!Number.isInteger(campaignId) || campaignId <= 0) {
             return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
         }
-        const [leads] = await pool.query('SELECT * FROM `asterisk`.`dialer_leads` WHERE campaign_id = ? ORDER BY id DESC LIMIT 500', [campaignId]);
-        res.json({ success: true, leads });
+
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.min(2000, Math.max(10, parseInt(req.query.limit, 10) || 500));
+        const offset = (page - 1) * limit;
+        const search = String(req.query.search || '').trim();
+        const status = String(req.query.status || '').trim();
+
+        let whereSql = 'campaign_id = ?';
+        const params = [campaignId];
+
+        if (status && status !== 'all') {
+            whereSql += ' AND status = ?';
+            params.push(status);
+        }
+
+        if (search) {
+            whereSql += ' AND (phone_number LIKE ? OR first_name LIKE ? OR last_name LIKE ?)';
+            const sTerm = `%${search}%`;
+            params.push(sTerm, sTerm, sTerm);
+        }
+
+        const [countRows] = await pool.query(`SELECT COUNT(*) AS total FROM \`asterisk\`.\`dialer_leads\` WHERE ${whereSql}`, params);
+        const total = countRows[0]?.total || 0;
+
+        const [leads] = await pool.query(
+            `SELECT * FROM \`asterisk\`.\`dialer_leads\` WHERE ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`,
+            [...params, limit, offset]
+        );
+        const leadFields = await getCampaignLeadFields(campaignId);
+        for (const lead of leads) {
+            lead.custom_data = normalizeDialerCustomData(lead.custom_data, leadFields);
+        }
+
+        res.json({
+            success: true,
+            leads,
+            lead_fields: leadFields,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/dialer/campaigns/:id/export - Export campaign leads with call outcomes as CSV
+app.get('/api/dialer/campaigns/:id/export', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const [cRows] = await pool.query('SELECT name, lead_fields FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [id]);
+        if (cRows.length === 0) return res.status(404).send('Campaign not found');
+
+        const leadFields = normalizeDialerFieldDefinitions(cRows[0].lead_fields);
+        const [leads] = await pool.query(
+            'SELECT first_name, last_name, phone_number, status, attempts, disposition, agent_extension, call_duration_sec, last_called_at, custom_data FROM `asterisk`.`dialer_leads` WHERE campaign_id = ? ORDER BY id ASC',
+            [id]
+        );
+
+        const dynamicHeaders = leadFields.map(field => `"${field.label.replace(/"/g, '""')}"`).join(',');
+        let csv = '\ufeffName,Phone Number,Status,Attempts,Disposition,Agent,Duration (sec),Last Called' +
+            (dynamicHeaders ? `,${dynamicHeaders}` : '') + '\n';
+        for (const l of leads) {
+            const name = `"${((l.first_name || '') + ' ' + (l.last_name || '')).trim().replace(/"/g, '""')}"`;
+            const phone = `="${l.phone_number}"`;
+            const status = l.status || '';
+            const attempts = l.attempts || 0;
+            const disp = `"${(l.disposition || '').replace(/"/g, '""')}"`;
+            const agent = l.agent_extension || '';
+            const duration = l.call_duration_sec || 0;
+            const lastCalled = l.last_called_at ? new Date(l.last_called_at).toISOString().replace('T', ' ').substring(0, 19) : '';
+            const customData = normalizeDialerCustomData(l.custom_data, leadFields);
+            const dynamicValues = leadFields.map(field => `"${String(customData[field.key] || '').replace(/"/g, '""')}"`).join(',');
+            csv += `${name},${phone},${status},${attempts},${disp},${agent},${duration},${lastCalled}` +
+                (dynamicValues ? `,${dynamicValues}` : '') + '\n';
+        }
+
+        const safeName = cRows[0].name.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_');
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="campaign_${id}_${safeName}_leads.csv"`);
+        res.send(csv);
+    } catch (err) {
+        res.status(500).send('Export error: ' + err.message);
+    }
+});
+
+// DELETE /api/dialer/leads/:id - Delete single lead
+app.delete('/api/dialer/leads/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        await pool.query('DELETE FROM `asterisk`.`dialer_leads` WHERE id = ?', [id]);
+        res.json({ success: true, message: 'Lead deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/dialer/leads/:id/reset - Reset single lead to pending
+app.post('/api/dialer/leads/:id/reset', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        await pool.query("UPDATE `asterisk`.`dialer_leads` SET status = 'pending', attempts = 0, last_called_at = NULL, disposition = NULL WHERE id = ?", [id]);
+        res.json({ success: true, message: 'Lead reset to pending' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -15909,7 +16334,7 @@ app.post('/api/dialer/dnc', async (req, res) => {
     try {
         const { phone_number, reason } = req.body;
         if (!phone_number) return res.status(400).json({ success: false, error: 'Phone number is required' });
-        const cleanPhone = String(phone_number).trim();
+        const cleanPhone = normalizeLeadPhone(phone_number) || String(phone_number).trim();
 
         await pool.query('INSERT IGNORE INTO `asterisk`.`dialer_dnc` (phone_number, reason) VALUES (?, ?)', [cleanPhone, reason || null]);
         await pool.query('UPDATE `asterisk`.`dialer_leads` SET status = "dnc" WHERE phone_number = ?', [cleanPhone]);
@@ -15934,6 +16359,51 @@ const csvUpload = multer({
     limits: { fileSize: 10 * 1024 * 1024 }
 });
 
+// POST /api/dialer/leads - Create a single lead without a file upload
+app.post('/api/dialer/leads', async (req, res) => {
+    try {
+        const campaignId = parseInt(req.body.campaign_id, 10);
+        if (!Number.isInteger(campaignId) || campaignId <= 0) {
+            return res.status(400).json({ success: false, error: 'Campaign ID is required' });
+        }
+        const [campaignRows] = await pool.query('SELECT id, lead_fields FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [campaignId]);
+        if (campaignRows.length === 0) return res.status(404).json({ success: false, error: 'Campaign not found' });
+
+        const cleanPhone = normalizeLeadPhone(req.body.phone_number);
+        if (!cleanPhone || cleanPhone.length < 3) {
+            return res.status(400).json({ success: false, error: 'A valid phone number is required' });
+        }
+        const leadFields = normalizeDialerFieldDefinitions(campaignRows[0].lead_fields);
+        const firstName = String(req.body.first_name || '').replace(/[\r\n\0]/g, ' ').trim().slice(0, 100);
+        const lastName = String(req.body.last_name || '').replace(/[\r\n\0]/g, ' ').trim().slice(0, 100);
+        const company = String(req.body.company || '').replace(/[\r\n\0]/g, ' ').trim().slice(0, 100);
+        const customData = normalizeDialerCustomData(req.body.custom_data, leadFields);
+        const [dncRows] = await pool.query('SELECT phone_number FROM `asterisk`.`dialer_dnc` WHERE phone_number = ?', [cleanPhone]);
+        const status = dncRows.length > 0 ? 'dnc' : 'pending';
+        const [result] = await pool.query(`
+            INSERT INTO \`asterisk\`.\`dialer_leads\`
+            (campaign_id, phone_number, first_name, last_name, company, custom_data, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [campaignId, cleanPhone, firstName || null, lastName || null, company || null,
+            Object.keys(customData).length > 0 ? JSON.stringify(customData) : null, status]);
+
+        try {
+            await syncDialerLeadToAddressBook(firstName, lastName, cleanPhone);
+        } catch (syncErr) {
+            console.warn('[AddressBook Sync] Manual lead warning:', syncErr.message);
+        }
+        const [leadRows] = await pool.query('SELECT * FROM `asterisk`.`dialer_leads` WHERE id = ?', [result.insertId]);
+        const lead = leadRows[0] || {
+            id: result.insertId, campaign_id: campaignId, phone_number: cleanPhone,
+            first_name: firstName, last_name: lastName, company, custom_data: customData, status
+        };
+        lead.custom_data = normalizeDialerCustomData(lead.custom_data, leadFields);
+        res.status(201).json({ success: true, lead, lead_fields: leadFields, dnc: status === 'dnc' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // POST /api/dialer/leads/import
 app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) => {
     try {
@@ -15942,6 +16412,12 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
             if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
             return res.status(400).json({ success: false, error: 'Campaign ID is required' });
         }
+        const [campaignRows] = await pool.query('SELECT id, lead_fields FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [campaignId]);
+        if (campaignRows.length === 0) {
+            if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+            return res.status(404).json({ success: false, error: 'Campaign not found' });
+        }
+        const leadFields = normalizeDialerFieldDefinitions(campaignRows[0].lead_fields);
         if (!req.file || !fs.existsSync(req.file.path)) {
             return res.status(400).json({ success: false, error: 'No CSV/XLSX file uploaded' });
         }
@@ -15974,30 +16450,30 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
             return res.status(400).json({ success: false, error: 'File is empty or missing data rows' });
         }
 
-        // Determine 2-column header indices
-        let nameIdx = 0;
-        let phoneIdx = 1;
+        // Resolve built-in and campaign-defined columns while retaining the generic two-column fallback.
+        const headers = Array.isArray(rows[0]) ? rows[0].map(value => String(value ?? '').trim()) : [];
+        const firstNameIdx = findDialerHeaderIndex(headers, ['First Name', 'first_name', 'fname']);
+        const lastNameIdx = findDialerHeaderIndex(headers, ['Last Name', 'last_name', 'lname', 'surname']);
+        let nameIdx = findDialerHeaderIndex(headers, ['Name', 'Full Name', 'Contact Name', 'اسم']);
+        let phoneIdx = findDialerHeaderIndex(headers, ['Phone', 'Phone Number', 'Number', 'Telephone', 'Tel', 'Mobile', 'هاتف', 'جوال']);
+        const companyIdx = findDialerHeaderIndex(headers, ['Company', 'Organization', 'الشركة']);
+        const dynamicIndices = new Map();
+        for (const field of leadFields) {
+            const fieldIdx = findDialerHeaderIndex(headers, [field.label, field.key]);
+            if (fieldIdx >= 0) dynamicIndices.set(field.key, fieldIdx);
+        }
+        const isHeader = nameIdx >= 0 || phoneIdx >= 0 || firstNameIdx >= 0 || lastNameIdx >= 0 ||
+            companyIdx >= 0 || dynamicIndices.size > 0;
         let startRow = 0;
-
-        const h0 = String(rows[0][0] || '').toLowerCase().trim();
-        const h1 = String(rows[0][1] || '').toLowerCase().trim();
-        const isHeader = (
-            h0.includes('name') || h0.includes('phone') || h0.includes('number') || h0.includes('اسم') || h0.includes('هاتف') ||
-            h1.includes('name') || h1.includes('phone') || h1.includes('number') || h1.includes('اسم') || h1.includes('هاتف')
-        );
 
         if (isHeader) {
             startRow = 1;
-            if (h0.includes('phone') || h0.includes('number') || h0.includes('tel') || h0.includes('mobile') || h0.includes('هاتف') || h0.includes('جوال')) {
-                phoneIdx = 0;
-                nameIdx = 1;
-            } else {
-                nameIdx = 0;
-                phoneIdx = 1;
-            }
+            if (phoneIdx < 0) phoneIdx = (headers.length > 1 ? 1 : 0);
+            if (nameIdx < 0 && firstNameIdx < 0) nameIdx = phoneIdx === 0 ? 1 : 0;
         } else {
-            const c0HasDigits = /\d{4,}/.test(String(rows[0][0] || ''));
-            if (c0HasDigits) {
+            nameIdx = 0;
+            phoneIdx = 1;
+            if (/\d{4,}/.test(String(rows[0][0] || ''))) {
                 phoneIdx = 0;
                 nameIdx = 1;
             }
@@ -16006,46 +16482,76 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
         let imported = 0;
         let skippedDnc = 0;
 
+        // 1. Batch pre-fetch all DNC phone numbers into a Set for O(1) in-memory checks
+        const [dncRows] = await pool.query('SELECT phone_number FROM `asterisk`.`dialer_dnc`');
+        const dncSet = new Set(dncRows.map(r => normalizeLeadPhone(r.phone_number)).filter(Boolean));
+
+        const leadBatch = [];
+        const sqliteStatements = [];
+
         for (let i = startRow; i < rows.length; i++) {
             const row = rows[i];
             if (!row || row.length === 0) continue;
 
-            const rawName = String(row[nameIdx] !== undefined ? row[nameIdx] : '').trim();
+            const rawName = nameIdx >= 0 ? String(row[nameIdx] !== undefined ? row[nameIdx] : '').trim() : '';
+            const rawFirstName = firstNameIdx >= 0 ? String(row[firstNameIdx] !== undefined ? row[firstNameIdx] : '').trim() : '';
+            const rawLastName = lastNameIdx >= 0 ? String(row[lastNameIdx] !== undefined ? row[lastNameIdx] : '').trim() : '';
             const rawPhone = String(row[phoneIdx] !== undefined ? row[phoneIdx] : '').trim();
             const cleanPhone = normalizeLeadPhone(rawPhone);
             if (!cleanPhone) continue;
-
-            const [dncCheck] = await pool.query('SELECT phone_number FROM `asterisk`.`dialer_dnc` WHERE phone_number = ?', [cleanPhone]);
-            if (dncCheck.length > 0) {
+            if (dncSet.has(cleanPhone)) {
                 skippedDnc++;
                 continue;
             }
 
             const leadName = rawName || cleanPhone;
             const nameParts = leadName.split(/\s+/);
-            const firstName = nameParts[0] || leadName;
-            const lastName = nameParts.slice(1).join(' ') || '';
+            const firstName = (rawFirstName || nameParts[0] || leadName).slice(0, 100);
+            const lastName = (rawLastName || nameParts.slice(1).join(' ')).slice(0, 100);
+            const company = companyIdx >= 0 ? String(row[companyIdx] ?? '').trim().slice(0, 100) : '';
+            const customData = {};
+            for (const field of leadFields) {
+                const fieldIdx = dynamicIndices.get(field.key);
+                if (fieldIdx !== undefined) {
+                    customData[field.key] = String(row[fieldIdx] ?? '').replace(/[\r\n\0]/g, ' ').trim().slice(0, MAX_DIALER_CUSTOM_VALUE_LENGTH);
+                }
+            }
 
-            // 1. Insert into MariaDB dialer_leads
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`dialer_leads\` (campaign_id, phone_number, first_name, last_name, status)
-                VALUES (?, ?, ?, ?, 'pending')
-            `, [campaignId, cleanPhone, firstName, lastName]);
-            imported++;
+            leadBatch.push([
+                campaignId, cleanPhone, firstName, lastName, company || null,
+                Object.keys(customData).length > 0 ? JSON.stringify(customData) : null, 'pending'
+            ]);
 
-            // 2. Synchronous Dual-Write to SQLite Address Book (/var/www/db/address_book.db)
+            const fNameEsc = escapeSql(firstName);
+            const lNameEsc = escapeSql(lastName);
+            const phoneEsc = escapeSql(cleanPhone);
+            sqliteStatements.push(`
+                INSERT INTO contact (name, last_name, telefono, iduser, directory, status)
+                SELECT '${fNameEsc}', '${lNameEsc}', '${phoneEsc}', 1, 'external', 'isPublic'
+                WHERE NOT EXISTS (SELECT 1 FROM contact WHERE telefono = '${phoneEsc}');
+                UPDATE contact SET name = '${fNameEsc}', last_name = '${lNameEsc}' WHERE telefono = '${phoneEsc}';
+            `);
+        }
+
+        // 2. Batch Insert into MariaDB dialer_leads
+        if (leadBatch.length > 0) {
+            await pool.query(
+                'INSERT INTO `asterisk`.`dialer_leads` (campaign_id, phone_number, first_name, last_name, company, custom_data, status) VALUES ?',
+                [leadBatch]
+            );
+            imported = leadBatch.length;
+        }
+
+        // 3. Batch Dual-Write into SQLite Address Book within single transactions
+        if (sqliteStatements.length > 0) {
             try {
-                const fNameEsc = escapeSql(firstName);
-                const lNameEsc = escapeSql(lastName);
-                const phoneEsc = escapeSql(cleanPhone);
-                await runSqlite(`
-                    INSERT INTO contact (name, last_name, telefono, iduser, directory, status)
-                    SELECT '${fNameEsc}', '${lNameEsc}', '${phoneEsc}', 1, 'external', 'isPublic'
-                    WHERE NOT EXISTS (SELECT 1 FROM contact WHERE telefono = '${phoneEsc}');
-                    UPDATE contact SET name = '${fNameEsc}', last_name = '${lNameEsc}' WHERE telefono = '${phoneEsc}';
-                `);
+                const chunkSize = 200;
+                for (let c = 0; c < sqliteStatements.length; c += chunkSize) {
+                    const chunk = sqliteStatements.slice(c, c + chunkSize);
+                    await runSqlite(`BEGIN TRANSACTION;\n${chunk.join('\n')}\nCOMMIT;`);
+                }
             } catch (sqlErr) {
-                console.warn('[AddressBook Sync] Failed for lead:', cleanPhone, sqlErr.message);
+                console.warn('[AddressBook Sync] Batch import warning:', sqlErr.message);
             }
         }
 

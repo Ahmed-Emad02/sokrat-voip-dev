@@ -21,6 +21,13 @@ const words = {
         templateNote2Col: "File must contain 2 columns: Name, Phone Number (.csv or .xlsx)",
         addressBookNote: "Every lead will be automatically synchronized with the Address Book for instant caller ID resolution.",
         noCampaigns: "No campaigns configured. Click 'Create Campaign' to launch a new progressive dialer campaign.",
+        leadFields: "Custom Lead Fields", builtInLeadFields: "Built-in columns: Name and Phone Number (always included)", fieldKey: "Field key", fieldLabel: "Column label", defaultFieldLabel: "Field",
+        addField: "Add Field", removeField: "Remove", noCustomFields: "No custom fields configured.",
+        addLead: "Add Lead", manualLead: "Manual Lead", leadName: "Name", company: "Company",
+        saveLead: "Save Lead", leadSaved: "Lead added successfully", leadFieldsNote: "Add ordered fields that will be available on every lead and in imports/templates.",
+        nameRequired: "Name or phone number is required", phoneRequired: "Phone number is required",
+        downloadCampaignTemplate: "Download campaign template",
+        templateNoteDynamic: "Template columns include this campaign's configured fields.",
         noLeads: "No leads loaded in this campaign yet.",
         searchLeads: "Search leads by name or phone..."
     },
@@ -45,6 +52,13 @@ const words = {
         templateNote2Col: "يجب أن يحتوي الملف على عمودين: الاسم، ورقم الهاتف (.csv أو .xlsx)",
         addressBookNote: "تتم مزامنة جميع الأرقام تلقائياً مع دفتر العناوين لإظهار اسم العميل فور وروده على الهاتف.",
         noCampaigns: "لا توجد حملات حالياً. انقر على 'إنشاء حملة' لإعداد حملة جديدة.",
+        leadFields: "حقول العملاء المخصصة", builtInLeadFields: "الأعمدة الأساسية: الاسم ورقم الهاتف (مضافة دائماً)", fieldKey: "مفتاح الحقل", fieldLabel: "اسم العمود", defaultFieldLabel: "حقل",
+        addField: "إضافة حقل", removeField: "حذف", noCustomFields: "لا توجد حقول مخصصة.",
+        addLead: "إضافة عميل", manualLead: "عميل يدوي", leadName: "الاسم", company: "الشركة",
+        saveLead: "حفظ العميل", leadSaved: "تمت إضافة العميل بنجاح", leadFieldsNote: "أضف حقولاً مرتبة ستظهر لكل عميل وفي النماذج.",
+        nameRequired: "الاسم أو رقم الهاتف مطلوب", phoneRequired: "رقم الهاتف مطلوب",
+        downloadCampaignTemplate: "تحميل نموذج الحملة",
+        templateNoteDynamic: "يتضمن النموذج حقول هذه الحملة المخصصة.",
         noLeads: "لا توجد أرقام مسجلة في هذه الحملة بعد.",
         searchLeads: "البحث في الأرقام بالاسم أو الهاتف..."
     }
@@ -90,6 +104,30 @@ const isRtl = currentLang === 'ar';
         .checkbox-pill:hover {
             border-color: var(--accent-color);
         }
+        .dialer-control {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 1.9rem;
+            gap: 0.35rem;
+            border-radius: 0.5rem;
+            padding: 0.35rem 0.65rem;
+            font-size: 0.7rem;
+            line-height: 1;
+            font-weight: 800;
+            cursor: pointer;
+            transition: filter 0.15s ease, opacity 0.15s ease;
+        }
+        .dialer-control:hover { filter: brightness(1.12); }
+        .dialer-control:disabled { cursor: not-allowed; opacity: 0.45; filter: none; }
+        .dialer-control-primary { background: var(--status-online, #059669); color: #fff; }
+        .dialer-control-warning { background: var(--dialer-warning, #d97706); color: #fff; }
+        .dialer-control-info { background: var(--dialer-info, #2563eb); color: #fff; }
+        .dialer-control-purple { background: var(--dialer-purple, #7c3aed); color: #fff; }
+        .dialer-control-neutral { background: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--border-primary); }
+        .dialer-control-danger { background: var(--accent-color); color: #fff; }
+        .dialer-control-danger:hover { background: var(--accent-hover); filter: none; }
+        .lead-fields-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
     </style>
 </head>
 <body class="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen flex flex-col md:flex-row m-0 p-0 font-sans">
@@ -154,6 +192,8 @@ const isRtl = currentLang === 'ar';
             </div>
         </div>
     </div>
+    <!-- TOAST NOTIFICATIONS CONTAINER -->
+    <div id="toastContainer" class="fixed bottom-5 end-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
 
     <!-- MODAL 1: CREATE / EDIT CAMPAIGN -->
     <div id="createCampaignModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
@@ -198,6 +238,31 @@ const isRtl = currentLang === 'ar';
                     <div>
                         <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campWrapupSec"><%= t.wrapupTime %></label>
                         <input type="number" id="campWrapupSec" value="15" min="0" max="300" class="config-input w-full">
+                    </div>
+                </div>
+                <!-- PHONE NUMBER MASKING OPTION -->
+                <div class="p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg flex items-start gap-2.5">
+                    <input type="checkbox" id="campMaskPhone" class="w-4 h-4 mt-0.5 rounded text-amber-500 cursor-pointer">
+                    <div class="flex-1">
+                        <label for="campMaskPhone" class="text-xs font-bold text-[var(--text-primary)] cursor-pointer block">
+                            <%= isRtl ? 'إخفاء أرقام العملاء على شاشة الموظف (مثال: 010*****380)' : 'Mask Customer Numbers on Agent Screen (e.g. 010*****380)' %>
+                        </label>
+                        <p class="text-[10px] text-[var(--text-muted)] mt-0.5">
+                            <%= isRtl ? 'إخفاء الأرقام الوسطى لحماية الخصوصية (إظهار أول 3 وآخر 3 أرقام فقط للموظف مع الاتصال بالرقم الكامل تلقائياً)' : 'Hides middle digits from agents to protect privacy (only first 3 and last 3 digits visible; full number is dialed automatically)' %>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- CAMPAIGN-LEVEL DYNAMIC LEAD FIELDS -->
+                <div class="pt-2 border-t border-[var(--border-primary)]">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase"><%= t.leadFields %></label>
+                        <button type="button" onclick="addCampaignField()" class="dialer-control dialer-control-info"><span>+</span><span><%= t.addField %></span></button>
+                    </div>
+                    <p class="text-[10px] text-[var(--text-muted)] mb-1"><%= t.builtInLeadFields %></p>
+                    <p class="text-[10px] text-[var(--text-muted)] mb-2"><%= t.leadFieldsNote %></p>
+                    <div id="campaignFieldsEditor" class="space-y-2 p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg">
+                        <div class="text-xs text-[var(--text-muted)] italic"><%= t.noCustomFields %></div>
                     </div>
                 </div>
 
@@ -245,10 +310,38 @@ const isRtl = currentLang === 'ar';
             </form>
         </div>
     </div>
+    <!-- MODAL 3: MANUAL LEAD -->
+    <div id="manualLeadModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-lg w-full p-6 text-[var(--text-primary)] max-h-[90vh] overflow-y-auto">
+            <h3 id="manualLeadTitle" class="text-base font-extrabold mb-1"><%= t.manualLead %></h3>
+            <p id="manualLeadCampaignName" class="text-xs text-[var(--text-muted)] mb-4"></p>
+            <form onsubmit="saveManualLead(event)" class="space-y-3.5">
+                <input type="hidden" id="manualLeadCampaignId">
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="manualLeadName"><%= t.leadName %></label>
+                    <input type="text" id="manualLeadName" maxlength="150" class="config-input w-full" autocomplete="name">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="manualLeadPhone"><%= t.phoneNumber %></label>
+                    <input type="text" id="manualLeadPhone" required maxlength="40" class="config-input w-full font-mono" autocomplete="tel">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="manualLeadCompany"><%= t.company %></label>
+                    <input type="text" id="manualLeadCompany" maxlength="150" class="config-input w-full" autocomplete="organization">
+                </div>
+                <div id="manualLeadFields" class="space-y-3"></div>
+                <div class="flex justify-end gap-2 pt-3 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('manualLeadModal')" class="dialer-control dialer-control-neutral"><%= t.cancel %></button>
+                    <button type="submit" id="saveManualLeadBtn" class="dialer-control dialer-control-primary"><%= t.saveLead %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 
     <!-- MODAL 3: VIEW LEADS INVENTORY -->
     <div id="viewLeadsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-2xl w-full p-6 text-[var(--text-primary)] max-h-[85vh] flex flex-col">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-3xl w-full p-6 text-[var(--text-primary)] max-h-[85vh] flex flex-col">
             <div class="flex items-center justify-between pb-3 border-b border-[var(--border-primary)] mb-3">
                 <div>
                     <h3 id="viewLeadsTitle" class="text-base font-extrabold"><%= t.leads %></h3>
@@ -256,27 +349,47 @@ const isRtl = currentLang === 'ar';
                 </div>
                 <button type="button" onclick="closeModal('viewLeadsModal')" class="text-zinc-400 hover:text-white cursor-pointer text-lg font-bold">✕</button>
             </div>
-            <div class="mb-3">
-                <input type="text" id="leadsSearchInput" oninput="filterLeadsTable()" class="config-input w-full text-xs" placeholder="<%= t.searchLeads %>">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                <div class="sm:col-span-2">
+                    <input type="text" id="leadsSearchInput" oninput="filterLeadsTable()" class="config-input w-full text-xs" placeholder="<%= t.searchLeads %>">
+                </div>
+                <div>
+                    <select id="leadsStatusFilter" onchange="filterLeadsTable()" class="config-input w-full text-xs">
+                        <option value="all">All Statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="connected">Connected</option>
+                        <option value="dialing">Dialing</option>
+                        <option value="no_answer">No Answer</option>
+                        <option value="busy">Busy</option>
+                        <option value="failed">Failed</option>
+                        <option value="dnc">DNC</option>
+                    </select>
+                </div>
             </div>
             <div class="flex-1 overflow-y-auto border border-[var(--border-primary)] rounded-lg">
                 <table class="w-full text-left text-xs">
                     <thead class="bg-[var(--bg-card)] sticky top-0 border-b border-[var(--border-primary)]">
-                        <tr class="text-[var(--text-muted)] uppercase">
+                        <tr id="leadsTableHead" class="text-[var(--text-muted)] uppercase">
                             <th class="py-2.5 px-3">Name</th>
                             <th class="py-2.5 px-3">Phone</th>
                             <th class="py-2.5 px-3">Status</th>
                             <th class="py-2.5 px-3 text-center">Attempts</th>
                             <th class="py-2.5 px-3">Last Called</th>
+                            <th class="py-2.5 px-3 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="leadsTableBody" class="divide-y divide-[var(--border-primary)]">
-                        <tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">No leads found.</td></tr>
+                        <tr><td colspan="6" class="py-6 text-center text-[var(--text-muted)]">No leads found.</td></tr>
                     </tbody>
                 </table>
             </div>
-            <div class="pt-3 flex justify-end">
-                <button type="button" onclick="closeModal('viewLeadsModal')" class="config-btn-secondary px-4 py-1.5 text-xs"><%= t.cancel %></button>
+            <div class="pt-3 border-t border-[var(--border-primary)] mt-3 flex items-center justify-between text-xs">
+                <div id="leadsPaginationInfo" class="text-[var(--text-muted)] font-mono">Page 1 of 1</div>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="prevLeadsPageBtn" onclick="changeLeadsPage(-1)" class="config-btn-secondary px-3 py-1 text-xs disabled:opacity-40" disabled>Previous</button>
+                    <button type="button" id="nextLeadsPageBtn" onclick="changeLeadsPage(1)" class="config-btn-secondary px-3 py-1 text-xs disabled:opacity-40" disabled>Next</button>
+                    <button type="button" onclick="closeModal('viewLeadsModal')" class="config-btn-secondary px-4 py-1 text-xs"><%= t.cancel %></button>
+                </div>
             </div>
         </div>
     </div>
@@ -307,6 +420,94 @@ const isRtl = currentLang === 'ar';
         let cachedDongles = [];
         let cachedExtensions = [];
         let currentLoadedLeads = [];
+        let campaignFieldDraft = [];
+        let currentCampaignViewFields = [];
+
+        function sanitizeFieldKey(value, fallback = 'field') {
+            const key = String(value || '').trim().replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^[_-]+|[_-]+$/g, '').slice(0, 40);
+            return key || fallback;
+        }
+
+        function sanitizeFieldLabel(value, fallback = '') {
+            return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 80) || fallback;
+        }
+
+        function normalizeLeadFields(raw) {
+            let fields = raw;
+            if (typeof fields === 'string') {
+                try { fields = JSON.parse(fields); } catch (_) { fields = []; }
+            }
+            if (!Array.isArray(fields)) return [];
+            const seen = new Set();
+            return fields.slice(0, 20).map((field, index) => {
+                const key = sanitizeFieldKey(field && field.key, `field_${index + 1}`);
+                const rawLabel = String(field && field.label || '').trim();
+                const label = sanitizeFieldLabel(/^field_\d+$/i.test(key) && rawLabel === key ? '' : rawLabel, '');
+                if (seen.has(key)) return null;
+                seen.add(key);
+                return { key, label };
+            }).filter(Boolean);
+        }
+
+        function renderCampaignFields(fields = campaignFieldDraft) {
+            campaignFieldDraft = normalizeLeadFields(fields);
+            const container = document.getElementById('campaignFieldsEditor');
+            if (!container) return;
+            container.innerHTML = '';
+            if (campaignFieldDraft.length === 0) {
+                container.innerHTML = `<div class="text-xs text-[var(--text-muted)] italic">${<%- JSON.stringify(t.noCustomFields) %>}</div>`;
+                return;
+            }
+            campaignFieldDraft.forEach((field, index) => {
+                const row = document.createElement('div');
+                row.className = 'lead-fields-row';
+                const keyInput = document.createElement('input');
+                keyInput.className = 'config-input w-full';
+                keyInput.placeholder = <%- JSON.stringify(t.fieldKey) %>;
+                keyInput.value = field.key;
+                keyInput.maxLength = 40;
+                keyInput.dataset.fieldPart = 'key';
+                const labelInput = document.createElement('input');
+                labelInput.className = 'config-input w-full';
+                labelInput.placeholder = <%- JSON.stringify(t.fieldLabel) %>;
+                labelInput.value = field.label;
+                labelInput.maxLength = 80;
+                labelInput.dataset.fieldPart = 'label';
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'dialer-control dialer-control-danger';
+                removeButton.textContent = <%- JSON.stringify(t.removeField) %>;
+                removeButton.onclick = () => {
+                    campaignFieldDraft.splice(index, 1);
+                    renderCampaignFields(campaignFieldDraft);
+                };
+                row.append(keyInput, labelInput, removeButton);
+                container.appendChild(row);
+            });
+        }
+
+        function addCampaignField() {
+            if (campaignFieldDraft.length >= 20) return;
+            campaignFieldDraft.push({ key: `field_${campaignFieldDraft.length + 1}`, label: '' });
+            renderCampaignFields(campaignFieldDraft);
+            const inputs = document.querySelectorAll('#campaignFieldsEditor input[data-field-part="label"]');
+            if (inputs.length) inputs[inputs.length - 1].focus();
+        }
+
+        function collectCampaignFields() {
+            const rows = Array.from(document.querySelectorAll('#campaignFieldsEditor .lead-fields-row'));
+            const seen = new Set();
+            return rows.map((row, index) => {
+                const keyInput = row.querySelector('input[data-field-part="key"]');
+                const labelInput = row.querySelector('input[data-field-part="label"]');
+                const key = sanitizeFieldKey(keyInput?.value, `field_${index + 1}`);
+                const label = sanitizeFieldLabel(labelInput?.value, `${<%- JSON.stringify(t.defaultFieldLabel) %>} ${index + 1}`);
+                if (seen.has(key)) return null;
+                seen.add(key);
+                return { key, label };
+            }).filter(Boolean).slice(0, 20);
+        }
+
 
         function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
         function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
@@ -372,63 +573,118 @@ const isRtl = currentLang === 'ar';
             });
         }
 
-        async function loadCampaigns() {
-            const res = await fetch('/api/dialer/campaigns');
-            const data = await res.json();
-            const container = document.getElementById('campaignsContainer');
-            container.innerHTML = '';
-
-            if (!data.campaigns || data.campaigns.length === 0) {
-                container.innerHTML = `<div class="col-span-full text-center py-8 text-[var(--text-muted)] text-sm font-semibold">${<%- JSON.stringify(t.noCampaigns) %>}</div>`;
-                return;
-            }
-
-            data.campaigns.forEach(c => {
-                const s = c.stats || {};
-                const allowedDongles = Array.isArray(c.allowed_dongles) ? c.allowed_dongles : [];
-                const assignedAgents = Array.isArray(c.assigned_agents) ? c.assigned_agents : [];
-
-                const dongleBadges = allowedDongles.length > 0
-                    ? allowedDongles.map(d => `<span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">${d}</span>`).join(' ')
-                    : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allDongles) %>}</span>`;
-
-                const agentBadges = assignedAgents.length > 0
-                    ? assignedAgents.map(a => `<span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">${a}</span>`).join(' ')
-                    : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allAgents) %>}</span>`;
-
-                const card = document.createElement('div');
-                card.className = 'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 flex flex-col justify-between';
-                card.innerHTML = `
-                    <div>
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="text-base font-extrabold text-[var(--text-primary)] truncate">${c.name}</h4>
-                            <span class="px-2 py-0.5 text-[10px] font-extrabold rounded uppercase ${c.status === 'running' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-500/20 text-slate-400'}">${c.status}</span>
-                        </div>
-                        <div class="space-y-1.5 mb-3 text-xs">
-                            <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[var(--text-muted)] text-[10px] uppercase font-bold">Dongles:</span> ${dongleBadges}</div>
-                            <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[var(--text-muted)] text-[10px] uppercase font-bold">Agents:</span> ${agentBadges}</div>
-                        </div>
-                        <div class="grid grid-cols-4 gap-2 mb-4 text-center">
-                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.total) %>}</span><span class="text-sm font-black">${s.total_leads || 0}</span></div>
-                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.pending) %>}</span><span class="text-sm font-black text-amber-400">${s.pending_leads || 0}</span></div>
-                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.connected) %>}</span><span class="text-sm font-black text-emerald-400">${s.connected_leads || 0}</span></div>
-                            <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.failed) %>}</span><span class="text-sm font-black text-rose-400">${s.failed_leads || 0}</span></div>
-                        </div>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-[var(--border-primary)]">
-                        ${c.status === 'running'
-                            ? `<button onclick="controlCampaign(${c.id}, 'pause')" class="px-2.5 py-1 text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white rounded cursor-pointer">${<%- JSON.stringify(t.pause) %>}</button>`
-                            : `<button onclick="controlCampaign(${c.id}, 'start')" class="px-2.5 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded cursor-pointer">${<%- JSON.stringify(t.start) %>}</button>`
-                        }
-                        <button onclick="controlCampaign(${c.id}, 'reset')" class="px-2.5 py-1 text-xs font-bold bg-zinc-700 hover:bg-zinc-600 text-white rounded cursor-pointer" title="Reset non-connected leads to pending">${<%- JSON.stringify(t.resetLeads) %>}</button>
-                        <button onclick="openImportModal(${c.id})" class="px-2.5 py-1 text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white rounded cursor-pointer">+ Import</button>
-                        <button onclick="openViewLeadsModal(${c.id}, '${escapeHtml(c.name)}')" class="px-2.5 py-1 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded cursor-pointer">${<%- JSON.stringify(t.viewLeads) %>}</button>
-                        <button onclick="openEditCampaignModal(${JSON.stringify(c).replace(/"/g, '&quot;')})" class="px-2 py-1 text-xs font-bold bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded cursor-pointer">${<%- JSON.stringify(t.editCamp) %>}</button>
-                        <button onclick="controlCampaign(${c.id}, 'delete')" class="px-2 py-1 text-xs font-bold text-rose-400 hover:text-rose-300 ml-auto cursor-pointer">${<%- JSON.stringify(t.deleteCamp) %>}</button>
-                    </div>
-                `;
-                container.appendChild(card);
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+            const borderCol = type === 'success' ? 'border-emerald-500/50 text-emerald-400 bg-emerald-950/80' : (type === 'error' ? 'border-rose-500/50 text-rose-400 bg-rose-950/80' : 'border-blue-500/50 text-blue-300 bg-zinc-900/90');
+            toast.className = `p-3 rounded-xl border ${borderCol} shadow-xl backdrop-blur-md text-xs font-semibold flex items-center justify-between gap-2 pointer-events-auto transition-all duration-300 transform translate-y-2 opacity-0`;
+            toast.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full ${type === 'success' ? 'bg-emerald-400' : (type === 'error' ? 'bg-rose-400' : 'bg-blue-400')}"></span>
+                    <span>${escapeHtml(message)}</span>
+                </div>
+                <button type="button" onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white text-sm font-bold ml-2">✕</button>
+            `;
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
             });
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        async function loadCampaigns() {
+            try {
+                const res = await fetch('/api/dialer/campaigns');
+                const data = await res.json();
+                const container = document.getElementById('campaignsContainer');
+                if (!container) return;
+                container.innerHTML = '';
+                if (!data.campaigns || data.campaigns.length === 0) {
+                    container.innerHTML = `<div class="col-span-full text-center py-8 text-[var(--text-muted)] text-sm font-semibold">${<%- JSON.stringify(t.noCampaigns) %>}</div>`;
+                    return;
+                }
+
+                data.campaigns.forEach(c => {
+                    const s = c.stats || {};
+                    const total = s.total_leads || 0;
+                    const pending = s.pending_leads || 0;
+                    const connected = s.connected_leads || 0;
+                    const failed = s.failed_leads || 0;
+                    const dialed = total - pending;
+                    const progressPct = total > 0 ? Math.round((dialed / total) * 100) : 0;
+                    const connectRate = dialed > 0 ? Math.round((connected / dialed) * 100) : 0;
+
+                    const allowedDongles = Array.isArray(c.allowed_dongles) ? c.allowed_dongles : [];
+                    const assignedAgents = Array.isArray(c.assigned_agents) ? c.assigned_agents : [];
+
+                    const dongleBadges = allowedDongles.length > 0
+                        ? allowedDongles.map(d => `<span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">${d}</span>`).join(' ')
+                        : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allDongles) %>}</span>`;
+
+                    const agentBadges = assignedAgents.length > 0
+                        ? assignedAgents.map(a => `<span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">${a}</span>`).join(' ')
+                        : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allAgents) %>}</span>`;
+
+                    const card = document.createElement('div');
+                    card.className = 'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 flex flex-col justify-between';
+                    card.innerHTML = `
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-base font-extrabold text-[var(--text-primary)] truncate">${escapeHtml(c.name)}</h4>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    ${c.mask_phone_numbers ? '<span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-purple-500/20 text-purple-400 border border-purple-500/30" title="Middle digits masked for agent privacy">Masked CID</span>' : ''}
+                                    <span class="px-2 py-0.5 text-[10px] font-extrabold rounded uppercase ${c.status === 'running' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (c.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-slate-500/20 text-slate-400')}">${c.status}</span>
+                                </div>
+                            </div>
+                            <div class="space-y-1.5 mb-3 text-xs">
+                                <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[var(--text-muted)] text-[10px] uppercase font-bold">Dongles:</span> ${dongleBadges}</div>
+                                <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[var(--text-muted)] text-[10px] uppercase font-bold">Agents:</span> ${agentBadges}</div>
+                            </div>
+                            <!-- PROGRESS BAR & CONNECT RATE -->
+                            <div class="mb-3">
+                                <div class="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] mb-1">
+                                    <span>Progress: <strong class="text-white">${progressPct}%</strong></span>
+                                    <span>Connect Rate: <strong class="text-emerald-400">${connectRate}%</strong></span>
+                                </div>
+                                <div class="w-full bg-[var(--bg-card)] rounded-full h-1.5 overflow-hidden border border-[var(--border-primary)]">
+                                    <div class="bg-emerald-500 h-1.5 transition-all duration-300" style="width: ${progressPct}%"></div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-4 gap-2 mb-4 text-center">
+                                <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.total) %>}</span><span class="text-sm font-black">${total}</span></div>
+                                <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.pending) %>}</span><span class="text-sm font-black text-amber-400">${pending}</span></div>
+                                <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.connected) %>}</span><span class="text-sm font-black text-emerald-400">${connected}</span></div>
+                                <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.failed) %>}</span><span class="text-sm font-black text-rose-400">${failed}</span></div>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center justify-center gap-2 pt-3 border-t border-[var(--border-primary)]">
+                            ${c.status === 'running'
+                                ? `<button onclick="controlCampaign(${c.id}, 'pause')" class="dialer-control dialer-control-warning">${<%- JSON.stringify(t.pause) %>}</button>`
+                                : `<button onclick="controlCampaign(${c.id}, 'start')" class="dialer-control dialer-control-primary">${<%- JSON.stringify(t.start) %>}</button>`
+                            }
+                            <button onclick="controlCampaign(${c.id}, 'reset')" class="dialer-control dialer-control-neutral" title="Reset non-connected leads to pending">${<%- JSON.stringify(t.resetLeads) %>}</button>
+                            <button onclick="openImportModal(${c.id})" class="dialer-control dialer-control-info">+ Import</button>
+                            <button onclick="openManualLeadModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(normalizeLeadFields(c.lead_fields)))})" class="dialer-control dialer-control-primary">${<%- JSON.stringify(t.addLead) %>}</button>
+                            <button onclick="openViewLeadsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(normalizeLeadFields(c.lead_fields)))})" class="dialer-control dialer-control-purple">${<%- JSON.stringify(t.viewLeads) %>}</button>
+                            <a href="/api/dialer/leads/template?campaign_id=${c.id}" class="dialer-control dialer-control-neutral" title="${<%- JSON.stringify(t.downloadCampaignTemplate) %>}">
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                <span>Template</span>
+                            </a>
+                            <a href="/api/dialer/campaigns/${c.id}/export" class="dialer-control dialer-control-neutral" title="Export leads to CSV">
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                <span>Export</span>
+                            </a>
+                            <button onclick="openEditCampaignModal(${JSON.stringify(c).replace(/"/g, '&quot;')})" class="dialer-control dialer-control-neutral">${<%- JSON.stringify(t.editCamp) %>}</button>
+                            <button onclick="controlCampaign(${c.id}, 'delete')" class="dialer-control dialer-control-danger">${<%- JSON.stringify(t.deleteCamp) %>}</button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (_) {}
         }
 
         async function loadOutboundRoutes() {
@@ -456,10 +712,13 @@ const isRtl = currentLang === 'ar';
             document.getElementById('campOutboundRoute').value = '';
             document.getElementById('campMaxDials').value = '1';
             document.getElementById('campWrapupSec').value = '15';
+            if (document.getElementById('campMaskPhone')) document.getElementById('campMaskPhone').checked = false;
             const fileGroup = document.getElementById('campLeadsFileGroup');
             if (fileGroup) fileGroup.style.display = 'block';
             const fileInput = document.getElementById('campLeadsFile');
             if (fileInput) fileInput.value = '';
+            campaignFieldDraft = [];
+            renderCampaignFields([]);
             renderDonglesCheckboxes([]);
             renderAgentsCheckboxes([]);
             openModal('createCampaignModal');
@@ -473,8 +732,10 @@ const isRtl = currentLang === 'ar';
             document.getElementById('campOutboundRoute').value = camp.outbound_route_id || '';
             document.getElementById('campMaxDials').value = camp.max_concurrent_dials || 1;
             document.getElementById('campWrapupSec').value = camp.wrapup_time_sec || 15;
+            if (document.getElementById('campMaskPhone')) document.getElementById('campMaskPhone').checked = Boolean(camp.mask_phone_numbers);
             const fileGroup = document.getElementById('campLeadsFileGroup');
             if (fileGroup) fileGroup.style.display = 'none';
+            renderCampaignFields(camp.lead_fields);
             renderDonglesCheckboxes(Array.isArray(camp.allowed_dongles) ? camp.allowed_dongles : []);
             renderAgentsCheckboxes(Array.isArray(camp.assigned_agents) ? camp.assigned_agents : []);
             openModal('createCampaignModal');
@@ -491,7 +752,9 @@ const isRtl = currentLang === 'ar';
                 allowed_dongles: selectedDongles,
                 assigned_agents: selectedAgents,
                 max_concurrent_dials: parseInt(document.getElementById('campMaxDials').value, 10) || 1,
-                wrapup_time_sec: parseInt(document.getElementById('campWrapupSec').value, 10) || 15
+                wrapup_time_sec: parseInt(document.getElementById('campWrapupSec').value, 10) || 15,
+                mask_phone_numbers: document.getElementById('campMaskPhone')?.checked ? 1 : 0,
+                lead_fields: collectCampaignFields()
             };
 
             const url = editId ? `/api/dialer/campaigns/${editId}` : '/api/dialer/campaigns';
@@ -517,20 +780,88 @@ const isRtl = currentLang === 'ar';
                         const importRes = await fetch('/api/dialer/leads/import', { method: 'POST', body: formData });
                         const importData = await importRes.json();
                         if (importData.success) {
-                            alert(`Campaign created and ${importData.imported} lead(s) imported successfully into campaign and Address Book!`);
+                            showToast(`Campaign created & ${importData.imported} lead(s) imported!`, 'success');
                         } else {
-                            alert(`Campaign created, but lead import error: ${importData.error}`);
+                            showToast(`Campaign created, but import warning: ${importData.error}`, 'error');
                         }
                     } catch (uploadErr) {
-                        alert(`Campaign created, but upload error: ${uploadErr.message}`);
+                        showToast(`Campaign created, but upload error: ${uploadErr.message}`, 'error');
                     } finally {
                         submitBtn.disabled = false;
                     }
+                } else {
+                    showToast('Campaign saved successfully', 'success');
                 }
                 closeModal('createCampaignModal');
                 loadCampaigns();
             } else {
-                alert(data.error);
+                showToast(data.error || 'Failed to save campaign', 'error');
+            }
+        }
+
+        function openManualLeadModal(campaignId, campaignName, fields = []) {
+            document.getElementById('manualLeadCampaignId').value = campaignId;
+            document.getElementById('manualLeadCampaignName').textContent = campaignName || '';
+            document.getElementById('manualLeadName').value = '';
+            document.getElementById('manualLeadPhone').value = '';
+            document.getElementById('manualLeadCompany').value = '';
+            const container = document.getElementById('manualLeadFields');
+            container.innerHTML = '';
+            currentCampaignViewFields = normalizeLeadFields(fields);
+            currentCampaignViewFields.forEach(field => {
+                const wrapper = document.createElement('div');
+                const label = document.createElement('label');
+                label.className = 'block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1';
+                label.textContent = field.label;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'config-input w-full';
+                input.maxLength = 500;
+                input.dataset.fieldKey = field.key;
+                wrapper.append(label, input);
+                container.appendChild(wrapper);
+            });
+            openModal('manualLeadModal');
+        }
+
+        async function saveManualLead(e) {
+            e.preventDefault();
+            const phone_number = document.getElementById('manualLeadPhone').value.trim();
+            const name = document.getElementById('manualLeadName').value.trim();
+            if (!phone_number) {
+                showToast(<%- JSON.stringify(t.phoneRequired) %>, 'error');
+                return;
+            }
+            const nameParts = name.split(/\s+/).filter(Boolean);
+            const custom_data = {};
+            document.querySelectorAll('#manualLeadFields input[data-field-key]').forEach(input => {
+                custom_data[sanitizeFieldKey(input.dataset.fieldKey)] = String(input.value || '').trim().slice(0, 500);
+            });
+            const button = document.getElementById('saveManualLeadBtn');
+            button.disabled = true;
+            try {
+                const res = await fetch('/api/dialer/leads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaign_id: document.getElementById('manualLeadCampaignId').value,
+                        phone_number,
+                        first_name: nameParts.shift() || '',
+                        last_name: nameParts.join(' '),
+                        company: document.getElementById('manualLeadCompany').value.trim(),
+                        custom_data
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Failed to add lead');
+                closeModal('manualLeadModal');
+                showToast(<%- JSON.stringify(t.leadSaved) %>, 'success');
+                loadCampaigns();
+                if (currentCampaignViewId === Number(document.getElementById('manualLeadCampaignId').value)) fetchAndRenderLeadsPage();
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                button.disabled = false;
             }
         }
 
@@ -542,7 +873,12 @@ const isRtl = currentLang === 'ar';
                 body: JSON.stringify({ action })
             });
             const data = await res.json();
-            if (data.success) loadCampaigns(); else alert(data.error);
+            if (data.success) {
+                showToast(data.message || 'Campaign updated', 'success');
+                loadCampaigns();
+            } else {
+                showToast(data.error || 'Control action failed', 'error');
+            }
         }
 
         function openImportModal(id) {
@@ -569,77 +905,169 @@ const isRtl = currentLang === 'ar';
                 const data = await res.json();
                 if (data.success) {
                     closeModal('importLeadsModal');
-                    alert(data.message);
+                    showToast(data.message, 'success');
                     loadCampaigns();
                 } else {
-                    alert(data.error);
+                    showToast(data.error || 'Import failed', 'error');
                 }
             } catch (err) {
-                alert(err.message);
+                showToast(err.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.textContent = <%- JSON.stringify(t.upload) %>;
             }
         }
 
-        async function openViewLeadsModal(campaignId, campaignName) {
-            document.getElementById('viewLeadsTitle').textContent = `${campaignName} — ${<%- JSON.stringify(t.leads) %>}`;
-            document.getElementById('leadsTableBody').innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">Loading leads...</td></tr>';
-            openModal('viewLeadsModal');
+        let currentCampaignViewId = null;
+        let currentCampaignViewName = '';
+        let currentLeadsPage = 1;
+        let currentLeadsTotalPages = 1;
 
+        async function openViewLeadsModal(campaignId, campaignName, fields = []) {
+            currentCampaignViewId = campaignId;
+            currentCampaignViewName = campaignName;
+            currentCampaignViewFields = normalizeLeadFields(fields);
+            currentLeadsPage = 1;
+            document.getElementById('viewLeadsTitle').textContent = `${campaignName} — ${<%- JSON.stringify(t.leads) %>}`;
+            renderLeadTableHeader();
+            document.getElementById('leadsTableBody').innerHTML = `<tr><td colspan="${6 + currentCampaignViewFields.length}" class="py-6 text-center text-[var(--text-muted)]">Loading leads...</td></tr>`;
+            openModal('viewLeadsModal');
+            await fetchAndRenderLeadsPage();
+        }
+
+        function renderLeadTableHeader() {
+            const head = document.getElementById('leadsTableHead');
+            if (!head) return;
+            head.innerHTML = `
+                <th class="py-2.5 px-3">Name</th>
+                <th class="py-2.5 px-3">Phone</th>
+                ${currentCampaignViewFields.map(field => `<th class="py-2.5 px-3">${escapeHtml(field.label)}</th>`).join('')}
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3 text-center">Attempts</th>
+                <th class="py-2.5 px-3">Last Called</th>
+                <th class="py-2.5 px-3 text-right">Actions</th>
+            `;
+        }
+
+        async function fetchAndRenderLeadsPage() {
+            if (!currentCampaignViewId) return;
+            const search = (document.getElementById('leadsSearchInput')?.value || '').trim();
+            const status = document.getElementById('leadsStatusFilter')?.value || 'all';
             try {
-                const res = await fetch(`/api/dialer/leads/${campaignId}`);
+                const res = await fetch(`/api/dialer/leads/${currentCampaignViewId}?page=${currentLeadsPage}&limit=50&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`);
                 const data = await res.json();
                 currentLoadedLeads = data.leads || [];
-                document.getElementById('viewLeadsCount').textContent = `${currentLoadedLeads.length} leads loaded`;
+                currentLeadsTotalPages = data.totalPages || 1;
+                const total = data.total || 0;
+                document.getElementById('viewLeadsCount').textContent = `${total} leads total`;
+                document.getElementById('leadsPaginationInfo').textContent = `Page ${currentLeadsPage} of ${Math.max(1, currentLeadsTotalPages)} (${total} total)`;
+                document.getElementById('prevLeadsPageBtn').disabled = currentLeadsPage <= 1;
+                document.getElementById('nextLeadsPageBtn').disabled = currentLeadsPage >= currentLeadsTotalPages;
                 renderLeadsTable(currentLoadedLeads);
             } catch (err) {
-                document.getElementById('leadsTableBody').innerHTML = `<tr><td colspan="5" class="py-6 text-center text-rose-400">${err.message}</td></tr>`;
+                document.getElementById('leadsTableBody').innerHTML = `<tr><td colspan="${6 + currentCampaignViewFields.length}" class="py-6 text-center text-rose-400">${escapeHtml(err.message)}</td></tr>`;
+            }
+        }
+
+        function changeLeadsPage(delta) {
+            const newPage = currentLeadsPage + delta;
+            if (newPage < 1 || newPage > currentLeadsTotalPages) return;
+            currentLeadsPage = newPage;
+            fetchAndRenderLeadsPage();
+        }
+
+        let filterDebounceTimer = null;
+        function filterLeadsTable() {
+            clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                currentLeadsPage = 1;
+                fetchAndRenderLeadsPage();
+            }, 250);
+        }
+
+        function parseLeadCustomData(value) {
+            if (!value) return {};
+            if (typeof value === 'object') return value;
+            try {
+                const parsed = JSON.parse(value);
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (_) {
+                return {};
             }
         }
 
         function renderLeadsTable(leads) {
             const tbody = document.getElementById('leadsTableBody');
             tbody.innerHTML = '';
+            const colspan = 6 + currentCampaignViewFields.length;
             if (leads.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">No leads found.</td></tr>';
+                tbody.innerHTML = `<tr><td colspan="${colspan}" class="py-6 text-center text-[var(--text-muted)]">No leads found.</td></tr>`;
                 return;
             }
             leads.forEach(l => {
                 const fullName = (l.first_name ? `${l.first_name} ${l.last_name || ''}` : l.phone_number).trim();
+                const customData = parseLeadCustomData(l.custom_data);
                 const statusColor = l.status === 'connected' ? 'text-emerald-400' : (l.status === 'dialing' ? 'text-blue-400' : (l.status === 'pending' ? 'text-amber-400' : 'text-rose-400'));
+                const dynamicCells = currentCampaignViewFields.map(field => `<td class="py-2.5 px-3 text-[var(--text-secondary)]">${escapeHtml(customData[field.key] ?? '') || '—'}</td>`).join('');
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-zinc-900/40';
                 tr.innerHTML = `
                     <td class="py-2.5 px-3 font-bold text-white">${escapeHtml(fullName)}</td>
                     <td class="py-2.5 px-3 font-mono text-zinc-300">${escapeHtml(l.phone_number)}</td>
+                    ${dynamicCells}
                     <td class="py-2.5 px-3 font-mono text-[10px] font-bold uppercase ${statusColor}">${escapeHtml(l.status)}</td>
                     <td class="py-2.5 px-3 text-center font-mono">${l.attempts || 0}</td>
                     <td class="py-2.5 px-3 text-zinc-400 text-[11px] font-mono">${l.last_called_at ? new Date(l.last_called_at).toLocaleString() : '—'}</td>
+                    <td class="py-2.5 px-3 text-right">
+                        <div class="flex items-center justify-end gap-1.5">
+                            <button type="button" onclick="resetSingleLead(${l.id})" class="dialer-control dialer-control-neutral" title="Reset this lead to pending">Reset</button>
+                            <button type="button" onclick="deleteSingleLead(${l.id})" class="dialer-control dialer-control-danger" title="Delete lead">✕</button>
+                        </div>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
         }
 
-        function filterLeadsTable() {
-            const query = (document.getElementById('leadsSearchInput').value || '').toLowerCase().trim();
-            if (!query) {
-                renderLeadsTable(currentLoadedLeads);
-                return;
+        async function resetSingleLead(id) {
+            try {
+                const res = await fetch(`/api/dialer/leads/${id}/reset`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Lead reset to pending', 'success');
+                    fetchAndRenderLeadsPage();
+                    loadCampaigns();
+                } else {
+                    showToast(data.error || 'Failed to reset lead', 'error');
+                }
+            } catch (err) {
+                showToast(err.message, 'error');
             }
-            const filtered = currentLoadedLeads.filter(l => {
-                const name = (l.first_name ? `${l.first_name} ${l.last_name || ''}` : '').toLowerCase();
-                const phone = String(l.phone_number || '').toLowerCase();
-                return name.includes(query) || phone.includes(query);
-            });
-            renderLeadsTable(filtered);
+        }
+
+        async function deleteSingleLead(id) {
+            if (!confirm('Are you sure you want to delete this lead?')) return;
+            try {
+                const res = await fetch(`/api/dialer/leads/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Lead deleted', 'success');
+                    fetchAndRenderLeadsPage();
+                    loadCampaigns();
+                } else {
+                    showToast(data.error || 'Failed to delete lead', 'error');
+                }
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
         }
 
         async function loadDnc() {
+            const tbody = document.getElementById('dncTableBody');
+            if (!tbody) return;
             try {
                 const res = await fetch('/api/dialer/dnc');
                 const data = await res.json();
-                const tbody = document.getElementById('dncTableBody');
                 tbody.innerHTML = '';
                 if (!data.dnc || data.dnc.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-[var(--text-muted)]">No DNC entries found.</td></tr>';
@@ -654,7 +1082,9 @@ const isRtl = currentLang === 'ar';
                     `;
                     tbody.appendChild(tr);
                 });
-            } catch (_) {}
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="3" class="py-4 text-center text-rose-400">${escapeHtml(err.message || 'Failed to load DNC entries')}</td></tr>`;
+            }
         }
 
         function openAddDncModal() {
@@ -675,9 +1105,10 @@ const isRtl = currentLang === 'ar';
             const data = await res.json();
             if (data.success) {
                 closeModal('addDncModal');
+                showToast('Number added to DNC list', 'success');
                 loadDnc();
             } else {
-                alert(data.error);
+                showToast(data.error || 'Failed to add DNC', 'error');
             }
         }
 
@@ -685,7 +1116,12 @@ const isRtl = currentLang === 'ar';
             if (!confirm('Remove number from DNC?')) return;
             const res = await fetch(`/api/dialer/dnc/${encodeURIComponent(phone)}`, { method: 'DELETE' });
             const data = await res.json();
-            if (data.success) loadDnc(); else alert(data.error);
+            if (data.success) {
+                showToast('Number removed from DNC', 'success');
+                loadDnc();
+            } else {
+                showToast(data.error || 'Failed to remove DNC', 'error');
+            }
         }
 
         function escapeHtml(str) {
@@ -693,7 +1129,29 @@ const isRtl = currentLang === 'ar';
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         }
 
-        // Live Attempt Logs via Socket.io
+        async function loadRecentAttempts() {
+            try {
+                const res = await fetch('/api/dialer/attempts/recent');
+                const data = await res.json();
+                if (data.success && Array.isArray(data.attempts) && data.attempts.length > 0) {
+                    const container = document.getElementById('attemptsContainer');
+                    if (!container) return;
+                    container.innerHTML = '';
+                    data.attempts.forEach(a => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 bg-[var(--bg-card)] rounded-lg text-xs flex items-center justify-between border border-[var(--border-primary)]';
+                        div.innerHTML = `
+                            <span class="font-mono font-bold">${escapeHtml(a.leadPhone || '')}</span>
+                            <span class="text-[10px] text-[var(--text-muted)] font-mono">${escapeHtml(a.dongleId || 'default')}</span>
+                            <span class="text-[10px] font-bold uppercase ${a.status === 'connected' ? 'text-emerald-400' : (a.status === 'dialing' ? 'text-blue-400' : 'text-amber-400')}">${escapeHtml(a.status || '')}</span>
+                        `;
+                        container.appendChild(div);
+                    });
+                }
+            } catch (_) {}
+        }
+
+        // Live Attempt Logs & Campaign Stats via Socket.io
         const socket = io();
         socket.on('dialerAttemptUpdate', (data) => {
             const container = document.getElementById('attemptsContainer');
@@ -714,12 +1172,23 @@ const isRtl = currentLang === 'ar';
             }
         });
 
+        socket.on('campaignStatsUpdate', () => {
+            loadCampaigns();
+        });
+
+        socket.on('campaignStatusChange', () => {
+            loadCampaigns();
+        });
+
         document.addEventListener('DOMContentLoaded', () => {
             loadCampaigns();
             loadOutboundRoutes();
             loadDongles();
             loadExtensions();
             loadDnc();
+            loadRecentAttempts();
+            // Real-time polling every 5s for live campaign updates
+            setInterval(loadCampaigns, 5000);
         });
     </script>
 </body>

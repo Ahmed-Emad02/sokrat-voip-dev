@@ -127,14 +127,11 @@ test('4. Progressive Pacer Engine Uses Local Channel and Selected Dongles', () =
     assert.match(serverJsContent, /camp\.allowed_dongles/);
     assert.match(serverJsContent, /for \(const dId of allowedDongleSet\)/);
 
-    // Assert agent channel uses Local/ext@from-internal/n to support WebRTC
-    assert.match(serverJsContent, /const agentChannel = `Local\/\$\{cleanAgent\}@from-internal\/n`/);
+    // Assert agent channel routes through autodialer-agent-setup for PJSIP auto-answer headers
+    assert.match(serverJsContent, /const agentChannel = `Local\/\$\{cleanAgent\}@autodialer-agent-setup\/n`/);
 
     // Assert caller ID header passes lead name and phone number
     assert.match(serverJsContent, /const callerIdHeader = `"\$\{cleanLeadName\}" <\$\{cleanPhone\}>`/);
-
-    // Assert auto-answer SIP headers are passed for WebRTC client
-    assert.match(serverJsContent, /Call-Info: <sip:127\.0\.0\.1>;answer-after=0/);
 });
 
 test('5. Asterisk Dialplan Contexts for Progressive Auto-Dialing', () => {
@@ -149,6 +146,12 @@ test('5. Asterisk Dialplan Contexts for Progressive Auto-Dialing', () => {
 
     const hangupOutput = execSync('/usr/sbin/asterisk -rx "dialplan show sub-autodialer-progressive-hangup"', { encoding: 'utf8' });
     assert.ok(hangupOutput.includes('DialerProgressiveHangup'), 'Sends UserEvent DialerProgressiveHangup on teardown');
+
+    const agentSetupOutput = execSync('/usr/sbin/asterisk -rx "dialplan show autodialer-agent-setup"', { encoding: 'utf8' });
+    assert.ok(agentSetupOutput.includes("Context 'autodialer-agent-setup'"), 'autodialer-agent-setup context exists in dialplan');
+    assert.ok(agentSetupOutput.includes('SIPHEADERS,Alert-Info'), 'Sets Alert-Info SIPHEADER for auto-answer');
+    assert.ok(agentSetupOutput.includes('SIPHEADERS,Call-Info'), 'Sets Call-Info SIPHEADER for auto-answer');
+    assert.ok(agentSetupOutput.includes('Goto(from-internal,${EXTEN},1)'), 'Routes to from-internal after header setup');
 });
 
 test('6. Sokrat VoIP Campaign Manager View (views/dialer.ejs)', () => {

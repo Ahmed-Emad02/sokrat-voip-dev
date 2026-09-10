@@ -402,26 +402,42 @@ const isRtl = currentLang === 'ar';
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Chart 1: CPU & RAM Utilization -->
                 <div class="panel-surface rounded-2xl p-5 flex flex-col">
-                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-4">
+                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-4 flex-wrap gap-2">
                         <div class="flex items-center gap-2">
                             <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
                             <h3 class="text-sm font-bold text-white"><%= t.chartCpuRam %></h3>
                         </div>
-                        <span class="text-xs text-[var(--text-muted)] font-mono" id="chart-cpu-ram-legend">CPU: 0% | RAM: 0%</span>
+                        <div class="flex items-center gap-2.5">
+                            <div class="inline-flex items-center p-0.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[10px] font-bold">
+                                <button type="button" onclick="setChartZoomRange('cpu', 15)" class="px-2 py-0.5 rounded hover:text-white text-[var(--text-muted)] transition cursor-pointer">15m</button>
+                                <button type="button" onclick="setChartZoomRange('cpu', 60)" class="px-2 py-0.5 rounded hover:text-white text-[var(--text-muted)] transition cursor-pointer">1h</button>
+                                <button type="button" onclick="setChartZoomRange('cpu', 360)" class="px-2 py-0.5 rounded hover:text-white text-[var(--text-muted)] transition cursor-pointer">6h</button>
+                                <button type="button" onclick="setChartZoomRange('cpu', 0)" class="px-2 py-0.5 rounded text-purple-400 font-extrabold transition cursor-pointer">All</button>
+                            </div>
+                            <span class="text-xs text-[var(--text-muted)] font-mono" id="chart-cpu-ram-legend">CPU: 0% | RAM: 0%</span>
+                        </div>
                     </div>
-                    <div id="cpuRamChart" style="height: 240px; width: 100%;"></div>
+                    <div id="cpuRamChart" style="height: 260px; width: 100%;"></div>
                 </div>
 
                 <!-- Chart 2: Network Traffic & Asterisk Concurrent Calls -->
                 <div class="panel-surface rounded-2xl p-5 flex flex-col">
-                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-4">
+                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-4 flex-wrap gap-2">
                         <div class="flex items-center gap-2">
                             <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
                             <h3 class="text-sm font-bold text-white"><%= t.chartNetChannels %></h3>
                         </div>
-                        <span class="text-xs text-[var(--text-muted)] font-mono" id="chart-net-legend">RX: 0 KB/s | TX: 0 KB/s</span>
+                        <div class="flex items-center gap-2.5">
+                            <div class="inline-flex items-center p-0.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[10px] font-bold">
+                                <button type="button" onclick="setChartZoomRange('net', 15)" class="px-2 py-0.5 rounded hover:text-white text-[var(--text-muted)] transition cursor-pointer">15m</button>
+                                <button type="button" onclick="setChartZoomRange('net', 60)" class="px-2 py-0.5 rounded hover:text-white text-[var(--text-muted)] transition cursor-pointer">1h</button>
+                                <button type="button" onclick="setChartZoomRange('net', 360)" class="px-2 py-0.5 rounded hover:text-white text-[var(--text-muted)] transition cursor-pointer">6h</button>
+                                <button type="button" onclick="setChartZoomRange('net', 0)" class="px-2 py-0.5 rounded text-blue-400 font-extrabold transition cursor-pointer">All</button>
+                            </div>
+                            <span class="text-xs text-[var(--text-muted)] font-mono" id="chart-net-legend">RX: 0 KB/s | TX: 0 KB/s</span>
+                        </div>
                     </div>
-                    <div id="netChannelsChart" style="height: 240px; width: 100%;"></div>
+                    <div id="netChannelsChart" style="height: 260px; width: 100%;"></div>
                 </div>
             </div>
 
@@ -809,8 +825,8 @@ const isRtl = currentLang === 'ar';
         let netChannelsChartInstance = null;
         let pendingServiceAction = null;
 
-        // Chart Data Buffers (Sliding 20 points)
-        const MAX_POINTS = 20;
+        // Chart Data Buffers (Supports several hours of historical points)
+        const MAX_POINTS = 720;
         const timeLabels = [];
         const cpuData = [];
         const ramData = [];
@@ -935,7 +951,25 @@ const isRtl = currentLang === 'ar';
                 cpuRamChartInstance.setOption({
                     animation: false,
                     tooltip: { trigger: 'axis' },
-                    grid: { top: 20, right: 15, bottom: 25, left: 35 },
+                    grid: { top: 20, right: 15, bottom: 42, left: 35 },
+                    dataZoom: [
+                        {
+                            type: 'inside',
+                            start: 0,
+                            end: 100
+                        },
+                        {
+                            type: 'slider',
+                            bottom: 4,
+                            height: 14,
+                            borderColor: 'transparent',
+                            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+                            fillerColor: 'rgba(168, 85, 247, 0.25)',
+                            handleStyle: { color: '#a855f7', borderColor: '#a855f7' },
+                            moveHandleStyle: { color: '#a855f7' },
+                            textStyle: { color: textColor, fontSize: 9 }
+                        }
+                    ],
                     xAxis: {
                         type: 'category',
                         data: timeLabels,
@@ -987,7 +1021,25 @@ const isRtl = currentLang === 'ar';
                 netChannelsChartInstance.setOption({
                     animation: false,
                     tooltip: { trigger: 'axis' },
-                    grid: { top: 20, right: 35, bottom: 25, left: 40 },
+                    grid: { top: 20, right: 35, bottom: 42, left: 40 },
+                    dataZoom: [
+                        {
+                            type: 'inside',
+                            start: 0,
+                            end: 100
+                        },
+                        {
+                            type: 'slider',
+                            bottom: 4,
+                            height: 14,
+                            borderColor: 'transparent',
+                            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+                            fillerColor: 'rgba(59, 130, 246, 0.25)',
+                            handleStyle: { color: '#3b82f6', borderColor: '#3b82f6' },
+                            moveHandleStyle: { color: '#3b82f6' },
+                            textStyle: { color: textColor, fontSize: 9 }
+                        }
+                    ],
                     xAxis: {
                         type: 'category',
                         data: timeLabels,
@@ -997,16 +1049,14 @@ const isRtl = currentLang === 'ar';
                     yAxis: [
                         {
                             type: 'value',
-                            name: 'KB/s',
-                            axisLabel: { color: textColor, fontSize: 10 },
+                            min: 0,
+                            axisLabel: { color: textColor, fontSize: 10, formatter: '{value} KB' },
                             splitLine: { lineStyle: { color: splitColor } }
                         },
                         {
                             type: 'value',
-                            name: 'Calls',
                             min: 0,
-                            minInterval: 1,
-                            axisLabel: { color: '#f59e0b', fontSize: 10 },
+                            axisLabel: { color: textColor, fontSize: 10, formatter: '{value} calls' },
                             splitLine: { show: false }
                         }
                     ],
@@ -1119,25 +1169,40 @@ const isRtl = currentLang === 'ar';
                     renderUsbTopology(data.usb);
                 }
 
-                // 6. Push to sliding chart series
-                const nowLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                timeLabels.push(nowLabel);
-                cpuData.push(cpuPct);
-                ramData.push(ramPct);
+                // 6. Prefill historical data on initial load, or append live point
+                if (timeLabels.length === 0 && Array.isArray(data.history) && data.history.length > 0) {
+                    data.history.forEach(pt => {
+                        if (pt && typeof pt === 'object') {
+                            timeLabels.push(pt.timeLabel || '00:00:00');
+                            cpuData.push(typeof pt.cpuPct === 'number' ? pt.cpuPct : 0);
+                            ramData.push(typeof pt.ramPct === 'number' ? pt.ramPct : 0);
+                            netRxData.push(typeof pt.rxKb === 'number' ? pt.rxKb : 0);
+                            netTxData.push(typeof pt.txKb === 'number' ? pt.txKb : 0);
+                            channelsData.push(typeof pt.activeCalls === 'number' ? pt.activeCalls : 0);
+                        }
+                    });
+                }
 
+                const nowLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 const rxKb = data.network ? Math.round(data.network.rxBytesPerSec / 1024) : 0;
                 const txKb = data.network ? Math.round(data.network.txBytesPerSec / 1024) : 0;
-                netRxData.push(rxKb);
-                netTxData.push(txKb);
-                channelsData.push(data.asterisk ? data.asterisk.activeCalls || 0 : 0);
 
-                if (timeLabels.length > MAX_POINTS) {
-                    timeLabels.shift();
-                    cpuData.shift();
-                    ramData.shift();
-                    netRxData.shift();
-                    netTxData.shift();
-                    channelsData.shift();
+                if (timeLabels.length === 0 || timeLabels[timeLabels.length - 1] !== nowLabel) {
+                    timeLabels.push(nowLabel);
+                    cpuData.push(cpuPct);
+                    ramData.push(ramPct);
+                    netRxData.push(rxKb);
+                    netTxData.push(txKb);
+                    channelsData.push(data.asterisk ? data.asterisk.activeCalls || 0 : 0);
+
+                    if (timeLabels.length > MAX_POINTS) {
+                        timeLabels.shift();
+                        cpuData.shift();
+                        ramData.shift();
+                        netRxData.shift();
+                        netTxData.shift();
+                        channelsData.shift();
+                    }
                 }
 
                 document.getElementById('chart-cpu-ram-legend').textContent = 'CPU: ' + cpuPct + '% | RAM: ' + ramPct + '%';
@@ -1155,11 +1220,36 @@ const isRtl = currentLang === 'ar';
                         series: [{ data: netRxData }, { data: netTxData }, { data: channelsData }]
                     });
                 }
-
             } catch (err) {
                 console.error('Failed to fetch telemetry:', err);
             }
         }
+
+        // Quick Time-Range Zoom Helper for Charts
+        window.setChartZoomRange = function(chartType, minutes) {
+            const chart = chartType === 'cpu' ? cpuRamChartInstance : netChannelsChartInstance;
+            if (!chart || timeLabels.length === 0) return;
+
+            if (minutes <= 0) {
+                chart.dispatchAction({
+                    type: 'dataZoom',
+                    start: 0,
+                    end: 100
+                });
+                return;
+            }
+
+            // Estimate points: samples are ~30 seconds apart (2 points per minute)
+            const totalPoints = timeLabels.length;
+            const pointsWanted = Math.max(5, Math.round(minutes * 2));
+            const startPct = Math.max(0, Math.round(100 - (pointsWanted / totalPoints) * 100));
+
+            chart.dispatchAction({
+                type: 'dataZoom',
+                start: startPct,
+                end: 100
+            });
+        };
 
         // Fetch Core Services Status
         async function fetchServicesStatus() {
@@ -1544,11 +1634,12 @@ const isRtl = currentLang === 'ar';
                         if (gdriveCreds && data.settings.gdrive_credentials) {
                             gdriveCreds.value = data.settings.gdrive_credentials;
                         }
-                        if (badge) {
-                            badge.textContent = data.settings.gdrive_enabled ? 'Active' : 'Disabled';
-                            badge.className = data.settings.gdrive_enabled 
-                                ? 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                : 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700';
+                        const gdriveBadge = document.getElementById('gdrive-status-badge');
+                        if (gdriveBadge) {
+                            gdriveBadge.textContent = data.settings.gdrive_enabled ? '<%= t.active %>' : '<%= t.disabled %>';
+                            gdriveBadge.className = data.settings.gdrive_enabled 
+                                ? 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0'
+                                : 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700 shrink-0';
                         }
                     }
                 })
