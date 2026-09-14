@@ -17,7 +17,11 @@ WHITE='\033[1;37m'
 RESET='\033[0m'
 BOLD='\033[1m'
 DIM='\033[2m'
-
+# Terminal clean header: clear previous lastlogin/failed login messages if interactive
+if [ -t 1 ]; then
+    clear 2>/dev/null || true
+fi
+echo ""
 # ASCII Logo
 echo -e "${RED}${BOLD}  ███████╗ ██████╗ ██╗  ██╗██████╗  █████╗ ████████╗"
 echo -e "  ██╔════╝██╔═══██╗██║ ██╔╝██╔══██╗██╔══██╗╚══██╔══╝"

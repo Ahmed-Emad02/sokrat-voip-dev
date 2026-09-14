@@ -115,6 +115,10 @@ if [ -f /etc/profile.d/sokrat-motd.sh ]; then
     rm -f /etc/profile.d/sokrat-motd.sh
     echo "  Removed /etc/profile.d/sokrat-motd.sh"
 fi
+if [ -f /etc/profile.d/sokrat-aliases.sh ]; then
+    rm -f /etc/profile.d/sokrat-aliases.sh
+    echo "  Removed /etc/profile.d/sokrat-aliases.sh"
+fi
 if [ -f /etc/profile.d/login-info.sh.bak ]; then
     mv /etc/profile.d/login-info.sh.bak /etc/profile.d/login-info.sh
     echo "  Restored /etc/profile.d/login-info.sh"

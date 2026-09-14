@@ -171,6 +171,10 @@ if [ -f "$MOTD_SCRIPT" ]; then
         echo "  Legacy banner backed up to /etc/profile.d/login-info.sh.bak"
     fi
 fi
+cat > /etc/profile.d/sokrat-aliases.sh << 'EOF'
+alias dd='asterisk -rx "dongle show devices"'
+EOF
+chmod 644 /etc/profile.d/sokrat-aliases.sh
 
 # Announcements in Issabel use picotts.agi, which requires both sox and pico2wave.
 PICO_AGI_SOURCE=/var/www/html/admin/modules/announcement/agi-bin/picotts.agi
