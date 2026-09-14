@@ -134,13 +134,20 @@ else
     mem_used_percent=0
 fi
 mem_gauge="${WHITE}[${RED}$(print_bar "$mem_used_percent")${WHITE}] ${RED}${memory_usage}${RESET}"
-
+# Infrastructure & Services Health Strip
+SVC_DB=$(systemctl is-active mariadb >/dev/null 2>&1 && echo -e "${GREEN}●${RESET}" || echo -e "${RED}○${RESET}")
+SVC_HTTP=$(systemctl is-active httpd >/dev/null 2>&1 && echo -e "${GREEN}●${RESET}" || echo -e "${RED}○${RESET}")
+SVC_PUSH=$(systemctl is-active sokrat-push-gateway >/dev/null 2>&1 && echo -e "${GREEN}●${RESET}" || echo -e "${RED}○${RESET}")
+SVC_STT=$(systemctl is-active sokrat-stt >/dev/null 2>&1 && echo -e "${GREEN}●${RESET}" || echo -e "${RED}○${RESET}")
+SVC_WD=$(systemctl is-active sokrat-watchdog >/dev/null 2>&1 && echo -e "${GREEN}●${RESET}" || echo -e "${RED}○${RESET}")
+STACK_HEALTH="DB:${SVC_DB}  Web:${SVC_HTTP}  Push:${SVC_PUSH}  STT:${SVC_STT}  Watchdog:${SVC_WD}"
 # Output clean 2-column grid
 echo -e "  ${WHITE}Sokrat Service:   ${RESET}${SOKRAT_STATUS_STR}                   ${WHITE}Active Calls:     ${RESET}${AST_CALLS_STR}"
 echo -e "  ${WHITE}Asterisk Core:    ${RESET}${AST_STATUS_STR}       ${WHITE}SIP Extensions:   ${RESET}${EXT_STATUS_STR}"
 echo -e "  ${WHITE}System Load:      ${RESET}${RED}${load_1m}${RESET}         ${WHITE}Calls Today:      ${RESET}${CALLS_TODAY_STR}"
 echo -e "  ${WHITE}System Uptime:    ${RESET}${RED}${uptime_val}${RESET}               ${WHITE}SSH Sessions:     ${RESET}${RED}${users_count} open${RESET}"
 echo -e "  ${WHITE}Memory (RAM):     ${RESET}${mem_gauge} ${RED}${mem_used}/${memory}MB${RESET}  ${WHITE}Root Disk (/):    ${RESET}${root_disk_gauge} ${RED}${root_usedgb}/${root_total}${RESET}"
+echo -e "  ${WHITE}Stack Services:   ${RESET}${STACK_HEALTH}"
 echo ""
 
 # GSM Dongles Section
