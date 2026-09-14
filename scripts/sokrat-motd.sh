@@ -53,36 +53,57 @@ if [ "$IP_FOUND" -eq 0 ]; then
 fi
 echo ""
 
+# System & PBX Status Section
+echo -e "${WHITE}${BOLD}System & PBX Status${RESET}"
+
 # Sokrat Service Status
 SOKRAT_STATUS=$(systemctl is-active sokrat-voip 2>/dev/null || echo "unknown")
 if [ "$SOKRAT_STATUS" = "active" ]; then
-    echo -e "${WHITE}Sokrat Service: ${GREEN}● ACTIVE${RESET}"
+    SOKRAT_STATUS_STR="${GREEN}● ACTIVE${RESET}"
 else
-    echo -e "${WHITE}Sokrat Service: ${RED}○ INACTIVE${RESET}"
+    SOKRAT_STATUS_STR="${RED}○ INACTIVE${RESET}"
 fi
 
-# Asterisk Status
+# Asterisk Status & Active Calls
 asterisk_version=$(asterisk -rx "core show version" 2>/dev/null | awk 'NR==1{print $1" "$2}')
 if [ -z "$asterisk_version" ] || [[ "$asterisk_version" == "Unable to"* ]]; then
-    echo -e "${WHITE}Asterisk:       ${RED}○ OFFLINE${RESET}"
+    AST_STATUS_STR="${RED}○ OFFLINE${RESET}"
+    AST_CALLS_STR="${RED}0${RESET}"
+    EXT_STATUS_STR="${RED}Offline${RESET}"
 else
+    AST_STATUS_STR="${GREEN}● ${asterisk_version}${RESET}"
     asterisk_calls=$(asterisk -rx "core show channels" 2>/dev/null | grep "active calls" | awk '{print $1}')
     [ -z "$asterisk_calls" ] && asterisk_calls="0"
-    echo -e "${WHITE}Asterisk:       ${GREEN}● ${asterisk_version} ${WHITE}Active Calls: ${RED}${asterisk_calls}${RESET}"
+    AST_CALLS_STR="${RED}${asterisk_calls}${RESET}"
+
+    # Query extensions (SIP + PJSIP)
+    peers_line=$(asterisk -rx "sip show peers" 2>/dev/null | grep -i "sip peers" | tr -d '\r\n' || echo "")
+    if [ -n "$peers_line" ]; then
+        online_peers=$(echo "$peers_line" | sed -e 's/.*Monitored: \([0-9]*\) online.*/\1/' || echo "0")
+        total_peers=$(echo "$peers_line" | awk '{print $1}' || echo "0")
+        EXT_STATUS_STR="${GREEN}${online_peers} online${RESET} / ${total_peers} total"
+    else
+        EXT_STATUS_STR="${RED}0 online${RESET}"
+    fi
 fi
+
+# Calls Today from MySQL CDR (fast read from issabel config if available)
+MYSQL_PWD=$(grep -s mysqlrootpwd /etc/issabel.conf 2>/dev/null | cut -d= -f2- | xargs || echo "")
+if [ -n "$MYSQL_PWD" ]; then
+    CALLS_TODAY=$(mysql -u root -p"${MYSQL_PWD}" -N -e "SELECT COUNT(*) FROM asteriskcdrdb.cdr WHERE calldate >= CURDATE();" 2>/dev/null || echo "")
+fi
+[ -z "$CALLS_TODAY" ] && CALLS_TODAY="0"
+CALLS_TODAY_STR="${RED}${CALLS_TODAY} calls${RESET}"
 
 # System load and stats
 user=$(whoami)
-load=$(cat /proc/loadavg 2>/dev/null | awk '{print $1" (1m) "$2" (5m) "$3" (15m)"}' || echo "unknown")
-uptime_val=$(uptime -p 2>/dev/null || uptime 2>/dev/null | sed 's/.*up \([^,]*\).*/\1/' || echo "unknown")
+load_1m=$(cat /proc/loadavg 2>/dev/null | awk '{print $1" (1m)  "$2" (5m)"}' || echo "unknown")
+uptime_val=$(uptime -p 2>/dev/null | sed -e 's/^up //' -e 's/ weeks\?,/w/' -e 's/ days\?,/d/' -e 's/ hours\?,/h/' -e 's/ minutes\?/m/' || uptime 2>/dev/null | sed 's/.*up \([^,]*\).*/\1/' || echo "unknown")
 memory_usage=$(free -m 2>/dev/null | awk '/Mem:/ { printf("%3.0f%%", ($3/$2)*100)}' || echo "0%")
 memory=$(free -m 2>/dev/null | awk '/Mem:/ { print $2 }' || echo "0")
 mem_used=$(free -m 2>/dev/null | awk '/Mem:/ { print $3 }' || echo "0")
-swap_usage=$(free -m 2>/dev/null | awk '/Swap/ { if($2>0) printf("%3.1f%%", $3/$2*100); else print "0.0%" }' || echo "0.0%")
 
 users_count=$(who -q 2>/dev/null | grep users= | awk -F= '{print $2}' || echo "0")
-processes_total=$(ps aux 2>/dev/null | wc -l || echo "0")
-processes_user=$(ps -U "${user}" u 2>/dev/null | wc -l || echo "0")
 
 root_total=$(df -h / 2>/dev/null | awk '/\// {print $(NF-4)}' || echo "0G")
 root_usedgb=$(df -h / 2>/dev/null | awk '/\// {print $(NF-3)}' || echo "0G")
@@ -105,21 +126,21 @@ print_bar() {
     echo -n "$bar"
 }
 
-root_disk_gauge="${WHITE}[${RED}$(print_bar "$root_used")${WHITE}] ${RED}${root_used_print}"
+root_disk_gauge="${WHITE}[${RED}$(print_bar "$root_used")${WHITE}] ${RED}${root_used_print}${RESET}"
 
 if [ "$memory" -gt 0 ]; then
     mem_used_percent=$((mem_used * 100 / memory))
 else
     mem_used_percent=0
 fi
-mem_gauge="${WHITE}[${RED}$(print_bar "$mem_used_percent")${WHITE}] ${RED}${memory_usage}"
+mem_gauge="${WHITE}[${RED}$(print_bar "$mem_used_percent")${WHITE}] ${RED}${memory_usage}${RESET}"
 
-echo -e "${WHITE}System load:    ${RED}${load} ${WHITE}Uptime: ${RED}${uptime_val}${RESET}"
-echo -e "${WHITE}Memory:         ${mem_gauge} ${RED}${mem_used}/${memory}MB${RESET}"
-echo -e "${WHITE}Usage on /:     ${root_disk_gauge} ${RED}${root_usedgb}/${root_total}${RESET}"
-echo -e "${WHITE}Swap usage:     ${RED}${swap_usage}${RESET}"
-echo -e "${WHITE}SSH logins:     ${RED}${users_count} open sessions${RESET}"
-echo -e "${WHITE}Processes:      ${RED}${processes_total} total, ${processes_user} yours${RESET}"
+# Output clean 2-column grid
+echo -e "  ${WHITE}Sokrat Service:   ${RESET}${SOKRAT_STATUS_STR}                   ${WHITE}Active Calls:     ${RESET}${AST_CALLS_STR}"
+echo -e "  ${WHITE}Asterisk Core:    ${RESET}${AST_STATUS_STR}       ${WHITE}SIP Extensions:   ${RESET}${EXT_STATUS_STR}"
+echo -e "  ${WHITE}System Load:      ${RESET}${RED}${load_1m}${RESET}         ${WHITE}Calls Today:      ${RESET}${CALLS_TODAY_STR}"
+echo -e "  ${WHITE}System Uptime:    ${RESET}${RED}${uptime_val}${RESET}               ${WHITE}SSH Sessions:     ${RESET}${RED}${users_count} open${RESET}"
+echo -e "  ${WHITE}Memory (RAM):     ${RESET}${mem_gauge} ${RED}${mem_used}/${memory}MB${RESET}  ${WHITE}Root Disk (/):    ${RESET}${root_disk_gauge} ${RED}${root_usedgb}/${root_total}${RESET}"
 echo ""
 
 # GSM Dongles Section
