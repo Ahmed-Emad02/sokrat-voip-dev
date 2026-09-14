@@ -187,17 +187,16 @@ else
                     state_color = RED
                     state_symbol = "○"
                 }
-                state_text = sprintf("%-12s", state)
+                state_text = sprintf("%-13s", state)
                 state_col = state_color state_symbol " " state_text RESET
 
                 rssi_val = rssi + 0
-                rssi_bar = " "
-                if (rssi_val >= 15) { rssi_bar = "█" }
-                else if (rssi_val >= 10) { rssi_bar = "▆" }
-                else if (rssi_val >= 5) { rssi_bar = "▃" }
+                rssi_color = GREEN
+                if (rssi_val < 10) { rssi_color = RED }
+                else if (rssi_val < 15) { rssi_color = YELLOW }
 
-                rssi_text = sprintf("%-9s", rssi)
-                rssi_col = GREEN rssi_bar RESET " " rssi_text
+                rssi_text = sprintf("%-11s", rssi "/31")
+                rssi_col = rssi_color rssi_text RESET
 
                 prov_str = sprintf("%-18s", prov)
                 num_str = sprintf("%-16s", num)
