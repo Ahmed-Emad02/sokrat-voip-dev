@@ -54,10 +54,15 @@ test('Sokrat MOTD Script', async (t) => {
 
         assert.ok(stdout.includes('SOKRAT VOIP Enterprise PBX Dashboard'), 'Missing logo text');
         assert.ok(stdout.includes('Dashboard Access:'), 'Missing URL section');
-        assert.ok(stdout.includes('Sokrat Service: \x1b[1;32m● ACTIVE'), 'Missing active service status');
-        assert.ok(stdout.includes('Asterisk:       \x1b[1;32m● Asterisk 18.19.0'), 'Missing asterisk active status');
-        assert.ok(stdout.includes('Active Calls: \x1b[1;32m2'), 'Missing asterisk calls');
+        assert.ok(stdout.includes('\x1b[1;37mSokrat Service: \x1b[1;32m● ACTIVE'), 'Missing active service status with white label');
+        assert.ok(stdout.includes('\x1b[1;37mAsterisk:       \x1b[1;32m● Asterisk 18.19.0'), 'Missing asterisk active status with white label');
+        assert.ok(stdout.includes('Active Calls: \x1b[1;31m2'), 'Missing asterisk calls in red');
+        assert.ok(stdout.includes('\x1b[1;37mSystem load:'), 'Missing system load label in white');
+        assert.ok(stdout.includes('\x1b[1;37mMemory:         \x1b[1;37m[\x1b[1;31m'), 'Memory gauge brackets should be white and bar red');
+        assert.ok(stdout.includes('\x1b[1;37mUsage on /:     \x1b[1;37m[\x1b[1;31m'), 'Usage on / gauge brackets should be white and bar red');
+        assert.ok(stdout.includes('\x1b[1;37mSwap usage:     \x1b[1;31m'), 'Swap usage stat value should be red');
         assert.ok(stdout.includes('GSM Dongles'), 'Missing dongles section');
+        assert.ok(stdout.includes('DEVICE     STATE          RSSI       PROVIDER          PHONE NUMBER'), 'Missing aligned table header');
         assert.ok(stdout.includes('dongle0'), 'Missing dongle0');
         assert.ok(stdout.includes('Vodafone'), 'Missing provider name');
         assert.ok(stdout.includes('dongle2'), 'Missing dongle2');
