@@ -209,3 +209,92 @@ else
     fi
 fi
 echo ""
+
+# Network Addresses Section
+echo -e "${WHITE}${BOLD}Network Addresses${RESET}"
+printf "${BOLD}%-13s%-15s%-20s%-18s${RESET}\n" "INTERFACE" "TYPE" "IPV4 ADDRESS" "SCOPE / INFO"
+
+ip -4 -o addr show 2>/dev/null | awk '
+{
+    intf = $2
+    sub(/@.*/, "", intf)
+    sub(/:.*/, "", intf)
+
+    if (intf ~ /^(lo|docker|veth|br-|cni|flannel)/) next
+
+    ipaddr = ""
+    for (i = 1; i <= NF; i++) {
+        if ($i == "inet") {
+            ipaddr = $(i+1)
+            sub(/\/.*$/, "", ipaddr)
+            break
+        }
+    }
+
+    if (ipaddr == "" || ipaddr == "127.0.0.1") next
+
+    RESET = "\033[0m"
+    RED = "\033[1;31m"
+    GREEN = "\033[1;32m"
+    CYAN = "\033[1;36m"
+
+    if (intf ~ /^(tailscale|wg|tun|tap|zt)/) {
+        type = "VPN/Mesh"
+        color = CYAN
+        scope = "VPN Overlay"
+    } else if (ipaddr ~ /^10\./ || ipaddr ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./ || ipaddr ~ /^192\.168\./) {
+        type = "Private"
+        color = GREEN
+        scope = "Internal LAN"
+    } else {
+        type = "Public"
+        color = RED
+        scope = "Public Interface"
+    }
+
+    intf_str = sprintf("%-13s", intf)
+    type_text = sprintf("%-13s", type)
+    type_col = color "● " type_text RESET
+    ip_str = sprintf("%-20s", ipaddr)
+    scope_str = sprintf("%-18s", scope)
+
+    printf "%s%s%s%s\n", intf_str, type_col, ip_str, scope_str
+}
+'
+
+CACHE_FILE="${SOKRAT_PUBLIC_IP_CACHE:-/tmp/.sokrat_public_ip}"
+NOW=$(date +%s 2>/dev/null || echo 0)
+MTIME=0
+CACHE_EXISTS=0
+
+if [ -f "$CACHE_FILE" ]; then
+    CACHE_EXISTS=1
+    MTIME=$(stat -c %Y "$CACHE_FILE" 2>/dev/null || stat -f %m "$CACHE_FILE" 2>/dev/null || echo 0)
+fi
+
+AGE=$((NOW - MTIME))
+if [ "$CACHE_EXISTS" -eq 0 ] || [ "$AGE" -gt 300 ]; then
+    (curl -s -m 1 --connect-timeout 1 ifconfig.me > "$CACHE_FILE" 2>/dev/null &)
+fi
+
+PUBLIC_IP=""
+if [ -f "$CACHE_FILE" ]; then
+    PUBLIC_IP=$(tr -d ' \t\r\n' < "$CACHE_FILE" 2>/dev/null)
+fi
+
+if [[ "$PUBLIC_IP" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    WAN_IP="$PUBLIC_IP"
+elif [ "$CACHE_EXISTS" -eq 0 ]; then
+    WAN_IP="Pending / Resolving..."
+else
+    WAN_IP="Unavailable / Offline"
+fi
+
+WAN_INTF=$(printf "%-13s" "wan")
+WAN_TYPE_TEXT=$(printf "%-13s" "Public")
+WAN_TYPE_COL=$(echo -e "${RED}● ${WAN_TYPE_TEXT}${RESET}")
+WAN_IP_STR=$(printf "%-20s" "$WAN_IP")
+WAN_SCOPE_STR=$(printf "%-18s" "External Gateway")
+
+printf "%s%s%s%s\n" "$WAN_INTF" "$WAN_TYPE_COL" "$WAN_IP_STR" "$WAN_SCOPE_STR"
+echo ""
