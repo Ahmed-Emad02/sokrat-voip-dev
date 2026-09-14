@@ -148,14 +148,39 @@ SVC_STT=$(systemctl is-active sokrat-stt >/dev/null 2>&1 && echo -e "${GREEN}●
 SVC_WD=$(systemctl is-active sokrat-watchdog >/dev/null 2>&1 && echo -e "${GREEN}●${RESET}" || echo -e "${RED}○${RESET}")
 STACK_HEALTH="DB: ${SVC_DB}       Web: ${SVC_HTTP}       Push: ${SVC_PUSH}       STT: ${SVC_STT}       Watchdog: ${SVC_WD}"
 
-# Output clean 2-column grid with generous spacing
-echo -e "  ${WHITE}Sokrat Service:    ${RESET}${SOKRAT_STATUS_STR}                           ${WHITE}Active Calls:      ${RESET}${AST_CALLS_STR}"
-echo -e "  ${WHITE}Asterisk Core:     ${RESET}${AST_STATUS_STR}               ${WHITE}SIP Extensions:    ${RESET}${EXT_STATUS_STR}"
-echo -e "  ${WHITE}System Load:       ${RESET}${RED}${load_1m}${RESET}                 ${WHITE}Calls Today:       ${RESET}${CALLS_TODAY_STR}"
-echo -e "  ${WHITE}System Uptime:     ${RESET}${RED}${uptime_val}${RESET}                       ${WHITE}SSH Sessions:      ${RESET}${RED}${users_count} open${RESET}"
-echo -e "  ${WHITE}Memory (RAM):      ${RESET}${mem_gauge} ${RED}${mem_used}/${memory}MB${RESET}          ${WHITE}Root Disk (/):     ${RESET}${root_disk_gauge} ${RED}${root_usedgb}/${root_total}${RESET}"
+pad_vis() {
+    local text="$1"
+    local width="$2"
+    local plain=$(echo -e "$text" | sed 's/\x1b\[[0-9;]*m//g')
+    local plen=${#plain}
+    local pad=$((width - plen))
+    echo -ne "$text"
+    if [ $pad -gt 0 ]; then
+        printf "%*s" $pad ""
+    fi
+}
+
+print_stat_row() {
+    local l1="$1"
+    local v1="$2"
+    local l2="$3"
+    local v2="$4"
+
+    echo -n "  "
+    pad_vis "${WHITE}${l1}${RESET}" 18
+    pad_vis "${v1}" 30
+    pad_vis "${WHITE}${l2}${RESET}" 18
+    echo -e "${v2}"
+}
+
+# Output perfectly aligned 2-column grid
+print_stat_row "Sokrat Service:" "${SOKRAT_STATUS_STR}" "Active Calls:" "${AST_CALLS_STR}"
+print_stat_row "Asterisk Core:" "${AST_STATUS_STR}" "SIP Extensions:" "${EXT_STATUS_STR}"
+print_stat_row "System Load:" "${RED}${load_1m}${RESET}" "Calls Today:" "${CALLS_TODAY_STR}"
+print_stat_row "System Uptime:" "${RED}${uptime_val}${RESET}" "SSH Sessions:" "${RED}${users_count} open${RESET}"
+print_stat_row "Memory (RAM):" "${mem_gauge} ${RED}${mem_used}/${memory}MB${RESET}" "Root Disk (/):" "${root_disk_gauge} ${RED}${root_usedgb}/${root_total}${RESET}"
 echo ""
-echo -e "  ${WHITE}Stack Services:    ${RESET}${STACK_HEALTH}"
+echo -e "  ${WHITE}Stack Services:   ${RESET}${STACK_HEALTH}"
 echo ""
 
 # GSM Dongles Section
@@ -247,7 +272,7 @@ echo ""
 
 # Network Addresses Section
 echo -e "${WHITE}${BOLD}Network Addresses${RESET}"
-printf "${BOLD}%-13s%-15s%-20s%-18s${RESET}\n" "INTERFACE" "TYPE" "IPV4 ADDRESS" "SCOPE / INFO"
+printf "${BOLD}%-13s%-15s%-24s%-18s${RESET}\n" "INTERFACE" "TYPE" "IPV4 ADDRESS" "SCOPE / INFO"
 
 ip -4 -o addr show 2>/dev/null | awk '
 {
@@ -290,7 +315,7 @@ ip -4 -o addr show 2>/dev/null | awk '
     intf_str = sprintf("%-13s", intf)
     type_text = sprintf("%-13s", type)
     type_col = color "● " type_text RESET
-    ip_str = sprintf("%-20s", ipaddr)
+    ip_str = sprintf("%-24s", ipaddr)
     scope_str = sprintf("%-18s", scope)
 
     printf "%s%s%s%s\n", intf_str, type_col, ip_str, scope_str
@@ -328,7 +353,7 @@ fi
 WAN_INTF=$(printf "%-13s" "external")
 WAN_TYPE_TEXT=$(printf "%-13s" "Public")
 WAN_TYPE_COL=$(echo -e "${RED}● ${WAN_TYPE_TEXT}${RESET}")
-WAN_IP_STR=$(printf "%-20s" "$WAN_IP")
+WAN_IP_STR=$(printf "%-24s" "$WAN_IP")
 WAN_SCOPE_STR=$(printf "%-18s" "External Gateway")
 
 printf "%s%s%s%s\n" "$WAN_INTF" "$WAN_TYPE_COL" "$WAN_IP_STR" "$WAN_SCOPE_STR"

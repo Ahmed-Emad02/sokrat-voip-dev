@@ -179,7 +179,7 @@ test("Sokrat MOTD Script", async (t) => {
         });
 
         assert.ok(stdout.includes("Network Addresses"), "Missing Network Addresses header");
-        assert.ok(stdout.includes("INTERFACE    TYPE           IPV4 ADDRESS        SCOPE / INFO"), "Missing Network Addresses table header");
+        assert.ok(stdout.includes("INTERFACE    TYPE           IPV4 ADDRESS            SCOPE / INFO"), "Missing Network Addresses table header");
         assert.ok(stdout.includes("eth0"), "Missing eth0 interface");
         assert.ok(stdout.includes("Private"), "Missing Private classification");
         assert.ok(stdout.includes("192.168.1.50"), "Missing eth0 IP");
