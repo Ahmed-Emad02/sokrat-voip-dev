@@ -110,7 +110,15 @@ fi
 echo "[3/5] Database notice: Database tables were NOT touched or altered."
 
 # 4. Remove root credential file if present
-echo "[4/5] Cleaning up root credential file..."
+echo "[4/5] Cleaning up legacy MOTD banner and restoring defaults..."
+if [ -f /etc/profile.d/sokrat-motd.sh ]; then
+    rm -f /etc/profile.d/sokrat-motd.sh
+    echo "  Removed /etc/profile.d/sokrat-motd.sh"
+fi
+if [ -f /etc/profile.d/login-info.sh.bak ]; then
+    mv /etc/profile.d/login-info.sh.bak /etc/profile.d/login-info.sh
+    echo "  Restored /etc/profile.d/login-info.sh"
+fi
 rm -f /etc/sokrat-root-credential.txt /var/www/html/sokrat_sso.php
 
 # 5. Remove dashboard directory

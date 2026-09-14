@@ -151,12 +151,26 @@ hostname "$SYSTEM_HOSTNAME" 2>/dev/null || true
 hostnamectl set-hostname "$SYSTEM_HOSTNAME" 2>/dev/null || true
 
 # ──────────────────────────────────────────────
-# Step 1 — System Packages + Disable Fail2Ban
+# Step 1 — System Packages + Disable Fail2Ban + Install Sokrat MOTD
 # ──────────────────────────────────────────────
 echo "[1/14] Installing system packages..."
 # Install EPEL first so sox (which lives in EPEL) resolves
 yum install -y epel-release
 yum install -y nano net-tools sox sqlite picotts
+
+# Install Sokrat MOTD
+MOTD_SCRIPT=/opt/sokrat-voip/scripts/sokrat-motd.sh
+if [ -f "$MOTD_SCRIPT" ]; then
+    chmod +x "$MOTD_SCRIPT"
+    cp "$MOTD_SCRIPT" /etc/profile.d/sokrat-motd.sh
+    chmod +x /etc/profile.d/sokrat-motd.sh
+    
+    # Silence Issabel banner if it exists
+    if [ -f /etc/profile.d/login-info.sh ] && [ ! -f /etc/profile.d/login-info.sh.bak ]; then
+        mv /etc/profile.d/login-info.sh /etc/profile.d/login-info.sh.bak
+        echo "  Legacy banner backed up to /etc/profile.d/login-info.sh.bak"
+    fi
+fi
 
 # Announcements in Issabel use picotts.agi, which requires both sox and pico2wave.
 PICO_AGI_SOURCE=/var/www/html/admin/modules/announcement/agi-bin/picotts.agi
@@ -1376,6 +1390,11 @@ echo "  [10d] Configuring and applying dongle.conf..."
 if [ -f /etc/asterisk/dongle.conf ] && grep -q '^\[dongle0\]' /etc/asterisk/dongle.conf; then
     echo "  /etc/asterisk/dongle.conf already exists, preserving existing port & SIM configuration..."
     cp -a /etc/asterisk/dongle.conf /etc/asterisk/dongle.conf.bak-install 2>/dev/null || true
+    if grep -q '^;callwaiting=' /etc/asterisk/dongle.conf; then
+        sed -i 's/^;callwaiting=.*/callwaiting=no/' /etc/asterisk/dongle.conf
+    elif ! grep -q '^callwaiting=' /etc/asterisk/dongle.conf; then
+        sed -i '/^\[defaults\]/a callwaiting=no' /etc/asterisk/dongle.conf
+    fi
 else
     echo "  Configuring $NUM_DONGLES dongle(s)..."
     TEMP_CONF="/tmp/dongle.conf.tmp"
