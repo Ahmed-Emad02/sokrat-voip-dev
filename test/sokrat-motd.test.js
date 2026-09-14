@@ -87,7 +87,7 @@ test("Sokrat MOTD Script", async (t) => {
         assert.ok(stdout.includes("\x1b[1;37mUsage on /:     \x1b[1;37m[\x1b[1;31m"), "Usage on / gauge brackets should be white and bar red");
         assert.ok(stdout.includes("\x1b[1;37mSwap usage:     \x1b[1;31m"), "Swap usage stat value should be red");
         assert.ok(stdout.includes("GSM Dongles"), "Missing dongles section");
-        assert.ok(stdout.includes("DEVICE     STATE          RSSI       PROVIDER          PHONE NUMBER"), "Missing aligned table header");
+        assert.ok(stdout.includes("DEVICE       STATE          RSSI       PROVIDER          PHONE NUMBER"), "Missing aligned table header");
         assert.ok(stdout.includes("dongle0"), "Missing dongle0");
         assert.ok(stdout.includes("Vodafone"), "Missing provider name");
         assert.ok(stdout.includes("dongle2"), "Missing dongle2");
@@ -186,7 +186,7 @@ test("Sokrat MOTD Script", async (t) => {
         assert.ok(stdout.includes("VPN/Mesh"), "Missing VPN/Mesh classification");
         assert.ok(stdout.includes("100.64.0.1"), "Missing tailscale IP");
         assert.ok(stdout.includes("VPN Overlay"), "Missing VPN Overlay scope");
-        assert.ok(stdout.includes("wan"), "Missing wan interface");
+        assert.ok(stdout.includes("external"), "Missing external interface");
         assert.ok(stdout.includes("Public"), "Missing Public classification");
         assert.ok(stdout.includes("203.0.113.5"), "Missing public WAN IP");
         assert.ok(stdout.includes("External Gateway"), "Missing External Gateway scope");
@@ -203,7 +203,7 @@ test("Sokrat MOTD Script", async (t) => {
             env: { ...process.env, PATH: `${mockBinDir}:${process.env.PATH}`, SOKRAT_PUBLIC_IP_CACHE: cacheFile }
         });
 
-        assert.ok(stdout.includes("wan"), "Missing wan interface");
+        assert.ok(stdout.includes("external"), "Missing external interface");
         assert.ok(stdout.includes("Unavailable / Offline"), "Missing Unavailable / Offline status");
         assert.equal(stderr, "", "Should not have any stderr output");
     });

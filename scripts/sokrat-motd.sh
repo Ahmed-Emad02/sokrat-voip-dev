@@ -135,7 +135,7 @@ else
         if [ "$lines_count" -le 1 ]; then
             echo -e "${DIM}No GSM dongles connected${RESET}"
         else
-            printf "${BOLD}%-11s%-15s%-11s%-18s%-16s${RESET}\n" "DEVICE" "STATE" "RSSI" "PROVIDER" "PHONE NUMBER"
+            printf "${BOLD}%-13s%-15s%-11s%-18s%-16s${RESET}\n" "DEVICE" "STATE" "RSSI" "PROVIDER" "PHONE NUMBER"
             
             echo "$dongles_out" | awk '
             NR==1 {
@@ -180,7 +180,7 @@ else
                 YELLOW="\033[1;33m"
                 DIM="\033[2m"
                 
-                id_str = sprintf("%-11s", id)
+                id_str = sprintf("%-13s", id)
                 state_color = GREEN
                 state_symbol = "●"
                 if (state != "Free") {
@@ -290,7 +290,7 @@ else
     WAN_IP="Unavailable / Offline"
 fi
 
-WAN_INTF=$(printf "%-13s" "wan")
+WAN_INTF=$(printf "%-13s" "external")
 WAN_TYPE_TEXT=$(printf "%-13s" "Public")
 WAN_TYPE_COL=$(echo -e "${RED}● ${WAN_TYPE_TEXT}${RESET}")
 WAN_IP_STR=$(printf "%-20s" "$WAN_IP")
