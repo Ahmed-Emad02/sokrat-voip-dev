@@ -653,8 +653,7 @@ function fmtDur(s) {
 
 
         document.addEventListener('DOMContentLoaded', () => {
-            const clockEl = document.getElementById('digitalClock');
-            if(clockEl) { setInterval(() => { clockEl.textContent = new Date().toTimeString().split(' ')[0]; }, 1000); }
+            if (typeof window.updateClock === 'function') window.updateClock();
             let currentlyPlaying = null;
             function fmtTime(s) {
                 if (!s || !isFinite(s)) return '0:00';

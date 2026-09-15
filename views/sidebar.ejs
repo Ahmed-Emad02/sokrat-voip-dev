@@ -2513,12 +2513,28 @@ function can(tab) { return isSuper || allowed.includes(tab); }
 </script>
 
 <script>
+window.serverTimezone = <%- JSON.stringify(typeof serverTimezone !== 'undefined' ? serverTimezone : '') %>;
+window.serverTimeOffset = (<%- (typeof serverTimestamp !== 'undefined' && serverTimestamp) ? serverTimestamp : 'Date.now()' %>) - Date.now();
+
 function updateClock() {
     var el = document.getElementById('digitalClock');
     if (!el) return;
-    var d = new Date();
-    el.textContent = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
+    var now = new Date(Date.now() + (window.serverTimeOffset || 0));
+    try {
+        if (window.serverTimezone) {
+            el.textContent = now.toLocaleTimeString('en-GB', {
+                timeZone: window.serverTimezone,
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            return;
+        }
+    } catch (_) {}
+    el.textContent = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0') + ':' + now.getSeconds().toString().padStart(2,'0');
 }
+window.updateClock = updateClock;
 document.addEventListener('DOMContentLoaded', function() { updateClock(); setInterval(updateClock, 1000); });
 </script>
 
@@ -3700,10 +3716,15 @@ async function loadTimeSettings() {
 
 let currentTimezone = '';
 let currentNtp = false;
+let initialManualDate = '';
+let initialManualTime = '';
 
 function renderTimeModal(data) {
     currentTimezone = data.timezone;
     currentNtp = data.ntpActive;
+    if (data.timezone) window.serverTimezone = data.timezone;
+    if (data.timestamp) window.serverTimeOffset = data.timestamp - Date.now();
+    updateClock();
 
     var tzOptions = data.timezoneList.map(function(tz) {
         var sel = tz === data.timezone ? 'selected' : '';
@@ -3714,8 +3735,25 @@ function renderTimeModal(data) {
     var manualDisabled = data.ntpActive ? 'disabled' : '';
 
     var now = new Date(data.timestamp);
-    var dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
-    var timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    var dateStr = '';
+    var timeStr = '';
+    try {
+        var fmt = new Intl.DateTimeFormat('en-CA', {
+            timeZone: data.timezone || window.serverTimezone || undefined,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: false
+        });
+        var parts = fmt.formatToParts(now);
+        var pMap = {};
+        for (var i = 0; i < parts.length; i++) pMap[parts[i].type] = parts[i].value;
+        dateStr = pMap.year + '-' + pMap.month + '-' + pMap.day;
+        timeStr = pMap.hour + ':' + pMap.minute;
+    } catch (_) {
+        dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+        timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    }
+    initialManualDate = dateStr;
+    initialManualTime = timeStr;
 
     var html =
         '<div class="flex items-center justify-between p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)]">' +
@@ -4135,13 +4173,17 @@ async function saveTimeSettings() {
     var newNtp = ntpCheckbox ? ntpCheckbox.checked : currentNtp;
     if (newNtp !== currentNtp) body.ntp = newNtp;
 
-    var ntpIsOrBecomingOff = (body.ntp === false) || (body.ntp === undefined && !currentNtp);
-    if (ntpIsOrBecomingOff) {
+    var isManualActive = (!newNtp);
+    if (isManualActive) {
         var manualDate = document.getElementById('manualDate');
         var manualTime = document.getElementById('manualTime');
         if (manualDate && manualTime) {
-            body.manualDate = manualDate.value;
-            body.manualTime = manualTime.value;
+            var dateChanged = manualDate.value !== initialManualDate;
+            var timeChanged = manualTime.value !== initialManualTime;
+            if (dateChanged || timeChanged) {
+                body.manualDate = manualDate.value;
+                body.manualTime = manualTime.value;
+            }
         }
     }
 
@@ -4162,6 +4204,9 @@ async function saveTimeSettings() {
         btn.textContent = origText;
         btn.disabled = false;
         if (data.success) {
+            if (data.timezone) window.serverTimezone = data.timezone;
+            if (data.timestamp) window.serverTimeOffset = data.timestamp - Date.now();
+            updateClock();
             if (typeof window.showToast === 'function') window.showToast(<%- JSON.stringify(sbT.savedSuccess || 'Saved successfully') %>, 'success');
             closeTimeModal();
         } else {

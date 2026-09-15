@@ -24,4 +24,5 @@ test('dongles default to rx/tx gain of 3 across add-slot UI, server API, and ins
     const template = fs.readFileSync(path.join(__dirname, '../dongle.conf'), 'utf8');
     assert.ok(/^rxgain=3\s*;/m.test(template), 'Template [defaults] must use rxgain=3');
     assert.ok(/^txgain=3\s*;/m.test(template), 'Template [defaults] must use txgain=3');
+    assert.ok(/^callwaiting=no\s*;/m.test(template), 'Template [defaults] must have callwaiting=no set');
 });

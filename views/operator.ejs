@@ -1019,10 +1019,7 @@ const isRtl = currentLang === 'ar';
             if (countEl) countEl.textContent = visibleTrunks;
         };
         updateOpViewButtons();
-            const clockEl = document.getElementById('digitalClock');
-            if (clockEl) {
-                setInterval(() => { clockEl.textContent = new Date().toTimeString().split(' ')[0]; }, 1000);
-            }
+            if (typeof window.updateClock === 'function') window.updateClock();
             const socket = io();
             const labels = {
                 incall: '<%= t.incall %>',

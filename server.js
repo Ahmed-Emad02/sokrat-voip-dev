@@ -3092,6 +3092,8 @@ app.use(async (req, res, next) => {
         res.locals.greetingMode = greetingConfig.mode || 'none';
         res.locals.greetingExtensions = greetingConfig.extensions || [];
         res.locals.clientName = cachedClientName || '';
+        res.locals.serverTimezone = getSystemTimezone();
+        res.locals.serverTimestamp = Date.now();
         if (now - cachedFedTimestamp > 30000) {
             try {
                 const [sRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
@@ -16930,6 +16932,20 @@ function convertToGsm(inputPath, outputPath) {
 
 const TIMEZONE_CACHE = { list: null, fetched: 0 };
 
+function getSystemTimezone() {
+    try {
+        const link = fs.readlinkSync('/etc/localtime');
+        if (link && link.includes('zoneinfo/')) {
+            return link.split('zoneinfo/')[1];
+        }
+    } catch (_) {}
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch (_) {
+        return 'UTC';
+    }
+}
+
 function getTimezoneList() {
     return new Promise((resolve, reject) => {
         if (TIMEZONE_CACHE.list && Date.now() - TIMEZONE_CACHE.fetched < 60000) {
@@ -16971,10 +16987,13 @@ app.get('/api/settings/time', async (req, res) => {
         for (const line of tdOut.split('\n')) {
             const tzMatch = line.match(/^\s*Time zone:\s+(\S+)/);
             if (tzMatch) timezone = tzMatch[1];
-            const ntpMatch = line.match(/^\s*NTP service:\s+(\S+)/);
-            if (ntpMatch) ntpActive = ntpMatch[1] === 'active';
-            const rtcMatch = line.match(/^\s*RTC in local TZ:\s+(\S+)/);
-            if (rtcMatch) rtcInLocalTZ = rtcMatch[1] === 'yes';
+            const ntpMatch = line.match(/^\s*(?:NTP service|NTP enabled|Network time on|System clock synchronized):\s+(\S+)/i);
+            if (ntpMatch) {
+                const val = ntpMatch[1].toLowerCase();
+                ntpActive = val === 'active' || val === 'yes' || val === 'true';
+            }
+            const rtcMatch = line.match(/^\s*RTC in local TZ:\s+(\S+)/i);
+            if (rtcMatch) rtcInLocalTZ = rtcMatch[1].toLowerCase() === 'yes';
             const localMatch = line.match(/^\s*Local time:\s+(.+)/);
             if (localMatch) localTime = localMatch[1];
         }
@@ -17009,7 +17028,11 @@ app.post('/api/settings/time', async (req, res) => {
 
         // Set NTP on/off (must be done before manual time changes)
         if (typeof ntp === 'boolean') {
-            await run('timedatectl', ['set-ntp', ntp ? 'true' : 'false']);
+            try {
+                await run('timedatectl', ['set-ntp', ntp ? 'true' : 'false']);
+            } catch (e) {
+                console.warn('Failed to set NTP:', e.message);
+            }
         }
 
         // Set timezone
@@ -17019,9 +17042,15 @@ app.post('/api/settings/time', async (req, res) => {
 
         // Set manual date/time (only when NTP is off)
         if (manualDate && manualTime) {
-            await run('timedatectl', ['set-time', `${manualDate} ${manualTime}`]);
+            const timeWithSec = (typeof manualTime === 'string' && manualTime.split(':').length === 2)
+                ? `${manualTime}:00`
+                : manualTime;
+            await run('timedatectl', ['set-time', `${manualDate} ${timeWithSec}`]);
         } else if (manualTime) {
-            await run('timedatectl', ['set-time', manualTime]);
+            const timeWithSec = (typeof manualTime === 'string' && manualTime.split(':').length === 2)
+                ? `${manualTime}:00`
+                : manualTime;
+            await run('timedatectl', ['set-time', timeWithSec]);
         }
 
         // Refresh and return current state
@@ -17041,8 +17070,11 @@ app.post('/api/settings/time', async (req, res) => {
         for (const line of tdOut.split('\n')) {
             const tzMatch = line.match(/^\s*Time zone:\s+(\S+)/);
             if (tzMatch) timezoneNew = tzMatch[1];
-            const ntpMatch = line.match(/^\s*NTP service:\s+(\S+)/);
-            if (ntpMatch) ntpActiveNew = ntpMatch[1] === 'active';
+            const ntpMatch = line.match(/^\s*(?:NTP service|NTP enabled|Network time on|System clock synchronized):\s+(\S+)/i);
+            if (ntpMatch) {
+                const val = ntpMatch[1].toLowerCase();
+                ntpActiveNew = val === 'active' || val === 'yes' || val === 'true';
+            }
             const localMatch = line.match(/^\s*Local time:\s+(.+)/);
             if (localMatch) localTimeNew = localMatch[1];
         }

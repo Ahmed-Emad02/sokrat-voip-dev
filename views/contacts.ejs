@@ -458,8 +458,7 @@ const isRtl = currentLang === 'ar';
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const clockEl = document.getElementById('digitalClock');
-            if (clockEl) { setInterval(() => { clockEl.textContent = new Date().toTimeString().split(' ')[0]; }, 1000); }
+            if (typeof window.updateClock === 'function') window.updateClock();
         });
 
         // Fast Client-side filter
