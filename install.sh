@@ -1328,7 +1328,7 @@ echo "[10/14] Setting up GSM dongles & chan_dongle..."
 
 # 10a — Install Build Dependencies
 echo "  [10a] Installing build dependencies..."
-yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom wget curl tar
+yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom wget curl tar patch
 yum -y install asterisk18-devel
 
 # 10b — Compile and Install librnnoise & func_rnnoise.so
@@ -1376,9 +1376,16 @@ fi
 cd asterisk-chan-dongle
 git pull origin master 2>/dev/null || true
 if [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
-    if patch -p1 -N --dry-run < "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
-        patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch"
-        echo "  Applied Sokrat chan_dongle patch"
+    if command -v patch &>/dev/null; then
+        if patch -p1 -N --dry-run < "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
+            patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch"
+            echo "  Applied Sokrat chan_dongle patch (via patch)"
+        else
+            echo "  Sokrat chan_dongle patch already applied"
+        fi
+    elif git apply --check "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
+        git apply "$INSTALL_DIR/asterisk/chan_dongle.patch"
+        echo "  Applied Sokrat chan_dongle patch (via git apply)"
     else
         echo "  Sokrat chan_dongle patch already applied"
     fi
