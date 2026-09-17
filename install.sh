@@ -133,6 +133,70 @@ collect_dongle_count() {
     fi
 }
 
+collect_default_setup() {
+    local input_fd
+    local user_val=""
+
+    if [[ -n "${DEFAULT_SETUP:-}" ]]; then
+        case "$(echo "$DEFAULT_SETUP" | tr '[:upper:]' '[:lower:]')" in
+            y|yes|1|true)
+                DEFAULT_SETUP="yes"
+                return 0
+                ;;
+            n|no|0|false)
+                DEFAULT_SETUP="no"
+                return 0
+                ;;
+            *)
+                echo "Warning: Invalid DEFAULT_SETUP='$DEFAULT_SETUP', defaulting to 'no'." >&2
+                DEFAULT_SETUP="no"
+                return 0
+                ;;
+        esac
+    fi
+
+    if [[ -t 0 ]]; then
+        input_fd=0
+    elif { exec 3<>/dev/tty; } 2>/dev/null; then
+        input_fd=3
+    elif [[ -t 1 ]] && { exec 3<>/proc/self/fd/1; } 2>/dev/null; then
+        input_fd=3
+    elif [[ -t 2 ]] && { exec 3<>/proc/self/fd/2; } 2>/dev/null; then
+        input_fd=3
+    else
+        DEFAULT_SETUP="no"
+        return 0
+    fi
+
+    while true; do
+        printf "Apply default setup (10 extensions 101-110, ring group 601, general inbound route)? [y/N]: "
+        if ! IFS= read -r -u "$input_fd" user_val; then
+            if [[ "$input_fd" -eq 3 ]]; then
+                exec 3>&-
+            fi
+            DEFAULT_SETUP="no"
+            break
+        fi
+
+        user_val="$(echo "$user_val" | tr '[:upper:]' '[:lower:]' | xargs)"
+        if [[ -z "$user_val" || "$user_val" == "n" || "$user_val" == "no" ]]; then
+            DEFAULT_SETUP="no"
+            break
+        elif [[ "$user_val" == "y" || "$user_val" == "yes" ]]; then
+            DEFAULT_SETUP="yes"
+            break
+        fi
+
+        echo "Invalid input '$user_val'. Please enter 'y' for yes or 'n' for no."
+    done
+
+    if [[ "$input_fd" -eq 3 ]]; then
+        exec 3>&-
+    fi
+}
+
+collect_default_setup
+echo " Default setup: $DEFAULT_SETUP"
 collect_client_name
 echo " Client name: $CLIENT_NAME"
 collect_dongle_count
@@ -559,6 +623,132 @@ echo "  Database migrations applied"
 
 # Clear any stale retrieve_conf failure notification
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "DELETE FROM \`notifications\` WHERE \`id\` = 'RCONFFAIL';" 2>/dev/null || true
+
+# Provision Default Setup if selected (10 extensions 101-110, ring group 601, general inbound route)
+if [[ "${DEFAULT_SETUP:-no}" == "yes" ]]; then
+    echo "  Applying Default Setup..."
+    MYSQL_ROOT_PWD="$MYSQL_ROOT_PWD" python3 - << 'PYEOF'
+import os, subprocess
+
+mysql_pwd = os.environ.get("MYSQL_ROOT_PWD", "")
+
+def run_mysql(query):
+    cmd = ["mysql", "-u", "root", f"-p{mysql_pwd}", "asterisk", "-e", query]
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    if res.returncode != 0:
+        print(f"  [Default Setup MySQL Warning] {res.stderr.strip()}")
+    return res.stdout
+
+def run_asterisk(cmd_str):
+    res = subprocess.run(["/usr/sbin/asterisk", "-rx", cmd_str], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    return res.stdout
+
+# 1. Ensure 10 Extensions: 101 to 110
+for ext_num in range(101, 111):
+    ext = str(ext_num)
+    name = ext
+    secret = "sss333"
+
+    # Check if extension already exists in users table
+    check = run_mysql(f"SELECT extension FROM users WHERE extension='{ext}'")
+    if ext not in check:
+        run_mysql(f"""
+            INSERT INTO users (extension, password, name, voicemail, ringtimer, noanswer, recording, outboundcid, sipname, mohclass)
+            VALUES ('{ext}', '', '{name}', 'novm', 0, '', 'out=always|in=always', '', '', 'default')
+            ON DUPLICATE KEY UPDATE name='{name}', voicemail='novm', recording='out=always|in=always';
+        """)
+        run_mysql(f"""
+            INSERT INTO devices (id, tech, dial, devicetype, user, description, emergency_cid)
+            VALUES ('{ext}', 'sip', 'SIP/{ext}', 'fixed', '{ext}', '{name}', '')
+            ON DUPLICATE KEY UPDATE tech='sip', dial='SIP/{ext}', user='{ext}', description='{name}';
+        """)
+
+        sip_pairs = [
+            (ext, 'account', ext, 32),
+            (ext, 'accountcode', '', 28),
+            (ext, 'allow', '', 26),
+            (ext, 'avpf', 'no', 15),
+            (ext, 'callerid', f"{name} <{ext}>", 33),
+            (ext, 'callgroup', '1', 0),
+            (ext, 'canreinvite', 'no', 4),
+            (ext, 'context', 'from-internal', 5),
+            (ext, 'deny', '0.0.0.0/0.0.0.0', 30),
+            (ext, 'dial', f"SIP/{ext}", 27),
+            (ext, 'disallow', '', 25),
+            (ext, 'dtmfmode', 'rfc2833', 3),
+            (ext, 'encryption', 'no', 22),
+            (ext, 'host', 'dynamic', 6),
+            (ext, 'mailbox', f"{ext}@device", 29),
+            (ext, 'nat', 'yes', 10),
+            (ext, 'permit', '0.0.0.0/0.0.0.0', 31),
+            (ext, 'pickupgroup', '1', 0),
+            (ext, 'port', '5060', 11),
+            (ext, 'qualify', 'yes', 12),
+            (ext, 'qualifyfreq', '15', 13),
+            (ext, 'secret', secret, 2),
+            (ext, 'sendrpid', 'no', 8),
+            (ext, 'transport', 'udp', 14),
+            (ext, 'trustrpid', 'yes', 7),
+            (ext, 'type', 'friend', 9)
+        ]
+        for s_id, s_kw, s_data, s_flags in sip_pairs:
+            run_mysql(f"""
+                INSERT INTO sip (id, keyword, data, flags)
+                VALUES ('{s_id}', '{s_kw}', '{s_data}', {s_flags})
+                ON DUPLICATE KEY UPDATE data='{s_data}', flags={s_flags};
+            """)
+
+    # Populate AstDB defaults for extension
+    astdb_cmds = [
+        f"database put AMPUSER {ext}/answermode disabled",
+        f"database put AMPUSER {ext}/cfringtimer 0",
+        f"database put AMPUSER {ext}/cidname \"{name}\"",
+        f"database put AMPUSER {ext}/cidnum \"{ext}\"",
+        f"database put AMPUSER {ext}/concurrency_limit 0",
+        f"database put AMPUSER {ext}/device \"{ext}\"",
+        f"database put AMPUSER {ext}/recording/in/external always",
+        f"database put AMPUSER {ext}/recording/in/internal always",
+        f"database put AMPUSER {ext}/recording/ondemand disabled",
+        f"database put AMPUSER {ext}/recording/out/external always",
+        f"database put AMPUSER {ext}/recording/out/internal always",
+        f"database put AMPUSER {ext}/recording/priority 10",
+        f"database put AMPUSER {ext}/ringtimer 0",
+        f"database put AMPUSER {ext}/voicemail novm",
+        f"database put AMPUSER {ext}/ai_denoise both",
+        f"database put AMPUSER {ext}/vad_gate 1",
+        f"database put AMPUSER {ext}/vad_db off",
+        f"database put DEVICE/{ext} default_user \"{ext}\"",
+        f"database put DEVICE/{ext} dial \"SIP/{ext}\"",
+        f"database put DEVICE/{ext} tech \"sip\"",
+        f"database put DEVICE/{ext} user \"{ext}\"",
+        f"database put DEVICE/{ext} type \"fixed\""
+    ]
+    for acmd in astdb_cmds:
+        run_asterisk(acmd)
+
+# 2. Ensure Ring Group: 601 (containing all 10 extensions: 101-102-103-104-105-106-107-108-109-110)
+rg_num = "601"
+rg_ext_list = "-".join(str(n) for n in range(101, 111))
+run_mysql(f"""
+    INSERT INTO ringgroups (grpnum, strategy, grptime, grppre, grplist, annmsg_id, postdest, description, alertinfo, remotealert_id, needsconf, toolate_id, ringing, cwignore, cfignore, cpickup, recording)
+    VALUES ('{rg_num}', 'ringall', 20, '', '{rg_ext_list}', 0, 'ext-group,{rg_num},1', '{rg_num}', '', 0, '', 0, 'Ring', 'CHECKED', '', '', 'always')
+    ON DUPLICATE KEY UPDATE grplist='{rg_ext_list}', strategy='ringall', grptime=20, postdest='ext-group,{rg_num},1', ringing='Ring', cwignore='CHECKED', recording='always';
+""")
+
+# 3. Ensure General Inbound Route (default destination to ring group 601)
+check_route = run_mysql("SELECT description FROM incoming WHERE extension='' AND cidnum=''")
+if "General Inbound Route" not in check_route and not check_route.strip():
+    run_mysql("""
+        INSERT INTO incoming (cidnum, extension, destination, faxexten, faxemail, answer, wait, privacyman, alertinfo, ringing, mohclass, description, grppre, delay_answer, pricid, pmmaxretries, pmminlength)
+        VALUES ('', '', 'ext-group,601,1', NULL, NULL, NULL, NULL, 0, '', '', 'default', 'General Inbound Route', '', 0, '', 3, 10);
+    """)
+
+# 4. Trigger FreePBX retrieve_conf to generate Asterisk dialplan & configs
+subprocess.run(["/var/lib/asterisk/bin/retrieve_conf"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+run_asterisk("core reload")
+print("  Default setup provisioned: 10 extensions (101-110), ring group 601 (all extensions), general inbound route")
+PYEOF
+fi
 
 # ──────────────────────────────────────────────
 # Step 6b — Sokrat Push Gateway (mobile push-to-wake)
