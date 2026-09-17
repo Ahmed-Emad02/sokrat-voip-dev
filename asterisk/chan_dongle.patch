@@ -12,26 +12,85 @@ index 5f0137e..2956cf4 100644
  		/* pvt->initialized = 1 after successful of CMD_AT_CNMI */
  		ATQ_CMD_DECLARE_ST(CMD_AT_CNMI, "AT+CNMI=2,1,0,2,0\r"),
 diff --git a/at_response.c b/at_response.c
-index 1832dae..97fb3a6 100644
+index 1832dae..b556150 100644
 --- a/at_response.c
 +++ b/at_response.c
-@@ -200,6 +200,9 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+@@ -200,6 +200,15 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
  			case CMD_AT_CHLD_1x:
  				CPVT_RESET_FLAGS(task->cpvt, CALL_FLAG_NEED_HANGUP);
  				ast_debug (1, "[%s] Successful hangup for call idx %d\n", PVT_ID(pvt), task->cpvt->call_idx);
-+				if (task->cpvt && task->cpvt != &pvt->sys_chan && task->cpvt->channel == NULL) {
-+					change_channel_state(task->cpvt, CALL_STATE_RELEASED, 0);
++				{
++					struct cpvt * c;
++					AST_LIST_TRAVERSE(&pvt->chans, c, entry) {
++						if (c->channel == NULL || c->state == CALL_STATE_INIT || c->state == CALL_STATE_DIALING || c->state == CALL_STATE_ALERTING) {
++							change_channel_state(c, CALL_STATE_RELEASED, 0);
++						}
++					}
++					pvt->dialing = 0;
 +				}
  				break;
  
  			case CMD_AT_CMGS:
-@@ -445,6 +448,9 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -445,6 +454,15 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  			case CMD_AT_CHUP:
  			case CMD_AT_CHLD_1x:
  				log_cmd_response_error(pvt, ecmd, "[%s] Error sending hangup for call idx %d\n", PVT_ID(pvt), task->cpvt->call_idx);
-+				if (task->cpvt && task->cpvt != &pvt->sys_chan && task->cpvt->channel == NULL) {
-+					change_channel_state(task->cpvt, CALL_STATE_RELEASED, 0);
++				{
++					struct cpvt * c;
++					AST_LIST_TRAVERSE(&pvt->chans, c, entry) {
++						if (c->channel == NULL || c->state == CALL_STATE_INIT || c->state == CALL_STATE_DIALING || c->state == CALL_STATE_ALERTING) {
++							change_channel_state(c, CALL_STATE_RELEASED, 0);
++						}
++					}
++					pvt->dialing = 0;
 +				}
  				break;
  
  			case CMD_AT_CMGR:
+@@ -1029,6 +1047,12 @@ static int at_response_clcc (struct pvt* pvt, char* str)
+ 			if(!CPVT_TEST_FLAG(cpvt, CALL_FLAG_ALIVE))
+ 				change_channel_state(cpvt, CALL_STATE_RELEASED, 0);
+ 		}
++		if (all == 0) {
++			pvt->dialing = 0;
++			AST_LIST_TRAVERSE(&pvt->chans, cpvt, entry) {
++				change_channel_state(cpvt, CALL_STATE_RELEASED, 0);
++			}
++		}
+ 	}
+ 	return 0;
+ }
+@@ -1759,11 +1783,16 @@ static void at_response_busy(struct pvt* pvt, enum ast_control_frame_type contro
+ 	if(cpvt == &pvt->sys_chan)
+ 		cpvt = pvt->last_dialed_cpvt;
+ 
++	pvt->dialing = 0;
+ 	if(cpvt)
+ 	{
+ 		CPVT_SET_FLAGS(cpvt, CALL_FLAG_NEED_HANGUP);
+ 		queue_control_channel (cpvt, control);
++		if(cpvt->channel == NULL || cpvt->state == CALL_STATE_DIALING || cpvt->state == CALL_STATE_INIT) {
++			change_channel_state(cpvt, CALL_STATE_RELEASED, 0);
++		}
+ 	}
++	request_clcc(pvt);
+ }
+ 
+ /*!
+diff --git a/channel.c b/channel.c
+index 3cb2815..b54ffbf 100644
+--- a/channel.c
++++ b/channel.c
+@@ -404,6 +404,12 @@ static int channel_hangup (struct ast_channel* channel)
+ 
+ 		disactivate_call (cpvt);
+ 
++		/* If call is still in initiating or dialing state when local hangup occurs, force released state */
++		if (cpvt->state == CALL_STATE_INIT || cpvt->state == CALL_STATE_DIALING || cpvt->state == CALL_STATE_ALERTING) {
++			pvt->dialing = 0;
++			change_channel_state(cpvt, CALL_STATE_RELEASED, 0);
++		}
++
+ 		/* drop cpvt->channel reference */
+ 		cpvt->channel = NULL;
+ 		ast_mutex_unlock (&pvt->lock);
