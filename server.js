@@ -381,12 +381,141 @@ io.use((socket, next) => {
 });
 
 // --- DATABASE INIT & AUTO-PROVISION ---
-const ALL_TABS = [
-    'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'softphone', 'contacts', 'users', 'config', 'storage',
-    'config-extensions', 'config-ringgroups', 'config-queues', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram',
-    'config-timegroups', 'config-timeconditions', 'config-announcements', 'config-modem', 'config-dongles', 'config-terminal',
-    'operator-listen', 'operator-whisper', 'operator-barge', 'operator-hangup', 'operator-hijack', 'operator-transfer'
+const PERMISSION_CATEGORIES = [
+    {
+        id: 'pages',
+        label: 'Main Pages & Navigation',
+        labelAr: 'الصفحات الرئيسية والتنقل',
+        icon: 'layout',
+        permissions: [
+            { key: 'dashboard', label: 'Executive Dashboard', labelAr: 'لوحة المتابعة الرئيسية' },
+            { key: 'call_history', label: 'Call History', labelAr: 'سجل المكالمات' },
+            { key: 'operator', label: 'Live Switchboard', labelAr: 'لوحة التحكم الحية' },
+            { key: 'ext-stats', label: 'Extension Statistics', labelAr: 'إحصائيات التحويلات' },
+            { key: 'contacts', label: 'Address Book', labelAr: 'دليل الهاتف' },
+            { key: 'voicemails', label: 'Voicemails', labelAr: 'البريد الصوتي' },
+            { key: 'gsm-dongles', label: 'GSM Dongles', labelAr: 'دونجلات GSM' },
+            { key: 'campaigns', label: 'Campaigns & Dialer', labelAr: 'الحملات والاتصال الآلي' },
+            { key: 'storage', label: 'Storage & System Health', labelAr: 'التخزين وحالة النظام' },
+            { key: 'config', label: 'PBX Configuration', labelAr: 'إعدادات المقسم بالكامل' }
+        ]
+    },
+    {
+        id: 'operator',
+        label: 'Live Switchboard Actions',
+        labelAr: 'إجراءات لوحة التحكم الحية',
+        icon: 'phone',
+        permissions: [
+            { key: 'operator-listen', label: 'Listen (ChanSpy)', labelAr: 'استماع سري للمكالمة' },
+            { key: 'operator-whisper', label: 'Whisper', labelAr: 'همس للموظف' },
+            { key: 'operator-barge', label: 'Barge In', labelAr: 'تدخل وتحدث مع الطرفين' },
+            { key: 'operator-hijack', label: 'Hijack Call', labelAr: 'سحب المكالمة للمشرف' },
+            { key: 'operator-transfer', label: 'Transfer Call', labelAr: 'تحويل المكالمة الجارية' },
+            { key: 'operator-hangup', label: 'Force Hangup', labelAr: 'إنهاء المكالمة إجبارياً' }
+        ]
+    },
+    {
+        id: 'call_history',
+        label: 'Call Records & Media Controls',
+        labelAr: 'إجراءات سجل المكالمات والتسجيلات',
+        icon: 'volume',
+        permissions: [
+            { key: 'cdr-export', label: 'Export Call Logs (CSV)', labelAr: 'تصدير السجلات إلى CSV' },
+            { key: 'cdr-audio-listen', label: 'Listen to Call Recordings', labelAr: 'الاستماع لتسجيلات المكالمات' },
+            { key: 'cdr-audio-download', label: 'Download Recording Audio', labelAr: 'تحميل ملفات الصوت' },
+            { key: 'cdr-delete', label: 'Delete Call Records', labelAr: 'حذف سجلات المكالمات' }
+        ]
+    },
+    {
+        id: 'gsm',
+        label: 'GSM Modems & Hardware Controls',
+        labelAr: 'إجراءات المودم والدونجلات',
+        icon: 'chip',
+        permissions: [
+            { key: 'gsm-sms-send', label: 'Send / Clear SMS', labelAr: 'إرسال ومسح الرسائل النصية' },
+            { key: 'gsm-ussd', label: 'Run USSD Commands', labelAr: 'تنفيذ أوامر واستعلامات USSD' },
+            { key: 'gsm-control', label: 'Modem Controls (Reboot/Re-detect)', labelAr: 'إعادة تشغيل وتحديث المودم' }
+        ]
+    },
+    {
+        id: 'campaigns',
+        label: 'Campaigns & Dialer Controls',
+        labelAr: 'إجراءات الحملات والاتصال الآلي',
+        icon: 'phone-outgoing',
+        permissions: [
+            { key: 'campaigns-manage', label: 'Create / Edit / Delete Campaigns', labelAr: 'إنشاء وتعديل وحذف الحملات' },
+            { key: 'campaigns-start-stop', label: 'Start / Pause / Control Campaigns', labelAr: 'تشغيل وإيقاف الحملات' },
+            { key: 'campaigns-import-leads', label: 'Import Leads (CSV / Excel)', labelAr: 'استيراد جهات الاتصال والأرقام' },
+            { key: 'campaigns-export-leads', label: 'Export Leads (CSV)', labelAr: 'تصدير أرقام الحملة' },
+            { key: 'campaigns-dnc', label: 'Manage Do-Not-Call (DNC) List', labelAr: 'إدارة قائمة منع الاتصال (DNC)' }
+        ]
+    },
+    {
+        id: 'contacts',
+        label: 'Address Book & Contacts Actions',
+        labelAr: 'إجراءات دليل الهاتف وجهات الاتصال',
+        icon: 'book',
+        permissions: [
+            { key: 'contacts-create', label: 'Add Contact', labelAr: 'إضافة جهة اتصال جديدة' },
+            { key: 'contacts-edit', label: 'Edit Contact', labelAr: 'تعديل بيانات جهة الاتصال' },
+            { key: 'contacts-delete', label: 'Delete Contact', labelAr: 'حذف جهات الاتصال' },
+            { key: 'contacts-import', label: 'Import Contacts (CSV)', labelAr: 'استيراد جهات اتصال عبر CSV' }
+        ]
+    },
+    {
+        id: 'voicemails',
+        label: 'Voicemail Actions',
+        labelAr: 'إجراءات البريد الصوتي',
+        icon: 'mail',
+        permissions: [
+            { key: 'voicemail-listen', label: 'Listen to Voicemails', labelAr: 'الاستماع للرسائل الصوتية' },
+            { key: 'voicemail-download', label: 'Download Voicemail Audio', labelAr: 'تحميل ملفات البريد الصوتي' },
+            { key: 'voicemail-purge', label: 'Purge Voicemails', labelAr: 'تنظيف وحذف الرسائل الصوتية' }
+        ]
+    },
+    {
+        id: 'storage',
+        label: 'Storage & System Controls',
+        labelAr: 'إجراءات التخزين وصيانة النظام',
+        icon: 'hard-drive',
+        permissions: [
+            { key: 'storage-export', label: 'Export PC Backup & Archives', labelAr: 'تصدير وأرشفة التسجيلات للكمبيوتر' },
+            { key: 'storage-gdrive', label: 'Google Drive Sync Setup', labelAr: 'إعداد ومزامنة Google Drive' },
+            { key: 'storage-purge', label: 'Purge & Retention Settings', labelAr: 'تنظيف التسجيلات وإعدادات الاحتفاظ' },
+            { key: 'system-service-control', label: 'System Services & Reload Controls', labelAr: 'التحكم في خدمات النظام وإعادة التشغيل' }
+        ]
+    },
+    {
+id: 'config',
+label: 'PBX Sub-Tab Configurations',
+labelAr: 'إعدادات مقسم PBX الفرعية',
+icon: 'settings',
+permissions: [
+{ key: 'config-extensions', label: 'Extensions', labelAr: 'التحويلات' },
+{ key: 'config-queues', label: 'Queues', labelAr: 'طوابير الانتظار' },
+{ key: 'config-ringgroups', label: 'Ring Groups', labelAr: 'مجموعات الاتصال' },
+{ key: 'config-trunks', label: 'Trunks', labelAr: 'خطوط الربط (Trunks)' },
+{ key: 'config-inbound', label: 'Inbound Routes', labelAr: 'المسارات الواردة' },
+{ key: 'config-outbound', label: 'Outbound Routes', labelAr: 'المسارات الصادرة' },
+{ key: 'config-ivrs', label: 'IVR Menus', labelAr: 'قوائم الرد الآلي (IVR)' },
+{ key: 'config-recordings', label: 'System Recordings', labelAr: 'التسجيلات الصوتية' },
+{ key: 'config-announcements', label: 'Announcements', labelAr: 'الإعلانات الصوتية' },
+{ key: 'config-timegroups', label: 'Time Groups', labelAr: 'المجموعات الزمنية' },
+{ key: 'config-timeconditions', label: 'Time Conditions', labelAr: 'الشروط الزمنية' },
+{ key: 'config-voicemail', label: 'Voicemail Settings', labelAr: 'البريد الصوتي' },
+{ key: 'config-dongles', label: 'Dongle Mappings', labelAr: 'ربط الشرائح والخطوط' },
+{ key: 'config-modem', label: 'Audio & DSP Gains', labelAr: 'إعدادات الصوت والمودم' },
+{ key: 'config-diagram', label: 'Call Flow Diagram', labelAr: 'مخطط سير المكالمات' },
+{ key: 'config-terminal', label: 'TTY Terminal & PBX Reload', labelAr: 'الطرفية وإعادة تحميل المقسم' }
+]
+}
 ];
+
+const ALL_TABS = Array.from(new Set([
+    ...PERMISSION_CATEGORIES.flatMap(c => c.permissions.map(p => p.key)),
+    // Backward compatibility aliases
+    'cdr', 'dialer', 'softphone', 'users'
+]));
 
 async function initAuthDb() {
     const conn = await mysql.createConnection({
@@ -958,33 +1087,46 @@ function getUserScopedExtension(req) {
 }
 
 function getFirstAllowedRoute(perms) {
-    if (!perms || !Array.isArray(perms) || perms.length === 0) return null;
-    const tabToRoute = {
+if (!perms || !Array.isArray(perms) || perms.length === 0) return null;
+const tabToRoute = {
         dashboard: '/',
-        cdr: '/cdr',
-        operator: '/operator',
-        'ext-stats': '/ext-stats',
-        contacts: '/contacts',
-        voicemails: '/voicemails',
+        call_history: '/cdr',
+cdr: '/cdr',
+operator: '/operator',
+'ext-stats': '/ext-stats',
+contacts: '/contacts',
+voicemails: '/voicemails',
         'gsm-dongles': '/gsm-dongles',
-        dialer: '/dialer',
-        storage: '/storage',
-        config: '/config'
-    };
-    for (const p of perms) {
-        if (tabToRoute[p]) return tabToRoute[p];
-        if (p.startsWith('config-')) return '/config';
-    }
-    return null;
+        campaigns: '/dialer',
+dialer: '/dialer',
+storage: '/storage',
+config: '/config'
+};
+for (const p of perms) {
+if (tabToRoute[p]) return tabToRoute[p];
+if (p.startsWith('config-')) return '/config';
+if (p.startsWith('operator-')) return '/operator';
+if (p.startsWith('cdr-')) return '/cdr';
+        if (p.startsWith('gsm-')) return '/gsm-dongles';
+        if (p.startsWith('campaigns-')) return '/dialer';
+        if (p.startsWith('contacts-')) return '/contacts';
+        if (p.startsWith('voicemail-')) return '/voicemails';
+        if (p.startsWith('storage-') || p.startsWith('system-')) return '/storage';
+}
+return null;
 }
 
 function requireTabPermission(tabName) {
-    return (req, res, next) => {
-        if (isSuperAdmin(req)) return next();
-        const perms = req.session.userPermissions || [];
+return (req, res, next) => {
+if (isSuperAdmin(req)) return next();
+const perms = req.session.userPermissions || [];
         if (perms.includes(tabName)) return next();
-        return res.status(403).json({ success: false, error: `Forbidden: Missing ${tabName} permission` });
-    };
+        if (tabName === 'call_history' && perms.includes('cdr')) return next();
+        if (tabName === 'cdr' && perms.includes('call_history')) return next();
+        if (tabName === 'campaigns' && perms.includes('dialer')) return next();
+        if (tabName === 'dialer' && perms.includes('campaigns')) return next();
+return res.status(403).json({ success: false, error: `Forbidden: Missing ${tabName} permission` });
+};
 }
 
 async function getUserPreferences(username, userId = null) {
@@ -1412,7 +1554,7 @@ async function reconcileDongleMappings() {
 }
 const TAB_ROUTE_MAP = {
     '/': 'dashboard',
-    '/cdr': 'cdr',
+    '/cdr': 'call_history',
     '/voicemails': 'voicemails',
     '/ext-stats': 'ext-stats',
     '/operator': 'operator',
@@ -1420,7 +1562,7 @@ const TAB_ROUTE_MAP = {
     '/contacts': 'contacts',
     '/users': 'users',
     '/config': 'config',
-    '/dialer': 'dialer',
+    '/dialer': 'campaigns',
     '/storage': 'storage'
 };
 
@@ -1440,7 +1582,7 @@ function requireActionPermission(actionPermission) {
     return (req, res, next) => {
         if (isSuperAdmin(req)) return next();
         const perms = req.session.userPermissions || [];
-        if (perms.includes(actionPermission) || perms.includes('operator')) {
+        if (perms.includes(actionPermission)) {
             return next();
         }
         return res.status(403).json({ success: false, error: `Forbidden. Missing permission: ${actionPermission}` });
@@ -1463,7 +1605,8 @@ app.use((req, res, next) => {
     const publicPaths = [
         '/login', '/logout', '/forgot-password', '/reset-password',
         '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info',
-        '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live'
+        '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live',
+        '/401', '/403', '/404'
     ];
     if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/federation/v1/')) {
         return next();
@@ -1503,19 +1646,39 @@ app.use(async (req, res, next) => {
     }
     const userPerms = req.session.userPermissions || [];
     res.locals.allowedTabs = userPerms;
-    if (userPerms.includes(tab)) return next();
-    if (tab === 'config' && userPerms.some(p => p.startsWith('config-'))) {
+    if (userPerms.includes(tab) || (tab === 'call_history' && userPerms.includes('cdr')) || (tab === 'campaigns' && userPerms.includes('dialer'))) return next();
+    // Hierarchical permissions: access to any operator action permits viewing the live operator board
+    if (tab === 'operator' && userPerms.some(p => p.startsWith('operator-'))) {
         return next();
     }
+    // Hierarchical permissions: access to any CDR action permits viewing Call History
+    if ((tab === 'call_history' || tab === 'cdr') && userPerms.some(p => p.startsWith('cdr-'))) {
+        return next();
+    }
+    // Hierarchical permissions: access to any GSM action permits viewing GSM Dongles
+    if (tab === 'gsm-dongles' && userPerms.some(p => p.startsWith('gsm-'))) {
+        return next();
+    }
+if (tab === 'config' && userPerms.some(p => p.startsWith('config-'))) {
+return next();
+}
     // Denied — redirect to the first tab they can access, or /no-access
     const firstAllowed = getFirstAllowedRoute(userPerms);
     if (firstAllowed && firstAllowed !== req.path) {
         return res.redirect(firstAllowed);
     }
-    return res.status(403).render('no-access', {
+    if (userPerms.length === 0) {
+        return res.status(403).render('no-access', {
+            currentLang: res.locals.currentLang || 'en',
+            isRtl: (res.locals.currentLang === 'ar'),
+            username: req.session.username
+        });
+    }
+    return res.status(403).render('403', {
         currentLang: res.locals.currentLang || 'en',
         isRtl: (res.locals.currentLang === 'ar'),
-        username: req.session.username
+        username: req.session.username,
+        permission: tab
     });
 });
 
@@ -1530,7 +1693,13 @@ app.use('/api/config', (req, res, next) => {
         subTab = 'ringgroups';
     } else if (req.path.startsWith('/queues')) {
         subTab = 'queues';
+    } else if (req.path.startsWith('/ivrs')) {
+        subTab = 'ivrs';
     } else if (req.path.startsWith('/recordings')) {
+        subTab = 'recordings';
+        subTab = 'ivrs';
+    } else if (req.path.startsWith('/recordings')) {
+        subTab = 'ivrs';
         subTab = 'recordings';
     } else if (req.path.startsWith('/trunks')) {
         subTab = 'trunks';
@@ -3114,6 +3283,36 @@ app.use(async (req, res, next) => {
 
 // --- AUTH ROUTES ---
 
+// Direct route endpoints for previewing / testing error pages
+app.get('/401', (req, res) => {
+    const currentLang = (req.session && req.session.lang) || req.query.lang || res.locals.currentLang || 'en';
+    res.status(401).render('401', {
+        currentLang,
+        isRtl: currentLang === 'ar',
+        redirect: req.query.redirect || '/'
+    });
+});
+
+app.get('/403', (req, res) => {
+    const currentLang = (req.session && req.session.lang) || req.query.lang || res.locals.currentLang || 'en';
+    res.status(403).render('403', {
+        currentLang,
+        isRtl: currentLang === 'ar',
+        username: (req.session && req.session.username) || 'demo_user',
+        permission: req.query.permission || 'dialer'
+    });
+});
+
+app.get('/404', (req, res) => {
+    const currentLang = (req.session && req.session.lang) || req.query.lang || res.locals.currentLang || 'en';
+    res.status(404).render('404', {
+        currentLang,
+        isRtl: currentLang === 'ar',
+        url: req.query.url || req.path
+    });
+});
+
+
 // GET /login - render login page
 app.get('/login', (req, res) => {
     if (req.session && req.session.userId) {
@@ -3385,6 +3584,7 @@ app.get('/users', async (req, res) => {
             groups,
             availableDongles,
             allTabs: ALL_TABS,
+            permissionCategories: PERMISSION_CATEGORIES,
             success: req.query.success || null,
             error: req.query.error || null,
             currentLang: res.locals.currentLang || 'en'
@@ -4334,11 +4534,23 @@ app.post('/groups/permissions', async (req, res) => {
         // Clear existing permissions
         await conn.execute('DELETE FROM dashboard_group_permissions WHERE group_id = ?', [group_id]);
         // Insert new ones
-        const selectedTabs = Array.isArray(tabs) ? tabs : (tabs ? [tabs] : []);
-        for (const tab of selectedTabs) {
-            if (ALL_TABS.includes(tab)) {
-                await conn.execute('INSERT INTO dashboard_group_permissions (group_id, tab) VALUES (?, ?)', [group_id, tab]);
-            }
+        // Filter permissions: only allow sub-actions if the parent tab permission is also present
+        const hasParent = (parentKey) => selectedTabs.includes(parentKey);
+        const filteredTabs = selectedTabs.filter(tab => {
+            if (!ALL_TABS.includes(tab)) return false;
+            if (tab.startsWith('operator-')) return hasParent('operator');
+            if (tab.startsWith('cdr-')) return hasParent('call_history') || hasParent('cdr');
+            if (tab.startsWith('gsm-')) return hasParent('gsm-dongles');
+            if (tab.startsWith('campaigns-')) return hasParent('campaigns') || hasParent('dialer');
+            if (tab.startsWith('contacts-')) return hasParent('contacts');
+            if (tab.startsWith('voicemail-')) return hasParent('voicemails');
+            if (tab.startsWith('storage-') || tab.startsWith('system-')) return hasParent('storage');
+            if (tab.startsWith('config-')) return hasParent('config');
+            return true;
+        });
+
+        for (const tab of filteredTabs) {
+            await conn.execute('INSERT INTO dashboard_group_permissions (group_id, tab) VALUES (?, ?)', [group_id, tab]);
         }
         await conn.end();
         res.redirect('/users?success=Permissions updated' + langQuery);
@@ -4840,7 +5052,8 @@ app.get('/cdr', async (req, res) => {
 });
 
 // Route to export all filtered CDR records as a CSV file
-app.get('/cdr/export', async (req, res) => {
+// Route to export all filtered CDR records as a CSV file
+app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async (req, res) => {
     try {
         const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
         const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
@@ -4984,11 +5197,12 @@ app.get('/cdr/export', async (req, res) => {
     }
 });
 
-// POST /api/cdr/delete — Delete a call history record (Super Admins only)
+// POST /api/cdr/delete — Delete a call history record
 app.post('/api/cdr/delete', requireAuth, async (req, res) => {
     try {
-        if (!isSuperAdmin(req)) {
-            return res.status(403).json({ success: false, error: 'Unauthorized: Super Admin access required' });
+        const perms = req.session.userPermissions || [];
+        if (!isSuperAdmin(req) && !perms.includes('cdr-delete')) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Missing cdr-delete permission' });
         }
         const { uniqueid, calldate } = req.body;
         if (!uniqueid) {
@@ -5177,14 +5391,24 @@ app.get('/api/voicemails', async (req, res) => {
     res.json({ messages: paged, mailboxes, filters: { startDate, endDate }, pagination: { total, totalPages, page, perPage } });
 });
 
-app.get('/vm-audio/:mailbox/:file', (req, res) => {
+app.get('/vm-audio/:mailbox/:file', requireAuth, (req, res) => {
+    const isDownload = req.query.download === '1';
+    const perms = req.session.userPermissions || [];
+    if (!isSuperAdmin(req)) {
+        if (isDownload && !perms.includes('voicemail-download')) {
+            return res.status(403).send("Forbidden: Missing voicemail-download permission.");
+        }
+        if (!isDownload && !perms.includes('voicemail-listen') && !perms.includes('voicemails')) {
+            return res.status(403).send("Forbidden: Missing voicemail-listen permission.");
+        }
+    }
     const filePath = path.join(VM_ROOT, req.params.mailbox, 'INBOX', req.params.file);
     if (!fs.existsSync(filePath)) return res.status(404).send('Voicemail audio missing.');
     const stat = fs.statSync(filePath);
     const ext = path.extname(filePath).toLowerCase();
     const mimeTypes = { '.wav': 'audio/wav', '.WAV': 'audio/wav', '.gsm': 'audio/x-gsm', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg' };
     const contentType = mimeTypes[ext] || 'audio/wav';
-    const isDownload = req.query.download === '1';
+        // isDownload already declared above
     if (isDownload) {
         res.setHeader('Content-Type', contentType);
         return res.download(filePath, req.params.file, (err) => {
@@ -7649,7 +7873,7 @@ app.get('/api/gsm-dongles', async (req, res) => {
 });
 
 // API Endpoint to reload specific dongle
-app.post('/api/gsm-dongles/reload/:dongleId', async (req, res) => {
+app.post('/api/gsm-dongles/reload/:dongleId', requireAuth, requireActionPermission('gsm-control'), async (req, res) => {
     const { dongleId } = req.params;
     if (!/^dongle[0-9]+$/.test(dongleId)) {
         return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
@@ -7716,7 +7940,7 @@ function getUsbBusIdForDongle(dongleId) {
 }
 
 // API Endpoint to reboot modem firmware via AT command (AT+CFUN=1,1)
-app.post('/api/gsm-dongles/reboot-modem/:dongleId', async (req, res) => {
+app.post('/api/gsm-dongles/reboot-modem/:dongleId', requireAuth, requireActionPermission('gsm-control'), async (req, res) => {
     const { dongleId } = req.params;
     if (!/^dongle[0-9]+$/.test(dongleId)) {
         return res.status(400).json({ success: false, error: "Invalid dongle ID format" });
@@ -7988,7 +8212,7 @@ app.post('/api/gsm-dongles/reconcile-conf', requireAuth, async (req, res) => {
 });
 
 // API Endpoint to re-detect dongle SIM numbers and update trunk caller IDs
-app.post('/api/gsm-dongles/redetect', async (req, res) => {
+app.post('/api/gsm-dongles/redetect', requireAuth, requireActionPermission('gsm-control'), async (req, res) => {
     try {
         await detectDonglesAndSetTrunkCID();
         io.emit('usbDevicesUpdated');
@@ -9182,7 +9406,7 @@ app.post('/api/storage/purge', requireAuth, requireTabPermission('storage'), asy
 });
 
 // API Endpoint to send USSD request (with transparent MMI Call Forwarding support)
-app.post('/api/gsm-dongles/ussd', async (req, res) => {
+app.post('/api/gsm-dongles/ussd', requireAuth, requireActionPermission('gsm-ussd'), async (req, res) => {
     const { dongle, code } = req.body;
     if (!dongle || !code) {
         return res.status(400).json({ success: false, error: "Dongle and USSD code are required" });
@@ -9369,6 +9593,16 @@ app.get('/audio/:uniqueid', async (req, res) => {
                 return res.status(403).send("Forbidden: Access denied to call recording.");
             }
         }
+        const isDownload = req.query.download === '1';
+        const perms = req.session.userPermissions || [];
+        if (!isSuperAdmin(req)) {
+            if (isDownload && !perms.includes('cdr-audio-download')) {
+                return res.status(403).send("Forbidden: Missing cdr-audio-download permission.");
+            }
+            if (!isDownload && !perms.includes('cdr-audio-listen') && !perms.includes('call_history') && !perms.includes('cdr')) {
+                return res.status(403).send("Forbidden: Missing cdr-audio-listen permission.");
+            }
+        }
 
         const callDate = moment(rows[0].calldate);
         const rawFilename = rows[0].recordingfile;
@@ -9408,7 +9642,7 @@ app.get('/audio/:uniqueid', async (req, res) => {
         const mimeTypes = { '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wma': 'audio/x-ms-wma', '.sln': 'audio/wav', '.wav49': 'audio/wav', '.gsm': 'audio/x-gsm' };
         const contentType = mimeTypes[fileExt] || 'audio/wav';
 
-        const isDownload = req.query.download === '1';
+        // const isDownload = req.query.download === '1';
         if (isDownload) {
             res.setHeader('Content-Type', contentType);
             return res.download(targetPath, baseName, (err) => {
@@ -9479,7 +9713,95 @@ app.get('/api/gsm-dongles/sms', async (req, res) => {
 });
 
 // Endpoint to clear SMS inbox
-app.post('/api/gsm-dongles/clear-sms', (req, res) => {
+app.post('/api/gsm-dongles/clear-sms', requireAuth, requireActionPermission('gsm-sms-send'), (req, res) => {
+    try {
+        saveSmsInbox([]);
+        io.emit('smsCleared');
+        res.json({ success: true, message: 'SMS inbox cleared.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Endpoint to send SMS via Dongle ID OR SIM phone number
+app.post('/api/gsm-dongles/send-sms', requireAuth, requireActionPermission('gsm-sms-send'), async (req, res) => {
+    try {
+        const { dongleId, simNumber, to, message } = req.body;
+        
+        const cleanTo = String(to || '').replace(/[\s\-\(\)]/g, '').trim();
+        if (!cleanTo || !/^\+?[0-9]{3,25}$/.test(cleanTo)) {
+            return res.status(400).json({ success: false, error: 'Recipient number is invalid (e.g. +201012345678 or 01012345678)' });
+        }
+
+        const cleanMessage = String(message || '').trim();
+        if (!cleanMessage) {
+            return res.status(400).json({ success: false, error: 'SMS message body cannot be empty' });
+        }
+
+        let targetDongle = null;
+
+        // 1. If explicit dongleId is passed (e.g. "dongle0")
+        if (dongleId && /^dongle[0-9]+$/i.test(String(dongleId).trim())) {
+            targetDongle = String(dongleId).toLowerCase().trim();
+        } 
+        // 2. Otherwise resolve by simNumber if provided
+        else if (simNumber) {
+            const rawSim = String(simNumber).replace(/[\s\-\(\)\+]/g, '').trim();
+            const [rows] = await pool.query('SELECT dongle_name, phone_number FROM `asterisk`.`gsm_dongles` WHERE phone_number IS NOT NULL AND phone_number != ""');
+            const match = rows.find(r => {
+                const dbNum = String(r.phone_number || '').replace(/[\s\-\(\)\+]/g, '').trim();
+                return dbNum === rawSim || dbNum.endsWith(rawSim) || rawSim.endsWith(dbNum);
+            });
+            if (match) {
+                targetDongle = match.dongle_name.toLowerCase().trim();
+            }
+        }
+
+        // Fallback: if only one connected dongle exists and no identifier was given, or neither matched
+        if (!targetDongle && !dongleId && !simNumber) {
+            const [onlineRows] = await pool.query('SELECT dongle_name FROM `asterisk`.`gsm_dongles` LIMIT 1');
+            if (onlineRows.length > 0) {
+                targetDongle = onlineRows[0].dongle_name.toLowerCase().trim();
+            }
+        }
+
+        if (!targetDongle) {
+            return res.status(400).json({ 
+                success: false, 
+                error: simNumber 
+                    ? `Could not find an active dongle with SIM number: ${simNumber}` 
+                    : 'Valid dongle ID (e.g. dongle0) or SIM number is required' 
+            });
+        }
+
+        // Verify user dongle permission scoping
+        const allowedDongles = await getUserAllowedDongles(req);
+        if (allowedDongles !== null && !allowedDongles.includes(targetDongle)) {
+            return res.status(403).json({ success: false, error: `Forbidden: You do not have permission to send from ${targetDongle}` });
+        }
+
+        // Send via Asterisk CLI: dongle sms <device> <number> <message>
+        execFile(ASTERISK_BIN, ['-rx', `dongle sms ${targetDongle} ${cleanTo} ${cleanMessage}`], (error, stdout, stderr) => {
+            if (error) {
+                console.error(`GSM SEND SMS ERROR (${targetDongle}):`, error.message);
+                return res.status(500).json({ success: false, error: error.message });
+            }
+
+            const out = (stdout || '').trim();
+            res.json({
+                success: true,
+                message: `SMS sent successfully via ${targetDongle}`,
+                dongle: targetDongle,
+                to: cleanTo,
+                output: out
+            });
+        });
+    } catch (err) {
+        console.error('send-sms route error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+app.post('/api/gsm-dongles/clear-sms', requireAuth, requireActionPermission('gsm-sms-send'), (req, res) => {
     try {
         saveSmsInbox([]);
         io.emit('smsCleared');
@@ -9598,7 +9920,11 @@ app.get('/api/contacts', requireAuth, requireTabPermission('contacts'), async (r
         res.status(500).json({ success: false, error: err.message });
     }
 });
-app.post('/api/contacts/add', requireAuth, requireTabPermission('contacts'), async (req, res) => {
+app.post('/api/contacts/add', requireAuth, async (req, res) => {
+    const perms = req.session.userPermissions || [];
+    if (!isSuperAdmin(req) && !perms.includes('contacts-create') && !perms.includes('contacts')) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Missing contacts-create permission' });
+    }
     try {
         const { firstName, lastName, phone } = req.body;
         if (!firstName || !phone) {
@@ -9622,9 +9948,10 @@ app.post('/api/contacts/add', requireAuth, requireTabPermission('contacts'), asy
     }
 });
 
-app.post('/api/contacts/edit', async (req, res) => {
-    if (!isSuperAdmin(req)) {
-        return res.status(403).json({ success: false, error: 'Unauthorized' });
+app.post('/api/contacts/edit', requireAuth, async (req, res) => {
+    const perms = req.session.userPermissions || [];
+    if (!isSuperAdmin(req) && !perms.includes('contacts-edit') && !perms.includes('contacts')) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Missing contacts-edit permission' });
     }
     try {
         const { id, firstName, lastName, phone } = req.body;
@@ -9649,9 +9976,10 @@ app.post('/api/contacts/edit', async (req, res) => {
     }
 });
 
-app.post('/api/contacts/delete', async (req, res) => {
-    if (!isSuperAdmin(req)) {
-        return res.status(403).json({ success: false, error: 'Unauthorized' });
+app.post('/api/contacts/delete', requireAuth, async (req, res) => {
+    const perms = req.session.userPermissions || [];
+    if (!isSuperAdmin(req) && !perms.includes('contacts-delete') && !perms.includes('contacts')) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Missing contacts-delete permission' });
     }
     try {
         const { id } = req.body;
@@ -15989,7 +16317,11 @@ app.get('/api/dialer/campaigns/:id', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
-app.post('/api/dialer/campaigns', async (req, res) => {
+app.post('/api/dialer/campaigns', requireAuth, async (req, res) => {
+    const perms = req.session.userPermissions || [];
+    if (!isSuperAdmin(req) && !perms.includes('campaigns-manage') && !perms.includes('campaigns')) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Missing campaigns-manage permission' });
+    }
 
     try {
         const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields } = req.body;
@@ -16035,7 +16367,11 @@ app.post('/api/dialer/campaigns', async (req, res) => {
 });
 
 // PUT /api/dialer/campaigns/:id
-app.put('/api/dialer/campaigns/:id', async (req, res) => {
+app.put('/api/dialer/campaigns/:id', requireAuth, async (req, res) => {
+    const perms = req.session.userPermissions || [];
+    if (!isSuperAdmin(req) && !perms.includes('campaigns-manage') && !perms.includes('campaigns')) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Missing campaigns-manage permission' });
+    }
     try {
         const id = parseInt(req.params.id, 10);
         const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields } = req.body;
@@ -16078,7 +16414,18 @@ app.put('/api/dialer/campaigns/:id', async (req, res) => {
 });
 
 // POST /api/dialer/campaigns/:id/control
-app.post('/api/dialer/campaigns/:id/control', async (req, res) => {
+app.post('/api/dialer/campaigns/:id/control', requireAuth, async (req, res) => {
+    const perms = req.session.userPermissions || [];
+    const isControlAction = ['start', 'pause', 'stop', 'reset'].includes(req.body.action);
+    const isDeleteAction = req.body.action === 'delete';
+    if (!isSuperAdmin(req)) {
+        if (isDeleteAction && !perms.includes('campaigns-manage') && !perms.includes('campaigns')) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Missing campaigns-manage permission' });
+        }
+        if (isControlAction && !perms.includes('campaigns-start-stop') && !perms.includes('campaigns')) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Missing campaigns-start-stop permission' });
+        }
+    }
     try {
         const id = parseInt(req.params.id, 10);
         const { action } = req.body;
@@ -16221,7 +16568,7 @@ app.get('/api/dialer/leads/:campaignId', async (req, res) => {
 });
 
 // GET /api/dialer/campaigns/:id/export - Export campaign leads with call outcomes as CSV
-app.get('/api/dialer/campaigns/:id/export', async (req, res) => {
+app.get('/api/dialer/campaigns/:id/export', requireAuth, requireActionPermission('campaigns-export-leads'), async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         const [cRows] = await pool.query('SELECT name, lead_fields FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [id]);
@@ -16332,7 +16679,7 @@ app.get('/api/dialer/dnc', async (req, res) => {
 });
 
 // POST /api/dialer/dnc
-app.post('/api/dialer/dnc', async (req, res) => {
+app.post('/api/dialer/dnc', requireAuth, requireActionPermission('campaigns-dnc'), async (req, res) => {
     try {
         const { phone_number, reason } = req.body;
         if (!phone_number) return res.status(400).json({ success: false, error: 'Phone number is required' });
@@ -16407,7 +16754,7 @@ app.post('/api/dialer/leads', async (req, res) => {
 });
 
 // POST /api/dialer/leads/import
-app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) => {
+app.post('/api/dialer/leads/import', requireAuth, requireActionPermission('campaigns-import-leads'), csvUpload.single('file'), async (req, res) => {
     try {
         const campaignId = parseInt(req.body.campaign_id, 10);
         if (!campaignId) {
@@ -16569,10 +16916,11 @@ app.post('/api/dialer/leads/import', csvUpload.single('file'), async (req, res) 
 });
 
 
-app.post('/api/contacts/csv-import', csvUpload.single('file'), async (req, res) => {
-    if (!isSuperAdmin(req)) {
+app.post('/api/contacts/csv-import', requireAuth, csvUpload.single('file'), async (req, res) => {
+    const perms = req.session.userPermissions || [];
+    if (!isSuperAdmin(req) && !perms.includes('contacts-import') && !perms.includes('contacts')) {
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        return res.status(403).json({ success: false, error: 'Unauthorized' });
+        return res.status(403).json({ success: false, error: 'Unauthorized: Missing contacts-import permission' });
     }
     try {
         if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -17389,6 +17737,21 @@ app.get('/embed/crm/live', async (req, res) => {
         res.status(500).send('Embed Error: ' + err.message);
     }
 });
+// 404 handler for unmatched routes
+app.use((req, res) => {
+    const isApi = req.path.startsWith('/api/') || req.path.startsWith('/integrations/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
+    if (isApi) {
+        return res.status(404).json({ success: false, error: 'Endpoint not found' });
+    }
+    const currentLang = (req.session && req.session.lang) || req.query.lang || res.locals.currentLang || 'en';
+    res.status(404).render('404', {
+        currentLang,
+        isRtl: currentLang === 'ar',
+        url: req.originalUrl || req.path
+    });
+});
+
+
 if (require.main === module) {
     const handleGracefulShutdown = async (signal) => {
         console.log(`[Server] Received ${signal}, closing open extension status intervals...`);

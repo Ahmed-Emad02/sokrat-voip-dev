@@ -1409,6 +1409,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             <p id="sms-inbox-device" class="text-[10px] text-[var(--text-muted)] font-mono mt-0.5 truncate"><%= isRtl ? 'اختر جهازاً' : 'Select a dongle' %></p>
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
+                            <button type="button" onclick="openSendSmsModal()" class="text-[10px] bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white font-bold rounded-lg px-3 py-1.5 transition cursor-pointer flex items-center gap-1.5 shadow-sm">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                                <span><%= isRtl ? 'إرسال SMS' : 'Send SMS' %></span>
+                            </button>
                             <span id="sms-inbox-count" class="px-2 py-1 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[10px] font-mono font-bold text-[var(--text-secondary)]">0</span>
                             <button onclick="clearSmsInbox()" class="text-[10px] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">
                                 <%= isRtl ? 'مسح' : 'Clear' %>
@@ -1728,6 +1732,71 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
     <div id="toast-container" class="fixed bottom-5 z-[999999] flex flex-col gap-2.5 max-w-sm pointer-events-none <%= isRtl ? 'left-5' : 'right-5' %>"></div>
 
     <!-- SMS Detail Modal -->
+    <!-- Send SMS Modal -->
+    <div id="send-sms-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200">
+        <div id="send-sms-modal-card" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 scale-95 opacity-0 transition-all duration-200 flex flex-col gap-4 mx-4 shadow-2xl">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
+                <h3 class="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <svg class="text-[var(--accent-color)]" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                    <span><%= isRtl ? 'إرسال رسالة SMS جديدة' : 'Send SMS Message' %></span>
+                </h3>
+                <button onclick="closeSendSmsModal()" class="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer p-1 rounded-lg hover:bg-[var(--bg-hover)]">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <!-- Form -->
+            <form id="sendSmsForm" onsubmit="handleSendSmsSubmit(event)" class="flex flex-col gap-4">
+                <!-- Sender Selection (Dongle ID or SIM Number) -->
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5" for="smsSenderSelect">
+                        <%= isRtl ? 'من الشريحة / الدونجل (From)' : 'Sender (Dongle ID / SIM Number)' %>
+                    </label>
+                    <select id="smsSenderSelect" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <!-- Populated dynamically from active devices -->
+                    </select>
+                </div>
+
+                <!-- Recipient Phone Number -->
+                <div>
+                    <label class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5" for="smsRecipientInput">
+                        <%= isRtl ? 'إلى رقم الهاتف (To)' : 'Recipient Phone Number' %>
+                    </label>
+                    <input type="text" id="smsRecipientInput" required placeholder="+201012345678" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--accent-color)]">
+                </div>
+
+                <!-- SMS Body -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-bold text-[var(--text-secondary)]" for="smsMessageInput">
+                            <%= isRtl ? 'نص الرسالة' : 'Message' %>
+                        </label>
+                        <span id="smsCharCounter" class="text-[10px] font-mono text-[var(--text-muted)]">0/160</span>
+                    </div>
+                    <textarea id="smsMessageInput" required rows="4" oninput="updateSmsCounter(this)" placeholder="<%= isRtl ? 'اكتب نص الرسالة هنا...' : 'Type your message here...' %>" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl p-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] resize-none"></textarea>
+                </div>
+
+                <!-- Modal Actions -->
+                <div class="flex justify-end gap-2.5 pt-2 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeSendSmsModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-card)] transition">
+                        <%= isRtl ? 'إلغاء' : 'Cancel' %>
+                    </button>
+                    <button type="submit" id="sendSmsSubmitBtn" class="btn-primary text-xs px-6 py-2.5 min-w-[140px] flex items-center justify-center gap-2">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                        <span id="sendSmsSubmitText" class="whitespace-nowrap font-bold"><%= isRtl ? 'إرسال الرسالة' : 'Send Message' %></span>
+                    </button>
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                        <span id="sendSmsSubmitText"><%= isRtl ? 'إرسال الرسالة' : 'Send Message' %></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="sms-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200">
         <div id="sms-modal-card" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-lg p-6 scale-95 opacity-0 transition-all duration-200 flex flex-col gap-4 mx-4">
             <!-- Modal Header -->
@@ -2837,6 +2906,115 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 smsModalCard.classList.add('scale-100', 'opacity-100');
             };
             
+            // Send SMS Modal Controller
+            const sendSmsModal = document.getElementById('send-sms-modal');
+            const sendSmsModalCard = document.getElementById('send-sms-modal-card');
+            const smsSenderSelect = document.getElementById('smsSenderSelect');
+            const smsRecipientInput = document.getElementById('smsRecipientInput');
+            const smsMessageInput = document.getElementById('smsMessageInput');
+            const smsCharCounter = document.getElementById('smsCharCounter');
+
+            window.openSendSmsModal = function(prefillDongle = null, prefillNumber = null) {
+                // Populate senders list from current state
+                // Populate senders list from current state
+                smsSenderSelect.innerHTML = '';
+                const devs = Array.isArray(window.loadedDevices) && window.loadedDevices.length > 0 ? window.loadedDevices : (typeof loadedDevices !== 'undefined' && Array.isArray(loadedDevices) ? loadedDevices : []);
+                if (devs.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.value = selectedDongleId || 'dongle0';
+                    opt.textContent = selectedDongleId || 'dongle0';
+                    smsSenderSelect.appendChild(opt);
+                } else {
+                    devs.forEach(d => {
+                        const opt = document.createElement('option');
+                        const dongleId = d.ID || d.id || d.dongle_name || 'dongle0';
+                        const simNum = d.Number || d.simNumber || d.phone_number || '';
+                        const provider = d.ProviderName || d.provider || '';
+                        opt.value = dongleId;
+                        const numText = simNum ? ` (${simNum})` : '';
+                        opt.textContent = `${dongleId}${numText}${provider ? ' - ' + provider : ''}`;
+                        if (prefillDongle && (dongleId === prefillDongle || (simNum && simNum === prefillDongle))) {
+                            opt.selected = true;
+                        } else if (!prefillDongle && selectedDongleId && dongleId === selectedDongleId) {
+                            opt.selected = true;
+                        }
+                        smsSenderSelect.appendChild(opt);
+                    });
+                }
+
+                if (prefillNumber) {
+                    smsRecipientInput.value = prefillNumber;
+                }
+
+                sendSmsModal.classList.remove('opacity-0', 'pointer-events-none');
+                sendSmsModalCard.classList.remove('scale-95', 'opacity-0');
+                sendSmsModalCard.classList.add('scale-100', 'opacity-100');
+                setTimeout(() => {
+                    if (prefillNumber) smsMessageInput.focus();
+                    else smsRecipientInput.focus();
+                }, 100);
+            };
+
+            window.closeSendSmsModal = function() {
+                sendSmsModal.classList.add('opacity-0', 'pointer-events-none');
+                sendSmsModalCard.classList.remove('scale-100', 'opacity-100');
+                sendSmsModalCard.classList.add('scale-95', 'opacity-0');
+                smsMessageInput.value = '';
+                if (smsCharCounter) smsCharCounter.textContent = '0/160';
+            };
+
+            sendSmsModal.addEventListener('click', (e) => {
+                if (e.target === sendSmsModal) closeSendSmsModal();
+            });
+
+            window.updateSmsCounter = function(textarea) {
+                if (!smsCharCounter) return;
+                const len = textarea.value.length;
+                const isUnicode = /[^\u0000-\u007F]/.test(textarea.value);
+                const limit = isUnicode ? 70 : 160;
+                smsCharCounter.textContent = `${len}/${limit}${isUnicode ? ' (Unicode)' : ''}`;
+            };
+
+            window.handleSendSmsSubmit = async function(event) {
+                event.preventDefault();
+                const btn = document.getElementById('sendSmsSubmitBtn');
+                const btnText = document.getElementById('sendSmsSubmitText');
+                const origText = btnText ? btnText.textContent : 'Send';
+
+                const dongleOrSim = smsSenderSelect.value;
+                const to = smsRecipientInput.value.trim();
+                const message = smsMessageInput.value.trim();
+
+                if (!to || !message) return;
+
+                if (btn) btn.disabled = true;
+                if (btnText) btnText.textContent = isRtl ? 'جاري الإرسال...' : 'Sending...';
+
+                try {
+                    const res = await fetch('/api/gsm-dongles/send-sms', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            dongleId: dongleOrSim,
+                            to: to,
+                            message: message
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast(isRtl ? 'تم إرسال الرسالة بنجاح!' : 'SMS dispatched successfully!', 'success');
+                        closeSendSmsModal();
+                    } else {
+                        showToast(data.error || (isRtl ? 'فشل إرسال الرسالة' : 'Failed to send SMS'), 'error');
+                    }
+                } catch (err) {
+                    showToast(err.message, 'error');
+                } finally {
+                    if (btn) btn.disabled = false;
+                    if (btnText) btnText.textContent = origText;
+                }
+            };
+
             window.closeSmsModal = function() {
                 smsModal.classList.add('opacity-0', 'pointer-events-none');
                 smsModalCard.classList.remove('scale-100', 'opacity-100');

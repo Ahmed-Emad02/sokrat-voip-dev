@@ -1,0 +1,149 @@
+<%
+const activeLang = typeof currentLang !== 'undefined' ? currentLang : 'en';
+const isRtlMode = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
+const user = typeof username !== 'undefined' ? username : 'User';
+const missingPermission = typeof permission !== 'undefined' ? permission : '';
+%>
+<!DOCTYPE html>
+<html lang="<%= activeLang %>" dir="<%= isRtlMode ? 'rtl' : 'ltr' %>">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - 403 <%= isRtlMode ? 'الوصول محظور' : 'Access Forbidden' %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            if (theme === 'light') {
+                document.documentElement.classList.add('light-theme');
+            } else {
+                document.documentElement.classList.remove('light-theme');
+            }
+        })();
+    </script>
+    <style>
+        :root {
+            --bg-primary: #050507;
+            --bg-secondary: #0b0b0e;
+            --bg-card: rgba(11, 11, 14, 0.75);
+            --border-primary: rgba(255, 255, 255, 0.08);
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --accent-color: #cc090c;
+            --accent-hover: #e62629;
+            --accent-dark: #7b0002;
+        }
+        html.light-theme {
+            --bg-primary: #f4f4f5;
+            --bg-secondary: #ffffff;
+            --bg-card: rgba(255, 255, 255, 0.9);
+            --border-primary: #e4e4e7;
+            --text-primary: #09090b;
+            --text-secondary: #52525b;
+            --text-muted: #a1a1aa;
+            --accent-color: #cc090c;
+            --accent-hover: #b0080a;
+            --accent-dark: #7b0002;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            padding: 0;
+        }
+        [dir="rtl"] {
+            font-family: 'Cairo', sans-serif;
+        }
+        .error-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--border-primary);
+            border-radius: 1.5rem;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4 sm:p-6 relative overflow-hidden">
+    <!-- Ambient glow background -->
+    <div class="fixed inset-0 pointer-events-none z-0">
+        <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-amber-600/10 rounded-full blur-[140px]"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-[350px] h-[350px] bg-red-600/5 rounded-full blur-[110px]"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="w-full max-w-lg relative z-10 space-y-6">
+        <!-- Language Switcher Bar -->
+        <div class="flex justify-end gap-2 text-xs">
+            <a href="?lang=<%= activeLang === 'ar' ? 'en' : 'ar' %>" class="px-3 py-1.5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition flex items-center gap-1.5 font-bold">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+                <span><%= activeLang === 'ar' ? 'English' : 'العربية' %></span>
+            </a>
+        </div>
+
+        <!-- 403 Card -->
+        <div class="error-card p-6 sm:p-8 text-center shadow-2xl space-y-6">
+            <!-- Status Code & Icon Header -->
+            <div class="flex flex-col items-center justify-center gap-3">
+                <div class="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-lg">
+                    <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                </div>
+                <span class="text-6xl sm:text-7xl font-black tracking-tight font-mono text-[var(--text-primary)] select-none">403</span>
+            </div>
+
+            <!-- Title & Subtitle -->
+            <div class="space-y-2">
+                <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-[var(--text-primary)]">
+                    <%= isRtlMode ? 'غير مصرح لك بالوصول' : 'Access Forbidden' %>
+                </h1>
+                <p class="text-sm text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto">
+                    <%= isRtlMode 
+                        ? 'ليس لديك صلاحية كافية لعرض هذه الصفحة أو تنفيذ هذا الإجراء. يرجى التواصل مع مسؤول النظام لتحديث صلاحيات مجموعتك.' 
+                        : 'You do not have the required permissions to access this page or perform this action. Please contact your system administrator to update your group permissions.' %>
+                </p>
+                <% if (missingPermission) { %>
+                    <p class="text-xs font-mono text-[var(--text-muted)] bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 inline-block mt-2 truncate max-w-full">
+                        <%= isRtlMode ? 'الصلاحية المطلوبة:' : 'Required:' %> <span class="text-amber-400 font-bold"><%= missingPermission %></span>
+                    </p>
+                <% } %>
+            </div>
+
+            <!-- User Badge -->
+            <% if (user) { %>
+            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] text-xs font-mono">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                <span class="text-[var(--text-muted)]"><%= isRtlMode ? 'المستخدم:' : 'User:' %></span>
+                <span class="text-[var(--text-primary)] font-bold"><%= user %></span>
+            </div>
+            <% } %>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-3 pt-2 justify-center">
+                <button type="button" onclick="window.history.length > 1 ? window.history.back() : window.location.href='/'" class="px-5 py-2.5 rounded-xl border border-[var(--border-primary)] text-xs font-bold text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition cursor-pointer flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4 <%= isRtlMode ? 'rotate-180' : '' %>" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                    <span><%= isRtlMode ? 'العودة للخلف' : 'Go Back' %></span>
+                </button>
+                <a href="/?lang=<%= activeLang %>" class="px-6 py-2.5 rounded-xl bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold transition shadow-lg shadow-red-900/30 flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                    <span><%= isRtlMode ? 'لوحة التحكم' : 'Dashboard' %></span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Footer Branding -->
+        <div class="text-center text-[10px] text-[var(--text-muted)] font-mono">
+            <span>Sokrat VoIP Enterprise PBX</span>
+        </div>
+    </div>
+</body>
+</html>

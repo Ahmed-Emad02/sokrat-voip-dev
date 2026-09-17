@@ -6,11 +6,14 @@ const path = require('path');
 const fs = require('fs');
 
 // --- 1. Core Reference Constants and Helpers ---
+// --- 1. Core Reference Constants and Helpers ---
 const ALL_TABS = [
-    'dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'softphone', 'contacts', 'users', 'config', 'storage',
+    'dashboard', 'call_history', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'softphone', 'contacts', 'users', 'config', 'storage', 'campaigns', 'dialer',
     'config-extensions', 'config-ringgroups', 'config-queues', 'config-recordings', 'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail', 'config-diagram',
-    'config-timegroups', 'config-timeconditions', 'config-announcements', 'config-modem', 'config-dongles', 'config-terminal',
-    'operator-listen', 'operator-whisper', 'operator-barge', 'operator-hangup', 'operator-hijack'
+    'config-timegroups', 'config-timeconditions', 'config-announcements', 'config-modem', 'config-dongles', 'config-terminal', 'config-ivrs',
+    'operator-listen', 'operator-whisper', 'operator-barge', 'operator-hangup', 'operator-hijack', 'operator-transfer',
+    'cdr-export', 'cdr-audio-listen', 'cdr-audio-download', 'cdr-delete',
+    'gsm-sms-send', 'gsm-ussd', 'gsm-control'
 ];
 
 const ROOT_USER = 'root';
@@ -38,7 +41,7 @@ function requireActionPermission(actionPermission) {
     return (req, res, next) => {
         if (isSuperAdmin(req)) return next();
         const perms = req.session.userPermissions || [];
-        if (perms.includes(actionPermission) || perms.includes('operator')) {
+        if (perms.includes(actionPermission)) {
             return next();
         }
         return res.status(403).json({ success: false, error: `Forbidden. Missing permission: ${actionPermission}` });
@@ -102,11 +105,9 @@ test('isSuperAdmin accurately identifies root, super admin groups and denies sta
     assert.equal(isSuperAdmin(null), false);
 });
 
-test('ALL_TABS defines full catalog of 31 permissions across main tabs, subtabs, and action controls', () => {
-    assert.equal(ALL_TABS.length, 31, 'ALL_TABS must contain exactly 31 permission keys');
-
+test('ALL_TABS defines full catalog of permissions across main tabs, subtabs, and action controls', () => {
     // Core tabs
-    const coreTabs = ['dashboard', 'cdr', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'softphone', 'contacts', 'users', 'config', 'storage'];
+    const coreTabs = ['dashboard', 'call_history', 'voicemails', 'ext-stats', 'operator', 'gsm-dongles', 'contacts', 'campaigns', 'config', 'storage'];
     coreTabs.forEach(tab => assert.ok(ALL_TABS.includes(tab), `ALL_TABS should include core tab: ${tab}`));
 
     // Config sub-tabs
@@ -114,13 +115,17 @@ test('ALL_TABS defines full catalog of 31 permissions across main tabs, subtabs,
         'config-extensions', 'config-ringgroups', 'config-queues', 'config-recordings',
         'config-trunks', 'config-inbound', 'config-outbound', 'config-voicemail',
         'config-diagram', 'config-timegroups', 'config-timeconditions', 'config-announcements',
-        'config-modem', 'config-dongles', 'config-terminal'
+        'config-modem', 'config-dongles', 'config-terminal', 'config-ivrs'
     ];
     configSubTabs.forEach(sub => assert.ok(ALL_TABS.includes(sub), `ALL_TABS should include config sub-tab: ${sub}`));
 
     // Operator action permissions
-    const actionPerms = ['operator-listen', 'operator-whisper', 'operator-barge', 'operator-hangup', 'operator-hijack'];
+    const actionPerms = ['operator-listen', 'operator-whisper', 'operator-barge', 'operator-hangup', 'operator-hijack', 'operator-transfer'];
     actionPerms.forEach(act => assert.ok(ALL_TABS.includes(act), `ALL_TABS should include operator action: ${act}`));
+
+    // Call history & GSM permissions
+    const additionalPerms = ['cdr-export', 'cdr-audio-listen', 'cdr-audio-download', 'cdr-delete', 'gsm-sms-send', 'gsm-ussd', 'gsm-control'];
+    additionalPerms.forEach(p => assert.ok(ALL_TABS.includes(p), `ALL_TABS should include permission: ${p}`));
 });
 
 // --- 3. Authentication & Authorization Middleware Tests ---
@@ -179,12 +184,13 @@ test('requireActionPermission enforces operator call action control hierarchy', 
     middleware(explicitReq, explicitRes, () => { explicitNext = true; });
     assert.equal(explicitNext, true);
 
-    // 3. User with legacy parent 'operator' permission is allowed
-    const parentReq = { session: { userGroup: 'operators', userPermissions: ['operator'] } };
-    const parentRes = createMockRes();
-    let parentNext = false;
-    middleware(parentReq, parentRes, () => { parentNext = true; });
-    assert.equal(parentNext, true);
+    // 3. User with explicit action permission 'operator-whisper' does not grant 'operator-listen'
+    const otherReq = { session: { userGroup: 'operators', userPermissions: ['operator-whisper'] } };
+    const otherRes = createMockRes();
+    let otherNext = false;
+    middleware(otherReq, otherRes, () => { otherNext = true;
+    });
+    assert.equal(otherNext, false);
 
     // 4. User missing the permission is denied 403 Forbidden
     const deniedReq = { session: { userGroup: 'operators', userPermissions: ['cdr', 'operator-whisper'] } };

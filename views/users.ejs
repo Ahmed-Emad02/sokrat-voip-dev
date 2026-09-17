@@ -495,38 +495,152 @@
                                         <% } %>
                                     </div>
 
+                                    <% 
+                                        var cats = typeof permissionCategories !== 'undefined' && permissionCategories ? permissionCategories : [
+                                            {
+                                                id: 'pages',
+                                                label: 'Main Pages & Navigation',
+                                                labelAr: 'الصفحات الرئيسية والتنقل',
+                                                permissions: [
+                                                    { key: 'dashboard', label: 'Executive Dashboard', labelAr: 'لوحة المتابعة الرئيسية' },
+                                                    { key: 'call_history', label: 'Call History', labelAr: 'سجل المكالمات' },
+                                                    { key: 'operator', label: 'Live Switchboard', labelAr: 'لوحة التحكم الحية' },
+                                                    { key: 'ext-stats', label: 'Extension Statistics', labelAr: 'إحصائيات التحويلات' },
+                                                    { key: 'contacts', label: 'Address Book', labelAr: 'دليل الهاتف' },
+                                                    { key: 'voicemails', label: 'Voicemails', labelAr: 'البريد الصوتي' },
+                                                    { key: 'gsm-dongles', label: 'GSM Dongles', labelAr: 'دونجلات GSM' },
+                                                    { key: 'campaigns', label: 'Campaigns & Dialer', labelAr: 'الحملات والاتصال الآلي' },
+                                                    { key: 'storage', label: 'Storage & System Health', labelAr: 'التخزين وحالة النظام' },
+                                                    { key: 'config', label: 'PBX Configuration', labelAr: 'إعدادات المقسم بالكامل' }
+                                                ]
+                                            },
+                                            {
+                                                id: 'operator',
+                                                label: 'Live Switchboard Actions',
+                                                labelAr: 'إجراءات لوحة التحكم الحية',
+                                                permissions: [
+                                                    { key: 'operator-listen', label: 'Listen (ChanSpy)', labelAr: 'استماع سري للمكالمة' },
+                                                    { key: 'operator-whisper', label: 'Whisper', labelAr: 'همس للموظف' },
+                                                    { key: 'operator-barge', label: 'Barge In', labelAr: 'تدخل وتحدث مع الطرفين' },
+                                                    { key: 'operator-hijack', label: 'Hijack Call', labelAr: 'سحب المكالمة للمشرف' },
+                                                    { key: 'operator-transfer', label: 'Transfer Call', labelAr: 'تحويل المكالمة الجارية' },
+                                                    { key: 'operator-hangup', label: 'Force Hangup', labelAr: 'إنهاء المكالمة إجبارياً' }
+                                                ]
+                                            },
+                                            {
+                                                id: 'call_history',
+                                                label: 'Call Records & Media Controls',
+                                                labelAr: 'إجراءات سجل المكالمات والتسجيلات',
+                                                permissions: [
+                                                    { key: 'cdr-export', label: 'Export Call Logs (CSV)', labelAr: 'تصدير السجلات إلى CSV' },
+                                                    { key: 'cdr-audio-listen', label: 'Listen to Call Recordings', labelAr: 'الاستماع لتسجيلات المكالمات' },
+                                                    { key: 'cdr-audio-download', label: 'Download Recording Audio', labelAr: 'تحميل ملفات الصوت' },
+                                                    { key: 'cdr-delete', label: 'Delete Call Records', labelAr: 'حذف سجلات المكالمات' }
+                                                ]
+                                            },
+                                            {
+                                                id: 'gsm',
+                                                label: 'GSM Modems & Hardware Controls',
+                                                labelAr: 'إجراءات المودم والدونجلات',
+                                                permissions: [
+                                                    { key: 'gsm-sms-send', label: 'Send / Clear SMS', labelAr: 'إرسال ومسح الرسائل النصية' },
+                                                    { key: 'gsm-ussd', label: 'Run USSD Commands', labelAr: 'تنفيذ أوامر واستعلامات USSD' },
+                                                    { key: 'gsm-control', label: 'Modem Controls (Reboot/Re-detect)', labelAr: 'إعادة تشغيل وتحديث المودم' }
+                                                ]
+                                            },
+                                            {
+                                                id: 'config',
+                                                label: 'PBX Sub-Tab Configurations',
+                                                labelAr: 'إعدادات مقسم PBX الفرعية',
+                                                permissions: [
+                                                    { key: 'config-extensions', label: 'Extensions', labelAr: 'التحويلات' },
+                                                    { key: 'config-queues', label: 'Queues', labelAr: 'طوابير الانتظار' },
+                                                    { key: 'config-ringgroups', label: 'Ring Groups', labelAr: 'مجموعات الاتصال' },
+                                                    { key: 'config-trunks', label: 'Trunks', labelAr: 'خطوط الربط (Trunks)' },
+                                                    { key: 'config-inbound', label: 'Inbound Routes', labelAr: 'المسارات الواردة' },
+                                                    { key: 'config-outbound', label: 'Outbound Routes', labelAr: 'المسارات الصادرة' },
+                                                    { key: 'config-ivrs', label: 'IVR Menus', labelAr: 'قوائم الرد الآلي (IVR)' },
+                                                    { key: 'config-recordings', label: 'System Recordings', labelAr: 'التسجيلات الصوتية' },
+                                                    { key: 'config-announcements', label: 'Announcements', labelAr: 'الإعلانات الصوتية' },
+                                                    { key: 'config-timegroups', label: 'Time Groups', labelAr: 'المجموعات الزمنية' },
+                                                    { key: 'config-timeconditions', label: 'Time Conditions', labelAr: 'الشروط الزمنية' },
+                                                    { key: 'config-voicemail', label: 'Voicemail Settings', labelAr: 'البريد الصوتي' },
+                                                    { key: 'config-dongles', label: 'Dongle Mappings', labelAr: 'ربط الشرائح والخطوط' },
+                                                    { key: 'config-modem', label: 'Audio & DSP Gains', labelAr: 'إعدادات الصوت والمودم' },
+                                                    { key: 'config-diagram', label: 'Call Flow Diagram', labelAr: 'مخطط سير المكالمات' },
+                                                    { key: 'config-terminal', label: 'TTY Terminal & PBX Reload', labelAr: 'الطرفية وإعادة تحميل المقسم' }
+                                                ]
+                                            }
+                                        ];
+                                    %>
+
                                     <% if (g.name === 'super admins') { %>
-                                        <div>
-                                            <p class="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-2.5"><%= isRtl ? 'صلاحيات الوصول للتبويبات' : 'Tab Access Permissions' %></p>
-                                            <div class="flex flex-wrap gap-3 opacity-60">
-                                                <% var visibleTabs = (typeof allTabs !== 'undefined' ? allTabs : []).filter(function(t) { return t !== 'users'; }); %>
-                                                <% visibleTabs.forEach(function(tab) { %>
-                                                    <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-xs text-[var(--text-muted)] opacity-60 cursor-not-allowed">
-                                                        <input type="checkbox" name="tabs" value="<%= tab %>" class="tab-checkbox" <%= (g.permissions || []).includes(tab) ? 'checked' : '' %> disabled>
-                                                        <span class="capitalize"><%= tab.replace(/-/g, ' ') %></span>
-                                                    </label>
+                                        <div class="space-y-4">
+                                            <p class="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-2"><%= isRtl ? 'صلاحيات الوصول (مفعلة بالكامل ومحمية)' : 'Role Permissions (Full Access & Protected)' %></p>
+                                            <div class="space-y-3 opacity-60">
+                                                <% cats.forEach(function(cat) { %>
+                                                    <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                                                        <span class="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block mb-2"><%= isRtl ? cat.labelAr : cat.label %></span>
+                                                        <div class="flex flex-wrap gap-2">
+                                                            <% cat.permissions.forEach(function(p) { %>
+                                                                <label class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-xs text-[var(--text-muted)] opacity-60 cursor-not-allowed">
+                                                                    <input type="checkbox" class="tab-checkbox" checked disabled>
+                                                                    <span><%= isRtl ? p.labelAr : p.label %></span>
+                                                                </label>
+                                                            <% }); %>
+                                                        </div>
+                                                    </div>
                                                 <% }); %>
                                             </div>
                                         </div>
                                     <% } else { %>
-                                        <form method="POST" action="/groups/permissions" class="space-y-4">
+                                        <form method="POST" action="/groups/permissions" class="space-y-4" id="group-form-<%= g.id %>">
                                             <input type="hidden" name="lang" value="<%= currentLang %>">
                                             <input type="hidden" name="group_id" value="<%= g.id %>">
-                                            <div>
-                                                <p class="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-2.5"><%= isRtl ? 'صلاحيات الوصول للتبويبات' : 'Tab Access Permissions' %></p>
-                                                <div class="flex flex-wrap gap-3">
-                                                    <% var visibleTabs = (typeof allTabs !== 'undefined' ? allTabs : []).filter(function(t) { return t !== 'users'; }); %>
-                                                    <% visibleTabs.forEach(function(tab) { %>
-                                                        <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] hover:bg-[var(--bg-hover)] text-xs text-[var(--text-primary)] cursor-pointer transition">
-                                                            <input type="checkbox" name="tabs" value="<%= tab %>" class="tab-checkbox" <%= (g.permissions || []).includes(tab) ? 'checked' : '' %>>
-                                                            <span class="capitalize"><%= tab.replace(/-/g, ' ') %></span>
-                                                        </label>
-                                                    <% }); %>
+                                            <div class="flex items-center justify-between">
+                                                <p class="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider"><%= isRtl ? 'صلاحيات الوصول حسب الفئات' : 'Permissions by Category' %></p>
+                                                <div class="flex items-center gap-2">
+                                                    <button type="button" onclick="toggleAllGroupPerms('<%= g.id %>', true)" class="text-[10px] font-bold text-sky-400 hover:text-sky-300 transition cursor-pointer"><%= isRtl ? 'تحديد الكل' : 'Select All' %></button>
+                                                    <span class="text-[var(--text-muted)] text-[10px]">|</span>
+                                                    <button type="button" onclick="toggleAllGroupPerms('<%= g.id %>', false)" class="text-[10px] font-bold text-rose-400 hover:text-rose-300 transition cursor-pointer"><%= isRtl ? 'إلغاء الكل' : 'Clear All' %></button>
                                                 </div>
                                             </div>
-                                            <div class="flex justify-end pt-1">
-                                                <button type="submit" class="btn-primary text-[10px]">
-                                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+
+                                            <div class="space-y-3">
+                                                <% cats.forEach(function(cat, catIdx) { %>
+                                                    <div id="cat-card-<%= g.id %>-<%= cat.id %>" class="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] transition">
+                                                        <div class="flex items-center justify-between mb-2.5 pb-2 border-b border-[var(--border-primary)]">
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wider"><%= isRtl ? cat.labelAr : cat.label %></span>
+                                                                <span id="cat-lock-badge-<%= g.id %>-<%= cat.id %>" class="hidden text-[9px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold">
+                                                                    <%= isRtl ? 'يتطلب تبويب الصفحة' : 'Requires Page Access' %>
+                                                                </span>
+                                                            </div>
+                                                            <div class="cat-quick-actions flex items-center gap-2 text-[10px]">
+                                                                <button type="button" onclick="toggleCatPerms('<%= g.id %>', '<%= cat.id %>', true)" class="text-sky-400 hover:text-sky-300 font-semibold cursor-pointer"><%= isRtl ? 'الكل' : 'All' %></button>
+                                                                <span class="text-[var(--text-muted)]">/</span>
+                                                                <button type="button" onclick="toggleCatPerms('<%= g.id %>', '<%= cat.id %>', false)" class="text-[var(--text-muted)] hover:text-white font-semibold cursor-pointer"><%= isRtl ? 'لا شيء' : 'None' %></button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="cat-items-container flex flex-wrap gap-2">
+                                                            <% cat.permissions.forEach(function(p) { 
+                                                                var isChecked = (g.permissions || []).includes(p.key);
+                                                                if (!isChecked && p.key === 'call_history' && (g.permissions || []).includes('cdr')) isChecked = true;
+                                                                if (!isChecked && p.key === 'campaigns' && (g.permissions || []).includes('dialer')) isChecked = true;
+                                                            %>
+                                                                <label class="perm-label flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] text-xs text-[var(--text-primary)] cursor-pointer transition select-none">
+                                                                    <input type="checkbox" name="tabs" value="<%= p.key %>" data-group="<%= g.id %>" data-cat="<%= cat.id %>" onchange="handlePermChange('<%= g.id %>', '<%= p.key %>')" class="group-<%= g.id %>-perm cat-<%= cat.id %>-perm tab-checkbox" <%= isChecked ? 'checked' : '' %>>
+                                                                    <span class="font-medium"><%= isRtl ? p.labelAr : p.label %></span>
+                                                                </label>
+                                                            <% }); %>
+                                                        </div>
+                                                    </div>
+                                                <% }); %>
+                                            </div>
+
+                                            <div class="flex justify-end pt-2">
+                                                <button type="submit" class="btn-primary text-xs">
+                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                     <span><%= isRtl ? 'حفظ الصلاحيات' : 'Save Permissions' %></span>
                                                 </button>
                                             </div>
@@ -861,6 +975,95 @@
                 }
             } catch (_) {}
         }
+        const HIERARCHY_MAP = {
+            operator: 'operator',
+            call_history: 'call_history',
+            gsm: 'gsm-dongles',
+            campaigns: 'campaigns',
+            contacts: 'contacts',
+            voicemails: 'voicemails',
+            storage: 'storage',
+            config: 'config'
+        };
+
+        function getCategoryParentState(groupId, catId) {
+            const parentKey = HIERARCHY_MAP[catId];
+            if (!parentKey) return true; // not constrained
+            const form = document.getElementById('group-form-' + groupId);
+            if (!form) return true;
+            const parentCheckbox = form.querySelector(`input[name="tabs"][value="${parentKey}"]`);
+            if (!parentCheckbox) return true;
+            return parentCheckbox.checked;
+        }
+
+        function updateCategoryHierarchyUI(groupId) {
+            const form = document.getElementById('group-form-' + groupId);
+            if (!form) return;
+
+            Object.keys(HIERARCHY_MAP).forEach(catId => {
+                const parentKey = HIERARCHY_MAP[catId];
+                const parentCheckbox = form.querySelector(`input[name="tabs"][value="${parentKey}"]`);
+                if (!parentCheckbox) return;
+
+                const isParentChecked = parentCheckbox.checked;
+                const catCard = document.getElementById(`cat-card-${groupId}-${catId}`);
+                const lockBadge = document.getElementById(`cat-lock-badge-${groupId}-${catId}`);
+                const actionCheckboxes = form.querySelectorAll(`.cat-${catId}-perm`);
+                const quickActions = catCard ? catCard.querySelector('.cat-quick-actions') : null;
+
+                if (!catCard) return;
+
+                if (!isParentChecked) {
+                    // Gray out action card and uncheck/disable sub-action checkboxes
+                    catCard.classList.add('opacity-40', 'bg-zinc-900/30', 'pointer-events-none');
+                    catCard.classList.remove('hover:border-[var(--border-accent)]');
+                    if (lockBadge) lockBadge.classList.remove('hidden');
+                    if (quickActions) quickActions.classList.add('invisible');
+                    actionCheckboxes.forEach(cb => {
+                        cb.disabled = true;
+                    });
+                } else {
+                    // Enable action card
+                    catCard.classList.remove('opacity-40', 'bg-zinc-900/30', 'pointer-events-none');
+                    catCard.classList.add('hover:border-[var(--border-accent)]');
+                    if (lockBadge) lockBadge.classList.add('hidden');
+                    if (quickActions) quickActions.classList.remove('invisible');
+                    actionCheckboxes.forEach(cb => {
+                        cb.disabled = false;
+                    });
+                }
+            });
+        }
+
+        function handlePermChange(groupId, changedKey) {
+            updateCategoryHierarchyUI(groupId);
+        }
+
+        function toggleAllGroupPerms(groupId, enable) {
+            const form = document.getElementById('group-form-' + groupId);
+            if (!form) return;
+            form.querySelectorAll('.group-' + groupId + '-perm').forEach(cb => {
+                cb.checked = Boolean(enable);
+            });
+            updateCategoryHierarchyUI(groupId);
+        }
+
+        function toggleCatPerms(groupId, catId, enable) {
+            if (!getCategoryParentState(groupId, catId)) return;
+            const form = document.getElementById('group-form-' + groupId);
+            if (!form) return;
+            form.querySelectorAll(`.group-${groupId}-perm.cat-${catId}-perm`).forEach(cb => {
+                if (!cb.disabled) cb.checked = Boolean(enable);
+            });
+        }
+
+        // Initialize hierarchy state on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('form[id^="group-form-"]').forEach(form => {
+                const groupId = form.id.replace('group-form-', '');
+                updateCategoryHierarchyUI(groupId);
+            });
+        });
 
         function initUserAlertTimer() {
             const alerts = document.querySelectorAll('.alert-notification');

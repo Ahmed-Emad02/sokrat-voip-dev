@@ -77,6 +77,17 @@ const words = {
 };
 const t = words[currentLang];
 const isRtl = currentLang === 'ar';
+const isSuper = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin);
+const userAllowedTabs = typeof allowedTabs !== 'undefined' ? allowedTabs : [];
+const hasFullOperatorTab = isSuper || userAllowedTabs.includes('operator');
+const hasSpecificOperatorAction = userAllowedTabs.some(p => p.startsWith('operator-'));
+const canListen = isSuper || userAllowedTabs.includes('operator-listen') || (hasFullOperatorTab && !hasSpecificOperatorAction);
+const canWhisper = isSuper || userAllowedTabs.includes('operator-whisper') || (hasFullOperatorTab && !hasSpecificOperatorAction);
+const canBarge = isSuper || userAllowedTabs.includes('operator-barge') || (hasFullOperatorTab && !hasSpecificOperatorAction);
+const canHijack = isSuper || userAllowedTabs.includes('operator-hijack') || (hasFullOperatorTab && !hasSpecificOperatorAction);
+const canTransfer = isSuper || userAllowedTabs.includes('operator-transfer') || (hasFullOperatorTab && !hasSpecificOperatorAction);
+const canHangup = isSuper || userAllowedTabs.includes('operator-hangup') || (hasFullOperatorTab && !hasSpecificOperatorAction);
+const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || canTransfer || canHangup;
 %>
 <!DOCTYPE html>
 <html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
@@ -880,20 +891,22 @@ const isRtl = currentLang === 'ar';
                                         <%= partnerNum %>
                                     </span>
                                 </div>
+                                <% if (hasAnyCallAction) { %>
                                 <div class="mt-2 relative">
                                     <select id="actionSelect-<%= emp.cardId %>"
                                             onchange="handleSelectAction('<%= emp.extension %>', this.value, <%= emp.isRemote ? (emp.peerId || 0) : 0 %>); this.value='';"
                                             <%= (callState === 'incall' || callState === 'ringing') ? '' : 'disabled' %>
                                             class="action-select w-full bg-[var(--bg-card)] text-xs font-semibold rounded-lg px-2.5 py-1.5 border border-[var(--border-primary)] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 text-[var(--text-primary)]">
                                         <option value="" disabled selected hidden><%= isRtl ? 'إجراءات المكالمة' : 'Call Actions' %></option>
-                                        <option value="listen"><%= isRtl ? 'استماع (Listen)' : 'Listen' %></option>
-                                        <option value="whisper"><%= isRtl ? 'همس (Whisper)' : 'Whisper' %></option>
-                                        <option value="barge"><%= isRtl ? 'تدخل (Barge)' : 'Barge' %></option>
-                                        <option value="hijack" class="text-amber-400 font-bold"><%= isRtl ? 'سحب المكالمة (Hijack)' : 'Hijack Call' %></option>
-                                        <option value="transfer" class="text-sky-400 font-bold"><%= t.transferTo %></option>
-                                        <option value="hangup" class="text-rose-400 font-bold"><%= isRtl ? 'إنهاء المكالمة' : 'End Call' %></option>
+                                        <% if (canListen) { %><option value="listen"><%= isRtl ? 'استماع (Listen)' : 'Listen' %></option><% } %>
+                                        <% if (canWhisper) { %><option value="whisper"><%= isRtl ? 'همس (Whisper)' : 'Whisper' %></option><% } %>
+                                        <% if (canBarge) { %><option value="barge"><%= isRtl ? 'تدخل (Barge)' : 'Barge' %></option><% } %>
+                                        <% if (canHijack) { %><option value="hijack" class="text-amber-400 font-bold"><%= isRtl ? 'سحب المكالمة (Hijack)' : 'Hijack Call' %></option><% } %>
+                                        <% if (canTransfer) { %><option value="transfer" class="text-sky-400 font-bold"><%= t.transferTo %></option><% } %>
+                                        <% if (canHangup) { %><option value="hangup" class="text-rose-400 font-bold"><%= isRtl ? 'إنهاء المكالمة' : 'End Call' %></option><% } %>
                                     </select>
                                 </div>
+                                <% } %>
                             </div>
                         </article>
                         <% }) %>

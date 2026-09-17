@@ -55,7 +55,21 @@ const allowed = typeof allowedTabs !== 'undefined' ? allowedTabs : [];
 const isSuper = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) || (typeof currentUser !== 'undefined' && (currentUser === 'admin' || currentUser === 'root'));
 const isRoot = (typeof isRootUser !== 'undefined' && isRootUser) || (typeof currentUser !== 'undefined' && currentUser === 'root');
 const curPage = typeof currentPage !== 'undefined' ? currentPage : '';
-function can(tab) { return isSuper || allowed.includes(tab); }
+function can(tab) {
+    if (isSuper) return true;
+    if (allowed.includes(tab)) return true;
+    if (tab === 'call_history' && (allowed.includes('cdr') || allowed.some(p => p.startsWith('cdr-')))) return true;
+    if (tab === 'cdr' && (allowed.includes('call_history') || allowed.some(p => p.startsWith('cdr-')))) return true;
+    if (tab === 'operator' && allowed.some(p => p.startsWith('operator-'))) return true;
+    if (tab === 'campaigns' && (allowed.includes('dialer') || allowed.some(p => p.startsWith('campaigns-')))) return true;
+    if (tab === 'dialer' && (allowed.includes('campaigns') || allowed.some(p => p.startsWith('campaigns-')))) return true;
+    if (tab === 'contacts' && allowed.some(p => p.startsWith('contacts-'))) return true;
+    if (tab === 'voicemails' && allowed.some(p => p.startsWith('voicemail-'))) return true;
+    if (tab === 'gsm-dongles' && allowed.some(p => p.startsWith('gsm-'))) return true;
+    if (tab === 'storage' && allowed.some(p => p.startsWith('storage-') || p.startsWith('system-'))) return true;
+    if (tab === 'config' && allowed.some(p => p.startsWith('config-'))) return true;
+    return false;
+}
 %>
 
 <!-- Prevent theme/JIT flickering loading screen overlay -->
@@ -2603,7 +2617,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% } %>
 
             <!-- 2. Call History -->
-            <% if (can('cdr')) { %>
+            <% if (can('call_history')) { %>
             <a href="/cdr?lang=<%= currentLang %>" title="<%= sbT.cdrLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
                <%= curPage === '/cdr' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
@@ -2681,7 +2695,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% } %>
 
             <!-- 8. Campaigns -->
-            <% if (isSuper || can('dialer') || can('config')) { %>
+            <% if (can('campaigns')) { %>
             <a href="/dialer?lang=<%= currentLang %>" title="<%= sbT.dialerLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
                <%= curPage === '/dialer' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
