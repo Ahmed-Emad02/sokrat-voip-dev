@@ -96,7 +96,7 @@ const isRtl = currentLang === 'ar';
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -105,7 +105,7 @@ const isRtl = currentLang === 'ar';
     <style>
         /* Enforce typography across all elements including Tailwind v4 resets */
         html[dir="rtl"], html[dir="rtl"] body, html[dir="rtl"] * {
-            font-family: 'IBM Plex Sans Arabic', 'Cairo', sans-serif !important;
+            font-family: 'Cairo', sans-serif !important;
         }
         html:not([dir="rtl"]), html:not([dir="rtl"]) body {
             font-family: 'Plus Jakarta Sans', 'Roboto', sans-serif;
@@ -171,7 +171,7 @@ const isRtl = currentLang === 'ar';
         #dashStatusChecklistBtn,
         #dashExtChecklistBtn,
         .filter-action-btn {
-            font-family: 'Plus Jakarta Sans', 'IBM Plex Sans Arabic', 'Cairo', sans-serif !important;
+            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif !important;
         }
         #dashFilterForm input[type="text"],
         #dashFilterForm input[type="datetime-local"],
@@ -841,7 +841,7 @@ const isRtl = currentLang === 'ar';
             const trendChart = echarts.init(document.getElementById('trendChart'), isLight ? null : 'dark');
             trendChart.setOption({
                 textStyle: {
-                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                    fontFamily: _isRtl ? "'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
                 },
                 backgroundColor: 'transparent',
                 tooltip: {
@@ -916,7 +916,7 @@ const isRtl = currentLang === 'ar';
             const dispChart = echarts.init(document.getElementById('dispositionChart'), isLight ? null : 'dark');
             dispChart.setOption({
                 textStyle: {
-                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                    fontFamily: _isRtl ? "'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
                 },
                 backgroundColor: 'transparent',
                 tooltip: {
@@ -962,7 +962,7 @@ const isRtl = currentLang === 'ar';
             const hourlyChart = echarts.init(document.getElementById('hourlyChart'), isLight ? null : 'dark');
             hourlyChart.setOption({
                 textStyle: {
-                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                    fontFamily: _isRtl ? "'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
                 },
                 backgroundColor: 'transparent',
                 tooltip: {
@@ -1004,7 +1004,7 @@ const isRtl = currentLang === 'ar';
             const talkersChart = echarts.init(document.getElementById('topTalkersChart'), isLight ? null : 'dark');
             talkersChart.setOption({
                 textStyle: {
-                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                    fontFamily: _isRtl ? "'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
                 },
                 backgroundColor: 'transparent',
                 tooltip: {
@@ -1071,7 +1071,7 @@ const isRtl = currentLang === 'ar';
 
             durationChart.setOption({
                 textStyle: {
-                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                    fontFamily: _isRtl ? "'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
                 },
                 backgroundColor: 'transparent',
                 tooltip: { 
@@ -1138,7 +1138,7 @@ const isRtl = currentLang === 'ar';
 
             scopeChart.setOption({
                 textStyle: {
-                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                    fontFamily: _isRtl ? "'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
                 },
                 backgroundColor: 'transparent',
                 tooltip: { 

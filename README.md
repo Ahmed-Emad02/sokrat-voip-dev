@@ -609,7 +609,7 @@ The dashboard can upload custom audio files and save them as Issabel system reco
 ## Tech Stack
 
 - **Backend:** Node.js 22, Express 4, Socket.io 4, mysql2, bcrypt, express-session, nodemailer
-- **Frontend:** EJS, Tailwind CSS v4 (CDN), ECharts 5, Roboto / IBM Plex Sans Arabic fonts
+- **Frontend:** EJS, Tailwind CSS v4 (CDN), ECharts 5, Roboto / Cairo fonts
 - **Real-time:** Asterisk AMI (raw TCP), Socket.io WebSocket
 - **Media:** ffmpeg (static build), fluent-ffmpeg, multer
 - **Database:** MySQL (Issabel CDR — `asteriskcdrdb`)
