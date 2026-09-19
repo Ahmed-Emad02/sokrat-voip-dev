@@ -103,6 +103,16 @@ const isRtl = currentLang === 'ar';
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="/js/jssip.min.js"></script>
     <style>
+        /* Enforce typography across all elements including Tailwind v4 resets */
+        html[dir="rtl"], html[dir="rtl"] body, html[dir="rtl"] * {
+            font-family: 'IBM Plex Sans Arabic', 'Cairo', sans-serif !important;
+        }
+        html:not([dir="rtl"]), html:not([dir="rtl"]) body {
+            font-family: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+        }
+        html[dir="rtl"] .font-mono, html[dir="rtl"] code, html[dir="rtl"] pre, html[dir="rtl"] input[type="time"], html[dir="rtl"] input[type="datetime-local"] {
+            font-family: 'JetBrains Mono', monospace !important;
+        }
         :root {
             --bg-primary: #09090b;
             --bg-secondary: #121212;
@@ -121,11 +131,7 @@ const isRtl = currentLang === 'ar';
         }
         body { 
             background-color: var(--bg-primary); 
-            font-family: 'Plus Jakarta Sans', 'IBM Plex Sans Arabic', 'Cairo', sans-serif; 
             color: var(--text-primary); 
-        }
-        [dir="rtl"], [dir="rtl"] body, html[dir="rtl"] {
-            font-family: 'IBM Plex Sans Arabic', 'Cairo', sans-serif !important;
         }
         /* Modern background pattern with subtle gradients */
         body::before {
