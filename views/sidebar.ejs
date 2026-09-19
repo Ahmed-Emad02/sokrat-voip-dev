@@ -238,8 +238,10 @@ function can(tab) {
         if (link) prefetchTabTarget(link.getAttribute('href'));
     }, { capture: true, passive: true });
 </script>
-<!-- Google Fonts Import for Plus Jakarta Sans & Cairo -->
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- Google Fonts Import for IBM Plex Sans Arabic, Cairo, Plus Jakarta Sans, and JetBrains Mono -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Cairo:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Flatpickr Datepicker -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -319,7 +321,7 @@ function can(tab) {
     
     /* Arabic text overrides */
     [lang="ar"], [dir="rtl"], [dir="rtl"] * {
-        font-family: 'Cairo', sans-serif !important;
+        font-family: 'IBM Plex Sans Arabic', 'Cairo', sans-serif !important;
     }
     
     /* English headings and labels - clean geometric display */
@@ -329,8 +331,8 @@ function can(tab) {
     }
     
     /* Telemetry, numbers, tables, codes, logs, terminal - JetBrains Mono */
-    .font-mono, td, th, input, select, textarea, pre, code, .font-numeric, #digitalClock {
-        font-family: 'JetBrains Mono', 'Plus Jakarta Sans', monospace !important;
+    .font-mono, .font-numeric, #digitalClock, input[type="time"], input[type="datetime-local"] {
+        font-family: 'JetBrains Mono', monospace !important;
     }
     input, select, textarea {
         accent-color: var(--accent-color) !important;
