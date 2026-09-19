@@ -1313,7 +1313,42 @@ function can(tab) {
         left: 1.25rem !important;
         right: auto !important;
     }
+    /* Premium smooth collapse transition */
     @media (min-width: 768px) {
+        #appSidebar {
+            transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                        padding 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                        transform 300ms ease;
+            will-change: width, padding;
+        }
+        #appSidebar .sidebar-text,
+        #appSidebar .sidebar-brand-title,
+        #appSidebar .sidebar-info-row,
+        #appSidebar .settings-launcher-label,
+        #appSidebar .settings-launcher-chevron {
+            display: inline-block;
+            max-width: 180px;
+            opacity: 1;
+            transform: translateX(0);
+            transition: opacity 220ms ease, transform 240ms ease, max-width 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            white-space: nowrap;
+            overflow: hidden;
+            vertical-align: middle;
+        }
+        #brandLogo {
+            transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                        height 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                        transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            will-change: width, height, transform;
+        }
+        #appSidebar .nav-item {
+            transition: background-color 150ms ease, color 150ms ease, padding 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        #appSidebar .nav-item svg {
+            transition: margin 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* Collapsed state rules */
         html.sidebar-collapsed #appSidebar,
         #appSidebar.sidebar-collapsed {
             width: 76px !important;
@@ -1352,7 +1387,22 @@ function can(tab) {
         #appSidebar.sidebar-collapsed .sidebar-info-row,
         #appSidebar.sidebar-collapsed .settings-launcher-label,
         #appSidebar.sidebar-collapsed .settings-launcher-chevron {
-            display: none !important;
+            opacity: 0 !important;
+            max-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            pointer-events: none !important;
+            transform: translateX(-8px);
+        }
+        [dir="rtl"] html.sidebar-collapsed #appSidebar .sidebar-text,
+        [dir="rtl"] html.sidebar-collapsed #appSidebar .sidebar-brand-title,
+        [dir="rtl"] html.sidebar-collapsed #appSidebar .sidebar-info-row,
+        [dir="rtl"] html.sidebar-collapsed #appSidebar .settings-launcher-label,
+        [dir="rtl"] #appSidebar.sidebar-collapsed .sidebar-text,
+        [dir="rtl"] #appSidebar.sidebar-collapsed .sidebar-brand-title,
+        [dir="rtl"] #appSidebar.sidebar-collapsed .sidebar-info-row,
+        [dir="rtl"] #appSidebar.sidebar-collapsed .settings-launcher-label {
+            transform: translateX(8px);
         }
         html.sidebar-collapsed #appSidebar .nav-item,
         #appSidebar.sidebar-collapsed .nav-item {
@@ -2481,7 +2531,10 @@ function can(tab) {
             document.documentElement.classList.toggle('sidebar-collapsed', isCollapsed);
             localStorage.setItem('sidebar_collapsed', String(isCollapsed));
             updateCollapseButtonIcon(isCollapsed);
+            // Trigger smooth chart and layout reflows during and after width transition
             window.dispatchEvent(new Event('resize'));
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 160);
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 340);
         };
 
         if (localStorage.getItem('sidebar_collapsed') === 'true') {
