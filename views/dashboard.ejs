@@ -428,14 +428,6 @@ const isRtl = currentLang === 'ar';
             }
         %>
         <!-- Row 1: Volume & Direction Metrics (6 cards) -->
-        <style>
-            /* Scoped JetBrains Mono font for Dashboard KPI stat cards */
-            .card-stat,
-            .card-stat p,
-            .card-stat span {
-                font-family: 'JetBrains Mono', monospace !important;
-            }
-        </style>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6 shrink-0">
             <!-- Card 1: Total Calls -->
             <a href="<%= baseUrl %>&statusFilter=ALL&directionFilter=ALL" 
