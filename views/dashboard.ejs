@@ -96,7 +96,7 @@ const isRtl = currentLang === 'ar';
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -121,8 +121,11 @@ const isRtl = currentLang === 'ar';
         }
         body { 
             background-color: var(--bg-primary); 
-            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif; 
+            font-family: 'Plus Jakarta Sans', 'IBM Plex Sans Arabic', 'Cairo', sans-serif; 
             color: var(--text-primary); 
+        }
+        [dir="rtl"], [dir="rtl"] body, html[dir="rtl"] {
+            font-family: 'IBM Plex Sans Arabic', 'Cairo', sans-serif !important;
         }
         /* Modern background pattern with subtle gradients */
         body::before {
@@ -162,7 +165,7 @@ const isRtl = currentLang === 'ar';
         #dashStatusChecklistBtn,
         #dashExtChecklistBtn,
         .filter-action-btn {
-            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif !important;
+            font-family: 'Plus Jakarta Sans', 'IBM Plex Sans Arabic', 'Cairo', sans-serif !important;
         }
         #dashFilterForm input[type="text"],
         #dashFilterForm input[type="datetime-local"],
