@@ -1417,20 +1417,29 @@ function can(tab) {
         }
         html.sidebar-collapsed #appSidebar .settings-launcher,
         #appSidebar.sidebar-collapsed .settings-launcher {
+            display: flex !important;
             justify-content: center !important;
             align-items: center !important;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-            width: 100% !important;
+            padding: 0 !important;
+            width: 2.5rem !important;
+            height: 2.5rem !important;
+            margin: 0 auto !important;
+            gap: 0 !important;
         }
         html.sidebar-collapsed #appSidebar .settings-launcher svg,
         #appSidebar.sidebar-collapsed .settings-launcher svg {
-            margin: 0 auto !important;
-            align-self: center !important;
+            margin: 0 !important;
+            flex-shrink: 0 !important;
         }
         html.sidebar-collapsed #appSidebar .settings-launcher > .settings-launcher-chevron,
         #appSidebar.sidebar-collapsed .settings-launcher > .settings-launcher-chevron {
             display: none !important;
+        }
+        html.sidebar-collapsed #appSidebar #settingsDropdown,
+        #appSidebar.sidebar-collapsed #settingsDropdown {
+            display: flex !important;
+            justify-content: center !important;
+            width: 100% !important;
         }
     }
     .no-scrollbar::-webkit-scrollbar {
@@ -1462,7 +1471,7 @@ function can(tab) {
         gap: 0.65rem;
         height: 2.5rem;
         padding: 0 0.7rem;
-        transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+        transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, width 320ms cubic-bezier(0.2, 0.8, 0.2, 1), padding 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
         width: 100%;
     }
     .settings-launcher:hover,
@@ -1487,7 +1496,7 @@ function can(tab) {
         flex: 0 0 auto;
         height: 1rem !important;
         width: 1rem !important;
-        transition: margin 200ms ease;
+        margin: 0;
     }
     .settings-launcher-label {
         flex: 1;
