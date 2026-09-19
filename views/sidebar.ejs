@@ -1418,13 +1418,19 @@ function can(tab) {
         html.sidebar-collapsed #appSidebar .settings-launcher,
         #appSidebar.sidebar-collapsed .settings-launcher {
             justify-content: center !important;
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+            align-items: center !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            width: 100% !important;
         }
         html.sidebar-collapsed #appSidebar .settings-launcher svg,
         #appSidebar.sidebar-collapsed .settings-launcher svg {
-            margin-right: 0 !important;
-            margin-left: 0 !important;
+            margin: 0 auto !important;
+            align-self: center !important;
+        }
+        html.sidebar-collapsed #appSidebar .settings-launcher > .settings-launcher-chevron,
+        #appSidebar.sidebar-collapsed .settings-launcher > .settings-launcher-chevron {
+            display: none !important;
         }
     }
     .no-scrollbar::-webkit-scrollbar {
@@ -1481,6 +1487,7 @@ function can(tab) {
         flex: 0 0 auto;
         height: 1rem !important;
         width: 1rem !important;
+        transition: margin 200ms ease;
     }
     .settings-launcher-label {
         flex: 1;
@@ -2832,10 +2839,10 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
         <div class="flex items-center px-1">
             <!-- Settings Button with Dropdown -->
             <div class="relative w-full" id="settingsDropdown">
-                <button id="settingsBtn" type="button" class="settings-launcher cursor-pointer" title="<%= sbT.settingsTitle %>" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsMenu">
-                    <svg class="w-4 h-4 text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <button id="settingsBtn" type="button" class="settings-launcher cursor-pointer flex items-center" title="<%= sbT.settingsTitle %>" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsMenu">
+                    <svg class="w-4 h-4 text-[var(--text-secondary)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     <span class="settings-launcher-label"><%= sbT.settingsTitle %></span>
-                    <svg class="settings-launcher-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>
+                    <svg class="settings-launcher-chevron shrink-0" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>
                 </button>
             </div>
         </div>
