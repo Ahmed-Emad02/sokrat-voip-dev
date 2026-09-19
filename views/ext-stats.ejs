@@ -41,7 +41,22 @@ const words = {
         partnerParty: "Caller / Dest",
         start: "Start",
         end: "End",
-        interactiveTable: "Click a row to inspect an extension."
+        interactiveTable: "Click a row to inspect an extension.",
+        reportShiftFilter: "Working Hours (Shift)",
+        reportShiftFilterDesc: "Calculate stats only during specific working hours and days",
+        reportShiftStart: "Shift Start",
+        reportShiftEnd: "Shift End",
+        reportWorkDays: "Working Days",
+        reportPresetSunThu: "Sun - Thu",
+        reportPresetMonFri: "Mon - Fri",
+        reportPresetAllDays: "All Days",
+        daySun: "Sun",
+        dayMon: "Mon",
+        dayTue: "Tue",
+        dayWed: "Wed",
+        dayThu: "Thu",
+        dayFri: "Fri",
+        daySat: "Sat"
     },
     ar: {
         title: "الموظفين", subtitle: "",
@@ -84,7 +99,22 @@ const words = {
         partnerParty: "الطرف الآخر",
         start: "البداية",
         end: "النهاية",
-        interactiveTable: "جدول ملخص أداء الموظفين (انقر فوق أي صف لعرض التحليلات العميقة)"
+        interactiveTable: "جدول ملخص أداء الموظفين (انقر فوق أي صف لعرض التحليلات العميقة)",
+        reportShiftFilter: "ساعات العمل (الوردية)",
+        reportShiftFilterDesc: "حساب الإحصائيات خلال ساعات وأيام عمل الوردية فقط",
+        reportShiftStart: "بداية الوردية",
+        reportShiftEnd: "نهاية الوردية",
+        reportWorkDays: "أيام العمل",
+        reportPresetSunThu: "الأحد - الخميس",
+        reportPresetMonFri: "الإثنين - الجمعة",
+        reportPresetAllDays: "جميع الأيام",
+        daySun: "أحد",
+        dayMon: "إثنين",
+        dayTue: "ثلاثاء",
+        dayWed: "أربعاء",
+        dayThu: "خميس",
+        dayFri: "جمعة",
+        daySat: "سبت"
     }
 };
 const t = words[currentLang];
@@ -449,7 +479,51 @@ const isRtl = currentLang === 'ar';
                     </select>
                 </div>
                 <div class="md:col-span-2 flex items-end gap-2">
-                    <button type="submit" class="btn-primary flex-1 py-1.5 text-xs uppercase tracking-wider"><%= t.apply %></button>
+                    <button type="submit" class="btn-primary flex-1 py-1.5 text-xs uppercase tracking-wider cursor-pointer"><%= t.apply %></button>
+                </div>
+            </div>
+            <!-- Working Hours & Shift Filter -->
+            <div class="pt-2 border-t border-[var(--border-primary)]/60">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                    <div class="flex items-center gap-3">
+                        <label class="relative inline-flex items-center cursor-pointer select-none">
+                            <input type="checkbox" id="workHoursEnabled" name="workHoursEnabled" class="sr-only peer" onchange="toggleWorkHours(this.checked)">
+                            <div class="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--accent-color)]"></div>
+                            <span class="ms-2 text-xs font-bold text-[var(--text-primary)]"><%= t.reportShiftFilter %></span>
+                        </label>
+                        <span class="text-[10px] text-[var(--text-muted)] hidden sm:inline"><%= t.reportShiftFilterDesc %></span>
+                    </div>
+                    <div id="shiftControls" class="hidden flex-wrap items-center gap-3">
+                        <!-- Shift Start & End Hours -->
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1">
+                                <label for="shiftStart" class="text-[10px] font-bold text-[var(--text-secondary)] uppercase"><%= t.reportShiftStart %>:</label>
+                                <input type="time" id="shiftStart" name="shiftStart" value="09:00" class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--accent-color)]">
+                            </div>
+                            <span class="text-zinc-500 font-bold text-xs">-</span>
+                            <div class="flex items-center gap-1">
+                                <label for="shiftEnd" class="text-[10px] font-bold text-[var(--text-secondary)] uppercase"><%= t.reportShiftEnd %>:</label>
+                                <input type="time" id="shiftEnd" name="shiftEnd" value="17:00" class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--accent-color)]">
+                            </div>
+                        </div>
+                        <!-- Workdays Quick Presets & Day Pills -->
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-[10px] font-bold text-[var(--text-secondary)] uppercase"><%= t.reportWorkDays %>:</span>
+                            <button type="button" onclick="setWorkDaysPreset('sun-thu')" class="px-2 py-0.5 text-[10px] font-semibold rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= t.reportPresetSunThu %></button>
+                            <button type="button" onclick="setWorkDaysPreset('mon-fri')" class="px-2 py-0.5 text-[10px] font-semibold rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= t.reportPresetMonFri %></button>
+                            <button type="button" onclick="setWorkDaysPreset('all')" class="px-2 py-0.5 text-[10px] font-semibold rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= t.reportPresetAllDays %></button>
+                            <!-- Day Pills Checkboxes (0=Sun .. 6=Sat) -->
+                            <div class="flex items-center gap-1 ms-1" id="workdaysPills">
+                                <label class="cursor-pointer select-none"><input type="checkbox" name="workDay" value="0" checked class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.daySun %></span></label>
+                                <label class="cursor-pointer select-none"><input type="checkbox" name="workDay" value="1" checked class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.dayMon %></span></label>
+                                <label class="cursor-pointer select-none"><input type="checkbox" name="workDay" value="2" checked class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.dayTue %></span></label>
+                                <label class="cursor-pointer select-none"><input type="checkbox" name="workDay" value="3" checked class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.dayWed %></span></label>
+                                <label class="cursor-pointer select-none"><input type="checkbox" name="workDay" value="4" checked class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.dayThu %></span></label>
+                                <label class="cursor-pointer select-none"><input type="checkbox" name="workDay" value="5" class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.dayFri %></span></label>
+                                <label class="cursor-pointer select-none"><input type="checkbox" name="workDay" value="6" class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.daySat %></span></label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </form>
@@ -579,6 +653,49 @@ const isRtl = currentLang === 'ar';
             loadStats(ext);
         }
 
+        function toggleWorkHours(checked) {
+            const c = document.getElementById('shiftControls');
+            if (c) {
+                if (checked) c.classList.remove('hidden');
+                else c.classList.add('hidden');
+            }
+            if (currentExtension) loadStats(currentExtension);
+            else loadOverview();
+        }
+
+        function setWorkDaysPreset(preset) {
+            const checkboxes = document.querySelectorAll('input[name="workDay"]');
+            checkboxes.forEach(cb => {
+                const val = parseInt(cb.value, 10);
+                if (preset === 'sun-thu') {
+                    cb.checked = (val >= 0 && val <= 4);
+                } else if (preset === 'mon-fri') {
+                    cb.checked = (val >= 1 && val <= 5);
+                } else if (preset === 'all') {
+                    cb.checked = true;
+                }
+            });
+            if (currentExtension) loadStats(currentExtension);
+            else loadOverview();
+        }
+
+        function getShiftQueryParams() {
+            const workHoursCheckbox = document.getElementById('workHoursEnabled');
+            const workHoursEnabled = workHoursCheckbox ? workHoursCheckbox.checked : false;
+            const shiftStart = (document.getElementById('shiftStart')?.value || '09:00').trim();
+            const shiftEnd = (document.getElementById('shiftEnd')?.value || '17:00').trim();
+            const selectedWorkDays = [];
+            document.querySelectorAll('input[name="workDay"]:checked').forEach(cb => {
+                selectedWorkDays.push(cb.value);
+            });
+            return {
+                workHoursEnabled,
+                shiftStart,
+                shiftEnd,
+                workDays: selectedWorkDays.join(',')
+            };
+        }
+
         function loadOverview() {
             overviewPage = 1;
             const startDate = (document.getElementById('startDate_raw') || document.getElementById('startDate')).value;
@@ -592,7 +709,8 @@ const isRtl = currentLang === 'ar';
                 </div>
             `;
 
-            const params = new URLSearchParams({ startDate, endDate, lang });
+            const shiftParams = getShiftQueryParams();
+            const params = new URLSearchParams({ startDate, endDate, lang, ...shiftParams });
             fetch(`/api/ext-overview?${params}`)
                 .then(r => r.json())
                 .then(data => {
@@ -816,7 +934,8 @@ const isRtl = currentLang === 'ar';
                 </div>
             `;
 
-            const params = new URLSearchParams({ startDate, endDate, direction, lang });
+            const shiftParams = getShiftQueryParams();
+            const params = new URLSearchParams({ startDate, endDate, direction, lang, ...shiftParams });
             fetch(`/api/ext-stats/${ext}?${params}`)
                 .then(r => r.json())
                 .then(data => renderStats(data))

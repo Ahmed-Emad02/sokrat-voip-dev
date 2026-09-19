@@ -123,7 +123,81 @@ const words = {
         atDiagCustomLabel: "Custom AT Command:",
         atDiagCustomPlaceholder: "Enter AT command (e.g. AT^CARDLOCK?, AT^SYSINFO)...",
         atDiagExplanationTitle: "Diagnostic Explanation & Analysis",
-        atDiagRawOutputTitle: "Raw Baseband Response"
+        atDiagRawOutputTitle: "Raw Baseband Response",
+        stateDurationTitle: "Dongle Analytics",
+        stateDurationSubtitle: "Track exact duration and percentage spent in each state (Free, In Call, Not Initialized, Disconnected) with Inbound & Outbound branch",
+        reportTimeframe: "Timeframe & Filters",
+        reportStartTime: "Start Time",
+        reportEndTime: "End Time",
+        reportDongle: "Dongle",
+        reportSim: "SIM Number (DID)",
+        reportAllDongles: "All Dongles (ALL)",
+        reportAllSims: "All SIM Numbers (ALL)",
+        reportQuickPresets: "Quick Presets:",
+        reportToday: "Today",
+        reportYesterday: "Yesterday",
+        report7Days: "Last 7 Days",
+        report30Days: "Last 30 Days",
+        reportShiftFilter: "Working Hours (Shift)",
+        reportShiftFilterDesc: "Calculate stats only during specific working hours and days",
+        reportShiftStart: "Shift Start",
+        reportShiftEnd: "Shift End",
+        reportWorkDays: "Working Days",
+        reportPresetSunThu: "Sun - Thu",
+        reportPresetMonFri: "Mon - Fri",
+        reportPresetAllDays: "All Days",
+        daySun: "Sun",
+        dayMon: "Mon",
+        dayTue: "Tue",
+        dayWed: "Wed",
+        dayThu: "Thu",
+        dayFri: "Fri",
+        daySat: "Sat",
+        reportGenerateBtn: "Generate Report",
+        reportReadyFree: "Ready (Free)",
+        reportReadyFreeDesc: "Idle & ready to place and receive calls",
+        reportInCall: "In Call (Busy)",
+        reportInCallDesc: "Total active call & talk duration",
+        reportInboundBranch: "Incoming",
+        reportOutboundBranch: "Outgoing",
+        reportNotInit: "Not Initialized",
+        reportNotInitDesc: "Modem error / resetting / initializing",
+        reportDisconnected: "Disconnected",
+        reportDisconnectedDesc: "Unattached USB device status",
+        reportTabDongles: "By Dongle",
+        reportTabSims: "By SIM Number (DID)",
+        reportColDongle: "Dongle",
+        reportColSim: "SIM Number",
+        reportColFree: "Free (Ready)",
+        reportColBusy: "In Call (Busy)",
+        reportColNotInit: "Not Initialized",
+        reportColDisconnected: "Disconnected",
+        reportColDistribution: "State Distribution",
+        reportColCallsTalk: "Calls / Talk Time",
+        reportColUptime: "Readiness Uptime",
+        reportNoData: "No state logs recorded in this timeframe.",
+        reportLoading: "Loading duration report metrics...",
+        reportWindow: "Window:",
+        smsMessengerTitle: "SMS Messenger",
+        smsConversations: "Conversations",
+        smsSearchPlaceholder: "Search number or text...",
+        smsNewChat: "New Chat",
+        smsEnterNumberPrompt: "Enter phone number (e.g. +201012345678):",
+        smsNoThreads: "No conversations found",
+        smsSelectThreadHint: "Select a conversation to view chat history",
+        smsTypePlaceholder: "Type a message... (Enter to send)",
+        smsShiftEnterHint: "Shift+Enter for newline",
+        smsSendBtn: "Send",
+        smsDeleteThreadConfirm: "Are you sure you want to delete this conversation thread?",
+        smsClearAllConfirm: "Are you sure you want to clear all SMS messages?",
+        smsSenderDongle: "Sender Dongle",
+        smsIncoming: "Incoming",
+        smsOutgoing: "Outgoing",
+        smsSent: "Sent",
+        smsCopyNumber: "Copy number",
+        smsCopyMessage: "Copy message",
+        smsCopied: "Copied!",
+        smsBackToThreads: "Back to conversations"
     },
     ar: {
         title: "شرائح الاتصال", subtitle: "GSM",
@@ -246,7 +320,81 @@ const words = {
         atDiagCustomLabel: "أمر مخصص:",
         atDiagCustomPlaceholder: "أدخل أمر AT (مثال: AT^CARDLOCK?, AT^SYSINFO)...",
         atDiagExplanationTitle: "التحليل والتفسير الفني للاستجابة",
-        atDiagRawOutputTitle: "الاستجابة الخام من المودم"
+        atDiagRawOutputTitle: "الاستجابة الخام من المودم",
+        stateDurationTitle: "تحليلات مدة حالات المودم والشرائح",
+        stateDurationSubtitle: "تتبع دقيق للمدة الزمنية والنسب المئوية لكل حالة (جاهز، في مكالمة، غير مهيأ، غير متصل) مع تفصيل المكالمات الواردة والصادرة",
+        reportTimeframe: "النطاق الزمني والفلترة",
+        reportStartTime: "من تاريخ/وقت",
+        reportEndTime: "إلى تاريخ/وقت",
+        reportDongle: "المودم",
+        reportSim: "رقم الشريحة (DID)",
+        reportAllDongles: "جميع الأجهزة (الكل)",
+        reportAllSims: "جميع الشرائح (الكل)",
+        reportQuickPresets: "فترات سريعة:",
+        reportToday: "اليوم",
+        reportYesterday: "الأمس",
+        report7Days: "آخر 7 أيام",
+        report30Days: "آخر 30 يوماً",
+        reportShiftFilter: "ساعات العمل (الوردية)",
+        reportShiftFilterDesc: "حساب الإحصائيات خلال ساعات وأيام عمل الوردية فقط",
+        reportShiftStart: "بداية الوردية",
+        reportShiftEnd: "نهاية الوردية",
+        reportWorkDays: "أيام العمل",
+        reportPresetSunThu: "الأحد - الخميس",
+        reportPresetMonFri: "الإثنين - الجمعة",
+        reportPresetAllDays: "جميع الأيام",
+        daySun: "أحد",
+        dayMon: "إثنين",
+        dayTue: "ثلاثاء",
+        dayWed: "أربعاء",
+        dayThu: "خميس",
+        dayFri: "جمعة",
+        daySat: "سبت",
+        reportGenerateBtn: "توليد التقرير",
+        reportReadyFree: "جاهز / متاح (Free)",
+        reportReadyFreeDesc: "جاهزية تامة لاستقبال وإجراء المكالمات",
+        reportInCall: "في مكالمة (مشغول)",
+        reportInCallDesc: "إجمالي زمن المحادثات وإشغال الخط",
+        reportInboundBranch: "المكالمات الواردة",
+        reportOutboundBranch: "المكالمات الصادرة",
+        reportNotInit: "غير مهيأ / متوقف",
+        reportNotInitDesc: "حالة خطأ أو إعادة ضبط المودم",
+        reportDisconnected: "غير متصل",
+        reportDisconnectedDesc: "المودم غير موصول بمنفذ USB",
+        reportTabDongles: "حسب المودم",
+        reportTabSims: "حسب رقم الشريحة",
+        reportColDongle: "المودم",
+        reportColSim: "رقم الشريحة",
+        reportColFree: "متاح (Free)",
+        reportColBusy: "في مكالمة (مشغول)",
+        reportColNotInit: "غير مهيأ",
+        reportColDisconnected: "غير متصل",
+        reportColDistribution: "توزيع الحالات",
+        reportColCallsTalk: "المكالمات / زمن التحدث",
+        reportColUptime: "نسبة الجاهزية",
+        reportNoData: "لا توجد بيانات مسجلة في هذا النطاق الزمني.",
+        reportLoading: "جاري تحميل بيانات مدة الحالات...",
+        reportWindow: "النطاق الزمني:",
+        smsMessengerTitle: "المحادثات والرسائل",
+        smsConversations: "المحادثات",
+        smsSearchPlaceholder: "بحث بالرقم أو نص الرسالة...",
+        smsNewChat: "محادثة جديدة",
+        smsEnterNumberPrompt: "أدخل رقم الهاتف (مثال: 01012345678 أو +2010...):",
+        smsNoThreads: "لا توجد محادثات",
+        smsSelectThreadHint: "اختر محادثة لعرض سجل الرسائل",
+        smsTypePlaceholder: "اكتب رسالة هنا... (Enter للإرسال)",
+        smsShiftEnterHint: "Shift+Enter لسطر جديد",
+        smsSendBtn: "إرسال",
+        smsDeleteThreadConfirm: "هل أنت متأكد من حذف هذه المحادثة؟",
+        smsClearAllConfirm: "هل أنت متأكد من مسح كافة الرسائل؟",
+        smsSenderDongle: "شريحة الإرسال",
+        smsIncoming: "واردة",
+        smsOutgoing: "صادرة",
+        smsSent: "تم الإرسال",
+        smsCopyNumber: "نسخ الرقم",
+        smsCopyMessage: "نسخ الرسالة",
+        smsCopied: "تم النسخ!",
+        smsBackToThreads: "العودة للمحادثات"
     }
 };
 const t = words[currentLang] || words['en'];
@@ -275,7 +423,19 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Roboto:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <style>
+        .flatpickr-input {
+            font-family: 'JetBrains Mono', monospace !important;
+        }
+        .duration-busy-text {
+            color: #ffffff !important;
+        }
+        .light-theme .duration-busy-text,
+        body.light-theme .duration-busy-text {
+            color: #000000 !important;
+        }
         :root {
             --bg-primary: #050507; /* Sleek OLED black background */
             --bg-secondary: #0c0c0e; /* Vantablack card background */
@@ -330,8 +490,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
         
+        .dongle-icon-box {
+            background: transparent !important;
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        
         .terminal-container {
-            background-color: var(--bg-card, #09090b);
             border: 1px solid var(--border-primary, #27272a);
         }
         .terminal-screen {
@@ -1232,9 +1398,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         
         <!-- Header Section -->
         <div class="mb-6 shrink-0 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-            <div class="flex items-center gap-3.5">
-                <div class="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 text-[var(--accent-color)] flex items-center justify-center shrink-0">
-                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <div class="flex items-center gap-3">
+                <div class="text-[var(--accent-color)] flex items-center justify-center shrink-0">
+                    <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="10" y="2" width="4" height="4" rx="0.5" />
                         <line x1="11" y1="3.5" x2="11.01" y2="3.5" stroke-width="2" />
                         <line x1="13" y1="3.5" x2="13.01" y2="3.5" stroke-width="2" />
@@ -1258,10 +1424,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <span><%= t.viewMinimal %></span>
                     </button>
                 </div>
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold">
-                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                    <%= isRtl ? 'تحديث مباشر' : 'Live status' %>
-                </span>
                 <div class="px-3 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
                     <span class="text-[9px] uppercase tracking-wider text-[var(--text-muted)] block"><%= isRtl ? 'الأجهزة' : 'Devices' %></span>
                     <span id="gsm-device-total" class="text-sm font-black text-[var(--text-primary)] font-mono">0</span>
@@ -1290,8 +1452,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 <div class="px-5 sm:px-6 py-3 bg-[var(--bg-card)]/80 border-b border-[var(--border-primary)]">
                     <div class="flex items-center justify-between gap-2 cursor-pointer select-none" onclick="toggleLegendBlock()">
                         <div class="flex items-center gap-2">
-                            <div class="w-6 h-6 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            <div class="text-blue-400 flex items-center justify-center shrink-0">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                             </div>
                             <span class="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]"><%= t.legendTitle %></span>
                         </div>
@@ -1396,43 +1558,126 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         </section>
 
 
-            <!-- Middle Row: SMS Inbox & USSD Console Side-by-Side (2 Columns) -->
-            <div class="inboxes-grid grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch mt-4">
-                <!-- 1. SMS Inbox Panel -->
-                <div class="gsm-console-panel sms-inbox-panel panel-surface rounded-2xl p-5 flex flex-col gap-4 h-[30rem]">
-                    <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 gap-3 shrink-0">
-                        <div class="min-w-0">
-                            <h3 class="text-sm font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                                <svg class="text-[var(--accent-color)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="m22 6-10 7L2 6"/></svg>
-                                <%= isRtl ? 'صندوق الرسائل' : 'SMS Inbox' %>
-                            </h3>
-                            <p id="sms-inbox-device" class="text-[10px] text-[var(--text-muted)] font-mono mt-0.5 truncate"><%= isRtl ? 'اختر جهازاً' : 'Select a dongle' %></p>
+            <!-- Middle Row: SMS Inbox & USSD Console Side-by-Side (Expanded SMS Messenger & Reduced USSD Console) -->
+            <div class="inboxes-grid grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch mt-4">
+                <!-- 1. SMS Messenger Panel (Expanded 7/12 or 8/12 on larger screens) -->
+                <div class="gsm-console-panel sms-inbox-panel panel-surface rounded-2xl flex flex-col h-[34rem] overflow-hidden border border-[var(--border-primary)] lg:col-span-7 xl:col-span-8" id="sms-messenger-container">
+                    <!-- Top Bar -->
+                    <div class="p-3 sm:px-4 flex items-center justify-between border-b border-[var(--border-primary)] bg-[var(--bg-card)]/80 gap-2 shrink-0">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="text-emerald-400 flex items-center justify-center shrink-0">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                            </div>
+                            <div class="min-w-0">
+                                <h3 class="text-xs sm:text-sm font-black text-[var(--text-primary)] uppercase tracking-wider truncate"><%= t.smsMessengerTitle || 'SMS Messenger' %></h3>
+                                <p id="sms-inbox-device" class="text-[10px] text-[var(--text-muted)] font-mono truncate"><%= isRtl ? 'اختر جهازاً' : 'Select a dongle' %></p>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-2 shrink-0">
-                            <button type="button" onclick="openSendSmsModal()" class="text-[10px] bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white font-bold rounded-lg px-3 py-1.5 transition cursor-pointer flex items-center gap-1.5 shadow-sm">
-                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                                <span><%= isRtl ? 'إرسال SMS' : 'Send SMS' %></span>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onclick="startNewChatPrompt()" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--accent-color)] hover:opacity-90 text-white flex items-center gap-1 transition cursor-pointer shadow-sm">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                <span class="hidden sm:inline"><%= t.smsNewChat || 'New Chat' %></span>
                             </button>
-                            <span id="sms-inbox-count" class="px-2 py-1 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[10px] font-mono font-bold text-[var(--text-secondary)]">0</span>
-                            <button onclick="clearSmsInbox()" class="text-[10px] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">
-                                <%= isRtl ? 'مسح' : 'Clear' %>
+                            <span id="sms-inbox-count" class="px-2 py-0.5 rounded-md bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[10px] font-mono font-bold text-[var(--text-secondary)]">0</span>
+                            <button type="button" onclick="clearSmsInbox()" class="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-[var(--bg-hover)] transition cursor-pointer" title="<%= isRtl ? 'مسح كافة الرسائل' : 'Clear All Messages' %>">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                             </button>
                         </div>
                     </div>
 
-                    <div class="sms-inbox-scroll overflow-y-auto flex-1 flex flex-col gap-2.5 pe-1" id="sms-inbox-container">
-                        <div class="text-center py-8 text-[var(--text-muted)] italic" id="sms-empty-placeholder"><%= isRtl ? 'لا يوجد رسائل واردة حالياً' : 'No incoming SMS messages' %></div>
+                    <!-- Dual-Pane Body -->
+                    <div class="flex-1 flex overflow-hidden min-h-0 relative">
+                        <!-- Left Pane: Conversations / Endpoints List -->
+                        <div id="sms-threads-pane" class="w-full sm:w-[32%] lg:w-[34%] xl:w-[28%] min-w-[200px] max-w-[300px] border-e border-[var(--border-primary)] flex flex-col bg-[var(--bg-primary)]/40 shrink-0">
+                            <!-- Search & Filter Bar -->
+                            <div class="p-2 border-b border-[var(--border-primary)] bg-[var(--bg-card)]/50 space-y-1.5 shrink-0">
+                                <div class="relative">
+                                    <input type="text" id="sms-thread-search" oninput="handleSmsSearch(this.value)" placeholder="<%= t.smsSearchPlaceholder || 'Search number or text...' %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1 text-xs text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-[var(--accent-color)] font-mono">
+                                    <svg class="w-3.5 h-3.5 text-zinc-500 absolute end-2.5 top-2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                </div>
+                            </div>
+
+                            <!-- Thread Roster -->
+                            <div id="sms-threads-list" class="flex-1 overflow-y-auto divide-y divide-[var(--border-primary)]/30">
+                                <div class="text-center py-10 text-[var(--text-muted)] text-xs italic" id="sms-empty-placeholder">
+                                    <%= t.smsNoThreads || 'No conversations found' %>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Pane: Chat History & Composer (~62%) -->
+                        <div id="sms-chat-pane" class="hidden sm:flex flex-1 flex-col bg-[var(--bg-card)]/30 overflow-hidden min-w-0">
+                            <!-- Chat Active Header -->
+                            <div id="sms-chat-header" class="px-3.5 py-2 border-b border-[var(--border-primary)] bg-[var(--bg-card)]/70 flex items-center justify-between gap-2 shrink-0">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <button type="button" onclick="backToThreadList()" class="sm:hidden p-1 rounded-lg hover:bg-[var(--bg-hover)] text-zinc-400 cursor-pointer" title="<%= t.smsBackToThreads || 'Back' %>">
+                                        <svg class="w-4 h-4 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                                    </button>
+                                    <div class="w-7 h-7 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs font-mono shrink-0" id="sms-active-avatar">
+                                        #
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="font-black text-xs text-white font-mono truncate" id="sms-active-number">-</span>
+                                            <button type="button" id="sms-active-copy-btn" onclick="copyActiveNumber()" class="text-zinc-400 hover:text-white p-0.5 cursor-pointer" title="<%= t.smsCopyNumber || 'Copy number' %>">
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                            </button>
+                                        </div>
+                                        <p class="text-[10px] text-zinc-400 truncate" id="sms-active-contact-name"></p>
+                                    </div>
+                                </div>
+
+                                <!-- Chat Actions (Dongle selector, delete thread) -->
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <div class="w-40 sm:w-48 shrink-0">
+                                        <select id="sms-reply-dongle" class="text-xs font-semibold font-mono" title="<%= t.smsSenderDongle || 'Sender Dongle' %>">
+                                            <% if (devices && devices.length > 0) { %>
+                                                <% devices.forEach(d => { %>
+                                                    <option value="<%= d.ID %>" <%= d.ID === initialSelectedDongleId ? 'selected' : '' %>><%= d.ID %> (<%= d.Number || 'No SIM' %>)</option>
+                                                <% }) %>
+                                            <% } else { %>
+                                                <option value="dongle0">dongle0 (No SIM)</option>
+                                            <% } %>
+                                        </select>
+                                    </div>
+                                    <button type="button" onclick="deleteActiveThread()" class="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-[var(--bg-hover)] transition cursor-pointer" title="<%= t.smsDeleteThreadConfirm || 'Delete thread' %>">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Scrollable Message Bubbles Stream -->
+                            <div id="sms-messages-stream" class="flex-1 overflow-y-auto p-4 space-y-3">
+                                <div class="text-center py-16 text-zinc-500 text-xs italic" id="sms-no-thread-selected">
+                                    <%= t.smsSelectThreadHint || 'Select a conversation to view chat history' %>
+                                </div>
+                            </div>
+
+                            <!-- Embedded Bottom Composer -->
+                            <form id="sms-quick-composer-form" onsubmit="handleQuickSmsSubmit(event)" class="p-2.5 border-t border-[var(--border-primary)] bg-[var(--bg-card)]/80 flex items-end gap-2 shrink-0">
+                                <div class="flex-1 min-w-0 relative">
+                                    <textarea id="sms-composer-input" rows="2" required placeholder="<%= t.smsTypePlaceholder || 'Type a message... (Enter to send)' %>" onkeydown="handleComposerKeydown(event)" oninput="handleComposerInput(this)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl p-2.5 text-xs text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-[var(--accent-color)] resize-none font-sans text-start" dir="auto"></textarea>
+                                    <div class="flex items-center justify-between px-1 text-[9px] font-mono text-zinc-500">
+                                        <span id="sms-composer-counter">0/160</span>
+                                        <span class="hidden sm:inline text-zinc-500 text-[9px]"><%= t.smsShiftEnterHint || 'Shift+Enter for newline' %></span>
+                                    </div>
+                                </div>
+                                <button type="submit" id="sms-composer-send-btn" class="bg-[var(--accent-color)] hover:opacity-90 text-white font-bold p-2.5 rounded-xl transition cursor-pointer flex items-center justify-center shrink-0 shadow-sm" title="<%= t.smsSendBtn || 'Send' %>">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 2. USSD Console Panel & Terminal Response -->
-                <div class="gsm-console-panel panel-surface rounded-2xl p-5 flex flex-col gap-4 h-[30rem]">
+                <!-- 2. USSD Console Panel & Terminal Response (Reduced 5/12 or 4/12) -->
+                <div class="gsm-console-panel panel-surface rounded-2xl p-5 flex flex-col gap-4 h-[34rem] lg:col-span-5 xl:col-span-4">
                     <!-- USSD Exec Section -->
                     <div class="flex flex-col gap-3 pb-3 border-b border-[var(--border-primary)] shrink-0">
                         <div class="flex items-center justify-between gap-2 flex-wrap">
                             <h3 class="text-sm font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                                <div id="console-tab-icon" class="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <div id="console-tab-icon" class="flex items-center justify-center text-indigo-400 shrink-0">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <polyline points="4 17 10 11 4 5"></polyline>
                                         <line x1="12" y1="19" x2="20" y2="19"></line>
                                     </svg>
@@ -1451,32 +1696,34 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             </div>
                         </div>
 
-                        <form id="ussd-execution-form" class="flex flex-col sm:flex-row items-end gap-2.5">
-                            <div class="flex-1 w-full sm:w-auto">
-                                <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="ussd-target-dongle">
-                                    <%= isRtl ? 'الشريحة المستهدفة *' : 'Target Dongle *' %>
-                                </label>
-                                <select id="ussd-target-dongle" class="config-input w-full py-1.5 text-xs font-semibold cursor-pointer" required>
-                                    <option value="" disabled <%= initialSelectedDongleId ? '' : 'selected' %> hidden><%= t.selectPlaceholder %></option>
-                                    <% if (devices && devices.length > 0) { %>
-                                        <% devices.forEach(d => { %>
-                                            <option value="<%= d.ID %>" <%= d.ID === initialSelectedDongleId ? 'selected' : '' %>><%= d.ID %> (<%= d.Number || 'Unknown SIM' %>)</option>
-                                        <% }) %>
-                                    <% } %>
-                                </select>
-                            </div>
-                            
-                            <div class="flex-1 w-full sm:w-auto">
-                                <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="ussd-code-input">
-                                    <%= isRtl ? 'رمز الـ USSD *' : 'USSD Code *' %>
-                                </label>
-                                <div class="flex items-center bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 focus-within:border-indigo-500 transition-colors">
-                                    <span class="text-indigo-400 font-bold font-mono text-xs leading-none select-none me-1.5">&gt;_</span>
-                                    <input type="text" id="ussd-code-input" class="w-full bg-transparent border-0 outline-none py-1.5 text-xs text-[var(--text-primary)] font-mono placeholder-zinc-500" placeholder="e.g. *100# or *50#" required autocomplete="off">
+                        <form id="ussd-execution-form" class="flex flex-col gap-2.5">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <div class="w-full">
+                                    <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="ussd-target-dongle">
+                                        <%= isRtl ? 'الشريحة المستهدفة *' : 'Target Dongle *' %>
+                                    </label>
+                                    <select id="ussd-target-dongle" class="config-input w-full py-1.5 text-xs font-semibold cursor-pointer" required>
+                                        <option value="" disabled <%= initialSelectedDongleId ? '' : 'selected' %> hidden><%= t.selectPlaceholder %></option>
+                                        <% if (devices && devices.length > 0) { %>
+                                            <% devices.forEach(d => { %>
+                                                <option value="<%= d.ID %>" <%= d.ID === initialSelectedDongleId ? 'selected' : '' %>><%= d.ID %> (<%= d.Number || 'Unknown SIM' %>)</option>
+                                            <% }) %>
+                                        <% } %>
+                                    </select>
+                                </div>
+                                
+                                <div class="w-full">
+                                    <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="ussd-code-input">
+                                        <%= isRtl ? 'رمز الـ USSD *' : 'USSD Code *' %>
+                                    </label>
+                                    <div class="flex items-center bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 focus-within:border-indigo-500 transition-colors">
+                                        <span class="text-indigo-400 font-bold font-mono text-xs leading-none select-none me-1.5">&gt;_</span>
+                                        <input type="text" id="ussd-code-input" class="w-full bg-transparent border-0 outline-none py-1.5 text-xs text-[var(--text-primary)] font-mono placeholder-zinc-500" placeholder="e.g. *100# or *50#" required autocomplete="off">
+                                    </div>
                                 </div>
                             </div>
 
-                            <button type="submit" id="ussd-submit-btn" class="config-btn-primary px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shrink-0 w-full sm:w-auto">
+                            <button type="submit" id="ussd-submit-btn" class="config-btn-primary px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shrink-0 w-full">
                                 <span id="btn-label"><%= t.sendBtn %></span>
                                 <div id="btn-spinner" class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin hidden"></div>
                             </button>
@@ -1484,7 +1731,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                         <!-- Call Forwarding Helper Form -->
                         <form id="forwarding-execution-form" class="hidden flex flex-col gap-2.5">
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 items-end">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
                                 <div>
                                     <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="cf-target-dongle">
                                         <%= isRtl ? 'الشريحة المستهدفة *' : 'Target Dongle *' %>
@@ -1570,13 +1817,254 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 </div>
             </div>
 
+        <!-- 4. Dongle & SIM State Duration Analytics Section (Redesigned) -->
+        <section class="panel-surface rounded-2xl overflow-hidden shrink-0 flex flex-col gap-0 border border-[var(--border-primary)] mt-4" id="dongle-duration-stats-section">
+            <!-- Section Header -->
+            <div class="p-4 sm:px-6 border-b border-[var(--border-primary)] bg-[var(--bg-card)]/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="text-sky-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="20" x2="18" y2="10" />
+                            <line x1="12" y1="20" x2="12" y2="4" />
+                            <line x1="6" y1="20" x2="6" y2="14" />
+                            <path d="M3 13l5-5 5 5 8-8" />
+                            <polyline points="16 5 21 5 21 10" />
+                        </svg>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h3 class="text-sm sm:text-base font-black text-[var(--text-primary)] uppercase tracking-wider"><%= t.stateDurationTitle %></h3>
+                        <span class="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono font-bold tracking-wider uppercase"><%= isRtl ? 'الحالات والجهوزية' : 'Activity & States' %></span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="fetchDongleStateReports()" id="dongle-report-refresh-btn" class="dongle-action-button dongle-action-primary cursor-pointer px-3.5 py-1.5 h-8 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
+                        <span><%= isRtl ? 'تحديث' : 'Refresh' %></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filters Bar -->
+            <div class="p-4 sm:px-6 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="reportStartDate"><%= t.reportStartTime %></label>
+                        <input type="datetime-local" id="reportStartDate" name="reportStartDate" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="reportEndDate"><%= t.reportEndTime %></label>
+                        <input type="datetime-local" id="reportEndDate" name="reportEndDate" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="reportDongleSelect"><%= t.reportDongle %></label>
+                        <select id="reportDongleSelect" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] font-mono">
+                            <option value="ALL"><%= t.reportAllDongles %></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="reportSimSelect"><%= t.reportSim %></label>
+                        <select id="reportSimSelect" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] font-mono">
+                            <option value="ALL"><%= t.reportAllSims %></option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Working Hours & Shift Filter -->
+                <div class="pt-2 border-t border-[var(--border-primary)]/60">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                        <div class="flex items-center gap-3">
+                            <label class="relative inline-flex items-center cursor-pointer select-none">
+                                <input type="checkbox" id="reportWorkHoursEnabled" class="sr-only peer" onchange="toggleReportWorkHours(this.checked)">
+                                <div class="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--accent-color)]"></div>
+                                <span class="ms-2 text-xs font-bold text-[var(--text-primary)]"><%= t.reportShiftFilter %></span>
+                            </label>
+                            <span class="text-[10px] text-[var(--text-muted)] hidden sm:inline"><%= t.reportShiftFilterDesc %></span>
+                        </div>
+                        <div id="report-shift-controls" class="hidden flex-wrap items-center gap-3">
+                            <!-- Shift Start & End Hours -->
+                            <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-1">
+                                    <label for="reportShiftStart" class="text-[10px] font-bold text-[var(--text-secondary)] uppercase"><%= t.reportShiftStart %>:</label>
+                                    <input type="time" id="reportShiftStart" value="09:00" class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--accent-color)]">
+                                </div>
+                                <span class="text-zinc-500 font-bold text-xs">-</span>
+                                <div class="flex items-center gap-1">
+                                    <label for="reportShiftEnd" class="text-[10px] font-bold text-[var(--text-secondary)] uppercase"><%= t.reportShiftEnd %>:</label>
+                                    <input type="time" id="reportShiftEnd" value="17:00" class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2 py-1 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--accent-color)]">
+                                </div>
+                            </div>
+                            <!-- Workdays Quick Presets & Day Pills -->
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="text-[10px] font-bold text-[var(--text-secondary)] uppercase"><%= t.reportWorkDays %>:</span>
+                                <button type="button" onclick="setReportWorkDaysPreset('sun-thu')" class="px-2 py-0.5 text-[10px] font-semibold rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= t.reportPresetSunThu %></button>
+                                <button type="button" onclick="setReportWorkDaysPreset('mon-fri')" class="px-2 py-0.5 text-[10px] font-semibold rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= t.reportPresetMonFri %></button>
+                                <button type="button" onclick="setReportWorkDaysPreset('all')" class="px-2 py-0.5 text-[10px] font-semibold rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= t.reportPresetAllDays %></button>
+                                <!-- Day Pills Checkboxes (0=Sun .. 6=Sat) -->
+                                <div class="flex items-center gap-1 ms-1" id="report-workdays-pills">
+                                    <label class="cursor-pointer select-none"><input type="checkbox" name="reportWorkDay" value="0" checked class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.daySun %></span></label>
+                                    <label class="cursor-pointer select-none"><input type="checkbox" name="reportWorkDay" value="1" checked class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.dayMon %></span></label>
+                                    <label class="cursor-pointer select-none"><input type="checkbox" name="reportWorkDay" value="2" checked class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.dayTue %></span></label>
+                                    <label class="cursor-pointer select-none"><input type="checkbox" name="reportWorkDay" value="3" checked class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.dayWed %></span></label>
+                                    <label class="cursor-pointer select-none"><input type="checkbox" name="reportWorkDay" value="4" checked class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.dayThu %></span></label>
+                                    <label class="cursor-pointer select-none"><input type="checkbox" name="reportWorkDay" value="5" class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.dayFri %></span></label>
+                                    <label class="cursor-pointer select-none"><input type="checkbox" name="reportWorkDay" value="6" class="sr-only peer"><span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded border border-zinc-700 bg-zinc-800 text-zinc-400 peer-checked:bg-sky-500/20 peer-checked:text-sky-300 peer-checked:border-sky-500/40"><%= t.daySat %></span></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="text-[11px] font-bold text-zinc-300 me-1"><%= t.reportQuickPresets %></span>
+                        <button type="button" onclick="setDongleReportPreset('today')" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-zinc-200 hover:text-white hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"><%= t.reportToday %></button>
+                        <button type="button" onclick="setDongleReportPreset('yesterday')" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-zinc-200 hover:text-white hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"><%= t.reportYesterday %></button>
+                        <button type="button" onclick="setDongleReportPreset('7days')" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-zinc-200 hover:text-white hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"><%= t.report7Days %></button>
+                        <button type="button" onclick="setDongleReportPreset('30days')" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-zinc-200 hover:text-white hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"><%= t.report30Days %></button>
+                    </div>
+
+                    <button type="button" onclick="fetchDongleStateReports()" class="bg-[var(--accent-color)] hover:opacity-90 text-white font-bold rounded-xl px-4 py-2 text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <span><%= t.reportGenerateBtn %></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Global KPI Summary Cards -->
+            <div class="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <!-- Ready / Free KPI -->
+                <div class="p-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                <span class="text-[11px] font-black uppercase tracking-wider text-emerald-400"><%= t.reportReadyFree %></span>
+                            </div>
+                            <span class="text-xs font-mono font-black text-emerald-600" id="report-kpi-free-pct">0%</span>
+                        </div>
+                        <p class="text-2xl font-black text-white mt-2 font-mono" id="report-kpi-free-dur">0s</p>
+                        <p class="text-[11px] text-zinc-300 mt-1 font-medium"><%= t.reportReadyFreeDesc %></p>
+                    </div>
+                </div>
+
+                <!-- In Call / Busy KPI (with Inbound & Outbound branch) -->
+                <div class="p-4 rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-500/15 via-blue-500/5 to-transparent flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                                <span class="text-[11px] font-black uppercase tracking-wider text-blue-400"><%= t.reportInCall %></span>
+                            </div>
+                            <span class="text-xs font-mono font-black text-blue-300" id="report-kpi-busy-pct">0%</span>
+                        </div>
+                        <p class="text-2xl font-black text-white mt-1.5 font-mono" id="report-kpi-busy-dur">0s</p>
+                        <p class="text-[11px] text-zinc-300 mt-0.5 font-medium"><%= t.reportInCallDesc %></p>
+                    </div>
+                    <!-- Incoming & Outgoing Branch -->
+                    <div class="mt-3 pt-2.5 border-t border-blue-500/20 grid grid-cols-2 gap-2">
+                        <div class="p-2 rounded-xl bg-cyan-300 border border-cyan-400 flex flex-col text-black">
+                            <div class="flex items-center gap-1 text-black text-[10px] font-bold">
+                                <svg class="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                                <span class="text-black font-black"><%= t.reportInboundBranch %></span>
+                            </div>
+                            <span class="text-sm font-black font-mono text-black mt-1" id="report-kpi-inbound-dur">0s</span>
+                            <span class="text-[10px] text-black font-mono font-bold" id="report-kpi-inbound-calls">0 calls</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-indigo-200 border border-indigo-300 flex flex-col text-black">
+                            <div class="flex items-center gap-1 text-black text-[10px] font-bold">
+                                <svg class="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                                <span class="text-black font-black"><%= t.reportOutboundBranch %></span>
+                            </div>
+                            <span class="text-sm font-black font-mono text-black mt-1" id="report-kpi-outbound-dur">0s</span>
+                            <span class="text-[10px] text-black font-mono font-bold" id="report-kpi-outbound-calls">0 calls</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Not Initialized KPI -->
+                <div class="p-4 rounded-2xl border border-rose-500/20 bg-gradient-to-br from-rose-500/10 via-rose-500/5 to-transparent flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                                <span class="text-[11px] font-black uppercase tracking-wider text-rose-400"><%= t.reportNotInit %></span>
+                            </div>
+                            <span class="text-xs font-mono font-black text-rose-600" id="report-kpi-notinit-pct">0%</span>
+                        </div>
+                        <p class="text-2xl font-black text-white mt-2 font-mono" id="report-kpi-notinit-dur">0s</p>
+                        <p class="text-[11px] text-zinc-300 mt-1 font-medium"><%= t.reportNotInitDesc %></p>
+                    </div>
+                </div>
+
+                <!-- Disconnected KPI -->
+                <div class="p-4 rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                                <span class="text-[11px] font-black uppercase tracking-wider text-amber-400"><%= t.reportDisconnected %></span>
+                            </div>
+                            <span class="text-xs font-mono font-black text-amber-600" id="report-kpi-notconn-pct">0%</span>
+                        </div>
+                        <p class="text-2xl font-black text-white mt-2 font-mono" id="report-kpi-notconn-dur">0s</p>
+                        <p class="text-[11px] text-zinc-300 mt-1 font-medium"><%= t.reportDisconnectedDesc %></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Reports Table -->
+            <div class="px-4 sm:px-6 pb-6 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-card)] p-2.5 rounded-xl border border-[var(--border-primary)]">
+                    <!-- Tabs Switcher -->
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" id="report-tab-dongles-btn" onclick="setDongleReportTab('dongles')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition bg-[var(--accent-color)] text-white shadow-sm cursor-pointer">
+                            <%= t.reportTabDongles %>
+                        </button>
+                        <button type="button" id="report-tab-sims-btn" onclick="setDongleReportTab('sims')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] cursor-pointer">
+                            <%= t.reportTabSims %>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs font-mono text-[var(--text-muted)]">
+                        <span><%= t.reportWindow %></span>
+                        <span id="report-window-label" class="text-[var(--text-primary)] font-bold">-</span>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-[var(--border-primary)] overflow-hidden bg-[var(--bg-card)]">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-start border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-black/60 border-b border-[var(--border-primary)] text-[11px] uppercase font-black text-zinc-200 tracking-wider">
+                                    <th class="py-3 px-4 text-start" id="report-col-target-header"><%= t.reportColDongle %></th>
+                                    <th class="py-3 px-4 text-start" id="report-col-subtarget-header"><%= t.reportColSim %></th>
+                                    <th class="py-3 px-4 text-start"><%= t.reportColFree %></th>
+                                    <th class="py-3 px-4 text-start"><%= t.reportColBusy %></th>
+                                    <th class="py-3 px-4 text-start"><%= t.reportColNotInit %></th>
+                                    <th class="py-3 px-4 text-start"><%= t.reportColDisconnected %></th>
+                                    <th class="py-3 px-4 text-start min-w-[140px]"><%= t.reportColDistribution %></th>
+                                    <th class="py-3 px-4 text-start"><%= t.reportColCallsTalk %></th>
+                                    <th class="py-3 px-4 text-center"><%= t.reportColUptime %></th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-table-body" class="divide-y divide-[var(--border-primary)]/50 font-mono text-xs">
+                                <tr>
+                                    <td colspan="9" class="py-8 text-center text-xs text-[var(--text-muted)] font-sans">
+                                        <%= t.reportLoading %>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
             <!-- Lower Row: Selected Device Details (Short, Wide & Dense Horizontal Card directly under SMS & USSD) -->
             <div id="device-details-panel" class="panel-surface rounded-2xl p-5 flex flex-col gap-4 mt-4 w-full">
                 <!-- Header with ID & Live Diagnostics Badges -->
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-[var(--border-primary)] pb-3">
                     <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-xl bg-[var(--accent-color)]/10 border border-[var(--accent-color)]/20 flex items-center justify-center text-[var(--accent-color)] font-bold shrink-0">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <div class="text-[var(--accent-color)] flex items-center justify-center shrink-0 font-bold">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="3" y="3" width="18" height="18" rx="2"></rect>
                                 <path d="M9 3v18M13 8h4M13 12h4M13 16h2"></path>
                             </svg>
@@ -1692,7 +2180,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         </section>
 
         <!-- Collapsible logs console (Bottom) -->
-        <div class="panel-surface rounded-2xl flex flex-col shrink-0">
+        <div class="panel-surface rounded-2xl flex flex-col shrink-0 mt-4">
             <div class="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/40 border-b border-[var(--border-primary)] rounded-t-2xl <%= isRtl ? 'sm:flex-row-reverse' : '' %>">
                 <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
                     <div class="relative flex items-center justify-center">
@@ -1788,9 +2276,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <button type="submit" id="sendSmsSubmitBtn" class="btn-primary text-xs px-6 py-2.5 min-w-[140px] flex items-center justify-center gap-2">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                         <span id="sendSmsSubmitText" class="whitespace-nowrap font-bold"><%= isRtl ? 'إرسال الرسالة' : 'Send Message' %></span>
-                    </button>
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                        <span id="sendSmsSubmitText"><%= isRtl ? 'إرسال الرسالة' : 'Send Message' %></span>
                     </button>
                 </div>
             </form>
@@ -2058,19 +2543,19 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             <div class="p-5 overflow-y-auto space-y-4 flex-1">
                 <!-- Command Shortcuts Bar -->
                 <div>
-                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2 text-center"><%= t.atDiagShortcuts %></label>
+                    <div class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2 text-center"><%= t.atDiagShortcuts %></div>
                     <div class="flex flex-wrap items-center justify-center gap-1.5" id="at-diag-shortcuts-container">
-                        <button type="button" onclick="executeAtDiag('AT^CARDLOCK?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-amber-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT^CARDLOCK?</button>
-                        <button type="button" onclick="executeAtDiag('AT^SYSINFO')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-blue-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT^SYSINFO</button>
-                        <button type="button" onclick="executeAtDiag('AT+CREG?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-purple-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT+CREG?</button>
-                        <button type="button" onclick="executeAtDiag('AT+CSQ')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-emerald-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT+CSQ</button>
-                        <button type="button" onclick="executeAtDiag('AT+COPS?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-sky-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT+COPS?</button>
-                        <button type="button" onclick="executeAtDiag('AT^SYSCFG?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-rose-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT^SYSCFG?</button>
-                        <button type="button" onclick="executeAtDiag('AT+CPIN?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-teal-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">AT+CPIN?</button>
+                        <button type="button" onclick="executeAtDiag('AT^CARDLOCK?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer">AT^CARDLOCK?</button>
+                        <button type="button" onclick="executeAtDiag('AT^SYSINFO')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer">AT^SYSINFO</button>
+                        <button type="button" onclick="executeAtDiag('AT+CREG?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer">AT+CREG?</button>
+                        <button type="button" onclick="executeAtDiag('AT+CSQ')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer">AT+CSQ</button>
+                        <button type="button" onclick="executeAtDiag('AT+COPS?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer">AT+COPS?</button>
+                        <button type="button" onclick="executeAtDiag('AT^SYSCFG?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer">AT^SYSCFG?</button>
+                        <button type="button" onclick="executeAtDiag('AT+CPIN?')" class="at-shortcut-chip px-2.5 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer">AT+CPIN?</button>
                         <div class="flex items-center justify-center gap-1.5 w-full pt-2 border-t border-[var(--border-primary)]/50 mt-1 flex-wrap">
-                            <button type="button" onclick="executeAtDiag('AT^SYSCFG=14,2,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-bold bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30 transition cursor-pointer" title="Lock modem to 3G Only (WCDMA / UMTS)">Lock 3G Only</button>
-                            <button type="button" onclick="executeAtDiag('AT^SYSCFG=13,1,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 transition cursor-pointer" title="Lock modem to 2G Only (GSM / GPRS)">Lock 2G Only</button>
-                            <button type="button" onclick="executeAtDiag('AT^SYSCFG=2,2,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition cursor-pointer" title="Auto mode: 3G Preferred with automatic fallback to 2G (Recommended default)">Auto 3G/2G (Default)</button>
+                            <button type="button" onclick="executeAtDiag('AT^SYSCFG=14,2,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-zinc-300 hover:text-white border border-[var(--border-primary)] hover:border-zinc-500 transition cursor-pointer" title="Lock modem to 3G Only (WCDMA / UMTS)">Lock 3G Only</button>
+                            <button type="button" onclick="executeAtDiag('AT^SYSCFG=13,1,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-zinc-300 hover:text-white border border-[var(--border-primary)] hover:border-zinc-500 transition cursor-pointer" title="Lock modem to 2G Only (GSM / GPRS)">Lock 2G Only</button>
+                            <button type="button" onclick="executeAtDiag('AT^SYSCFG=2,2,3FFFFFFF,2,4')" class="at-shortcut-chip px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-zinc-300 hover:text-white border border-[var(--border-primary)] hover:border-zinc-500 transition cursor-pointer" title="Auto mode: 3G Preferred with automatic fallback to 2G (Recommended default)">Auto 3G/2G (Default)</button>
                         </div>
                     </div>
                 </div>
@@ -2262,10 +2747,12 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             let selectedDongleId = null;
             let allSmsMessages = [];
+            let activeThreadEndpoint = null;
+            let smsSearchQuery = '';
             let lastUssdText = "";
             let lastUssdTime = 0;
             let devicesRefreshInFlight = false;
-
+            let isSyncingSelect = false;
             function getDongleStateView(dev) {
                 const rawState = String((dev && dev.State) || 'Not Connected');
                 const normalized = rawState.toLowerCase();
@@ -2358,61 +2845,68 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             }
 
             function renderDongleRouting(dev) {
-                const imei = String(dev.IMEI || '').trim();
-                const trunks = Array.isArray(dev.customTrunks) ? dev.customTrunks : [];
-                const validImei = /^\d{8,20}$/.test(imei);
-                const emptyMessage = validImei
-                    ? (isRtl ? 'لا يوجد مسار اتصال مخصص يحتوي على IMEI هذا الجهاز.' : 'No custom trunk dial string contains this IMEI.')
-                    : (isRtl ? 'رقم IMEI غير متاح، لذلك لا يمكن مطابقة المسارات.' : 'IMEI unavailable, so routing cannot be matched.');
+                try {
+                    if (!dev) return '';
+                    const imei = String(dev.IMEI || '').trim();
+                    const trunks = Array.isArray(dev.customTrunks) ? dev.customTrunks.filter(Boolean) : [];
+                    const validImei = /^\d{8,20}$/.test(imei);
+                    const emptyMessage = validImei
+                        ? (isRtl ? 'لا يوجد مسار اتصال مخصص يحتوي على IMEI هذا الجهاز.' : 'No custom trunk dial string contains this IMEI.')
+                        : (isRtl ? 'رقم IMEI غير متاح، لذلك لا يمكن مطابقة المسارات.' : 'IMEI unavailable, so routing cannot be matched.');
 
-                if (trunks.length === 0) {
+                    if (trunks.length === 0) {
+                        return `
+                            <div class="dongle-routing-panel">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <svg class="text-[var(--text-muted)] shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                    <span class="text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">${isRtl ? 'الربط الصادر عبر IMEI' : 'IMEI-Linked Outbound Routing'}</span>
+                                </div>
+                                <p class="text-[9px] text-[var(--text-muted)] leading-relaxed">${escapeHtml(emptyMessage)}</p>
+                            </div>`;
+                    }
+
+                    const routeCount = trunks.reduce((total, trunk) => total + (Array.isArray(trunk?.routes) ? trunk.routes.length : 0), 0);
                     return `
                         <div class="dongle-routing-panel">
-                            <div class="flex items-center gap-2 mb-1.5">
-                                <svg class="text-[var(--text-muted)] shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                                <span class="text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">${isRtl ? 'الربط الصادر عبر IMEI' : 'IMEI-Linked Outbound Routing'}</span>
+                            <div class="flex items-center justify-between gap-2 mb-1.5">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <svg class="text-sky-400 shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                    <span class="text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">${isRtl ? 'الربط الصادر عبر IMEI' : 'IMEI-Linked Outbound Routing'}</span>
+                                </div>
+                                <span class="text-[8px] font-mono font-bold text-sky-400 shrink-0">${trunks.length} ${isRtl ? 'مسار' : 'trunk'} · ${routeCount} ${isRtl ? 'وجهة' : 'routes'}</span>
                             </div>
-                            <p class="text-[9px] text-[var(--text-muted)] leading-relaxed">${escapeHtml(emptyMessage)}</p>
-                        </div>`;
-                }
-
-                const routeCount = trunks.reduce((total, trunk) => total + (Array.isArray(trunk.routes) ? trunk.routes.length : 0), 0);
-                return `
-                    <div class="dongle-routing-panel">
-                        <div class="flex items-center justify-between gap-2 mb-1.5">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <svg class="text-sky-400 shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                                <span class="text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">${isRtl ? 'الربط الصادر عبر IMEI' : 'IMEI-Linked Outbound Routing'}</span>
-                            </div>
-                            <span class="text-[8px] font-mono font-bold text-sky-400 shrink-0">${trunks.length} ${isRtl ? 'مسار' : 'trunk'} · ${routeCount} ${isRtl ? 'وجهة' : 'routes'}</span>
-                        </div>
-                        <div class="space-y-1.5">
-                            ${trunks.map(trunk => {
-                                const routes = Array.isArray(trunk.routes) ? trunk.routes : [];
-                                const trunkUrl = `/config?tab=trunks&highlightTrunk=${encodeURIComponent(trunk.trunkId)}`;
-                                return `
-                                    <a href="${trunkUrl}" class="dongle-routing-trunk group/trunk block" title="${isRtl ? 'عرض وتحديد خط الربط هذا في إعدادات المقسم' : 'Click to view and highlight this trunk in PBX Configuration'}">
-                                        <div class="flex items-center justify-between gap-2 mb-1">
-                                            <div class="min-w-0 flex items-center gap-1.5">
-                                                <span class="text-[10px] font-extrabold text-[var(--text-primary)] group-hover/trunk:text-red-400 transition-colors truncate block">${escapeHtml(trunk.name || `Trunk #${trunk.trunkId}`)}</span>
-                                                <span class="text-[8px] text-[var(--text-muted)] font-mono">Trunk #${escapeHtml(trunk.trunkId)}</span>
-                                                <svg class="w-2.5 h-2.5 text-[var(--text-muted)] group-hover/trunk:text-red-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                            <div class="space-y-1.5">
+                                ${trunks.map(trunk => {
+                                    if (!trunk) return '';
+                                    const routes = Array.isArray(trunk.routes) ? trunk.routes.filter(Boolean) : [];
+                                    const trunkUrl = `/config?tab=trunks&highlightTrunk=${encodeURIComponent(trunk.trunkId || '')}`;
+                                    return `
+                                        <a href="${trunkUrl}" class="dongle-routing-trunk group/trunk block" title="${isRtl ? 'عرض وتحديد خط الربط هذا في إعدادات المقسم' : 'Click to view and highlight this trunk in PBX Configuration'}">
+                                            <div class="flex items-center justify-between gap-2 mb-1">
+                                                <div class="min-w-0 flex items-center gap-1.5">
+                                                    <span class="text-[10px] font-extrabold text-[var(--text-primary)] group-hover/trunk:text-red-400 transition-colors truncate block">${escapeHtml(trunk.name || `Trunk #${trunk.trunkId || ''}`)}</span>
+                                                    <span class="text-[8px] text-[var(--text-muted)] font-mono">Trunk #${escapeHtml(trunk.trunkId || '')}</span>
+                                                    <svg class="w-2.5 h-2.5 text-[var(--text-muted)] group-hover/trunk:text-red-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                                </div>
+                                                <span class="px-1.5 py-0.5 rounded-full border text-[8px] font-bold shrink-0 ${trunk.disabled ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}">
+                                                    ${trunk.disabled ? (isRtl ? 'معطل' : 'Disabled') : (isRtl ? 'مفعل' : 'Enabled')}
+                                                </span>
                                             </div>
-                                            <span class="px-1.5 py-0.5 rounded-full border text-[8px] font-bold shrink-0 ${trunk.disabled ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}">
-                                                ${trunk.disabled ? (isRtl ? 'معطل' : 'Disabled') : (isRtl ? 'مفعل' : 'Enabled')}
-                                            </span>
-                                        </div>
-                                        <div class="dongle-dial-string font-mono mb-1.5" title="${escapeHtml(trunk.dialString || '')}">${escapeHtml(trunk.dialString || '-')}</div>
-                                        <div class="flex flex-wrap items-center gap-1">
-                                            <span class="text-[8px] font-bold uppercase tracking-wider text-[var(--text-muted)]">${isRtl ? 'المسارات الصادرة' : 'Outbound Routes'}</span>
-                                            ${routes.length > 0
-                                                ? routes.map(route => `<span class="dongle-route-chip"><span class="truncate">${escapeHtml(route.name || `Route #${route.routeId}`)}</span><span class="opacity-60 ms-1 shrink-0">#${escapeHtml(route.routeId)}</span></span>`).join('')
-                                                : `<span class="text-[8px] italic text-[var(--text-muted)]">${isRtl ? 'غير مرتبط بأي مسار صادر' : 'Not assigned to an outbound route'}</span>`}
-                                        </div>
-                                    </a>`;
-                            }).join('')}
-                        </div>
-                    </div>`;
+                                            <div class="dongle-dial-string font-mono mb-1.5" title="${escapeHtml(trunk.dialString || '')}">${escapeHtml(trunk.dialString || '-')}</div>
+                                            <div class="flex flex-wrap items-center gap-1">
+                                                <span class="text-[8px] font-bold uppercase tracking-wider text-[var(--text-muted)]">${isRtl ? 'المسارات الصادرة' : 'Outbound Routes'}</span>
+                                                ${routes.length > 0
+                                                    ? routes.map(route => `<span class="dongle-route-chip"><span class="truncate">${escapeHtml(route.name || `Route #${route.routeId || ''}`)}</span><span class="opacity-60 ms-1 shrink-0">#${escapeHtml(route.routeId || '')}</span></span>`).join('')
+                                                    : `<span class="text-[8px] italic text-[var(--text-muted)]">${isRtl ? 'غير مرتبط بأي مسار صادر' : 'Not assigned to an outbound route'}</span>`}
+                                            </div>
+                                        </a>`;
+                                }).join('')}
+                            </div>
+                        </div>`;
+                } catch (err) {
+                    console.error('Error rendering dongle routing:', err);
+                    return '';
+                }
             }
 
             function renderDongleCards() {
@@ -2433,8 +2927,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 if (loadedDevices.length === 0) {
                     donglesGrid.innerHTML = `
                         <div class="col-span-full py-10 text-center">
-                            <div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] flex items-center justify-center text-[var(--text-muted)]">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17h16M7 13h10M10 9h4"/></svg>
+                            <div class="mx-auto mb-2 flex items-center justify-center text-[var(--text-muted)]">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17h16M7 13h10M10 9h4"/></svg>
                             </div>
                             <p class="text-xs font-semibold text-[var(--text-secondary)]">${escapeHtml(words.noDongles)}</p>
                         </div>`;
@@ -2585,21 +3079,21 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                         <span class="text-[9px] font-mono text-[var(--text-muted)] font-bold">${escapeHtml(id)}</span>
                                     </div>
                                     <div class="grid grid-cols-4 gap-1.5 w-full">
-                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^CARDLOCK?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-amber-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check SIM Lock & remaining attempts counter">^CARDLOCK?</button>
-                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSINFO')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-blue-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check network service state, domain & roaming">^SYSINFO</button>
-                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CREG?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-purple-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check GSM network registration status">+CREG?</button>
-                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CSQ')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-emerald-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check signal quality RSSI / dBm">+CSQ</button>
-                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+COPS?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-sky-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check current cellular operator">+COPS?</button>
-                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-rose-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check 2G/3G mode and band preferences">^SYSCFG?</button>
-                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CPIN?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-bold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-teal-500/50 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer truncate" title="Check SIM PIN readiness">+CPIN?</button>
-                                        <button type="button" onclick="openAtDiagConsole('${escapeHtml(id)}')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-bold bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-400 transition cursor-pointer flex items-center justify-center gap-1" title="Open interactive AT console">
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^CARDLOCK?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check SIM Lock & remaining attempts counter">^CARDLOCK?</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSINFO')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check network service state, domain & roaming">^SYSINFO</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CREG?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check GSM network registration status">+CREG?</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CSQ')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check signal quality RSSI / dBm">+CSQ</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+COPS?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check current cellular operator">+COPS?</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check 2G/3G mode and band preferences">^SYSCFG?</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CPIN?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check SIM PIN readiness">+CPIN?</button>
+                                        <button type="button" onclick="openAtDiagConsole('${escapeHtml(id)}')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-bold bg-[var(--bg-hover)] hover:bg-zinc-700/60 border border-[var(--border-primary)] text-zinc-200 hover:text-white transition cursor-pointer flex items-center justify-center gap-1" title="Open interactive AT console">
                                             <span>${isRtl ? 'وحدة التحكم' : 'Console'}</span> &rarr;
                                         </button>
                                     </div>
                                     <div class="pt-2 border-t border-[var(--border-primary)]/60 grid grid-cols-3 gap-1.5 w-full">
-                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG=14,2,3FFFFFFF,2,4')" class="w-full py-1.5 rounded-lg text-[10px] font-mono font-black text-center bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30 transition cursor-pointer truncate" title="Lock modem to 3G Only (WCDMA / UMTS)">Lock 3G</button>
-                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG=13,1,3FFFFFFF,2,4')" class="w-full py-1.5 rounded-lg text-[10px] font-mono font-black text-center bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 transition cursor-pointer truncate" title="Lock modem to 2G Only (GSM / GPRS)">Lock 2G</button>
-                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG=2,2,3FFFFFFF,2,4')" class="w-full py-1.5 rounded-lg text-[10px] font-mono font-black text-center bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition cursor-pointer truncate" title="Auto: 3G Preferred, 2G Fallback (Recommended default)">Auto 3G/2G</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG=14,2,3FFFFFFF,2,4')" class="w-full py-1.5 rounded-lg text-[10px] font-mono font-semibold text-center bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-zinc-300 hover:text-white border border-[var(--border-primary)] hover:border-zinc-500 transition cursor-pointer truncate" title="Lock modem to 3G Only (WCDMA / UMTS)">Lock 3G</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG=13,1,3FFFFFFF,2,4')" class="w-full py-1.5 rounded-lg text-[10px] font-mono font-semibold text-center bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-zinc-300 hover:text-white border border-[var(--border-primary)] hover:border-zinc-500 transition cursor-pointer truncate" title="Lock modem to 2G Only (GSM / GPRS)">Lock 2G</button>
+                                        <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSCFG=2,2,3FFFFFFF,2,4')" class="w-full py-1.5 rounded-lg text-[10px] font-mono font-semibold text-center bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-zinc-300 hover:text-white border border-[var(--border-primary)] hover:border-zinc-500 transition cursor-pointer truncate" title="Auto: 3G Preferred, 2G Fallback (Recommended default)">Auto 3G/2G</button>
                                     </div>
                                 </div>` : ''}
                             </div>
@@ -2719,19 +3213,30 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     selectedDongleId = normalizedId;
                     updateSmsInboxTitle();
                     if (!options || !options.skipSms || previousSelected !== normalizedId) {
+                        if (previousSelected !== normalizedId) {
+                            activeThreadEndpoint = null;
+                        }
                         filterAndRenderSms();
                     }
                     // Update Live Status & Diagnostics Block
                     updateLiveDiagnostics(dev);
 
                     // Sync select dropdowns
-                    if (ussdTarget) {
+                    isSyncingSelect = true;
+                    if (ussdTarget && ussdTarget.value !== id) {
                         ussdTarget.value = id;
+                        ussdTarget.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                     const cfTarget = document.getElementById('cf-target-dongle');
-                    if (cfTarget) {
+                    if (cfTarget && cfTarget.value !== id) {
                         cfTarget.value = id;
+                        cfTarget.dispatchEvent(new Event('change', { bubbles: true }));
                     }
+                    const replyDongle = document.getElementById('sms-reply-dongle');
+                    if (replyDongle && replyDongle.value.toLowerCase() !== normalizedId.toLowerCase()) {
+                        replyDongle.value = normalizedId;
+                    }
+                    isSyncingSelect = false;
                 } catch (err) {
                     console.error("Error inside selectDevice:", err);
                 }
@@ -2792,13 +3297,29 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             // Sync detail card and table highlight when select dropdown is changed
             if (ussdTarget) {
                 ussdTarget.addEventListener('change', (e) => {
-                    selectDevice(e.target.value);
+                    if (isSyncingSelect) return;
+                    if (e.target.value && e.target.value !== selectedDongleId) {
+                        selectDevice(e.target.value);
+                    }
                 });
             }
             const cfTargetEl = document.getElementById('cf-target-dongle');
             if (cfTargetEl) {
                 cfTargetEl.addEventListener('change', (e) => {
-                    selectDevice(e.target.value);
+                    if (isSyncingSelect) return;
+                    if (e.target.value && e.target.value !== selectedDongleId) {
+                        selectDevice(e.target.value);
+                    }
+                });
+            }
+            const replyDongleEl = document.getElementById('sms-reply-dongle');
+            if (replyDongleEl) {
+                replyDongleEl.addEventListener('change', (e) => {
+                    if (isSyncingSelect) return;
+                    const val = e.target.value;
+                    if (val && val.toLowerCase() !== (selectedDongleId || '').toLowerCase()) {
+                        selectDevice(val);
+                    }
                 });
             }
 
@@ -2809,10 +3330,15 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             function updateSmsInboxTitle() {
                 const deviceEl = document.getElementById('sms-inbox-device');
-                if (!deviceEl) return;
-                deviceEl.textContent = selectedDongleId
-                    ? `${isRtl ? 'الجهاز المحدد' : 'Selected'}: ${selectedDongleId}`
-                    : (isRtl ? 'اختر جهازاً' : 'Select a dongle');
+                if (deviceEl) {
+                    deviceEl.textContent = selectedDongleId
+                        ? `${isRtl ? 'الجهاز المحدد' : 'Selected'}: ${selectedDongleId}`
+                        : (isRtl ? 'اختر جهازاً' : 'Select a dongle');
+                }
+                const replyDongle = document.getElementById('sms-reply-dongle');
+                if (replyDongle && selectedDongleId && replyDongle.value.toLowerCase() !== selectedDongleId.toLowerCase()) {
+                    replyDongle.value = selectedDongleId;
+                }
             }
 
             function updateSmsInboxCount(count) {
@@ -2843,7 +3369,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     if (selectedDongleId && selectedDongleId.toLowerCase() !== sms.dongleId.toLowerCase()) {
                         selectDevice(sms.dongleId);
                     }
-                    showSmsModal(sms.dongleId, sms.sender, sms.content, sms.timestamp);
+                    if (typeof selectSmsThread === 'function') {
+                        selectSmsThread(sms.endpoint || sms.sender);
+                    } else if (typeof showSmsModal === 'function') {
+                        showSmsModal(sms.dongleId, sms.sender, sms.content, sms.timestamp);
+                    }
                     toast.remove();
                 };
                 
@@ -3484,52 +4014,390 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     });
             };
 
-            function renderSmsCard(sms) {
-                const dateStr = new Date(sms.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const card = document.createElement('div');
-                card.className = 'sms-message-card p-3.5 bg-[var(--bg-card)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] rounded-xl transition flex flex-col gap-2 cursor-pointer select-none';
-                card.id = 'sms-' + sms.id;
-                card.innerHTML = `
-                    <div class="flex items-center justify-between gap-2 text-xs">
-                        <div class="flex items-center gap-2 min-w-0">
-                            <span class="bg-[var(--accent-color)] text-white font-mono font-bold px-1.5 py-0.5 rounded text-[9px] uppercase shrink-0">${escapeHtml(sms.dongleId)}</span>
-                            <span class="text-[var(--text-primary)] font-bold font-mono truncate">${escapeHtml(sms.sender)}</span>
-                            <button type="button" class="sms-copy-sender text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded transition cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            </button>
-                        </div>
-                        <span class="text-[var(--text-muted)] font-mono text-[9px] shrink-0">${escapeHtml(dateStr)}</span>
-                    </div>
-                    <p class="text-xs text-[var(--text-secondary)] leading-relaxed select-text font-sans line-clamp-2">${escapeHtml(sms.content)}</p>`;
+            // --- DUAL-PANE SMS PHONE CHAT MESSENGER CONTROLLER ---
 
-                const copyButton = card.querySelector('.sms-copy-sender');
-                copyButton.addEventListener('click', event => {
-                    event.stopPropagation();
-                    copyToClipboard(sms.sender, copyButton);
-                });
-                card.addEventListener('click', () => {
-                    showSmsModal(sms.dongleId, sms.sender, sms.content, sms.timestamp);
-                });
-                return card;
+            function normalizePhoneEndpoint(num) {
+                if (!num) return '';
+                return String(num).replace(/[\s\-\(\)]/g, '').trim();
             }
 
+            function formatRelativeTime(timestamp) {
+                if (!timestamp) return '';
+                const date = new Date(timestamp);
+                const now = new Date();
+                const isToday = date.toDateString() === now.toDateString();
+                const isYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toDateString() === date.toDateString();
+
+                if (isToday) {
+                    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                } else if (isYesterday) {
+                    return isRtl ? 'الأمس' : 'Yesterday';
+                } else {
+                    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                }
+            }
+
+            function groupSmsIntoThreads(messages, filterDongleId = null) {
+                const threadMap = new Map();
+                const sorted = [...messages].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+                sorted.forEach(msg => {
+                    const dId = String(msg.dongleId || '').toLowerCase().trim();
+                    if (filterDongleId && dId !== filterDongleId.toLowerCase().trim()) {
+                        return;
+                    }
+
+                    const rawEndpoint = msg.endpoint || (msg.direction === 'outgoing' ? msg.recipient : msg.sender) || 'Unknown';
+                    const endpoint = normalizePhoneEndpoint(rawEndpoint);
+                    if (!endpoint) return;
+
+                    if (!threadMap.has(endpoint)) {
+                        threadMap.set(endpoint, {
+                            endpoint: endpoint,
+                            displayNumber: rawEndpoint,
+                            contactName: msg.contactName || '',
+                            dongleId: msg.dongleId || 'dongle0',
+                            lastMessage: msg,
+                            messages: []
+                        });
+                    }
+
+                    const thread = threadMap.get(endpoint);
+                    thread.lastMessage = msg;
+                    thread.dongleId = msg.dongleId || thread.dongleId;
+                    if (msg.contactName && !thread.contactName) thread.contactName = msg.contactName;
+                    thread.messages.push(msg);
+                });
+
+                return Array.from(threadMap.values()).sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
+            }
+
+            function renderSmsThreads() {
+                const listEl = document.getElementById('sms-threads-list');
+                if (!listEl) return;
+
+                const threads = groupSmsIntoThreads(allSmsMessages, selectedDongleId);
+                updateSmsInboxCount(threads.length);
+
+                const query = smsSearchQuery.toLowerCase().trim();
+                const filteredThreads = query 
+                    ? threads.filter(t => t.endpoint.toLowerCase().includes(query) || (t.contactName && t.contactName.toLowerCase().includes(query)) || (t.lastMessage?.content && t.lastMessage.content.toLowerCase().includes(query)))
+                    : threads;
+
+                if (filteredThreads.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="text-center py-12 text-zinc-500 text-xs italic" id="sms-empty-placeholder">
+                            ${query ? (isRtl ? 'لا توجد نتائج بحث' : 'No matches found') : (isRtl ? 'لا توجد محادثات لهذه الشريحة' : 'No conversations found for this dongle')}
+                        </div>`;
+                    activeThreadEndpoint = null;
+                    renderChatMessages();
+                    return;
+                }
+
+                // If activeThreadEndpoint is no longer valid for this dongle, reset it
+                if (activeThreadEndpoint && !filteredThreads.some(t => t.endpoint === activeThreadEndpoint)) {
+                    activeThreadEndpoint = null;
+                }
+
+                let html = '';
+                filteredThreads.forEach(t => {
+                    const isActive = activeThreadEndpoint && normalizePhoneEndpoint(activeThreadEndpoint) === t.endpoint;
+                    const lastMsg = t.lastMessage || {};
+                    const isOutgoing = lastMsg.direction === 'outgoing';
+                    const prefix = isOutgoing ? (isRtl ? 'أنت: ' : 'You: ') : '';
+                    const previewText = (prefix + (lastMsg.content || '')).trim();
+                    const timeStr = formatRelativeTime(lastMsg.timestamp);
+                    const avatarLetter = (t.contactName ? t.contactName.trim()[0] : (t.displayNumber ? t.displayNumber.replace(/^\+/, '')[0] : '#')).toUpperCase();
+
+                    html += `
+                        <div class="p-3 flex items-start gap-2.5 cursor-pointer transition select-none hover:bg-[var(--bg-hover)] text-start ${isActive ? 'bg-[var(--bg-hover)] border-s-2 border-[var(--accent-color)]' : ''}" onclick="selectSmsThread('${escapeHtml(t.endpoint)}', true)">
+                            <div class="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs font-mono shrink-0 mt-0.5">
+                                ${escapeHtml(avatarLetter)}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center justify-between gap-1">
+                                    <span class="font-bold text-xs ${isActive ? 'text-[var(--accent-color)] font-black' : 'text-[var(--text-primary)]'} font-mono truncate">${escapeHtml(t.contactName || t.displayNumber)}</span>
+                                    <span class="text-[9px] text-[var(--text-muted)] font-mono shrink-0">${escapeHtml(timeStr)}</span>
+                                </div>
+                                ${t.contactName ? `<p class="text-[10px] text-[var(--text-muted)] font-mono truncate">${escapeHtml(t.displayNumber)}</p>` : ''}
+                                <p class="text-[11px] text-[var(--text-muted)] truncate mt-0.5">${escapeHtml(previewText)}</p>
+                                <div class="flex items-center justify-between mt-1">
+                                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-muted)] uppercase">${escapeHtml(t.dongleId)}</span>
+                                    <span class="text-[9px] text-[var(--text-muted)] font-mono">${t.messages.length} ${isRtl ? 'رسالة' : 'msgs'}</span>
+                                </div>
+                            </div>
+                        </div>`;
+                });
+
+                listEl.innerHTML = html;
+
+                if (!activeThreadEndpoint && filteredThreads.length > 0 && window.innerWidth >= 640) {
+                    selectSmsThread(filteredThreads[0].endpoint, false);
+                } else if (!activeThreadEndpoint) {
+                    renderChatMessages();
+                }
+            }
+
+            window.selectSmsThread = function(endpoint, shouldFocus = false) {
+                activeThreadEndpoint = normalizePhoneEndpoint(endpoint);
+
+                const chatPane = document.getElementById('sms-chat-pane');
+                const threadsPane = document.getElementById('sms-threads-pane');
+                if (chatPane) {
+                    chatPane.classList.remove('hidden');
+                    chatPane.classList.add('flex');
+                }
+                if (threadsPane && window.innerWidth < 640) {
+                    threadsPane.classList.add('hidden');
+                }
+
+                const numberEl = document.getElementById('sms-active-number');
+                const nameEl = document.getElementById('sms-active-contact-name');
+                const avatarEl = document.getElementById('sms-active-avatar');
+                const replyDongleSelect = document.getElementById('sms-reply-dongle');
+
+                const threads = groupSmsIntoThreads(allSmsMessages, selectedDongleId);
+                const activeThread = threads.find(t => t.endpoint === activeThreadEndpoint);
+
+                if (numberEl) numberEl.textContent = activeThread ? activeThread.displayNumber : endpoint;
+                if (nameEl) nameEl.textContent = activeThread?.contactName || '';
+                if (avatarEl) {
+                    const letter = (activeThread?.contactName ? activeThread.contactName.trim()[0] : endpoint.replace(/^\+/, '')[0] || '#').toUpperCase();
+                    avatarEl.textContent = letter;
+                }
+
+                if (replyDongleSelect) {
+                    replyDongleSelect.innerHTML = '';
+                    const devs = (loadedDevices && loadedDevices.length > 0) ? loadedDevices : [];
+                    if (devs.length > 0) {
+                        devs.forEach(d => {
+                            const opt = document.createElement('option');
+                            const id = d.ID || 'dongle0';
+                            opt.value = id;
+                            opt.textContent = `${id} (${d.Number && d.Number !== 'Unknown' ? d.Number : 'No SIM'})`;
+                            if (selectedDongleId && selectedDongleId.toLowerCase() === id.toLowerCase()) {
+                                opt.selected = true;
+                            } else if (activeThread && activeThread.dongleId && activeThread.dongleId.toLowerCase() === id.toLowerCase()) {
+                                opt.selected = true;
+                            }
+                            replyDongleSelect.appendChild(opt);
+                        });
+                    } else {
+                        const fallbackId = (activeThread && activeThread.dongleId) || selectedDongleId || 'dongle0';
+                        const opt = document.createElement('option');
+                        opt.value = fallbackId;
+                        opt.textContent = fallbackId;
+                        opt.selected = true;
+                        replyDongleSelect.appendChild(opt);
+                    }
+                    isSyncingSelect = true;
+                    replyDongleSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    isSyncingSelect = false;
+                }
+
+                renderSmsThreads();
+                renderChatMessages();
+
+                const input = document.getElementById('sms-composer-input');
+                if (shouldFocus && input && window.innerWidth >= 640) {
+                    input.focus({ preventScroll: true });
+                }
+            };
+
+            window.backToThreadList = function() {
+                const chatPane = document.getElementById('sms-chat-pane');
+                const threadsPane = document.getElementById('sms-threads-pane');
+                if (chatPane) {
+                    chatPane.classList.add('hidden');
+                    chatPane.classList.remove('flex');
+                }
+                if (threadsPane) {
+                    threadsPane.classList.remove('hidden');
+                }
+            };
+
+            function renderChatMessages() {
+                const stream = document.getElementById('sms-messages-stream');
+                if (!stream) return;
+
+                const numberEl = document.getElementById('sms-active-number');
+                const nameEl = document.getElementById('sms-active-contact-name');
+                const avatarEl = document.getElementById('sms-active-avatar');
+
+                if (!activeThreadEndpoint) {
+                    stream.innerHTML = `<div class="text-center py-16 text-zinc-500 text-xs italic" id="sms-no-thread-selected">${isRtl ? 'اختر محادثة لعرض سجل الرسائل' : 'Select a conversation to view chat history'}</div>`;
+                    if (numberEl) numberEl.textContent = '-';
+                    if (nameEl) nameEl.textContent = '';
+                    if (avatarEl) avatarEl.textContent = '#';
+                    return;
+                }
+
+                const threads = groupSmsIntoThreads(allSmsMessages, selectedDongleId);
+                const activeThread = threads.find(t => t.endpoint === activeThreadEndpoint);
+                const messages = activeThread ? activeThread.messages : [];
+                if (messages.length === 0) {
+                    stream.innerHTML = `<div class="text-center py-16 text-zinc-500 text-xs italic">${isRtl ? 'لا توجد رسائل سابقة في هذه المحادثة. يمكنك إرسال رسالة الآن.' : 'No messages in this thread yet. Send a message to start chatting.'}</div>`;
+                    return;
+                }
+
+                let html = '';
+                let lastDateHeader = '';
+
+                messages.forEach(msg => {
+                    const msgDate = new Date(msg.timestamp || Date.now());
+                    const dateHeader = msgDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+
+                    if (dateHeader !== lastDateHeader) {
+                        lastDateHeader = dateHeader;
+                        html += `
+                            <div class="flex items-center justify-center my-3">
+                                <span class="px-2.5 py-0.5 rounded-full bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-muted)] text-[10px] font-mono shadow-xs">${escapeHtml(dateHeader)}</span>
+                            </div>`;
+                    }
+
+                    const isOut = msg.direction === 'outgoing';
+                    const timeStr = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    if (isOut) {
+                        html += `
+                            <div class="flex justify-end select-text">
+                                <div class="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-te-xs bg-[var(--accent-color)] text-white p-3 shadow-md flex flex-col gap-1 text-start" dir="auto">
+                                    <p class="text-xs leading-relaxed whitespace-pre-wrap font-sans break-words text-start" dir="auto">${escapeHtml(msg.content)}</p>
+                                    <div class="flex items-center justify-end gap-1 text-[9px] font-mono text-white/80">
+                                        <span>${escapeHtml(timeStr)}</span>
+                                        <span title="Sent">✓</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        html += `
+                            <div class="flex justify-start select-text">
+                                <div class="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-ts-xs bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-primary)] p-3 shadow-sm flex flex-col gap-1 text-start" dir="auto">
+                                    <p class="text-xs leading-relaxed whitespace-pre-wrap font-sans break-words text-[var(--text-primary)] text-start" dir="auto">${escapeHtml(msg.content)}</p>
+                                    <div class="flex items-center justify-start gap-1.5 text-[9px] font-mono text-[var(--text-muted)] mt-0.5">
+                                        <span class="px-1 py-0.5 rounded bg-[var(--bg-hover)] border border-[var(--border-primary)] text-[var(--text-muted)] text-[8px] uppercase font-mono">${escapeHtml(msg.dongleId || 'dongle')}</span>
+                                        <span>${escapeHtml(timeStr)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+
+                stream.innerHTML = html;
+                stream.scrollTop = stream.scrollHeight;
+            }
+
+            window.handleQuickSmsSubmit = async function(event) {
+                if (event) event.preventDefault();
+                const input = document.getElementById('sms-composer-input');
+                const sendBtn = document.getElementById('sms-composer-send-btn');
+                const dongleSelect = document.getElementById('sms-reply-dongle');
+                if (!input || !activeThreadEndpoint) return;
+
+                const message = input.value.trim();
+                if (!message) return;
+
+                const targetDongle = (dongleSelect && dongleSelect.value) ? dongleSelect.value : (selectedDongleId || 'dongle0');
+                if (sendBtn) sendBtn.disabled = true;
+
+                try {
+                    const res = await fetch('/api/gsm-dongles/send-sms', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            dongleId: targetDongle,
+                            to: activeThreadEndpoint,
+                            message: message
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        input.value = '';
+                        const counter = document.getElementById('sms-composer-counter');
+                        if (counter) counter.textContent = '0/160';
+                        showToast(isRtl ? 'تم الإرسال' : 'Sent', isRtl ? 'تم إرسال الرسالة بنجاح' : 'SMS sent successfully', 'success');
+                    } else {
+                        showToast(isRtl ? 'فشل الإرسال' : 'Send Failed', data.error || 'Failed to send SMS', 'error');
+                    }
+                } catch (err) {
+                    showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error');
+                } finally {
+                    if (sendBtn) sendBtn.disabled = false;
+                }
+            };
+
+            window.startNewChatPrompt = function() {
+                const num = prompt(isRtl ? 'أدخل رقم هاتف المحادثة (مثال: +201012345678 أو 01012345678):' : 'Enter phone number (e.g. +201012345678 or 01012345678):');
+                if (!num || !num.trim()) return;
+                const clean = normalizePhoneEndpoint(num);
+                if (clean.length < 3) {
+                    alert(isRtl ? 'رقم الهاتف غير صالح' : 'Invalid phone number');
+                    return;
+                }
+                selectSmsThread(clean);
+            };
+
+            window.deleteActiveThread = async function() {
+                if (!activeThreadEndpoint) return;
+                if (!confirm(isRtl ? 'هل أنت متأكد من حذف هذه المحادثة؟' : 'Are you sure you want to delete this conversation thread?')) return;
+
+                try {
+                    const res = await fetch('/api/gsm-dongles/delete-thread', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            endpoint: activeThreadEndpoint,
+                            dongleId: selectedDongleId || 'all'
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        allSmsMessages = allSmsMessages.filter(m => normalizePhoneEndpoint(m.endpoint || m.sender || m.recipient) !== activeThreadEndpoint);
+                        activeThreadEndpoint = null;
+                        renderSmsThreads();
+                        renderChatMessages();
+                        showToast(isRtl ? 'تم الحذف' : 'Deleted', isRtl ? 'تم حذف المحادثة بنجاح' : 'Thread deleted successfully', 'success');
+                    } else {
+                        showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Failed to delete thread', 'error');
+                    }
+                } catch (err) {
+                    showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error');
+                }
+            };
+
+            window.handleSmsSearch = function(val) {
+                smsSearchQuery = String(val || '');
+                renderSmsThreads();
+            };
+
+            window.handleComposerKeydown = function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleQuickSmsSubmit();
+                }
+            };
+
+            window.handleComposerInput = function(textarea) {
+                const len = textarea.value.length;
+                const isUnicode = /[^\u0000-\u007F]/.test(textarea.value);
+                const limit = isUnicode ? 70 : 160;
+                const counter = document.getElementById('sms-composer-counter');
+                if (counter) {
+                    counter.textContent = `${len}/${limit}${isUnicode ? ' (Unicode)' : ''}`;
+                }
+            };
+
+            window.copyActiveNumber = function() {
+                if (!activeThreadEndpoint) return;
+                navigator.clipboard.writeText(activeThreadEndpoint);
+                showToast(isRtl ? 'تم النسخ' : 'Copied', activeThreadEndpoint, 'info');
+            };
+
             function filterAndRenderSms() {
-                const container = getSmsContainer();
-                if (!container) return;
-
-                if (!selectedDongleId) {
-                    showEmptySmsInbox();
-                    return;
-                }
-
-                const filtered = allSmsMessages.filter(sms => (sms.dongleId || '').toLowerCase() === selectedDongleId.toLowerCase());
-                updateSmsInboxCount(filtered.length);
-                container.innerHTML = '';
-                if (filtered.length === 0) {
-                    showEmptySmsInbox();
-                    return;
-                }
-                filtered.forEach(sms => container.appendChild(renderSmsCard(sms)));
+                renderSmsThreads();
+                renderChatMessages();
             }
 
             window.loadSmsInbox = async function() {
@@ -3538,11 +4406,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     const data = await res.json();
                     if (data.success && data.sms) {
                         allSmsMessages = data.sms;
-                        filterAndRenderSms();
                     } else {
                         allSmsMessages = [];
-                        showEmptySmsInbox();
                     }
+                    renderSmsThreads();
+                    renderChatMessages();
                 } catch (e) {
                     console.error("Failed to load SMS inbox:", e);
                 }
@@ -3557,40 +4425,31 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 }
             };
 
-            function showEmptySmsInbox() {
-                const container = getSmsContainer();
-                if (!container) return;
-                updateSmsInboxCount(0);
-                container.innerHTML = `
-                    <div class="text-center py-8 text-[var(--text-muted)] italic" id="sms-empty-placeholder">
-                        ${isRtl ? 'لا يوجد رسائل واردة حالياً' : 'No incoming SMS messages'}
-                    </div>`;
-            }
-
             // Real-time SMS receivers
             if (socket) {
                 socket.on('newSms', (sms) => {
                     allSmsMessages.unshift(sms);
-                    
-                    // Show a real-time toast notification alert
                     showSmsToast(sms);
-                    
-                    if (selectedDongleId && (sms.dongleId || '').toLowerCase() === selectedDongleId.toLowerCase()) {
-                        const placeholder = document.getElementById('sms-empty-placeholder');
-                        if (placeholder && placeholder.parentNode) {
-                            placeholder.parentNode.removeChild(placeholder);
-                        }
-                        const container = getSmsContainer();
-                        if (container) {
-                            container.insertBefore(renderSmsCard(sms), container.firstChild);
-                        }
-                        updateSmsInboxCount(allSmsMessages.filter(message => (message.dongleId || '').toLowerCase() === selectedDongleId.toLowerCase()).length);
+                    renderSmsThreads();
+                    const msgEndpoint = normalizePhoneEndpoint(sms.endpoint || sms.sender || sms.recipient);
+                    if (activeThreadEndpoint && msgEndpoint === activeThreadEndpoint) {
+                        renderChatMessages();
                     }
                 });
 
                 socket.on('smsCleared', () => {
                     allSmsMessages = [];
-                    showEmptySmsInbox();
+                    activeThreadEndpoint = null;
+                    renderSmsThreads();
+                    renderChatMessages();
+                });
+
+                socket.on('smsThreadDeleted', (data) => {
+                    const ep = normalizePhoneEndpoint(data.endpoint);
+                    allSmsMessages = allSmsMessages.filter(m => normalizePhoneEndpoint(m.endpoint || m.sender || m.recipient) !== ep);
+                    if (activeThreadEndpoint === ep) activeThreadEndpoint = null;
+                    renderSmsThreads();
+                    renderChatMessages();
                 });
             }
 
@@ -3654,7 +4513,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 shadow-xs"></span>
                                     <span class="font-black text-xs text-[var(--text-primary)] truncate">${escapeUsbText(modem.vendorName || '')} ${escapeUsbText(modem.modelName || 'GSM Modem')}</span>
                                 </div>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black text-purple-300 bg-purple-500/20 border border-purple-500/40 shrink-0">${escapeUsbText(modem.hardwareId)}</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black text-black bg-purple-300 border border-purple-400 shrink-0">${escapeUsbText(modem.hardwareId)}</span>
                             </div>
 
                             <div class="grid grid-cols-2 gap-2 text-[10px] font-mono pt-2 border-t border-purple-500/20">
@@ -4290,7 +5149,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     }
                     if (tabTitle) tabTitle.textContent = words.callForwardingTitle || (isRtl ? 'تحويل المكالمات' : 'Call Forwarding');
                     if (tabIcon) {
-                        tabIcon.className = 'w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400';
+                        tabIcon.className = 'flex items-center justify-center text-emerald-400 shrink-0';
                         tabIcon.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l5 5-5 5"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v7a4 4 0 004 4h12"/></svg>';
                     }
                 } else {
@@ -4305,7 +5164,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     }
                     if (tabTitle) tabTitle.textContent = words.ussdTitle;
                     if (tabIcon) {
-                        tabIcon.className = 'w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400';
+                        tabIcon.className = 'flex items-center justify-center text-indigo-400 shrink-0';
                         tabIcon.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>';
                     }
                 }
@@ -4529,7 +5388,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                 el.appendChild(option);
                             });
                             if (selectedVal) {
+                                isSyncingSelect = true;
                                 el.value = selectedVal;
+                                el.dispatchEvent(new Event('change', { bubbles: true }));
+                                isSyncingSelect = false;
                             }
                         }
 
@@ -4541,6 +5403,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         }
 
                         renderDongleCards();
+                        if (typeof updateReportDropdowns === 'function') {
+                            updateReportDropdowns();
+                        }
                         if (nextSelected) {
                             selectDevice(nextSelected, { skipSms: (previousSelected === nextSelected) });
                         } else {
@@ -4584,6 +5449,414 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 });
             }
             setInterval(refreshDevicesList, 3000);
+
+            // -----------------------------------------------------------------
+            // Dongle & SIM State Duration Analytics Controller
+            // -----------------------------------------------------------------
+            let currentReportTab = 'dongles';
+            let cachedReportData = null;
+
+            function formatLocalDatetime(date) {
+                const pad = (n) => String(n).padStart(2, '0');
+                const y = date.getFullYear();
+                const m = pad(date.getMonth() + 1);
+                const d = pad(date.getDate());
+                const h = pad(date.getHours());
+                const min = pad(date.getMinutes());
+                return `${y}-${m}-${d}T${h}:${min}`;
+            }
+
+            function updateReportDropdowns() {
+                const dSelect = document.getElementById('reportDongleSelect');
+                const sSelect = document.getElementById('reportSimSelect');
+                if (!dSelect || !sSelect || !Array.isArray(loadedDevices)) return;
+
+                const curD = dSelect.value || 'ALL';
+                const curS = sSelect.value || 'ALL';
+
+                const dOptions = ['<option value="ALL">' + (isRtl ? 'جميع الأجهزة (الكل)' : 'All Dongles (ALL)') + '</option>'];
+                const sOptions = ['<option value="ALL">' + (isRtl ? 'جميع الشرائح (الكل)' : 'All SIM Numbers (ALL)') + '</option>'];
+                const addedSims = new Set();
+
+                loadedDevices.forEach(dev => {
+                    const dId = String(dev.ID || '').trim();
+                    if (dId) {
+                        dOptions.push(`<option value="${escapeHtml(dId)}"${curD.toLowerCase() === dId.toLowerCase() ? ' selected' : ''}>${escapeHtml(dId)}</option>`);
+                    }
+                    const sNum = String(dev.Number || '').trim();
+                    if (sNum && sNum !== 'Unknown' && sNum !== '-' && !addedSims.has(sNum)) {
+                        addedSims.add(sNum);
+                        sOptions.push(`<option value="${escapeHtml(sNum)}"${curS === sNum ? ' selected' : ''}>${escapeHtml(sNum)}</option>`);
+                    }
+                });
+
+                dSelect.innerHTML = dOptions.join('');
+                sSelect.innerHTML = sOptions.join('');
+            }
+
+            window.setDongleReportTab = function(tab) {
+                currentReportTab = tab;
+                const btnDongles = document.getElementById('report-tab-dongles-btn');
+                const btnSims = document.getElementById('report-tab-sims-btn');
+                if (tab === 'dongles') {
+                    if (btnDongles) {
+                        btnDongles.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition bg-[var(--accent-color)] text-white shadow-sm cursor-pointer';
+                    }
+                    if (btnSims) {
+                        btnSims.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] cursor-pointer';
+                    }
+                } else {
+                    if (btnDongles) {
+                        btnDongles.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] cursor-pointer';
+                    }
+                    if (btnSims) {
+                        btnSims.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition bg-[var(--accent-color)] text-white shadow-sm cursor-pointer';
+                    }
+                }
+                renderDurationTable();
+            };
+
+            let reportStartPicker = null;
+            let reportEndPicker = null;
+
+            function initReportPickers() {
+                if (typeof flatpickr === 'undefined') return;
+                const sEl = document.getElementById('reportStartDate');
+                const eEl = document.getElementById('reportEndDate');
+                if (sEl && !reportStartPicker) {
+                    reportStartPicker = flatpickr(sEl, {
+                        enableTime: true,
+                        dateFormat: "Y-m-d\\TH:i",
+                        altInput: true,
+                        altFormat: "m/d/Y h:i K",
+                        time_24hr: false,
+                        allowInput: true,
+                        scrollInputIntoView: false,
+                        appendTo: document.body,
+                        monthSelectorType: "dropdown",
+                        onReady: function(selectedDates, dateStr, instance) {
+                            if (instance.altInput) {
+                                var origId = instance.input.id || 'reportStartDate';
+                                if (origId.endsWith('_raw')) origId = origId.replace(/_raw$/, '');
+                                instance.input.id = origId + '_raw';
+                                instance.altInput.id = origId;
+                                instance.altInput.name = (instance.input.name || origId) + '_display';
+                                instance.altInput.setAttribute('autocomplete', 'off');
+                                var ariaLabel = instance.input.getAttribute('aria-label') || instance.input.name || origId;
+                                instance.altInput.setAttribute('aria-label', ariaLabel);
+                            }
+                        }
+                    });
+                }
+                if (eEl && !reportEndPicker) {
+                    reportEndPicker = flatpickr(eEl, {
+                        enableTime: true,
+                        dateFormat: "Y-m-d\\TH:i",
+                        altInput: true,
+                        altFormat: "m/d/Y h:i K",
+                        time_24hr: false,
+                        allowInput: true,
+                        scrollInputIntoView: false,
+                        appendTo: document.body,
+                        monthSelectorType: "dropdown",
+                        onReady: function(selectedDates, dateStr, instance) {
+                            if (instance.altInput) {
+                                var origId = instance.input.id || 'reportEndDate';
+                                if (origId.endsWith('_raw')) origId = origId.replace(/_raw$/, '');
+                                instance.input.id = origId + '_raw';
+                                instance.altInput.id = origId;
+                                instance.altInput.name = (instance.input.name || origId) + '_display';
+                                instance.altInput.setAttribute('autocomplete', 'off');
+                                var ariaLabel = instance.input.getAttribute('aria-label') || instance.input.name || origId;
+                                instance.altInput.setAttribute('aria-label', ariaLabel);
+                            }
+                        }
+                    });
+                }
+            }
+
+            window.setDongleReportPreset = function(preset) {
+                initReportPickers();
+                const startInput = document.getElementById('reportStartDate_raw') || document.getElementById('reportStartDate');
+                const endInput = document.getElementById('reportEndDate_raw') || document.getElementById('reportEndDate');
+                if (!startInput || !endInput) return;
+
+                const now = new Date();
+                let start, end;
+                if (preset === 'today') {
+                    start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+                    end = now;
+                } else if (preset === 'yesterday') {
+                    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+                    end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59);
+                } else if (preset === '7days') {
+                    start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    end = now;
+                } else if (preset === '30days') {
+                    start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    end = now;
+                }
+
+                if (reportStartPicker) reportStartPicker.setDate(start, true);
+                else startInput.value = formatLocalDatetime(start);
+
+                if (reportEndPicker) reportEndPicker.setDate(end, true);
+                else endInput.value = formatLocalDatetime(end);
+
+                fetchDongleStateReports();
+            };
+
+            window.toggleReportWorkHours = function(checked) {
+                const c = document.getElementById('report-shift-controls');
+                if (c) {
+                    if (checked) c.classList.remove('hidden');
+                    else c.classList.add('hidden');
+                }
+                fetchDongleStateReports();
+            };
+
+            window.setReportWorkDaysPreset = function(preset) {
+                const checkboxes = document.querySelectorAll('input[name="reportWorkDay"]');
+                checkboxes.forEach(cb => {
+                    const val = parseInt(cb.value, 10);
+                    if (preset === 'sun-thu') {
+                        cb.checked = (val >= 0 && val <= 4);
+                    } else if (preset === 'mon-fri') {
+                        cb.checked = (val >= 1 && val <= 5);
+                    } else if (preset === 'all') {
+                        cb.checked = true;
+                    }
+                });
+                fetchDongleStateReports();
+            };
+            function renderDurationTable() {
+                const tbody = document.getElementById('report-table-body');
+                const colTargetHeader = document.getElementById('report-col-target-header');
+                const colSubtargetHeader = document.getElementById('report-col-subtarget-header');
+                if (!tbody) return;
+
+                if (colTargetHeader && colSubtargetHeader) {
+                    if (currentReportTab === 'dongles') {
+                        colTargetHeader.textContent = isRtl ? 'المودم' : 'Dongle';
+                        colSubtargetHeader.textContent = isRtl ? 'رقم الشريحة' : 'SIM Number';
+                    } else {
+                        colTargetHeader.textContent = isRtl ? 'رقم الشريحة' : 'SIM Number';
+                        colSubtargetHeader.textContent = isRtl ? 'المودم' : 'Dongle';
+                    }
+                }
+
+                if (!cachedReportData) {
+                    tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-xs text-[var(--text-muted)] font-sans">${isRtl ? 'لا توجد بيانات' : 'No data loaded'}</td></tr>`;
+                    return;
+                }
+
+                const items = currentReportTab === 'dongles' ? (cachedReportData.dongleReports || []) : (cachedReportData.simReports || []);
+
+                if (items.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-xs text-[var(--text-muted)] font-sans">${isRtl ? 'لا توجد سجلات مسجلة في هذا النطاق الزمني.' : 'No state logs recorded in this timeframe.'}</td></tr>`;
+                    return;
+                }
+
+                let html = '';
+                items.forEach(item => {
+                    const name = currentReportTab === 'dongles' ? (item.dongle_name || '-') : (item.sim_number || '-');
+                    const secondary = currentReportTab === 'dongles' ? (item.sim_number || '-') : (item.dongle_name || '-');
+                    const free = item.states?.Free || { formatted: '0s', pct: 0 };
+                    const busy = item.states?.Busy || { formatted: '0s', pct: 0, inbound: { calls: 0, formatted: '0s', pct: 0 }, outbound: { calls: 0, formatted: '0s', pct: 0 } };
+                    const notInit = item.states?.['Not Initialized'] || { formatted: '0s', pct: 0 };
+                    const notConn = item.states?.['Not connected'] || { formatted: '0s', pct: 0 };
+                    const uptime = item.uptimePct || 0;
+
+                    const inCalls = busy.inbound?.calls || 0;
+                    const inDur = busy.inbound?.talkFormatted || busy.inbound?.formatted || '0s';
+                    const outCalls = busy.outbound?.calls || 0;
+                    const outDur = busy.outbound?.talkFormatted || busy.outbound?.formatted || '0s';
+
+                    const pctFree = free.pct || 0;
+                    const pctIn = busy.inbound?.pct || 0;
+                    const pctOut = busy.outbound?.pct || 0;
+                    const pctNotInit = notInit.pct || 0;
+                    const pctNotConn = notConn.pct || 0;
+
+                    html += `
+                        <tr class="hover:bg-[var(--bg-hover)] transition-colors border-b border-[var(--border-primary)]/40">
+                            <td class="py-3 px-4 font-black text-white font-mono text-xs">${escapeHtml(name)}</td>
+                            <td class="py-3 px-4 text-sky-300 font-bold font-mono text-xs">${escapeHtml(secondary)}</td>
+                            <td class="py-3 px-4">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-emerald-600 font-bold font-mono text-xs">${free.formatted}</span>
+                                    <span class="text-[11px] text-zinc-300 font-mono font-medium">(${free.pct}%)</span>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4">
+                                <div class="flex flex-col gap-1">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="duration-busy-text font-black font-mono text-xs">${busy.formatted}</span>
+                                        <span class="duration-busy-text text-[11px] font-mono font-bold">(${busy.pct}%)</span>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-1 mt-0.5">
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-300 text-black border border-cyan-400 text-[10px] font-mono font-black" title="${isRtl ? 'المكالمات الواردة' : 'Incoming Calls'}">
+                                            <svg class="w-2.5 h-2.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                                            <span class="text-black font-bold">${inDur} (${inCalls})</span>
+                                        </span>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-300 text-black border border-indigo-400 text-[10px] font-mono font-black" title="${isRtl ? 'المكالمات الصادرة' : 'Outgoing Calls'}">
+                                            <svg class="w-2.5 h-2.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                                            <span class="text-black font-bold">${outDur} (${outCalls})</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-rose-600 font-bold font-mono text-xs">${notInit.formatted}</span>
+                                    <span class="text-[11px] text-zinc-300 font-mono font-medium">(${notInit.pct}%)</span>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-amber-600 font-bold font-mono text-xs">${notConn.formatted}</span>
+                                    <span class="text-[11px] text-zinc-300 font-mono font-medium">(${notConn.pct}%)</span>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 min-w-[140px]">
+                                <div class="w-full h-2 rounded-full bg-zinc-800 overflow-hidden flex" title="${isRtl ? 'جاهز' : 'Free'}: ${pctFree}% | ${isRtl ? 'وارد' : 'Inbound'}: ${pctIn}% | ${isRtl ? 'صادر' : 'Outbound'}: ${pctOut}% | ${isRtl ? 'غير مهيأ' : 'Not Init'}: ${pctNotInit}% | ${isRtl ? 'غير متصل' : 'Disconn'}: ${pctNotConn}%">
+                                    ${pctFree > 0 ? `<div style="width:${pctFree}%" class="h-full bg-emerald-400"></div>` : ''}
+                                    ${pctIn > 0 ? `<div style="width:${pctIn}%" class="h-full bg-cyan-400"></div>` : ''}
+                                    ${pctOut > 0 ? `<div style="width:${pctOut}%" class="h-full bg-indigo-400"></div>` : ''}
+                                    ${pctNotInit > 0 ? `<div style="width:${pctNotInit}%" class="h-full bg-rose-400"></div>` : ''}
+                                    ${pctNotConn > 0 ? `<div style="width:${pctNotConn}%" class="h-full bg-amber-400"></div>` : ''}
+                                </div>
+                                <div class="flex items-center justify-between text-[10px] text-zinc-300 font-mono font-medium mt-1">
+                                    <span>${isRtl ? 'جاهز' : 'Free'}: ${pctFree}%</span>
+                                    <span>${isRtl ? 'مكالمات' : 'Calls'}: ${busy.pct}%</span>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 text-zinc-100 font-mono">
+                                <div class="flex flex-col gap-0.5">
+                                    <span class="font-bold text-white text-xs">${item.totalCalls || 0} ${isRtl ? 'مكالمة' : 'calls'}</span>
+                                    <span class="text-[11px] text-zinc-300 font-medium">${item.talkFormatted || (item.talkMin + 'm') || '0s'} ${isRtl ? 'محادثة' : 'talk'}</span>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <span class="px-2.5 py-1 text-[11px] font-black font-mono rounded-lg inline-flex items-center gap-1.5 ${uptime >= 90 ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-400/30' : uptime >= 60 ? 'bg-amber-500/20 text-amber-600 border border-amber-400/30' : 'bg-rose-500/20 text-rose-600 border border-rose-400/30'}">
+                                    <span class="w-1.5 h-1.5 rounded-full ${uptime >= 90 ? 'bg-emerald-400' : uptime >= 60 ? 'bg-amber-400' : 'bg-rose-400'}"></span>
+                                    ${uptime}%
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html;
+            }
+
+            window.fetchDongleStateReports = async function() {
+                initReportPickers();
+                const startInput = document.getElementById('reportStartDate_raw') || document.getElementById('reportStartDate');
+                const endInput = document.getElementById('reportEndDate_raw') || document.getElementById('reportEndDate');
+                const dSelect = document.getElementById('reportDongleSelect');
+                const sSelect = document.getElementById('reportSimSelect');
+                const refreshBtn = document.getElementById('dongle-report-refresh-btn');
+
+                if (!startInput || !endInput) return;
+                if (refreshBtn) refreshBtn.disabled = true;
+
+                const startDate = startInput.value;
+                const endDate = endInput.value;
+                const dongleId = dSelect ? dSelect.value : 'ALL';
+                const simNumber = sSelect ? sSelect.value : 'ALL';
+
+                const workHoursCheckbox = document.getElementById('reportWorkHoursEnabled');
+                const workHoursEnabled = workHoursCheckbox ? workHoursCheckbox.checked : false;
+                const shiftStart = (document.getElementById('reportShiftStart')?.value || '09:00').trim();
+                const shiftEnd = (document.getElementById('reportShiftEnd')?.value || '17:00').trim();
+                const selectedWorkDays = [];
+                document.querySelectorAll('input[name="reportWorkDay"]:checked').forEach(cb => {
+                    selectedWorkDays.push(cb.value);
+                });
+                const workDaysParam = selectedWorkDays.join(',');
+
+                try {
+                    const url = `/api/config/modem/reports?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&dongleId=${encodeURIComponent(dongleId)}&simNumber=${encodeURIComponent(simNumber)}&workHoursEnabled=${workHoursEnabled}&shiftStart=${encodeURIComponent(shiftStart)}&shiftEnd=${encodeURIComponent(shiftEnd)}&workDays=${encodeURIComponent(workDaysParam)}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+
+                    if (!data.success) {
+                        showToast(isRtl ? 'خطأ في التقرير' : 'Report Error', data.error || 'Failed to fetch report', 'error');
+                        return;
+                    }
+
+                    cachedReportData = data;
+
+                    // Update Global KPI Cards
+                    const g = data.globalSummary || {};
+                    const freeElPct = document.getElementById('report-kpi-free-pct');
+                    const freeElDur = document.getElementById('report-kpi-free-dur');
+                    if (freeElPct) freeElPct.textContent = `${g.Free?.pct || 0}%`;
+                    if (freeElDur) freeElDur.textContent = g.Free?.formatted || '0s';
+
+                    const busyElPct = document.getElementById('report-kpi-busy-pct');
+                    const busyElDur = document.getElementById('report-kpi-busy-dur');
+                    if (busyElPct) busyElPct.textContent = `${g.Busy?.pct || 0}%`;
+                    if (busyElDur) busyElDur.textContent = g.Busy?.formatted || '0s';
+
+                    // Branches
+                    const inDurEl = document.getElementById('report-kpi-inbound-dur');
+                    const inCallsEl = document.getElementById('report-kpi-inbound-calls');
+                    if (inDurEl) inDurEl.textContent = g.Busy?.inbound?.talkFormatted || g.Busy?.inbound?.formatted || '0s';
+                    if (inCallsEl) inCallsEl.textContent = `${g.Busy?.inbound?.calls || 0} ${isRtl ? 'مكالمة' : 'calls'}`;
+
+                    const outDurEl = document.getElementById('report-kpi-outbound-dur');
+                    const outCallsEl = document.getElementById('report-kpi-outbound-calls');
+                    if (outDurEl) outDurEl.textContent = g.Busy?.outbound?.talkFormatted || g.Busy?.outbound?.formatted || '0s';
+                    if (outCallsEl) outCallsEl.textContent = `${g.Busy?.outbound?.calls || 0} ${isRtl ? 'مكالمة' : 'calls'}`;
+
+                    const notInitPct = document.getElementById('report-kpi-notinit-pct');
+                    const notInitDur = document.getElementById('report-kpi-notinit-dur');
+                    if (notInitPct) notInitPct.textContent = `${g['Not Initialized']?.pct || 0}%`;
+                    if (notInitDur) notInitDur.textContent = g['Not Initialized']?.formatted || '0s';
+
+                    const notConnPct = document.getElementById('report-kpi-notconn-pct');
+                    const notConnDur = document.getElementById('report-kpi-notconn-dur');
+                    if (notConnPct) notConnPct.textContent = `${g['Not connected']?.pct || 0}%`;
+                    if (notConnDur) notConnDur.textContent = g['Not connected']?.formatted || '0s';
+
+                    const winLabel = document.getElementById('report-window-label');
+                    if (winLabel) {
+                        let label = data.timeframe?.formattedWindow || '-';
+                        if (data.timeframe?.workHoursEnabled) {
+                            label += ` (${isRtl ? 'الوردية: ' : 'Shift: '}${data.timeframe.shiftStart} - ${data.timeframe.shiftEnd})`;
+                        }
+                        winLabel.textContent = label;
+                    }
+
+                    renderDurationTable();
+                } catch (err) {
+                    console.error('Failed to fetch duration reports:', err);
+                } finally {
+                    if (refreshBtn) refreshBtn.disabled = false;
+                }
+            };
+
+            const initReportDates = () => {
+                initReportPickers();
+                const now = new Date();
+                const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+                if (reportStartPicker) reportStartPicker.setDate(start, true);
+                else {
+                    const sIn = document.getElementById('reportStartDate_raw') || document.getElementById('reportStartDate');
+                    if (sIn) sIn.value = formatLocalDatetime(start);
+                }
+                if (reportEndPicker) reportEndPicker.setDate(now, true);
+                else {
+                    const eIn = document.getElementById('reportEndDate_raw') || document.getElementById('reportEndDate');
+                    if (eIn) eIn.value = formatLocalDatetime(now);
+                }
+            };
+            initReportDates();
+            updateReportDropdowns();
+            setTimeout(() => {
+                fetchDongleStateReports();
+            }, 200);
         }
 
         if (document.readyState === 'loading') {

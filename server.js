@@ -3039,8 +3039,9 @@ async function recordDongleStateLog(dongleName, state, simNumber = null, imsi = 
     const safeName = String(dongleName).trim().toLowerCase();
     const safeState = String(state).trim();
 
-    if (lastKnownDongleStates[safeName] === safeState) return;
-    lastKnownDongleStates[safeName] = safeState;
+    const fingerprint = `${safeState}|${simNumber || ''}|${imsi || ''}|${imei || ''}`;
+    if (lastKnownDongleStates[safeName] === fingerprint) return;
+    lastKnownDongleStates[safeName] = fingerprint;
 
     try {
         await pool.query(
@@ -5908,11 +5909,74 @@ app.post('/api/voicemail-storage/purge', requireAuth, async (req, res) => {
     }
 });
 
+function buildShiftIntervals(startStr, endStr, workHoursEnabled, shiftStartParam, shiftEndParam, workDaysParam) {
+    const winStartMs = moment(startStr).valueOf();
+    const winEndMs = moment(endStr).valueOf();
+    if (!workHoursEnabled) {
+        return [{ startMs: winStartMs, endMs: winEndMs }];
+    }
+    const [startH, startM] = (shiftStartParam || '09:00').split(':').map(n => parseInt(n, 10) || 0);
+    const [endH, endM] = (shiftEndParam || '17:00').split(':').map(n => parseInt(n, 10) || 0);
+
+    let workDays = [0, 1, 2, 3, 4]; // Default: Sun-Thu
+    if (workDaysParam !== undefined && workDaysParam !== null && workDaysParam !== '') {
+        const rawDays = Array.isArray(workDaysParam) ? workDaysParam : String(workDaysParam).split(',');
+        workDays = rawDays.map(d => parseInt(d, 10)).filter(d => !isNaN(d) && d >= 0 && d <= 6);
+    }
+
+    const intervals = [];
+    const currDay = moment(startStr).startOf('day');
+    const lastDay = moment(endStr).endOf('day');
+
+    while (currDay.isSameOrBefore(lastDay, 'day')) {
+        const dayOfWeek = currDay.day();
+        if (workDays.includes(dayOfWeek)) {
+            if (startH < endH || (startH === endH && startM < endM)) {
+                const shiftStartMs = currDay.clone().hour(startH).minute(startM).second(0).millisecond(0).valueOf();
+                const shiftEndMs = currDay.clone().hour(endH).minute(endM).second(0).millisecond(0).valueOf();
+                const s = Math.max(winStartMs, shiftStartMs);
+                const e = Math.min(winEndMs, shiftEndMs);
+                if (e > s) intervals.push({ startMs: s, endMs: e });
+            } else {
+                // Overnight shift (e.g. 22:00 to 06:00)
+                const s1 = Math.max(winStartMs, currDay.clone().hour(startH).minute(startM).second(0).millisecond(0).valueOf());
+                const e1 = Math.min(winEndMs, currDay.clone().hour(23).minute(59).second(59).millisecond(999).valueOf());
+                if (e1 > s1) intervals.push({ startMs: s1, endMs: e1 });
+
+                const s2 = Math.max(winStartMs, currDay.clone().hour(0).minute(0).second(0).millisecond(0).valueOf());
+                const e2 = Math.min(winEndMs, currDay.clone().hour(endH).minute(endM).second(0).millisecond(0).valueOf());
+                if (e2 > s2) intervals.push({ startMs: s2, endMs: e2 });
+            }
+        }
+        currDay.add(1, 'day');
+    }
+    return intervals;
+}
+
+function calculateShiftOverlapSec(startMs, endMs, intervals) {
+    if (endMs <= startMs || !intervals || !intervals.length) return 0;
+    let durSec = 0;
+    for (const inv of intervals) {
+        const s = Math.max(startMs, inv.startMs);
+        const e = Math.min(endMs, inv.endMs);
+        if (e > s) {
+            durSec += Math.floor((e - s) / 1000);
+        }
+    }
+    return durSec;
+}
+
 // --- API: GENERAL EXTENSIONS OVERVIEW ---
 app.get('/api/ext-overview', async (req, res) => {
     try {
         const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
         const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+
+        const workHoursEnabled = req.query.workHoursEnabled === 'true' || req.query.workHoursEnabled === true || req.query.workHoursEnabled === '1';
+        const shiftStart = req.query.shiftStart ? String(req.query.shiftStart).trim() : '09:00';
+        const shiftEnd = req.query.shiftEnd ? String(req.query.shiftEnd).trim() : '17:00';
+        const workDays = req.query.workDays;
+        const activeIntervals = buildShiftIntervals(startDate, endDate, workHoursEnabled, shiftStart, shiftEnd, workDays);
 
         const [rows] = await pool.query(`SELECT src, dst, billsec, ${CDR_DISPOSITION_SQL} as disposition, channel, dstchannel FROM ${tables.cdr} c WHERE calldate BETWEEN ? AND ? ${CDR_HISTORY_FILTERS_SQL}`, [startDate, endDate]);
 
@@ -5934,6 +5998,11 @@ app.get('/api/ext-overview', async (req, res) => {
         });
 
         rows.forEach(row => {
+            if (workHoursEnabled) {
+                const callDateMs = moment(row.calldate).valueOf();
+                const isInShift = activeIntervals.some(inv => callDateMs >= inv.startMs && callDateMs <= inv.endMs);
+                if (!isInShift) return;
+            }
             const sec = parseInt(row.billsec) || 0;
             const callClass = classifyCdr(row);
             const srcExt = row.src || getExtensionFromChannel(row.channel);
@@ -5969,21 +6038,38 @@ app.get('/api/ext-overview', async (req, res) => {
             }
         });
 
-        const [statusRows] = await pool.query(
-            `SELECT extension, status, SUM(duration_seconds) as total_sec
-             FROM ${tables.extensionStatusLogs}
-             WHERE end_time >= ? AND start_time <= ?
-             GROUP BY extension, status`,
-            [startDate, endDate]
-        );
-
         const statusMap = {};
-        statusRows.forEach(r => {
-            if (!statusMap[r.extension]) {
-                statusMap[r.extension] = { offline: 0, idle: 0, ringing: 0, incall: 0 };
-            }
-            statusMap[r.extension][r.status] = parseInt(r.total_sec) || 0;
-        });
+        if (workHoursEnabled) {
+            const [rawLogs] = await pool.query(
+                `SELECT extension, status, start_time, end_time, duration_seconds
+                 FROM ${tables.extensionStatusLogs}
+                 WHERE end_time >= ? AND start_time <= ?`,
+                [startDate, endDate]
+            );
+            rawLogs.forEach(r => {
+                if (!statusMap[r.extension]) {
+                    statusMap[r.extension] = { offline: 0, idle: 0, ringing: 0, incall: 0 };
+                }
+                const sMs = new Date(r.start_time).getTime();
+                const eMs = new Date(r.end_time).getTime();
+                const dur = calculateShiftOverlapSec(sMs, eMs, activeIntervals);
+                statusMap[r.extension][r.status] = (statusMap[r.extension][r.status] || 0) + dur;
+            });
+        } else {
+            const [statusRows] = await pool.query(
+                `SELECT extension, status, SUM(duration_seconds) as total_sec
+                 FROM ${tables.extensionStatusLogs}
+                 WHERE end_time >= ? AND start_time <= ?
+                 GROUP BY extension, status`,
+                [startDate, endDate]
+            );
+            statusRows.forEach(r => {
+                if (!statusMap[r.extension]) {
+                    statusMap[r.extension] = { offline: 0, idle: 0, ringing: 0, incall: 0 };
+                }
+                statusMap[r.extension][r.status] = parseInt(r.total_sec) || 0;
+            });
+        }
 
         const nowMs = Date.now();
         const startFilterMs = new Date(startDate).getTime();
@@ -6004,7 +6090,9 @@ app.get('/api/ext-overview', async (req, res) => {
                 const openStart = Math.max(startFilterMs, cached.since.getTime());
                 const openEnd = Math.min(endFilterMs, nowMs);
                 if (openEnd > openStart) {
-                    const openSec = Math.round((openEnd - openStart) / 1000);
+                    const openSec = workHoursEnabled
+                        ? calculateShiftOverlapSec(openStart, openEnd, activeIntervals)
+                        : Math.round((openEnd - openStart) / 1000);
                     st[cached.status] = (st[cached.status] || 0) + openSec;
                 }
             }
@@ -6044,6 +6132,12 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
         const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
         const direction = req.query.direction || 'all';
 
+        const workHoursEnabled = req.query.workHoursEnabled === 'true' || req.query.workHoursEnabled === true || req.query.workHoursEnabled === '1';
+        const shiftStart = req.query.shiftStart ? String(req.query.shiftStart).trim() : '09:00';
+        const shiftEnd = req.query.shiftEnd ? String(req.query.shiftEnd).trim() : '17:00';
+        const workDays = req.query.workDays;
+        const activeIntervals = buildShiftIntervals(startDate, endDate, workHoursEnabled, shiftStart, shiftEnd, workDays);
+
         const [rows] = await pool.query(
              `SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.channel, c.dstchannel, c.uniqueid, c.cnum
               FROM ${tables.cdr} c
@@ -6068,6 +6162,11 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
         };
 
         rows.forEach(row => {
+            if (workHoursEnabled) {
+                const callDateMs = moment(row.calldate).valueOf();
+                const isInShift = activeIntervals.some(inv => callDateMs >= inv.startMs && callDateMs <= inv.endMs);
+                if (!isInShift) return;
+            }
             const sec = parseInt(row.billsec) || 0;
             const callClass = classifyCdr(row);
             const isSrc = row.src === extension || row.cnum === extension || getExtensionFromChannel(row.channel) === extension;
@@ -6142,6 +6241,11 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
 
         stats.recentCalls = [];
         for (const row of rows) {
+            if (workHoursEnabled) {
+                const callDateMs = moment(row.calldate).valueOf();
+                const isInShift = activeIntervals.some(inv => callDateMs >= inv.startMs && callDateMs <= inv.endMs);
+                if (!isInShift) continue;
+            }
             const sec = parseInt(row.billsec) || 0;
             const callClass = classifyCdr(row);
             const isSrc = row.src === extension || row.cnum === extension || getExtensionFromChannel(row.channel) === extension;
@@ -6162,20 +6266,35 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
             if (stats.recentCalls.length >= 50) break;
         }
         // Status tracking aggregation
-        const [statusAggRows] = await pool.query(
-            `SELECT status, SUM(duration_seconds) as total_sec, COUNT(*) as transitions_count
-             FROM ${tables.extensionStatusLogs}
-             WHERE extension = ? AND end_time >= ? AND start_time <= ?
-             GROUP BY status`,
-            [extension, startDate, endDate]
-        );
-
         const statusTotals = { offline: 0, idle: 0, ringing: 0, incall: 0 };
-        statusAggRows.forEach(r => {
-            if (statusTotals[r.status] !== undefined) {
-                statusTotals[r.status] = parseInt(r.total_sec) || 0;
-            }
-        });
+        if (workHoursEnabled) {
+            const [rawLogs] = await pool.query(
+                `SELECT status, start_time, end_time, duration_seconds
+                 FROM ${tables.extensionStatusLogs}
+                 WHERE extension = ? AND end_time >= ? AND start_time <= ?`,
+                [extension, startDate, endDate]
+            );
+            rawLogs.forEach(r => {
+                if (statusTotals[r.status] !== undefined) {
+                    const sMs = new Date(r.start_time).getTime();
+                    const eMs = new Date(r.end_time).getTime();
+                    statusTotals[r.status] += calculateShiftOverlapSec(sMs, eMs, activeIntervals);
+                }
+            });
+        } else {
+            const [statusAggRows] = await pool.query(
+                `SELECT status, SUM(duration_seconds) as total_sec, COUNT(*) as transitions_count
+                 FROM ${tables.extensionStatusLogs}
+                 WHERE extension = ? AND end_time >= ? AND start_time <= ?
+                 GROUP BY status`,
+                [extension, startDate, endDate]
+            );
+            statusAggRows.forEach(r => {
+                if (statusTotals[r.status] !== undefined) {
+                    statusTotals[r.status] = parseInt(r.total_sec) || 0;
+                }
+            });
+        }
 
         const nowMs = Date.now();
         const startFilterMs = new Date(startDate).getTime();
@@ -6185,7 +6304,9 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
             const openStart = Math.max(startFilterMs, cached.since.getTime());
             const openEnd = Math.min(endFilterMs, nowMs);
             if (openEnd > openStart) {
-                const openSec = Math.round((openEnd - openStart) / 1000);
+                const openSec = workHoursEnabled
+                    ? calculateShiftOverlapSec(openStart, openEnd, activeIntervals)
+                    : Math.round((openEnd - openStart) / 1000);
                 statusTotals[cached.status] = (statusTotals[cached.status] || 0) + openSec;
             }
         }
@@ -7510,19 +7631,23 @@ function startUssdLogMonitor() {
                 // Trim trailing quote
                 content = content.replace(/'\s*$/, '').trim();
                 
+                const cleanSender = String(sender || '').trim();
                 const newSms = {
-                    id: Date.now() + '-' + Math.floor(Math.random() * 1000),
+                    id: 'in-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
                     dongleId,
-                    sender,
+                    sender: cleanSender,
+                    recipient: '',
+                    endpoint: cleanSender,
+                    direction: 'incoming',
                     content,
                     timestamp: Date.now()
                 };
                 const inbox = readSmsInbox();
                 inbox.unshift(newSms);
-                if (inbox.length > 100) inbox.pop();
+                if (inbox.length > 500) inbox.pop();
                 saveSmsInbox(inbox);
                 io.emit('newSms', newSms);
-                console.log(`GSM MONITOR: Saved incoming SMS on ${dongleId} from ${sender} -> ${content}`);
+                console.log(`GSM MONITOR: Saved incoming SMS on ${dongleId} from ${cleanSender} -> ${content}`);
             }
         }
         
@@ -9788,11 +9913,33 @@ app.post('/api/gsm-dongles/send-sms', requireAuth, requireActionPermission('gsm-
             }
 
             const out = (stdout || '').trim();
+            const sentSms = {
+                id: 'out-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+                dongleId: targetDongle,
+                sender: 'me',
+                recipient: cleanTo,
+                endpoint: cleanTo,
+                direction: 'outgoing',
+                content: cleanMessage,
+                timestamp: Date.now(),
+                status: 'sent'
+            };
+            try {
+                const inbox = readSmsInbox();
+                inbox.unshift(sentSms);
+                if (inbox.length > 500) inbox.pop();
+                saveSmsInbox(inbox);
+                io.emit('newSms', sentSms);
+            } catch (saveErr) {
+                console.error('Failed to save sent SMS to inbox:', saveErr.message);
+            }
+
             res.json({
                 success: true,
                 message: `SMS sent successfully via ${targetDongle}`,
                 dongle: targetDongle,
                 to: cleanTo,
+                sms: sentSms,
                 output: out
             });
         });
@@ -9806,6 +9953,29 @@ app.post('/api/gsm-dongles/clear-sms', requireAuth, requireActionPermission('gsm
         saveSmsInbox([]);
         io.emit('smsCleared');
         res.json({ success: true, message: 'SMS inbox cleared.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Endpoint to delete a specific SMS conversation thread
+app.post('/api/gsm-dongles/delete-thread', requireAuth, requireActionPermission('gsm-sms-send'), (req, res) => {
+    try {
+        const { endpoint, dongleId } = req.body;
+        if (!endpoint) return res.status(400).json({ success: false, error: 'Endpoint phone number is required.' });
+        const cleanEndpoint = String(endpoint).replace(/[\s\-\(\)]/g, '').trim();
+        let inbox = readSmsInbox();
+        inbox = inbox.filter(msg => {
+            const msgEndpoint = String(msg.endpoint || msg.sender || msg.recipient || '').replace(/[\s\-\(\)]/g, '').trim();
+            const matchesEndpoint = msgEndpoint === cleanEndpoint || msgEndpoint.endsWith(cleanEndpoint) || cleanEndpoint.endsWith(msgEndpoint);
+            if (dongleId && String(dongleId).toLowerCase() !== 'all') {
+                return !(matchesEndpoint && String(msg.dongleId || '').toLowerCase() === String(dongleId).toLowerCase());
+            }
+            return !matchesEndpoint;
+        });
+        saveSmsInbox(inbox);
+        io.emit('smsThreadDeleted', { endpoint: cleanEndpoint, dongleId });
+        res.json({ success: true, message: 'Thread deleted successfully.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -14054,8 +14224,52 @@ app.get('/api/config/modem/reports', async (req, res) => {
 
         const winStartMs = moment(startStr).valueOf();
         const winEndMs = moment(endStr).valueOf();
-        const totalWinSec = Math.max(1, Math.floor((winEndMs - winStartMs) / 1000));
 
+        const workHoursEnabled = req.query.workHoursEnabled === 'true' || req.query.workHoursEnabled === true || req.query.workHoursEnabled === '1';
+        const shiftStartParam = req.query.shiftStart ? String(req.query.shiftStart).trim() : '09:00';
+        const shiftEndParam = req.query.shiftEnd ? String(req.query.shiftEnd).trim() : '17:00';
+
+        let workDays = [0, 1, 2, 3, 4]; // Default: Sun-Thu (0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu)
+        if (req.query.workDays !== undefined && req.query.workDays !== null && req.query.workDays !== '') {
+            const rawDays = Array.isArray(req.query.workDays) ? req.query.workDays : String(req.query.workDays).split(',');
+            workDays = rawDays.map(d => parseInt(d, 10)).filter(d => !isNaN(d) && d >= 0 && d <= 6);
+        }
+
+        const activeIntervals = [];
+        if (!workHoursEnabled) {
+            activeIntervals.push({ startMs: winStartMs, endMs: winEndMs });
+        } else {
+            const [startH, startM] = shiftStartParam.split(':').map(n => parseInt(n, 10) || 0);
+            const [endH, endM] = shiftEndParam.split(':').map(n => parseInt(n, 10) || 0);
+
+            const currDay = moment(startStr).startOf('day');
+            const lastDay = moment(endStr).endOf('day');
+
+            while (currDay.isSameOrBefore(lastDay, 'day')) {
+                const dayOfWeek = currDay.day();
+                if (workDays.includes(dayOfWeek)) {
+                    if (startH < endH || (startH === endH && startM < endM)) {
+                        const shiftStartMs = currDay.clone().hour(startH).minute(startM).second(0).millisecond(0).valueOf();
+                        const shiftEndMs = currDay.clone().hour(endH).minute(endM).second(0).millisecond(0).valueOf();
+                        const s = Math.max(winStartMs, shiftStartMs);
+                        const e = Math.min(winEndMs, shiftEndMs);
+                        if (e > s) activeIntervals.push({ startMs: s, endMs: e });
+                    } else {
+                        // Overnight shift (e.g. 22:00 to 06:00)
+                        const s1 = Math.max(winStartMs, currDay.clone().hour(startH).minute(startM).second(0).millisecond(0).valueOf());
+                        const e1 = Math.min(winEndMs, currDay.clone().hour(23).minute(59).second(59).millisecond(999).valueOf());
+                        if (e1 > s1) activeIntervals.push({ startMs: s1, endMs: e1 });
+
+                        const s2 = Math.max(winStartMs, currDay.clone().hour(0).minute(0).second(0).millisecond(0).valueOf());
+                        const e2 = Math.min(winEndMs, currDay.clone().hour(endH).minute(endM).second(0).millisecond(0).valueOf());
+                        if (e2 > s2) activeIntervals.push({ startMs: s2, endMs: e2 });
+                    }
+                }
+                currDay.add(1, 'day');
+            }
+        }
+
+        const totalWinSec = Math.max(1, activeIntervals.reduce((acc, inv) => acc + Math.floor((inv.endMs - inv.startMs) / 1000), 0));
         let sql = `
             SELECT dongle_name, sim_number, imsi, imei, state,
                    started_at, COALESCE(ended_at, NOW()) as ended_at
@@ -14077,37 +14291,20 @@ app.get('/api/config/modem/reports', async (req, res) => {
         const [logs] = await pool.query(sql, queryParams);
 
         // Fetch CDR statistics for dongles in timeframe
-        const [cdrRows] = await pool.query(`
-            SELECT channel, dstchannel, billsec, disposition, calldate
-            FROM ${tables.cdr}
-            WHERE calldate BETWEEN ? AND ?
-              AND (channel LIKE 'Dongle/%' OR dstchannel LIKE 'Dongle/%')
-        `, [startStr, endStr]);
-
-        const dongleCdrMap = {};
-        cdrRows.forEach(row => {
-            const mSrc = (row.channel || '').match(/dongle\/(dongle\d+)/i);
-            const mDst = (row.dstchannel || '').match(/dongle\/(dongle\d+)/i);
-            const dId = (mSrc && mSrc[1] ? mSrc[1] : (mDst && mDst[1] ? mDst[1] : '')).toLowerCase();
-            if (dId) {
-                dongleCdrMap[dId] = dongleCdrMap[dId] || { totalCalls: 0, answeredCalls: 0, talkSec: 0 };
-                dongleCdrMap[dId].totalCalls++;
-                if (row.disposition === 'ANSWERED') {
-                    dongleCdrMap[dId].answeredCalls++;
-                    dongleCdrMap[dId].talkSec += (parseInt(row.billsec) || 0);
-                }
-            }
-        });
-
         // Group State Durations by Dongle & SIM
         const dongleStats = {};
         const simStats = {};
+        const dongleToSimMap = {};
         const globalStateSec = { Free: 0, Busy: 0, 'Not Initialized': 0, 'Not connected': 0, Other: 0 };
 
         logs.forEach(log => {
             const dName = (log.dongle_name || 'unknown').toLowerCase();
             const simNum = log.sim_number || log.imsi || 'Unknown SIM';
             const stateRaw = String(log.state || 'Unknown').trim();
+
+            if (dName && log.sim_number && log.sim_number !== 'Unknown') {
+                dongleToSimMap[dName] = log.sim_number;
+            }
 
             let stateKey = 'Other';
             if (/free|ready|idle/i.test(stateRaw)) stateKey = 'Free';
@@ -14117,25 +14314,32 @@ app.get('/api/config/modem/reports', async (req, res) => {
 
             const logStartMs = Math.max(winStartMs, moment(log.started_at).valueOf());
             const logEndMs = Math.min(winEndMs, moment(log.ended_at).valueOf());
-            const durSec = Math.max(0, Math.floor((logEndMs - logStartMs) / 1000));
+            let durSec = 0;
+            if (logEndMs > logStartMs) {
+                for (const inv of activeIntervals) {
+                    const s = Math.max(logStartMs, inv.startMs);
+                    const e = Math.min(logEndMs, inv.endMs);
+                    if (e > s) {
+                        durSec += Math.floor((e - s) / 1000);
+                    }
+                }
+            }
 
             globalStateSec[stateKey] = (globalStateSec[stateKey] || 0) + durSec;
 
             if (!dongleStats[dName]) {
                 dongleStats[dName] = {
                     dongle_name: dName,
-                    sim_number: log.sim_number || 'Unknown',
-                    imsi: log.imsi || '',
-                    imei: log.imei || '',
+                    sim_numbers: new Set(),
+                    imsis: new Set(),
+                    imeis: new Set(),
                     statesSec: { Free: 0, Busy: 0, 'Not Initialized': 0, 'Not connected': 0, Other: 0 },
                     totalLoggedSec: 0
                 };
             }
-            if (log.sim_number && dongleStats[dName].sim_number === 'Unknown') {
-                dongleStats[dName].sim_number = log.sim_number;
-            }
-            if (log.imsi && !dongleStats[dName].imsi) dongleStats[dName].imsi = log.imsi;
-            if (log.imei && !dongleStats[dName].imei) dongleStats[dName].imei = log.imei;
+            if (log.sim_number && log.sim_number !== 'Unknown') dongleStats[dName].sim_numbers.add(log.sim_number);
+            if (log.imsi) dongleStats[dName].imsis.add(log.imsi);
+            if (log.imei) dongleStats[dName].imeis.add(log.imei);
 
             dongleStats[dName].statesSec[stateKey] = (dongleStats[dName].statesSec[stateKey] || 0) + durSec;
             dongleStats[dName].totalLoggedSec += durSec;
@@ -14143,14 +14347,101 @@ app.get('/api/config/modem/reports', async (req, res) => {
             if (!simStats[simNum]) {
                 simStats[simNum] = {
                     sim_number: simNum,
-                    dongle_name: dName,
-                    imsi: log.imsi || '',
+                    dongles: new Set(),
+                    imsis: new Set(),
                     statesSec: { Free: 0, Busy: 0, 'Not Initialized': 0, 'Not connected': 0, Other: 0 },
                     totalLoggedSec: 0
                 };
             }
+            simStats[simNum].dongles.add(dName);
+            if (log.imsi) simStats[simNum].imsis.add(log.imsi);
             simStats[simNum].statesSec[stateKey] = (simStats[simNum].statesSec[stateKey] || 0) + durSec;
             simStats[simNum].totalLoggedSec += durSec;
+        });
+
+        // Fetch CDR statistics with Inbound and Outbound branching
+        const [cdrRows] = await pool.query(`
+            SELECT channel, dstchannel, lastdata, billsec, duration, disposition, calldate, dst, src, did
+            FROM ${tables.cdr}
+            WHERE calldate BETWEEN ? AND ?
+              AND (channel LIKE 'Dongle/%' OR dstchannel LIKE 'Dongle/%' OR lastdata LIKE 'Dongle/%')
+        `, [startStr, endStr]);
+
+        const initCdrStat = () => ({
+            totalCalls: 0,
+            answeredCalls: 0,
+            talkSec: 0,
+            inbound: { calls: 0, answered: 0, talkSec: 0 },
+            outbound: { calls: 0, answered: 0, talkSec: 0 }
+        });
+
+        const dongleCdrMap = {};
+        const simCdrMap = {};
+        let globalInboundCalls = 0;
+        let globalInboundAnswered = 0;
+        let globalInboundTalkSec = 0;
+        let globalOutboundCalls = 0;
+        let globalOutboundAnswered = 0;
+        let globalOutboundTalkSec = 0;
+
+        cdrRows.forEach(row => {
+            const ch = String(row.channel || '');
+            const dstCh = String(row.dstchannel || '');
+            const lastData = String(row.lastdata || '');
+
+            const mSrc = ch.match(/dongle\/(dongle\d+)/i);
+            const mDst = dstCh.match(/dongle\/(dongle\d+)/i);
+            const mLast = lastData.match(/dongle\/(dongle\d+)/i);
+
+            const dId = (mSrc && mSrc[1] ? mSrc[1] : (mDst && mDst[1] ? mDst[1] : (mLast && mLast[1] ? mLast[1] : ''))).toLowerCase();
+            if (!dId) return;
+
+            if (workHoursEnabled) {
+                const callDateMs = moment(row.calldate).valueOf();
+                const isInShift = activeIntervals.some(inv => callDateMs >= inv.startMs && callDateMs <= inv.endMs);
+                if (!isInShift) return;
+            }
+            const isIncoming = Boolean(mSrc);
+            const billsec = Math.max(0, parseInt(row.billsec, 10) || 0);
+            const isAnswered = String(row.disposition || '').toUpperCase() === 'ANSWERED';
+
+            if (!dongleCdrMap[dId]) dongleCdrMap[dId] = initCdrStat();
+            const dStat = dongleCdrMap[dId];
+            dStat.totalCalls++;
+            if (isAnswered) dStat.answeredCalls++;
+            dStat.talkSec += billsec;
+
+            if (isIncoming) {
+                dStat.inbound.calls++;
+                if (isAnswered) dStat.inbound.answered++;
+                dStat.inbound.talkSec += billsec;
+                globalInboundCalls++;
+                if (isAnswered) globalInboundAnswered++;
+                globalInboundTalkSec += billsec;
+            } else {
+                dStat.outbound.calls++;
+                if (isAnswered) dStat.outbound.answered++;
+                dStat.outbound.talkSec += billsec;
+                globalOutboundCalls++;
+                if (isAnswered) globalOutboundAnswered++;
+                globalOutboundTalkSec += billsec;
+            }
+
+            const targetSim = dongleToSimMap[dId] || (dongleStats[dId] && dongleStats[dId].sim_number && dongleStats[dId].sim_number !== 'Unknown' ? dongleStats[dId].sim_number : (row.did ? String(row.did).trim() : 'Unknown SIM'));
+            if (!simCdrMap[targetSim]) simCdrMap[targetSim] = initCdrStat();
+            const sStat = simCdrMap[targetSim];
+            sStat.totalCalls++;
+            if (isAnswered) sStat.answeredCalls++;
+            sStat.talkSec += billsec;
+            if (isIncoming) {
+                sStat.inbound.calls++;
+                if (isAnswered) sStat.inbound.answered++;
+                sStat.inbound.talkSec += billsec;
+            } else {
+                sStat.outbound.calls++;
+                if (isAnswered) sStat.outbound.answered++;
+                sStat.outbound.talkSec += billsec;
+            }
         });
 
         const formatDuration = (sec) => {
@@ -14168,7 +14459,7 @@ app.get('/api/config/modem/reports', async (req, res) => {
         const formatReportList = (mapObj, isDongle = true) => {
             return Object.values(mapObj).map(item => {
                 const totalSec = Math.max(1, item.totalLoggedSec || totalWinSec);
-                const cdr = isDongle ? (dongleCdrMap[item.dongle_name] || { totalCalls: 0, answeredCalls: 0, talkSec: 0 }) : { totalCalls: 0, answeredCalls: 0, talkSec: 0 };
+                const cdr = isDongle ? (dongleCdrMap[item.dongle_name] || initCdrStat()) : (simCdrMap[item.sim_number] || initCdrStat());
                 const statesFormatted = {};
                 for (const [sKey, sSec] of Object.entries(item.statesSec)) {
                     statesFormatted[sKey] = {
@@ -14177,15 +14468,61 @@ app.get('/api/config/modem/reports', async (req, res) => {
                         pct: Math.round((sSec / totalSec) * 1000) / 10
                     };
                 }
+
+                const busySec = item.statesSec.Busy || 0;
+                const busyInboundSec = cdr.talkSec > 0 ? Math.round((busySec * cdr.inbound.talkSec) / cdr.talkSec) : (cdr.inbound.calls > 0 && cdr.outbound.calls === 0 ? busySec : 0);
+                const busyOutboundSec = Math.max(0, busySec - busyInboundSec);
+
+                statesFormatted.Busy = {
+                    sec: busySec,
+                    formatted: formatDuration(busySec),
+                    pct: Math.round((busySec / totalSec) * 1000) / 10,
+                    inbound: {
+                        calls: cdr.inbound.calls,
+                        answered: cdr.inbound.answered,
+                        sec: busyInboundSec,
+                        talkSec: cdr.inbound.talkSec,
+                        formatted: formatDuration(busyInboundSec),
+                        pct: Math.round((busyInboundSec / totalSec) * 1000) / 10,
+                        talkFormatted: formatDuration(cdr.inbound.talkSec)
+                    },
+                    outbound: {
+                        calls: cdr.outbound.calls,
+                        answered: cdr.outbound.answered,
+                        sec: busyOutboundSec,
+                        talkSec: cdr.outbound.talkSec,
+                        formatted: formatDuration(busyOutboundSec),
+                        pct: Math.round((busyOutboundSec / totalSec) * 1000) / 10,
+                        talkFormatted: formatDuration(cdr.outbound.talkSec)
+                    }
+                };
+
                 const readySec = (item.statesSec.Free || 0) + (item.statesSec.Busy || 0);
                 const uptimePct = Math.round((readySec / totalSec) * 1000) / 10;
+                const simNumberDisplay = item.sim_numbers ? (Array.from(item.sim_numbers).join(', ') || 'Unknown') : (item.sim_number || 'Unknown');
+                const dongleNameDisplay = item.dongles ? (Array.from(item.dongles).join(', ') || item.dongle_name || '-') : (item.dongle_name || '-');
                 return {
                     ...item,
+                    sim_number: simNumberDisplay,
+                    dongle_name: dongleNameDisplay,
                     states: statesFormatted,
                     totalCalls: cdr.totalCalls,
                     answeredCalls: cdr.answeredCalls,
                     talkSec: cdr.talkSec,
                     talkMin: Math.round(cdr.talkSec / 60),
+                    talkFormatted: formatDuration(cdr.talkSec),
+                    inbound: {
+                        calls: cdr.inbound.calls,
+                        answered: cdr.inbound.answered,
+                        talkSec: cdr.inbound.talkSec,
+                        talkFormatted: formatDuration(cdr.inbound.talkSec)
+                    },
+                    outbound: {
+                        calls: cdr.outbound.calls,
+                        answered: cdr.outbound.answered,
+                        talkSec: cdr.outbound.talkSec,
+                        talkFormatted: formatDuration(cdr.outbound.talkSec)
+                    },
                     uptimePct
                 };
             });
@@ -14194,14 +14531,52 @@ app.get('/api/config/modem/reports', async (req, res) => {
         const dongleReportsList = formatReportList(dongleStats, true);
         const simReportsList = formatReportList(simStats, false);
 
+        const totalDonglesCount = Math.max(1, Object.keys(dongleStats).length);
+        const totalGlobalTime = totalWinSec * totalDonglesCount;
+        const busyGlobalSec = globalStateSec.Busy || 0;
+        const globalTalkSec = globalInboundTalkSec + globalOutboundTalkSec;
+        const globalBusyInboundSec = globalTalkSec > 0 ? Math.round((busyGlobalSec * globalInboundTalkSec) / globalTalkSec) : (globalInboundCalls > 0 && globalOutboundCalls === 0 ? busyGlobalSec : 0);
+        const globalBusyOutboundSec = Math.max(0, busyGlobalSec - globalBusyInboundSec);
+
         res.json({
             success: true,
-            timeframe: { startDate: startStr, endDate: endStr, totalWindowSec: totalWinSec, formattedWindow: formatDuration(totalWinSec) },
+            timeframe: {
+                startDate: startStr,
+                endDate: endStr,
+                totalWindowSec: totalWinSec,
+                formattedWindow: formatDuration(totalWinSec),
+                workHoursEnabled,
+                shiftStart: shiftStartParam,
+                shiftEnd: shiftEndParam,
+                workDays
+            },
             globalSummary: {
-                Free: { sec: globalStateSec.Free, formatted: formatDuration(globalStateSec.Free), pct: Math.round((globalStateSec.Free / (totalWinSec * Math.max(1, Object.keys(dongleStats).length))) * 1000) / 10 },
-                Busy: { sec: globalStateSec.Busy, formatted: formatDuration(globalStateSec.Busy), pct: Math.round((globalStateSec.Busy / (totalWinSec * Math.max(1, Object.keys(dongleStats).length))) * 1000) / 10 },
-                'Not Initialized': { sec: globalStateSec['Not Initialized'], formatted: formatDuration(globalStateSec['Not Initialized']), pct: Math.round((globalStateSec['Not Initialized'] / (totalWinSec * Math.max(1, Object.keys(dongleStats).length))) * 1000) / 10 },
-                'Not connected': { sec: globalStateSec['Not connected'], formatted: formatDuration(globalStateSec['Not connected']), pct: Math.round((globalStateSec['Not connected'] / (totalWinSec * Math.max(1, Object.keys(dongleStats).length))) * 1000) / 10 }
+                Free: { sec: globalStateSec.Free, formatted: formatDuration(globalStateSec.Free), pct: Math.round((globalStateSec.Free / totalGlobalTime) * 1000) / 10 },
+                Busy: {
+                    sec: busyGlobalSec,
+                    formatted: formatDuration(busyGlobalSec),
+                    pct: Math.round((busyGlobalSec / totalGlobalTime) * 1000) / 10,
+                    inbound: {
+                        calls: globalInboundCalls,
+                        answered: globalInboundAnswered,
+                        sec: globalBusyInboundSec,
+                        talkSec: globalInboundTalkSec,
+                        formatted: formatDuration(globalBusyInboundSec),
+                        pct: Math.round((globalBusyInboundSec / totalGlobalTime) * 1000) / 10,
+                        talkFormatted: formatDuration(globalInboundTalkSec)
+                    },
+                    outbound: {
+                        calls: globalOutboundCalls,
+                        answered: globalOutboundAnswered,
+                        sec: globalBusyOutboundSec,
+                        talkSec: globalOutboundTalkSec,
+                        formatted: formatDuration(globalBusyOutboundSec),
+                        pct: Math.round((globalBusyOutboundSec / totalGlobalTime) * 1000) / 10,
+                        talkFormatted: formatDuration(globalOutboundTalkSec)
+                    }
+                },
+                'Not Initialized': { sec: globalStateSec['Not Initialized'], formatted: formatDuration(globalStateSec['Not Initialized']), pct: Math.round((globalStateSec['Not Initialized'] / totalGlobalTime) * 1000) / 10 },
+                'Not connected': { sec: globalStateSec['Not connected'], formatted: formatDuration(globalStateSec['Not connected']), pct: Math.round((globalStateSec['Not connected'] / totalGlobalTime) * 1000) / 10 }
             },
             dongleReports: dongleReportsList,
             simReports: simReportsList

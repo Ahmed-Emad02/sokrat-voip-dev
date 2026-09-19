@@ -2189,75 +2189,23 @@ function isTabAllowed(tabName) {
                 </div>
             </div>
 
-            <!-- Dongle & SIM State Duration Reports Panel -->
-            <div class="config-card overflow-hidden">
-                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)]">
-                    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'تقارير مدة حالات المودم والشرائح' : 'Dongle & SIM State Duration Reports' %></h3>
-                                <p class="text-xs text-[var(--text-muted)] mt-1"><%= isRtl ? 'تحليل الزمن المستغرق لكل مودم وشريحة في كل حالة (جاهز، في مكالمة، غير مهيأ، غير متصل).' : 'Track exact duration spent in each state (Free, Busy, Not Initialized, Disconnected) per Dongle and SIM Number.' %></p>
-                            </div>
-                        </div>
+            <!-- Dongle & SIM State Duration Analytics Notice -->
+            <div class="p-6 rounded-2xl border border-blue-500/20 bg-blue-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-[var(--text-primary)]"><%= isRtl ? 'تحليلات مدة حالات المودم والشرائح انتقلت إلى صفحة GSM Dongles' : 'Dongle & SIM State Duration Analytics Relocated' %></h4>
+                        <p class="text-xs text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'تمت ترقية وتطوير لوحة تقارير مدة حالات المودم والشرائح وتضمينها بالكامل مع تفريغ المكالمات الواردة والصادرة في أسفل صفحة شرائح الاتصال.' : 'The duration analytics dashboard has been redesigned with incoming/outgoing call branching and relocated to the bottom of the GSM Dongles page.' %></p>
                     </div>
                 </div>
-
-                <!-- Filters Bar -->
-                <div class="p-4 sm:px-6 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/25 space-y-3">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1" for="dongleReportStartDate"><%= isRtl ? 'من تاريخ/وقت' : 'Start Time' %></label>
-                            <input type="datetime-local" id="dongleReportStartDate" name="dongleReportStartDate" class="config-input w-full text-xs font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1" for="dongleReportEndDate"><%= isRtl ? 'إلى تاريخ/وقت' : 'End Time' %></label>
-                            <input type="datetime-local" id="dongleReportEndDate" name="dongleReportEndDate" class="config-input w-full text-xs font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1" for="dongleReportDongleSelect"><%= isRtl ? 'المودم' : 'Dongle' %></label>
-                            <select id="dongleReportDongleSelect" class="config-input w-full text-xs font-mono">
-                                <option value="ALL"><%= isRtl ? 'جميع الأجهزة (ALL)' : 'All Dongles (ALL)' %></option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1" for="dongleReportSimSelect"><%= isRtl ? 'رقم الشريحة (DID)' : 'SIM Number (DID)' %></label>
-                            <select id="dongleReportSimSelect" class="config-input w-full text-xs font-mono">
-                                <option value="ALL"><%= isRtl ? 'جميع الشرائح (ALL)' : 'All SIM Numbers (ALL)' %></option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
-                        <div class="flex flex-wrap items-center gap-1.5">
-                            <span class="text-[11px] font-bold text-[var(--text-secondary)] me-1"><%= isRtl ? 'فترات سريعة:' : 'Quick Presets:' %></span>
-                            <button type="button" onclick="setDongleReportPreset('today')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= isRtl ? 'اليوم' : 'Today' %></button>
-                            <button type="button" onclick="setDongleReportPreset('yesterday')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= isRtl ? 'الأمس' : 'Yesterday' %></button>
-                            <button type="button" onclick="setDongleReportPreset('7days')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= isRtl ? 'آخر 7 أيام' : 'Last 7 Days' %></button>
-                            <button type="button" onclick="setDongleReportPreset('30days')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition-all cursor-pointer"><%= isRtl ? 'آخر 30 يوماً' : 'Last 30 Days' %></button>
-                        </div>
-
-                        <button type="button" onclick="fetchDongleStateReports()" class="config-action-btn config-action-btn--primary px-4 py-2 text-xs cursor-pointer">
-                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                            <span><%= isRtl ? 'توليد التقرير' : 'Generate Report' %></span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Report Summary Cards & Detailed Tables -->
-                <div class="p-5 sm:p-6 space-y-6">
-                    <div id="dongleReportSummaryContainer" class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <!-- Summary metrics populated dynamically -->
-                    </div>
-
-                    <div id="dongleReportTablesContainer" class="space-y-6">
-                        <!-- Reports tables populated dynamically -->
-                    </div>
-                </div>
+                <a href="/gsm-dongles#dongle-duration-stats-section" class="config-action-btn config-action-btn--primary px-4 py-2 text-xs flex items-center gap-1.5 self-start sm:self-auto shrink-0">
+                    <span><%= isRtl ? 'فتح تقارير GSM Dongles' : 'Open GSM Analytics' %></span>
+                    <svg class="w-3.5 h-3.5 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </a>
             </div>
         </div>
         <% } %>
