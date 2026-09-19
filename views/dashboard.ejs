@@ -783,6 +783,9 @@ const isRtl = currentLang === 'ar';
             talkTime: '<%= t.talkTime %>',
             min: '<%= t.min %>',
             calls: '<%= t.calls %>',
+            total: '<%= isRtl ? "الإجمالي" : "Total" %>',
+            inbound: '<%= t.inbound %>',
+            outbound: '<%= t.outbound %>',
             saving: '<%= t.saving %>',
             saved: '<%= t.saved %>',
             addedToast: '<%= t.addedToast %>',
@@ -793,6 +796,23 @@ const isRtl = currentLang === 'ar';
             importedToast: '<%= t.importedToast %>',
             failedImport: '<%= t.failedImport %>',
             errorImport: '<%= t.errorImport %>'
+        };
+        const _dispTranslations = {
+            'ANSWERED': '<%= isRtl ? "تم الرد" : "ANSWERED" %>',
+            'BUSY': '<%= isRtl ? "مشغول" : "BUSY" %>',
+            'NO ANSWER': '<%= isRtl ? "لم يتم الرد" : "NO ANSWER" %>',
+            'FAILED': '<%= isRtl ? "فاشلة" : "FAILED" %>',
+            'CONGESTION': '<%= isRtl ? "ازدحام" : "CONGESTION" %>',
+            'UNKNOWN': '<%= isRtl ? "غير معروف" : "UNKNOWN" %>'
+        };
+        const _durTranslations = {
+            'Short (<30s)': '<%= isRtl ? "قصيرة (<30ث)" : "Short (<30s)" %>',
+            'Medium (30s-3m)': '<%= isRtl ? "متوسطة (30ث-3د)" : "Medium (30s-3m)" %>',
+            'Long (>3m)': '<%= isRtl ? "طويلة (>3د)" : "Long (>3m)" %>'
+        };
+        const _scopeTranslations = {
+            'Internal': '<%= isRtl ? "داخلي" : "Internal" %>',
+            'External': '<%= isRtl ? "خارجي" : "External" %>'
         };
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -814,6 +834,9 @@ const isRtl = currentLang === 'ar';
             // -- Call Volume Trend --
             const trendChart = echarts.init(document.getElementById('trendChart'), isLight ? null : 'dark');
             trendChart.setOption({
+                textStyle: {
+                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                },
                 backgroundColor: 'transparent',
                 tooltip: {
                     trigger: 'axis',
@@ -839,7 +862,7 @@ const isRtl = currentLang === 'ar';
                 },
                 series: [
                     {
-                        name: 'Total',
+                        name: _t.total,
                         type: 'line',
                         smooth: true,
                         symbol: 'circle',
@@ -855,7 +878,7 @@ const isRtl = currentLang === 'ar';
                         data: trendData.map(d => d.total)
                     },
                     {
-                        name: 'Inbound',
+                        name: _t.inbound,
                         type: 'bar',
                         barWidth: 6,
                         barGap: '20%',
@@ -863,9 +886,10 @@ const isRtl = currentLang === 'ar';
                         data: trendData.map(d => d.inbound)
                     },
                     {
-                        name: 'Outbound',
+                        name: _t.outbound,
                         type: 'bar',
                         barWidth: 6,
+                        barGap: '20%',
                         itemStyle: { color: '#00b4d8', borderRadius: [3, 3, 0, 0] },
                         data: trendData.map(d => d.outbound)
                     }
@@ -885,6 +909,9 @@ const isRtl = currentLang === 'ar';
             };
             const dispChart = echarts.init(document.getElementById('dispositionChart'), isLight ? null : 'dark');
             dispChart.setOption({
+                textStyle: {
+                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                },
                 backgroundColor: 'transparent',
                 tooltip: {
                     trigger: 'item',
@@ -916,7 +943,7 @@ const isRtl = currentLang === 'ar';
                     },
                     data: dispositionData.map(d => ({
                         value: d.value,
-                        name: d.name,
+                        name: _dispTranslations[d.name] || d.name,
                         itemStyle: { color: dispPalette[d.name] || '#71717a' }
                     })),
                     animationEasing: 'cubicOut',
@@ -928,6 +955,9 @@ const isRtl = currentLang === 'ar';
             // -- Hourly Distribution --
             const hourlyChart = echarts.init(document.getElementById('hourlyChart'), isLight ? null : 'dark');
             hourlyChart.setOption({
+                textStyle: {
+                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                },
                 backgroundColor: 'transparent',
                 tooltip: {
                     trigger: 'axis',
@@ -967,6 +997,9 @@ const isRtl = currentLang === 'ar';
             // -- Top Talkers --
             const talkersChart = echarts.init(document.getElementById('topTalkersChart'), isLight ? null : 'dark');
             talkersChart.setOption({
+                textStyle: {
+                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                },
                 backgroundColor: 'transparent',
                 tooltip: {
                     trigger: 'axis',
@@ -1031,6 +1064,9 @@ const isRtl = currentLang === 'ar';
             const totalDurVal = durationData.reduce((acc, curr) => acc + (curr.value || 0), 0) || 1;
 
             durationChart.setOption({
+                textStyle: {
+                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                },
                 backgroundColor: 'transparent',
                 tooltip: { 
                     trigger: 'axis',
@@ -1052,7 +1088,7 @@ const isRtl = currentLang === 'ar';
                 },
                 yAxis: {
                     type: 'category',
-                    data: durationData.map(d => d.name),
+                    data: durationData.map(d => _durTranslations[d.name] || d.name),
                     axisLine: { show: false },
                     axisTick: { show: false },
                     axisLabel: { color: isLight ? '#27272a' : '#ffffff', fontSize: 10, fontWeight: 'bold' }
@@ -1066,7 +1102,7 @@ const isRtl = currentLang === 'ar';
                     },
                     data: durationData.map(d => ({
                         value: d.value,
-                        name: d.name,
+                        name: _durTranslations[d.name] || d.name,
                         itemStyle: { color: durationColors[d.name] || '#64748b' }
                     })),
                     label: {
@@ -1095,6 +1131,9 @@ const isRtl = currentLang === 'ar';
             const totalScopeVal = scopeData.reduce((acc, curr) => acc + (curr.value || 0), 0) || 1;
 
             scopeChart.setOption({
+                textStyle: {
+                    fontFamily: _isRtl ? "'IBM Plex Sans Arabic', 'Cairo', sans-serif" : "'Plus Jakarta Sans', sans-serif"
+                },
                 backgroundColor: 'transparent',
                 tooltip: { 
                     trigger: 'axis',
@@ -1116,7 +1155,7 @@ const isRtl = currentLang === 'ar';
                 },
                 yAxis: {
                     type: 'category',
-                    data: scopeData.map(d => d.name),
+                    data: scopeData.map(d => _scopeTranslations[d.name] || d.name),
                     axisLine: { show: false },
                     axisTick: { show: false },
                     axisLabel: { color: isLight ? '#27272a' : '#ffffff', fontSize: 10, fontWeight: 'bold' }
@@ -1130,7 +1169,7 @@ const isRtl = currentLang === 'ar';
                     },
                     data: scopeData.map(d => ({
                         value: d.value,
-                        name: d.name,
+                        name: _scopeTranslations[d.name] || d.name,
                         itemStyle: { color: scopeColors[d.name] || '#64748b' }
                     })),
                     label: {
