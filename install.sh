@@ -1691,7 +1691,9 @@ rm -f /etc/systemd/system/dongle-auto-reload.service
 echo "  Old dongle-auto-reload.service removed"
 
 # 10f — Reload and restart
-echo "  [10f] Reloading rules and restarting Asterisk..."
+echo "  [10f] Clearing stale lock files, reloading rules, and restarting Asterisk..."
+rm -f /var/lock/LCK..* /run/lock/LCK..* 2>/dev/null || true
+chmod 666 /dev/ttyUSB* 2>/dev/null || true
 systemctl daemon-reload
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger 2>/dev/null || true
