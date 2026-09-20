@@ -33,6 +33,8 @@ test('backend/install_db.sql has full schema parity for extension scoping, dongl
 
     // RCONFFAIL notification cleanup
     assert.match(sql, /DELETE FROM `asterisk`\.`notifications` WHERE `id` = 'RCONFFAIL';/, 'install_db.sql must delete stale RCONFFAIL notifications');
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS `asterisk`\.`sipsettings`/, 'install_db.sql must ensure sipsettings table exists before updates');
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS `asterisk`\.`pjsipsettings`/, 'install_db.sql must ensure pjsipsettings table exists before updates');
 });
 
 test('install.sh contains schema migrations, rnnoise builds, and inbound blacklist dialplan', () => {
@@ -57,6 +59,10 @@ test('install.sh contains schema migrations, rnnoise builds, and inbound blackli
     assert.match(script, /DELETE FROM \\`notifications\\` WHERE \\`id\\` = 'RCONFFAIL';/, 'install.sh must clear stale RCONFFAIL notification');
     assert.match(script, /AMPORTAL_SERVICE in \/usr\/lib\/systemd\/system\/amportal-reload\.service \/etc\/systemd\/system\/amportal-reload\.service/, 'install.sh must inspect amportal-reload.service unit locations');
     assert.match(script, /ExecStartPre=\/bin\/bash -c '\\''for i in \$\(seq 1 30\); do if \/usr\/sbin\/asterisk -rx "core show version"/, 'install.sh must configure ExecStartPre readiness check on amportal-reload.service');
+
+    // PicoTTS AGI self-provisioning & DB prerequisites
+    assert.match(script, /write_embedded_picotts_agi/, 'install.sh must define write_embedded_picotts_agi fallback');
+    assert.match(script, /CREATE TABLE IF NOT EXISTS \\`sipsettings\\`/, 'install.sh must ensure sipsettings table exists before import');
 });
 
 test('install.sh and uninstall.sh pass bash syntax validation', () => {

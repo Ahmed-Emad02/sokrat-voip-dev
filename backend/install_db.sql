@@ -256,6 +256,48 @@ CREATE TABLE IF NOT EXISTS `voicemail_storage_settings` (
 
 INSERT IGNORE INTO `voicemail_storage_settings` (`id`, `max_messages`, `max_duration_sec`, `retention_days`, `auto_purge_enabled`)
 VALUES (1, 1000, 300, 90, 0);
+
+-- Ensure target tables exist before configuring FreePBX/Asterisk defaults
+CREATE TABLE IF NOT EXISTS `asterisk`.`sipsettings` (
+  `keyword` VARCHAR(50) NOT NULL DEFAULT '',
+  `data`    VARCHAR(255) NOT NULL DEFAULT '',
+  `seq`     TINYINT(1) NOT NULL DEFAULT '1',
+  `type`    TINYINT(1) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`keyword`,`seq`,`type`)
+);
+
+CREATE TABLE IF NOT EXISTS `asterisk`.`pjsipsettings` (
+  `keyword` VARCHAR(50) NOT NULL DEFAULT '',
+  `data`    VARCHAR(255) NOT NULL DEFAULT '',
+  `seq`     TINYINT(1) NOT NULL DEFAULT '1',
+  `type`    TINYINT(1) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`keyword`,`seq`,`type`)
+);
+
+CREATE TABLE IF NOT EXISTS `asterisk`.`featurecodes` (
+  `modulename` VARCHAR(50) NOT NULL,
+  `featurename` VARCHAR(50) NOT NULL,
+  `description` VARCHAR(200) NOT NULL DEFAULT '',
+  `defaultcode` VARCHAR(20) DEFAULT NULL,
+  `customcode` VARCHAR(20) DEFAULT NULL,
+  `enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `providedest` TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`modulename`,`featurename`)
+);
+
+CREATE TABLE IF NOT EXISTS `asterisk`.`notifications` (
+  `module` VARCHAR(24) NOT NULL,
+  `id` VARCHAR(24) NOT NULL,
+  `level` INTEGER NOT NULL DEFAULT 0,
+  `display_text` VARCHAR(255) NOT NULL DEFAULT '',
+  `extended_text` TEXT NOT NULL,
+  `link` VARCHAR(255) NOT NULL DEFAULT '',
+  `reset` TINYINT(1) NOT NULL DEFAULT 0,
+  `candelete` TINYINT(1) NOT NULL DEFAULT 1,
+  `timestamp` INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (`module`,`id`)
+);
+
 -- Prioritize HD Voice / Wideband Codecs (G.722 / Opus) for high-quality extension-to-extension calls
 UPDATE `asterisk`.`sipsettings` SET `data` = '1', `seq` = 0 WHERE `keyword` = 'g722';
 UPDATE `asterisk`.`sipsettings` SET `data` = '2', `seq` = 1 WHERE `keyword` = 'opus';
