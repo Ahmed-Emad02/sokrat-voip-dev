@@ -2219,6 +2219,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
     <!-- Toast Notification Container -->
     <div id="toast-container" class="fixed bottom-5 z-[999999] flex flex-col gap-2.5 max-w-sm pointer-events-none <%= isRtl ? 'left-5' : 'right-5' %>"></div>
 
+    <!-- Top Center Prominent Alert Banner Container (for Critical Hardware / SIM Warnings) -->
+    <div id="top-alert-container" class="fixed top-5 left-1/2 -translate-x-1/2 z-[9999999] flex flex-col items-center gap-3 pointer-events-none w-full max-w-xl px-4"></div>
+
     <!-- SMS Detail Modal -->
     <!-- Send SMS Modal -->
     <div id="send-sms-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200">
@@ -5336,6 +5339,54 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     refreshUsbDevices();
                     refreshDevicesList(true);
                 });
+
+                // Real-time SIM failure prominent top-center notification (IMSI read error)
+                socket.on('dongleSimError', (data) => {
+                    if (!data || data.error !== 'imsi_failed') return;
+                    const dongleName = data.dongleId || 'dongle';
+                    const alertTitle = isRtl ? `تنبيه عتاد الشريحة [${dongleName}]` : `Hardware SIM Alert [${dongleName}]`;
+                    const alertMsg = isRtl
+                        ? `بطاقة SIM غير متصلة بشكل صحيح (تعذر قراءة رقم IMSI). يرجى التأكد من تركيب الشريحة في الجهاز وإعادة التوصيل.`
+                        : `SIM card is not connected properly (failed to read IMSI). Please make sure the SIM card is properly inserted in the dongle.`;
+                    showTopCenterAlert(alertTitle, alertMsg);
+                });
+            }
+
+            function showTopCenterAlert(title, message) {
+                const topContainer = document.getElementById('top-alert-container');
+                if (!topContainer) {
+                    showToast(title, message, 'warning');
+                    return;
+                }
+                const alertEl = document.createElement('div');
+                alertEl.className = 'pointer-events-auto w-full rounded-2xl p-4 sm:p-5 flex items-start gap-4 transform -translate-y-8 opacity-0 transition-all duration-300';
+                alertEl.style.cssText = 'background-color: #121215 !important; border: 2px solid #ef4444 !important; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 25px rgba(239, 68, 68, 0.35) !important;';
+                alertEl.innerHTML = `
+                    <div class="p-2.5 rounded-xl shrink-0 mt-0.5" style="background-color: rgba(239, 68, 68, 0.2) !important; color: #f87171 !important; border: 1px solid rgba(239, 68, 68, 0.4) !important;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                            <h4 class="text-sm sm:text-base font-black tracking-wide uppercase font-sans" style="color: #ff6b6b !important;">${title}</h4>
+                            <button type="button" class="p-1 rounded-lg transition cursor-pointer" style="color: #ffffff !important; background-color: rgba(255, 255, 255, 0.1) !important;" onclick="this.closest('.pointer-events-auto').remove()">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+                        <p class="text-sm sm:text-base font-extrabold leading-relaxed font-sans" style="color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${message}</p>
+                    </div>
+                `;
+                topContainer.appendChild(alertEl);
+                requestAnimationFrame(() => {
+                    alertEl.classList.remove('-translate-y-8', 'opacity-0');
+                });
+                setTimeout(() => {
+                    alertEl.classList.add('-translate-y-8', 'opacity-0');
+                    setTimeout(() => { alertEl.remove(); }, 300);
+                }, 12000);
             }
 
             // Refresh Device List AJAX helper

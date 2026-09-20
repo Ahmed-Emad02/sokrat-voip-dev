@@ -7611,6 +7611,8 @@ function startUssdLogMonitor() {
     
     const responsePattern = /\[([^\]]+)\] VERBOSE\[\d+\] at_response\.c:\s+\[([^\]]+)\] Got USSD type \d+ '[^']*':\s*'(.*)/s; // Added /s flag to capture multi-line USSD response!
     const dongleLogPattern = /chan_dongle|at_response|app_ussd|dongle[0-9]+/i;
+    const imsiErrorPattern = /\[([^\]]+)\]\s+ERROR\[\d+\](?:\s*:\s*)?\s+at_response\.c(?::\d+)?(?::|\s+)?(?:\s*log_cmd_response_error:\s*)?\s*\[([^\]]+)\]\s+Getting IMSI number failed/i;
+    const latestImsiFailAlerts = {};
 
     function processLogStatement(statement) {
         if (!statement.trim()) return;
@@ -7651,6 +7653,27 @@ function startUssdLogMonitor() {
             }
         }
         
+        // Parse Getting IMSI number failed error from chan_dongle at_response.c
+        const imsiMatch = imsiErrorPattern.exec(statement);
+        if (imsiMatch) {
+            const logTime = imsiMatch[1].trim();
+            const dongleId = imsiMatch[2].trim();
+            const now = Date.now();
+            const lastAlert = latestImsiFailAlerts[dongleId];
+            // Debounce alerts to avoid spamming the UI (alert at most once every 30 seconds per dongle)
+            if (!lastAlert || (now - lastAlert > 30000)) {
+                latestImsiFailAlerts[dongleId] = now;
+                console.warn(`GSM MONITOR: SIM error on ${dongleId} (Getting IMSI number failed) at ${logTime}`);
+                io.emit('dongleSimError', {
+                    dongleId,
+                    error: 'imsi_failed',
+                    logTime,
+                    messageEn: `SIM card is not connected properly on ${dongleId} (failed to read IMSI).`,
+                    messageAr: `بطاقة SIM غير متصلة بشكل صحيح في ${dongleId} (تعذر قراءة رقم IMSI).`
+                });
+            }
+        }
+
         // Parse USSD response
         const match = responsePattern.exec(statement);
         if (match) {
