@@ -222,23 +222,6 @@ echo "[1/14] Installing system packages..."
 yum install -y epel-release
 yum install -y nano net-tools sox sqlite picotts
 
-# Install Sokrat MOTD
-MOTD_SCRIPT=/opt/sokrat-voip/scripts/sokrat-motd.sh
-if [ -f "$MOTD_SCRIPT" ]; then
-    chmod +x "$MOTD_SCRIPT"
-    cp "$MOTD_SCRIPT" /etc/profile.d/sokrat-motd.sh
-    chmod +x /etc/profile.d/sokrat-motd.sh
-    
-    # Silence Issabel banner if it exists
-    if [ -f /etc/profile.d/login-info.sh ] && [ ! -f /etc/profile.d/login-info.sh.bak ]; then
-        mv /etc/profile.d/login-info.sh /etc/profile.d/login-info.sh.bak
-        echo "  Legacy banner backed up to /etc/profile.d/login-info.sh.bak"
-    fi
-fi
-cat > /etc/profile.d/sokrat-aliases.sh << 'EOF'
-alias dd='asterisk -rx "dongle show devices"'
-EOF
-chmod 644 /etc/profile.d/sokrat-aliases.sh
 
 # Announcements in Issabel use picotts.agi, which requires both sox and pico2wave.
 PICO_AGI_SOURCE=/var/www/html/admin/modules/announcement/agi-bin/picotts.agi
@@ -622,6 +605,26 @@ else
     fi
     cd "$INSTALL_DIR"
 fi
+
+# Install Sokrat MOTD & Aliases
+echo "  Installing Sokrat MOTD..."
+MOTD_SCRIPT="$INSTALL_DIR/scripts/sokrat-motd.sh"
+if [ -f "$MOTD_SCRIPT" ]; then
+    chmod +x "$MOTD_SCRIPT"
+    cp "$MOTD_SCRIPT" /etc/profile.d/sokrat-motd.sh
+    chmod +x /etc/profile.d/sokrat-motd.sh
+    echo "  Installed Sokrat MOTD to /etc/profile.d/sokrat-motd.sh"
+    
+    # Silence Issabel banner if it exists
+    if [ -f /etc/profile.d/login-info.sh ] && [ ! -f /etc/profile.d/login-info.sh.bak ]; then
+        mv /etc/profile.d/login-info.sh /etc/profile.d/login-info.sh.bak
+        echo "  Legacy banner backed up to /etc/profile.d/login-info.sh.bak"
+    fi
+fi
+cat > /etc/profile.d/sokrat-aliases.sh << 'EOF'
+alias dd='asterisk -rx "dongle show devices"'
+EOF
+chmod 644 /etc/profile.d/sokrat-aliases.sh
 
 # 3b — Clone / Update Sokrat VOICE (WebRTC Softphone)
 echo "  [3b] Cloning Sokrat VOICE (WebRTC Softphone) repository..."
