@@ -5162,12 +5162,41 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
             rgRows.forEach(r => ringGroupSet.add(String(r.grpnum)));
         } catch (_) {}
 
-        // Build CSV string
-        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
-        
-        let csvContent = "\ufeff"; // BOM for UTF-8 Excel support
-        csvContent += csvHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n";
+        if (XLSX) {
+            const headers = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
+            const dataRows = [headers];
+            for (const row of rows) {
+                const formattedDst = formatDestination(row, ringGroupSet);
+                dataRows.push([
+                    moment(row.calldate).format('YYYY-MM-DD HH:mm:ss'),
+                    String(row.src || '').trim(),
+                    String(row.src_name || '').trim(),
+                    formattedDst,
+                    String(row.did || '').trim(),
+                    Number(row.duration) || 0,
+                    Number(row.billsec) || 0,
+                    String(row.disposition || ''),
+                    String(row.direction || ''),
+                    String(row.call_scope || 'EXTERNAL'),
+                    String(row.channel || ''),
+                    String(row.dstchannel || ''),
+                    String(row.uniqueid || '')
+                ]);
+            }
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(dataRows);
+            XLSX.utils.book_append_sheet(wb, ws, 'Call History');
+            const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+            const filename = `cdr_report_${moment().format('YYYYMMDD_HHmmss')}.xlsx`;
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            return res.send(buffer);
+        }
 
+        // Fallback to CSV if XLSX is unavailable
+        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
+        let csvContent = "\ufeff";
+        csvContent += csvHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n";
         for (const row of rows) {
             const formattedDst = formatDestination(row, ringGroupSet);
             const rowData = [
@@ -5187,12 +5216,10 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
             ];
             csvContent += rowData.join(",") + "\n";
         }
-
         const filename = `cdr_export_${moment().format('YYYYMMDD_HHmmss')}.csv`;
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(csvContent);
-
     } catch (error) {
         res.status(500).send("CDR Export Error: " + error.message);
     }
@@ -5448,6 +5475,29 @@ app.get('/vm-export', async (req, res) => {
         const endMs = moment(endDate).valueOf();
         filtered = filtered.filter(m => m.origtime && m.origtime <= endMs);
     }
+    if (XLSX) {
+        const headers = ["Mailbox", "Caller ID", "Date", "Duration (Sec)", "Extension", "File"];
+        const dataRows = [headers];
+        for (const m of filtered) {
+            dataRows.push([
+                String(m.mailbox || ''),
+                String(m.callerid || ''),
+                m.origtime ? moment(m.origtime).format('YYYY-MM-DD HH:mm:ss') : '',
+                Number(m.duration) || 0,
+                String(m.extension || ''),
+                String(m.wavFile || '')
+            ]);
+        }
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(dataRows);
+        XLSX.utils.book_append_sheet(wb, ws, 'Voicemails');
+        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        const filename = `voicemails_report_${moment().format('YYYYMMDD_HHmmss')}.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        return res.send(buffer);
+    }
+
     const csvHeaders = ["Mailbox", "Caller ID", "Date", "Duration (Sec)", "Extension", "File"];
     let csv = "\ufeff" + csvHeaders.map(h => `"${h}"`).join(",") + "\n";
     for (const m of filtered) {
@@ -16978,6 +17028,39 @@ app.get('/api/dialer/campaigns/:id/export', requireAuth, requireActionPermission
             [id]
         );
 
+        if (XLSX) {
+            const baseHeaders = ['Name', 'Phone Number', 'Status', 'Attempts', 'Disposition', 'Agent', 'Duration (sec)', 'Last Called'];
+            const allHeaders = baseHeaders.concat(leadFields.map(f => f.label));
+            const dataRows = [allHeaders];
+            for (const l of leads) {
+                const name = ((l.first_name || '') + ' ' + (l.last_name || '')).trim();
+                const lastCalled = l.last_called_at ? new Date(l.last_called_at).toISOString().replace('T', ' ').substring(0, 19) : '';
+                const customData = normalizeDialerCustomData(l.custom_data, leadFields);
+                const row = [
+                    name,
+                    String(l.phone_number || ''),
+                    String(l.status || ''),
+                    Number(l.attempts) || 0,
+                    String(l.disposition || ''),
+                    String(l.agent_extension || ''),
+                    Number(l.call_duration_sec) || 0,
+                    lastCalled
+                ];
+                for (const field of leadFields) {
+                    row.push(String(customData[field.key] || ''));
+                }
+                dataRows.push(row);
+            }
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(dataRows);
+            XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+            const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+            const safeName = cRows[0].name.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_');
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename="campaign_${id}_${safeName}_leads.xlsx"`);
+            return res.send(buffer);
+        }
+
         const dynamicHeaders = leadFields.map(field => `"${field.label.replace(/"/g, '""')}"`).join(',');
         let csv = '\ufeffName,Phone Number,Status,Attempts,Disposition,Agent,Duration (sec),Last Called' +
             (dynamicHeaders ? `,${dynamicHeaders}` : '') + '\n';
@@ -16995,7 +17078,6 @@ app.get('/api/dialer/campaigns/:id/export', requireAuth, requireActionPermission
             csv += `${name},${phone},${status},${attempts},${disp},${agent},${duration},${lastCalled}` +
                 (dynamicValues ? `,${dynamicValues}` : '') + '\n';
         }
-
         const safeName = cRows[0].name.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_');
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="campaign_${id}_${safeName}_leads.csv"`);

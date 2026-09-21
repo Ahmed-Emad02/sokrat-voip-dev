@@ -96,7 +96,7 @@ const isRtl = currentLang === 'ar';
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -110,8 +110,15 @@ const isRtl = currentLang === 'ar';
         html:not([dir="rtl"]), html:not([dir="rtl"]) body {
             font-family: 'Plus Jakarta Sans', 'Roboto', sans-serif;
         }
-        html[dir="rtl"] .font-mono, html[dir="rtl"] code, html[dir="rtl"] pre, html[dir="rtl"] input[type="time"], html[dir="rtl"] input[type="datetime-local"] {
+        .font-mono, html[dir="rtl"] .font-mono,
+        .card-stat-val, html[dir="rtl"] .card-stat-val,
+        .card-stat-number, html[dir="rtl"] .card-stat-number,
+        html[dir="rtl"] code, html[dir="rtl"] pre, html[dir="rtl"] input[type="time"], html[dir="rtl"] input[type="datetime-local"] {
             font-family: 'JetBrains Mono', monospace !important;
+            font-variant-numeric: tabular-nums;
+        }
+        .card-stat-val .font-sans, html[dir="rtl"] .card-stat-val .font-sans {
+            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif !important;
         }
         :root {
             --bg-primary: #09090b;
@@ -445,7 +452,7 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.totalCalls %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.totalCalls %></p>
                     <div class="mt-3 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
                         <div class="h-full bg-[var(--accent-color)] rounded-full transition-all duration-500" style="width: 100%"></div>
                     </div>
@@ -468,7 +475,7 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.answeredCalls %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.answeredCalls %></p>
                     <div class="mt-3 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
                         <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: <%= stats.totalCalls ? (stats.answeredCalls / stats.totalCalls) * 100 : 0 %>%"></div>
                     </div>
@@ -491,8 +498,8 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.inboundCount %></p>
-                    <p class="text-xs font-bold text-[var(--accent-color)] mt-1.5"><%= stats.inboundMin %> <%= t.min %> <%= t.airMinutes %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.inboundCount %></p>
+                    <p class="text-xs font-bold text-[var(--accent-color)] mt-1.5"><span class="card-stat-val"><%= stats.inboundMin %></span> <%= t.min %> <%= t.airMinutes %></p>
                 </div>
             </a>
 
@@ -512,8 +519,8 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.outboundCount %></p>
-                    <p class="text-xs font-bold text-zinc-400 mt-1.5"><%= stats.outboundMin %> <%= t.min %> <%= t.airMinutes %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.outboundCount %></p>
+                    <p class="text-xs font-bold text-zinc-400 mt-1.5"><span class="card-stat-val"><%= stats.outboundMin %></span> <%= t.min %> <%= t.airMinutes %></p>
                 </div>
             </a>
 
@@ -533,8 +540,8 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.internalCount || 0 %></p>
-                    <p class="text-xs font-bold text-purple-400 mt-1.5"><%= stats.internalMin || 0 %> <%= t.min %> <%= t.airMinutes %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.internalCount || 0 %></p>
+                    <p class="text-xs font-bold text-purple-400 mt-1.5"><span class="card-stat-val"><%= stats.internalMin || 0 %></span> <%= t.min %> <%= t.airMinutes %></p>
                 </div>
             </a>
 
@@ -554,8 +561,8 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.externalCount || 0 %></p>
-                    <p class="text-xs font-bold text-indigo-400 mt-1.5"><%= stats.externalMin || 0 %> <%= t.min %> <%= t.airMinutes %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.externalCount || 0 %></p>
+                    <p class="text-xs font-bold text-indigo-400 mt-1.5"><span class="card-stat-val"><%= stats.externalMin || 0 %></span> <%= t.min %> <%= t.airMinutes %></p>
                 </div>
             </a>
         </div>
@@ -579,12 +586,12 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.totalCalls ? Math.round((stats.answeredCalls / stats.totalCalls) * 100) : 0 %>%</p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.totalCalls ? Math.round((stats.answeredCalls / stats.totalCalls) * 100) : 0 %>%</p>
                     <div class="mt-3 flex items-center gap-2">
                         <div class="flex-1 h-1 bg-zinc-800/50 rounded-full overflow-hidden">
                             <div class="h-full bg-[var(--accent-color)] rounded-full transition-all duration-500" style="width: <%= stats.totalCalls ? (stats.answeredCalls / stats.totalCalls) * 100 : 0 %>%"></div>
                         </div>
-                        <span class="text-[10px] font-bold text-zinc-500"><%= Math.round(stats.inboundMin + stats.outboundMin) %> <%= t.min %></span>
+                        <span class="text-xs font-bold text-zinc-500"><span class="card-stat-val"><%= Math.round(stats.inboundMin + stats.outboundMin) %></span> <%= t.min %></span>
                     </div>
                 </div>
             </a>
@@ -605,7 +612,7 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.noAnswerCalls %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.noAnswerCalls %></p>
                     <div class="mt-3 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
                         <div class="h-full bg-rose-500 rounded-full transition-all duration-500" style="width: <%= stats.totalCalls ? (stats.noAnswerCalls / stats.totalCalls) * 100 : 0 %>%"></div>
                     </div>
@@ -628,7 +635,7 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.busyCalls %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.busyCalls %></p>
                     <div class="mt-3 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
                         <div class="h-full bg-amber-500 rounded-full transition-all duration-500" style="width: <%= stats.totalCalls ? (stats.busyCalls / stats.totalCalls) * 100 : 0 %>%"></div>
                     </div>
@@ -651,7 +658,7 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.failedCalls %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.failedCalls %></p>
                     <div class="mt-3 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
                         <div class="h-full bg-red-600 rounded-full transition-all duration-500" style="width: <%= stats.totalCalls ? (stats.failedCalls / stats.totalCalls) * 100 : 0 %>%"></div>
                     </div>
@@ -674,8 +681,8 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-3xl font-black text-white"><%= stats.totalTalkMin %> <span class="text-xs font-bold text-cyan-400"><%= t.min %></span></p>
-                    <p class="text-xs font-bold text-cyan-400/80 mt-1.5"><%= Math.round(stats.totalTalkSec) %> <%= t.sec %> <%= isRtl ? 'إجمالي المحادثات' : 'total duration' %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val"><%= stats.totalTalkMin %> <span class="text-xs font-bold text-cyan-400 font-sans"><%= t.min %></span></p>
+                    <p class="text-xs font-bold text-cyan-400/80 mt-1.5"><span class="card-stat-val"><%= Math.round(stats.totalTalkSec) %></span> <%= t.sec %> <%= isRtl ? 'إجمالي المحادثات' : 'total duration' %></p>
                 </div>
             </a>
 
@@ -686,7 +693,6 @@ const isRtl = currentLang === 'ar';
                     ? `${Math.floor(avgSec / 60)} ${t.min} ${avgSec % 60} ${t.sec}` 
                     : `${avgSec} ${t.sec}`;
             %>
-            <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
             <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض تفاصيل مدة المكالمات في سجل الاتصالات' : 'View average call duration details in Call History' %>"
                class="panel-surface rounded-2xl p-5 card-stat border border-[#27272a]/30 hover:border-indigo-500 transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
@@ -702,7 +708,13 @@ const isRtl = currentLang === 'ar';
                     </svg>
                 </div>
                 <div class="mt-3">
-                    <p class="text-2xl sm:text-3xl font-black text-white"><%= avgFormatted %></p>
+                    <p class="text-3xl font-semibold text-white card-stat-val">
+                        <% if (avgSec >= 60) { %>
+                            <span><%= Math.floor(avgSec / 60) %></span> <span class="text-xs font-bold font-sans"><%= t.min %></span> <span><%= avgSec % 60 %></span> <span class="text-xs font-bold font-sans"><%= t.sec %></span>
+                        <% } else { %>
+                            <span><%= avgSec %></span> <span class="text-xs font-bold font-sans"><%= t.sec %></span>
+                        <% } %>
+                    </p>
                     <p class="text-xs font-bold text-indigo-400/80 mt-1.5"><%= isRtl ? 'لكل مكالمة مجابة' : 'per answered call' %></p>
                 </div>
             </a>

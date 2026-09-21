@@ -429,6 +429,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         .flatpickr-input {
             font-family: 'JetBrains Mono', monospace !important;
         }
+        #top-alert-container,
+        #top-alert-container * {
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important;
+        }
         .duration-busy-text {
             color: #ffffff !important;
         }
@@ -5359,8 +5363,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     return;
                 }
                 const alertEl = document.createElement('div');
-                alertEl.className = 'pointer-events-auto w-full rounded-2xl p-4 sm:p-5 flex items-start gap-4 transform -translate-y-8 opacity-0 transition-all duration-300';
-                alertEl.style.cssText = 'background-color: #121215 !important; border: 2px solid #ef4444 !important; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 25px rgba(239, 68, 68, 0.35) !important;';
+                alertEl.className = 'pointer-events-auto w-full rounded-2xl p-4 sm:p-5 flex items-start gap-4 transform -translate-y-8 opacity-0 transition-all duration-300 font-mono';
+                alertEl.style.cssText = 'background-color: #121215 !important; border: 2px solid #ef4444 !important; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 25px rgba(239, 68, 68, 0.35) !important; font-family: \'JetBrains Mono\', monospace !important;';
                 alertEl.innerHTML = `
                     <div class="p-2.5 rounded-xl shrink-0 mt-0.5" style="background-color: rgba(239, 68, 68, 0.2) !important; color: #f87171 !important; border: 1px solid rgba(239, 68, 68, 0.4) !important;">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -5369,14 +5373,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             <line x1="12" y1="17" x2="12.01" y2="17"></line>
                         </svg>
                     </div>
-                    <div class="flex-1 min-w-0">
+                    <div class="flex-1 min-w-0 font-mono">
                         <div class="flex items-center justify-between gap-2 mb-1.5">
-                            <h4 class="text-sm sm:text-base font-black tracking-wide uppercase font-sans" style="color: #ff6b6b !important;">${title}</h4>
+                            <h4 class="text-sm sm:text-base font-bold tracking-wide uppercase font-mono" style="color: #ff6b6b !important; font-family: 'JetBrains Mono', monospace !important;">${title}</h4>
                             <button type="button" class="p-1 rounded-lg transition cursor-pointer" style="color: #ffffff !important; background-color: rgba(255, 255, 255, 0.1) !important;" onclick="this.closest('.pointer-events-auto').remove()">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             </button>
                         </div>
-                        <p class="text-sm sm:text-base font-extrabold leading-relaxed font-sans" style="color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${message}</p>
+                        <p class="text-sm sm:text-base font-medium leading-relaxed font-mono" style="color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.5); font-family: 'JetBrains Mono', monospace !important;">${message}</p>
                     </div>
                 `;
                 topContainer.appendChild(alertEl);
