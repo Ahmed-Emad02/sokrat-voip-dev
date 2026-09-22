@@ -41,6 +41,19 @@ enabled=1
 gpgcheck=0
 REPO_EOF
 
+# Ensure git and tar are installed for repo management
+if ! command -v git &>/dev/null; then
+    rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/git*.rpm "${RPM_DIR}"/perl*.rpm 2>/dev/null || true
+fi
+echo "--> Configuring local file repository..."
+cat << REPO_EOF > /etc/yum.repos.d/sokrat-local-bundle.repo
+[sokrat-local-bundle]
+name=Sokrat Local Offline Bundle
+baseurl=file://${RPM_DIR}/
+enabled=1
+gpgcheck=0
+REPO_EOF
+
 # 3. Disable SELinux immediately to avoid permission issues
 echo "--> Disabling SELinux..."
 setenforce 0 2>/dev/null || true
@@ -112,6 +125,10 @@ if [ -f /etc/asterisk/modules_custom.conf ]; then
 fi
 
 # 8. Set proper file ownership and permissions for Issabel web GUI
+echo "--> Setting file permissions..."
+mkdir -p /var/www/html/var/templates_c
+chown -R asterisk:asterisk /var/www/html /etc/asterisk /var/lib/asterisk /var/log/asterisk
+chmod -R 775 /var/www/html/var 2>/dev/null || true
 echo "--> Setting file permissions..."
 chown -R asterisk:asterisk /var/www/html /etc/asterisk /var/lib/asterisk /var/log/asterisk
 chmod -R 775 /var/www/html/var 2>/dev/null || true
