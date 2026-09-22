@@ -97,11 +97,10 @@ echo "--> Starting MariaDB..."
 systemctl enable --now mariadb
 sleep 2
 
-# Provision initial databases with install_amp if not present
-if [ -d /usr/src/issabelPBX/framework ]; then
+# Provision initial databases with install_amp if asterisk db is missing
+if ! mysql -u root -p"$MARIADB_PASS" -e "USE asterisk;" 2>/dev/null && [ -f /usr/src/issabelPBX/framework/install_amp ]; then
     echo "--> Running install_amp to seed asterisk & asteriskcdrdb..."
-    /usr/src/issabelPBX/framework/install_amp --dbuser=root --dbpass="$MARIADB_PASS" --installdb --scripted --language=en 2>/dev/null || \
-    /usr/src/issabelPBX/framework/install_amp --dbuser=root --installdb --scripted --language=en 2>/dev/null || true
+    /usr/src/issabelPBX/framework/install_amp --dbuser=root --dbpass="$MARIADB_PASS" --installdb --scripted --language=en 2>&1 | tail -n 20 || true
 fi
 
 echo "--> Initializing Issabel 5 non-interactively..."
