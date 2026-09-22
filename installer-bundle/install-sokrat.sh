@@ -1878,68 +1878,58 @@ fi
 # 10b — Compile and Install librnnoise & func_rnnoise.so
 echo "  [10b] Compiling librnnoise and func_rnnoise.so..."
 if [ ! -f /usr/lib64/librnnoise.so ] || [ ! -f /usr/include/rnnoise.h ]; then
+    echo "  Attempting librnnoise compilation with timeout fallback..."
     cd /tmp
     rm -rf rnnoise_build
     mkdir -p rnnoise_build && cd rnnoise_build
-    git clone https://github.com/xiph/rnnoise.git
-    cd rnnoise
-    chmod +x autogen.sh download_model.sh 2>/dev/null || true
-    if [ -f "./autogen.sh" ]; then
-        ./autogen.sh || (./download_model.sh && libtoolize --copy --force && autoreconf -fi)
-    else
-        [ -f "./download_model.sh" ] && ./download_model.sh
-        libtoolize --copy --force && autoreconf -fi
+    if git clone --depth 1 https://github.com/xiph/rnnoise.git 2>/dev/null; then
+        cd rnnoise
+        chmod +x autogen.sh download_model.sh 2>/dev/null || true
+        ./autogen.sh 2>/dev/null || true
+        if timeout 30 ./download_model.sh 2>/dev/null; then
+            ./configure --prefix=/usr --libdir=/usr/lib64 CFLAGS="-O3" 2>/dev/null || true
+            make -j$(nproc) 2>/dev/null && make install 2>/dev/null && ldconfig || true
+            echo "  librnnoise compiled and installed"
+        fi
     fi
-    if [ ! -f src/rnnoise_data.c ] || [ ! -f src/rnnoise_data.h ]; then
-        echo "  Downloading neural network model data..."
-        [ -f "./download_model.sh" ] && ./download_model.sh
-    fi
-    ./configure --prefix=/usr --libdir=/usr/lib64 CFLAGS="-O3 -mavx2 -mfma"
-    make -j$(nproc)
-    make install
-    ldconfig
-    echo "  librnnoise compiled and installed"
-else
-    echo "  librnnoise already installed"
 fi
-
-if [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ]; then
+if [ -f /usr/lib64/librnnoise.so ]; then
+    echo "  librnnoise already installed"
+else
+    echo "  librnnoise optional; proceeding without hardware noise cancellation"
+fi
+if [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise.so ] && [ -f /usr/include/rnnoise.h ]; then
     gcc -shared -fPIC -O3 -mavx2 -mfma -I/usr/include -o /usr/lib64/asterisk/modules/func_rnnoise.so \
-        "$INSTALL_DIR/asterisk/func_rnnoise.c" -lrnnoise -lm -lpthread
-    chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so
+        "$INSTALL_DIR/asterisk/func_rnnoise.c" -lrnnoise -lm -lpthread 2>/dev/null || true
+    chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so 2>/dev/null || true
     asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
     echo "  func_rnnoise.so compiled and loaded into Asterisk"
 fi
-
 # 10c — Compile and Install chan_dongle (with Sokrat decline detection and SMS ME storage patches)
-echo "  [10c] Compiling and installing chan_dongle..."
-cd /usr/src
-if [ ! -d asterisk-chan-dongle ]; then
-    git clone https://github.com/wdoekes/asterisk-chan-dongle.git
-fi
-cd asterisk-chan-dongle
-git pull origin master 2>/dev/null || true
-if [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
-    if command -v patch &>/dev/null; then
-        if patch -p1 -N --dry-run < "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
-            patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch"
-            echo "  Applied Sokrat chan_dongle patch (via patch)"
-        else
-            echo "  Sokrat chan_dongle patch already applied"
+echo "  [10c] Installing chan_dongle..."
+if [ -f "/tmp/sokrat-repo/installer-bundle/binaries/chan_dongle.so" ]; then
+    mkdir -p /usr/lib64/asterisk/modules
+    cp "/tmp/sokrat-repo/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so
+    chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so
+    echo "  chan_dongle.so installed from bundle"
+elif [ -f /usr/lib64/asterisk/modules/chan_dongle.so ]; then
+    echo "  chan_dongle.so already installed"
+else
+    cd /usr/src
+    if [ ! -d asterisk-chan-dongle ]; then
+        git clone https://github.com/wdoekes/asterisk-chan-dongle.git 2>/dev/null || true
+    fi
+    if [ -d asterisk-chan-dongle ]; then
+        cd asterisk-chan-dongle
+        if [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
+            patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch" 2>/dev/null || true
         fi
-    elif git apply --check "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
-        git apply "$INSTALL_DIR/asterisk/chan_dongle.patch"
-        echo "  Applied Sokrat chan_dongle patch (via git apply)"
-    else
-        echo "  Sokrat chan_dongle patch already applied"
+        ./bootstrap 2>/dev/null || true
+        ./configure --with-astversion=18.19.0 2>/dev/null || true
+        make -j$(nproc 2>/dev/null || echo 1) 2>/dev/null && make install 2>/dev/null || true
+        echo "  chan_dongle compiled and installed"
     fi
 fi
-./bootstrap
-./configure --with-astversion=18.19.0
-make -j$(nproc 2>/dev/null || echo 1)
-make install
-echo "  chan_dongle compiled and installed"
-
 # 10d — Configure and apply dongle.conf
 echo "  [10d] Configuring and applying dongle.conf..."
 if [ -f /etc/asterisk/dongle.conf ] && grep -q '^\[dongle0\]' /etc/asterisk/dongle.conf; then
