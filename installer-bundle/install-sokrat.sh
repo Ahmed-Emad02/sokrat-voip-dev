@@ -219,6 +219,9 @@ for dev in $(ip -o link show | awk -F': ' '{print $2}' | grep -vE '^(lo|docker|v
     ethtool -K "$dev" rx off tx off tso off gso off gro off lro off 2>/dev/null || true
     ip link set dev "$dev" mtu 1400 2>/dev/null || true
 done
+
+# Ensure reliable public DNS resolution for GitHub, npm, and system repositories
+grep -q "8.8.8.8" /etc/resolv.conf 2>/dev/null || echo -e "nameserver 8.8.8.8\nnameserver 1.1.1.1" >> /etc/resolv.conf
 # ──────────────────────────────────────────────
 # Step 1 — System Packages + Disable Fail2Ban + Install Sokrat MOTD
 # ──────────────────────────────────────────────
