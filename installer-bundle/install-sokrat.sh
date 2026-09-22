@@ -719,8 +719,10 @@ if [ -z "$AMPMGR_PASS" ]; then AMPMGR_PASS="admin"; fi
 
 if [ -f "$INSTALL_DIR/.env" ]; then
     echo "  .env already exists, updating AMI credentials..."
-    sed -i "s/^AMI_USER=.*/AMI_USER=${AMPMGR_USER}/" "$INSTALL_DIR/.env"
-    sed -i "s/^AMI_PASS=.*/AMI_PASS=${AMPMGR_PASS}/" "$INSTALL_DIR/.env"
+    AMPMGR_USER_CLEAN=$(echo "$AMPMGR_USER" | tr -d '\n\r' | sed 's/[&/\]/\\&/g')
+    AMPMGR_PASS_CLEAN=$(echo "$AMPMGR_PASS" | tr -d '\n\r' | sed 's/[&/\]/\\&/g')
+    sed -i "s|^AMI_USER=.*|AMI_USER=${AMPMGR_USER_CLEAN}|" "$INSTALL_DIR/.env"
+    sed -i "s|^AMI_PASS=.*|AMI_PASS=${AMPMGR_PASS_CLEAN}|" "$INSTALL_DIR/.env"
     if ! grep -q '^ROOT_PASSWORD_HASH=' "$INSTALL_DIR/.env"; then
         GEN_ROOT_PASS="Admin@123"
         GEN_ROOT_HASH=$(node -e "console.log(require('bcrypt').hashSync('$GEN_ROOT_PASS', 10))")
