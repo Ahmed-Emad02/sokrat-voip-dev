@@ -107,6 +107,10 @@ fi
 systemctl disable issabel-firstboot.service 2>/dev/null || true
 
 # 8. Configure SIP Driver to chan_sip
+# Ensure chan_sip is enabled in modules_custom.conf
+if [ -f /etc/asterisk/modules_custom.conf ]; then
+    grep -q "load = chan_sip.so" /etc/asterisk/modules_custom.conf || echo "load = chan_sip.so" >> /etc/asterisk/modules_custom.conf
+fi
 echo "--> Setting default SIP driver to $SIP_DRIVER..."
 mysql -u root -p"$MARIADB_PASS" asterisk -e "UPDATE issabelpbx_settings SET value = '$SIP_DRIVER' WHERE keyword = 'SIPDRIVER';" 2>/dev/null || true
 
