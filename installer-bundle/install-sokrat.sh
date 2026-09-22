@@ -1108,7 +1108,7 @@ if [ -d "$PUSH_GATEWAY_DIR/.git" ]; then
     cd "$PUSH_GATEWAY_DIR"
     git fetch origin
     git checkout origin/master -B master 2>/dev/null || git checkout origin/main -B main 2>/dev/null || true
-elif [ -f "$PUSH_GATEWAY_DIR/server.js" ]; then
+elif [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
     echo "  Push gateway source already present in $PUSH_GATEWAY_DIR, proceeding..."
     cd "$PUSH_GATEWAY_DIR"
 else
