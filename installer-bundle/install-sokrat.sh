@@ -1108,14 +1108,18 @@ if [ -d "$PUSH_GATEWAY_DIR/.git" ]; then
     cd "$PUSH_GATEWAY_DIR"
     git fetch origin
     git checkout origin/master -B master 2>/dev/null || git checkout origin/main -B main 2>/dev/null || true
+elif [ -f "$PUSH_GATEWAY_DIR/server.js" ]; then
+    echo "  Push gateway source already present in $PUSH_GATEWAY_DIR, proceeding..."
+    cd "$PUSH_GATEWAY_DIR"
 else
     git clone "$PUSH_GATEWAY_REPO" "$PUSH_GATEWAY_DIR"
     cd "$PUSH_GATEWAY_DIR"
 fi
 
-# Gateway dependencies (apns2, firebase-admin, express, mysql2, dotenv)
-if [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
-    npm install --production --prefix "$PUSH_GATEWAY_DIR"
+if [ -d "$PUSH_GATEWAY_DIR/node_modules" ] && [ -f "$PUSH_GATEWAY_DIR/node_modules/express/package.json" ]; then
+    echo "  Push gateway dependencies already bundled in node_modules, skipping npm install."
+elif [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
+    npm install --production --prefix "$PUSH_GATEWAY_DIR" 2>/dev/null || true
 fi
 
 # Gateway .env (reuse the same MySQL root password and host settings)
