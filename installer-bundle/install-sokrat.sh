@@ -1279,8 +1279,9 @@ echo "  address_book.db initialized with schema and permissions set"
 # ──────────────────────────────────────────────
 echo "[8/14] Configuring WebRTC / PJSIP infrastructure..."
 
-# Generate DTLS certificate for WebRTC if missing
-if [ ! -f /etc/asterisk/keys/asterisk.pem ]; then
+# Generate DTLS certificate for WebRTC if missing or empty
+if [ ! -s /etc/asterisk/keys/asterisk.pem ]; then
+    rm -f /etc/asterisk/keys/asterisk.pem
     mkdir -p /etc/asterisk/keys
     openssl req -x509 -newkey rsa:4096 -keyout /etc/asterisk/keys/asterisk.pem \
         -out /etc/asterisk/keys/asterisk.pem -days 3650 -nodes \
