@@ -63,8 +63,7 @@ fi
 
 # 4. Install EVERYTHING strictly offline from the local bundle
 echo "--> Installing all database, web, Asterisk 18 & Issabel 5 packages offline..."
-dnf --disablerepo="*" --enablerepo="sokrat-local-bundle" install -y --nogpgcheck --allowerasing "${RPM_DIR}"/*.rpm || \
-rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/*.rpm || true
+rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/*.rpm 2>/dev/null || true
 
 # 5. Install binaries (Node.js, ffmpeg, pico2wave)
 echo "--> Installing core binaries..."
