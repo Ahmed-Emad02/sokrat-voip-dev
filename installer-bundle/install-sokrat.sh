@@ -214,6 +214,11 @@ echo "$SYSTEM_HOSTNAME" > /etc/hostname 2>/dev/null || true
 hostname "$SYSTEM_HOSTNAME" 2>/dev/null || true
 hostnamectl set-hostname "$SYSTEM_HOSTNAME" 2>/dev/null || true
 
+# Fix virtual/physical NIC TCP segmentation offloading corruption and MTU on Rocky 8
+for dev in $(ip -o link show | awk -F': ' '{print $2}' | grep -vE '^(lo|docker|veth)'); do
+    ethtool -K "$dev" rx off tx off tso off gso off gro off lro off 2>/dev/null || true
+    ip link set dev "$dev" mtu 1400 2>/dev/null || true
+done
 # ──────────────────────────────────────────────
 # Step 1 — System Packages + Disable Fail2Ban + Install Sokrat MOTD
 # ──────────────────────────────────────────────
@@ -565,13 +570,18 @@ fi
 # Step 2 — Install Node.js 22
 # ──────────────────────────────────────────────
 echo "[2/14] Installing Node.js 22..."
-if ! command -v node &>/dev/null; then
+if command -v node &>/dev/null; then
+    echo "  Node.js already installed: $(node -v)"
+elif [ -f "/tmp/sokrat-repo/installer-bundle/binaries/node" ]; then
+    echo "  Installing Node.js from installer-bundle..."
+    cp "/tmp/sokrat-repo/installer-bundle/binaries/node" /usr/local/bin/node
+    chmod +x /usr/local/bin/node
+    echo "  Node.js installed: $(/usr/local/bin/node -v)"
+else
     curl -fsSL -o /tmp/nodesetup.sh "$NODE_SETUP_URL"
     bash /tmp/nodesetup.sh
     yum install -y nodejs
     rm -f /tmp/nodesetup.sh
-else
-    echo "  Node.js already installed: $(node -v)"
 fi
 
 # ──────────────────────────────────────────────
@@ -579,15 +589,16 @@ fi
 # ──────────────────────────────────────────────
 echo "[3/14] Cloning repository..."
 systemctl stop sokrat-voip 2>/dev/null || true
-echo "[3/14] Cloning repository..."
-systemctl stop sokrat-voip 2>/dev/null || true
-
 # Optimize git HTTP settings to prevent SSL_ERROR_SYSCALL on slow/unstable networks
 git config --global http.postBuffer 524288000 2>/dev/null || true
 git config --global http.lowSpeedLimit 1000 2>/dev/null || true
 git config --global http.lowSpeedTime 300 2>/dev/null || true
 
-if [ -d "$INSTALL_DIR/.git" ]; then
+# If files are already present in $INSTALL_DIR (e.g. from bundle or manual extract)
+if [ -f "$INSTALL_DIR/server.js" ]; then
+    echo "  Application source already present in $INSTALL_DIR, proceeding..."
+    cd "$INSTALL_DIR"
+elif [ -d "$INSTALL_DIR/.git" ]; then
     echo "  Directory $INSTALL_DIR exists, maintaining local modifications..."
     cd "$INSTALL_DIR"
     git config http.postBuffer 524288000 2>/dev/null || true
@@ -627,7 +638,9 @@ chmod 644 /etc/profile.d/sokrat-aliases.sh
 # 3b — Clone / Update Sokrat VOICE (WebRTC Softphone)
 echo "  [3b] Cloning Sokrat VOICE (WebRTC Softphone) repository..."
 systemctl stop sokrat-softphone 2>/dev/null || true
-if [ -d "$SOFTPHONE_DIR/.git" ]; then
+if [ -f "$SOFTPHONE_DIR/server.js" ]; then
+    echo "  Softphone source already present in $SOFTPHONE_DIR, proceeding..."
+elif [ -d "$SOFTPHONE_DIR/.git" ]; then
     echo "  Directory $SOFTPHONE_DIR exists, maintaining local modifications..."
     cd "$SOFTPHONE_DIR"
     git config http.postBuffer 524288000 2>/dev/null || true
@@ -650,14 +663,18 @@ fi
 # Step 4 — Install Dependencies
 # ──────────────────────────────────────────────
 echo "[4/14] Installing npm dependencies..."
-if [ -f package-lock.json ]; then
+if [ -d "$INSTALL_DIR/node_modules" ] && [ -f "$INSTALL_DIR/node_modules/express/package.json" ]; then
+    echo "  Dependencies already bundled in node_modules, skipping npm install."
+elif [ -f package-lock.json ]; then
     npm ci --omit=dev 2>/dev/null || npm install --omit=dev
 else
     npm install --omit=dev
 fi
 
 echo "  [4a] Installing Sokrat VOICE softphone npm dependencies..."
-if [ -d "$SOFTPHONE_DIR" ]; then
+if [ -d "$SOFTPHONE_DIR/node_modules" ] && [ -f "$SOFTPHONE_DIR/node_modules/express/package.json" ]; then
+    echo "  Softphone dependencies already bundled in node_modules, skipping npm install."
+elif [ -d "$SOFTPHONE_DIR" ]; then
     cd "$SOFTPHONE_DIR"
     npm install --omit=dev 2>/dev/null || true
     cd "$INSTALL_DIR"
