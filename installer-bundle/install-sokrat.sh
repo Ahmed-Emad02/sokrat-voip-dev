@@ -1871,8 +1871,9 @@ echo "[10/14] Setting up GSM dongles & chan_dongle..."
 
 # 10a — Install Build Dependencies
 echo "  [10a] Installing build dependencies..."
-yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom wget curl tar patch
-yum -y install asterisk18-devel
+if ! command -v gcc &>/dev/null || ! command -v make &>/dev/null; then
+    yum -y install gcc gcc-c++ make automake autoconf libtool sqlite-devel usbutils usb_modeswitch minicom wget curl tar patch asterisk18-devel 2>/dev/null || true
+fi
 
 # 10b — Compile and Install librnnoise & func_rnnoise.so
 echo "  [10b] Compiling librnnoise and func_rnnoise.so..."
