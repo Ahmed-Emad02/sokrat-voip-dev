@@ -31,28 +31,11 @@ if [ ! -d "$RPM_DIR" ] && [ -d "$SCRIPT_DIR/rpms" ]; then
     RPM_DIR="$SCRIPT_DIR/rpms"
 fi
 
-# 2. Configure Local Offline RPM Repository
-echo "--> Configuring local file repository..."
-cat << REPO_EOF > /etc/yum.repos.d/sokrat-local-bundle.repo
-[sokrat-local-bundle]
-name=Sokrat Local Offline Bundle
-baseurl=file://${RPM_DIR}/
-enabled=1
-gpgcheck=0
-REPO_EOF
-
 # Ensure git and tar are installed for repo management
 if ! command -v git &>/dev/null; then
     rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/git*.rpm "${RPM_DIR}"/perl*.rpm 2>/dev/null || true
 fi
-echo "--> Configuring local file repository..."
-cat << REPO_EOF > /etc/yum.repos.d/sokrat-local-bundle.repo
-[sokrat-local-bundle]
-name=Sokrat Local Offline Bundle
-baseurl=file://${RPM_DIR}/
-enabled=1
-gpgcheck=0
-REPO_EOF
+rm -f /etc/yum.repos.d/sokrat-local-bundle.repo 2>/dev/null || true
 
 # 3. Disable SELinux immediately to avoid permission issues
 echo "--> Disabling SELinux..."

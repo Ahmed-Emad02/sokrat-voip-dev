@@ -583,6 +583,9 @@ elif [ -f "/tmp/sokrat-repo/installer-bundle/binaries/node" ]; then
 else
     curl -fsSL -o /tmp/nodesetup.sh "$NODE_SETUP_URL"
     bash /tmp/nodesetup.sh
+    dnf --disablerepo="issabel*,remi*,epel*,sokrat*" install -y nodejs 2>/dev/null || yum install -y nodejs
+    rm -f /tmp/nodesetup.sh
+    bash /tmp/nodesetup.sh
     yum install -y nodejs
     rm -f /tmp/nodesetup.sh
 fi
