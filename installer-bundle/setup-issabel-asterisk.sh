@@ -45,7 +45,17 @@ if [ -f /etc/selinux/config ]; then
 fi
 
 # 4. Install EVERYTHING strictly offline from the local bundle
+# 4. Install EVERYTHING strictly offline from the local bundle
 echo "--> Installing all database, web, Asterisk 18 & Issabel 5 packages offline..."
+rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/*.rpm 2>/dev/null || true
+
+# Open firewall ports for web, PBX, and softphone
+if command -v firewall-cmd &>/dev/null && systemctl is-active firewalld &>/dev/null; then
+    echo "--> Configuring firewalld rules..."
+    firewall-cmd --zone=public --add-service=http --add-service=https --permanent 2>/dev/null || true
+    firewall-cmd --zone=public --add-port=80/tcp --add-port=443/tcp --add-port=8443/tcp --add-port=3000/tcp --add-port=3001/tcp --add-port=5060/udp --add-port=10000-20000/udp --permanent 2>/dev/null || true
+    firewall-cmd --reload 2>/dev/null || true
+fi
 rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/*.rpm 2>/dev/null || true
 
 # 5. Install binaries (Node.js, ffmpeg, pico2wave)
