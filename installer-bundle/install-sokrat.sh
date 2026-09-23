@@ -666,6 +666,23 @@ fi
 # Step 4 — Install Dependencies
 # ──────────────────────────────────────────────
 echo "[4/14] Installing npm dependencies..."
+NPM_BUNDLE=""
+for candidate in \
+    "$INSTALL_DIR/installer-bundle/sokrat-npm-modules.tar.gz" \
+    "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/sokrat-npm-modules.tar.gz" \
+    "/tmp/sokrat-repo/installer-bundle/sokrat-npm-modules.tar.gz" \
+    "/tmp/installer-bundle/sokrat-npm-modules.tar.gz"; do
+    if [ -f "$candidate" ]; then
+        NPM_BUNDLE="$candidate"
+        break
+    fi
+done
+
+if [ -n "$NPM_BUNDLE" ] && [ ! -d "$INSTALL_DIR/node_modules/express" ]; then
+    echo "  Extracting pre-bundled npm dependencies from $(basename "$NPM_BUNDLE")..."
+    tar -xzf "$NPM_BUNDLE" -C /opt 2>/dev/null || true
+fi
+
 if [ -d "$INSTALL_DIR/node_modules" ] && [ -f "$INSTALL_DIR/node_modules/express/package.json" ]; then
     echo "  Dependencies already bundled in node_modules, skipping npm install."
 elif [ -f package-lock.json ]; then
