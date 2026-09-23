@@ -92,9 +92,10 @@ if [ -f "$SCRIPT_DIR/binaries/chan_dongle.so" ]; then
     cp "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/
 fi
 
-# 6. Start MariaDB and apply passwords non-interactively
-echo "--> Starting MariaDB..."
+# 6. Start MariaDB and Asterisk
+echo "--> Starting MariaDB & Asterisk..."
 systemctl enable --now mariadb
+systemctl enable --now asterisk
 sleep 2
 
 # Provision initial databases with install_amp if asterisk db is missing
@@ -127,11 +128,8 @@ echo "--> Setting file permissions..."
 mkdir -p /var/www/html/var/templates_c
 chown -R asterisk:asterisk /var/www/html /etc/asterisk /var/lib/asterisk /var/log/asterisk
 chmod -R 775 /var/www/html/var 2>/dev/null || true
-echo "--> Setting file permissions..."
-chown -R asterisk:asterisk /var/www/html /etc/asterisk /var/lib/asterisk /var/log/asterisk
-chmod -R 775 /var/www/html/var 2>/dev/null || true
 
-# 9. Start and enable Asterisk & Apache
+# 9. Start and enable Apache and reload amportal
 echo "--> Starting Asterisk and Apache services..."
 systemctl enable --now httpd
 systemctl enable --now php-fpm
