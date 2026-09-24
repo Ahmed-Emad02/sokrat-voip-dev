@@ -585,9 +585,6 @@ else
     bash /tmp/nodesetup.sh
     dnf --disablerepo="issabel*,remi*,epel*,sokrat*" install -y nodejs 2>/dev/null || yum install -y nodejs
     rm -f /tmp/nodesetup.sh
-    bash /tmp/nodesetup.sh
-    yum install -y nodejs
-    rm -f /tmp/nodesetup.sh
 fi
 
 # ──────────────────────────────────────────────
