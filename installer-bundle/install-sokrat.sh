@@ -1138,6 +1138,7 @@ elif [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
     echo "  Push gateway source already present in $PUSH_GATEWAY_DIR, proceeding..."
     cd "$PUSH_GATEWAY_DIR"
 else
+    rm -rf "$PUSH_GATEWAY_DIR"
     git clone "$PUSH_GATEWAY_REPO" "$PUSH_GATEWAY_DIR"
     cd "$PUSH_GATEWAY_DIR"
 fi
