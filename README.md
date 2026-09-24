@@ -12,18 +12,23 @@ curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/i
 
 ## Offline Appliance & Fast Install (Rocky Linux 8)
 
-### 1. Install Issabel 5 & Asterisk 18 (100% Offline Bundle)
-Run as root on a fresh Rocky Linux 8 server (zero internet needed):
+### Complete Installation (Asterisk 18 + Issabel 5 + Sokrat VOIP)
+Run as root on a fresh Rocky Linux 8 server (clones once and sets up the complete PBX appliance):
+```bash
+git clone https://github.com/Ahmed-Emad02/sokrat-voip-dev.git /tmp/sokrat-repo && cd /tmp/sokrat-repo/installer-bundle && bash setup-issabel-asterisk.sh && bash install-sokrat.sh
+```
+
+### Or Step-by-Step:
+
+**Step 1 — Install Issabel 5 & Asterisk 18 (100% Offline Bundle):**
 ```bash
 git clone https://github.com/Ahmed-Emad02/sokrat-voip-dev.git /tmp/sokrat-repo && cd /tmp/sokrat-repo/installer-bundle && bash setup-issabel-asterisk.sh
 ```
 
-### 2. Install Sokrat VOIP (Without System Packages)
-Run as root once Issabel 5 and Asterisk 18 are installed:
+**Step 2 — Install Sokrat VOIP (Without downloading again):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/installer-bundle/install-sokrat.sh | bash
+cd /tmp/sokrat-repo/installer-bundle && bash install-sokrat.sh
 ```
-
 Run as root to remove Sokrat VoIP and restore Issabel default web GUI (database tables are preserved):
 
 ```bash
