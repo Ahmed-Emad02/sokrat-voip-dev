@@ -16,7 +16,8 @@ SOFTPHONE_REPO_BRANCH=main
 PUSH_GATEWAY_DIR=/opt/sokrat-push-gateway
 PUSH_GATEWAY_REPO=https://github.com/Ahmed-Emad02/sokrat-push-gateway.git
 NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
-MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf 2>/dev/null | cut -d= -f2- | xargs || true)
+MYSQL_ROOT_PWD=$(grep -i '^mysqlrootpwd=' /etc/issabel.conf 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ' | xargs 2>/dev/null || echo "admin")
+if [ -z "$MYSQL_ROOT_PWD" ]; then MYSQL_ROOT_PWD="admin"; fi
 echo "============================================"
 echo " Sokrat VOIP Installer v1.0.4"
 echo " Target: Asterisk 18"
