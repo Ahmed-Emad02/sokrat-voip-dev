@@ -113,8 +113,8 @@ ISSABEL_CONF
 chmod 600 /etc/issabel.conf 2>/dev/null || true
 
 if [ -f /usr/bin/issabel-admin-passwords ]; then
-    /usr/bin/issabel-admin-passwords --cli change "$MARIADB_PASS" "$WEB_ADMIN_PASS" 2>/dev/null || \
-    /usr/bin/issabel-admin-passwords --cli init "$MARIADB_PASS" "$WEB_ADMIN_PASS" 2>/dev/null || true
+/usr/bin/issabel-admin-passwords --cli change "$MARIADB_PASS" "$WEB_ADMIN_PASS" 2>/dev/null || \
+/usr/bin/issabel-admin-passwords --cli init "$MARIADB_PASS" "$WEB_ADMIN_PASS" 2>/dev/null || true
 fi
 
 # Disable interactive firstboot prompt on reboot
