@@ -973,14 +973,22 @@ ALTER TABLE mobile_devices MODIFY device_uuid VARCHAR(128) NOT NULL;
 " 2>/dev/null || true
 ensure_db_index "mobile_devices" "uniq_platform_device" "UNIQUE KEY \`uniq_platform_device\` (\`platform\`, \`device_uuid\`)"
 
-# Older/partial Announcement module installs can lack the Pico TTS columns.
-# Use information_schema checks rather than version-specific ADD IF NOT EXISTS syntax.
-ANNOUNCEMENT_TABLE_EXISTS=$(mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -Nse \
-    "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'announcement'")
-if [ "$ANNOUNCEMENT_TABLE_EXISTS" != "1" ]; then
-    echo "  Error: Issabel's required asterisk.announcement table is missing" >&2
-    exit 1
-fi
+# Auto-create announcement table if missing
+mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
+CREATE TABLE IF NOT EXISTS \`announcement\` (
+  \`announcement_id\` INT(11) NOT NULL AUTO_INCREMENT,
+  \`description\` VARCHAR(50) DEFAULT NULL,
+  \`recording_id\` INT(11) DEFAULT NULL,
+  \`allow_skip\` INT(11) DEFAULT NULL,
+  \`post_dest\` VARCHAR(255) DEFAULT NULL,
+  \`return_ivr\` TINYINT(1) NOT NULL DEFAULT 0,
+  \`noanswer\` TINYINT(1) NOT NULL DEFAULT 0,
+  \`repeat_msg\` VARCHAR(2) NOT NULL DEFAULT '',
+  \`tts_lang\` VARCHAR(10) NOT NULL DEFAULT 'en-US',
+  \`tts_text\` TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (\`announcement_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+" 2>/dev/null || true
 
 ensure_db_column "announcement" "tts_lang" "VARCHAR(10) NOT NULL DEFAULT 'en-US'"
 ensure_db_column "announcement" "tts_text" "TEXT NOT NULL DEFAULT ('')"
