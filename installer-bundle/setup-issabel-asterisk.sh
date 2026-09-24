@@ -91,17 +91,30 @@ systemctl enable --now mariadb
 systemctl enable --now asterisk
 sleep 2
 
-# Provision initial databases with install_amp if asterisk db is missing
-if ! mysql -u root -p"$MARIADB_PASS" -e "USE asterisk;" 2>/dev/null && [ -f /usr/src/issabelPBX/framework/install_amp ]; then
-    echo "--> Running install_amp to seed asterisk & asteriskcdrdb..."
-    /usr/src/issabelPBX/framework/install_amp --dbuser=root --dbpass="$MARIADB_PASS" --installdb --scripted --language=en 2>&1 | tail -n 20 || true
+# Ensure MariaDB root password is set cleanly without prompts
+echo "--> Configuring MariaDB root credentials..."
+mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$MARIADB_PASS'; FLUSH PRIVILEGES;" 2>/dev/null || \
+mysql -u root -p"$MARIADB_PASS" -e "SELECT 1;" 2>/dev/null || true
+
+# Provision initial databases with install_amp so ampusers and all FreePBX tables exist
+if [ -f /usr/src/issabelPBX/framework/install_amp ]; then
+    echo "--> Running install_amp to seed asterisk & asteriskcdrdb tables..."
+    /usr/src/issabelPBX/framework/install_amp --dbuser=root --dbpass="$MARIADB_PASS" --installdb --scripted --language=en 2>&1 | tail -n 15 || true
 fi
 
 echo "--> Initializing Issabel 5 non-interactively..."
 touch /installamp
+mkdir -p /etc
+cat > /etc/issabel.conf << ISSABEL_CONF
+mysqlrootpwd=$MARIADB_PASS
+amiadminpwd=$WEB_ADMIN_PASS
+cyrususerpwd=$MARIADB_PASS
+ISSABEL_CONF
+chmod 600 /etc/issabel.conf 2>/dev/null || true
 
 if [ -f /usr/bin/issabel-admin-passwords ]; then
-    /usr/bin/issabel-admin-passwords --cli init "$MARIADB_PASS" "$WEB_ADMIN_PASS" || true
+    /usr/bin/issabel-admin-passwords --cli change "$MARIADB_PASS" "$WEB_ADMIN_PASS" 2>/dev/null || \
+    /usr/bin/issabel-admin-passwords --cli init "$MARIADB_PASS" "$WEB_ADMIN_PASS" 2>/dev/null || true
 fi
 
 # Disable interactive firstboot prompt on reboot
