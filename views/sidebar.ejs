@@ -4953,7 +4953,7 @@ function enhanceSelectElements() {
         select.classList.add('enhanced-select');
 
         const wrapper = document.createElement('div');
-        wrapper.className = 'custom-select-wrapper relative w-full';
+        wrapper.className = 'custom-select-wrapper relative w-full min-w-0 max-w-full';
         select.parentNode.insertBefore(wrapper, select);
         wrapper.appendChild(select);
 
@@ -4975,10 +4975,10 @@ function enhanceSelectElements() {
         trigger.setAttribute('aria-controls', menuId);
         trigger.setAttribute('aria-haspopup', 'listbox');
         trigger.setAttribute('aria-expanded', 'false');
-        trigger.className = 'custom-select-trigger config-dropdown-trigger w-full border rounded-lg px-3 py-2 flex items-center justify-between gap-2 cursor-pointer select-none transition';
+        trigger.className = 'custom-select-trigger config-dropdown-trigger w-full max-w-full overflow-hidden border rounded-lg px-3 py-2 flex items-center justify-between gap-2 cursor-pointer select-none transition';
 
         const labelSpan = document.createElement('span');
-        labelSpan.className = 'config-dropdown-label flex-1';
+        labelSpan.className = 'config-dropdown-label flex-1 min-w-0 truncate text-left';
         const selectedOpt = select.options[select.selectedIndex] || select.options[0];
         labelSpan.textContent = selectedOpt ? selectedOpt.textContent : '';
 

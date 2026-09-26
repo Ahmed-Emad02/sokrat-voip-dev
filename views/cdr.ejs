@@ -4,7 +4,7 @@ const words = {
         title: "Call", subtitle: "History", desc: "Searchable call records and recording playback",
         startTime: "Start Time", endTime: "End Time", roster: "Extension Roster", allExt: "All Extensions",
         status: "Call Status", allDisp: "All Dispositions", direction: "Direction", allDir: "All Directions", dirIn: "Inbound", dirOut: "Outbound", dirInternal: "Internal",
-        scope: "Call Scope", allScope: "All Scopes", scopeInternal: "Internal Only", scopeExternal: "External Only",
+        scope: "Call Scope", allScope: "All Scopes", scopeInternal: "Internal Only", scopeExternal: "External Only", scopeFailover: "Failover Only",
         src: "Source", dst: "Destination", did: "DID Number", uid: "Unique ID",
         btn: "Apply Filters", thTime: "Timestamp", thId: "UniqueID", thSrc: "Source", thDst: "Destination", thDid: "DID",
         thName: "Name", thAir: "Airtime", thState: "State", thDir: "Dir", thScope: "Scope", thRec: "Recording", thActions: "Actions", noData: "No matching call records.",
@@ -16,7 +16,7 @@ const words = {
         title: "سجل", subtitle: "المكالمات", desc: "نظام القياس عن بعد الشامل وسجلات الأنشطة الصوتية",
         startTime: "وقت البدء", endTime: "وقت الانتهاء", roster: "قائمة الموظفين", allExt: "جميع التحويلات",
         status: "حالة المكالمة", allDisp: "جميع الحالات", direction: "الاتجاه", allDir: "كل الاتجاهات", dirIn: "وارد", dirOut: "صادر", dirInternal: "داخلي",
-        scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط",
+        scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط", scopeFailover: "تحويل خارجي فقط",
         src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
         btn: "تطبيق فلاتر البحث", thTime: "التوقيت", thId: "المعرف", thSrc: "المصدر", thDst: "الوجهة", thDid: "DID",
         thName: "الاسم", thAir: "مدة المكالمة", thState: "الحالة", thDir: "اتجاه", thScope: "النطاق", thRec: "التسجيل", thActions: "الإجراءات", noData: "لم يتم العثور على سجلات مكالمات مطابقة.",
@@ -224,6 +224,71 @@ function fmtDur(s) {
             background: #ffffff;
             cursor: pointer;
         }
+        /* Theme-aware styling for External Failover calls in CDR */
+        .cdr-failover-pill {
+            background-color: rgba(245, 158, 11, 0.16);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            font-weight: 800;
+        }
+        .light-theme .cdr-failover-pill {
+            background-color: #fef3c7 !important;
+            color: #78350f !important;
+            border-color: #f59e0b !important;
+            font-weight: 800;
+        }
+        .cdr-via-badge {
+            background-color: #27272a;
+            color: #f4f4f5;
+            border: 1px solid #3f3f46;
+            font-weight: 800;
+        }
+        .light-theme .cdr-via-badge {
+            background-color: #e2e8f0 !important;
+            color: #0f172a !important;
+            border-color: #94a3b8 !important;
+            font-weight: 800;
+        }
+        .cdr-failover-dst {
+            color: #f59e0b;
+            font-weight: 800;
+        }
+        .light-theme .cdr-failover-dst {
+            color: #78350f !important;
+            font-weight: 800;
+        }
+        .cdr-failover-dir {
+            background-color: rgba(245, 158, 11, 0.16);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            font-weight: 900;
+        }
+        .light-theme .cdr-failover-dir {
+            background-color: #fef3c7 !important;
+            color: #78350f !important;
+            border-color: #f59e0b !important;
+            font-weight: 900;
+        }
+        .cdr-failover-scope {
+            background-color: rgba(249, 115, 22, 0.16);
+            color: #fb923c;
+            border: 1px solid rgba(249, 115, 22, 0.35);
+            font-weight: 900;
+        }
+        .light-theme .cdr-failover-scope {
+            background-color: #ffedd5 !important;
+            color: #7c2d12 !important;
+            border-color: #ea580c !important;
+            font-weight: 900;
+        }
+        .cdr-failover-name {
+            color: #fbbf24;
+            font-weight: 700;
+        }
+        .light-theme .cdr-failover-name {
+            color: #78350f !important;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
@@ -376,6 +441,7 @@ function fmtDur(s) {
                         <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
                         <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
                         <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
+                        <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
                     </select>
                 </div>
                 <div>
@@ -450,13 +516,46 @@ function fmtDur(s) {
                             <tr><td colspan="<%= isSuper ? 12 : 11 %>" class="p-8 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>
                         <% } else { %>
                             <% calls.forEach(call => { %>
-                                <tr class="hover:bg-zinc-900/60 transition">
+                                <% const isFailover = (call.dcontext === 'ext-external-failover') || (call.userfield && String(call.userfield).startsWith('Failover:')); %>
+                                <% const failoverViaMatch = call.userfield ? String(call.userfield).match(/via\s+([^\s,]+)/i) : null; %>
+                                <% const failoverVia = failoverViaMatch ? failoverViaMatch[1] : (call.dstchannel && call.dstchannel.startsWith('Dongle/') ? call.dstchannel.split('-')[0].replace('Dongle/', '') : ''); %>
+                                <tr class="hover:bg-zinc-900/60 transition <%= isFailover ? 'bg-amber-500/[0.03]' : '' %>">
                                     <td class="p-4 text-slate-400 whitespace-nowrap"><%= moment(call.calldate).format('YYYY-MM-DD HH:mm:ss') %></td>
                                     <td class="p-4 text-zinc-400 text-[11px] font-mono whitespace-nowrap"><%= call.uniqueid %></td>
-                                    <td class="p-4 font-bold text-white font-mono whitespace-nowrap"><%= call.src %></td>
-                                    <td class="p-4 text-white font-mono whitespace-nowrap"><%= call.dst %></td>
+                                    <td class="p-4 font-bold text-white font-mono whitespace-nowrap">
+                                        <%= call.src %>
+                                        <% if (isFailover && call.channel && call.channel.startsWith('Dongle/')) { %>
+                                            <span class="block text-[10px] font-mono text-zinc-400 font-normal"><%= call.channel.split('-')[0].replace('Dongle/', '') %></span>
+                                        <% } %>
+                                    </td>
+                                    <td class="p-4 whitespace-nowrap">
+                                        <% if (isFailover) { %>
+                                            <div class="flex flex-col gap-1">
+                                                <span class="font-bold cdr-failover-dst font-mono flex items-center gap-1.5 text-xs">
+                                                    <svg class="w-3.5 h-3.5 shrink-0 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                                                    <%= call.dst %>
+                                                </span>
+                                                <div class="flex items-center gap-1 flex-wrap">
+                                                    <span class="inline-flex items-center gap-1 text-[10px] font-sans font-black px-2 py-0.5 rounded cdr-failover-pill">
+                                                        <%= isRtl ? 'تحويل لرقم خارجي' : 'Failover Mobile' %>
+                                                    </span>
+                                                    <% if (failoverVia) { %>
+                                                        <span class="text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded cdr-via-badge">via <%= failoverVia %></span>
+                                                    <% } %>
+                                                </div>
+                                            </div>
+                                        <% } else { %>
+                                            <span class="text-white font-mono"><%= call.dst %></span>
+                                        <% } %>
+                                    </td>
                                     <td class="p-4 font-mono text-xs text-zinc-300 whitespace-nowrap"><%= call.did && call.did.trim() ? call.did.trim() : '-' %></td>
-                                    <td class="p-4 text-zinc-300"><%= call.src_name %></td>
+                                    <td class="p-4 text-zinc-300">
+                                        <% if (isFailover && (!call.src_name || call.src_name === 'No Name' || call.src_name.startsWith('dongle'))) { %>
+                                            <span class="cdr-failover-name text-xs font-semibold"><%= isRtl ? 'مكالمة واردة محولة لموبايل' : 'Inbound Forwarded Call' %></span>
+                                        <% } else { %>
+                                            <%= call.src_name %>
+                                        <% } %>
+                                    </td>
                                     <td class="p-4 text-zinc-400 whitespace-nowrap"><%= fmtDur(call.billsec) %></td>
                                     <td class="p-4 whitespace-nowrap">
                                         <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded text-[10px] font-black tracking-wider whitespace-nowrap <%= dispColors[call.disposition] || 'bg-zinc-800 text-zinc-400 border border-zinc-700/50' %>">
@@ -464,7 +563,11 @@ function fmtDur(s) {
                                         </span>
                                     </td>
                                     <td class="p-4 whitespace-nowrap">
-                                        <% if (call.direction === 'OUTBOUND') { %>
+                                        <% if (isFailover) { %>
+                                            <span class="inline-flex items-center justify-center text-[10px] font-black tracking-wider px-2 py-0.5 rounded cdr-failover-dir whitespace-nowrap">
+                                                <%= isRtl ? 'تحويل خارجي' : 'FAILOVER' %>
+                                            </span>
+                                        <% } else if (call.direction === 'OUTBOUND') { %>
                                             <span class="inline-flex items-center justify-center text-[10px] font-black tracking-wider text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20 whitespace-nowrap"><%= t.dirOut %></span>
                                         <% } else if (call.direction === 'INBOUND') { %>
                                             <span class="inline-flex items-center justify-center text-[10px] font-black tracking-wider text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20 whitespace-nowrap"><%= t.dirIn %></span>
@@ -473,7 +576,11 @@ function fmtDur(s) {
                                         <% } %>
                                     </td>
                                     <td class="p-4 whitespace-nowrap">
-                                        <% if (call.call_scope === 'INTERNAL') { %>
+                                        <% if (isFailover) { %>
+                                            <span class="inline-flex items-center justify-center text-[10px] font-black tracking-wider px-2 py-0.5 rounded cdr-failover-scope whitespace-nowrap">
+                                                <%= isRtl ? 'ربط شريحة مباشر' : 'Direct SIM Bridge' %>
+                                            </span>
+                                        <% } else if (call.call_scope === 'INTERNAL') { %>
                                             <span class="inline-flex items-center justify-center text-[10px] font-black tracking-wider text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded border border-purple-400/20 whitespace-nowrap"><%= isRtl ? 'داخلي' : 'Internal' %></span>
                                         <% } else { %>
                                             <span class="inline-flex items-center justify-center text-[10px] font-black tracking-wider text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded border border-indigo-400/20 whitespace-nowrap"><%= isRtl ? 'خارجي' : 'External' %></span>

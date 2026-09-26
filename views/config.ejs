@@ -4830,16 +4830,22 @@ function isTabAllowed(tabName) {
                                     <input type="text" id="${customInputId}" value="${escapeHtml(this.customDialplanString)}" placeholder="e.g. custom-app,s,1" class="dest-custom-input config-input w-full font-mono text-xs py-1.5">
                                 ` : isExternal ? `
                                     <div class="space-y-1.5">
-                                        <input type="tel" id="${externalInputId}" autocomplete="tel" value="${escapeHtml(this.selectedTarget && this.selectedTarget !== 'external' ? this.selectedTarget : '')}" placeholder="${this.isRtl ? 'مثال: 01012345678 أو +201012345678' : 'e.g. 01012345678 or +201012345678'}" class="dest-external-input config-input w-full font-mono text-xs py-1.5">
-                                        <div class="flex items-center gap-1.5">
-                                            <label for="dest-dongle-${this.instanceId}" class="text-[10px] text-[var(--text-muted)] font-bold shrink-0">${this.isRtl ? 'المنفذ:' : 'Trunk:'}</label>
-                                            <select id="dest-dongle-${this.instanceId}" name="dest_dongle_${this.instanceId}" aria-label="${this.isRtl ? 'منفذ الشريحة' : 'Failover Trunk'}" class="dest-external-dongle config-input w-full text-[11px] py-1 font-mono">
-                                                <option value="" ${!this.selectedDongle ? 'selected' : ''}>${this.isRtl ? 'تلقائي (تسلسل المسارات الصادرة)' : 'Auto (Outbound Routes Sequence)'}</option>
-                                                <option value="dongle1" ${this.selectedDongle === 'dongle1' ? 'selected' : ''}>dongle1 (Second GSM Modem)</option>
-                                                <option value="dongle2" ${this.selectedDongle === 'dongle2' ? 'selected' : ''}>dongle2 (Third GSM Modem)</option>
-                                                <option value="dongle3" ${this.selectedDongle === 'dongle3' ? 'selected' : ''}>dongle3 (Fourth GSM Modem)</option>
-                                                <option value="dongle0" ${this.selectedDongle === 'dongle0' ? 'selected' : ''}>dongle0 (First GSM Modem)</option>
-                                            </select>
+                                        <div>
+                                            <input type="tel" id="${externalInputId}" autocomplete="tel" value="${escapeHtml(this.selectedTarget && this.selectedTarget !== 'external' ? this.selectedTarget : '')}" placeholder="${this.isRtl ? 'مثال: 01012345678 أو +201012345678' : 'e.g. 01012345678 or +201012345678'}" class="dest-external-input config-input w-full font-mono text-xs py-1.5">
+                                        </div>
+                                        <div class="space-y-0.5 w-full min-w-0">
+                                            <label for="dest-dongle-${this.instanceId}" class="block text-[10px] text-[var(--text-muted)] font-bold">
+                                                ${this.isRtl ? 'شريحة الخروج (Trunk SIM):' : 'Trunk SIM:'}
+                                            </label>
+                                            <div class="w-full min-w-0">
+                                                <select id="dest-dongle-${this.instanceId}" name="dest_dongle_${this.instanceId}" aria-label="${this.isRtl ? 'منفذ الشريحة' : 'Failover Trunk'}" class="dest-external-dongle config-input w-full text-[11px] py-1 font-mono">
+                                                    <option value="dongle1" ${this.selectedDongle === 'dongle1' ? 'selected' : ''}>dongle1 (${this.isRtl ? 'الشريحة الثانية - ربط مباشر' : 'Direct SIM 2 - Recommended'})</option>
+                                                    <option value="dongle0" ${this.selectedDongle === 'dongle0' ? 'selected' : ''}>dongle0 (${this.isRtl ? 'الشريحة الأولى - ربط مباشر' : 'Direct SIM 1 - Hardware Bridge'})</option>
+                                                    <option value="dongle2" ${this.selectedDongle === 'dongle2' ? 'selected' : ''}>dongle2 (Third GSM Modem)</option>
+                                                    <option value="dongle3" ${this.selectedDongle === 'dongle3' ? 'selected' : ''}>dongle3 (Fourth GSM Modem)</option>
+                                                    <option value="" ${!this.selectedDongle ? 'selected' : ''}>${this.isRtl ? 'تلقائي (تسلسل المسارات الصادرة)' : 'Auto (Outbound Routes Sequence)'}</option>
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
                                 ` : `
@@ -4870,6 +4876,56 @@ function isTabAllowed(tabName) {
                                 `}
                             </div>
                         </div>
+                        ${isExternal ? `
+                            <!-- Clear Visual Guide Layout for External Number Destination -->
+                            <div class="dest-external-guide-card rounded-xl p-3 border border-emerald-500/25 bg-emerald-500/5 text-xs space-y-2 mt-2 transition-all">
+                                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 pb-2">
+                                    <div class="flex items-center gap-1.5 font-bold text-emerald-400">
+                                        <svg class="w-4 h-4 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        <span>${this.isRtl ? 'دليل إعداد تحويل المكالمات لرقم خارجي (SIM Failover Guide)' : 'External Number SIM Failover Guide'}</span>
+                                    </div>
+                                    <div class="dest-external-mode-badge shrink-0">
+                                        ${this.selectedDongle ? `
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                                ${this.isRtl ? 'ربط عتادي مباشر (Direct SIM Bridge)' : 'Direct SIM Bridge (Recommended)'}
+                                            </span>
+                                        ` : `
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                                <svg class="w-3 h-3 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                                ${this.isRtl ? 'مسارات صادرة (Outbound Routes)' : 'Via Outbound Routes'}
+                                            </span>
+                                        `}
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px] text-[var(--text-secondary)]">
+                                    <div class="flex items-start gap-2 bg-[var(--bg-primary)]/40 p-2 rounded-lg border border-[var(--border-primary)]/60">
+                                        <span class="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">1</span>
+                                        <span>${this.isRtl ? '<b>استقبال المكالمة:</b> تدخل المكالمة عبر الشريحة (مثل dongle0) وترن داخلياً حتى انتهاء المهلة.' : '<b>Incoming:</b> Call enters on SIM 1 (dongle0) and rings the group until timeout.'}</span>
+                                    </div>
+                                    <div class="flex items-start gap-2 bg-[var(--bg-primary)]/40 p-2 rounded-lg border border-[var(--border-primary)]/60">
+                                        <span class="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">2</span>
+                                        <span>${this.isRtl ? '<b>ربط فوري:</b> عند عدم الرد، يتصل Asterisk برقم جوالك عبر شريحة الخروج المحددة (مثل dongle1).' : '<b>Direct Bridge:</b> If unanswered, Asterisk dials your mobile via the chosen dongle (e.g. dongle1).'}</span>
+                                    </div>
+                                    <div class="flex items-start gap-2 bg-[var(--bg-primary)]/40 p-2 rounded-lg border border-[var(--border-primary)]/60">
+                                        <span class="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">3</span>
+                                        <span>${this.isRtl ? '<b>دون إعادة تشغيل:</b> يستمر الاتصال بدون إعادة تشغيل المودم وتظل الشرائح متصلة بالشبكة.' : '<b>Zero Restarts:</b> Bridges voice directly; SIM modems stay online continuously.'}</span>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-emerald-500/15 text-[10px]">
+                                    <div class="flex items-center gap-1.5 text-[var(--text-muted)]">
+                                        <span>${this.isRtl ? 'وجهة Asterisk المباشرة:' : 'Asterisk Destination String:'}</span>
+                                        <code class="dest-external-preview font-mono text-emerald-400 bg-[var(--bg-primary)] px-2 py-0.5 rounded border border-[var(--border-primary)] font-bold">${escapeHtml(this.dialplanString)}</code>
+                                    </div>
+                                    <div class="text-[var(--text-muted)] flex items-center gap-1">
+                                        <span class="font-bold text-amber-400">${this.isRtl ? 'ملاحظة:' : 'Tip:'}</span>
+                                        <span>${this.isRtl ? 'حدد شريحة الخروج (dongle1) لضمان تجاوز قيود المسارات الصادرة.' : 'Selecting a specific dongle guarantees bypassing outbound route restrictions.'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
                         ${this.inputName ? `<input type="hidden" name="${this.inputName}" class="dest-hidden-output" value="${escapeHtml(this.dialplanString)}">` : ''}
                     </div>
                 `;
@@ -4978,6 +5034,15 @@ function isTabAllowed(tabName) {
                         this.dialplanString = `ext-external-failover,${rawNum}/${dongle},1`;
                     } else {
                         this.dialplanString = `ext-external-failover,${rawNum},1`;
+                    }
+                    const previewEl = this.container.querySelector('.dest-external-preview');
+                    if (previewEl) previewEl.textContent = this.dialplanString;
+                    const modeBadgeEl = this.container.querySelector('.dest-external-mode-badge');
+                    if (modeBadgeEl) {
+                        if (dongle) {
+                            modeBadgeEl.innerHTML = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>${this.isRtl ? 'ربط عتادي مباشر (Direct SIM Bridge)' : 'Direct SIM Bridge (Recommended)'}</span>`;
+                        } else {
+                            modeBadgeEl.innerHTML = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30"><svg class="w-3 h-3 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>${this.isRtl ? 'مسارات صادرة (Outbound Routes)' : 'Via Outbound Routes'}</span>`;
                     }
                     this.emitChange();
                 };

@@ -186,6 +186,10 @@ function classifyCdr(row) {
     const did = String(row.did || '').trim();
     const dst = String(row.dst || '').trim();
 
+    // 0. Failover calls to external mobile
+    if (dcontext === 'ext-external-failover' || (row.userfield && String(row.userfield).startsWith('Failover:'))) {
+        return { direction: 'FAILOVER', call_scope: 'FAILOVER' };
+    }
     // 1. Inbound calls: from trunk / dongle / DID
     if (isTrunkChannel(ch) || dcontext.startsWith('from-dongle') || dcontext.startsWith('from-trunk') || dcontext.startsWith('from-pstn') || did) {
         return { direction: 'INBOUND', call_scope: 'EXTERNAL' };
@@ -235,6 +239,9 @@ const CDR_DIRECTION_CASE = `
 
 const CDR_CALL_SCOPE_CASE = `
     CASE
+        WHEN c.dcontext = 'ext-external-failover' OR c.userfield LIKE 'Failover:%'
+        THEN 'FAILOVER'
+
         WHEN (c.channel LIKE 'SIP/%' OR c.channel LIKE 'PJSIP/%' OR c.channel LIKE 'IAX2/%' OR c.dcontext = 'from-internal' OR c.dcontext LIKE 'from-internal%' OR c.dcontext LIKE 'from-intercom%')
              AND (c.dstchannel NOT LIKE 'Dongle/%' AND c.dstchannel NOT LIKE 'DAHDI/%' AND c.lastdata NOT LIKE 'dongle/%' AND c.lastdata NOT LIKE 'DAHDI/%')
              AND (NOT ${CDR_EXTERNAL_DST_SQL} OR c.dst IN ('101','102','111','200','600','300'))
@@ -4826,7 +4833,7 @@ app.get('/', async (req, res) => {
 });
 
 // Helper to format Destination field for inbound/USSD/Ring Groups calls
-function formatDestination(row, ringGroupSet = new Set()) {
+function formatDestination(row, ringGroupSet = new Set(), forExport = false) {
     let dst = String(row.dst || '').trim();
     if (dst === 's' || dst.toLowerCase() === 'ussd') {
         if (row.channel && row.channel.toLowerCase().startsWith('dongle/')) {
@@ -4846,6 +4853,13 @@ function formatDestination(row, ringGroupSet = new Set()) {
             return 'USSD Service';
         }
         return 'System (s)';
+    }
+
+    const isFailover = (row.dcontext === 'ext-external-failover') || (row.userfield && String(row.userfield).startsWith('Failover:'));
+    if (isFailover && forExport) {
+        const viaMatch = row.userfield ? String(row.userfield).match(/via\s+([^\s,]+)/i) : null;
+        const via = viaMatch ? viaMatch[1] : (row.dstchannel && row.dstchannel.startsWith('Dongle/') ? row.dstchannel.split('-')[0].replace('Dongle/', '') : '');
+        return via ? `${dst} (Failover via ${via})` : `${dst} (Failover to Mobile)`;
     }
 
     const isHuntOrGroup = (ringGroupSet && ringGroupSet.has(dst)) 
@@ -4951,7 +4965,7 @@ app.get('/cdr', async (req, res) => {
         let countParams = [startDate, endDate];
 
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             stt.transcript, stt.status as stt_status, stt.duration_sec as stt_duration, stt.language as stt_lang,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
@@ -5095,7 +5109,7 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
             FROM ${tables.cdr} c
@@ -5166,7 +5180,7 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
             const headers = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
             const dataRows = [headers];
             for (const row of rows) {
-                const formattedDst = formatDestination(row, ringGroupSet);
+                const formattedDst = formatDestination(row, ringGroupSet, true);
                 dataRows.push([
                     moment(row.calldate).format('YYYY-MM-DD HH:mm:ss'),
                     String(row.src || '').trim(),

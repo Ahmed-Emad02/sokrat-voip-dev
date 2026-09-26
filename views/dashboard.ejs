@@ -7,7 +7,7 @@ const words = {
         roster: "Extension Roster", allExt: "All Extensions",
         status: "Call Status", allDisp: "All Dispositions",
         direction: "Direction", allDir: "All Directions", dirIn: "Inbound", dirOut: "Outbound", dirInternal: "Internal",
-        scope: "Call Scope", allScope: "All Scopes", scopeInternal: "Internal Only", scopeExternal: "External Only",
+        scope: "Call Scope", allScope: "All Scopes", scopeInternal: "Internal Only", scopeExternal: "External Only", scopeFailover: "Failover Only",
         src: "Source", dst: "Destination", did: "DID Number", uid: "Unique ID",
         moreFilters: "More Filters", lessFilters: "Fewer Filters",
         reset: "Reset Filters",
@@ -43,7 +43,7 @@ const words = {
         roster: "قائمة الموظفين", allExt: "جميع التحويلات",
         status: "حالة المكالمة", allDisp: "جميع الحالات",
         direction: "الاتجاه", allDir: "كل الاتجاهات", dirIn: "وارد", dirOut: "صادر", dirInternal: "داخلي",
-        scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط",
+        scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط", scopeFailover: "تحويل خارجي فقط",
         src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
         moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر",
         reset: "إعادة ضبط",
@@ -342,6 +342,7 @@ const isRtl = currentLang === 'ar';
                         <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
                         <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
                         <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
+                        <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
                     </select>
                 </div>
             </div>
