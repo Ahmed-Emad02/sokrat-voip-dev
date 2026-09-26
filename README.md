@@ -28,8 +28,9 @@
 > **Recommended**: Clones once and automatically installs Asterisk 18, Issabel 5 (100% offline bundle), and Sokrat VOIP with zero external mirror dependencies.
 
 ```bash
-git clone https://github.com/Ahmed-Emad02/sokrat-voip-dev.git /tmp/sokrat-repo && \
-cd /tmp/sokrat-repo/installer-bundle && \
+yum install -y git && \
+git clone https://github.com/Ahmed-Emad02/sokrat-voip-dev.git /opt/sokrat-voip && \
+cd /opt/sokrat-voip/installer-bundle && \
 bash setup-issabel-asterisk.sh && \
 bash install-sokrat.sh
 ```
@@ -43,14 +44,15 @@ curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/i
 
 **Step 1 — Install Issabel 5 & Asterisk 18 (100% Offline Bundle):**
 ```bash
-git clone https://github.com/Ahmed-Emad02/sokrat-voip-dev.git /tmp/sokrat-repo && \
-cd /tmp/sokrat-repo/installer-bundle && \
+yum install -y git && \
+git clone https://github.com/Ahmed-Emad02/sokrat-voip-dev.git /opt/sokrat-voip && \
+cd /opt/sokrat-voip/installer-bundle && \
 bash setup-issabel-asterisk.sh
 ```
 
 **Step 2 — Install Sokrat VOIP (Without downloading again):**
 ```bash
-cd /tmp/sokrat-repo/installer-bundle && \
+cd /opt/sokrat-voip/installer-bundle && \
 bash install-sokrat.sh
 ```
 

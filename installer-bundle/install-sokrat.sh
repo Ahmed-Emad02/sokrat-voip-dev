@@ -8,6 +8,8 @@ set -euo pipefail
 export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:${PATH:-}"
 
 INSTALL_DIR=/opt/sokrat-voip
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+PARENT_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
 REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voip-dev.git
 REPO_BRANCH=main
 SOFTPHONE_DIR=/opt/sokrat-softphone
@@ -227,6 +229,18 @@ grep -q "8.8.8.8" /etc/resolv.conf 2>/dev/null || echo -e "nameserver 8.8.8.8\nn
 # Step 1 — System Packages + Disable Fail2Ban + Install Sokrat MOTD
 # ──────────────────────────────────────────────
 echo "[1/14] Checking system prerequisites..."
+# Ensure git is installed at the beginning
+if ! command -v git &>/dev/null; then
+    echo "  Installing git..."
+    if [ -d "$SCRIPT_DIR/all-rpms" ] && ls "$SCRIPT_DIR/all-rpms"/git*.rpm 1>/dev/null 2>&1; then
+        rpm -Uvh --replacepkgs --nodeps "$SCRIPT_DIR/all-rpms"/git*.rpm "$SCRIPT_DIR/all-rpms"/perl*.rpm 2>/dev/null || true
+    elif [ -d "$INSTALL_DIR/installer-bundle/all-rpms" ] && ls "$INSTALL_DIR/installer-bundle/all-rpms"/git*.rpm 1>/dev/null 2>&1; then
+        rpm -Uvh --replacepkgs --nodeps "$INSTALL_DIR/installer-bundle/all-rpms"/git*.rpm "$INSTALL_DIR/installer-bundle/all-rpms"/perl*.rpm 2>/dev/null || true
+    else
+        yum install -y git 2>/dev/null || dnf install -y git 2>/dev/null || true
+    fi
+fi
+# Packages already provided by installer-bundle (sox, sqlite, picotts, net-tools, nano)
 # Packages already provided by installer-bundle (sox, sqlite, picotts, net-tools, nano)
 
 # Announcements in Issabel use picotts.agi, which requires both sox and pico2wave.
@@ -576,6 +590,24 @@ fi
 echo "[2/14] Installing Node.js 22..."
 if command -v node &>/dev/null; then
     echo "  Node.js already installed: $(node -v)"
+elif ls "$SCRIPT_DIR"/packages/nodejs-*.rpm 1>/dev/null 2>&1; then
+    echo "  Installing Node.js 22 from offline bundle..."
+    rpm -Uvh --replacepkgs --nodeps "$SCRIPT_DIR"/packages/nodejs-*.rpm 2>/dev/null || true
+    echo "  Node.js installed: $(node -v 2>/dev/null || /usr/bin/node -v)"
+elif ls "$INSTALL_DIR"/installer-bundle/packages/nodejs-*.rpm 1>/dev/null 2>&1; then
+    echo "  Installing Node.js 22 from offline bundle..."
+    rpm -Uvh --replacepkgs --nodeps "$INSTALL_DIR"/installer-bundle/packages/nodejs-*.rpm 2>/dev/null || true
+    echo "  Node.js installed: $(node -v 2>/dev/null || /usr/bin/node -v)"
+elif [ -f "$SCRIPT_DIR/binaries/node" ]; then
+    echo "  Installing Node.js from installer-bundle..."
+    cp "$SCRIPT_DIR/binaries/node" /usr/local/bin/node
+    chmod +x /usr/local/bin/node
+    echo "  Node.js installed: $(/usr/local/bin/node -v)"
+elif [ -f "$INSTALL_DIR/installer-bundle/binaries/node" ]; then
+    echo "  Installing Node.js from installer-bundle..."
+    cp "$INSTALL_DIR/installer-bundle/binaries/node" /usr/local/bin/node
+    chmod +x /usr/local/bin/node
+    echo "  Node.js installed: $(/usr/local/bin/node -v)"
 elif [ -f "/tmp/sokrat-repo/installer-bundle/binaries/node" ]; then
     echo "  Installing Node.js from installer-bundle..."
     cp "/tmp/sokrat-repo/installer-bundle/binaries/node" /usr/local/bin/node
@@ -601,6 +633,16 @@ git config --global http.lowSpeedTime 300 2>/dev/null || true
 # If files are already present in $INSTALL_DIR (e.g. from bundle or manual extract)
 if [ -f "$INSTALL_DIR/server.js" ]; then
     echo "  Application source already present in $INSTALL_DIR, proceeding..."
+    cd "$INSTALL_DIR"
+elif [ -f "$PARENT_DIR/server.js" ] && [ "$PARENT_DIR" != "$INSTALL_DIR" ]; then
+    echo "  Application source detected at $PARENT_DIR, copying to $INSTALL_DIR without re-cloning..."
+    mkdir -p "$INSTALL_DIR"
+    cp -a "$PARENT_DIR/." "$INSTALL_DIR/"
+    cd "$INSTALL_DIR"
+elif [ -f "/tmp/sokrat-repo/server.js" ] && [ "/tmp/sokrat-repo" != "$INSTALL_DIR" ]; then
+    echo "  Application source detected at /tmp/sokrat-repo, copying to $INSTALL_DIR without re-cloning..."
+    mkdir -p "$INSTALL_DIR"
+    cp -a "/tmp/sokrat-repo/." "$INSTALL_DIR/"
     cd "$INSTALL_DIR"
 elif [ -d "$INSTALL_DIR/.git" ]; then
     echo "  Directory $INSTALL_DIR exists, maintaining local modifications..."
@@ -669,8 +711,8 @@ fi
 echo "[4/14] Installing npm dependencies..."
 NPM_BUNDLE=""
 for candidate in \
+    "$SCRIPT_DIR/sokrat-npm-modules.tar.gz" \
     "$INSTALL_DIR/installer-bundle/sokrat-npm-modules.tar.gz" \
-    "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/sokrat-npm-modules.tar.gz" \
     "/tmp/sokrat-repo/installer-bundle/sokrat-npm-modules.tar.gz" \
     "/tmp/installer-bundle/sokrat-npm-modules.tar.gz"; do
     if [ -f "$candidate" ]; then
@@ -1904,8 +1946,30 @@ if ! command -v gcc &>/dev/null || ! command -v make &>/dev/null; then
 fi
 
 # 10b — Compile and Install librnnoise & func_rnnoise.so
-echo "  [10b] Compiling librnnoise and func_rnnoise.so..."
-if [ ! -f /usr/lib64/librnnoise.so ] || [ ! -f /usr/include/rnnoise.h ]; then
+echo "  [10b] Setting up librnnoise and func_rnnoise.so..."
+RNNOISE_BIN_DIR=""
+for candidate in "$SCRIPT_DIR/binaries" "$INSTALL_DIR/installer-bundle/binaries" "/tmp/sokrat-repo/installer-bundle/binaries"; do
+    if [ -f "$candidate/librnnoise.so.0.4.1" ]; then
+        RNNOISE_BIN_DIR="$candidate"
+        break
+    fi
+done
+
+if [ -n "$RNNOISE_BIN_DIR" ]; then
+    echo "  Installing pre-compiled librnnoise and func_rnnoise from bundle..."
+    cp -a "$RNNOISE_BIN_DIR"/librnnoise.so* /usr/lib64/ 2>/dev/null || true
+    if [ -f "$RNNOISE_BIN_DIR/rnnoise.h" ]; then
+        cp -a "$RNNOISE_BIN_DIR/rnnoise.h" /usr/include/ 2>/dev/null || true
+    fi
+    ldconfig 2>/dev/null || true
+    if [ -f "$RNNOISE_BIN_DIR/func_rnnoise.so" ]; then
+        mkdir -p /usr/lib64/asterisk/modules
+        cp "$RNNOISE_BIN_DIR/func_rnnoise.so" /usr/lib64/asterisk/modules/func_rnnoise.so
+        chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so
+        asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
+        echo "  func_rnnoise.so installed from bundle and loaded into Asterisk"
+    fi
+elif [ ! -f /usr/lib64/librnnoise.so ] || [ ! -f /usr/include/rnnoise.h ]; then
     echo "  Attempting librnnoise compilation with timeout fallback..."
     cd /tmp
     rm -rf rnnoise_build
@@ -1922,11 +1986,11 @@ if [ ! -f /usr/lib64/librnnoise.so ] || [ ! -f /usr/include/rnnoise.h ]; then
     fi
 fi
 if [ -f /usr/lib64/librnnoise.so ]; then
-    echo "  librnnoise already installed"
+    echo "  librnnoise verified"
 else
     echo "  librnnoise optional; proceeding without hardware noise cancellation"
 fi
-if [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise.so ] && [ -f /usr/include/rnnoise.h ]; then
+if [ ! -f /usr/lib64/asterisk/modules/func_rnnoise.so ] && [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise.so ] && [ -f /usr/include/rnnoise.h ]; then
     gcc -shared -fPIC -O3 -mavx2 -mfma -I/usr/include -o /usr/lib64/asterisk/modules/func_rnnoise.so \
         "$INSTALL_DIR/asterisk/func_rnnoise.c" -lrnnoise -lm -lpthread 2>/dev/null || true
     chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so 2>/dev/null || true
@@ -1935,7 +1999,17 @@ if [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise.s
 fi
 # 10c — Compile and Install chan_dongle (with Sokrat decline detection and SMS ME storage patches)
 echo "  [10c] Installing chan_dongle..."
-if [ -f "/tmp/sokrat-repo/installer-bundle/binaries/chan_dongle.so" ]; then
+if [ -f "$SCRIPT_DIR/binaries/chan_dongle.so" ]; then
+    mkdir -p /usr/lib64/asterisk/modules
+    cp "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so
+    chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so
+    echo "  chan_dongle.so installed from bundle"
+elif [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
+    mkdir -p /usr/lib64/asterisk/modules
+    cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so
+    chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so
+    echo "  chan_dongle.so installed from bundle"
+elif [ -f "/tmp/sokrat-repo/installer-bundle/binaries/chan_dongle.so" ]; then
     mkdir -p /usr/lib64/asterisk/modules
     cp "/tmp/sokrat-repo/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so
     chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so
@@ -2107,7 +2181,9 @@ echo "  AstDB Noise and Audio defaults initialized"
 # Step 11 — Configure Apache Reverse Proxy
 # ──────────────────────────────────────────────
 echo "[11/14] Configuring Apache reverse proxy..."
-yum install -y mod_ssl 2>/dev/null || true
+if ! rpm -q mod_ssl &>/dev/null; then
+    yum install -y mod_ssl 2>/dev/null || true
+fi
 
 # Restore Listen 80 in httpd.conf if it was replaced, and ensure Listen 3000 is present
 if ! grep -q '^Listen 80' /etc/httpd/conf/httpd.conf; then
@@ -2389,8 +2465,21 @@ echo "  Sokrat system watchdog daemon enabled and started"
 
 # Provision Webmin Local Control Panel on Port 3001
 echo "  Configuring Webmin Control Panel (Port 3001)..."
-if [ ! -f /etc/yum.repos.d/webmin.repo ]; then
-    cat > /etc/yum.repos.d/webmin.repo << 'EOF'
+WEBMIN_RPM=""
+for candidate in "$SCRIPT_DIR/packages" "$INSTALL_DIR/installer-bundle/packages" "/tmp/sokrat-repo/installer-bundle/packages"; do
+    if ls "$candidate"/webmin-*.rpm 1>/dev/null 2>&1; then
+        WEBMIN_RPM=$(ls "$candidate"/webmin-*.rpm 2>/dev/null | head -1)
+        break
+    fi
+done
+
+if ! rpm -q webmin &>/dev/null; then
+    if [ -n "$WEBMIN_RPM" ] && [ -f "$WEBMIN_RPM" ]; then
+        echo "  Installing Webmin from offline package $(basename "$WEBMIN_RPM")..."
+        rpm -Uvh --replacepkgs --nodeps "$WEBMIN_RPM" 2>/dev/null || true
+    else
+        if [ ! -f /etc/yum.repos.d/webmin.repo ]; then
+            cat > /etc/yum.repos.d/webmin.repo << 'EOF'
 [webmin-noarch]
 name=Webmin - noarch
 baseurl=https://download.webmin.com/download/newkey/yum
@@ -2398,10 +2487,10 @@ enabled=1
 gpgcheck=1
 gpgkey=https://download.webmin.com/developers-key.asc
 EOF
-    rpm --import https://download.webmin.com/developers-key.asc 2>/dev/null || true
-fi
-if ! rpm -q webmin &>/dev/null; then
-    dnf install -y webmin 2>/dev/null || true
+            rpm --import https://download.webmin.com/developers-key.asc 2>/dev/null || true
+        fi
+        dnf install -y webmin 2>/dev/null || yum install -y webmin 2>/dev/null || true
+    fi
 fi
 if [ -f /etc/webmin/miniserv.conf ]; then
     sed -i 's/^port=.*/port=3001/' /etc/webmin/miniserv.conf

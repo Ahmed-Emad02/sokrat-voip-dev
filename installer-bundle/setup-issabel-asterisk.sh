@@ -58,7 +58,13 @@ if command -v firewall-cmd &>/dev/null && systemctl is-active firewalld &>/dev/n
 fi
 rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/*.rpm 2>/dev/null || true
 
-# 5. Install binaries (Node.js, ffmpeg, pico2wave)
+# 5. Install binaries (Node.js, ffmpeg, pico2wave, librnnoise)
+echo "--> Installing core binaries..."
+if ls "$SCRIPT_DIR"/packages/nodejs-*.rpm 1>/dev/null 2>&1; then
+    echo "--> Installing Node.js 22 from local packages..."
+    rpm -Uvh --replacepkgs --nodeps "$SCRIPT_DIR"/packages/nodejs-*.rpm 2>/dev/null || true
+fi
+if [ -f "$SCRIPT_DIR/binaries/node" ]; then
 echo "--> Installing core binaries..."
 if [ -f "$SCRIPT_DIR/binaries/node" ]; then
     cp "$SCRIPT_DIR/binaries/node" /usr/local/bin/
@@ -81,6 +87,26 @@ if [ -d "$SCRIPT_DIR/binaries/picotts" ]; then
 fi
 
 if [ -f "$SCRIPT_DIR/binaries/chan_dongle.so" ]; then
+    mkdir -p /usr/lib64/asterisk/modules
+    cp "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/
+fi
+
+if [ -f "$SCRIPT_DIR/binaries/librnnoise.so.0.4.1" ]; then
+    echo "--> Installing RNNoise libraries..."
+    cp -a "$SCRIPT_DIR"/binaries/librnnoise.so* /usr/lib64/ 2>/dev/null || true
+    [ -f "$SCRIPT_DIR/binaries/rnnoise.h" ] && cp -a "$SCRIPT_DIR/binaries/rnnoise.h" /usr/include/ 2>/dev/null || true
+    ldconfig 2>/dev/null || true
+fi
+
+if [ -f "$SCRIPT_DIR/binaries/func_rnnoise.so" ]; then
+    mkdir -p /usr/lib64/asterisk/modules
+    cp "$SCRIPT_DIR/binaries/func_rnnoise.so" /usr/lib64/asterisk/modules/
+fi
+
+if ls "$SCRIPT_DIR"/packages/webmin-*.rpm 1>/dev/null 2>&1; then
+    echo "--> Installing Webmin from local packages..."
+    rpm -Uvh --replacepkgs --nodeps "$SCRIPT_DIR"/packages/webmin-*.rpm 2>/dev/null || true
+fi
     mkdir -p /usr/lib64/asterisk/modules
     cp "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/
 fi

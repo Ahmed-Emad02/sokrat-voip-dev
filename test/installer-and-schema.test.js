@@ -71,6 +71,46 @@ test('install.sh contains schema migrations, rnnoise builds, and inbound blackli
     assert.match(script, /CREATE TABLE IF NOT EXISTS \\`sipsettings\\`/, 'install.sh must ensure sipsettings table exists before import');
 });
 
+test('installer-bundle/install-sokrat.sh prevents duplicate cloning and passes bash syntax validation', () => {
+    const rootDir = path.join(__dirname, '..');
+    const bundleInstallerPath = path.join(rootDir, 'installer-bundle', 'install-sokrat.sh');
+    assert.ok(fs.existsSync(bundleInstallerPath), 'install-sokrat.sh must exist');
+    assert.doesNotThrow(() => {
+        execSync(`bash -n "${bundleInstallerPath}"`, { cwd: rootDir, stdio: 'pipe' });
+    }, 'install-sokrat.sh must pass bash -n syntax check');
+
+    const script = fs.readFileSync(bundleInstallerPath, 'utf8');
+    assert.match(script, /SCRIPT_DIR=/, 'install-sokrat.sh must define SCRIPT_DIR dynamically');
+    assert.match(script, /PARENT_DIR=/, 'install-sokrat.sh must define PARENT_DIR dynamically');
+    assert.match(script, /elif \[ -f "\$PARENT_DIR\/server\.js" \]/, 'install-sokrat.sh must detect existing parent source to prevent duplicate cloning');
+    assert.match(script, /elif \[ -f "\$SCRIPT_DIR\/binaries\/node" \]/, 'install-sokrat.sh must look for node binary in SCRIPT_DIR');
+    assert.match(script, /if \[ -f "\$SCRIPT_DIR\/binaries\/chan_dongle\.so" \]/, 'install-sokrat.sh must look for chan_dongle.so in SCRIPT_DIR');
+    assert.match(script, /command -v git/, 'install-sokrat.sh must check and install git at the beginning');
+    assert.match(script, /packages\/nodejs-\*\.rpm/, 'install-sokrat.sh must check for offline nodejs RPM');
+    assert.match(script, /webmin-\*\.rpm/, 'install-sokrat.sh must check for offline webmin RPM');
+    assert.match(script, /librnnoise\.so/, 'install-sokrat.sh must check for offline rnnoise library');
+});
+
+test('offline installer packages and binaries are present in installer-bundle', () => {
+    const rootDir = path.join(__dirname, '..');
+    const packagesDir = path.join(rootDir, 'installer-bundle', 'packages');
+    const binariesDir = path.join(rootDir, 'installer-bundle', 'binaries');
+
+    assert.ok(fs.existsSync(packagesDir), 'installer-bundle/packages must exist');
+    assert.ok(fs.existsSync(binariesDir), 'installer-bundle/binaries must exist');
+
+    // Check Node.js and Webmin packages
+    const pkgFiles = fs.readdirSync(packagesDir);
+    assert.ok(pkgFiles.some(f => f.startsWith('nodejs-') && f.endsWith('.rpm')), 'nodejs RPM must be present in packages');
+    assert.ok(pkgFiles.some(f => f.startsWith('webmin-') && f.endsWith('.rpm')), 'webmin RPM must be present in packages');
+
+    // Check RNNoise binaries
+    const binFiles = fs.readdirSync(binariesDir);
+    assert.ok(binFiles.some(f => f.startsWith('librnnoise.so')), 'librnnoise must be present in binaries');
+    assert.ok(binFiles.includes('func_rnnoise.so'), 'func_rnnoise.so must be present in binaries');
+    assert.ok(binFiles.includes('rnnoise.h'), 'rnnoise.h must be present in binaries');
+});
+
 test('install.sh and uninstall.sh pass bash syntax validation', () => {
     const rootDir = path.join(__dirname, '..');
     assert.doesNotThrow(() => {
