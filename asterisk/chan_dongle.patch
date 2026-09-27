@@ -375,3 +375,60 @@ index 1ceefbb..c54180d 100644
  
  //	size_t			write;				/*!< write position in pvt->a_write_buf */
  //	size_t			used;				/*!< bytes used in pvt->a_write_buf */
+diff --git a/manager.c b/manager.c
+index 789dcb2..9af4c1b 100644
+--- a/manager.c
++++ b/manager.c
+@@ -189,7 +189,9 @@ static int manager_send_sms (struct mansession* s, const struct message* m)
+ 	}
+ 
+ 	ast_unescape_c(unescaped_msg);
+-	int res = send_sms(device, number, unescaped_msg, validity, report, payload, strlen(payload) + 1);
++	size_t payload_len = ast_strlen_zero(payload) ? 0 : strlen(payload) + 1;
++	const char *payload_ptr = ast_strlen_zero(payload) ? NULL : payload;
++	int res = send_sms(device, number, unescaped_msg, validity, report, payload_ptr, payload_len);
+ 	ast_free(unescaped_msg);
+ 	snprintf(buf, sizeof (buf), "[%s] %s", device, res < 0 ? error2str(chan_dongle_err) : "SMS queued for send");
+ 	(res == 0 ? astman_send_ack : astman_send_error)(s, m, buf);
+diff --git a/smsdb.c b/smsdb.c
+index a6d8a82..1ac0b2d 100644
+--- a/smsdb.c
++++ b/smsdb.c
+@@ -361,17 +361,28 @@ EXPORT_DEF int smsdb_put(const char *id, const char *addr, int ref, int parts, i
+ 		if (sqlite3_bind_text(get_full_message_stmt, 1, fullkey, fullkey_len, SQLITE_STATIC) != SQLITE_OK) {
+ 			ast_log(LOG_WARNING, "Couldn't bind key to stmt: %s\n", sqlite3_errmsg(smsdb));
+ 			res = -1;
+-		} else while (sqlite3_step(get_full_message_stmt) == SQLITE_ROW) {
+-			part = (const char*)sqlite3_column_text(get_full_message_stmt, 0);
+-			int partlen = sqlite3_column_bytes(get_full_message_stmt, 0);
+-			if (!part) {
+-				ast_log(LOG_WARNING, "Couldn't get value\n");
+-				res = -1;
+-				break;
++		} else {
++			size_t max_out = 160 * 255;
++			size_t accumulated = 0;
++			while (sqlite3_step(get_full_message_stmt) == SQLITE_ROW) {
++				part = (const char*)sqlite3_column_text(get_full_message_stmt, 0);
++				int partlen = sqlite3_column_bytes(get_full_message_stmt, 0);
++				if (!part) {
++					ast_log(LOG_WARNING, "Couldn't get value\n");
++					res = -1;
++					break;
++				}
++				if (accumulated + partlen < max_out) {
++					memcpy(out + accumulated, part, partlen);
++					accumulated += partlen;
++				} else {
++					ast_log(LOG_WARNING, "CSMS full message buffer exceeded limit\n");
++					res = -1;
++					break;
++				}
+ 			}
+-			out = stpncpy(out, part, partlen);
++			out[accumulated] = '\0';
+ 		}
+-		out[0] = '\0';
+ 		sqlite3_reset(get_full_message_stmt);
+ 
+ 		if (res >= 0) {
