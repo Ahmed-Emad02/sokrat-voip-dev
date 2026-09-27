@@ -80,11 +80,14 @@ fi
 echo "[2/7] Updating Sokrat VoIP codebase..."
 if [ ! -d "$INSTALL_DIR" ]; then
     echo "  Cloning repository into $INSTALL_DIR..."
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    timeout 60 git clone "$REPO_URL" "$INSTALL_DIR" || echo "  Warning: Git clone timed out or failed."
 elif [ -d "$INSTALL_DIR/.git" ]; then
     cd "$INSTALL_DIR"
-    if git fetch origin main >/dev/null 2>&1; then
+    echo "  Checking for remote repository updates..."
+    if timeout 15 git fetch origin main >/dev/null 2>&1; then
         git merge --ff-only origin/main 2>/dev/null || git pull --ff-only origin main 2>/dev/null || true
+    else
+        echo "  Notice: Remote fetch timed out or offline, proceeding with current codebase."
     fi
     echo "  Codebase at commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'current')"
 fi
@@ -135,6 +138,7 @@ if [ -d "$SRC_CHAN_DONGLE" ] && [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]
     cd "$SRC_CHAN_DONGLE"
     git reset --hard HEAD >/dev/null 2>&1 || true
     git clean -fd >/dev/null 2>&1 || true
+    sed -i "s/a_write_buf\[FRAME_SIZE \* [0-9]\+\]/a_write_buf[FRAME_SIZE * 35]/" chan_dongle.h 2>/dev/null || true
     patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch"
     ./bootstrap 2>/dev/null || true
     ./configure --with-astversion=18.19.0 >/dev/null 2>&1 || ./configure >/dev/null 2>&1
