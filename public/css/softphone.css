@@ -36,7 +36,7 @@
     --radius-lg: 0px;
     --radius-xl: 0px;
     --radius-full: 0px;
-    --font-main: 'Plus Jakarta Sans', 'Cairo', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-main: 'JetBrains Mono', 'Cairo', monospace;
     --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
 }
 

@@ -44,7 +44,7 @@ const isRtl = currentLang === 'ar';
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
         :root {
@@ -62,7 +62,7 @@ const isRtl = currentLang === 'ar';
         }
         body { 
             background-color: var(--bg-primary); 
-            font-family: 'Roboto', 'Cairo', sans-serif; 
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important; 
             color: var(--text-primary); 
         }
         body::before {
@@ -308,9 +308,9 @@ const isRtl = currentLang === 'ar';
                             <% } %>
                         </tr>
                     </thead>
-                    <tbody id="contactsTableBody" class="divide-y divide-zinc-800/30 text-sm font-sans">
+                    <tbody id="contactsTableBody" class="divide-y divide-zinc-800/30 text-sm font-mono">
                         <% if (contacts.length === 0) { %>
-                            <tr id="noContactsRow"><td colspan="<%= isSuperAdmin ? 4 : 3 %>" class="p-8 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>
+                            <tr id="noContactsRow"><td colspan="<%= isSuperAdmin ? 4 : 3 %>" class="p-8 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>
                         <% } else { %>
                             <% contacts.forEach(contact => { %>
                                 <tr class="contact-row hover:bg-zinc-900/60 transition" data-name="<%= contact.name.toLowerCase() %>" data-lastname="<%= contact.last_name.toLowerCase() %>" data-phone="<%= contact.telefono %>">
@@ -486,7 +486,7 @@ const isRtl = currentLang === 'ar';
                     const tbody = document.getElementById('contactsTableBody');
                     const tr = document.createElement('tr');
                     tr.id = 'noContactsRow';
-                    tr.innerHTML = '<td colspan="' + <%- isSuperAdmin ? 4 : 3 %> + '" class="p-8 text-center text-zinc-500 font-sans">' + <%- JSON.stringify(t.noData) %> + '</td>';
+                    tr.innerHTML = '<td colspan="' + <%- isSuperAdmin ? 4 : 3 %> + '" class="p-8 text-center text-zinc-500 font-mono">' + <%- JSON.stringify(t.noData) %> + '</td>';
                     tbody.appendChild(tr);
                 }
             } else {
@@ -765,7 +765,7 @@ const isRtl = currentLang === 'ar';
                 </div>
                 <!-- Modal Search -->
                 <div class="relative min-w-[240px]">
-                    <input type="text" id="blacklistSearchInput" oninput="filterBlacklistRows()" placeholder="<%= isRtl ? 'البحث برقم الهاتف أو السبب...' : 'Search by phone or reason...' %>" class="w-full bg-[#18181b] border border-[#27272a] rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-rose-500 font-sans">
+                    <input type="text" id="blacklistSearchInput" oninput="filterBlacklistRows()" placeholder="<%= isRtl ? 'البحث برقم الهاتف أو السبب...' : 'Search by phone or reason...' %>" class="w-full bg-[#18181b] border border-[#27272a] rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-rose-500 font-mono">
                 </div>
             </div>
 
@@ -782,7 +782,7 @@ const isRtl = currentLang === 'ar';
                             <th class="p-3 text-end"><%= isRtl ? 'الإجراءات' : 'Actions' %></th>
                         </tr>
                     </thead>
-                    <tbody id="blacklistTableBody" class="divide-y divide-zinc-800/40 text-xs font-sans">
+                    <tbody id="blacklistTableBody" class="divide-y divide-zinc-800/40 text-xs font-mono">
                         <tr><td colspan="6" class="p-8 text-center text-zinc-500"><%= isRtl ? 'جاري تحميل قائمة الحظر...' : 'Loading blacklist registry...' %></td></tr>
                     </tbody>
                 </table>
@@ -923,7 +923,7 @@ const isRtl = currentLang === 'ar';
             activeCountEl.textContent = list.filter(item => item.enabled === 1 || item.enabled === true).length;
 
             if (!list || list.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-zinc-500 font-sans"><%= isRtl ? 'لا توجد أرقام محظورة حالياً في القائمة السوداء.' : 'No blocked numbers currently in the blacklist.' %></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-zinc-500 font-mono"><%= isRtl ? 'لا توجد أرقام محظورة حالياً في القائمة السوداء.' : 'No blocked numbers currently in the blacklist.' %></td></tr>`;
                 return;
             }
 

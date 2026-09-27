@@ -88,11 +88,11 @@ const isRtl = activeLang === 'ar';
     <link rel="shortcut icon" href="/favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Roboto:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
         body {
-            font-family: 'Roboto', 'Cairo', sans-serif;
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         }
         .config-input {
             background-color: var(--bg-card) !important;
@@ -149,7 +149,7 @@ const isRtl = activeLang === 'ar';
         .lead-fields-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
     </style>
 </head>
-<body class="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen flex flex-col md:flex-row m-0 p-0 font-sans">
+<body class="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen flex flex-col md:flex-row m-0 p-0 font-mono">
     <%- include('sidebar', { activeTab: 'dialer', isRtl, currentLang: activeLang }) %>
 
     <div class="flex-1 p-6 md:p-8 overflow-y-auto">

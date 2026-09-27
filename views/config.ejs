@@ -62,7 +62,7 @@ function isTabAllowed(tabName) {
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
@@ -169,7 +169,7 @@ function isTabAllowed(tabName) {
         body {
             background-color: var(--bg-primary);
             color: var(--text-primary);
-            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif;
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important;
             min-height: 100vh;
         }
         .config-card {
@@ -1100,7 +1100,7 @@ function isTabAllowed(tabName) {
                     <span><%= isRtl ? 'تحذير: تعارض في أرقام التحويلات' : 'Warning: Extension Number Conflict Detected' %></span>
                     <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">PBX Conflict</span>
                 </div>
-                <div class="mt-1 text-amber-200/90 leading-relaxed font-sans" id="extensionConflictDesc"></div>
+                <div class="mt-1 text-amber-200/90 leading-relaxed font-mono" id="extensionConflictDesc"></div>
             </div>
             <button type="button" onclick="document.getElementById('extensionConflictBanner').classList.add('hidden')" class="p-1 rounded text-amber-400 hover:text-white hover:bg-amber-500/20 transition cursor-pointer" title="Dismiss">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -9374,12 +9374,12 @@ function isTabAllowed(tabName) {
                         label.className = 'flex items-center justify-between gap-2 p-2 hover:bg-[var(--bg-hover)]/40 rounded-lg cursor-pointer text-xs transition';
                         
                         const greetingBadge = ext.hasCustomGreeting ? `
-                            <span class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md flex items-center gap-1.5 font-sans shrink-0 max-w-[220px] truncate shadow-sm" title="${escapeHtml(ext.greetingName || (isRtl ? 'ترحيب مخصص' : 'Custom Greeting'))}">
+                            <span class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md flex items-center gap-1.5 font-mono shrink-0 max-w-[220px] truncate shadow-sm" title="${escapeHtml(ext.greetingName || (isRtl ? 'ترحيب مخصص' : 'Custom Greeting'))}">
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="shrink-0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                                 <span class="truncate">${escapeHtml(ext.greetingName || (isRtl ? 'ترحيب مخصص' : 'Custom Greeting'))}</span>
                             </span>
                         ` : `
-                            <span class="text-[10px] text-[var(--text-muted)] bg-[var(--bg-card)] border border-[var(--border-primary)] px-2 py-0.5 rounded-md font-sans shrink-0">
+                            <span class="text-[10px] text-[var(--text-muted)] bg-[var(--bg-card)] border border-[var(--border-primary)] px-2 py-0.5 rounded-md font-mono shrink-0">
                                 ${isRtl ? 'ترحيب افتراضي' : 'Default Greeting'}
                             </span>
                         `;

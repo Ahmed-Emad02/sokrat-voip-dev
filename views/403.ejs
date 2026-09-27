@@ -13,7 +13,7 @@ const missingPermission = typeof permission !== 'undefined' ? permission : '';
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script>
         (function() {
@@ -51,7 +51,7 @@ const missingPermission = typeof permission !== 'undefined' ? permission : '';
             --accent-dark: #7b0002;
         }
         body {
-            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif;
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important;
             background-color: var(--bg-primary);
             color: var(--text-primary);
             min-height: 100vh;
@@ -61,7 +61,7 @@ const missingPermission = typeof permission !== 'undefined' ? permission : '';
             padding: 0;
         }
         [dir="rtl"] {
-            font-family: 'Cairo', sans-serif;
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         }
         .error-card {
             background: var(--bg-card);

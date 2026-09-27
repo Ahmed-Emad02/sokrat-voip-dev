@@ -238,10 +238,10 @@ function can(tab) {
         if (link) prefetchTabTarget(link.getAttribute('href'));
     }, { capture: true, passive: true });
 </script>
-<!-- Google Fonts Import for Cairo, Plus Jakarta Sans, and JetBrains Mono -->
+<!-- Google Fonts Import for Cairo and JetBrains Mono -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
 <!-- Flatpickr Datepicker -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -254,6 +254,8 @@ function can(tab) {
         text-shadow: none !important;
     }
     :root {
+        --font-sans: 'JetBrains Mono', 'Cairo', monospace;
+        --font-mono: 'JetBrains Mono', monospace;
         --bg-primary: #050507; /* OLED black background */
         --bg-secondary: #0a0a0d; /* Dark-tech surface */
         --bg-card: #101014; /* Card background */
@@ -295,11 +297,11 @@ function can(tab) {
         --status-error-text: #b91c1c !important;
         --selection-bg: #991b1b !important;
     }
-    body {
+    html, body {
         background-color: var(--bg-primary) !important;
         color: var(--text-primary) !important;
         accent-color: var(--accent-color) !important;
-        font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         font-size: 16px !important;
     }
     
@@ -314,14 +316,14 @@ function can(tab) {
             radial-gradient(circle at 90% 80%, rgba(0, 0, 0, 0.02) 0%, transparent 45%) !important;
     }
     
-    /* Fonts and sizes styling */
-    body {
-        font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif !important;
+    /* Global Typography - JetBrains Mono everywhere */
+    html, body, button, input, select, textarea, optgroup, option, table, th, td, p, span, a, label, h1, h2, h3, h4, h5, h6, .font-sans, .font-mono, .font-numeric {
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
     }
     
-    /* English headings and labels - clean geometric display */
+    /* English headings and labels */
     h1, h2, h3, h4, h5, h6 {
-        font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         font-weight: 800 !important;
     }
     
@@ -330,9 +332,9 @@ function can(tab) {
         font-family: 'JetBrains Mono', monospace !important;
     }
     
-    /* Arabic text overrides */
+    /* Arabic text overrides fallback gracefully to Cairo for Arabic characters */
     [lang="ar"], [dir="rtl"], [dir="rtl"] * {
-        font-family: 'Cairo', sans-serif !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
     }
     input, select, textarea {
         accent-color: var(--accent-color) !important;
@@ -932,7 +934,7 @@ function can(tab) {
         background: var(--bg-card) !important;
         border-color: var(--border-primary) !important;
         color: var(--text-primary) !important;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-family: 'JetBrains Mono', monospace !important;
         font-size: 0.75rem;
         font-weight: 600;
         line-height: 1rem;
@@ -977,7 +979,7 @@ function can(tab) {
         background: var(--bg-card) !important;
         border: 1px solid var(--border-primary) !important;
         border-radius: 0.5rem;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-family: 'JetBrains Mono', monospace !important;
         font-size: 0.75rem;
         line-height: 1rem;
         outline: none;
@@ -996,7 +998,7 @@ function can(tab) {
         padding: 0.5rem 0.75rem;
         color: var(--text-secondary) !important;
         border-radius: 0.5rem;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-family: 'JetBrains Mono', monospace !important;
         font-size: 0.75rem;
         line-height: 1rem;
         overflow-wrap: anywhere;
@@ -1059,7 +1061,7 @@ function can(tab) {
         color: #f4f4f5 !important;
         border: 1px solid rgba(255, 255, 255, 0.12) !important;
         border-radius: 0.5rem !important;
-        font-family: 'JetBrains Mono', 'Plus Jakarta Sans', monospace !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         font-size: 13px !important;
         padding-top: 0.5rem !important;
         padding-bottom: 0.5rem !important;
@@ -1072,7 +1074,7 @@ function can(tab) {
         background-color: #0d0d12 !important;
         color: #f4f4f5 !important;
         padding: 10px 14px !important;
-        font-family: 'JetBrains Mono', 'Plus Jakarta Sans', monospace !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         font-size: 13px !important;
     }
     select option:hover,
@@ -1916,7 +1918,7 @@ function can(tab) {
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.07) !important;
         backdrop-filter: blur(24px) !important;
         -webkit-backdrop-filter: blur(24px) !important;
-        font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         padding: 14px 16px 14px !important;
         width: 336px !important;
         box-sizing: border-box !important;
@@ -2230,7 +2232,7 @@ function can(tab) {
         border: 1px solid var(--border-primary) !important;
         border-radius: 9px !important;
         color: var(--text-primary) !important;
-        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        font-family: 'JetBrains Mono', monospace !important;
         font-weight: 800 !important;
         font-size: 0.82rem !important;
         letter-spacing: 0.05em !important;
@@ -4788,7 +4790,7 @@ function triggerDashboardUpdate() {
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = 'updateOverlay';
-        overlay.className = 'fixed inset-0 bg-black/85 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-6 text-white font-sans text-center transition-opacity duration-300';
+        overlay.className = 'fixed inset-0 bg-black/85 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-6 text-white font-mono text-center transition-opacity duration-300';
         overlay.innerHTML = `
             <div class="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
             <h3 class="text-xl font-bold mb-2"><%= currentLang === 'ar' ? 'جاري تحديث Sokrat VoIP...' : 'Updating Sokrat VoIP...' %></h3>

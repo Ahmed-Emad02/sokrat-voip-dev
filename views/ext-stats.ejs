@@ -140,7 +140,7 @@ const isRtl = currentLang === 'ar';
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -268,7 +268,7 @@ const isRtl = currentLang === 'ar';
         }
         body { 
             background-color: var(--bg-primary); 
-            font-family: 'Roboto', 'Cairo', sans-serif; 
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important; 
             color: var(--text-primary); 
         }
         /* Modern background pattern with subtle gradients */
@@ -546,7 +546,7 @@ const isRtl = currentLang === 'ar';
                     <% roster.forEach(emp => { %>
                         <div class="ext-card panel-surface rounded-xl px-3 py-2.5 text-sm flex items-center gap-3 <%= !emp.online ? 'opacity-40' : '' %> <%= isRtl ? 'flex-row-reverse' : '' %>" data-ext="<%= emp.extension %>" onclick="selectExtension('<%= emp.extension %>')">
                             <span class="text-[var(--accent-color)] font-bold font-mono text-xs"><%= emp.extension %></span>
-                            <span class="text-white font-sans font-bold truncate flex-1"><%= emp.name %></span>
+                            <span class="text-white font-mono font-bold truncate flex-1"><%= emp.name %></span>
                             <span class="w-2 h-2 rounded-full <%= emp.online ? 'bg-[var(--accent-color)]' : 'bg-zinc-700' %> shrink-0"></span>
                         </div>
                     <% }) %>
@@ -803,7 +803,7 @@ const isRtl = currentLang === 'ar';
                 : currentStatusLogs.filter(l => String(l.status || '').toLowerCase() === status);
 
             if (filtered.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>';
                 return;
             }
 
@@ -876,7 +876,7 @@ const isRtl = currentLang === 'ar';
             `;
 
             if (sorted.length === 0) {
-                html += `<tr><td colspan="10" class="p-8 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>`;
+                html += `<tr><td colspan="10" class="p-8 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>`;
             } else {
                 pageData.forEach(row => {
                     const talkMin = Math.round(row.totalTalkSec / 60);
@@ -884,7 +884,7 @@ const isRtl = currentLang === 'ar';
                     html += `
                         <tr class="hover:bg-zinc-900/50 cursor-pointer transition" onclick="selectExtension('${row.extension}')">
                             <td class="p-3.5 text-[var(--accent-color)] font-black text-sm">${row.extension}</td>
-                            <td class="p-3.5 text-white font-sans font-bold text-sm">${row.name}</td>
+                            <td class="p-3.5 text-white font-mono font-bold text-sm">${row.name}</td>
                             <td class="p-3.5 text-center">${renderStatusBadge(row.liveStatus)}</td>
                             <td class="p-3.5 text-center text-emerald-400 font-bold text-xs font-mono">${fmtHumanDur(row.onlineSec)}</td>
                             <td class="p-3.5 text-center text-amber-400 font-bold text-xs font-mono">${fmtHumanDur(row.idleSec)}</td>
@@ -966,7 +966,7 @@ const isRtl = currentLang === 'ar';
                 <div class="flex items-center gap-3 ${rtl ? 'flex-row-reverse' : ''}">
                     <span class="accent-orange font-mono bg-[var(--bg-primary)] border border-[var(--border-primary)] px-3 py-1.5 rounded-xl text-lg font-black">${data.extension}</span>
                     <div>
-                        <h3 class="text-2xl font-bold text-[var(--text-primary)] font-sans flex items-center gap-2 ${rtl ? 'flex-row-reverse' : ''}">${data.name}</h3>
+                        <h3 class="text-2xl font-bold text-[var(--text-primary)] font-mono flex items-center gap-2 ${rtl ? 'flex-row-reverse' : ''}">${data.name}</h3>
                         <p class="text-xs font-semibold text-[var(--text-muted)] tracking-wider uppercase mt-0.5"><%= isRtl ? 'تقرير تحليلات أداء الموظف' : 'Employee Performance Analytics Report' %></p>
                     </div>
                 </div>
@@ -1117,7 +1117,7 @@ const isRtl = currentLang === 'ar';
                             <td class="p-3 text-white">${call.dst}</td>
                             <td class="p-3 text-zinc-400">${fmtDur(call.billsec)}</td>
                             <td class="p-3 whitespace-nowrap">
-                                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded text-[10px] font-black tracking-wider whitespace-nowrap ${dispMap[call.disposition] || 'bg-zinc-800 text-zinc-400 border border-zinc-700/50'}">
+                                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded text-[10px] font-mono font-black tracking-wider whitespace-nowrap ${dispMap[call.disposition] || 'bg-zinc-800 text-zinc-400 border border-zinc-700/50'}">
                                     ${call.disposition}
                                 </span>
                             </td>

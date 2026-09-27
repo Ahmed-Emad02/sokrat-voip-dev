@@ -66,7 +66,7 @@ function fmtDur(s) {
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -89,7 +89,7 @@ function fmtDur(s) {
         }
         body { 
             background-color: var(--bg-primary); 
-            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif; 
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important; 
             color: var(--text-primary); 
         }
         body::before {
@@ -129,7 +129,7 @@ function fmtDur(s) {
         #statusChecklistBtn,
         #targetExtensionChecklistBtn,
         .filter-action-btn {
-            font-family: 'Plus Jakarta Sans', 'Cairo', sans-serif !important;
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         }
         #cdrFilterForm input[type="text"],
         #cdrFilterForm input[type="datetime-local"],
@@ -511,9 +511,9 @@ function fmtDur(s) {
                             <% } %>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-800/30 text-sm font-sans">
+                    <tbody class="divide-y divide-zinc-800/30 text-sm font-mono">
                         <% if(calls.length === 0) { %>
-                            <tr><td colspan="<%= isSuper ? 12 : 11 %>" class="p-8 text-center text-zinc-500 font-sans"><%= t.noData %></td></tr>
+                            <tr><td colspan="<%= isSuper ? 12 : 11 %>" class="p-8 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>
                         <% } else { %>
                             <% calls.forEach(call => { %>
                                 <% const isFailover = (call.dcontext === 'ext-external-failover') || (call.userfield && String(call.userfield).startsWith('Failover:')); %>
@@ -536,7 +536,7 @@ function fmtDur(s) {
                                                     <%= call.dst %>
                                                 </span>
                                                 <div class="flex items-center gap-1 flex-wrap">
-                                                    <span class="inline-flex items-center gap-1 text-[10px] font-sans font-black px-2 py-0.5 rounded cdr-failover-pill">
+                                                    <span class="inline-flex items-center gap-1 text-[10px] font-mono font-black px-2 py-0.5 rounded cdr-failover-pill">
                                                         <%= isRtl ? 'تحويل لرقم خارجي' : 'Failover Mobile' %>
                                                     </span>
                                                     <% if (failoverVia) { %>
@@ -558,7 +558,7 @@ function fmtDur(s) {
                                     </td>
                                     <td class="p-4 text-zinc-400 whitespace-nowrap"><%= fmtDur(call.billsec) %></td>
                                     <td class="p-4 whitespace-nowrap">
-                                        <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded text-[10px] font-black tracking-wider whitespace-nowrap <%= dispColors[call.disposition] || 'bg-zinc-800 text-zinc-400 border border-zinc-700/50' %>">
+                                        <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded text-[10px] font-mono font-black tracking-wider whitespace-nowrap <%= dispColors[call.disposition] || 'bg-zinc-800 text-zinc-400 border border-zinc-700/50' %>">
                                             <%= call.disposition %>
                                         </span>
                                     </td>
@@ -628,7 +628,7 @@ function fmtDur(s) {
                                                 </div>
                                             </div>
                                         <% } else { %>
-                                            <span class="text-xs font-sans text-zinc-500/30 font-bold italic select-none <%= isRtl ? 'pl-3' : 'pr-3' %>"><%= t.noAudio %></span>
+                                            <span class="text-xs font-mono text-zinc-500/30 font-bold italic select-none <%= isRtl ? 'pl-3' : 'pr-3' %>"><%= t.noAudio %></span>
                                         <% } %>
                                     </td>
                                     <% if (canDeleteCdr) { %>

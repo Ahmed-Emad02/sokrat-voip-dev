@@ -421,7 +421,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Roboto:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -474,7 +474,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         body { 
             background-color: var(--bg-primary); 
-            font-family: 'Roboto', 'Cairo', sans-serif; 
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important; 
             color: var(--text-primary); 
         }
         body::before {
@@ -1660,7 +1660,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             <!-- Embedded Bottom Composer -->
                             <form id="sms-quick-composer-form" onsubmit="handleQuickSmsSubmit(event)" class="p-2.5 border-t border-[var(--border-primary)] bg-[var(--bg-card)]/80 flex items-end gap-2 shrink-0">
                                 <div class="flex-1 min-w-0 relative">
-                                    <textarea id="sms-composer-input" rows="2" required placeholder="<%= t.smsTypePlaceholder || 'Type a message... (Enter to send)' %>" onkeydown="handleComposerKeydown(event)" oninput="handleComposerInput(this)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl p-2.5 text-xs text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-[var(--accent-color)] resize-none font-sans text-start" dir="auto"></textarea>
+                                    <textarea id="sms-composer-input" rows="2" required placeholder="<%= t.smsTypePlaceholder || 'Type a message... (Enter to send)' %>" onkeydown="handleComposerKeydown(event)" oninput="handleComposerInput(this)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl p-2.5 text-xs text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-[var(--accent-color)] resize-none font-mono text-start" dir="auto"></textarea>
                                     <div class="flex items-center justify-between px-1 text-[9px] font-mono text-zinc-500">
                                         <span id="sms-composer-counter">0/160</span>
                                         <span class="hidden sm:inline text-zinc-500 text-[9px]"><%= t.smsShiftEnterHint || 'Shift+Enter for newline' %></span>
@@ -2051,7 +2051,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             </thead>
                             <tbody id="report-table-body" class="divide-y divide-[var(--border-primary)]/50 font-mono text-xs">
                                 <tr>
-                                    <td colspan="9" class="py-8 text-center text-xs text-[var(--text-muted)] font-sans">
+                                    <td colspan="9" class="py-8 text-center text-xs text-[var(--text-muted)] font-mono">
                                         <%= t.reportLoading %>
                                     </td>
                                 </tr>
@@ -2321,7 +2321,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 </div>
                 <!-- Content Area -->
                 <div class="bg-[var(--bg-card)] border border-[var(--border-primary)] p-4 rounded-xl max-h-[250px] overflow-y-auto">
-                    <p id="sms-modal-content" class="text-sm text-[var(--text-secondary)] leading-relaxed select-text whitespace-pre-wrap font-sans"></p>
+                    <p id="sms-modal-content" class="text-sm text-[var(--text-secondary)] leading-relaxed select-text whitespace-pre-wrap font-mono"></p>
                 </div>
             </div>
             <!-- Modal Footer -->
@@ -2504,7 +2504,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             </thead>
                             <tbody id="audit-slots-table-body" class="divide-y divide-[var(--border-primary)]/50 font-mono">
                                 <tr>
-                                    <td colspan="5" class="px-4 py-8 text-center text-xs text-[var(--text-muted)] font-sans">
+                                    <td colspan="5" class="px-4 py-8 text-center text-xs text-[var(--text-muted)] font-mono">
                                         <%= isRtl ? 'جاري فحص الإعدادات والأجهزة...' : 'Scanning configuration and devices...' %>
                                     </td>
                                 </tr>
@@ -3648,12 +3648,12 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                 ${statusBadge}
                             </div>
                             <div class="flex items-center gap-1.5 shrink-0">
-                                <button type="button" onclick="setPortSelection('audio', '${escapeHtml(portPath)}')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold font-sans cursor-pointer transition flex items-center gap-1 ${
+                                <button type="button" onclick="setPortSelection('audio', '${escapeHtml(portPath)}')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono cursor-pointer transition flex items-center gap-1 ${
                                     isAudio ? 'bg-emerald-500 text-white shadow-sm' : 'bg-[var(--bg-card)] hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                                 }" title="${isRtl ? 'تعيين كمنفذ للصوت' : 'Assign as Audio Port'}">
                                     <span>${isRtl ? 'صوت' : 'Audio'}</span>
                                 </button>
-                                <button type="button" onclick="setPortSelection('data', '${escapeHtml(portPath)}')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold font-sans cursor-pointer transition flex items-center gap-1 ${
+                                <button type="button" onclick="setPortSelection('data', '${escapeHtml(portPath)}')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono cursor-pointer transition flex items-center gap-1 ${
                                     isData ? 'bg-cyan-500 text-white shadow-sm' : 'bg-[var(--bg-card)] hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
                                 }" title="${isRtl ? 'تعيين كمنفذ للأوامر' : 'Assign as Data Port'}">
                                     <span>${isRtl ? 'أوامر' : 'Data'}</span>
@@ -3809,7 +3809,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 if (!auditSlotsTableBody) return;
                 auditSlotsTableBody.innerHTML = `
                     <tr>
-                        <td colspan="5" class="px-4 py-8 text-center text-xs text-[var(--text-muted)] font-sans">
+                        <td colspan="5" class="px-4 py-8 text-center text-xs text-[var(--text-muted)] font-mono">
                             <div class="inline-flex items-center gap-2">
                                 <svg class="animate-spin text-[var(--accent-color)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="16"/></svg>
                                 <span>${isRtl ? 'جاري فحص الإعدادات والأجهزة...' : 'Scanning configuration and live devices...'}</span>
@@ -3831,7 +3831,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         } else {
                             auditSlotsTableBody.innerHTML = `
                                 <tr>
-                                    <td colspan="5" class="px-4 py-6 text-center text-xs text-rose-400 font-sans">
+                                    <td colspan="5" class="px-4 py-6 text-center text-xs text-rose-400 font-mono">
                                         ${escapeHtml(data.error || 'Failed to load audit data')}
                                     </td>
                                 </tr>`;
@@ -3840,7 +3840,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     .catch(err => {
                         auditSlotsTableBody.innerHTML = `
                             <tr>
-                                <td colspan="5" class="px-4 py-6 text-center text-xs text-rose-400 font-sans">
+                                <td colspan="5" class="px-4 py-6 text-center text-xs text-rose-400 font-mono">
                                     ${escapeHtml(err.message || 'Network Error during audit')}
                                 </td>
                             </tr>`;
@@ -3881,7 +3881,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 if (!slots || slots.length === 0) {
                     auditSlotsTableBody.innerHTML = `
                         <tr>
-                            <td colspan="5" class="px-4 py-8 text-center text-xs text-[var(--text-muted)] font-sans">
+                            <td colspan="5" class="px-4 py-8 text-center text-xs text-[var(--text-muted)] font-mono">
                                 ${isRtl ? 'لا توجد منافذ مهيأة في dongle.conf' : 'No dongle slots configured in dongle.conf'}
                             </td>
                         </tr>`;
@@ -3897,30 +3897,30 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                     let statusBadge = '';
                     if (slot.status === 'synced') {
-                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold font-sans">
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold font-mono">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> ${isRtl ? 'مطابق تماماً' : 'Synchronized'}
                         </span>`;
                     } else if (slot.status === 'mismatch') {
-                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold font-sans">
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold font-mono">
                             <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span> ${isRtl ? 'اختلاف في IMEI/IMSI' : 'Hardware Mismatch'}
                         </span>`;
                     } else if (slot.status === 'unpinned') {
-                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold font-sans">
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold font-mono">
                             <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> ${isRtl ? 'غير مسجل في conf' : 'Unpinned in config'}
                         </span>`;
                     } else if (slot.status === 'disconnected') {
-                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-500/10 text-[var(--text-muted)] border border-zinc-500/20 text-[10px] font-bold font-sans">
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-500/10 text-[var(--text-muted)] border border-zinc-500/20 text-[10px] font-bold font-mono">
                             <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span> ${isRtl ? 'غير متصل' : 'Disconnected'}
                         </span>`;
                     } else {
-                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold font-sans">
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold font-mono">
                             <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span> ${escapeHtml(slot.status)}
                         </span>`;
                     }
 
                     const issuesList = (slot.issues || []).map(iss => {
                         const colorClass = iss.severity === 'critical' ? 'text-rose-400' : (iss.severity === 'warning' ? 'text-amber-400' : 'text-blue-400');
-                        return `<p class="text-[10px] font-sans ${colorClass} leading-tight">• ${escapeHtml(iss.message)}</p>`;
+                        return `<p class="text-[10px] font-mono ${colorClass} leading-tight">• ${escapeHtml(iss.message)}</p>`;
                     }).join('');
 
                     html += `
@@ -3934,15 +3934,15 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             </td>
                             <td class="px-3.5 py-3 align-top">
                                 <div class="flex flex-col gap-1 text-[11px]">
-                                    <div><span class="text-[10px] text-[var(--text-muted)] font-sans">IMEI:</span> <span class="${cfg.imei ? 'text-[var(--text-primary)]' : 'text-amber-400/80 italic font-sans'}">${escapeHtml(cfg.imei || '(none)')}</span></div>
-                                    <div><span class="text-[10px] text-[var(--text-muted)] font-sans">IMSI:</span> <span class="${cfg.imsi ? 'text-[var(--text-primary)]' : 'text-amber-400/80 italic font-sans'}">${escapeHtml(cfg.imsi || '(none)')}</span></div>
+                                    <div><span class="text-[10px] text-[var(--text-muted)] font-mono">IMEI:</span> <span class="${cfg.imei ? 'text-[var(--text-primary)]' : 'text-amber-400/80 italic font-mono'}">${escapeHtml(cfg.imei || '(none)')}</span></div>
+                                    <div><span class="text-[10px] text-[var(--text-muted)] font-mono">IMSI:</span> <span class="${cfg.imsi ? 'text-[var(--text-primary)]' : 'text-amber-400/80 italic font-mono'}">${escapeHtml(cfg.imsi || '(none)')}</span></div>
                                 </div>
                             </td>
                             <td class="px-3.5 py-3 align-top">
                                 <div class="flex flex-col gap-1 text-[11px]">
-                                    <div><span class="text-[10px] text-[var(--text-muted)] font-sans">State:</span> <span class="font-bold ${isConnected ? 'text-emerald-400 font-sans' : 'text-zinc-400 font-sans'}">${escapeHtml(liv.state || 'Not Connected')}</span></div>
-                                    <div><span class="text-[10px] text-[var(--text-muted)] font-sans">IMEI:</span> <span class="${liv.imei ? 'text-[var(--text-primary)]' : 'text-zinc-500 italic font-sans'}">${escapeHtml(liv.imei || '(none)')}</span></div>
-                                    <div><span class="text-[10px] text-[var(--text-muted)] font-sans">IMSI:</span> <span class="${liv.imsi ? 'text-[var(--text-primary)]' : 'text-zinc-500 italic font-sans'}">${escapeHtml(liv.imsi || '(none)')}</span></div>
+                                    <div><span class="text-[10px] text-[var(--text-muted)] font-mono">State:</span> <span class="font-bold ${isConnected ? 'text-emerald-400 font-mono' : 'text-zinc-400 font-mono'}">${escapeHtml(liv.state || 'Not Connected')}</span></div>
+                                    <div><span class="text-[10px] text-[var(--text-muted)] font-mono">IMEI:</span> <span class="${liv.imei ? 'text-[var(--text-primary)]' : 'text-zinc-500 italic font-mono'}">${escapeHtml(liv.imei || '(none)')}</span></div>
+                                    <div><span class="text-[10px] text-[var(--text-muted)] font-mono">IMSI:</span> <span class="${liv.imsi ? 'text-[var(--text-primary)]' : 'text-zinc-500 italic font-mono'}">${escapeHtml(liv.imsi || '(none)')}</span></div>
                                 </div>
                             </td>
                             <td class="px-3.5 py-3 align-top">
@@ -3953,7 +3953,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             </td>
                             <td class="px-3.5 py-3 align-middle text-end">
                                 ${canSync && slot.status !== 'synced' ? `
-                                    <button type="button" onclick="reconcileSlot('${escapeHtml(slot.slotId)}')" class="bg-[var(--accent-color)]/20 hover:bg-[var(--accent-color)] text-[var(--accent-color)] hover:text-white font-sans font-bold px-2.5 py-1 rounded-lg text-xs transition cursor-pointer border border-[var(--accent-color)]/40 shrink-0">
+                                    <button type="button" onclick="reconcileSlot('${escapeHtml(slot.slotId)}')" class="bg-[var(--accent-color)]/20 hover:bg-[var(--accent-color)] text-[var(--accent-color)] hover:text-white font-mono font-bold px-2.5 py-1 rounded-lg text-xs transition cursor-pointer border border-[var(--accent-color)]/40 shrink-0">
                                         ${isRtl ? 'مطابقة' : 'Sync'}
                                     </button>
                                 ` : ''}
@@ -4269,7 +4269,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         html += `
                             <div class="flex justify-end select-text">
                                 <div class="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-te-xs bg-[var(--accent-color)] text-white p-3 shadow-md flex flex-col gap-1 text-start" dir="auto">
-                                    <p class="text-xs leading-relaxed whitespace-pre-wrap font-sans break-words text-start" dir="auto">${escapeHtml(msg.content)}</p>
+                                    <p class="text-xs leading-relaxed whitespace-pre-wrap font-mono break-words text-start" dir="auto">${escapeHtml(msg.content)}</p>
                                     <div class="flex items-center justify-end gap-1 text-[9px] font-mono text-white/80">
                                         <span>${escapeHtml(timeStr)}</span>
                                         <span title="Sent">✓</span>
@@ -4281,7 +4281,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         html += `
                             <div class="flex justify-start select-text">
                                 <div class="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-ts-xs bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-primary)] p-3 shadow-sm flex flex-col gap-1 text-start" dir="auto">
-                                    <p class="text-xs leading-relaxed whitespace-pre-wrap font-sans break-words text-[var(--text-primary)] text-start" dir="auto">${escapeHtml(msg.content)}</p>
+                                    <p class="text-xs leading-relaxed whitespace-pre-wrap font-mono break-words text-[var(--text-primary)] text-start" dir="auto">${escapeHtml(msg.content)}</p>
                                     <div class="flex items-center justify-start gap-1.5 text-[9px] font-mono text-[var(--text-muted)] mt-0.5">
                                         <span class="px-1 py-0.5 rounded bg-[var(--bg-hover)] border border-[var(--border-primary)] text-[var(--text-muted)] text-[8px] uppercase font-mono">${escapeHtml(msg.dongleId || 'dongle')}</span>
                                         <span>${escapeHtml(timeStr)}</span>
@@ -5701,14 +5701,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 }
 
                 if (!cachedReportData) {
-                    tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-xs text-[var(--text-muted)] font-sans">${isRtl ? 'لا توجد بيانات' : 'No data loaded'}</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-xs text-[var(--text-muted)] font-mono">${isRtl ? 'لا توجد بيانات' : 'No data loaded'}</td></tr>`;
                     return;
                 }
 
                 const items = currentReportTab === 'dongles' ? (cachedReportData.dongleReports || []) : (cachedReportData.simReports || []);
 
                 if (items.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-xs text-[var(--text-muted)] font-sans">${isRtl ? 'لا توجد سجلات مسجلة في هذا النطاق الزمني.' : 'No state logs recorded in this timeframe.'}</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-xs text-[var(--text-muted)] font-mono">${isRtl ? 'لا توجد سجلات مسجلة في هذا النطاق الزمني.' : 'No state logs recorded in this timeframe.'}</td></tr>`;
                     return;
                 }
 

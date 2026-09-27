@@ -6,9 +6,9 @@
     <title>لوحة المراقبة المباشرة للسنترال</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Cairo', sans-serif; background-color: #f8fafc; color: #0f172a; }
+        body { font-family: 'JetBrains Mono', 'Cairo', monospace !important; background-color: #f8fafc; color: #0f172a; }
         .action-select {
             appearance: none;
             background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2064748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
@@ -266,15 +266,15 @@
 
                             <div id="callBox-${ext}" class="hidden mt-2 text-xs font-mono bg-amber-50/70 p-3 rounded-lg border border-amber-200/80 text-slate-800 space-y-1 mb-3">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-slate-500 font-sans text-[11px]">الطرف الآخر:</span>
+                                    <span class="text-slate-500 font-mono text-[11px]">الطرف الآخر:</span>
                                     <strong id="partner-${ext}" class="font-mono text-slate-900">-</strong>
                                 </div>
                                 <div class="flex justify-between items-center">
-                                    <span class="text-slate-500 font-sans text-[11px]">حالة المكالمة:</span>
-                                    <strong id="stateLabel-${ext}" class="font-sans font-bold text-amber-700">-</strong>
+                                    <span class="text-slate-500 font-mono text-[11px]">حالة المكالمة:</span>
+                                    <strong id="stateLabel-${ext}" class="font-mono font-bold text-amber-700">-</strong>
                                 </div>
                                 <div class="flex justify-between items-center">
-                                    <span class="text-slate-500 font-sans text-[11px]">المدة الحية:</span>
+                                    <span class="text-slate-500 font-mono text-[11px]">المدة الحية:</span>
                                     <strong id="timer-${ext}" class="font-mono text-emerald-600">00:00</strong>
                                 </div>
                             </div>
