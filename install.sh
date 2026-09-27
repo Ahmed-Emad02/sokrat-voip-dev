@@ -1584,7 +1584,6 @@ same => n,Goto(s,process)
 
 exten => s,1,Set(DONGLE_TARGET=${DONGLENAME})
 same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
-same => n,Set(CHANNEL(hangup_handler_push)=dongle-hangup-cleanup,s,1)
 same => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=))
 same => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)
 same => n,ExecIf($["${DB(DONGLE_SETTINGS/${DONGLENAME})}" != "1"]?Goto(skip_dynamic))
@@ -1619,9 +1618,12 @@ same => n,MusicOnHold(${EXTEN})
 same => n,Hangup()
 DONGLE
 
-# Strip old [macro-dialout-trunk-predial-hook] before appending
-echo "  Stripping old [macro-dialout-trunk-predial-hook]..."
-python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\\[macro-dialout-trunk-predial-hook\\].*?(?=\\n\\[|\\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
+# Sanitize dialplans: remove any legacy dongle restart commands that cause call disconnects on transfer
+sed -i '/dongle restart now/d' /etc/asterisk/extensions*.conf 2>/dev/null || true
+
+# Strip old [macro-dialout-trunk-predial-hook] and [dongle-hangup-cleanup] before appending
+echo "  Stripping old [macro-dialout-trunk-predial-hook] and [dongle-hangup-cleanup]..."
+python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\[macro-dialout-trunk-predial-hook\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);f=re.sub(r'\[dongle-hangup-cleanup\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
 echo "  Stripped."
 
 # Append macro-dialout-trunk-predial-hook
@@ -1649,22 +1651,19 @@ same => n,Set(RAW_TARGET=${CUT(OUT_${DIAL_TRUNK},/,2)})
 same => n,Set(DONGLE_TARGET=${DB(DONGLE_DEVICE_MAP/${RAW_TARGET})})
 same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${RAW_TARGET}))
 same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
-same => n,Set(CHANNEL(hangup_handler_push)=dongle-hangup-cleanup,s,1)
 same => n,MacroExit()
+MACRO
+
+# Append safe dongle-hangup-cleanup stub (transfer-safe, restart disabled)
+append_context '[dongle-hangup-cleanup]' '[dongle-hangup-cleanup]' << 'CLEANUP_CTX'
 
 [dongle-hangup-cleanup]
-exten => s,1,NoOp(--- Pure Dialplan Dongle Hangup Cleanup ---)
+exten => s,1,NoOp(--- Pure Dialplan Dongle Hangup Cleanup (Safely Disabled) ---)
 same => n,GotoIf($["${BLINDTRANSFER}"!=""]?done)
 same => n,GotoIf($["${ATTENDEDTRANSFER}"!=""]?done)
 same => n,GotoIf($["${TRANSFER_CONTEXT}"!=""]?done)
-same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${CUT(CHANNEL,-,1)}))
-same => n,ExecIf($["${DONGLE_TARGET:0:7}"="Dongle/"]?Set(DONGLE_TARGET=${DONGLE_TARGET:7}))
-same => n,ExecIf($["${DB_EXISTS(DONGLE_DEVICE_MAP/${DONGLE_TARGET})}"="1"]?Set(DONGLE_TARGET=${DB(DONGLE_DEVICE_MAP/${DONGLE_TARGET})}))
-same => n,GotoIf($["${DONGLE_TARGET}"="" | "${DONGLE_TARGET:0:6}"!="dongle"]?done)
-same => n,Verbose(1, [DONGLE-DIALPLAN-CLEANUP] Resetting dongle ${DONGLE_TARGET} via dialplan System call (Cause: ${HANGUPCAUSE}, DialStatus: ${DIALSTATUS}))
-same => n,NoOp([DONGLE-DIALPLAN-CLEANUP] Restart disabled for ${DONGLE_TARGET})
 same => n(done),Return()
-MACRO
+CLEANUP_CTX
 
 # Append CDR hangup-cause capture subroutine
 append_context '[cdr-cause-capture]' '[cdr-cause-capture]' << 'CAUSECAP'

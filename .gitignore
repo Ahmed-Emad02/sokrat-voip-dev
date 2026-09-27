@@ -5,3 +5,4 @@ sim_mappings.json
 sms_inbox.json
 telemetry_history.json
 .omo/
+.codegraph/

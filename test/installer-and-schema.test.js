@@ -67,8 +67,11 @@ test('install.sh contains schema migrations, rnnoise builds, and inbound blackli
     // Sokrat MOTD installation after cloning in Step 3
     assert.match(script, /MOTD_SCRIPT="\$INSTALL_DIR\/scripts\/sokrat-motd\.sh"/, 'install.sh must define MOTD_SCRIPT relative to INSTALL_DIR');
     assert.match(script, /cp "\$MOTD_SCRIPT" \/etc\/profile\.d\/sokrat-motd\.sh/, 'install.sh must copy MOTD script to profile.d');
-    assert.match(script, /write_embedded_picotts_agi/, 'install.sh must define write_embedded_picotts_agi fallback');
-    assert.match(script, /CREATE TABLE IF NOT EXISTS \\`sipsettings\\`/, 'install.sh must ensure sipsettings table exists before import');
+
+    // Call transfer protection & dongle dialplan sanitization
+    assert.match(script, /sed -i '\/dongle restart now\/d' \/etc\/asterisk\/extensions\*\.conf/, 'install.sh must sanitize rogue dongle restart commands');
+    assert.match(script, /re\.sub\([^)]*dongle-hangup-cleanup[^)]*\)/, 'install.sh must strip dongle-hangup-cleanup');
+    assert.doesNotMatch(script, /same => n,Set\(CHANNEL\(hangup_handler_push\)=dongle-hangup-cleanup,s,1\)/, 'install.sh must not push dongle-hangup-cleanup');
 });
 
 test('installer-bundle/install-sokrat.sh prevents duplicate cloning and passes bash syntax validation', () => {
@@ -89,6 +92,11 @@ test('installer-bundle/install-sokrat.sh prevents duplicate cloning and passes b
     assert.match(script, /packages\/nodejs-\*\.rpm/, 'install-sokrat.sh must check for offline nodejs RPM');
     assert.match(script, /webmin-\*\.rpm/, 'install-sokrat.sh must check for offline webmin RPM');
     assert.match(script, /librnnoise\.so/, 'install-sokrat.sh must check for offline rnnoise library');
+
+    // Call transfer protection & dongle dialplan sanitization
+    assert.match(script, /sed -i '\/dongle restart now\/d' \/etc\/asterisk\/extensions\*\.conf/, 'install-sokrat.sh must sanitize rogue dongle restart commands');
+    assert.match(script, /re\.sub\([^)]*dongle-hangup-cleanup[^)]*\)/, 'install-sokrat.sh must strip dongle-hangup-cleanup');
+    assert.doesNotMatch(script, /same => n,Set\(CHANNEL\(hangup_handler_push\)=dongle-hangup-cleanup,s,1\)/, 'install-sokrat.sh must not push dongle-hangup-cleanup');
 });
 
 test('offline installer packages and binaries are present in installer-bundle', () => {
