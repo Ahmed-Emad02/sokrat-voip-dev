@@ -10,7 +10,7 @@
 [![Rocky Linux](https://img.shields.io/badge/Rocky%20Linux-8.8%20%7C%208.10-10b981?style=for-the-badge&logo=rockylinux)](https://rockylinux.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
-[Quick Start](#-installation) • [Key Features](#-core-capabilities) • [System Ports](#-network--service-ports) • [Architecture](#-architecture) • [Default Credentials](#-default-access-credentials) • [Testing](#-testing--validation)
+[Quick Start](#-installation) • [Key Features](#-core-capabilities) • [System Ports](#-network--service-ports) • [Architecture](#-architecture) • [Default Credentials](#-default-access-credentials) • [Safe Upgrade](#-safe-in-place-upgrade) • [Testing](#-testing--validation)
 
 </div>
 
@@ -128,6 +128,29 @@ curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/u
 
 ---
 
+## 🔄 Safe In-Place Upgrade
+
+Upgrade an existing Sokrat VOIP installation safely with a single command. This applies new stability patches for Asterisk / `chan_dongle`, provisions any new database tables and columns (`CREATE TABLE IF NOT EXISTS`), and sanitizes dialplans to prevent call transfer disconnects—**all while strictly preserving PBX extensions, routes, trunks, IVRs, and call history (CDR)**:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/scripts/safe-upgrade.sh | bash
+```
+
+*Or directly from an existing installation:*
+```bash
+bash /opt/sokrat-voip/scripts/safe-upgrade.sh
+```
+
+### 🛡️ What the Safe Upgrade Performs:
+1. **Pre-flight Backups:** Automatically creates timestamped backups of `/etc/asterisk/extensions_custom.conf`, `/etc/asterisk/dongle.conf`, and MySQL PBX database schemas in `/opt/sokrat-voip/backups/`.
+2. **Codebase Synchronization:** Fetches and fast-forwards the latest Sokrat VoIP features and bug fixes without overwriting local custom settings.
+3. **Database Schema Migrations:** Idempotently executes `CREATE TABLE IF NOT EXISTS` and adds missing columns/indexes. Existing tables, PBX configurations, and CDR records are never dropped or altered destructively.
+4. **Asterisk & `chan_dongle` Hardening:** Rebuilds `chan_dongle.so` with Condition 32 mutex crash protection, Use-After-Free (UAF) prevention, and audio jitter buffer alignment.
+5. **Dialplan Sanitization (Call Transfer Safety):** Removes rogue automated restart commands and deduplicates `[dongle-hangup-cleanup]` contexts so transferring calls between extensions never drops live conversations.
+6. **Zero-Downtime Reload:** Replaces driver modules and dialplans in RAM (`dialplan reload`) without requiring an Asterisk daemon restart.
+
+---
+
 ## 🧪 Testing & Validation
 
 Run the internal test suite to verify endpoints, schema migrations, and real-time state machines:
@@ -142,17 +165,7 @@ To run the full-surface endpoint error scanner across all server routes:
 node --test test/server-endpoints-scan.test.js
 ```
 
----
 
-## 📜 Updating & Maintenance
-
-To update Sokrat VOIP to the latest version while preserving your local database and SIM configurations:
-
-```bash
-cd /opt/sokrat-voip
-git pull origin main
-systemctl restart sokrat-voip sokrat-softphone
-```
 
 ---
 

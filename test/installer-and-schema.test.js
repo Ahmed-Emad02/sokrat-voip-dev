@@ -129,3 +129,19 @@ test('install.sh and uninstall.sh pass bash syntax validation', () => {
         execSync('bash -n uninstall.sh', { cwd: rootDir, stdio: 'pipe' });
     }, 'uninstall.sh must pass bash -n syntax check');
 });
+
+test('scripts/safe-upgrade.sh passes bash syntax validation and includes non-destructive schema and dialplan updates', () => {
+    const rootDir = path.join(__dirname, '..');
+    const upgradeScriptPath = path.join(rootDir, 'scripts', 'safe-upgrade.sh');
+    assert.ok(fs.existsSync(upgradeScriptPath), 'safe-upgrade.sh must exist');
+    assert.doesNotThrow(() => {
+        execSync(`bash -n "${upgradeScriptPath}"`, { cwd: rootDir, stdio: 'pipe' });
+    }, 'safe-upgrade.sh must pass bash -n syntax check');
+
+    const script = fs.readFileSync(upgradeScriptPath, 'utf8');
+    assert.match(script, /backend\/install_db\.sql/, 'safe-upgrade.sh must apply install_db.sql schema');
+    assert.match(script, /ensure_db_column/, 'safe-upgrade.sh must define ensure_db_column migration');
+    assert.match(script, /chan_dongle\.patch/, 'safe-upgrade.sh must apply chan_dongle.patch');
+    assert.match(script, /re\.sub\([^)]*dongle-hangup-cleanup[^)]*\)/, 'safe-upgrade.sh must sanitize dongle-hangup-cleanup');
+    assert.match(script, /sed -i '\/dongle restart now\/d'/, 'safe-upgrade.sh must strip rogue dongle restart triggers');
+});
