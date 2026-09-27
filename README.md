@@ -10,7 +10,7 @@
 [![Rocky Linux](https://img.shields.io/badge/Rocky%20Linux-8.8%20%7C%208.10-10b981?style=for-the-badge&logo=rockylinux)](https://rockylinux.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
-[Quick Start](#-installation) • [Key Features](#-core-capabilities) • [System Ports](#-network--service-ports) • [Architecture](#-architecture) • [Default Credentials](#-default-access-credentials) • [Safe Upgrade](#-safe-in-place-upgrade) • [Testing](#-testing--validation)
+[Quick Start](#-installation) • [Key Features](#-core-capabilities) • [System Ports](#-network--service-ports) • [Architecture](#-architecture) • [Default Credentials](#-default-access-credentials) • [Safe Upgrade](#-safe-in-place-upgrade) • [Backups](#-backup-retrieval--export) • [Testing](#-testing--validation)
 
 </div>
 
@@ -148,6 +148,48 @@ bash /opt/sokrat-voip/scripts/safe-upgrade.sh
 4. **Asterisk & `chan_dongle` Hardening:** Rebuilds `chan_dongle.so` with Condition 32 mutex crash protection, Use-After-Free (UAF) prevention, and audio jitter buffer alignment.
 5. **Dialplan Sanitization (Call Transfer Safety):** Removes rogue automated restart commands and deduplicates `[dongle-hangup-cleanup]` contexts so transferring calls between extensions never drops live conversations.
 6. **Zero-Downtime Reload:** Replaces driver modules and dialplans in RAM (`dialplan reload`) without requiring an Asterisk daemon restart.
+
+---
+
+## 💾 Backup Retrieval & Export
+
+Every safe upgrade automatically creates a timestamped backup snapshot in `/opt/sokrat-voip/backups/`. You can bundle, inspect, or stream backups directly to your local computer with a single command.
+
+### 🚀 Remote 1-Liner (Stream Backup to Your Local Machine)
+Download the latest PBX and database backup snapshot directly to your workstation over SSH (no temporary bundle files created on the server):
+
+```bash
+ssh root@<server-ip> "bash /opt/sokrat-voip/scripts/retrieve-backups.sh --stream" > sokrat_backup_$(date +%Y%m%d).tar.gz
+```
+
+*Or via curl one-liner directly over SSH:*
+```bash
+ssh root@<server-ip> "curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/scripts/retrieve-backups.sh | bash -s -- --stream" > sokrat_backup_$(date +%Y%m%d).tar.gz
+```
+
+### 📦 Local Server Commands
+
+* **Package latest backup locally on the server:**
+  ```bash
+  bash /opt/sokrat-voip/scripts/retrieve-backups.sh
+  ```
+  *(Packages into `/opt/sokrat-voip/backups/sokrat_backup_latest.tar.gz` with SHA256 checksums)*
+
+* **List all available snapshots:**
+  ```bash
+  bash /opt/sokrat-voip/scripts/retrieve-backups.sh --list
+  ```
+
+* **Create a fresh live snapshot right now and bundle it:**
+  ```bash
+  bash /opt/sokrat-voip/scripts/retrieve-backups.sh --create
+  ```
+
+### 📋 Files Included in Each Snapshot
+* `asterisk_pbx.bak_<timestamp>.sql`: Full dump of the FreePBX/Asterisk MySQL database (extensions, queues, IVRs, trunks, routes, settings).
+* `asterisk_cdr.bak_<timestamp>.sql`: Full dump of the Call Detail Records (`asteriskcdrdb.cdr`) history.
+* `extensions_custom.conf.bak_<timestamp>`: Custom Asterisk dialplans and contexts.
+* `dongle.conf.bak_<timestamp>`: GSM dongle hardware modem configurations.
 
 ---
 

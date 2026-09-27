@@ -145,3 +145,21 @@ test('scripts/safe-upgrade.sh passes bash syntax validation and includes non-des
     assert.match(script, /re\.sub\([^)]*dongle-hangup-cleanup[^)]*\)/, 'safe-upgrade.sh must sanitize dongle-hangup-cleanup');
     assert.match(script, /sed -i '\/dongle restart now\/d'/, 'safe-upgrade.sh must strip rogue dongle restart triggers');
 });
+
+test('scripts/retrieve-backups.sh passes bash syntax validation and supports snapshot listing and streaming', () => {
+    const rootDir = path.join(__dirname, '..');
+    const retrieveScriptPath = path.join(rootDir, 'scripts', 'retrieve-backups.sh');
+    assert.ok(fs.existsSync(retrieveScriptPath), 'retrieve-backups.sh must exist');
+    assert.doesNotThrow(() => {
+        execSync(`bash -n "${retrieveScriptPath}"`, { cwd: rootDir, stdio: 'pipe' });
+    }, 'retrieve-backups.sh must pass bash -n syntax check');
+
+    const script = fs.readFileSync(retrieveScriptPath, 'utf8');
+    assert.match(script, /--stream/, 'retrieve-backups.sh must support streaming mode');
+    assert.match(script, /--list/, 'retrieve-backups.sh must support list mode');
+    assert.match(script, /sha256sum/, 'retrieve-backups.sh must generate checksums');
+    assert.match(script, /tar -czf/, 'retrieve-backups.sh must compress archives with tar');
+
+    const listOutput = execSync(`bash "${retrieveScriptPath}" --list`, { cwd: rootDir, encoding: 'utf8' });
+    assert.match(listOutput, /Available Backup Snapshots/, 'retrieve-backups.sh --list should output snapshot table');
+});
