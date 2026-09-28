@@ -5206,9 +5206,14 @@ function positionConfigDropdown(trigger, menu, preferredHeight = 320) {
 
 function pruneDetachedDropdownMenus() {
     document.querySelectorAll('.config-dropdown-menu').forEach(menu => {
-        if (menu._trigger && !menu._trigger.isConnected) {
-            if (menu._selectObserver) menu._selectObserver.disconnect();
-            menu.remove();
+        if (menu._trigger) {
+            if (!menu._trigger.isConnected) {
+                if (menu._selectObserver) menu._selectObserver.disconnect();
+                menu.remove();
+            } else if (menu._trigger.closest('.hidden')) {
+                menu.classList.add('hidden');
+                menu._trigger.setAttribute('aria-expanded', 'false');
+            }
         }
     });
 }
@@ -5346,11 +5351,13 @@ function enhanceSelectElements() {
 
         function syncState() {
             const isDisabled = select.disabled || select.hasAttribute('disabled');
+            const isHidden = select.classList.contains('hidden') || select.hasAttribute('hidden') || select.style.display === 'none';
+            wrapper.classList.toggle('hidden', isHidden);
             trigger.disabled = isDisabled;
             trigger.setAttribute('aria-disabled', String(isDisabled));
             const currentOption = select.options[select.selectedIndex] || select.options[0];
             labelSpan.textContent = currentOption ? currentOption.textContent : '';
-            if (isDisabled) closeMenu();
+            if (isDisabled || isHidden) closeMenu();
         }
 
         select.addEventListener('invalid', () => {
@@ -5370,7 +5377,7 @@ function enhanceSelectElements() {
         });
         selectObserver.observe(select, {
             attributes: true,
-            attributeFilter: ['disabled'],
+            attributeFilter: ['disabled', 'class', 'style', 'hidden'],
             childList: true,
             subtree: true
         });
@@ -5383,7 +5390,7 @@ function enhanceSelectElements() {
         trigger.addEventListener('click', event => {
             event.stopPropagation();
             syncState();
-            if (select.disabled || select.hasAttribute('disabled')) return;
+            if (select.disabled || select.hasAttribute('disabled') || select.classList.contains('hidden') || wrapper.classList.contains('hidden')) return;
 
             const isOpening = menu.classList.contains('hidden');
             if (!isOpening) {

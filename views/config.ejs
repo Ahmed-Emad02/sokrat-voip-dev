@@ -7678,30 +7678,55 @@ function isTabAllowed(tabName) {
         function onIvrEntryTypeChange(rowId) {
             const row = document.getElementById(rowId);
             if (!row) return;
+            if (typeof closeConfigDropdowns === 'function') closeConfigDropdowns();
+
             const type = row.querySelector('.ivr-entry-type').value;
             const targetSelect = row.querySelector('.ivr-entry-target-select');
             const targetInput = row.querySelector('.ivr-entry-target-input');
             const externalWrap = row.querySelector('.ivr-entry-external-wrap');
             const hiddenDest = row.querySelector('.ivr-entry-dest-hidden');
 
+            const setFieldVisibility = (el, show) => {
+                if (!el) return;
+                const wrapper = el.closest('.custom-select-wrapper');
+                if (show) {
+                    el.classList.remove('hidden');
+                    if (wrapper) wrapper.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                    if (wrapper) {
+                        wrapper.classList.add('hidden');
+                        const trigger = wrapper.querySelector('.custom-select-trigger');
+                        if (trigger) {
+                            const menuId = trigger.getAttribute('aria-controls');
+                            if (menuId) {
+                                const m = document.getElementById(menuId);
+                                if (m) m.classList.add('hidden');
+                            }
+                            trigger.setAttribute('aria-expanded', 'false');
+                        }
+                    }
+                }
+            };
+
             if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions', 'musiconhold'].includes(type)) {
-                targetSelect.classList.remove('hidden');
-                targetInput.classList.add('hidden');
-                if (externalWrap) externalWrap.classList.add('hidden');
+                setFieldVisibility(targetSelect, true);
+                setFieldVisibility(targetInput, false);
+                setFieldVisibility(externalWrap, false);
                 populateIvrTargetSelect(targetSelect, type, hiddenDest.value);
             } else if (type === 'terminate') {
-                targetSelect.classList.add('hidden');
-                targetInput.classList.add('hidden');
-                if (externalWrap) externalWrap.classList.add('hidden');
+                setFieldVisibility(targetSelect, false);
+                setFieldVisibility(targetInput, false);
+                setFieldVisibility(externalWrap, false);
                 hiddenDest.value = 'app-blackhole,hangup,1';
             } else if (type === 'external') {
-                targetSelect.classList.add('hidden');
-                targetInput.classList.add('hidden');
-                if (externalWrap) externalWrap.classList.remove('hidden');
+                setFieldVisibility(targetSelect, false);
+                setFieldVisibility(targetInput, false);
+                setFieldVisibility(externalWrap, true);
             } else if (type === 'custom') {
-                targetSelect.classList.add('hidden');
-                targetInput.classList.remove('hidden');
-                if (externalWrap) externalWrap.classList.add('hidden');
+                setFieldVisibility(targetSelect, false);
+                setFieldVisibility(targetInput, true);
+                setFieldVisibility(externalWrap, false);
                 targetInput.value = hiddenDest.value;
             }
             updateIvrEntryDestValue(rowId);
