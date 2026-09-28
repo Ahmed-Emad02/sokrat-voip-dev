@@ -36,12 +36,22 @@ test('/etc/asterisk/extensions_custom.conf contains ext-external-failover with d
     // ext-external-failover context definition
     assert.match(conf, /\[ext-external-failover\]/, 'extensions_custom.conf must define [ext-external-failover]');
     assert.match(conf, /Dial\(Dongle\/\$\{EXPLICIT_DONGLE\}\/\$\{TARGET_NUM\},60\)/, 'ext-external-failover must dial explicit Dongle channel directly');
-    assert.match(conf, /Dial\(Local\/\$\{TARGET_NUM\}@outbound-allroutes,60\)/, 'ext-external-failover must dial Local directly without screening whisper');
+    assert.match(conf, /Dial\(Local\/\$\{TARGET_NUM\}@outbound-allroutes(\/n)?,60\)/, 'ext-external-failover must dial Local directly without screening whisper');
 });
 
 test('install.sh contains ext-external-failover dialplan migrations', () => {
     const installScript = fs.readFileSync(path.join(__dirname, '../install.sh'), 'utf8');
     assert.match(installScript, /\[ext-external-failover\]/, 'install.sh must configure [ext-external-failover]');
     assert.match(installScript, /Dial\(Dongle\/\$\{EXPLICIT_DONGLE\}\/\$\{TARGET_NUM\},60\)/, 'install.sh must dial Dongle directly');
-    assert.match(installScript, /Dial\(Local\/\$\{TARGET_NUM\}@outbound-allroutes,60\)/, 'install.sh must dial Local directly');
+    assert.match(installScript, /Dial\(Local\/\$\{TARGET_NUM\}@outbound-allroutes(\/n)?,60\)/, 'install.sh must dial Local directly');
+});
+
+test('views/config.ejs IVR Entries support External Number / Mobile destination', () => {
+    const configContent = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
+
+    // Check ivr_entry_type includes external option
+    assert.match(configContent, /<option value="external">/, 'ivr_entry_type must include external option');
+    assert.match(configContent, /ivr-entry-external-wrap/, 'ivr entry row must contain ivr-entry-external-wrap');
+    assert.match(configContent, /ivr-entry-external-phone/, 'ivr entry row must contain ivr-entry-external-phone input');
+    assert.match(configContent, /ivr-entry-external-dongle/, 'ivr entry row must contain ivr-entry-external-dongle select');
 });

@@ -1882,7 +1882,7 @@ append_context '[ext-external-failover]' '[ext-external-failover]' << 'FAILOVER_
 ; Sokrat Call Center Failover to External Mobile Number (Direct Bridge)
 ; Supports:
 ;   1. Explicit Dongle: ext-external-failover,01011719380/dongle1,1 OR ext-external-failover,01011719380@dongle1,1
-;   2. Automatic Outbound Routes: ext-external-failover,01011719380,1
+;   2. Automatic Outbound Routes: ext-external-failover,01011719380,1 OR ext-external-failover,01011719380/auto,1
 exten => _[0-9+*#].!,1,NoOp(=== SOKRAT FAILOVER: Target '${EXTEN}' for Customer '${CALLERID(num)}' ===)
 same => n,Set(CUST_NUM=${CALLERID(num)})
 same => n,Set(RAW_TARGET=${EXTEN})
@@ -1892,12 +1892,12 @@ same => n,Set(EXPLICIT_DONGLE=${CUT(RAW_TARGET,/,2)})
 same => n,ExecIf($["${EXPLICIT_DONGLE}"=""]?Set(EXPLICIT_DONGLE=${CUT(RAW_TARGET,@,2)}))
 same => n,Set(__FAILOVER_DEST=${TARGET_NUM})
 same => n,Set(CDR(userfield)=Failover: ${RAW_TARGET})
-same => n,GotoIf($["${EXPLICIT_DONGLE}"!=""]?dial_explicit:dial_routes)
+same => n,GotoIf($["${EXPLICIT_DONGLE}"!="" & "${EXPLICIT_DONGLE}"!="auto" & "${EXPLICIT_DONGLE}"!="none"]?dial_explicit:dial_routes)
 same => n(dial_explicit),NoOp(Dialing explicitly via Dongle/${EXPLICIT_DONGLE}/${TARGET_NUM})
 same => n,Dial(Dongle/${EXPLICIT_DONGLE}/${TARGET_NUM},60)
 same => n,Hangup()
 same => n(dial_routes),NoOp(Dialing via Outbound Routes for ${TARGET_NUM})
-same => n,Dial(Local/${TARGET_NUM}@outbound-allroutes,60)
+same => n,Dial(Local/${TARGET_NUM}@outbound-allroutes/n,60)
 same => n,Hangup()
 FAILOVER_CTX
 

@@ -7604,6 +7604,7 @@ function isTabAllowed(tabName) {
                         <option value="timeconditions">Time Conditions</option>
                         <option value="musiconhold">Music on Hold (MoH)</option>
                         <option value="terminate">Terminate Call (Hangup)</option>
+                        <option value="external">${isRtl ? 'رقم خارجي / جوال' : 'External Number / Mobile'}</option>
                         <option value="custom">Custom</option>
                     </select>
                 </div>
@@ -7612,6 +7613,19 @@ function isTabAllowed(tabName) {
                     <select name="ivr_entry_target[]" id="ivr_target_${rowId}" aria-label="Target" onchange="updateIvrEntryDestValue('${rowId}')" class="ivr-entry-target-select config-input w-full py-1 text-xs font-medium">
                         <option value="">== choose target ==</option>
                     </select>
+                    <div id="ivr_external_wrap_${rowId}" class="ivr-entry-external-wrap hidden space-y-1">
+                        <input type="tel" autocomplete="tel" id="ivr_ext_phone_${rowId}" placeholder="${isRtl ? 'رقم الهاتف (مثال: 010...)' : 'Phone number (e.g. 010...)'}" oninput="updateIvrEntryDestValue('${rowId}')" class="ivr-entry-external-phone config-input w-full py-1 text-xs font-mono font-bold">
+                        <div class="flex items-center gap-1">
+                            <label for="ivr_ext_dongle_${rowId}" class="text-[10px] text-[var(--text-muted)] font-bold shrink-0">${isRtl ? 'الشريحة:' : 'SIM:'}</label>
+                            <select id="ivr_ext_dongle_${rowId}" onchange="updateIvrEntryDestValue('${rowId}')" class="ivr-entry-external-dongle config-input w-full py-0.5 text-[11px] font-mono">
+                                <option value="dongle1">dongle1 (${isRtl ? 'الشريحة 2 - مباشر' : 'Direct SIM 2 - Recommended'})</option>
+                                <option value="dongle0">dongle0 (${isRtl ? 'الشريحة 1 - مباشر' : 'Direct SIM 1 - Bridge'})</option>
+                                <option value="dongle2">dongle2 (SIM 3)</option>
+                                <option value="dongle3">dongle3 (SIM 4)</option>
+                                <option value="" selected>${isRtl ? 'تلقائي (مسارات صادرة)' : 'Auto (Outbound Routes)'}</option>
+                            </select>
+                        </div>
+                    </div>
                     <input type="text" name="ivr_entry_custom[]" id="ivr_custom_${rowId}" aria-label="Custom Target" oninput="updateIvrEntryDestValue('${rowId}')" placeholder="e.g. custom,s,1" class="ivr-entry-target-input config-input w-full py-1 text-xs font-mono hidden">
                     <input type="hidden" name="ivr_entry_dest[]" id="ivr_dest_${rowId}" class="ivr-entry-dest-hidden" value="${escapeHtml(dest)}">
                 </div>
@@ -7641,6 +7655,19 @@ function isTabAllowed(tabName) {
                 typeSelect.value = 'musiconhold';
             } else if (dest === 'app-blackhole,hangup,1') {
                 typeSelect.value = 'terminate';
+            } else if (dest.startsWith('ext-external-failover,') || (dest.startsWith('from-internal,') && !dest.startsWith('from-internal-xfer,'))) {
+                const rawTarget = dest.split(',')[1] || '';
+                const phone = rawTarget.split('/')[0].split('@')[0];
+                const dongle = rawTarget.includes('/') ? rawTarget.split('/')[1] : (rawTarget.includes('@') ? rawTarget.split('@')[1] : '');
+                if (phone && /^[0-9+*#]{3,25}$/.test(phone) && !/^[1-9][0-9]{1,3}$/.test(phone)) {
+                    typeSelect.value = 'external';
+                    const phoneInput = div.querySelector('.ivr-entry-external-phone');
+                    const dongleSelect = div.querySelector('.ivr-entry-external-dongle');
+                    if (phoneInput) phoneInput.value = phone;
+                    if (dongleSelect) dongleSelect.value = (dongle && dongle !== 'auto') ? dongle : '';
+                } else {
+                    typeSelect.value = 'custom';
+                }
             } else if (dest) {
                 typeSelect.value = 'custom';
             }
@@ -7654,18 +7681,27 @@ function isTabAllowed(tabName) {
             const type = row.querySelector('.ivr-entry-type').value;
             const targetSelect = row.querySelector('.ivr-entry-target-select');
             const targetInput = row.querySelector('.ivr-entry-target-input');
+            const externalWrap = row.querySelector('.ivr-entry-external-wrap');
             const hiddenDest = row.querySelector('.ivr-entry-dest-hidden');
 
             if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions', 'musiconhold'].includes(type)) {
+                targetSelect.classList.remove('hidden');
                 targetInput.classList.add('hidden');
+                if (externalWrap) externalWrap.classList.add('hidden');
                 populateIvrTargetSelect(targetSelect, type, hiddenDest.value);
             } else if (type === 'terminate') {
                 targetSelect.classList.add('hidden');
                 targetInput.classList.add('hidden');
+                if (externalWrap) externalWrap.classList.add('hidden');
                 hiddenDest.value = 'app-blackhole,hangup,1';
+            } else if (type === 'external') {
+                targetSelect.classList.add('hidden');
+                targetInput.classList.add('hidden');
+                if (externalWrap) externalWrap.classList.remove('hidden');
             } else if (type === 'custom') {
                 targetSelect.classList.add('hidden');
                 targetInput.classList.remove('hidden');
+                if (externalWrap) externalWrap.classList.add('hidden');
                 targetInput.value = hiddenDest.value;
             }
             updateIvrEntryDestValue(rowId);
@@ -7677,11 +7713,25 @@ function isTabAllowed(tabName) {
             const type = row.querySelector('.ivr-entry-type').value;
             const targetSelect = row.querySelector('.ivr-entry-target-select');
             const targetInput = row.querySelector('.ivr-entry-target-input');
+            const externalWrap = row.querySelector('.ivr-entry-external-wrap');
             const hiddenDest = row.querySelector('.ivr-entry-dest-hidden');
 
             if (['extensions', 'ringgroups', 'queues', 'ivr', 'voicemail', 'announcements', 'timeconditions', 'musiconhold'].includes(type)) {
+                hiddenDest.value = targetSelect.value || '';
             } else if (type === 'terminate') {
                 hiddenDest.value = 'app-blackhole,hangup,1';
+            } else if (type === 'external') {
+                const phoneInput = row.querySelector('.ivr-entry-external-phone');
+                const dongleSelect = row.querySelector('.ivr-entry-external-dongle');
+                const rawPhone = phoneInput ? phoneInput.value.trim().replace(/\s+/g, '') : '';
+                const dongle = dongleSelect ? dongleSelect.value.trim() : '';
+                if (!rawPhone) {
+                    hiddenDest.value = 'app-blackhole,hangup,1';
+                } else if (dongle && dongle !== 'auto') {
+                    hiddenDest.value = `ext-external-failover,${rawPhone}/${dongle},1`;
+                } else {
+                    hiddenDest.value = `ext-external-failover,${rawPhone},1`;
+                }
             } else if (type === 'custom') {
                 hiddenDest.value = targetInput.value.trim();
             }
