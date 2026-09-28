@@ -1264,6 +1264,9 @@ async function getUserAllowedDongles(req) {
     if (!userId) return [];
     try {
         const [rows] = await pool.query('SELECT dongle_name FROM `asterisk`.`dashboard_user_dongles` WHERE user_id = ?', [userId]);
+        if (rows.some(r => r.dongle_name && (r.dongle_name.toLowerCase().trim() === 'all' || r.dongle_name.trim() === '*'))) {
+            return null; // Unrestricted / all dongles
+        }
         return rows.map(r => r.dongle_name.toLowerCase().trim());
     } catch (err) {
         console.error('getUserAllowedDongles error:', err.message);
@@ -3900,9 +3903,14 @@ app.post('/users/add', async (req, res) => {
 
         let allowedDonglesList = [];
         if (Array.isArray(dongles)) {
-            allowedDonglesList = dongles.map(d => String(d).trim().toLowerCase()).filter(Boolean);
+            allowedDonglesList = dongles.map(d => String(d).trim()).filter(Boolean);
         } else if (typeof dongles === 'string' && dongles.trim()) {
-            allowedDonglesList = [dongles.trim().toLowerCase()];
+            allowedDonglesList = [dongles.trim()];
+        }
+        if (allowedDonglesList.some(d => d.toLowerCase() === 'all' || d === '*')) {
+            allowedDonglesList = ['ALL'];
+        } else {
+            allowedDonglesList = allowedDonglesList.map(d => d.toLowerCase());
         }
 
         const conn = await mysql.createConnection({
@@ -3968,9 +3976,14 @@ app.post('/users/edit', async (req, res) => {
 
         let allowedDonglesList = [];
         if (Array.isArray(dongles)) {
-            allowedDonglesList = dongles.map(d => String(d).trim().toLowerCase()).filter(Boolean);
+            allowedDonglesList = dongles.map(d => String(d).trim()).filter(Boolean);
         } else if (typeof dongles === 'string' && dongles.trim()) {
-            allowedDonglesList = [dongles.trim().toLowerCase()];
+            allowedDonglesList = [dongles.trim()];
+        }
+        if (allowedDonglesList.some(d => d.toLowerCase() === 'all' || d === '*')) {
+            allowedDonglesList = ['ALL'];
+        } else {
+            allowedDonglesList = allowedDonglesList.map(d => d.toLowerCase());
         }
 
         const conn = await mysql.createConnection({

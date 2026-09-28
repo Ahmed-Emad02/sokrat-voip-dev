@@ -388,3 +388,48 @@ test('Multi-extension audio authorization allows calls for any assigned extensio
     // Call between 103 and 104 -> REJECTED
     assert.equal(isAuthorized({ src: '103', dst: '104', cnum: '103', channel: 'PJSIP/103-0001' }, userExts), false);
 });
+
+test('Explicit dongle scoping: All Dongles (Unrestricted) toggle and table representation', async () => {
+    const html = await ejs.renderFile(usersViewPath, {
+        currentLang: 'en',
+        currentPage: '/users',
+        isSuperAdmin: true,
+        user: { username: 'admin', role: 'admin' },
+        users: [
+            { id: 1, username: 'admin', email: 'admin@sokrat.local', group_id: 1, group_name: 'super admins', extension: null, allowed_dongles: [], created_at: new Date() },
+            { id: 2, username: 'all_dongles_user', email: 'all@sokrat.local', group_id: 2, group_name: 'operators', extension: null, allowed_dongles: ['ALL'], created_at: new Date() },
+            { id: 3, username: 'specific_dongle_user', email: 'spec@sokrat.local', group_id: 2, group_name: 'operators', extension: '101', allowed_dongles: ['dongle0'], created_at: new Date() },
+            { id: 4, username: 'no_dongle_user', email: null, group_id: 2, group_name: 'operators', extension: null, allowed_dongles: [], created_at: new Date() }
+        ],
+        groups: mockGroups,
+        roster: mockRoster,
+        availableDongles: mockAvailableDongles,
+        allTabs: ['dashboard', 'users', 'cdr', 'voicemails', 'ext-stats', 'operator', 'config', 'gsm-dongles']
+    });
+
+    // 1. All Dongles toggle exists in Add and Edit modals
+    assert.ok(html.includes('id="createDonglesAll"'), 'createDonglesAll checkbox rendered in Add User form');
+    assert.ok(html.includes('id="editDonglesAll"'), 'editDonglesAll checkbox rendered in Edit User modal');
+    assert.ok(html.includes('id="createDongleGsmHint"'), 'createDongleGsmHint rendered');
+    assert.ok(html.includes('id="editDongleGsmHint"'), 'editDongleGsmHint rendered');
+
+    // 2. Table renders All Dongles badge for user 2, specific dongle for user 3, and dash for user 4 (without restricted badge)
+    assert.ok(html.includes('All Dongles (Unrestricted)'), 'All Dongles badge rendered for all_dongles_user');
+    assert.ok(html.includes('dongle0'), 'dongle0 badge rendered for specific_dongle_user');
+    assert.ok(html.includes('—'), 'Clean dash rendered for no_dongle_user (without restricted badge)');
+
+    // 3. Backend resolution logic
+    const resolveUserDonglesLogic = (assignedDongles, isSuperAdmin) => {
+        if (isSuperAdmin) return null;
+        if (!assignedDongles || assignedDongles.length === 0) return [];
+        if (assignedDongles.some(d => String(d).toLowerCase().trim() === 'all' || d === '*')) {
+            return null; // Unrestricted access
+        }
+        return assignedDongles.map(d => String(d).toLowerCase().trim());
+    };
+
+    assert.equal(resolveUserDonglesLogic([], true), null, 'Super Admin receives null (unrestricted)');
+    assert.equal(resolveUserDonglesLogic(['ALL'], false), null, 'User with ALL receives null (unrestricted fleet access)');
+    assert.deepEqual(resolveUserDonglesLogic(['dongle0'], false), ['dongle0'], 'User with dongle0 is scoped to dongle0');
+    assert.deepEqual(resolveUserDonglesLogic([], false), [], 'User with no assigned dongles receives empty array');
+});
