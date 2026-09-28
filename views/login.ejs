@@ -1,10 +1,11 @@
 <% const isRtl = currentLang === 'ar'; %>
+<% const isLightInitial = (typeof currentTheme !== 'undefined' && currentTheme === 'light'); %>
 <!DOCTYPE html>
-<html lang="<%= currentLang === 'ar' ? 'ar' : 'en' %>" dir="<%= currentLang === 'ar' ? 'rtl' : 'ltr' %>">
+<html lang="<%= currentLang === 'ar' ? 'ar' : 'en' %>" dir="<%= currentLang === 'ar' ? 'rtl' : 'ltr' %>" class="<%= isLightInitial ? 'light-theme' : '' %>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sokrat VOIP - Login</title>
+    <title><%= isRtl ? 'Sokrat VOIP - تسجيل الدخول' : 'Sokrat VOIP - Login' %></title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,6 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script>
         (function() {
+            // HTTPS enforcement
             if (window.location.protocol !== 'https:'
                 && window.location.hostname !== 'localhost'
                 && window.location.hostname !== '127.0.0.1'
@@ -20,16 +22,82 @@
                     'https://' + window.location.hostname + window.location.pathname + window.location.search
                 );
             }
+            // Prevent theme flickering
+            try {
+                var serverTheme = '<%= typeof currentTheme !== "undefined" ? currentTheme : "" %>';
+                var savedTheme = localStorage.getItem('theme') || serverTheme || 'dark';
+                if (savedTheme === 'light') {
+                    document.documentElement.classList.add('light-theme');
+                } else {
+                    document.documentElement.classList.remove('light-theme');
+                }
+            } catch (_) {}
+
+            // Auto-align language from localStorage if not explicitly requested in query
+            try {
+                var url = new URL(window.location.href);
+                var savedLang = localStorage.getItem('lang');
+                if (savedLang && (savedLang === 'ar' || savedLang === 'en') && !url.searchParams.has('lang')) {
+                    var serverLang = '<%= currentLang %>';
+                    if (savedLang !== serverLang) {
+                        url.searchParams.set('lang', savedLang);
+                        window.location.replace(url.toString());
+                    }
+                }
+            } catch (_) {}
         })();
     </script>
     <style>
         :root {
             --bg-primary: #050507;
             --bg-secondary: #0b0b0e;
+            --bg-card: rgba(13, 13, 18, 0.88);
+            --border-primary: rgba(255, 255, 255, 0.08);
+            --border-input: #27272a;
+            --text-primary: #f4f4f5;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --input-bg: #121217;
             --accent-color: #cc090c;
             --accent-hover: #e62629;
             --accent-dark: #7b0002;
+            --top-half-bg: #07070a;
+            --top-half-title: #ffffff;
+            --top-half-subtitle: #a1a1aa;
+            --bottom-half-from: #7b0002;
+            --bottom-half-to: #180001;
+            --control-bg: rgba(255, 255, 255, 0.08);
+            --control-border: rgba(255, 255, 255, 0.12);
+            --control-text: #e4e4e7;
+            --control-hover: rgba(255, 255, 255, 0.16);
+            --card-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 35px rgba(204, 9, 12, 0.15);
         }
+
+        .light-theme {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-card: #ffffff;
+            --border-primary: #e2e8f0;
+            --border-input: #cbd5e1;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+            --input-bg: #f8fafc;
+            --accent-color: #b91c1c;
+            --accent-hover: #991b1b;
+            --accent-dark: #7b0002;
+            --top-half-bg: #ffffff;
+            --top-half-title: #0f172a;
+            --top-half-subtitle: #64748b;
+            --bottom-half-from: #7b0002;
+            --bottom-half-to: #3a0002;
+            --control-bg: rgba(0, 0, 0, 0.05);
+            --control-border: rgba(0, 0, 0, 0.12);
+            --control-text: #1e293b;
+            --control-hover: rgba(0, 0, 0, 0.10);
+            --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 30px rgba(185, 28, 28, 0.08);
+        }
+
         body {
             font-family: 'JetBrains Mono', 'Cairo', monospace !important;
             min-height: 100vh;
@@ -38,43 +106,90 @@
             margin: 0;
             padding: 0;
             overflow-x: hidden;
-        }
-        
-        /* Logo breathing and spinning animation */
-        @keyframes float-breathing {
-            0%, 100% { transform: translateY(0) scale(1); }
-            50% { transform: translateY(-6px) scale(1.04); }
-        }
-        @keyframes spin-clockwise {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .logo-float-animation {
-            animation: float-breathing 4s ease-in-out infinite;
-        }
-        .logo-outer-spin {
-            animation: spin-clockwise 25s linear infinite;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.25s ease, color 0.25s ease;
         }
 
-        .login-card {
-            background: rgba(11, 11, 14, 0.45);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 1.5rem;
-            padding: 2.25rem 2rem;
-        }
-        
         /* Language specific overrides */
         [dir="rtl"] {
             font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         }
-        [dir="rtl"] .border-r {
-            border-right-width: 0px;
-            border-left-width: 1px;
+
+        /* Top and Bottom Sections */
+        .login-top-half {
+            background-color: var(--top-half-bg);
+            transition: background-color 0.25s ease;
+        }
+        .login-top-title {
+            color: var(--top-half-title);
+            transition: color 0.25s ease;
+        }
+        .login-bottom-half {
+            background: linear-gradient(to bottom, var(--bottom-half-from), var(--bottom-half-to));
+            transition: background 0.3s ease;
         }
 
-        /* Shutter-in-horizontal on every button (login page has no sidebar CSS) */
+        /* Card Container */
+        .login-main-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        /* Input Controls */
+        .login-input-wrapper {
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-input);
+            transition: all 0.2s ease;
+        }
+        .login-input-wrapper:focus-within {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 2px rgba(204, 9, 12, 0.25);
+        }
+        .login-field-input {
+            color: var(--text-primary);
+        }
+        .login-field-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Theme Logo Switching */
+        .logo-dark-theme { display: block; }
+        .logo-light-theme { display: none; }
+        .light-theme .logo-dark-theme { display: none; }
+        .light-theme .logo-light-theme { display: block; }
+
+        /* Theme Toggle Icon Switching */
+        .theme-icon-sun { display: block; }
+        .theme-icon-moon { display: none; }
+        .light-theme .theme-icon-sun { display: none; }
+        .light-theme .theme-icon-moon { display: block; }
+
+        /* Top Bar Controls */
+        .login-ctrl-btn {
+            background-color: var(--control-bg);
+            border: 1px solid var(--control-border);
+            color: var(--control-text);
+            transition: all 0.2s ease;
+        }
+        .login-ctrl-btn:hover {
+            background-color: var(--control-hover);
+        }
+
+        /* Logo breathing and floating animation */
+        @keyframes float-breathing {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-6px) scale(1.03); }
+        }
+        .logo-float-animation {
+            animation: float-breathing 4s ease-in-out infinite;
+        }
+
+        /* Button shutter effect */
         button {
             position: relative;
             overflow: hidden;
@@ -90,160 +205,295 @@
             bottom: 0;
             transform: scaleX(1);
             transform-origin: 50%;
-            transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
-            background: rgba(0, 0, 0, 0.30);
+            transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+            background: rgba(0, 0, 0, 0.25);
         }
         button:hover::before, button:focus-visible::before {
             transform: scaleX(0);
         }
     </style>
 </head>
-<body class="bg-white">
-    <!-- Top Half: Brand & Static Logo -->
-    <div class="h-[50vh] min-h-[340px] bg-white flex flex-col items-center justify-center relative shrink-0 select-none">
-        <!-- Brand Logo Container -->
-        <div class="flex flex-col items-center gap-4">
-            <!-- Large static brand logo -->
-            <img src="/logo_dark.png" alt="Sokrat VOIP" class="w-72 h-72 object-contain logo-float-animation">
+<body>
+    <!-- Floating Top Header: Language and Theme Controls -->
+    <header class="absolute top-0 inset-x-0 z-30 p-3 sm:p-5 flex items-center justify-end pointer-events-auto select-none">
+        <!-- Controls: Theme Toggle & Language Switcher -->
+        <div class="flex items-center gap-2 sm:gap-2.5">
+            <!-- Theme Toggle Button -->
+            <button id="themeToggleBtn" type="button" onclick="toggleTheme()" class="login-ctrl-btn flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold cursor-pointer backdrop-blur-md" title="<%= isRtl ? 'تبديل المظهر (ليلي / نهاري)' : 'Toggle Theme (Dark / Light)' %>" aria-label="<%= isRtl ? 'تبديل المظهر' : 'Toggle Theme' %>">
+                <!-- Sun Icon (Shown in Dark Mode) -->
+                <svg class="theme-icon-sun w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+                </svg>
+                <!-- Moon Icon (Shown in Light Mode) -->
+                <svg class="theme-icon-moon w-3.5 h-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+                <span id="themeLabelText" class="hidden sm:inline text-[11px]">
+                    <%= isRtl ? 'المظهر' : 'Theme' %>
+                </span>
+            </button>
+
+            <!-- Language Switcher: Segmented Control -->
+            <div class="flex items-center p-0.5 rounded-full login-ctrl-btn backdrop-blur-md text-[11px] font-bold" role="group" aria-label="<%= isRtl ? 'اختيار اللغة' : 'Select Language' %>">
+                <!-- English Button -->
+                <button type="button" onclick="setLanguage('en')" class="px-2.5 py-1 rounded-full cursor-pointer transition-all duration-200 <%= currentLang === 'en' ? 'bg-red-600 text-white shadow-sm font-black' : 'opacity-70 hover:opacity-100' %>" aria-pressed="<%= currentLang === 'en' %>">
+                    EN
+                </button>
+                <!-- Arabic Button -->
+                <button type="button" onclick="setLanguage('ar')" class="px-2.5 py-1 rounded-full cursor-pointer transition-all duration-200 <%= currentLang === 'ar' ? 'bg-red-600 text-white shadow-sm font-black' : 'opacity-70 hover:opacity-100' %>" aria-pressed="<%= currentLang === 'ar' %>">
+                    العربية
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Top Half: Brand Logo & Title -->
+    <div class="login-top-half h-[44vh] min-h-[300px] flex flex-col items-center justify-center relative shrink-0 select-none px-4 pt-8">
+        <div class="flex flex-col items-center gap-3">
+            <!-- Theme-Aware Brand Logos -->
+            <img src="/logo_light_text.png" alt="Sokrat VOIP" class="w-56 h-56 sm:w-68 sm:h-68 object-contain logo-float-animation logo-dark-theme">
+            <img src="/logo_dark.png" alt="Sokrat VOIP" class="w-56 h-56 sm:w-68 sm:h-68 object-contain logo-float-animation logo-light-theme">
             
             <!-- Brand Title -->
-            <h1 class="text-3xl font-extrabold tracking-[0.15em] text-[#121215] uppercase mt-2">
+            <h1 class="login-top-title text-2xl sm:text-3xl font-black tracking-[0.14em] uppercase -mt-2">
                 Sokrat <span class="text-[var(--accent-color)]">VOIP</span>
             </h1>
         </div>
-        
     </div>
 
     <!-- Bottom Half: Deep dark red gradient and login container -->
-    <div class="flex-1 bg-gradient-to-b from-[#7b0002] to-[#3c0002] flex items-center justify-center p-6 relative">
+    <div class="login-bottom-half flex-1 flex items-center justify-center p-4 sm:p-6 relative">
         <div class="w-full max-w-[420px] flex flex-col items-center">
             
+            <!-- Error Notification Banner -->
             <% if (typeof error !== 'undefined' && error) { %>
-                <div class="w-full mb-4 text-center text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                    <%= error %>
+                <div class="w-full mb-4 text-center text-xs font-bold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/70 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 shadow-md">
+                    <% if (isRtl && error === 'Invalid credentials') { %>
+                        بيانات الاعتماد غير صالحة. يرجى التحقق من اسم المستخدم وكلمة المرور.
+                    <% } else if (isRtl && error === 'Username and password are required') { %>
+                        اسم المستخدم وكلمة المرور مطلوبان.
+                    <% } else { %>
+                        <%= error %>
+                    <% } %>
                 </div>
             <% } %>
 
+            <!-- Password Reset Success Notification -->
             <% if (typeof reset !== 'undefined' && reset === 'success') { %>
-                <div class="w-full bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-sm text-center mb-4 font-semibold">
-                    <%= currentLang === 'ar' ? 'تم إعادة تعيين كلمة المرور بنجاح' : 'Password reset successful. Please login.' %>
+                <div class="w-full bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 rounded-xl px-4 py-3 text-xs sm:text-sm text-center mb-4 font-bold shadow-md">
+                    <%= isRtl ? 'تمت إعادة تعيين كلمة المرور بنجاح. يرجى تسجيل الدخول.' : 'Password reset successful. Please login.' %>
                 </div>
             <% } %>
 
-            <!-- Form White Card Container -->
-            <div class="bg-white rounded-2xl w-full p-8 border border-gray-100 flex flex-col">
+            <!-- Form Card Container -->
+            <div class="login-main-card rounded-2xl w-full p-6 sm:p-8 flex flex-col">
                 <form id="loginForm" method="POST" action="/login" class="space-y-4">
                     <input type="hidden" name="redirect" value="<%= typeof redirect !== 'undefined' ? redirect : '/' %>">
+                    <input type="hidden" name="lang" id="loginFormLang" value="<%= currentLang %>">
+                    <input type="hidden" name="theme" id="loginFormTheme" value="<%= typeof currentTheme !== 'undefined' ? currentTheme : 'dark' %>">
                     
                     <!-- Username -->
                     <div class="space-y-1.5">
-                        <label for="username" class="block text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide <%= isRtl ? 'text-right' : 'text-left' %>">
-                            <%= currentLang === 'ar' ? 'اسم المستخدم' : 'Username' %>
+                        <label for="username" class="block text-xs font-bold uppercase tracking-wider mb-1 <%= isRtl ? 'text-right' : 'text-left' %>" style="color: var(--text-secondary);">
+                            <%= isRtl ? 'اسم المستخدم' : 'Username' %>
                         </label>
-                        <div class="relative flex items-center bg-gray-50 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-red-600 focus-within:border-transparent transition-all overflow-hidden">
-                            <div class="pl-3.5 pr-1 text-gray-400">
+                        <div class="login-input-wrapper relative flex items-center rounded-lg overflow-hidden">
+                            <div class="<%= isRtl ? 'pr-3.5 pl-1' : 'pl-3.5 pr-1' %> text-[var(--text-muted)]">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                                     <circle cx="12" cy="7" r="4"></circle>
                                 </svg>
                             </div>
-                            <input type="text" id="username" name="username" placeholder="user" required autocomplete="username" autofocus class="w-full h-11 px-4 bg-transparent border-0 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0 text-[14px]">
+                            <input type="text" id="username" name="username" value="<%= typeof username !== 'undefined' && username ? username : '' %>" placeholder="<%= isRtl ? 'أدخل اسم المستخدم' : 'Enter username' %>" required autocomplete="username" autofocus class="login-field-input w-full h-11 px-3 bg-transparent border-0 focus:outline-none focus:ring-0 text-[14px] font-medium">
                         </div>
                     </div>
 
                     <!-- Password -->
                     <div class="space-y-1.5">
-                        <label for="password" class="block text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide <%= isRtl ? 'text-right' : 'text-left' %>">
-                            <%= currentLang === 'ar' ? 'كلمة المرور' : 'Password' %>
+                        <label for="password" class="block text-xs font-bold uppercase tracking-wider mb-1 <%= isRtl ? 'text-right' : 'text-left' %>" style="color: var(--text-secondary);">
+                            <%= isRtl ? 'كلمة المرور' : 'Password' %>
                         </label>
-                        <div class="relative flex items-center bg-gray-50 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-red-600 focus-within:border-transparent transition-all overflow-hidden">
-                            <div class="pl-3.5 pr-1 text-gray-400">
+                        <div class="login-input-wrapper relative flex items-center rounded-lg overflow-hidden">
+                            <div class="<%= isRtl ? 'pr-3.5 pl-1' : 'pl-3.5 pr-1' %> text-[var(--text-muted)]">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                 </svg>
                             </div>
-                            <input type="password" id="password" name="password" placeholder="*************" required autocomplete="current-password" class="w-full h-11 px-4 bg-transparent border-0 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-transparent text-[14px]">
+                            <input type="password" id="password" name="password" placeholder="••••••••••••" required autocomplete="current-password" class="login-field-input w-full h-11 px-3 bg-transparent border-0 focus:outline-none focus:ring-0 text-[14px]">
                         </div>
                     </div>
 
                     <!-- Submit Button -->
-                    <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 mt-6 cursor-pointer">
-                        <span><%= currentLang === 'ar' ? 'تسجيل الدخول' : 'Sign In' %></span>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 mt-6 cursor-pointer shadow-lg shadow-red-950/30">
+                        <span><%= isRtl ? 'تسجيل الدخول' : 'Sign In' %></span>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="<%= isRtl ? 'rotate-180' : '' %>">
                             <polyline points="9 18 15 12 9 6"></polyline>
                         </svg>
                     </button>
                 </form>
 
                 <!-- Forgot Password Link -->
-                <div class="mt-5 text-center">
-                    <a href="#" onclick="showForgot()" class="text-sm text-red-600 hover:text-red-800 hover:underline transition-colors cursor-pointer">
-                        <%= currentLang === 'ar' ? 'نسيت كلمة المرور؟' : 'Forgot Password?' %>
+                <div class="mt-4 text-center">
+                    <a href="javascript:void(0)" onclick="showForgot()" class="text-xs font-bold text-red-600 dark:text-red-400 hover:underline transition-colors cursor-pointer">
+                        <%= isRtl ? 'نسيت كلمة المرور؟' : 'Forgot Password?' %>
                     </a>
                 </div>
 
                 <!-- Forgot Password Form Block -->
-                <div id="forgotForm" class="mt-5 hidden pt-4 border-t border-gray-200">
-                    <p class="text-xs text-gray-500 mb-3 <%= isRtl ? 'text-right' : 'text-left' %>">
-                        <%= currentLang === 'ar' ? 'أدخل اسم المستخدم والبريد الإلكتروني' : 'Enter your username and email' %>
+                <div id="forgotForm" class="mt-4 hidden pt-4 border-t" style="border-color: var(--border-primary);">
+                    <p class="text-xs mb-3 <%= isRtl ? 'text-right' : 'text-left' %>" style="color: var(--text-secondary);">
+                        <%= isRtl ? 'أدخل اسم المستخدم والبريد الإلكتروني لاستعادة الحساب:' : 'Enter your username and email to reset your password:' %>
                     </p>
                     <div class="flex flex-col gap-2.5">
-                        <input type="text" id="forgotUsername" placeholder="<%= currentLang === 'ar' ? 'اسم المستخدم' : 'Username' %>" class="w-full h-10 px-4 rounded-lg bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-400 text-xs focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all">
-                        <input type="email" id="forgotEmail" name="email" autocomplete="email" placeholder="<%= currentLang === 'ar' ? 'البريد الإلكتروني' : 'email@example.com' %>" class="w-full h-10 px-4 rounded-lg bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-400 text-xs focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all">
-                        <button onclick="sendReset(event)" class="h-10 w-full bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer transition">
-                            <%= currentLang === 'ar' ? 'إرسال' : 'Send' %>
-                        </button>
+                        <div class="login-input-wrapper relative flex items-center rounded-lg overflow-hidden">
+                            <input type="text" id="forgotUsername" placeholder="<%= isRtl ? 'اسم المستخدم' : 'Username' %>" class="login-field-input w-full h-10 px-3 bg-transparent border-0 text-xs focus:outline-none focus:ring-0">
+                        </div>
+                        <div class="login-input-wrapper relative flex items-center rounded-lg overflow-hidden">
+                            <input type="email" id="forgotEmail" name="email" autocomplete="email" placeholder="<%= isRtl ? 'البريد الإلكتروني' : 'email@example.com' %>" class="login-field-input w-full h-10 px-3 bg-transparent border-0 text-xs focus:outline-none focus:ring-0">
+                        </div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <button onclick="sendReset(event)" class="h-10 flex-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer transition shadow-sm">
+                                <%= isRtl ? 'إرسال' : 'Send' %>
+                            </button>
+                            <button type="button" onclick="showForgot()" class="h-10 px-3 rounded-lg text-xs font-semibold login-ctrl-btn cursor-pointer">
+                                <%= isRtl ? 'إلغاء' : 'Cancel' %>
+                            </button>
+                        </div>
                     </div>
-                    <p id="forgotMsg" class="text-xs mt-2.5 hidden text-center font-semibold"></p>
+                    <p id="forgotMsg" class="text-xs mt-2.5 hidden text-center font-bold"></p>
                 </div>
             </div>
             
             <!-- Footer Copyright -->
-            <p class="text-xs text-white/80 mt-8 text-center select-none font-mono">
-                Sokrat VOIP is licensed under GPL. 2006 - 2026.
+            <p class="text-[11px] text-white/70 mt-6 text-center select-none font-mono">
+                <%= isRtl ? 'نظام Sokrat VoIP مرخص بموجب GPL. 2006 - 2026.' : 'Sokrat VOIP is licensed under GPL. 2006 - 2026.' %>
             </p>
         </div>
     </div>
 
     <script>
         var uiLabels = {
-            sending: '<%= currentLang === "ar" ? "جاري الإرسال..." : "Sending..." %>',
-            send: '<%= currentLang === "ar" ? "إرسال" : "Send" %>'
+            sending: '<%= isRtl ? "جاري الإرسال..." : "Sending..." %>',
+            send: '<%= isRtl ? "إرسال" : "Send" %>',
+            errorMsg: '<%= isRtl ? "حدث خطأ أثناء إرسال الطلب" : "Error sending request" %>'
         };
-        function showForgot() {
-            document.getElementById('forgotForm').classList.toggle('hidden');
+
+        // Theme Toggle Functionality
+        function applyTheme(theme) {
+            var isLight = theme === 'light';
+            if (isLight) {
+                document.documentElement.classList.add('light-theme');
+                document.body.classList.add('light-theme');
+            } else {
+                document.documentElement.classList.remove('light-theme');
+                document.body.classList.remove('light-theme');
+            }
+            try {
+                localStorage.setItem('theme', isLight ? 'light' : 'dark');
+                document.cookie = 'theme=' + (isLight ? 'light' : 'dark') + ';path=/;max-age=31536000;SameSite=Lax';
+            } catch (_) {}
+
+            var themeInput = document.getElementById('loginFormTheme');
+            if (themeInput) {
+                themeInput.value = isLight ? 'light' : 'dark';
+            }
+            
+            var label = document.getElementById('themeLabelText');
+            if (label) {
+                label.textContent = isLight 
+                    ? ('<%= isRtl ? "نهاري" : "Light" %>') 
+                    : ('<%= isRtl ? "ليلي" : "Dark" %>');
+            }
         }
+
+        function toggleTheme() {
+            var isCurrentlyLight = document.documentElement.classList.contains('light-theme');
+            var newTheme = isCurrentlyLight ? 'dark' : 'light';
+            applyTheme(newTheme);
+        }
+
+        // Language Switcher Functionality
+        function setLanguage(lang) {
+            if (lang !== 'en' && lang !== 'ar') return;
+            var currentActiveTheme = document.documentElement.classList.contains('light-theme') ? 'light' : 'dark';
+            try {
+                localStorage.setItem('lang', lang);
+                localStorage.setItem('theme', currentActiveTheme);
+                document.cookie = 'lang=' + lang + ';path=/;max-age=31536000;SameSite=Lax';
+                document.cookie = 'theme=' + currentActiveTheme + ';path=/;max-age=31536000;SameSite=Lax';
+            } catch (_) {}
+
+            var url = new URL(window.location.href);
+            url.searchParams.set('lang', lang);
+            url.searchParams.set('theme', currentActiveTheme);
+
+            // Preserve typed username if user already started typing
+            var userField = document.getElementById('username');
+            if (userField && userField.value.trim()) {
+                url.searchParams.set('username', userField.value.trim());
+            }
+
+            window.location.href = url.toString();
+        }
+
+        // Toggle forgot password section
+        function showForgot() {
+            var f = document.getElementById('forgotForm');
+            if (f) f.classList.toggle('hidden');
+        }
+
+        // Submit forgot password request
         async function sendReset(evt) {
-            const username = document.getElementById('forgotUsername').value;
-            const email = document.getElementById('forgotEmail').value;
-            const btn = evt ? evt.target : document.querySelector('#forgotForm button');
+            var username = document.getElementById('forgotUsername').value;
+            var email = document.getElementById('forgotEmail').value;
+            var btn = evt ? evt.target : document.querySelector('#forgotForm button');
             if (btn) {
                 btn.disabled = true;
                 btn.textContent = uiLabels.sending;
             }
             try {
-                const resp = await fetch('/api/auth/forgot-password', {
+                var resp = await fetch('/api/auth/forgot-password', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, email })
+                    body: JSON.stringify({ username: username, email: email })
                 });
-                const data = await resp.json();
-                const msg = document.getElementById('forgotMsg');
+                var data = await resp.json();
+                var msg = document.getElementById('forgotMsg');
                 msg.classList.remove('hidden');
-                msg.textContent = data.message || data.error || 'Check your email';
-                msg.className = 'text-xs mt-2.5 font-semibold ' + (data.success !== false ? 'text-green-600' : 'text-red-600');
+                msg.textContent = data.message || data.error || (uiLabels.send);
+                msg.className = 'text-xs mt-2.5 font-bold ' + (data.success !== false ? 'text-emerald-500' : 'text-red-500');
             } catch(e) {
-                const msg = document.getElementById('forgotMsg');
+                var msg = document.getElementById('forgotMsg');
                 msg.classList.remove('hidden');
-                msg.textContent = 'Error sending request';
-                msg.className = 'text-xs mt-2.5 font-semibold text-red-600';
+                msg.textContent = uiLabels.errorMsg;
+                msg.className = 'text-xs mt-2.5 font-bold text-red-500';
             }
             if (btn) {
                 btn.disabled = false;
                 btn.textContent = uiLabels.send;
             }
         }
+
+        // Form submission sync
+        var loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', function() {
+                var isLight = document.documentElement.classList.contains('light-theme');
+                var themeInput = document.getElementById('loginFormTheme');
+                if (themeInput) {
+                    themeInput.value = isLight ? 'light' : 'dark';
+                }
+            });
+        }
+
+        // Initialize UI state on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            var serverTheme = '<%= typeof currentTheme !== "undefined" ? currentTheme : "" %>';
+            var currentTheme = localStorage.getItem('theme') || serverTheme || 'dark';
+            applyTheme(currentTheme);
+        });
     </script>
 </body>
 </html>

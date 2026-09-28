@@ -1149,6 +1149,59 @@ async function getUserPreferences(username, userId = null) {
     return {};
 }
 
+async function saveUserPreferences(username, userId = null, prefs = {}) {
+    if (!username) return;
+    try {
+        const jsonStr = JSON.stringify(prefs);
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`dashboard_user_preferences\` (username, user_id, preferences_json)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                user_id = VALUES(user_id),
+                preferences_json = VALUES(preferences_json),
+                updated_at = NOW()
+        `, [username, userId > 0 ? userId : null, jsonStr]);
+    } catch (err) {
+        console.error('saveUserPreferences error:', err.message);
+    }
+}
+
+function parseCookies(req) {
+    const list = {};
+    const rc = req && req.headers && req.headers.cookie;
+    if (rc) {
+        rc.split(';').forEach(cookie => {
+            const parts = cookie.split('=');
+            if (parts.length >= 2) {
+                const key = parts[0].trim();
+                const val = parts.slice(1).join('=').trim();
+                try {
+                    list[key] = decodeURIComponent(val);
+                } catch (_) {
+                    list[key] = val;
+                }
+            }
+        });
+    }
+    return list;
+}
+
+function buildRedirectUrl(targetUrl, lang) {
+    let dest = targetUrl || '/';
+    try {
+        const parsed = new URL(dest, 'http://localhost');
+        if (lang === 'ar' || lang === 'en') {
+            parsed.searchParams.set('lang', lang);
+        }
+        dest = parsed.pathname + parsed.search;
+    } catch (_) {
+        if (lang === 'ar' || lang === 'en') {
+            dest = dest + (dest.includes('?') ? '&' : '?') + 'lang=' + lang;
+        }
+    }
+    return dest;
+}
+
 function computePresetDateRange(preset) {
     switch (String(preset || '').toLowerCase()) {
         case 'yesterday':
@@ -3259,12 +3312,33 @@ app.use(async (req, res, next) => {
         res.locals.peerIPs = peerIPs;
         res.locals.activeCalls = activeCalls;
         res.locals.currentPage = req.path;
+
+        const reqCookies = parseCookies(req);
         if (req.query.lang === 'ar' || req.query.lang === 'en') {
             req.session.lang = req.query.lang;
+        } else if (!req.session.lang) {
+            if (req.session.userPreferences && (req.session.userPreferences.lang === 'ar' || req.session.userPreferences.lang === 'en')) {
+                req.session.lang = req.session.userPreferences.lang;
+            } else if (reqCookies.lang === 'ar' || reqCookies.lang === 'en') {
+                req.session.lang = reqCookies.lang;
+            }
         }
         const currentLang = req.session.lang || 'en';
         res.locals.currentLang = currentLang;
         res.locals.isRtl = currentLang === 'ar';
+
+        if (req.query.theme === 'light' || req.query.theme === 'dark') {
+            req.session.theme = req.query.theme;
+        } else if (!req.session.theme) {
+            if (req.session.userPreferences && (req.session.userPreferences.theme === 'light' || req.session.userPreferences.theme === 'dark')) {
+                req.session.theme = req.session.userPreferences.theme;
+            } else if (reqCookies.theme === 'light' || reqCookies.theme === 'dark') {
+                req.session.theme = reqCookies.theme;
+            }
+        }
+        const currentTheme = req.session.theme || 'dark';
+        res.locals.currentTheme = currentTheme;
+
         reloadGreetingConfig();
         res.locals.greetingMode = greetingConfig.mode || 'none';
         res.locals.greetingExtensions = greetingConfig.extensions || [];
@@ -3323,34 +3397,67 @@ app.get('/404', (req, res) => {
 
 // GET /login - render login page
 app.get('/login', (req, res) => {
+    const cookies = parseCookies(req);
+    const currentLang = (req.query.lang === 'ar' || req.query.lang === 'en')
+        ? req.query.lang
+        : ((req.session && req.session.lang) || cookies.lang || res.locals.currentLang || 'en');
+    const currentTheme = (req.query.theme === 'light' || req.query.theme === 'dark')
+        ? req.query.theme
+        : ((req.session && req.session.theme) || cookies.theme || (res.locals && res.locals.currentTheme) || 'dark');
+    if (req.session) {
+        req.session.lang = currentLang;
+        req.session.theme = currentTheme;
+    }
     if (req.session && req.session.userId) {
-        if (isSuperAdmin(req)) return res.redirect(req.query.redirect || '/');
+        if (isSuperAdmin(req)) return res.redirect(buildRedirectUrl(req.query.redirect || '/', currentLang));
         const perms = req.session.userPermissions || [];
         const first = getFirstAllowedRoute(perms);
         if (req.query.redirect && req.query.redirect !== '/' && perms.includes(TAB_ROUTE_MAP[req.query.redirect])) {
-            return res.redirect(req.query.redirect);
+            return res.redirect(buildRedirectUrl(req.query.redirect, currentLang));
         }
-        if (perms.includes('dashboard')) return res.redirect('/');
-        return res.redirect(first || '/no-access');
+        if (perms.includes('dashboard')) return res.redirect(buildRedirectUrl('/', currentLang));
+        return res.redirect(buildRedirectUrl(first || '/no-access', currentLang));
     }
-    res.render('login', { redirect: req.query.redirect || '/', error: null, currentLang: req.query.lang || 'en' });
+    res.render('login', {
+        redirect: req.query.redirect || '/',
+        error: null,
+        currentLang,
+        currentTheme,
+        username: req.query.username || ''
+    });
 });
 
 // POST /login - authenticate user
 app.post('/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const cookies = parseCookies(req);
+        const { username, password, lang, theme } = req.body;
+        const currentLang = (lang === 'ar' || lang === 'en')
+            ? lang
+            : ((req.query.lang === 'ar' || req.query.lang === 'en') ? req.query.lang : ((req.session && req.session.lang) || cookies.lang || res.locals.currentLang || 'en'));
+        const currentTheme = (theme === 'light' || theme === 'dark')
+            ? theme
+            : ((req.query.theme === 'light' || req.query.theme === 'dark') ? req.query.theme : ((req.session && req.session.theme) || cookies.theme || 'dark'));
+
+        if (req.session) {
+            req.session.lang = currentLang;
+            req.session.theme = currentTheme;
+        }
+
         if (!username || !password) {
-            return res.render('login', { redirect: req.body.redirect || '/', error: 'Username and password are required', currentLang: req.query.lang || 'en' });
+            const errorMsg = currentLang === 'ar' ? 'اسم المستخدم وكلمة المرور مطلوبان' : 'Username and password are required';
+            return res.render('login', { redirect: req.body.redirect || '/', error: errorMsg, currentLang, currentTheme, username: username || '' });
         }
         // Hardcoded root user — authenticated via process.env.ROOT_PASSWORD_HASH
         if (username === ROOT_USER) {
             if (!ROOT_PASSWORD_HASH) {
-                return res.render('login', { redirect: req.body.redirect || '/', error: 'Root user login disabled. ROOT_PASSWORD_HASH environment variable not set.', currentLang: req.query.lang || 'en' });
+                const errorMsg = currentLang === 'ar' ? 'تسجيل دخول المستخدم الرئيسي معطل. لم يتم ضبط ROOT_PASSWORD_HASH.' : 'Root user login disabled. ROOT_PASSWORD_HASH environment variable not set.';
+                return res.render('login', { redirect: req.body.redirect || '/', error: errorMsg, currentLang, currentTheme, username: username || '' });
             }
             const match = await bcrypt.compare(password, ROOT_PASSWORD_HASH);
             if (!match) {
-                return res.render('login', { redirect: req.body.redirect || '/', error: 'Invalid credentials', currentLang: req.query.lang || 'en' });
+                const errorMsg = currentLang === 'ar' ? 'بيانات الاعتماد غير صالحة' : 'Invalid credentials';
+                return res.render('login', { redirect: req.body.redirect || '/', error: errorMsg, currentLang, currentTheme, username: username || '' });
             }
             req.session.userId = -1;
             req.session.username = ROOT_USER;
@@ -3359,9 +3466,20 @@ app.post('/login', async (req, res) => {
             req.session.extension = null;
             req.session.allowedExtensions = [];
             req.session.extensions = [];
-            req.session.userPreferences = await getUserPreferences(ROOT_USER, -1);
+            req.session.lang = currentLang;
+            req.session.theme = currentTheme;
+
+            const existingPrefs = await getUserPreferences(ROOT_USER, -1);
+            const mergedPrefs = {
+                ...existingPrefs,
+                theme: currentTheme,
+                lang: currentLang
+            };
+            await saveUserPreferences(ROOT_USER, -1, mergedPrefs);
+            req.session.userPreferences = mergedPrefs;
+
             return req.session.save(() => {
-                res.redirect(req.body.redirect || '/');
+                res.redirect(buildRedirectUrl(req.body.redirect || '/', currentLang));
             });
         }
         const conn = await mysql.createConnection({
@@ -3378,13 +3496,15 @@ app.post('/login', async (req, res) => {
         `, [username]);
         if (rows.length === 0) {
             await conn.end();
-            return res.render('login', { redirect: req.body.redirect || '/', error: 'Invalid credentials', currentLang: req.query.lang || 'en' });
+            const errorMsg = currentLang === 'ar' ? 'بيانات الاعتماد غير صالحة' : 'Invalid credentials';
+            return res.render('login', { redirect: req.body.redirect || '/', error: errorMsg, currentLang, currentTheme, username: username || '' });
         }
         const user = rows[0];
         const match = await bcrypt.compare(password, user.password_hash);
         if (!match) {
             await conn.end();
-            return res.render('login', { redirect: req.body.redirect || '/', error: 'Invalid credentials', currentLang: req.query.lang || 'en' });
+            const errorMsg = currentLang === 'ar' ? 'بيانات الاعتماد غير صالحة' : 'Invalid credentials';
+            return res.render('login', { redirect: req.body.redirect || '/', error: errorMsg, currentLang, currentTheme, username: username || '' });
         }
 
         let userExtensions = [];
@@ -3403,10 +3523,21 @@ app.post('/login', async (req, res) => {
         req.session.allowedExtensions = userExtensions;
         req.session.extension = userExtensions.length > 0 ? userExtensions.join(',') : null;
         req.session.extensions = userExtensions;
-        req.session.userPreferences = await getUserPreferences(user.username, user.id);
+        req.session.lang = currentLang;
+        req.session.theme = currentTheme;
+
+        const existingPrefs = await getUserPreferences(user.username, user.id);
+        const mergedPrefs = {
+            ...existingPrefs,
+            theme: currentTheme,
+            lang: currentLang
+        };
+        await saveUserPreferences(user.username, user.id, mergedPrefs);
+        req.session.userPreferences = mergedPrefs;
+
         req.session.save(async () => {
             if (isSuperAdmin(req)) {
-                return res.redirect(req.body.redirect || '/');
+                return res.redirect(buildRedirectUrl(req.body.redirect || '/', currentLang));
             }
             let perms = [];
             try {
@@ -3416,16 +3547,24 @@ app.post('/login', async (req, res) => {
                 req.session.userPermissions = [];
             }
             if (req.body.redirect && req.body.redirect !== '/' && perms.includes(TAB_ROUTE_MAP[req.body.redirect])) {
-                return res.redirect(req.body.redirect);
+                return res.redirect(buildRedirectUrl(req.body.redirect, currentLang));
             }
             if (perms.includes('dashboard')) {
-                return res.redirect('/');
+                return res.redirect(buildRedirectUrl('/', currentLang));
             }
             const first = getFirstAllowedRoute(perms);
-            return res.redirect(first || '/no-access');
+            return res.redirect(buildRedirectUrl(first || '/no-access', currentLang));
         });
     } catch (err) {
-        res.render('login', { redirect: req.body.redirect || '/', error: 'Login error: ' + err.message, currentLang: req.query.lang || 'en' });
+        const cookies = parseCookies(req);
+        const currentLang = (req.body && (req.body.lang === 'ar' || req.body.lang === 'en'))
+            ? req.body.lang
+            : ((req.query && (req.query.lang === 'ar' || req.query.lang === 'en')) ? req.query.lang : ((req.session && req.session.lang) || cookies.lang || 'en'));
+        const currentTheme = (req.body && (req.body.theme === 'light' || req.body.theme === 'dark'))
+            ? req.body.theme
+            : ((req.query && (req.query.theme === 'light' || req.query.theme === 'dark')) ? req.query.theme : ((req.session && req.session.theme) || cookies.theme || 'dark'));
+        const errorMsg = currentLang === 'ar' ? ('خطأ في تسجيل الدخول: ' + err.message) : ('Login error: ' + err.message);
+        res.render('login', { redirect: req.body.redirect || '/', error: errorMsg, currentLang, currentTheme, username: req.body.username || '' });
     }
 });
 
@@ -3531,6 +3670,35 @@ app.post('/api/user/default-filters', requireAuth, async (req, res) => {
             message: 'Default filter preferences saved successfully.',
             filters: updatedFilters
         });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/user/theme-lang - Update theme and/or language preference for authenticated user
+app.post('/api/user/theme-lang', requireAuth, async (req, res) => {
+    try {
+        const username = req.session.username;
+        const userId = req.session.userId;
+        const { theme, lang } = req.body || {};
+        const updates = {};
+        if (theme === 'light' || theme === 'dark') {
+            req.session.theme = theme;
+            res.cookie('theme', theme, { path: '/', maxAge: 31536000, sameSite: 'lax' });
+            updates.theme = theme;
+        }
+        if (lang === 'ar' || lang === 'en') {
+            req.session.lang = lang;
+            res.cookie('lang', lang, { path: '/', maxAge: 31536000, sameSite: 'lax' });
+            updates.lang = lang;
+        }
+        if (Object.keys(updates).length > 0 && username) {
+            const existingPrefs = await getUserPreferences(username, userId);
+            const newPrefs = { ...existingPrefs, ...updates };
+            await saveUserPreferences(username, userId, newPrefs);
+            req.session.userPreferences = newPrefs;
+        }
+        res.json({ success: true, theme: req.session.theme, lang: req.session.lang });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -10491,7 +10659,7 @@ function updateVoicemailConf(extNum, displayName, vmVal) {
 }
 
 // Helper function to sync extension astdb recording & user settings
-async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'both', vadGateVal = '1', vadDbVal = 'off', customDial = null) {
+async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'both', vadGateVal = '1', vadDbVal = 'off', customDial = null, agcVal = '8000') {
     let techUpper = (tech || 'sip').toUpperCase();
     let techLower = (tech || 'sip').toLowerCase();
     let dialTarget = customDial && String(customDial).trim() ? String(customDial).trim() : `${techUpper}/${extNum}`;
@@ -10501,6 +10669,7 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
     const validDenoise = ['both', 'rx', 'tx', 'off'].includes(denoiseVal) ? denoiseVal : 'both';
     const validVadGate = (vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
     const validVadDb = (vadDbVal !== undefined && vadDbVal !== null) ? String(vadDbVal).trim() : 'off';
+    const validAgc = (agcVal !== undefined && agcVal !== null) ? String(agcVal).trim() : '8000';
     const commands = [
         `database put AMPUSER ${extNum}/answermode disabled`,
         `database put AMPUSER ${extNum}/cfringtimer 0`,
@@ -10519,6 +10688,7 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
         `database put AMPUSER ${extNum}/ai_denoise ${validDenoise}`,
         `database put AMPUSER ${extNum}/vad_gate ${validVadGate}`,
         `database put AMPUSER ${extNum}/vad_db ${validVadDb}`,
+        `database put AMPUSER ${extNum}/agc ${validAgc}`,
         `database put DEVICE/${extNum} default_user "${extNum}"`,
         `database put DEVICE/${extNum} dial "${dialTarget}"`,
         `database put DEVICE/${extNum} tech "${techLower}"`,
@@ -10624,6 +10794,7 @@ app.get('/api/config/extensions', async (req, res) => {
         let denoiseMap = {};
         let vadMap = {};
         let vadDbMap = {};
+        let agcMap = {};
         try {
             const { stdout: astdbOut } = await execPromise(`${ASTERISK_BIN} -rx "database show AMPUSER"`);
             const lines = (astdbOut || '').split('\n');
@@ -10640,9 +10811,13 @@ app.get('/api/config/extensions', async (req, res) => {
                 if (matchVadDb) {
                     vadDbMap[matchVadDb[1]] = matchVadDb[2].trim();
                 }
+                const matchAgc = line.match(/\/AMPUSER\/(\d+)\/agc\s*:\s*([\w\-]+)/);
+                if (matchAgc) {
+                    agcMap[matchAgc[1]] = matchAgc[2].trim();
+                }
             }
         } catch (err) {
-            console.error('[GET /api/config/extensions] AstDB denoise/VAD lookup error:', err.message);
+            console.error('[GET /api/config/extensions] AstDB denoise/VAD/AGC lookup error:', err.message);
         }
 
         const enriched = extensions.map(ext => ({
@@ -10650,7 +10825,8 @@ app.get('/api/config/extensions', async (req, res) => {
             is_group_admin: Boolean(ext.is_group_admin === 1 || ext.is_group_admin === true || ext.is_group_admin === '1'),
             denoise: denoiseMap[ext.extension] || 'both',
             vad_gate: vadMap[ext.extension] !== undefined ? vadMap[ext.extension] : '1',
-            vad_db: vadDbMap[ext.extension] || 'off'
+            vad_db: vadDbMap[ext.extension] || 'off',
+            agc: agcMap[ext.extension] || '8000'
         }));
         res.json({ success: true, extensions: enriched });
     } catch (error) {
@@ -10813,7 +10989,7 @@ async function checkNumberCollision(number, entityType, currentId = null) {
 // POST /api/config/extensions - Create new Generic SIP Extension
 app.post('/api/config/extensions', async (req, res) => {
     try {
-        const { extension, name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb } = req.body;
+        const { extension, name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb, agc } = req.body;
         if (!extension || !/^\d+$/.test(extension)) {
             return res.status(400).json({ success: false, error: 'Valid numeric Extension number is required.' });
         }
@@ -10897,7 +11073,8 @@ app.post('/api/config/extensions', async (req, res) => {
         const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
         const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
         const vadDbVal = (vad_db !== undefined ? vad_db : (vadDb || 'off'));
-        await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech, denoiseVal, vadGateVal, vadDbVal, devDial);
+        const agcVal = (agc !== undefined ? agc : '8000');
+        await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech, denoiseVal, vadGateVal, vadDbVal, devDial, agcVal);
         let isGroupAdmin = 0;
         if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
             const requestedAdmin = (req.body.is_group_admin === true || req.body.is_group_admin === 'true' || req.body.is_group_admin === 1 || req.body.is_group_admin === '1' || req.body.isGroupAdmin === true || req.body.isGroupAdmin === 'true' || req.body.isGroupAdmin === 1 || req.body.isGroupAdmin === '1') ? 1 : 0;
@@ -10939,7 +11116,7 @@ app.post('/api/config/extensions', async (req, res) => {
 app.put('/api/config/extensions/:extension', async (req, res) => {
     try {
         const extNum = String(req.params.extension).trim();
-        const { name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb } = req.body;
+        const { name, secret, voicemail, tech, denoise, vad_gate, vadGate, vad_db, vadDb, agc } = req.body;
         const displayName = String(name || '').trim();
         const extSecret = String(secret || '').trim();
         const vmVal = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
@@ -11001,6 +11178,10 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         if (vadDbVal !== undefined) {
             const validVadDb = String(vadDbVal).trim();
             await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/vad_db ${validVadDb}"`);
+        }
+        if (agc !== undefined) {
+            const validAgc = String(agc).trim() || '8000';
+            await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/agc ${validAgc}"`);
         }
 
         sipPresence[extNum] = false;

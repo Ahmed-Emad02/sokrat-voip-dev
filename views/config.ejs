@@ -2446,7 +2446,7 @@ function isTabAllowed(tabName) {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
                             <div>
                                 <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extDenoise"><%= isRtl ? 'عزل الضوضاء (AI RNNoise)' : 'AI Noise Suppression (RNNoise)' %></label>
                                 <select id="extDenoise" class="config-input w-full text-xs font-semibold">
@@ -2474,6 +2474,16 @@ function isTabAllowed(tabName) {
                                     <option value="-38">-38 dBFS (<%= isRtl ? 'صارم / ضوضاء قوية' : 'Strict / Heavy Noise' %>)</option>
                                     <option value="-35">-35 dBFS (<%= isRtl ? 'عدواني / ضوضاء شديدة' : 'Aggressive / Loud Noise' %>)</option>
                                     <option value="-30">-30 dBFS (<%= isRtl ? 'أقصى كتم / أصوات عالية' : 'Maximum / Extreme Noise' %>)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extAgc"><%= isRtl ? 'تطبيع الصوت التلقائي (AGC)' : 'Auto Gain Control (Speex AGC)' %></label>
+                                <select id="extAgc" class="config-input w-full text-xs font-semibold">
+                                    <option value="8000" selected><%= isRtl ? 'مفعل (8000 - متوازن / قياسي)' : 'Enabled (8000 - Balanced)' %></option>
+                                    <option value="6000"><%= isRtl ? 'مفعل (6000 - هادئ / خافت)' : 'Enabled (6000 - Gentle / Soft)' %></option>
+                                    <option value="10000"><%= isRtl ? 'مفعل (10000 - مرتفع)' : 'Enabled (10000 - Loud)' %></option>
+                                    <option value="12000"><%= isRtl ? 'مفعل (12000 - أقصى تضخيم)' : 'Enabled (12000 - Boosted)' %></option>
+                                    <option value="off"><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
                                 </select>
                             </div>
                         </div>
@@ -5745,7 +5755,7 @@ function isTabAllowed(tabName) {
                             </td>
                         `;
                         tr.querySelector('[data-action="edit"]').addEventListener('click', () => {
-                            editExtension(ext.extension, ext.name, ext.secret, ext.voicemail, ext.tech, ext.denoise, ext.vad_gate, ext.vad_db);
+                            editExtension(ext.extension, ext.name, ext.secret, ext.voicemail, ext.tech, ext.denoise, ext.vad_gate, ext.vad_db, ext.agc);
                         });
                         tr.querySelector('[data-action="delete"]').addEventListener('click', () => {
                             deleteExtension(ext.extension);
@@ -5856,6 +5866,8 @@ function isTabAllowed(tabName) {
             document.getElementById('extVadGate').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extVadDb').value = 'off';
             document.getElementById('extVadDb').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extAgc').value = '8000';
+            document.getElementById('extAgc').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
             openModal('extensionModal');
             try {
@@ -5865,7 +5877,7 @@ function isTabAllowed(tabName) {
             }
         }
 
-        async function editExtension(extNum, name, secret, voicemail, tech, denoise, vadGate, vadDb) {
+        async function editExtension(extNum, name, secret, voicemail, tech, denoise, vadGate, vadDb, agc) {
             document.getElementById('extModalTitle').textContent = (isRtl ? 'تعديل التحويلة ' : 'Edit Extension ') + extNum;
             document.getElementById('extEditMode').value = 'true';
             document.getElementById('extNum').value = extNum;
@@ -5877,11 +5889,13 @@ function isTabAllowed(tabName) {
             document.getElementById('extDenoise').value = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
             document.getElementById('extVadGate').value = (vadGate === '0' || vadGate === 0 || vadGate === false) ? '0' : '1';
             document.getElementById('extVadDb').value = (vadDb && vadDb !== 'undefined') ? String(vadDb).trim() : 'off';
+            document.getElementById('extAgc').value = (agc && agc !== 'undefined') ? String(agc).trim() : '8000';
             document.getElementById('extVoicemail').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extTech').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extDenoise').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extVadGate').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extVadDb').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('extAgc').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
             openModal('extensionModal');
 
@@ -5927,6 +5941,7 @@ function isTabAllowed(tabName) {
             const denoise = document.getElementById('extDenoise').value;
             const vadGate = document.getElementById('extVadGate').value;
             const vadDb = document.getElementById('extVadDb').value;
+            const agc = document.getElementById('extAgc').value;
             const saveButton = document.getElementById('extSaveBtn');
             let extensionCreated = false;
 
@@ -5950,7 +5965,7 @@ function isTabAllowed(tabName) {
                 const response = await fetch(wasEdit ? '/api/config/extensions/' + extNum : '/api/config/extensions', {
                     method: wasEdit ? 'PUT' : 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ extension: extNum, name, secret, voicemail, tech, denoise, vad_gate: vadGate, vad_db: vadDb })
+                    body: JSON.stringify({ extension: extNum, name, secret, voicemail, tech, denoise, vad_gate: vadGate, vad_db: vadDb, agc })
                 });
                 const data = await response.json();
                 if (!response.ok || !data.success) {

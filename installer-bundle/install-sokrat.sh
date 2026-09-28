@@ -1134,6 +1134,7 @@ for ext_num in range(101, 111):
         f"database put AMPUSER {ext}/ai_denoise both",
         f"database put AMPUSER {ext}/vad_gate 1",
         f"database put AMPUSER {ext}/vad_db off",
+        f"database put AMPUSER {ext}/agc 8000",
         f"database put DEVICE/{ext} default_user \"{ext}\"",
         f"database put DEVICE/{ext} dial \"SIP/{ext}\"",
         f"database put DEVICE/{ext} tech \"sip\"",
@@ -1741,6 +1742,11 @@ same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
 same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLER_VAD_DB}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
 same => n,Set(JITTERBUFFER(adaptive)=default)
+same => n,Set(CALLER_AGC=${DB(AMPUSER/${REALCALLERIDNUM}/agc)})
+same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=${DB(AMPUSER/${CALLERID(num)}/agc)}))
+same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=8000))
+same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(rx)=${CALLER_AGC}))
+same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(tx)=${CALLER_AGC}))
 same => n,Set(RAW_TARGET=${CUT(OUT_${DIAL_TRUNK},/,2)})
 same => n,Set(DONGLE_TARGET=${DB(DONGLE_DEVICE_MAP/${RAW_TARGET})})
 same => n,ExecIf($["${DONGLE_TARGET}"=""]?Set(DONGLE_TARGET=${RAW_TARGET}))
@@ -1792,6 +1798,10 @@ same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
 same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLER_VAD_DB}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
 same => n,Set(JITTERBUFFER(adaptive)=default)
+same => n,Set(CALLER_AGC=${DB(AMPUSER/${CALLERID(num)}/agc)})
+same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=8000))
+same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(rx)=${CALLER_AGC}))
+same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(tx)=${CALLER_AGC}))
 same => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)
 same => n,MacroExit()
 
@@ -1826,6 +1836,10 @@ same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
 same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
 same => n,ExecIf($["${CALLEE_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLEE_VAD_DB}))
 same => n,ExecIf($["${CALLEE_DENOISE}" != "off"]?Set(RNNOISE(${CALLEE_DENOISE},${VAD_OPT})=on))
+same => n,Set(CALLEE_AGC=${DB(AMPUSER/${CALLEE_EXT}/agc)})
+same => n,ExecIf($["${CALLEE_AGC}" = ""]?Set(CALLEE_AGC=8000))
+same => n,ExecIf($["${CALLEE_AGC}" != "off" & "${CALLEE_AGC}" != "0"]?Set(AGC(rx)=${CALLEE_AGC}))
+same => n,ExecIf($["${CALLEE_AGC}" != "off" & "${CALLEE_AGC}" != "0"]?Set(AGC(tx)=${CALLEE_AGC}))
 ; Rule 1: Do not mask internal extension-to-extension calls (e.g. 101 calling 102)
 same => n,GotoIf($[${LEN(${CALLERID(num)})} <= 4]?done)
 same => n,GotoIf($["${DB_EXISTS(AMPUSER/${CALLERID(num)}/cidname)}" = "1"]?done)
@@ -2172,6 +2186,10 @@ for ext in $(asterisk -rx "database show AMPUSER" 2>/dev/null | grep "/cidname" 
     curr_vad_db=$(asterisk -rx "database get AMPUSER $ext/vad_db" 2>/dev/null | grep "Value:" | awk '{print $2}')
     if [ -z "$curr_vad_db" ]; then
         asterisk -rx "database put AMPUSER $ext/vad_db off" 2>/dev/null || true
+    fi
+    curr_agc=$(asterisk -rx "database get AMPUSER $ext/agc" 2>/dev/null | grep "Value:" | awk '{print $2}')
+    if [ -z "$curr_agc" ]; then
+        asterisk -rx "database put AMPUSER $ext/agc 8000" 2>/dev/null || true
     fi
 done
 echo "  AstDB Noise and Audio defaults initialized"

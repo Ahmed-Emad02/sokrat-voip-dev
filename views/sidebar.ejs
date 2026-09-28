@@ -111,7 +111,21 @@ function can(tab) {
 </div>
 <script>
     (function() {
-        const theme = localStorage.getItem('theme') || 'dark';
+        const serverTheme = '<%= (typeof currentTheme !== "undefined" && currentTheme) ? currentTheme : "" %>';
+        const serverLang = '<%= (typeof currentLang !== "undefined" && currentLang) ? currentLang : "" %>';
+        if (serverTheme && (serverTheme === 'light' || serverTheme === 'dark')) {
+            try {
+                localStorage.setItem('theme', serverTheme);
+                document.cookie = 'theme=' + serverTheme + ';path=/;max-age=31536000;SameSite=Lax';
+            } catch (_) {}
+        }
+        if (serverLang && (serverLang === 'ar' || serverLang === 'en')) {
+            try {
+                localStorage.setItem('lang', serverLang);
+                document.cookie = 'lang=' + serverLang + ';path=/;max-age=31536000;SameSite=Lax';
+            } catch (_) {}
+        }
+        const theme = serverTheme || localStorage.getItem('theme') || 'dark';
         const collapsed = localStorage.getItem('sidebar_collapsed') === 'true';
         if (collapsed) {
             document.documentElement.classList.add('sidebar-collapsed');
@@ -2453,7 +2467,16 @@ function can(tab) {
     function toggleTheme(e) {
         const isLight = document.body.classList.toggle('light-theme');
         document.documentElement.classList.toggle('light-theme', isLight);
-        localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        const newTheme = isLight ? 'light' : 'dark';
+        try {
+            localStorage.setItem('theme', newTheme);
+            document.cookie = 'theme=' + newTheme + ';path=/;max-age=31536000;SameSite=Lax';
+            fetch('/api/user/theme-lang', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ theme: newTheme })
+            }).catch(() => {});
+        } catch (_) {}
         updateThemeUI(isLight);
         
         // Anime.js ripple & spring animation on theme toggle
@@ -2957,8 +2980,25 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     <span class="settings-control-title"><%= sbT.langLabel %></span>
                 </div>
                 <div class="settings-segmented" role="group" aria-label="<%= sbT.langLabel %>">
-                    <button type="button" onclick="location.href=window.location.pathname + '?lang=en'" class="settings-segment-btn cursor-pointer <%= currentLang === 'en' ? 'is-active' : '' %>" aria-pressed="<%= currentLang === 'en' %>">EN</button>
-                    <button type="button" onclick="location.href=window.location.pathname + '?lang=ar'" class="settings-segment-btn cursor-pointer <%= currentLang === 'ar' ? 'is-active' : '' %>" aria-pressed="<%= currentLang === 'ar' %>">AR</button>
+                    <script>
+                        function changeAppLang(newLang) {
+                            if (newLang !== 'en' && newLang !== 'ar') return;
+                            try {
+                                localStorage.setItem('lang', newLang);
+                                document.cookie = 'lang=' + newLang + ';path=/;max-age=31536000;SameSite=Lax';
+                                fetch('/api/user/theme-lang', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ lang: newLang })
+                                }).catch(function() {});
+                            } catch (_) {}
+                            var url = new URL(window.location.href);
+                            url.searchParams.set('lang', newLang);
+                            window.location.href = url.toString();
+                        }
+                    </script>
+                    <button type="button" onclick="changeAppLang('en')" class="settings-segment-btn cursor-pointer <%= currentLang === 'en' ? 'is-active' : '' %>" aria-pressed="<%= currentLang === 'en' %>">EN</button>
+                    <button type="button" onclick="changeAppLang('ar')" class="settings-segment-btn cursor-pointer <%= currentLang === 'ar' ? 'is-active' : '' %>" aria-pressed="<%= currentLang === 'ar' %>">AR</button>
                 </div>
             </div>
 
