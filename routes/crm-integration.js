@@ -109,6 +109,31 @@ function createCrmRouter(pool, options = {}) {
     function requireCrmScope(requiredScope) {
         return async (req, res, next) => {
             try {
+                // Support Static API Key authentication (X-API-Key, Bearer sokrat_live_...)
+                if (req.isApiKeyAuthenticated && req.apiKey) {
+                    const scopes = String(req.apiKey.scopes || '*').split(',').map(s => s.trim().toLowerCase());
+                    if (scopes.includes('*')) {
+                        req.crmClient = {
+                            clientId: 'api-key-' + req.apiKey.id,
+                            name: req.apiKey.name || 'Static API Key Client',
+                            defaultCountryCode: '20',
+                            scopes: ['calls:read', 'recordings:read', 'extensions:read', 'embed:live', 'live:read']
+                        };
+                        return next();
+                    }
+                    const reqScope = Array.isArray(requiredScope) ? requiredScope : [requiredScope];
+                    const matches = reqScope.some(s => scopes.includes(s.toLowerCase()));
+                    if (matches) {
+                        req.crmClient = {
+                            clientId: 'api-key-' + req.apiKey.id,
+                            name: req.apiKey.name || 'Static API Key Client',
+                            defaultCountryCode: '20',
+                            scopes
+                        };
+                        return next();
+                    }
+                }
+
                 const authHeader = req.headers.authorization || '';
                 if (!authHeader.startsWith('Bearer ')) {
                     return res.status(401).json({ success: false, error: 'Unauthorized. Bearer authentication required.' });
