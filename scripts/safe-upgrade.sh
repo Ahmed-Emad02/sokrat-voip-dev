@@ -134,12 +134,16 @@ ensure_db_index "dashboard_users" "idx_unique_email" "UNIQUE KEY \`idx_unique_em
 echo "  Database schema migrations complete. All PBX and CDR data preserved."
 
 # 4. Rebuild & Patch chan_dongle Module
-echo "[4/7] Compiling and applying Asterisk / chan_dongle stability patches..."
-if [ -d "$SRC_CHAN_DONGLE" ] && [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
+echo "[4/7] Applying Asterisk / chan_dongle stability patches..."
+if [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
+    mkdir -p "$MODULES_DIR"
+    cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" "$MODULES_DIR/chan_dongle.so"
+    chmod 644 "$MODULES_DIR/chan_dongle.so"
+    echo "  Hardened chan_dongle.so installed from bundle binary into $MODULES_DIR"
+elif [ -d "$SRC_CHAN_DONGLE" ] && [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
     cd "$SRC_CHAN_DONGLE"
     git reset --hard HEAD >/dev/null 2>&1 || true
     git clean -fd >/dev/null 2>&1 || true
-    sed -i "s/a_write_buf\[FRAME_SIZE \* [0-9]\+\]/a_write_buf[FRAME_SIZE * 35]/" chan_dongle.h 2>/dev/null || true
     patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch"
     ./bootstrap 2>/dev/null || true
     ./configure --with-astversion=18.19.0 >/dev/null 2>&1 || ./configure >/dev/null 2>&1
@@ -147,10 +151,6 @@ if [ -d "$SRC_CHAN_DONGLE" ] && [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]
     make -j"$(nproc 2>/dev/null || echo 1)" >/dev/null 2>&1
     make install >/dev/null 2>&1
     echo "  Patched chan_dongle.so built and installed into $MODULES_DIR"
-elif [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
-    cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" "$MODULES_DIR/chan_dongle.so"
-    chmod 644 "$MODULES_DIR/chan_dongle.so"
-    echo "  chan_dongle.so installed from bundle binary"
 fi
 
 # 5. Sanitize Dialplans & Protect Call Transfers
@@ -216,6 +216,42 @@ same => n,Return()
 """
         content = content.rstrip() + "\n\n" + dialer_stub.strip() + "\n"
 
+    # Update [ext-external-failover] with smart alternate dongle selection
+    content = re.sub(r'\[ext-external-failover\].*?(?=\n\[|\Z)', '', content, flags=re.DOTALL)
+    failover_stub = """
+[ext-external-failover]
+; Sokrat Call Center Failover to External Mobile Number (Direct Bridge)
+; Supports:
+;   1. Explicit Dongle: ext-external-failover,01011719380/dongle1,1 OR ext-external-failover,01011719380@dongle1,1
+;   2. Automatic Outbound Routing with Smart Alternate Dongle Selection
+exten => _[0-9+*#].!,1,NoOp(=== SOKRAT FAILOVER: Target '${EXTEN}' for Customer '${CALLERID(num)}' ===)
+same => n,Set(CUST_NUM=${CALLERID(num)})
+same => n,Set(RAW_TARGET=${EXTEN})
+same => n,Set(TARGET_NUM=${CUT(RAW_TARGET,/,1)})
+same => n,Set(TARGET_NUM=${CUT(TARGET_NUM,@,1)})
+same => n,Set(EXPLICIT_DONGLE=${CUT(RAW_TARGET,/,2)})
+same => n,ExecIf($["${EXPLICIT_DONGLE}"=""]?Set(EXPLICIT_DONGLE=${CUT(RAW_TARGET,@,2)}))
+same => n,Set(__FAILOVER_DEST=${TARGET_NUM})
+same => n,Set(CDR(userfield)=Failover: ${RAW_TARGET})
+same => n,GotoIf($["${EXPLICIT_DONGLE}"!="" & "${EXPLICIT_DONGLE}"!="auto" & "${EXPLICIT_DONGLE}"!="none"]?dial_explicit:auto_select)
+
+same => n(dial_explicit),NoOp(Dialing explicitly via Dongle/${EXPLICIT_DONGLE}/${TARGET_NUM})
+same => n,Dial(Dongle/${EXPLICIT_DONGLE}/${TARGET_NUM},60)
+same => n,Hangup()
+
+same => n(auto_select),NoOp(Auto-selecting outbound path for ${TARGET_NUM})
+same => n,Set(IN_DONGLE=${CUT(CHANNEL,-,1)})
+same => n,Set(IN_DONGLE=${CUT(IN_DONGLE,/,2)})
+same => n,Set(TARGET_DONGLE=dongle1)
+same => n,ExecIf($["${IN_DONGLE}"="dongle1"]?Set(TARGET_DONGLE=dongle0))
+same => n,NoOp(Auto-selected alternate dongle: ${TARGET_DONGLE} (incoming was: ${IN_DONGLE}))
+same => n,Dial(Dongle/${TARGET_DONGLE}/${TARGET_NUM},60)
+same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)
+same => n,Dial(Local/${TARGET_NUM}@outbound-allroutes/n,60)
+same => n(done),Hangup()
+"""
+    content = content.rstrip() + "\n\n" + failover_stub.strip() + "\n"
+
     with open(conf_path, "w", encoding="utf-8") as f:
         f.write(content)
     print("  Dialplan successfully sanitized in extensions_custom.conf")
@@ -227,7 +263,11 @@ fi
 
 # 6. Reload Asterisk Modules & Sokrat Daemons
 echo "[6/7] Refreshing Asterisk modules and restarting Sokrat services..."
-if command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
+if command -v systemctl &>/dev/null && systemctl is-active asterisk >/dev/null 2>&1; then
+    echo "  Restarting Asterisk service to reload shared driver libraries..."
+    systemctl restart asterisk
+    sleep 2
+elif command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
     asterisk -rx "module unload chan_dongle.so" >/dev/null 2>&1 || true
     sleep 1
     asterisk -rx "module load chan_dongle.so" >/dev/null 2>&1 || true
