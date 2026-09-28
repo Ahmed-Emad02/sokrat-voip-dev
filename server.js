@@ -8327,22 +8327,6 @@ function startUssdLogMonitor() {
                 content = content.replace(/'\s*$/, '').trim();
                 
                 const cleanSender = String(sender || '').trim();
-                const inbox = readSmsInbox();
-
-                // Deduplicate rapid repeat messages (identical content from same sender on same dongle within 60s)
-                const isDuplicate = inbox.length > 0 && inbox.slice(0, 15).some(m => 
-                    m.direction === 'incoming' &&
-                    m.dongleId === dongleId &&
-                    m.sender === cleanSender &&
-                    m.content === content &&
-                    (Date.now() - m.timestamp < 60000)
-                );
-
-                if (isDuplicate) {
-                    console.log(`GSM MONITOR: Suppressed duplicate incoming SMS on ${dongleId} from ${cleanSender}`);
-                    return;
-                }
-
                 const newSms = {
                     id: 'in-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
                     dongleId,
@@ -8353,6 +8337,7 @@ function startUssdLogMonitor() {
                     content,
                     timestamp: Date.now()
                 };
+                const inbox = readSmsInbox();
                 inbox.unshift(newSms);
                 if (inbox.length > 500) inbox.pop();
                 saveSmsInbox(inbox);
