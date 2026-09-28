@@ -433,3 +433,33 @@ test('Explicit dongle scoping: All Dongles (Unrestricted) toggle and table repre
     assert.deepEqual(resolveUserDonglesLogic(['dongle0'], false), ['dongle0'], 'User with dongle0 is scoped to dongle0');
     assert.deepEqual(resolveUserDonglesLogic([], false), [], 'User with no assigned dongles receives empty array');
 });
+
+test('isDeviceAllowedForDongles matches devices by ID, Device, IMEI, IMSI, or Number', () => {
+    const isDeviceAllowedForDongles = (device, allowed) => {
+        if (!allowed) return true;
+        if (!Array.isArray(allowed) || allowed.length === 0) return false;
+        const devName = String(device.ID || device.Device || device.dongle_name || device.name || '').toLowerCase().trim();
+        const imei = String(device.IMEI || '').replace(/\s+/g, '');
+        const imsi = String(device.IMSI || '').replace(/\s+/g, '');
+        const num = String(device.Number || '').replace(/\s+/g, '');
+        return allowed.some(ident => {
+            const id = String(ident).toLowerCase().trim();
+            return id === devName || (imei && imei === id) || (imsi && imsi === id) || (num && num.includes(id));
+        });
+    };
+
+    const d0 = { ID: 'dongle0', State: 'Free', IMEI: '353142035570335', IMSI: '602019518804949', Number: '+201280695454' };
+    const d1 = { ID: 'dongle1', State: 'Not Connected', IMEI: '', IMSI: '', Number: 'Unknown' };
+
+    // Scoped to dongle1
+    assert.equal(isDeviceAllowedForDongles(d1, ['dongle1']), true, 'Matches dongle1 by ID');
+    assert.equal(isDeviceAllowedForDongles(d0, ['dongle1']), false, 'Denies dongle0 when user only allowed dongle1');
+
+    // Scoped to dongle0
+    assert.equal(isDeviceAllowedForDongles(d0, ['dongle0']), true, 'Matches dongle0 by ID');
+    assert.equal(isDeviceAllowedForDongles(d1, ['dongle0']), false, 'Denies dongle1 when user only allowed dongle0');
+
+    // Unrestricted
+    assert.equal(isDeviceAllowedForDongles(d0, null), true, 'Unrestricted allows dongle0');
+    assert.equal(isDeviceAllowedForDongles(d1, null), true, 'Unrestricted allows dongle1');
+});

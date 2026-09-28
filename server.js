@@ -8159,7 +8159,7 @@ async function getDonglesForExtension(extension) {
 function isDeviceAllowedForDongles(device, allowedDongleIdentifiers) {
     if (!allowedDongleIdentifiers) return true;
     if (!Array.isArray(allowedDongleIdentifiers) || allowedDongleIdentifiers.length === 0) return false;
-    const devName = String(device.Device || '').toLowerCase().trim();
+    const devName = String(device.ID || device.Device || device.dongle_name || device.name || '').toLowerCase().trim();
     const imei = String(device.IMEI || '').replace(/\s+/g, '');
     const imsi = String(device.IMSI || '').replace(/\s+/g, '');
     const num = String(device.Number || '').replace(/\s+/g, '');
