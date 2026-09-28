@@ -1,0 +1,145 @@
+const test = require('node:test');
+const assert = require('node:assert');
+const http = require('node:http');
+
+const BASE_URL = 'http://127.0.0.1:8080';
+
+function makeRequest(path, options = {}) {
+    return new Promise((resolve, reject) => {
+        const url = new URL(path, BASE_URL);
+        const reqOptions = {
+            method: options.method || 'GET',
+            headers: options.headers || {}
+        };
+        const req = http.request(url, reqOptions, (res) => {
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => {
+                const bodyRaw = Buffer.concat(chunks).toString('utf8');
+                let bodyJson = null;
+                try {
+                    bodyJson = JSON.parse(bodyRaw);
+                } catch (_) {}
+                resolve({
+                    status: res.statusCode,
+                    headers: res.headers,
+                    body: bodyJson || bodyRaw,
+                    rawBuffer: Buffer.concat(chunks)
+                });
+            });
+        });
+        req.on('error', reject);
+        if (options.body) {
+            req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
+        }
+        req.end();
+    });
+}
+
+test('Open CDR API: GET /api/cdr/:uniqueid fetches single call record without authorization', async () => {
+    // 1790496202.18 is a real answered call with recording
+    const res = await makeRequest('/api/cdr/1790496202.18');
+    assert.strictEqual(res.status, 200, 'Should return HTTP 200 without any auth');
+    assert.strictEqual(res.body.success, true, 'Response success should be true');
+    assert.ok(res.body.data, 'Should return call data');
+    assert.strictEqual(res.body.data.uniqueid, '1790496202.18');
+    assert.strictEqual(res.body.data.src, '103');
+    assert.strictEqual(res.body.data.dst, '01011719380');
+    assert.strictEqual(res.body.data.disposition, 'ANSWERED');
+    assert.strictEqual(res.body.data.direction, 'OUTBOUND');
+
+    // Recording metadata verification
+    assert.ok(res.body.data.recording, 'Recording metadata should be present');
+    assert.strictEqual(res.body.data.recording.available, true, 'Audio file should be available');
+    assert.ok(res.body.data.recording.file_size > 0, 'Audio file size should be > 0');
+    assert.strictEqual(res.body.data.recording.format, 'wav', 'Format should be wav');
+    assert.strictEqual(res.body.data.recording.stream_url, '/api/cdr/audio/1790496202.18');
+    assert.strictEqual(res.body.data.recording.download_url, '/api/cdr/audio/1790496202.18?download=1');
+
+    // Transcription block verification
+    assert.ok(res.body.data.transcription, 'Transcription block should be present');
+});
+
+test('Open CDR API: GET /api/cdr/:uniqueid returns 404 for unknown record', async () => {
+    const res = await makeRequest('/api/cdr/unknown-unique-id-999');
+    assert.strictEqual(res.status, 404, 'Should return HTTP 404 for missing call');
+    assert.strictEqual(res.body.success, false);
+    assert.ok(res.body.error.includes('not found'));
+});
+
+test('Open CDR API: GET /api/cdr/phone/:phone fetches all calls involving number without authorization', async () => {
+    const res = await makeRequest('/api/cdr/phone/01011719380');
+    assert.strictEqual(res.status, 200, 'Should return HTTP 200 without any auth');
+    assert.strictEqual(res.body.success, true);
+    assert.strictEqual(res.body.phone, '01011719380');
+    assert.ok(Array.isArray(res.body.matched_variants), 'Should include normalized phone variants');
+    assert.ok(res.body.total >= 10, 'Should find all calls involving this phone');
+    assert.ok(Array.isArray(res.body.calls), 'Calls should be an array');
+
+    // Verify first call object structure
+    const firstCall = res.body.calls[0];
+    assert.ok(firstCall.uniqueid, 'Call should have uniqueid');
+    assert.ok(firstCall.calldate, 'Call should have calldate');
+    assert.ok(firstCall.direction, 'Call should have direction');
+    assert.ok(firstCall.recording, 'Call should have recording details');
+});
+
+test('Open CDR API: GET /api/cdr/phone/:phone returns empty list for number without calls', async () => {
+    const res = await makeRequest('/api/cdr/phone/01999999999');
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.body.success, true);
+    assert.strictEqual(res.body.total, 0);
+    assert.deepStrictEqual(res.body.calls, []);
+});
+
+test('Open CDR API: GET /api/cdr/audio/:uniqueid streams recording without authorization with Byte-Range support', async () => {
+    const res = await makeRequest('/api/cdr/audio/1790496202.18', {
+        headers: {
+            Range: 'bytes=0-99'
+        }
+    });
+    assert.strictEqual(res.status, 206, 'Should respond with 206 Partial Content');
+    assert.ok(res.headers['content-range'].includes('bytes 0-99/'), 'Content-Range should match requested byte window');
+    assert.strictEqual(res.headers['content-type'], 'audio/wav');
+    assert.strictEqual(res.rawBuffer.length, 100);
+});
+
+test('Open CDR API: GET /api/cdr/audio/:uniqueid?download=1 sets attachment disposition', async () => {
+    const res = await makeRequest('/api/cdr/audio/1790496202.18?download=1', {
+        headers: {
+            Range: 'bytes=0-9'
+        }
+    });
+    assert.strictEqual(res.status, 206);
+    assert.ok(res.headers['content-disposition'].startsWith('attachment;'), 'Should set attachment disposition');
+});
+
+test('Open CDR API: Query parameter and /api/calls aliases work seamlessly', async () => {
+    const resQueryUnique = await makeRequest('/api/cdr?uniqueid=1790496202.18');
+    assert.strictEqual(resQueryUnique.status, 200);
+    assert.strictEqual(resQueryUnique.body.data.uniqueid, '1790496202.18');
+
+    const resCallAlias = await makeRequest('/api/calls/1790496202.18');
+    assert.strictEqual(resCallAlias.status, 200);
+    assert.strictEqual(resCallAlias.body.data.uniqueid, '1790496202.18');
+
+    const resQueryPhone = await makeRequest('/api/cdr?phone=01011719380');
+    assert.strictEqual(resQueryPhone.status, 200);
+    assert.ok(resQueryPhone.body.total >= 10);
+
+    const resCallPhone = await makeRequest('/api/calls/phone/01011719380');
+    assert.strictEqual(resCallPhone.status, 200);
+    assert.ok(resCallPhone.body.total >= 10);
+});
+
+test('Security check: POST /api/cdr/delete remains protected and rejects unauthenticated callers', async () => {
+    const res = await makeRequest('/api/cdr/delete', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ uniqueid: '1790496202.18' })
+    });
+    assert.strictEqual(res.status, 401, 'Should return HTTP 401 Unauthorized for delete');
+    assert.strictEqual(res.body.success, false);
+});

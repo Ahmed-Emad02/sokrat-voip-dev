@@ -34,6 +34,7 @@ try {
 const createCrmRouter = require('./routes/crm-integration');
 const registerCrmLiveSocket = require('./socket/crm-live');
 const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
+const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
 const {
     initCrmTables,
     createPairingCode,
@@ -1668,7 +1669,11 @@ app.use((req, res, next) => {
         '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live',
         '/401', '/403', '/404'
     ];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/federation/v1/')) {
+    const isOpenCdrOrCallsRoute = (
+        (req.path.startsWith('/api/cdr') && req.path !== '/api/cdr/delete') ||
+        req.path.startsWith('/api/calls')
+    );
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/federation/v1/') || isOpenCdrOrCallsRoute) {
         return next();
     }
     requireAuth(req, res, next);
@@ -5437,6 +5442,341 @@ app.post('/api/cdr/delete', requireAuth, async (req, res) => {
         return res.status(500).json({ success: false, error: 'Database error: ' + err.message });
     }
 });
+
+// --- OPEN CDR & CALL RECORDS REST APIS (NO AUTHORIZATION REQUIRED) ---
+
+async function handleCdrSingleRecord(req, res) {
+    try {
+        const uniqueid = String(req.params.uniqueid || req.query.uniqueid || '').trim();
+        if (!uniqueid) {
+            return res.status(400).json({ success: false, error: 'uniqueid parameter is required' });
+        }
+
+        const [rows] = await pool.query(`
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastapp, c.lastdata,
+                   c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition,
+                   c.uniqueid, c.linkedid, c.recordingfile, c.channel, c.dstchannel,
+                   c.did, c.userfield, c.accountcode, c.cnum, c.cnam, c.outbound_cnum,
+                   c.outbound_cnam, c.dst_cnam, c.peeraccount, c.sequence,
+                   COALESCE(u_src.name, NULLIF(TRIM(c.cnam), ''), '') as src_name,
+                   COALESCE(u_dst.name, NULLIF(TRIM(c.dst_cnam), ''), '') as dst_name,
+                   ${CDR_DIRECTION_CASE} as direction,
+                   ${CDR_CALL_SCOPE_CASE} as call_scope
+            FROM ${tables.cdr} c
+            LEFT JOIN ${tables.users} u_src ON c.src = u_src.extension
+            LEFT JOIN ${tables.users} u_dst ON c.dst = u_dst.extension
+            WHERE c.uniqueid = ? OR (c.linkedid = ? AND c.linkedid != '' AND c.linkedid IS NOT NULL)
+            ORDER BY c.calldate ASC, c.sequence ASC
+        `, [uniqueid, uniqueid]);
+
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Call record not found', uniqueid });
+        }
+
+        let targetRow = rows.find(r => r.uniqueid === uniqueid);
+        if (!targetRow) targetRow = rows[0];
+
+        const recLeg = rows.find(r => r.recordingfile && r.recordingfile.trim() && r.uniqueid === uniqueid)
+            || rows.find(r => r.recordingfile && r.recordingfile.trim())
+            || targetRow;
+
+        let recordingInfo = {
+            available: false,
+            filename: null,
+            file_size: null,
+            format: null,
+            stream_url: null,
+            download_url: null
+        };
+
+        if (recLeg && recLeg.recordingfile && recLeg.recordingfile.trim()) {
+            const rawFile = recLeg.recordingfile.trim();
+            recordingInfo.filename = path.basename(rawFile);
+            const resolvedPath = await resolveRecordingPath(recLeg.uniqueid || uniqueid, pool, RECORDING_ROOT);
+            if (resolvedPath && fs.existsSync(resolvedPath)) {
+                try {
+                    const st = fs.statSync(resolvedPath);
+                    recordingInfo.available = true;
+                    recordingInfo.file_size = st.size;
+                    recordingInfo.format = path.extname(resolvedPath).replace('.', '').toLowerCase() || 'wav';
+                    recordingInfo.stream_url = `/api/cdr/audio/${encodeURIComponent(recLeg.uniqueid || uniqueid)}`;
+                    recordingInfo.download_url = `/api/cdr/audio/${encodeURIComponent(recLeg.uniqueid || uniqueid)}?download=1`;
+                } catch (_) {}
+            } else {
+                recordingInfo.stream_url = `/api/cdr/audio/${encodeURIComponent(recLeg.uniqueid || uniqueid)}`;
+                recordingInfo.download_url = `/api/cdr/audio/${encodeURIComponent(recLeg.uniqueid || uniqueid)}?download=1`;
+            }
+        }
+
+        let transcriptionInfo = {
+            status: 'none',
+            transcript: null,
+            language: null,
+            duration_sec: null,
+            completed_at: null
+        };
+
+        try {
+            const [sttRows] = await pool.query(
+                'SELECT status, transcript, language, duration_sec, completed_at FROM `asteriskcdrdb`.`cdr_transcriptions` WHERE uniqueid = ? OR uniqueid = ? LIMIT 1',
+                [uniqueid, targetRow.linkedid || uniqueid]
+            );
+            if (sttRows && sttRows.length > 0) {
+                transcriptionInfo = {
+                    status: sttRows[0].status || 'none',
+                    transcript: sttRows[0].transcript || '',
+                    language: sttRows[0].language || null,
+                    duration_sec: sttRows[0].duration_sec || 0,
+                    completed_at: sttRows[0].completed_at || null
+                };
+            }
+        } catch (_) {}
+
+        let ringGroupSet = new Set();
+        try {
+            const [rgRows] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups`');
+            rgRows.forEach(r => ringGroupSet.add(String(r.grpnum)));
+        } catch (_) {}
+
+        const formattedDst = formatDestination(targetRow, ringGroupSet);
+
+        const legs = rows.map(r => ({
+            uniqueid: r.uniqueid,
+            linkedid: r.linkedid,
+            calldate: r.calldate,
+            src: r.src,
+            dst: r.dst,
+            channel: r.channel,
+            dstchannel: r.dstchannel,
+            lastapp: r.lastapp,
+            lastdata: r.lastdata,
+            duration: r.duration,
+            billsec: r.billsec,
+            disposition: r.disposition,
+            recordingfile: r.recordingfile || null
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                uniqueid: targetRow.uniqueid,
+                linkedid: targetRow.linkedid || targetRow.uniqueid,
+                calldate: targetRow.calldate,
+                src: targetRow.src,
+                src_name: targetRow.src_name,
+                dst: formattedDst,
+                dst_raw: targetRow.dst,
+                dst_name: targetRow.dst_name,
+                cnum: targetRow.cnum,
+                cnam: targetRow.cnam,
+                did: targetRow.did,
+                direction: targetRow.direction,
+                call_scope: targetRow.call_scope,
+                disposition: targetRow.disposition,
+                duration: targetRow.duration,
+                billsec: targetRow.billsec,
+                channel: targetRow.channel,
+                dstchannel: targetRow.dstchannel,
+                lastapp: targetRow.lastapp,
+                lastdata: targetRow.lastdata,
+                dcontext: targetRow.dcontext,
+                recording: recordingInfo,
+                transcription: transcriptionInfo,
+                legs: rows.length > 1 ? legs : undefined
+            }
+        });
+    } catch (err) {
+        console.error('Error fetching CDR record by uniqueid:', err);
+        res.status(500).json({ success: false, error: 'Database error: ' + err.message });
+    }
+}
+
+async function handleCdrPhoneSearch(req, res) {
+    try {
+        const rawPhone = String(req.params.phone || req.query.phone || req.query.number || req.query.phoneNumber || '').trim();
+        if (!rawPhone) {
+            return res.status(400).json({ success: false, error: 'Phone number parameter is required' });
+        }
+
+        const cleaned = cleanPhoneString(rawPhone) || rawPhone;
+        let variants = getPhoneVariants(rawPhone, '20');
+        if (!variants || variants.length === 0) {
+            variants = [cleaned];
+        }
+        if (!variants.includes(cleaned)) {
+            variants.push(cleaned);
+        }
+        const digitsOnly = cleaned.replace(/\D/g, '');
+        if (digitsOnly && !variants.includes(digitsOnly)) {
+            variants.push(digitsOnly);
+        }
+
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const perPage = Math.min(200, Math.max(1, parseInt(req.query.limit || req.query.per_page, 10) || 50));
+        const offset = (page - 1) * perPage;
+        const startDate = req.query.startDate || req.query.from;
+        const endDate = req.query.endDate || req.query.to;
+        const direction = req.query.direction ? String(req.query.direction).toUpperCase() : 'ALL';
+        const status = req.query.status || req.query.disposition ? String(req.query.status || req.query.disposition).toUpperCase() : 'ALL';
+
+        let whereClauses = [];
+        let queryParams = [];
+
+        // Match phone variants in src, dst, cnum, did, or clid
+        whereClauses.push('(c.src IN (?) OR c.dst IN (?) OR c.cnum IN (?) OR c.did IN (?) OR c.clid LIKE ?)');
+        queryParams.push(variants, variants, variants, variants, `%${digitsOnly || cleaned}%`);
+
+        if (startDate) {
+            whereClauses.push('c.calldate >= ?');
+            queryParams.push(moment(startDate).format('YYYY-MM-DD HH:mm:ss'));
+        }
+        if (endDate) {
+            whereClauses.push('c.calldate <= ?');
+            queryParams.push(moment(endDate).format('YYYY-MM-DD HH:mm:ss'));
+        }
+        if (direction && direction !== 'ALL') {
+            whereClauses.push(`${CDR_DIRECTION_CASE} = ?`);
+            queryParams.push(direction);
+        }
+        if (status && status !== 'ALL') {
+            whereClauses.push(`(${CDR_DISPOSITION_SQL}) = ?`);
+            queryParams.push(status);
+        }
+
+        const whereSql = whereClauses.join(' AND ');
+
+        const countSql = `
+            SELECT COUNT(*) as total
+            FROM ${tables.cdr} c
+            WHERE ${whereSql}
+        `;
+        const [[{ total }]] = await pool.query(countSql, queryParams);
+
+        const dataSql = `
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec,
+                   ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.linkedid, c.recordingfile,
+                   c.channel, c.dstchannel, c.did, c.userfield, c.cnum, c.cnam,
+                   COALESCE(u_src.name, NULLIF(TRIM(c.cnam), ''), '') as src_name,
+                   COALESCE(u_dst.name, NULLIF(TRIM(c.dst_cnam), ''), '') as dst_name,
+                   stt.transcript, stt.status as stt_status, stt.duration_sec as stt_duration, stt.language as stt_lang,
+                   ${CDR_DIRECTION_CASE} as direction,
+                   ${CDR_CALL_SCOPE_CASE} as call_scope
+            FROM ${tables.cdr} c
+            LEFT JOIN ${tables.users} u_src ON c.src = u_src.extension
+            LEFT JOIN ${tables.users} u_dst ON c.dst = u_dst.extension
+            LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
+            WHERE ${whereSql}
+            ORDER BY c.calldate DESC
+            LIMIT ? OFFSET ?
+        `;
+        const [rows] = await pool.query(dataSql, [...queryParams, perPage, offset]);
+
+        let ringGroupSet = new Set();
+        try {
+            const [rgRows] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups`');
+            rgRows.forEach(r => ringGroupSet.add(String(r.grpnum)));
+        } catch (_) {}
+
+        const formattedCalls = rows.map(r => {
+            const hasRec = Boolean(r.recordingfile && r.recordingfile.trim());
+            return {
+                uniqueid: r.uniqueid,
+                linkedid: r.linkedid || r.uniqueid,
+                calldate: r.calldate,
+                src: r.src,
+                src_name: r.src_name,
+                dst: formatDestination(r, ringGroupSet),
+                dst_raw: r.dst,
+                dst_name: r.dst_name,
+                cnum: r.cnum,
+                did: r.did,
+                duration: r.duration,
+                billsec: r.billsec,
+                disposition: r.disposition,
+                direction: r.direction,
+                call_scope: r.call_scope,
+                recording: {
+                    available: hasRec,
+                    filename: hasRec ? path.basename(r.recordingfile.trim()) : null,
+                    stream_url: hasRec ? `/api/cdr/audio/${encodeURIComponent(r.uniqueid)}` : null,
+                    download_url: hasRec ? `/api/cdr/audio/${encodeURIComponent(r.uniqueid)}?download=1` : null
+                },
+                transcription: {
+                    status: r.stt_status || 'none',
+                    transcript: r.transcript || null,
+                    duration_sec: r.stt_duration || null
+                }
+            };
+        });
+
+        res.json({
+            success: true,
+            phone: rawPhone,
+            matched_variants: variants,
+            total,
+            page,
+            per_page: perPage,
+            total_pages: Math.ceil(total / perPage) || (total === 0 ? 0 : 1),
+            calls: formattedCalls
+        });
+    } catch (err) {
+        console.error('Error fetching CDR records by phone:', err);
+        res.status(500).json({ success: false, error: 'Database error: ' + err.message });
+    }
+}
+
+async function handleCdrAudioStream(req, res) {
+    try {
+        const uniqueid = String(req.params.uniqueid || req.query.uniqueid || '').trim();
+        if (!uniqueid) {
+            return res.status(400).json({ success: false, error: 'uniqueid parameter is required' });
+        }
+
+        const recordingPath = await resolveRecordingPath(uniqueid, pool, RECORDING_ROOT);
+        if (!recordingPath || !fs.existsSync(recordingPath)) {
+            return res.status(404).json({ success: false, error: 'Recording audio file not found on server' });
+        }
+
+        streamRecordingFile(req, res, recordingPath);
+    } catch (err) {
+        console.error('Error streaming CDR audio:', err);
+        res.status(500).json({ success: false, error: 'Audio streaming error: ' + err.message });
+    }
+}
+
+async function handleCdrRootQuery(req, res) {
+    if (req.query.uniqueid) {
+        return handleCdrSingleRecord(req, res);
+    }
+    if (req.query.phone || req.query.number || req.query.phoneNumber) {
+        return handleCdrPhoneSearch(req, res);
+    }
+    return res.status(400).json({
+        success: false,
+        error: 'Missing required query parameter. Provide either uniqueid (/api/cdr/:uniqueid or ?uniqueid=...) or phone (/api/cdr/phone/:phone or ?phone=...).',
+        endpoints: {
+            get_by_uniqueid: '/api/cdr/:uniqueid',
+            get_by_phone: '/api/cdr/phone/:phone',
+            stream_audio: '/api/cdr/audio/:uniqueid'
+        }
+    });
+}
+
+// Public Open Routes - No Auth Required
+app.get('/api/cdr/phone/:phone', handleCdrPhoneSearch);
+app.get('/api/cdr/by-phone/:phone', handleCdrPhoneSearch);
+app.get('/api/cdr/audio/:uniqueid', handleCdrAudioStream);
+app.get('/api/cdr/:uniqueid/audio', handleCdrAudioStream);
+app.get('/api/cdr/:uniqueid', handleCdrSingleRecord);
+app.get('/api/cdr', handleCdrRootQuery);
+
+// Aliases under /api/calls
+app.get('/api/calls/phone/:phone', handleCdrPhoneSearch);
+app.get('/api/calls/by-phone/:phone', handleCdrPhoneSearch);
+app.get('/api/calls/audio/:uniqueid', handleCdrAudioStream);
+app.get('/api/calls/:uniqueid/audio', handleCdrAudioStream);
+app.get('/api/calls/:uniqueid', handleCdrSingleRecord);
+app.get('/api/calls', handleCdrRootQuery);
 
 // --- VOICEMAIL ---
 const VM_ROOT = '/var/spool/asterisk/voicemail/default';

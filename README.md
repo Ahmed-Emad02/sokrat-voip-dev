@@ -9,7 +9,7 @@
 [![Issabel](https://img.shields.io/badge/Issabel-5.0.0-cb2026?style=for-the-badge)](https://www.issabel.org/)
 [![Rocky Linux](https://img.shields.io/badge/Rocky%20Linux-8.8%20%7C%208.10-10b981?style=for-the-badge&logo=rockylinux)](https://rockylinux.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![API Documentation](https://img.shields.io/badge/API-Documentation%20(255%20Endpoints)-8a2be2?style=for-the-badge&logo=openapi-initiative)](API_DOCUMENTATION.md)
+[![API Documentation](https://img.shields.io/badge/API-Documentation%20(259%20Endpoints)-8a2be2?style=for-the-badge&logo=openapi-initiative)](API_DOCUMENTATION.md)
 
 [Quick Start](#-installation) • [Key Features](#-core-capabilities) • [API Reference](API_DOCUMENTATION.md) • [System Ports](#-network--service-ports) • [Architecture](#-architecture) • [Default Credentials](#-default-access-credentials) • [Safe Upgrade](#-safe-in-place-upgrade) • [Backups](#-backup-retrieval--export) • [Testing](#-testing--validation)
 
@@ -196,11 +196,11 @@ ssh root@<server-ip> "curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/
 
 ## 📖 API Documentation & Integration
 
-Sokrat VoIP features an enterprise-grade REST and Telephony API with **255 documented endpoints** spanning 30 functional domains:
+Sokrat VoIP features an enterprise-grade REST and Telephony API with **259 documented endpoints** spanning 30 functional domains:
 
 * 🔐 **Authentication & Sessions**: Login, multi-session management, password reset tokens, user preferences.
 * 👥 **User Administration & RBAC**: Accounts, groups, permissions, extension scoping.
-* 📊 **CDR & Telephony Reporting**: Fast filtered CDR search, native streaming `.xlsx` exports.
+* 📊 **CDR & Telephony Reporting**: Fast filtered CDR search, open single-record retrieval by Unique ID, open phone-based call history matching, open audio streaming, native streaming `.xlsx` exports.
 * 🎙️ **Media & Voicemail**: Partial-content HTTP 206 byte-range audio streaming, custom mailbox greetings.
 * 🎛️ **PBX Administration**: Extensions (with AGC audio tuning), Trunks, Routes, Queues, Ring Groups, IVRs, Announcements, Time Conditions, MOH, DSP.
 * 📱 **GSM Cellular Gateways**: Multi-dongle USB monitoring, USSD query engine, SMS messaging threads, port remapping.

@@ -8,7 +8,7 @@
 [![Asterisk](https://img.shields.io/badge/Asterisk-18.19.0-f38b00?style=for-the-badge&logo=asterisk)](https://www.asterisk.org/)
 [![Issabel](https://img.shields.io/badge/Issabel-5.0.0-cb2026?style=for-the-badge)](https://www.issabel.org/)
 [![Node.js Version](https://img.shields.io/badge/Node.js-v22.x-68a063?style=for-the-badge&logo=node.js)](https://nodejs.org/)
-[![Endpoints](https://img.shields.io/badge/Endpoints-255%20Documented-success?style=for-the-badge)](#table-of-contents)
+[![Endpoints](https://img.shields.io/badge/Endpoints-259%20Documented-success?style=for-the-badge)](#table-of-contents)
 
 </div>
 
@@ -26,7 +26,7 @@ graph TB
         Branch["Remote Branch PBX (Federation Node)"]
     end
     subgraph Sokrat["Sokrat VoIP Application Server (Port 8080)"]
-        Express["Express HTTP / REST API (255 Endpoints)"]
+        Express["Express HTTP / REST API (259 Endpoints)"]
         SocketIO["Socket.IO WebSocket Telemetry (AMI Streaming)"]
         AuthRBAC["RBAC & Session Engine (bcrypt / Permissions)"]
         DialerEngine["Progressive Campaign Outbound Dialer Engine"]
@@ -104,7 +104,7 @@ Sokrat VoIP enforces five distinct security tiers depending on the endpoint cate
 
 ## 📑 Table of Contents
 
-The 255 API endpoints are organized into 30 functional modules:
+The 259 API endpoints are organized into 30 functional modules:
 
 - [**1. Authentication, Sessions & Preferences**](#auth-sessions) *(12 endpoints)*
   - [`GET` /login](#get-login)
@@ -147,7 +147,11 @@ The 255 API endpoints are organized into 30 functional modules:
   - [`GET` /404](#get-404)
   - [`GET` /favicon.ico](#get-faviconico)
   - [`GET` /favicon.png](#get-faviconpng)
-- [**4. Call Detail Records (CDR) & Analytics**](#cdr-reporting) *(2 endpoints)*
+- [**4. Call Detail Records (CDR) & Analytics**](#cdr-reporting) *(6 endpoints)*
+  - [`GET` /api/cdr/:uniqueid](#get-apicdruniqueid)
+  - [`GET` /api/cdr/phone/:phone](#get-apicdrphonephone)
+  - [`GET` /api/cdr/audio/:uniqueid](#get-apicdradiousuniqueid)
+  - [`GET` /api/cdr](#get-apicdr)
   - [`GET` /cdr/export](#get-cdrexport)
   - [`POST` /api/cdr/delete](#post-apicdrdelete)
 - [**5. Call Audio Playback & Media Streaming**](#media-playback) *(1 endpoints)*
@@ -1547,7 +1551,222 @@ Content-Type: image/png
 <a id="cdr-reporting"></a>
 ## 4. Call Detail Records (CDR) & Analytics
 
-*Endpoints for querying call historical logs, applying multi-dimensional filters, generating native Excel (.xlsx) reports, and auditing call metadata.*
+*Endpoints for querying call historical logs, retrieving individual call records by unique ID, querying call records by involved phone number, streaming call audio recordings, applying multi-dimensional filters, generating native Excel (.xlsx) reports, and auditing call metadata.*
+
+<a id="get-apicdruniqueid"></a>
+### `GET` /api/cdr/:uniqueid
+
+**Description**: Fetches the complete call detail record matching a specific Asterisk Unique ID (e.g., `1790496202.18`). Open endpoint requiring **no authentication or authorization headers**. Bundles all primary metadata, caller (`src`, `cnum`, `cnam`) and callee (`dst`, `dst_cnam`, `did`) details, timing (`calldate`, `duration`, `billsec`), disposition, direction (`INBOUND`, `OUTBOUND`, `INTERNAL`), call scope (`EXTERNAL`, `INTERNAL`, `FAILOVER`), channel information, multi-leg call history, speech-to-text transcript if available, and audio recording status with direct stream and download URLs.
+
+- **Aliases**: `GET /api/calls/:uniqueid`, `GET /api/cdr?uniqueid=:uniqueid`
+- **Authentication**: None (Open Access)
+- **Headers**: None required
+- **System Impact**: Reads `asteriskcdrdb.cdr`, `asterisk.users`, `asteriskcdrdb.cdr_transcriptions`, and verifies recording file presence on disk under `/var/spool/asterisk/monitor/`.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `uniqueid` | `path` | `string` | **Yes** | Asterisk Unique ID of the call record (e.g. `1790496202.18`) |
+
+#### Example Request
+
+```bash
+curl -X GET http://localhost:8080/api/cdr/1790496202.18
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "uniqueid": "1790496202.18",
+    "linkedid": "1790496202.18",
+    "calldate": "2026-09-27T08:03:22.000Z",
+    "src": "103",
+    "src_name": "Ahmed Emad",
+    "dst": "01011719380",
+    "dst_raw": "01011719380",
+    "dst_name": "",
+    "cnum": "103",
+    "cnam": "Ahmed Emad",
+    "did": "",
+    "direction": "OUTBOUND",
+    "call_scope": "EXTERNAL",
+    "disposition": "ANSWERED",
+    "duration": 358,
+    "billsec": 351,
+    "channel": "SIP/103-00000002",
+    "dstchannel": "Dongle/dongle0-0100000001",
+    "lastapp": "Dial",
+    "lastdata": "dongle/i:353142035570335/01011719380,300,T",
+    "dcontext": "from-internal",
+    "recording": {
+      "available": true,
+      "filename": "out-01011719380-103-20260927-110322-1790496202.18.wav",
+      "file_size": 5701804,
+      "format": "wav",
+      "stream_url": "/api/cdr/audio/1790496202.18",
+      "download_url": "/api/cdr/audio/1790496202.18?download=1"
+    },
+    "transcription": {
+      "status": "none",
+      "transcript": null,
+      "language": null,
+      "duration_sec": null,
+      "completed_at": null
+    }
+  }
+}
+```
+
+---
+
+<a id="get-apicdrphonephone"></a>
+### `GET` /api/cdr/phone/:phone
+
+**Description**: Fetches all call records involving a specific phone number or extension (where the number appears in `src`, `dst`, `cnum`, `did`, or `clid`). Open endpoint requiring **no authentication or authorization headers**. Automatically normalizes the phone number and computes international/national variants (e.g. `01011719380`, `+201011719380`, `201011719380`, raw digits) to guarantee comprehensive matching across inbound, outbound, and internal calls.
+
+- **Aliases**: `GET /api/calls/phone/:phone`, `GET /api/cdr/by-phone/:phone`, `GET /api/cdr?phone=:phone`
+- **Authentication**: None (Open Access)
+- **Headers**: None required
+- **System Impact**: Queries `asteriskcdrdb.cdr` with indexed variant matching and returns paginated call history with recording stream URLs.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `phone` | `path` | `string` | **Yes** | Phone number or extension to search (e.g. `01011719380`, `103`) |
+| `page` | `query` | `integer` | No | Page number for pagination (Default: `1`) |
+| `limit` | `query` | `integer` | No | Records per page, max 200 (Default: `50`, alias: `per_page`) |
+| `startDate` | `query` | `string` | No | Filter calls on or after timestamp (YYYY-MM-DD HH:mm:ss, alias: `from`) |
+| `endDate` | `query` | `string` | No | Filter calls on or before timestamp (YYYY-MM-DD HH:mm:ss, alias: `to`) |
+| `direction` | `query` | `string` | No | Filter by direction: `ALL`, `INBOUND`, `OUTBOUND`, `INTERNAL` |
+| `status` | `query` | `string` | No | Filter by status: `ALL`, `ANSWERED`, `NO ANSWER`, `BUSY`, `FAILED` (alias: `disposition`) |
+
+#### Example Request
+
+```bash
+curl -X GET 'http://localhost:8080/api/cdr/phone/01011719380?limit=25&direction=OUTBOUND'
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "phone": "01011719380",
+  "matched_variants": [
+    "01011719380",
+    "1011719380",
+    "201011719380",
+    "00201011719380",
+    "+201011719380"
+  ],
+  "total": 12,
+  "page": 1,
+  "per_page": 25,
+  "total_pages": 1,
+  "calls": [
+    {
+      "uniqueid": "1790585917.221",
+      "linkedid": "1790585917.221",
+      "calldate": "2026-09-28T08:58:37.000Z",
+      "src": "103",
+      "src_name": "Ahmed Emad",
+      "dst": "01011719380",
+      "dst_raw": "01011719380",
+      "dst_name": "",
+      "cnum": "103",
+      "did": "",
+      "duration": 5,
+      "billsec": 0,
+      "disposition": "NO ANSWER",
+      "direction": "OUTBOUND",
+      "call_scope": "EXTERNAL",
+      "recording": {
+        "available": true,
+        "filename": "out-01011719380-103-20260928-115837-1790585917.221.wav",
+        "stream_url": "/api/cdr/audio/1790585917.221",
+        "download_url": "/api/cdr/audio/1790585917.221?download=1"
+      },
+      "transcription": {
+        "status": "none",
+        "transcript": null,
+        "duration_sec": null
+      }
+    }
+  ]
+}
+```
+
+---
+
+<a id="get-apicdradiousuniqueid"></a>
+### `GET` /api/cdr/audio/:uniqueid
+
+**Description**: Streams the audio recording of a call record by its Unique ID. Open endpoint requiring **no authentication or authorization headers**. Supports HTTP Byte-Range requests (`206 Partial Content`) for browser audio player scrubbing and seeking, and accepts `?download=1` to force file download as an attachment.
+
+- **Aliases**: `GET /api/cdr/:uniqueid/audio`, `GET /api/calls/audio/:uniqueid`, `GET /api/calls/:uniqueid/audio`
+- **Authentication**: None (Open Access)
+- **Headers**: Optional `Range: bytes=<start>-<end>`
+- **System Impact**: Dynamically locates the recording file inside `/var/spool/asterisk/monitor/YYYY/MM/DD/` and streams chunks directly to the HTTP response.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `uniqueid` | `path` | `string` | **Yes** | Asterisk Unique ID of the call (e.g. `1790496202.18`) |
+| `download` | `query` | `string` | No | Set to `1` to receive `Content-Disposition: attachment` |
+
+#### Example Request
+
+```bash
+# Stream with HTTP range
+curl -i -r 0-1024 http://localhost:8080/api/cdr/audio/1790496202.18
+
+# Download file
+curl -O -J http://localhost:8080/api/cdr/audio/1790496202.18?download=1
+```
+
+#### Example Response
+
+```http
+HTTP/1.1 206 Partial Content
+Content-Type: audio/wav
+Content-Range: bytes 0-1024/5701804
+Content-Length: 1025
+Content-Disposition: inline
+
+[Binary Audio Content]
+```
+
+---
+
+<a id="get-apicdr"></a>
+### `GET` /api/cdr
+
+**Description**: Unified CDR query root endpoint. Dispatches to single call record lookup when `?uniqueid=` is specified, or to phone records lookup when `?phone=` is specified. Open endpoint requiring **no authentication or authorization headers**.
+
+- **Aliases**: `GET /api/calls`
+- **Authentication**: None (Open Access)
+- **Headers**: None required
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `uniqueid` | `query` | `string` | Conditional | Retrieve specific call by Unique ID (dispatches to `/api/cdr/:uniqueid`) |
+| `phone` | `query` | `string` | Conditional | Retrieve calls involving phone number (dispatches to `/api/cdr/phone/:phone`) |
+
+#### Example Request
+
+```bash
+curl -X GET 'http://localhost:8080/api/cdr?phone=01011719380&limit=10'
+```
+
+---
 
 <a id="get-cdrexport"></a>
 ### `GET` /cdr/export
