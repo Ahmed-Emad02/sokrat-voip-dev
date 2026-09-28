@@ -19,7 +19,7 @@ const sidebarWords = {
         vmGreetingChangeMode: "Changing mode will save a new greeting. Continue?",
         vmSelectAll: "Select All",
         dashLink: "Dashboard", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Campaigns", contactsLink: "Address Book", usersLink: "Users", apiKeysLink: "API Keys", storageLink: "SysMon", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Server SMTP", alertsSettings: "System Alerts", alertsModalTitle: "System Alerts & Monitoring", cpanelLink: "Control Panel (Webmin)", userLabel: "User", versionLabel: "Version", issabelGuiLink: "Issabel GUI (:3000)",
-        logoutLabel: "Sign Out", aiSttSettings: "Cloud AI Speech-to-Text", aiSttModalTitle: "Cloud AI Speech-to-Text API Keys", netInfo: "Network Interfaces", settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", coreToolsLabel: "Core Tools", systemAdminLabel: "Administration & Tools", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
+        logoutLabel: "Sign Out", updateSokrat: "Update Sokrat", restoreBackup: "Restore Backup", aiSttSettings: "Cloud AI Speech-to-Text", aiSttModalTitle: "Cloud AI Speech-to-Text API Keys", netInfo: "Network Interfaces", settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", coreToolsLabel: "Core Tools", systemAdminLabel: "Administration & Tools", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
         recTitle: "Add a Recording", recName: "Recording Name", recPlaceholder: "e.g. welcome_greeting", recFile: "Audio File", recNote: "Accepted: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (max 50MB)", recUploadStatus: "Uploading...", recCancel: "Cancel", recUpload: "Upload", recComplete: "Complete!", recFailed: "Failed", recSelectFileErr: "Please select a file", recNameErr: "Please enter a recording name",
         timeSettings: "Time Settings", timeModalTitle: "Time & Timezone", currentTime: "Current Time", timezone: "Timezone", searchTimezone: "Search timezone...", ntpSync: "NTP Synchronization", setManually: "Set Manually", dateLabel: "Date", timeLabel: "Time", saveSettings: "Save Settings", saving: "Saving...", savedSuccess: "Time settings saved successfully", saveFailed: "Failed to save time settings", timezoneChanged: "Timezone changed", ntpToggled: "NTP toggled", timeSetManually: "Time set manually", loadingTimezone: "Loading...",
         defaultFilters: "Default Filters", defaultFiltersDesc: "Configure default filters applied on login", dashDefaultFilters: "Dashboard Defaults", cdrDefaultFilters: "Call History Defaults", datePresetLabel: "Default Date Range", presetToday: "Today", presetYesterday: "Yesterday", presetThisWeek: "This Week", presetLast7Days: "Last 7 Days", presetThisMonth: "This Month", presetLast30Days: "Last 30 Days", defaultTargetExt: "Default Extension", defaultStatusLabel: "Default Status", defaultDirectionLabel: "Default Direction", defaultScopeLabel: "Default Scope", defaultPerPageLabel: "Default Rows Per Page", saveDefaultsBtn: "Save Default Filters", resetDefaultsBtn: "Reset to System Defaults", savedDefaultsSuccess: "Default filters saved successfully."
@@ -43,7 +43,7 @@ const sidebarWords = {
         vmGreetingChangeMode: "تغيير الوضع سيحفظ ترحيباً جديداً. هل تريد المتابعة؟",
         vmSelectAll: "اختر الكل",
         dashLink: "لوحة التحكم", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", softphoneLink: "هاتف Sokrat VOICE", configLink: "الإعدادات", dialerLink: "الحملات", contactsLink: "دفتر العناوين", usersLink: "المستخدمين", apiKeysLink: "مفاتيح API", storageLink: "SysMon", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعدادات SMTP", alertsSettings: "تنبيهات النظام", alertsModalTitle: "تنبيهات ومراقبة النظام", cpanelLink: "لوحة التحكم (Webmin)", userLabel: "المستخدم", versionLabel: "الإصدار", issabelGuiLink: "واجهة Issabel (منفذ 3000)",
-        logoutLabel: "تسجيل الخروج", aiSttSettings: "تحويل الصوت لنصوص بالذكاء الاصطناعي", aiSttModalTitle: "مفاتيح API لتحويل الصوت لنصوص", netInfo: "بطاقات الشبكة", settingsSubtitle: "التفضيلات وعناصر تحكم النظام", preferencesLabel: "التفضيلات", systemLabel: "النظام", coreToolsLabel: "الأدوات الأساسية", systemAdminLabel: "إدارة وأدوات النظام", appearanceLabel: "المظهر", darkModeLabel: "الوضع الداكن", lightModeLabel: "الوضع الفاتح",
+        logoutLabel: "تسجيل الخروج", updateSokrat: "ترقية سقراط الآمنة", restoreBackup: "استعادة النسخة الاحتياطية", aiSttSettings: "تحويل الصوت لنصوص بالذكاء الاصطناعي", aiSttModalTitle: "مفاتيح API لتحويل الصوت لنصوص", netInfo: "بطاقات الشبكة", settingsSubtitle: "التفضيلات وعناصر تحكم النظام", preferencesLabel: "التفضيلات", systemLabel: "النظام", coreToolsLabel: "الأدوات الأساسية", systemAdminLabel: "إدارة وأدوات النظام", appearanceLabel: "المظهر", darkModeLabel: "الوضع الداكن", lightModeLabel: "الوضع الفاتح",
         recTitle: "إضافة تسجيل صوتي", recName: "اسم التسجيل", recPlaceholder: "مثال: welcome_greeting", recFile: "ملف الصوت", recNote: "المرفقات المقبولة: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (الحد الأقصى 50 ميجابايت)", recUploadStatus: "جاري الرفع...", recCancel: "إلغاء", recUpload: "رفع", recComplete: "اكتمل الرفع!", recFailed: "فشل الرفع", recSelectFileErr: "يرجى اختيار ملف", recNameErr: "يرجى إدخال اسم التسجيل",
         timeSettings: "إعدادات الوقت", timeModalTitle: "الوقت والمنطقة الزمنية", currentTime: "الوقت الحالي", timezone: "المنطقة الزمنية", searchTimezone: "ابحث عن المنطقة الزمنية...", ntpSync: "مزامنة NTP", setManually: "ضبط يدوي", dateLabel: "التاريخ", timeLabel: "الوقت", saveSettings: "حفظ الإعدادات", saving: "جاري الحفظ...", savedSuccess: "تم حفظ إعدادات الوقت بنجاح", saveFailed: "فشل حفظ إعدادات الوقت", timezoneChanged: "تم تغيير المنطقة الزمنية", ntpToggled: "تم تبديل NTP", timeSetManually: "تم ضبط الوقت يدوياً", loadingTimezone: "جارٍ التحميل...",
         defaultFilters: "الفلاتر الافتراضية", defaultFiltersDesc: "تحديد الفلاتر الافتراضية المطبقة عند تسجيل الدخول", dashDefaultFilters: "افتراضيات لوحة التحكم", cdrDefaultFilters: "افتراضيات سجل المكالمات", datePresetLabel: "الفترة الزمنية الافتراضية", presetToday: "اليوم", presetYesterday: "أمس", presetThisWeek: "هذا الأسبوع", presetLast7Days: "آخر 7 أيام", presetThisMonth: "هذا الشهر", presetLast30Days: "آخر 30 يوم", defaultTargetExt: "التحويلة الافتراضية", defaultStatusLabel: "حالة المكالمة الافتراضية", defaultDirectionLabel: "اتجاه المكالمة الافتراضي", defaultScopeLabel: "نطاق المكالمة الافتراضي", defaultPerPageLabel: "عدد الصفوف الافتراضي في الصفحة", saveDefaultsBtn: "حفظ الفلاتر الافتراضية", resetDefaultsBtn: "استعادة الإعدادات الأصلية", savedDefaultsSuccess: "تم حفظ الفلاتر الافتراضية بنجاح."
@@ -1587,7 +1587,7 @@ function can(tab) {
         overflow-y: auto !important;
         transform-origin: bottom left;
         width: min(20rem, calc(100vw - 1rem));
-        box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.75), 0 0 0 1px var(--border-primary) !important;
+        box-shadow: none !important;
     }
     .settings-menu.settings-menu-wide {
         width: min(40rem, calc(100vw - 1.5rem)) !important;
@@ -3157,6 +3157,16 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                         <span class="settings-action-label"><%= currentLang === 'ar' ? 'مفاتيح API' : 'API Keys' %></span>
                         <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
                     </button>
+                    <button type="button" onclick="triggerDashboardUpdate()" id="updateDashboardBtn" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></span>
+                        <span class="settings-action-label"><%= sbT.updateSokrat || (currentLang === 'ar' ? 'ترقية سقراط الآمنة' : 'Update Sokrat') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="triggerRestoreBackup()" id="restoreBackupBtn" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>
+                        <span class="settings-action-label"><%= sbT.restoreBackup || (currentLang === 'ar' ? 'استعادة النسخة' : 'Restore Backup') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
                     <button type="button" onclick="window.open('http://' + window.location.hostname + ':3000/sokrat_sso.php', '_blank', 'noopener,noreferrer')" id="issabelWebGuiBtn" class="settings-action cursor-pointer">
                         <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg></span>
                         <span class="settings-action-label"><%= sbT.issabelGuiLink || (currentLang === 'ar' ? 'واجهة Issabel' : 'Issabel GUI') %></span>
@@ -3183,11 +3193,6 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     <button type="button" onclick="openClientModal()" id="clientSettingsBtn" class="settings-action cursor-pointer">
                         <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
                         <span class="settings-action-label"><%= sbT.clientSettings || (isRtl ? 'عميل' : 'Client') %></span>
-                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-                    </button>
-                    <button type="button" onclick="triggerDashboardUpdate()" id="updateDashboardBtn" class="settings-action cursor-pointer">
-                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></span>
-                        <span class="settings-action-label"><%= currentLang === 'ar' ? 'تحديث النظام' : 'Update PBX' %></span>
                         <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
                     </button>
                     <button type="button" onclick="openNetworkModal()" class="settings-action cursor-pointer">
@@ -4967,28 +4972,35 @@ function closeNetworkModal() {
     document.getElementById('networkModal').style.pointerEvents = 'none';
 }
 function triggerDashboardUpdate() {
-    if (!confirm(<%- JSON.stringify(currentLang === 'ar' ? 'هل أنت متأكد من تحديث Sokrat VoIP لأحدث إصدار؟' : 'Are you sure you want to update Sokrat VoIP to the latest version?') %>)) return;
+    const isAr = <%- JSON.stringify(currentLang === 'ar') %>;
+    const confirmMsg = isAr
+        ? 'هل أنت متأكد من بدء الترقية الآمنة لـ Sokrat VoIP؟ سيتم أخذ نسخة احتياطية كاملة وتطبيق أحدث التحديثات وإصلاحات الاستقرار.'
+        : 'Are you sure you want to perform a safe upgrade of Sokrat VoIP? A full pre-upgrade backup will be taken automatically before applying updates.';
+    if (!confirm(confirmMsg)) return;
     
-    document.getElementById('settingsMenu').classList.remove('visible', 'opacity-100', 'scale-100');
-    document.getElementById('settingsMenu').classList.add('invisible', 'opacity-0', 'scale-95');
-    document.getElementById('settingsMenu').style.pointerEvents = 'none';
+    const sm = document.getElementById('settingsMenu');
+    if (sm) {
+        sm.classList.remove('visible', 'opacity-100', 'scale-100');
+        sm.classList.add('invisible', 'opacity-0', 'scale-95');
+        sm.style.pointerEvents = 'none';
+    }
 
     let overlay = document.getElementById('updateOverlay');
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = 'updateOverlay';
         overlay.className = 'fixed inset-0 bg-black/85 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-6 text-white font-mono text-center transition-opacity duration-300';
-        overlay.innerHTML = `
-            <div class="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <h3 class="text-xl font-bold mb-2"><%= currentLang === 'ar' ? 'جاري تحديث Sokrat VoIP...' : 'Updating Sokrat VoIP...' %></h3>
-            <p class="text-sm text-zinc-400 max-w-md"><%= currentLang === 'ar' ? 'جاري سحب التحديثات وإعادة تشغيل الخدمات. يرجى الانتظار...' : 'Pulling latest version and restarting services. Please wait...' %></p>
-        `;
         document.body.appendChild(overlay);
     }
+    overlay.innerHTML = `
+        <div class="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <h3 class="text-xl font-bold mb-2">${isAr ? 'جاري الترقية الآمنة لـ Sokrat VoIP...' : 'Performing Sokrat VoIP Safe Upgrade...'}</h3>
+        <p class="text-sm text-zinc-400 max-w-md">${isAr ? 'جاري حفظ نسخة احتياطية وتطبيق التحديثات وترقية الجداول وإعادة تشغيل الخدمات. يرجى الانتظار...' : 'Creating pre-upgrade snapshot, applying migrations, and restarting services. Please wait...'}</p>
+    `;
 
     const pollAndReload = () => {
         let attempts = 0;
-        const maxAttempts = 35;
+        const maxAttempts = 40;
         setTimeout(() => {
             const interval = setInterval(async () => {
                 attempts++;
@@ -5016,7 +5028,72 @@ function triggerDashboardUpdate() {
                 pollAndReload();
             } else {
                 if (overlay) overlay.remove();
-                alert(data.error || 'Failed to trigger update');
+                alert(data.error || (isAr ? 'فشل بدء الترقية' : 'Failed to trigger upgrade'));
+            }
+        })
+        .catch(err => {
+            pollAndReload();
+        });
+}
+
+function triggerRestoreBackup() {
+    const isAr = <%- JSON.stringify(currentLang === 'ar') %>;
+    const confirmMsg = isAr
+        ? 'هل أنت متأكد من استعادة النسخة الاحتياطية السابقة للترقية؟ سيتم استرجاع إعدادات المقسم وقواعد البيانات السابقة وإعادة تشغيل الخدمات.'
+        : 'Are you sure you want to restore the pre-upgrade backup? This will revert PBX dialplans and database schemas to the snapshot taken before the last upgrade.';
+    if (!confirm(confirmMsg)) return;
+
+    const sm = document.getElementById('settingsMenu');
+    if (sm) {
+        sm.classList.remove('visible', 'opacity-100', 'scale-100');
+        sm.classList.add('invisible', 'opacity-0', 'scale-95');
+        sm.style.pointerEvents = 'none';
+    }
+
+    let overlay = document.getElementById('updateOverlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'updateOverlay';
+        overlay.className = 'fixed inset-0 bg-black/85 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-6 text-white font-mono text-center transition-opacity duration-300';
+        document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+        <div class="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <h3 class="text-xl font-bold mb-2">${isAr ? 'جاري استعادة النسخة الاحتياطية...' : 'Restoring Pre-Upgrade Backup...'}</h3>
+        <p class="text-sm text-zinc-400 max-w-md">${isAr ? 'جاري استرجاع قواعد البيانات والإعدادات وإعادة تشغيل الخدمات. يرجى الانتظار...' : 'Restoring database schemas, Asterisk dialplans, and reloading PBX services. Please wait...'}</p>
+    `;
+
+    const pollAndReload = () => {
+        let attempts = 0;
+        const maxAttempts = 40;
+        setTimeout(() => {
+            const interval = setInterval(async () => {
+                attempts++;
+                try {
+                    const res = await fetch('/api/network-info', { cache: 'no-store' });
+                    if (res.ok) {
+                        clearInterval(interval);
+                        window.location.reload();
+                    }
+                } catch (e) {
+                    // Server restarting
+                }
+                if (attempts >= maxAttempts) {
+                    clearInterval(interval);
+                    window.location.reload();
+                }
+            }, 2000);
+        }, 3000);
+    };
+
+    fetch('/api/system/restore-backup', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                pollAndReload();
+            } else {
+                if (overlay) overlay.remove();
+                alert(data.error || (isAr ? 'فشل استعادة النسخة الاحتياطية' : 'Failed to trigger backup restore'));
             }
         })
         .catch(err => {

@@ -18564,31 +18564,76 @@ app.post('/api/settings/time', async (req, res) => {
 });
 let isSystemUpdateInProgress = false;
 
-// POST /api/system/update - Trigger dashboard system update (Super Admin Only)
+// POST /api/system/update - Trigger dashboard safe system upgrade (Root Only)
 app.post('/api/system/update', requireAuth, (req, res) => {
-    if (!isSuperAdmin(req)) {
-        return res.status(403).json({ success: false, error: 'Access denied. Super Admin authorization required.' });
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Access denied. Root user authorization required.' });
     }
 
     if (isSystemUpdateInProgress) {
-        return res.status(409).json({ success: false, error: 'A system update is already in progress.' });
+        return res.status(409).json({ success: false, error: 'A system update or backup restoration is already in progress.' });
     }
 
     isSystemUpdateInProgress = true;
 
     res.json({
         success: true,
-        message: 'Dashboard update initiated. The system will pull the latest version and restart.'
+        message: 'Safe upgrade initiated. Taking pre-upgrade snapshot, updating codebase, applying schemas, and restarting services.'
     });
 
     setTimeout(() => {
-        const cmd = 'cd /opt/sokrat-voip && git fetch origin main && git reset --hard origin/main && npm ci --omit=dev && systemctl restart sokrat-voip';
-        exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+        const cmd = '/bin/bash /opt/sokrat-voip/scripts/safe-upgrade.sh';
+        exec(cmd, { maxBuffer: 20 * 1024 * 1024 }, (error, stdout, stderr) => {
             isSystemUpdateInProgress = false;
             if (error) {
-                console.error('System Update Error:', error.message, stderr);
+                console.error('Safe Upgrade Error:', error.message, stderr);
             } else {
-                console.log('System Update Output:', stdout);
+                console.log('Safe Upgrade Output:', stdout);
+            }
+        });
+    }, 500);
+});
+
+// POST /api/system/restore-backup - Restore pre-upgrade backup snapshot (Root Only)
+app.post('/api/system/restore-backup', requireAuth, (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Access denied. Root user authorization required.' });
+    }
+
+    if (isSystemUpdateInProgress) {
+        return res.status(409).json({ success: false, error: 'A system update or backup restoration is already in progress.' });
+    }
+
+    const backupDir = path.join(__dirname, 'backups');
+    let hasBackups = false;
+    try {
+        if (fs.existsSync(backupDir)) {
+            const files = fs.readdirSync(backupDir);
+            hasBackups = files.some(f => f.includes('.bak_'));
+        }
+    } catch (_) {}
+
+    if (!hasBackups) {
+        return res.status(404).json({ success: false, error: 'No pre-upgrade backup snapshot found to restore in /opt/sokrat-voip/backups.' });
+    }
+
+    isSystemUpdateInProgress = true;
+
+    res.json({
+        success: true,
+        message: 'Pre-upgrade backup restoration initiated. Reverting PBX configurations, schemas, and restarting.'
+    });
+
+    setTimeout(() => {
+        const cmd = '/bin/bash /opt/sokrat-voip/scripts/restore-backup.sh';
+        exec(cmd, { maxBuffer: 20 * 1024 * 1024 }, (error, stdout, stderr) => {
+            isSystemUpdateInProgress = false;
+            if (error) {
+                console.error('Restore Backup Error:', error.message, stderr);
+            } else {
+                console.log('Restore Backup Output:', stdout);
             }
         });
     }, 500);

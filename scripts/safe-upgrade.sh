@@ -75,6 +75,7 @@ if command -v mysqldump &>/dev/null; then
     mysqldump "${MYSQL_AUTH[@]}" --single-transaction asteriskcdrdb > "$INSTALL_DIR/backups/asterisk_cdr.bak_${BACKUP_TIMESTAMP}.sql" 2>/dev/null || true
     echo "  Created database snapshots in $INSTALL_DIR/backups/"
 fi
+echo "${BACKUP_TIMESTAMP}" > "$INSTALL_DIR/backups/.last_preupgrade_backup"
 
 # 2. Update Repository Codebase
 echo "[2/7] Updating Sokrat VoIP codebase..."
