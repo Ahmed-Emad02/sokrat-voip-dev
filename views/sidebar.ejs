@@ -1590,36 +1590,67 @@ function can(tab) {
         box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.75), 0 0 0 1px var(--border-primary) !important;
     }
     .settings-menu.settings-menu-wide {
-        width: min(37rem, calc(100vw - 1.5rem)) !important;
+        width: min(40rem, calc(100vw - 1.5rem)) !important;
     }
     [dir="rtl"] .settings-menu {
         transform-origin: bottom right;
     }
     .settings-layout-cols {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.65rem;
-        align-items: start;
+        grid-template-columns: minmax(13rem, 1fr) minmax(20rem, 1.65fr);
+        gap: 0.75rem;
+        align-items: stretch;
     }
     .settings-col-panel {
         display: flex;
         flex-direction: column;
-        gap: 0.4rem;
+        gap: 0.45rem;
     }
-    .settings-menu-footer {
+    .settings-actions-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        background: var(--border-primary);
+        border: 1px solid var(--border-primary);
+        border-radius: 0.75rem;
+        overflow: hidden;
+        gap: 1px;
+    }
+    .settings-actions-grid .settings-action {
+        background: var(--bg-primary) !important;
+        border: 0 !important;
+        min-height: 2.3rem;
+        padding: 0.35rem 0.55rem !important;
+        font-size: 0.72rem;
+        font-weight: 600;
+        gap: 0.45rem;
+        width: 100%;
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 0.6rem;
-        padding-top: 0.55rem;
-        margin-top: 0.45rem;
-        border-top: 1px solid var(--border-primary);
+    }
+    .settings-actions-grid .settings-action:hover {
+        background: var(--bg-hover) !important;
+        color: var(--text-primary) !important;
+    }
+    html.light-theme .settings-actions-grid {
+        background: #e2e8f0 !important;
+        border-color: #cbd5e1 !important;
+    }
+    html.light-theme .settings-actions-grid .settings-action {
+        background: #ffffff !important;
+        color: #1e293b !important;
+    }
+    html.light-theme .settings-actions-grid .settings-action:hover {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
     }
     @media (max-width: 768px) {
         .settings-menu.settings-menu-wide {
             width: min(22rem, calc(100vw - 1rem)) !important;
         }
         .settings-layout-cols {
+            grid-template-columns: 1fr !important;
+        }
+        .settings-actions-grid {
             grid-template-columns: 1fr !important;
         }
     }
@@ -3098,101 +3129,93 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     })();
                 </script>
             </div>
-            <button type="button" onclick="openDefaultFiltersModal()" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg></span>
-                <span class="settings-action-label"><%= sbT.defaultFilters %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-        </section>
+                </section>
 
-        <!-- Core Tools in Left Column -->
-        <p class="settings-section-label mt-1"><%= sbT.coreToolsLabel || (isRtl ? 'الأدوات الأساسية' : 'Core Tools') %></p>
-        <section class="settings-group" aria-label="Core Tools">
-            <button type="button" onclick="openNetworkModal()" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M8 9h8M8 15h8"></path><circle cx="8" cy="9" r=".5" fill="currentColor"></circle><circle cx="8" cy="15" r=".5" fill="currentColor"></circle></svg></span>
-                <span class="settings-action-label"><%= sbT.netInfo || (currentLang === 'ar' ? 'بطاقات الشبكة' : 'Network Interfaces') %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <% if (isSuper) { %>
-            <button type="button" onclick="openTimeModal()" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span>
-                <span class="settings-action-label"><%= sbT.timeSettings %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <button type="button" onclick="openSmtpModal()" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path></svg></span>
-                <span class="settings-action-label"><%= sbT.smtpSettings %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <% } %>
-        </section>
-    </div>
+                <div class="mt-auto pt-2 space-y-2">
+                    <div class="flex items-center justify-between px-1 text-[11px] text-[var(--text-muted)] font-mono">
+                        <span class="text-[var(--text-secondary)] font-bold"><%= typeof currentUser !== 'undefined' ? currentUser : '' %></span>
+                        <span>v1.0.4</span>
+                    </div>
+                    <a href="/logout" class="settings-signout w-full justify-center">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5M21 12H9"></path></svg>
+                        <span><%= sbT.logoutLabel || (currentLang === 'ar' ? 'تسجيل الخروج' : 'Sign Out') %></span>
+                    </a>
+                </div>
+            </div>
 
-    <!-- Right Column: System Administration & Integrations -->
-    <div class="settings-col-panel">
-        <p class="settings-section-label"><%= sbT.systemAdminLabel || (isRtl ? 'إدارة وأدوات النظام' : 'Administration & Tools') %></p>
-        <section class="settings-group" aria-label="System Administration">
-            <% if (isRoot) { %>
-            <button type="button" onclick="location.href='/integrations/crm'" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-                <span class="settings-action-label"><%= currentLang === 'ar' ? 'تكامل CRM' : 'CRM Integration' %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <button type="button" onclick="location.href='/admin/api-keys'" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 2-2 2m-6 6 7 7-3 3-4-4v-4l-4-4m-2 2L4 12l2-2 3 3 2-2-3-3 2-2 4 4Z"/><circle cx="7.5" cy="7.5" r="2.5"/></svg></span>
-                <span class="settings-action-label"><%= currentLang === 'ar' ? 'إدارة مفاتيح API' : 'API Key Manager' %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <button type="button" onclick="window.open('http://' + window.location.hostname + ':3000/sokrat_sso.php', '_blank', 'noopener,noreferrer')" id="issabelWebGuiBtn" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg></span>
-                <span class="settings-action-label"><%= sbT.issabelGuiLink || (currentLang === 'ar' ? 'واجهة Issabel (منفذ 3000)' : 'Issabel GUI (:3000)') %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <button type="button" onclick="window.open('https://' + window.location.hostname + ':3001', '_blank', 'noopener,noreferrer')" id="cpanelWebminBtn" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></span>
-                <span class="settings-action-label"><%= sbT.cpanelLink || (currentLang === 'ar' ? 'لوحة التحكم (Webmin)' : 'Control Panel (Webmin)') %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <% } %>
+            <!-- Right Column: System Administration & Integrations Grid -->
+            <div class="settings-col-panel">
+                <p class="settings-section-label"><%= sbT.systemAdminLabel || (isRtl ? 'إدارة وأدوات النظام' : 'Administration & Tools') %></p>
+                <div class="settings-actions-grid" aria-label="System Administration">
+                    <% if (isRoot) { %>
+                    <button type="button" onclick="location.href='/integrations/crm'" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                        <span class="settings-action-label"><%= currentLang === 'ar' ? 'تكامل CRM' : 'CRM Integration' %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="location.href='/admin/api-keys'" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 2-2 2m-6 6 7 7-3 3-4-4v-4l-4-4m-2 2L4 12l2-2 3 3 2-2-3-3 2-2 4 4Z"/><circle cx="7.5" cy="7.5" r="2.5"/></svg></span>
+                        <span class="settings-action-label"><%= currentLang === 'ar' ? 'مفاتيح API' : 'API Keys' %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="window.open('http://' + window.location.hostname + ':3000/sokrat_sso.php', '_blank', 'noopener,noreferrer')" id="issabelWebGuiBtn" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg></span>
+                        <span class="settings-action-label"><%= sbT.issabelGuiLink || (currentLang === 'ar' ? 'واجهة Issabel' : 'Issabel GUI') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="window.open('https://' + window.location.hostname + ':3001', '_blank', 'noopener,noreferrer')" id="cpanelWebminBtn" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></span>
+                        <span class="settings-action-label"><%= sbT.cpanelLink || (currentLang === 'ar' ? 'لوحة Webmin' : 'Webmin Panel') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <% } %>
 
-            <% if (isSuper) { %>
-            <button type="button" onclick="openSttApiKeyModal()" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg></span>
-                <span class="settings-action-label"><%= sbT.aiSttSettings || (currentLang === 'ar' ? 'تحويل الصوت لنصوص بالذكاء الاصطناعي' : 'Cloud AI Speech-to-Text') %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <button type="button" onclick="openAlertsModal()" id="alertsSettingsBtn" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></span>
-                <span class="settings-action-label"><%= sbT.alertsSettings || (currentLang === 'ar' ? 'تنبيهات النظام' : 'System Alerts') %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <button type="button" onclick="openClientModal()" id="clientSettingsBtn" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
-                <span class="settings-action-label"><%= sbT.clientSettings || (isRtl ? 'عميل' : 'Client') %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <button type="button" onclick="triggerDashboardUpdate()" id="updateDashboardBtn" class="settings-action cursor-pointer">
-                <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></span>
-                <span class="settings-action-label"><%= currentLang === 'ar' ? 'تحديث النظام (Update Sokrat VoIP)' : 'Update Sokrat VoIP' %></span>
-                <svg class="settings-action-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-            </button>
-            <% } %>
-        </section>
-    </div>
-</div>
-
-<div class="settings-menu-footer">
-    <div class="flex items-center gap-2 text-[11px] text-[var(--text-muted)] font-mono">
-        <span class="text-[var(--text-secondary)] font-bold"><%= typeof currentUser !== 'undefined' ? currentUser : '' %></span>
-        <span>•</span>
-        <span>v1.0.4</span>
-    </div>
-    <a href="/logout" class="settings-signout">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5M21 12H9"></path></svg>
-        <span><%= sbT.logoutLabel || (currentLang === 'ar' ? 'تسجيل الخروج' : 'Sign Out') %></span>
-    </a>
-</div>
-<% } else { %>
+                    <% if (isSuper) { %>
+                    <button type="button" onclick="openSttApiKeyModal()" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg></span>
+                        <span class="settings-action-label"><%= sbT.aiSttSettings || (currentLang === 'ar' ? 'الذكاء الاصطناعي' : 'Cloud AI STT') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="openAlertsModal()" id="alertsSettingsBtn" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></span>
+                        <span class="settings-action-label"><%= sbT.alertsSettings || (currentLang === 'ar' ? 'تنبيهات النظام' : 'System Alerts') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="openClientModal()" id="clientSettingsBtn" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
+                        <span class="settings-action-label"><%= sbT.clientSettings || (isRtl ? 'عميل' : 'Client') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="triggerDashboardUpdate()" id="updateDashboardBtn" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></span>
+                        <span class="settings-action-label"><%= currentLang === 'ar' ? 'تحديث النظام' : 'Update PBX' %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="openNetworkModal()" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M8 9h8M8 15h8"></path><circle cx="8" cy="9" r=".5" fill="currentColor"></circle><circle cx="8" cy="15" r=".5" fill="currentColor"></circle></svg></span>
+                        <span class="settings-action-label"><%= sbT.netInfo || (currentLang === 'ar' ? 'بطاقات الشبكة' : 'Network') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="openTimeModal()" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span>
+                        <span class="settings-action-label"><%= sbT.timeSettings || (currentLang === 'ar' ? 'إعدادات الوقت' : 'Time') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="openSmtpModal()" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path></svg></span>
+                        <span class="settings-action-label"><%= sbT.smtpSettings || (currentLang === 'ar' ? 'إعدادات SMTP' : 'SMTP') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <button type="button" onclick="openDefaultFiltersModal()" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg></span>
+                        <span class="settings-action-label"><%= sbT.defaultFilters %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+        <% } else { %>
 <!-- Standard User Single Column -->
 <p class="settings-section-label"><%= sbT.preferencesLabel %></p>
 <section class="settings-group" aria-label="<%= sbT.preferencesLabel %>">
