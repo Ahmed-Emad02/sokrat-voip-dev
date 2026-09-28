@@ -4694,6 +4694,7 @@ app.post('/groups/delete', async (req, res) => {
 
 // POST /groups/permissions - update group permissions
 app.post('/groups/permissions', async (req, res) => {
+    let conn;
     try {
         if (!isSuperAdmin(req)) return res.redirect('/');
         const { group_id, tabs, lang } = req.body;
@@ -4701,7 +4702,7 @@ app.post('/groups/permissions', async (req, res) => {
         const langQuery = currentLanguage === 'ar' ? '&lang=ar' : '';
 
         if (!group_id) return res.redirect('/users?error=Group ID required' + langQuery);
-        const conn = await mysql.createConnection({
+        conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'admin',
             password: process.env.DB_PASS || 'admin',
@@ -4715,6 +4716,7 @@ app.post('/groups/permissions', async (req, res) => {
         // Clear existing permissions
         await conn.execute('DELETE FROM dashboard_group_permissions WHERE group_id = ?', [group_id]);
         // Insert new ones
+        const selectedTabs = Array.isArray(tabs) ? tabs : (tabs ? [tabs] : []);
         // Filter permissions: only allow sub-actions if the parent tab permission is also present
         const hasParent = (parentKey) => selectedTabs.includes(parentKey);
         const filteredTabs = selectedTabs.filter(tab => {
@@ -4730,12 +4732,23 @@ app.post('/groups/permissions', async (req, res) => {
             return true;
         });
 
+        if (filteredTabs.includes('call_history') && !filteredTabs.includes('cdr')) {
+            filteredTabs.push('cdr');
+        }
+        if (filteredTabs.includes('campaigns') && !filteredTabs.includes('dialer')) {
+            filteredTabs.push('dialer');
+        }
+
         for (const tab of filteredTabs) {
             await conn.execute('INSERT INTO dashboard_group_permissions (group_id, tab) VALUES (?, ?)', [group_id, tab]);
         }
         await conn.end();
+        conn = null;
         res.redirect('/users?success=Permissions updated' + langQuery);
     } catch (err) {
+        if (conn) {
+            try { await conn.end(); } catch (_) {}
+        }
         const langQuery = (req.body.lang || req.session.lang) === 'ar' ? '&lang=ar' : '';
         res.redirect('/users?error=' + encodeURIComponent(err.message) + langQuery);
     }

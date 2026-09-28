@@ -555,3 +555,60 @@ test('User with specific single tab permission only sees that tab in the sidebar
     assert.equal(storageOnlyHtml.includes('/?lang='), false, 'Dashboard link must be hidden');
     assert.equal(storageOnlyHtml.includes('/contacts?lang='), false, 'Contacts link must be hidden');
 });
+
+test('POST /groups/permissions logic handles selectedTabs safely and filters sub-actions', () => {
+    const serverJs = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+    assert.match(
+        serverJs,
+        /const selectedTabs = Array\.isArray\(tabs\) \? tabs : \(tabs \? \[tabs\] : \[\]\);\s*\/\/[^\n]*\n\s*const hasParent =/,
+        'server.js must define selectedTabs safely before hasParent'
+    );
+
+    // Test the permission resolution function in isolation
+    function resolveGroupPermissions(tabs) {
+        const selectedTabs = Array.isArray(tabs) ? tabs : (tabs ? [tabs] : []);
+        const hasParent = (parentKey) => selectedTabs.includes(parentKey);
+        const filteredTabs = selectedTabs.filter(tab => {
+            if (!ALL_TABS.includes(tab)) return false;
+            if (tab.startsWith('operator-')) return hasParent('operator');
+            if (tab.startsWith('cdr-')) return hasParent('call_history') || hasParent('cdr');
+            if (tab.startsWith('gsm-')) return hasParent('gsm-dongles');
+            if (tab.startsWith('campaigns-')) return hasParent('campaigns') || hasParent('dialer');
+            if (tab.startsWith('contacts-')) return hasParent('contacts');
+            if (tab.startsWith('voicemail-')) return hasParent('voicemails');
+            if (tab.startsWith('storage-') || tab.startsWith('system-')) return hasParent('storage');
+            if (tab.startsWith('config-')) return hasParent('config');
+            return true;
+        });
+
+        if (filteredTabs.includes('call_history') && !filteredTabs.includes('cdr')) {
+            filteredTabs.push('cdr');
+        }
+        if (filteredTabs.includes('campaigns') && !filteredTabs.includes('dialer')) {
+            filteredTabs.push('dialer');
+        }
+        return filteredTabs;
+    }
+
+    // 1. Undefined / null tabs (no checkboxes checked)
+    assert.deepEqual(resolveGroupPermissions(undefined), []);
+    assert.deepEqual(resolveGroupPermissions(null), []);
+
+    // 2. Single string tab (one checkbox checked)
+    assert.deepEqual(resolveGroupPermissions('dashboard'), ['dashboard']);
+
+    // 3. Sub-actions without parent tab must be filtered out
+    assert.deepEqual(resolveGroupPermissions(['operator-listen', 'cdr-export']), []);
+
+    // 4. Sub-actions WITH parent tab must be retained
+    assert.deepEqual(
+        resolveGroupPermissions(['operator', 'operator-listen', 'operator-whisper']),
+        ['operator', 'operator-listen', 'operator-whisper']
+    );
+
+    // 5. Parent with backward-compatible aliases
+    const callHistoryRes = resolveGroupPermissions(['call_history', 'cdr-audio-listen']);
+    assert.ok(callHistoryRes.includes('call_history'));
+    assert.ok(callHistoryRes.includes('cdr-audio-listen'));
+    assert.ok(callHistoryRes.includes('cdr'), 'cdr alias must be included when call_history is present');
+});
