@@ -9,8 +9,9 @@
 [![Issabel](https://img.shields.io/badge/Issabel-5.0.0-cb2026?style=for-the-badge)](https://www.issabel.org/)
 [![Rocky Linux](https://img.shields.io/badge/Rocky%20Linux-8.8%20%7C%208.10-10b981?style=for-the-badge&logo=rockylinux)](https://rockylinux.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
+[![API Documentation](https://img.shields.io/badge/API-Documentation%20(255%20Endpoints)-8a2be2?style=for-the-badge&logo=openapi-initiative)](API_DOCUMENTATION.md)
 
-[Quick Start](#-installation) • [Key Features](#-core-capabilities) • [System Ports](#-network--service-ports) • [Architecture](#-architecture) • [Default Credentials](#-default-access-credentials) • [Safe Upgrade](#-safe-in-place-upgrade) • [Backups](#-backup-retrieval--export) • [Testing](#-testing--validation)
+[Quick Start](#-installation) • [Key Features](#-core-capabilities) • [API Reference](API_DOCUMENTATION.md) • [System Ports](#-network--service-ports) • [Architecture](#-architecture) • [Default Credentials](#-default-access-credentials) • [Safe Upgrade](#-safe-in-place-upgrade) • [Backups](#-backup-retrieval--export) • [Testing](#-testing--validation)
 
 </div>
 
@@ -190,6 +191,25 @@ ssh root@<server-ip> "curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/
 * `asterisk_cdr.bak_<timestamp>.sql`: Full dump of the Call Detail Records (`asteriskcdrdb.cdr`) history.
 * `extensions_custom.conf.bak_<timestamp>`: Custom Asterisk dialplans and contexts.
 * `dongle.conf.bak_<timestamp>`: GSM dongle hardware modem configurations.
+
+---
+
+## 📖 API Documentation & Integration
+
+Sokrat VoIP features an enterprise-grade REST and Telephony API with **255 documented endpoints** spanning 30 functional domains:
+
+* 🔐 **Authentication & Sessions**: Login, multi-session management, password reset tokens, user preferences.
+* 👥 **User Administration & RBAC**: Accounts, groups, permissions, extension scoping.
+* 📊 **CDR & Telephony Reporting**: Fast filtered CDR search, native streaming `.xlsx` exports.
+* 🎙️ **Media & Voicemail**: Partial-content HTTP 206 byte-range audio streaming, custom mailbox greetings.
+* 🎛️ **PBX Administration**: Extensions (with AGC audio tuning), Trunks, Routes, Queues, Ring Groups, IVRs, Announcements, Time Conditions, MOH, DSP.
+* 📱 **GSM Cellular Gateways**: Multi-dongle USB monitoring, USSD query engine, SMS messaging threads, port remapping.
+* 📞 **Progressive Outbound Dialer**: High-concurrency automated campaigns, lead management, DNC lists, dispositions.
+* 🤝 **CRM Integration REST v1**: Bearer token authentication, customer call history matching, iframe softphone embed tickets.
+* 🌐 **Multi-Site Federation**: Inter-branch clustering, IAX2 trunking, distributed GSM pooling.
+* 🤖 **AI Speech-to-Text (STT)**: Call & voicemail automated transcription (Whisper, Vosk, Google).
+
+👉 **[Read the Complete API Documentation (API_DOCUMENTATION.md)](API_DOCUMENTATION.md)**
 
 ---
 
