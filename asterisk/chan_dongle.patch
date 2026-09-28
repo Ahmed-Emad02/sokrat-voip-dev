@@ -110,6 +110,24 @@ index 1832dae..2702803 100644
  				break;
  			case RES_CPIN:
  				/* fatal */
+diff --git a/chan_dongle.c b/chan_dongle.c
+index 06886d8..2243b5b 100644
+--- a/chan_dongle.c
++++ b/chan_dongle.c
+@@ -518,6 +518,13 @@ static void* do_monitor_phone (void* data)
+ 			ecmd = at_queue_head_cmd (pvt);
+ 			if(ecmd)
+ 			{
++				if (ecmd->cmd == CMD_AT_DTMF)
++				{
++					ast_log (LOG_WARNING, "[%s] Timed out waiting response to AT^DTMF, skipping DTMF command\n", dev);
++					at_queue_handle_result (pvt, RES_PARSE_ERROR);
++					ast_mutex_unlock (&pvt->lock);
++					continue;
++				}
+ 				ast_log (LOG_ERROR, "[%s] timedout while waiting '%s' in response to '%s'\n", dev, at_res2str (ecmd->res), at_cmd2str (ecmd->cmd));
+ 				goto e_cleanup;
+ 			}
 diff --git a/chan_dongle.h b/chan_dongle.h
 index 72e9b51..40e4b0d 100644
 --- a/chan_dongle.h
@@ -124,7 +142,7 @@ index 72e9b51..40e4b0d 100644
  //	struct ringbuffer	a_write_rb;			/*!< audio ring buffer */
  
 diff --git a/channel.c b/channel.c
-index 3cb2815..39b4585 100644
+index 3cb2815..21d07d9 100644
 --- a/channel.c
 +++ b/channel.c
 @@ -17,6 +17,8 @@
@@ -164,7 +182,22 @@ index 3cb2815..39b4585 100644
  		/* drop cpvt->channel reference */
  		cpvt->channel = NULL;
  		ast_mutex_unlock (&pvt->lock);
-@@ -505,6 +521,9 @@ again:
+@@ -463,6 +479,14 @@ static int channel_digit_begin (struct ast_channel* channel, char digit)
+ 
+ 	ast_mutex_lock (&pvt->lock);
+ 
++	/* DTMF tones can ONLY be transmitted over GSM radio when call is answered / active */
++	if (cpvt->state != CALL_STATE_ACTIVE)
++	{
++		ast_mutex_unlock (&pvt->lock);
++		ast_debug (1, "[%s] Dropping DTMF %c on non-active call idx %d (state %d)\n", PVT_ID(pvt), digit, cpvt->call_idx, cpvt->state);
++		return 0;
++	}
++
+ 	rv = at_enqueue_dtmf(cpvt, digit);
+ 	if (rv)
+ 	{
+@@ -505,6 +529,9 @@ again:
  			{
  				--count;
  				if(count != 0) {
@@ -174,7 +207,7 @@ index 3cb2815..39b4585 100644
  					goto again;
  				}
  				ast_debug (1, "[%s] Deadlock avoided for write!\n", PVT_ID(pvt));
-@@ -525,7 +544,9 @@ again:
+@@ -525,7 +552,9 @@ again:
  				}
  				else
  				{
@@ -184,7 +217,7 @@ index 3cb2815..39b4585 100644
  					goto again;
  				}
  			} while(written > 0);
-@@ -574,7 +595,6 @@ static void timing_write(struct pvt* pvt)
+@@ -574,7 +603,6 @@ static void timing_write(struct pvt* pvt)
  		if (used >= FRAME_SIZE)
  		{
  			iovcnt = mixb_read_n_iov (&pvt->a_write_mixb, iov, FRAME_SIZE);
@@ -192,7 +225,7 @@ index 3cb2815..39b4585 100644
  			mixb_read_upd (&pvt->a_write_mixb, FRAME_SIZE);
  			change_audio_endianness_to_le(iov, iovcnt);
  		}
-@@ -584,7 +604,6 @@ static void timing_write(struct pvt* pvt)
+@@ -584,7 +612,6 @@ static void timing_write(struct pvt* pvt)
  			msg = "[%s] write truncated frame\n";
  
  			iovcnt = mixb_read_all_iov (&pvt->a_write_mixb, iov);
@@ -200,7 +233,7 @@ index 3cb2815..39b4585 100644
  			mixb_read_upd (&pvt->a_write_mixb, used);
  
  			iov[iovcnt].iov_base	= silence_frame;
-@@ -668,6 +687,12 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -668,6 +695,12 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  		CHANNEL_DEADLOCK_AVOIDANCE (channel);
  	}
  
@@ -213,7 +246,7 @@ index 3cb2815..39b4585 100644
  	ast_debug (7, "[%s] read call idx %d state %d audio_fd %d\n", PVT_ID(pvt), cpvt->call_idx, cpvt->state, pvt->audio_fd);
  
  	/* FIXME: move down for enable timing_write() to device ? */
-@@ -685,6 +710,9 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -685,6 +718,9 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  
  	else
  	{
@@ -223,7 +256,7 @@ index 3cb2815..39b4585 100644
  		memset (&cpvt->a_read_frame, 0, sizeof (cpvt->a_read_frame));
  
  		cpvt->a_read_frame.frametype = AST_FRAME_VOICE;
-@@ -695,24 +723,52 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -695,24 +731,52 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  #else /* 10- */
  		cpvt->a_read_frame.subclass_codec = AST_FORMAT_SLINEAR;
  #endif /* ^10- */
@@ -240,7 +273,8 @@ index 3cb2815..39b4585 100644
 +			buf[0] = (char)cpvt->odd_byte;
 +			res = read (fd, buf + 1, FRAME_SIZE - 1);
 +			if (res < 0)
-+			{
+ 			{
+-				ast_debug (1, "[%s] Read error %d, going to wait for new connection\n", PVT_ID(pvt), errno);
 +				if (errno != EAGAIN && errno != EINTR)
 +				{
 +					ast_debug (1, "[%s] Read error %d, going to wait for new connection\n", PVT_ID(pvt), errno);
@@ -248,8 +282,7 @@ index 3cb2815..39b4585 100644
 +				goto e_return;
 +			}
 +			else if (res == 0)
- 			{
--				ast_debug (1, "[%s] Read error %d, going to wait for new connection\n", PVT_ID(pvt), errno);
++			{
 +				goto e_return;
 +			}
 +			res += 1;
@@ -286,7 +319,7 @@ index 3cb2815..39b4585 100644
  
  		if(CPVT_IS_MASTER(cpvt))
  		{
-@@ -843,6 +899,12 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
+@@ -843,6 +907,12 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
  		CHANNEL_DEADLOCK_AVOIDANCE (channel);
  	}
  
@@ -299,7 +332,7 @@ index 3cb2815..39b4585 100644
  	if(!CPVT_IS_ACTIVE(cpvt))
  		goto e_return;
  
-@@ -1065,6 +1127,15 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
+@@ -1065,6 +1135,15 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
  #if ASTERISK_VERSION_NUM >= 110000 /* 11+ */
  		case AST_CONTROL_PVT_CAUSE_CODE:
  #endif /* ^11+ */
