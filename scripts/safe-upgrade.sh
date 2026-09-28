@@ -84,7 +84,7 @@ if [ ! -d "$INSTALL_DIR" ]; then
 elif [ -d "$INSTALL_DIR/.git" ]; then
     cd "$INSTALL_DIR"
     echo "  Checking for remote repository updates..."
-    if timeout 15 git fetch origin main >/dev/null 2>&1; then
+    if timeout 60 git fetch origin main >/dev/null 2>&1; then
         git merge --ff-only origin/main 2>/dev/null || git pull --ff-only origin main 2>/dev/null || true
     else
         echo "  Notice: Remote fetch timed out or offline, proceeding with current codebase."

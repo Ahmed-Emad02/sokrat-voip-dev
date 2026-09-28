@@ -515,3 +515,22 @@ CREATE TABLE IF NOT EXISTS `extension_status_logs` (
   INDEX `idx_start_time` (`start_time`),
   INDEX `idx_end_time` (`end_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `dashboard_api_keys` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(100) NOT NULL,
+  `key_prefix` VARCHAR(64) NOT NULL,
+  `key_hash` VARCHAR(64) NOT NULL UNIQUE,
+  `encrypted_key` TEXT NOT NULL,
+  `scopes` VARCHAR(255) DEFAULT '*',
+  `allowed_ips` VARCHAR(255) DEFAULT NULL,
+  `status` ENUM('active', 'revoked') DEFAULT 'active',
+  `created_by` VARCHAR(64) DEFAULT 'root',
+  `last_used_at` DATETIME DEFAULT NULL,
+  `last_used_ip` VARCHAR(64) DEFAULT NULL,
+  `expires_at` DATETIME DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_api_key_hash (`key_hash`),
+  INDEX idx_api_key_status (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
