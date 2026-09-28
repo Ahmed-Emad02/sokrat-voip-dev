@@ -1590,21 +1590,30 @@ function can(tab) {
         box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.75), 0 0 0 1px var(--border-primary) !important;
     }
     .settings-menu.settings-menu-wide {
-        width: min(44rem, calc(100vw - 1.5rem)) !important;
+        width: min(37rem, calc(100vw - 1.5rem)) !important;
     }
     [dir="rtl"] .settings-menu {
         transform-origin: bottom right;
     }
     .settings-layout-cols {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
-        gap: 0.75rem;
-        align-items: stretch;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.65rem;
+        align-items: start;
     }
     .settings-col-panel {
         display: flex;
         flex-direction: column;
-        gap: 0.45rem;
+        gap: 0.4rem;
+    }
+    .settings-menu-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding-top: 0.55rem;
+        margin-top: 0.45rem;
+        border-top: 1px solid var(--border-primary);
     }
     @media (max-width: 768px) {
         .settings-menu.settings-menu-wide {
@@ -2565,7 +2574,7 @@ function can(tab) {
                 settingsMenu.style.width = ''; // reset to auto first
                 const rect = settingsBtn.getBoundingClientRect();
                 const gap = 8;
-                const menuWidth = settingsMenu.offsetWidth || (settingsMenu.classList.contains('settings-menu-wide') ? 640 : 280);
+                const menuWidth = settingsMenu.offsetWidth || (settingsMenu.classList.contains('settings-menu-wide') ? 590 : 280);
                 const menuHeight = settingsMenu.offsetHeight || 360;
 
                 const isRtl = document.documentElement.dir === 'rtl';
@@ -3117,11 +3126,6 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </button>
             <% } %>
         </section>
-
-        <a href="/logout" class="settings-signout mt-auto">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5M21 12H9"></path></svg>
-            <span><%= sbT.logoutLabel || (currentLang === 'ar' ? 'تسجيل الخروج' : 'Sign Out') %></span>
-        </a>
     </div>
 
     <!-- Right Column: System Administration & Integrations -->
@@ -3175,6 +3179,18 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <% } %>
         </section>
     </div>
+</div>
+
+<div class="settings-menu-footer">
+    <div class="flex items-center gap-2 text-[11px] text-[var(--text-muted)] font-mono">
+        <span class="text-[var(--text-secondary)] font-bold"><%= typeof currentUser !== 'undefined' ? currentUser : '' %></span>
+        <span>•</span>
+        <span>v1.0.4</span>
+    </div>
+    <a href="/logout" class="settings-signout">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5M21 12H9"></path></svg>
+        <span><%= sbT.logoutLabel || (currentLang === 'ar' ? 'تسجيل الخروج' : 'Sign Out') %></span>
+    </a>
 </div>
 <% } else { %>
 <!-- Standard User Single Column -->
