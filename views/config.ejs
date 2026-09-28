@@ -7618,11 +7618,11 @@ function isTabAllowed(tabName) {
                         <div class="flex items-center gap-1">
                             <label for="ivr_ext_dongle_${rowId}" class="text-[10px] text-[var(--text-muted)] font-bold shrink-0">${isRtl ? 'الشريحة:' : 'SIM:'}</label>
                             <select id="ivr_ext_dongle_${rowId}" onchange="updateIvrEntryDestValue('${rowId}')" class="ivr-entry-external-dongle config-input w-full py-0.5 text-[11px] font-mono">
-                                <option value="dongle1">dongle1 (${isRtl ? 'الشريحة 2 - مباشر' : 'Direct SIM 2 - Recommended'})</option>
-                                <option value="dongle0">dongle0 (${isRtl ? 'الشريحة 1 - مباشر' : 'Direct SIM 1 - Bridge'})</option>
+                                <option value="dongle1" selected>dongle1 (${isRtl ? 'الشريحة الثانية - ربط مباشر' : 'Direct SIM 2 - Recommended'})</option>
+                                <option value="dongle0">dongle0 (${isRtl ? 'الشريحة الأولى - ربط مباشر' : 'Direct SIM 1 - Bridge'})</option>
                                 <option value="dongle2">dongle2 (SIM 3)</option>
                                 <option value="dongle3">dongle3 (SIM 4)</option>
-                                <option value="" selected>${isRtl ? 'تلقائي (مسارات صادرة)' : 'Auto (Outbound Routes)'}</option>
+                                <option value="">${isRtl ? 'تلقائي (اختيار أوتوماتيكي للخط المتفرغ)' : 'Auto (Smart Alternate SIM Selection)'}</option>
                             </select>
                         </div>
                     </div>
