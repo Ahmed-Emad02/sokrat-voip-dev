@@ -199,8 +199,9 @@ ssh root@<server-ip> "curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/
 Sokrat VoIP features an enterprise-grade REST and Telephony API with **259 documented endpoints** spanning 30 functional domains:
 
 * 🔐 **Authentication & Sessions**: Login, multi-session management, password reset tokens, user preferences.
+* 🔑 **Static API Key Manager (Root-Only)**: Secure GUI and REST engine for managing AES-256-GCM encrypted API keys (`sokrat_live_...`) with IP whitelisting, scope enforcement, and support for `X-API-Key`, `Authorization: Bearer`, and `?api_key=` audio streams.
 * 👥 **User Administration & RBAC**: Accounts, groups, permissions, extension scoping.
-* 📊 **CDR & Telephony Reporting**: Fast filtered CDR search, open single-record retrieval by Unique ID, open phone-based call history matching, open audio streaming, native streaming `.xlsx` exports.
+* 📊 **CDR & Telephony Reporting**: Fast filtered CDR search, single-record retrieval by Unique ID, phone-based call history matching, byte-range audio streaming, native streaming `.xlsx` exports.
 * 🎙️ **Media & Voicemail**: Partial-content HTTP 206 byte-range audio streaming, custom mailbox greetings.
 * 🎛️ **PBX Administration**: Extensions (with AGC audio tuning), Trunks, Routes, Queues, Ring Groups, IVRs, Announcements, Time Conditions, MOH, DSP.
 * 📱 **GSM Cellular Gateways**: Multi-dongle USB monitoring, USSD query engine, SMS messaging threads, port remapping.

@@ -8,7 +8,7 @@
 [![Asterisk](https://img.shields.io/badge/Asterisk-18.19.0-f38b00?style=for-the-badge&logo=asterisk)](https://www.asterisk.org/)
 [![Issabel](https://img.shields.io/badge/Issabel-5.0.0-cb2026?style=for-the-badge)](https://www.issabel.org/)
 [![Node.js Version](https://img.shields.io/badge/Node.js-v22.x-68a063?style=for-the-badge&logo=node.js)](https://nodejs.org/)
-[![Endpoints](https://img.shields.io/badge/Endpoints-259%20Documented-success?style=for-the-badge)](#table-of-contents)
+[![Endpoints](https://img.shields.io/badge/Endpoints-264%20Documented-success?style=for-the-badge)](#table-of-contents)
 
 </div>
 
@@ -26,7 +26,7 @@ graph TB
         Branch["Remote Branch PBX (Federation Node)"]
     end
     subgraph Sokrat["Sokrat VoIP Application Server (Port 8080)"]
-        Express["Express HTTP / REST API (259 Endpoints)"]
+        Express["Express HTTP / REST API (264 Endpoints)"]
         SocketIO["Socket.IO WebSocket Telemetry (AMI Streaming)"]
         AuthRBAC["RBAC & Session Engine (bcrypt / Permissions)"]
         DialerEngine["Progressive Campaign Outbound Dialer Engine"]
@@ -75,7 +75,7 @@ graph TB
 
 ## 🔐 Authentication & Access Control Models
 
-Sokrat VoIP enforces five distinct security tiers depending on the endpoint category:
+Sokrat VoIP enforces six distinct security tiers depending on the endpoint category:
 
 ### 1. Browser Session Authentication (`connect.sid` Cookie)
 - Authenticated via `POST /login`.
@@ -88,23 +88,33 @@ Sokrat VoIP enforces five distinct security tiers depending on the endpoint cate
 - **Action Permissions**: Protects specific high-impact actions (e.g. `crm_integration` required to manage integration tokens).
 - **Extension Scope (`allowedExtensions`)**: Restricts non-superadmin accounts to viewing and managing only their assigned extension(s) in CDR, stats, and recordings.
 
-### 3. CRM Integration Bearer Authentication
+### 3. Static API Key Authentication (`X-API-Key` / `Authorization: Bearer` / `?api_key=`)
+- Used by external CRM platforms, webhooks, and third-party automated services to authenticate REST requests (`/api/*`).
+- **Strict Root-Only Management**: Keys can only be generated, viewed, revoked, or deleted by the hardcoded `root` superadmin user via GUI (`/admin/api-keys`) or REST endpoints (`/api/admin/api-keys/*`).
+- **Storage & Security**: Raw keys (`sokrat_live_...`) are encrypted using **AES-256-GCM** and indexed using SHA-256 hashes in `asterisk.dashboard_api_keys`.
+- **Supported Access Formats**:
+  - Request Header: `X-API-Key: sokrat_live_...`
+  - Authorization Header: `Authorization: Bearer sokrat_live_...`
+  - Query Parameter: `?api_key=sokrat_live_...` (specifically supported for HTML5 `<audio>` media streaming).
+- **Security Bounds**: Supports configurable granted scopes, expiration dates, and IP address whitelisting (supports single IPs, comma-separated lists, subnet wildcards `192.168.1.*`, and CIDR notation `10.0.0.0/16`).
+
+### 4. CRM Integration Bearer Authentication
 - Endpoints under `/api/integrations/crm/v1/*` require an HTTP `Authorization: Bearer <token>` header.
 - Tokens are provisioned by pairing a 6-digit cryptographic PIN via `POST /api/integrations/crm/v1/pair`.
 - Enforces OAuth-style scopes: `calls:read`, `recordings:read`, `extensions:read`, `embed:live`.
 
-### 4. Single-Use Embed Tickets
+### 5. Single-Use Embed Tickets
 - Endpoint `/embed/crm/live` renders the embedded softphone widget inside third-party iframes.
 - Authenticated via single-use signed tokens (`?ticket=emb_...`) issued by `/api/integrations/crm/v1/embed-tickets` (15-minute validity window).
 
-### 5. Multi-Site Federation Secret
+### 6. Multi-Site Federation Secret
 - Inter-node clustering endpoints (`/api/federation/v1/*`) validate the header `X-Federation-Secret: <cluster_secret>` to allow secure inter-branch data synchronization.
 
 ---
 
 ## 📑 Table of Contents
 
-The 259 API endpoints are organized into 30 functional modules:
+The 264 API endpoints are organized into 31 functional modules:
 
 - [**1. Authentication, Sessions & Preferences**](#auth-sessions) *(12 endpoints)*
   - [`GET` /login](#get-login)
@@ -395,6 +405,13 @@ The 259 API endpoints are organized into 30 functional modules:
   - [`POST` /api/system/update](#post-apisystemupdate)
   - [`GET` /api/network-info](#get-apinetwork-info)
   - [`POST` /log_error](#post-log-error)
+- [**31. Static API Key Management & Root Access Security**](#api-keys) *(5 endpoints)*
+  - [`GET` /admin/api-keys](#get-adminapi-keys)
+  - [`GET` /api/admin/api-keys](#get-apiadminapi-keys)
+  - [`POST` /api/admin/api-keys](#post-apiadminapi-keys)
+  - [`GET` /api/admin/api-keys/:id/reveal](#get-apiadminapi-keysidreveal)
+  - [`POST` /api/admin/api-keys/:id/status](#post-apiadminapi-keysidstatus)
+  - [`DELETE` /api/admin/api-keys/:id](#delete-apiadminapi-keysid)
 
 ---
 
@@ -9104,6 +9121,225 @@ curl -X GET http://localhost:8080/api/network-info -b cookie.txt
 curl -X POST http://localhost:8080/log_error \
   -H 'Content-Type: application/json' \
   -d '{"message":"Uncaught TypeError: Cannot read property of undefined","source":"/js/operator.js","lineno":42}'
+```
+
+#### Example Response
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
+<a id="api-keys"></a>
+## 31. Static API Key Management & Root Access Security
+
+*Endpoints managing static API key authentication, secret key generation, AES-256-GCM encrypted persistence, status toggles (active/revoked), IP whitelisting, and strict root-only lifecycle operations.*
+
+<a id="get-adminapi-keys"></a>
+### `GET` /admin/api-keys
+
+**Description**: Renders the Root-Only Static API Key Manager web interface. Non-root users receive an HTTP 403 Forbidden error. Allows the root administrator to generate new keys, view/copy active tokens, configure IP restrictions, monitor last-used timestamps, toggle revocation status, and delete keys.
+
+- **Authentication**: Session Cookie (Strictly Root user only)
+- **Headers**: Cookie: connect.sid=<root_session_cookie>
+- **System Impact**: Queries `asterisk.dashboard_api_keys` and renders `views/api-keys.ejs`.
+
+#### Example Request
+
+```bash
+curl -X GET http://localhost:8080/admin/api-keys -b root-cookie.txt
+```
+
+#### Example Response
+
+*Returns HTTP 200 with complete rendered HTML dashboard.*
+
+---
+
+<a id="get-apiadminapi-keys"></a>
+### `GET` /api/admin/api-keys
+
+**Description**: Retrieves the complete list of registered static API keys along with their metadata, granted scopes, IP whitelist rules, and usage telemetry.
+
+- **Authentication**: Session Cookie (Strictly Root user only)
+- **Headers**: Cookie: connect.sid=<root_session_cookie>
+- **System Impact**: Reads `asterisk.dashboard_api_keys`.
+
+#### Example Request
+
+```bash
+curl -X GET http://localhost:8080/api/admin/api-keys -b root-cookie.txt
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "keys": [
+    {
+      "id": 1,
+      "name": "Zoho CRM Production",
+      "key_prefix": "sokrat_live_7c7e10...c42f",
+      "scopes": "*",
+      "allowed_ips": "192.168.1.0/24, 10.0.0.1",
+      "status": "active",
+      "created_by": "root",
+      "last_used_at": "2026-09-28T12:45:00.000Z",
+      "last_used_ip": "192.168.1.50",
+      "expires_at": null,
+      "created_at": "2026-09-28T10:00:00.000Z",
+      "updated_at": "2026-09-28T12:45:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+<a id="post-apiadminapi-keys"></a>
+### `POST` /api/admin/api-keys
+
+**Description**: Generates a new 256-bit cryptographically secure static API key prefixed with `sokrat_live_`. Encrypts the raw key with AES-256-GCM before saving to MySQL and returns the unmasked raw key token in the response payload.
+
+- **Authentication**: Session Cookie (Strictly Root user only)
+- **Headers**: Cookie: connect.sid=<root_session_cookie>, Content-Type: application/json
+- **System Impact**: Inserts new row into `asterisk.dashboard_api_keys` and invalidates in-memory key cache.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `name` | `body` | `string` | **Yes** | Human-readable label or CRM system name |
+| `scopes` | `body` | `string` | No | Comma-separated scopes or `*` for full access (default: `*`) |
+| `allowed_ips` | `body` | `string` | No | Optional IP whitelist (comma-separated, CIDR `10.0.0.0/24`, or wildcard `192.168.1.*`) |
+| `expires_in_days` | `body` | `integer` | No | Expiration duration in days (`0` = never expires) |
+
+#### Example Request
+
+```bash
+curl -X POST http://localhost:8080/api/admin/api-keys -b root-cookie.txt \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "HubSpot CRM Webhook",
+    "scopes": "cdr:read,cdr:audio",
+    "allowed_ips": "192.168.1.100",
+    "expires_in_days": 90
+  }'
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "key": {
+    "id": 2,
+    "name": "HubSpot CRM Webhook",
+    "rawKey": "sokrat_live_e5b1287c94a02195f2d1840cb89e21849104fa28",
+    "keyPrefix": "sokrat_live_e5b128...fa28",
+    "scopes": "cdr:read,cdr:audio",
+    "allowedIps": "192.168.1.100",
+    "status": "active",
+    "createdBy": "root",
+    "expiresAt": "2026-12-27T10:00:00.000Z",
+    "createdAt": "2026-09-28T10:00:00.000Z"
+  }
+}
+```
+
+---
+
+<a id="get-apiadminapi-keysidreveal"></a>
+### `GET` /api/admin/api-keys/:id/reveal
+
+**Description**: Decrypts and retrieves the full plaintext API key token for copy/paste into external developer configuration. Strictly accessible to root.
+
+- **Authentication**: Session Cookie (Strictly Root user only)
+- **Headers**: Cookie: connect.sid=<root_session_cookie>
+- **System Impact**: Decrypts `encrypted_key` in `asterisk.dashboard_api_keys` using AES-256-GCM.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `id` | `path` | `integer` | **Yes** | Numeric primary key ID of the API key |
+
+#### Example Request
+
+```bash
+curl -X GET http://localhost:8080/api/admin/api-keys/2/reveal -b root-cookie.txt
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "id": 2,
+  "name": "HubSpot CRM Webhook",
+  "rawKey": "sokrat_live_e5b1287c94a02195f2d1840cb89e21849104fa28"
+}
+```
+
+---
+
+<a id="post-apiadminapi-keysidstatus"></a>
+### `POST` /api/admin/api-keys/:id/status
+
+**Description**: Toggles the operational status of an API key between `active` and `revoked`. Revoked keys are immediately rejected across all endpoints.
+
+- **Authentication**: Session Cookie (Strictly Root user only)
+- **Headers**: Cookie: connect.sid=<root_session_cookie>, Content-Type: application/json
+- **System Impact**: Updates `status` in `asterisk.dashboard_api_keys` and clears the key cache.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `id` | `path` | `integer` | **Yes** | Numeric primary key ID of the API key |
+| `status` | `body` | `string` | **Yes** | Target status: `'active'` or `'revoked'` |
+
+#### Example Request
+
+```bash
+curl -X POST http://localhost:8080/api/admin/api-keys/2/status -b root-cookie.txt \
+  -H "Content-Type: application/json" \
+  -d '{"status":"revoked"}'
+```
+
+#### Example Response
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
+<a id="delete-apiadminapi-keysid"></a>
+### `DELETE` /api/admin/api-keys/:id
+
+**Description**: Permanently deletes an API key record from the system.
+
+- **Authentication**: Session Cookie (Strictly Root user only)
+- **Headers**: Cookie: connect.sid=<root_session_cookie>
+- **System Impact**: Removes row from `asterisk.dashboard_api_keys` and purges from active cache.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `id` | `path` | `integer` | **Yes** | Numeric primary key ID of the API key |
+
+#### Example Request
+
+```bash
+curl -X DELETE http://localhost:8080/api/admin/api-keys/2 -b root-cookie.txt
 ```
 
 #### Example Response

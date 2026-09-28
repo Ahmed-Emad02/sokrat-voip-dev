@@ -1,8 +1,39 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
+const mysql = require('mysql2/promise');
+const { createApiKey, deleteApiKey } = require('../lib/api-key-manager');
 
 const BASE_URL = 'http://127.0.0.1:8080';
+
+let testApiKey = null;
+let testKeyId = null;
+let pool = null;
+
+test.before(async () => {
+    pool = mysql.createPool({
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASS || 'admin',
+        database: 'asterisk'
+    });
+    const keyData = await createApiKey(pool, {
+        name: 'Automated Test Key',
+        scopes: '*',
+        allowed_ips: null
+    });
+    testApiKey = keyData.rawKey;
+    testKeyId = keyData.id;
+});
+
+test.after(async () => {
+    if (pool && testKeyId) {
+        try {
+            await deleteApiKey(pool, testKeyId);
+        } catch (_) {}
+        await pool.end();
+    }
+});
 
 function makeRequest(path, options = {}) {
     return new Promise((resolve, reject) => {
@@ -36,10 +67,19 @@ function makeRequest(path, options = {}) {
     });
 }
 
-test('Open CDR API: GET /api/cdr/:uniqueid fetches single call record without authorization', async () => {
-    // 1790496202.18 is a real answered call with recording
+test('CDR Security: Unauthenticated request without API key returns HTTP 401', async () => {
     const res = await makeRequest('/api/cdr/1790496202.18');
-    assert.strictEqual(res.status, 200, 'Should return HTTP 200 without any auth');
+    assert.strictEqual(res.status, 401, 'Should return HTTP 401 without API key');
+    assert.strictEqual(res.body.success, false);
+    assert.ok(res.body.error.includes('Unauthorized'));
+});
+
+test('CDR API with X-API-Key: GET /api/cdr/:uniqueid fetches single call record', async () => {
+    // 1790496202.18 is a real answered call with recording
+    const res = await makeRequest('/api/cdr/1790496202.18', {
+        headers: { 'X-API-Key': testApiKey }
+    });
+    assert.strictEqual(res.status, 200, 'Should return HTTP 200 with X-API-Key');
     assert.strictEqual(res.body.success, true, 'Response success should be true');
     assert.ok(res.body.data, 'Should return call data');
     assert.strictEqual(res.body.data.uniqueid, '1790496202.18');
@@ -60,16 +100,20 @@ test('Open CDR API: GET /api/cdr/:uniqueid fetches single call record without au
     assert.ok(res.body.data.transcription, 'Transcription block should be present');
 });
 
-test('Open CDR API: GET /api/cdr/:uniqueid returns 404 for unknown record', async () => {
-    const res = await makeRequest('/api/cdr/unknown-unique-id-999');
+test('CDR API with X-API-Key: GET /api/cdr/:uniqueid returns 404 for unknown record', async () => {
+    const res = await makeRequest('/api/cdr/unknown-unique-id-999', {
+        headers: { 'X-API-Key': testApiKey }
+    });
     assert.strictEqual(res.status, 404, 'Should return HTTP 404 for missing call');
     assert.strictEqual(res.body.success, false);
     assert.ok(res.body.error.includes('not found'));
 });
 
-test('Open CDR API: GET /api/cdr/phone/:phone fetches all calls involving number without authorization', async () => {
-    const res = await makeRequest('/api/cdr/phone/01011719380');
-    assert.strictEqual(res.status, 200, 'Should return HTTP 200 without any auth');
+test('CDR API with Authorization: Bearer: GET /api/cdr/phone/:phone fetches calls', async () => {
+    const res = await makeRequest('/api/cdr/phone/01011719380', {
+        headers: { 'Authorization': `Bearer ${testApiKey}` }
+    });
+    assert.strictEqual(res.status, 200, 'Should return HTTP 200 with Bearer auth');
     assert.strictEqual(res.body.success, true);
     assert.strictEqual(res.body.phone, '01011719380');
     assert.ok(Array.isArray(res.body.matched_variants), 'Should include normalized phone variants');
@@ -84,16 +128,18 @@ test('Open CDR API: GET /api/cdr/phone/:phone fetches all calls involving number
     assert.ok(firstCall.recording, 'Call should have recording details');
 });
 
-test('Open CDR API: GET /api/cdr/phone/:phone returns empty list for number without calls', async () => {
-    const res = await makeRequest('/api/cdr/phone/01999999999');
+test('CDR API with X-API-Key: GET /api/cdr/phone/:phone returns empty list for number without calls', async () => {
+    const res = await makeRequest('/api/cdr/phone/01999999999', {
+        headers: { 'X-API-Key': testApiKey }
+    });
     assert.strictEqual(res.status, 200);
     assert.strictEqual(res.body.success, true);
     assert.strictEqual(res.body.total, 0);
     assert.deepStrictEqual(res.body.calls, []);
 });
 
-test('Open CDR API: GET /api/cdr/audio/:uniqueid streams recording without authorization with Byte-Range support', async () => {
-    const res = await makeRequest('/api/cdr/audio/1790496202.18', {
+test('CDR Audio API with ?api_key=: GET /api/cdr/audio/:uniqueid streams recording with Byte-Range support', async () => {
+    const res = await makeRequest(`/api/cdr/audio/1790496202.18?api_key=${testApiKey}`, {
         headers: {
             Range: 'bytes=0-99'
         }
@@ -104,8 +150,8 @@ test('Open CDR API: GET /api/cdr/audio/:uniqueid streams recording without autho
     assert.strictEqual(res.rawBuffer.length, 100);
 });
 
-test('Open CDR API: GET /api/cdr/audio/:uniqueid?download=1 sets attachment disposition', async () => {
-    const res = await makeRequest('/api/cdr/audio/1790496202.18?download=1', {
+test('CDR Audio API with ?api_key=: GET /api/cdr/audio/:uniqueid?download=1 sets attachment disposition', async () => {
+    const res = await makeRequest(`/api/cdr/audio/1790496202.18?download=1&api_key=${testApiKey}`, {
         headers: {
             Range: 'bytes=0-9'
         }
@@ -114,20 +160,28 @@ test('Open CDR API: GET /api/cdr/audio/:uniqueid?download=1 sets attachment disp
     assert.ok(res.headers['content-disposition'].startsWith('attachment;'), 'Should set attachment disposition');
 });
 
-test('Open CDR API: Query parameter and /api/calls aliases work seamlessly', async () => {
-    const resQueryUnique = await makeRequest('/api/cdr?uniqueid=1790496202.18');
+test('CDR API with X-API-Key: Query parameter and /api/calls aliases work seamlessly', async () => {
+    const resQueryUnique = await makeRequest('/api/cdr?uniqueid=1790496202.18', {
+        headers: { 'X-API-Key': testApiKey }
+    });
     assert.strictEqual(resQueryUnique.status, 200);
     assert.strictEqual(resQueryUnique.body.data.uniqueid, '1790496202.18');
 
-    const resCallAlias = await makeRequest('/api/calls/1790496202.18');
+    const resCallAlias = await makeRequest('/api/calls/1790496202.18', {
+        headers: { 'X-API-Key': testApiKey }
+    });
     assert.strictEqual(resCallAlias.status, 200);
     assert.strictEqual(resCallAlias.body.data.uniqueid, '1790496202.18');
 
-    const resQueryPhone = await makeRequest('/api/cdr?phone=01011719380');
+    const resQueryPhone = await makeRequest('/api/cdr?phone=01011719380', {
+        headers: { 'X-API-Key': testApiKey }
+    });
     assert.strictEqual(resQueryPhone.status, 200);
     assert.ok(resQueryPhone.body.total >= 10);
 
-    const resCallPhone = await makeRequest('/api/calls/phone/01011719380');
+    const resCallPhone = await makeRequest('/api/calls/phone/01011719380', {
+        headers: { 'X-API-Key': testApiKey }
+    });
     assert.strictEqual(resCallPhone.status, 200);
     assert.ok(resCallPhone.body.total >= 10);
 });
@@ -140,6 +194,6 @@ test('Security check: POST /api/cdr/delete remains protected and rejects unauthe
         },
         body: JSON.stringify({ uniqueid: '1790496202.18' })
     });
-    assert.strictEqual(res.status, 401, 'Should return HTTP 401 Unauthorized for delete');
+    assert.strictEqual(res.status, 401, 'Should return HTTP 401 Unauthorized for delete without auth');
     assert.strictEqual(res.body.success, false);
 });

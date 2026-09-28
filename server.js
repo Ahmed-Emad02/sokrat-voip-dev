@@ -36,6 +36,15 @@ const registerCrmLiveSocket = require('./socket/crm-live');
 const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
 const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
 const {
+    initApiKeyTables,
+    createApiKey,
+    listApiKeys,
+    revealApiKey,
+    setApiKeyStatus,
+    deleteApiKey,
+    validateApiKey
+} = require('./lib/api-key-manager');
+const {
     initCrmTables,
     createPairingCode,
     consumeEmbedTicket,
@@ -1035,6 +1044,11 @@ async function initAuthDb() {
         console.error('CRM DB init error:', crmErr.message);
     }
     try {
+        await initApiKeyTables(conn);
+    } catch (apiKeyErr) {
+        console.error('API Keys DB init error:', apiKeyErr.message);
+    }
+    try {
         await initFederationDb(conn);
     } catch (fedErr) {
         console.error('Federation DB init error:', fedErr.message);
@@ -1070,8 +1084,12 @@ initAuthDb().catch(err => console.error('AUTH DB init error:', err));
 
 // --- SESSION HELPERS ---
 function isSuperAdmin(req) {
+    if (req && req.isApiKeyAuthenticated && req.apiKey) {
+        const scopes = String(req.apiKey.scopes || '*').split(',').map(s => s.trim().toLowerCase());
+        return scopes.includes('*') || scopes.includes('admin') || scopes.includes('superadmin');
+    }
     if (!req || !req.session) return false;
-    if (req.session.isRoot || req.session.username === ROOT_USER) return true;
+    if (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root') return true;
     const g = String(req.session.userGroup || '').toLowerCase().trim();
     return g === 'super admins' || g === 'super admin' || g === 'administrator' || g === 'administrators';
 }
@@ -1627,20 +1645,44 @@ const TAB_ROUTE_MAP = {
     '/storage': 'storage'
 };
 
+// --- CLIENT IP HELPER ---
+function getClientIp(req) {
+    if (!req) return '';
+    const xff = req.headers ? req.headers['x-forwarded-for'] : null;
+    if (xff) {
+        const ip = String(xff).split(',')[0].trim();
+        return ip.startsWith('::ffff:') ? ip.replace('::ffff:', '') : ip;
+    }
+    const sockIp = req.socket ? req.socket.remoteAddress : '';
+    const ip = req.ip || sockIp || '';
+    return ip.startsWith('::ffff:') ? ip.replace('::ffff:', '') : ip;
+}
+
 // --- AUTH MIDDLEWARE ---
 function requireAuth(req, res, next) {
+    if (req.isApiKeyAuthenticated && req.apiKey) {
+        return next();
+    }
     if (req.session && req.session.userId) {
         res.locals.currentUser = req.session.username;
         return next();
     }
     if (req.path.startsWith('/api/') || req.path.startsWith('/integrations/') || req.path.startsWith('/audio/') || req.path.startsWith('/voicemail/audio/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
-        return res.status(401).json({ success: false, error: 'Unauthorized. Please log in.' });
+        return res.status(401).json({ success: false, error: 'Unauthorized. Please log in or provide a valid X-API-Key header.' });
     }
     const loginUrl = '/login' + (req.originalUrl !== '/' ? '?redirect=' + encodeURIComponent(req.originalUrl) : '');
     res.redirect(loginUrl);
 }
+
 function requireActionPermission(actionPermission) {
     return (req, res, next) => {
+        if (req.isApiKeyAuthenticated && req.apiKey) {
+            const scopes = String(req.apiKey.scopes || '*').split(',').map(s => s.trim().toLowerCase());
+            if (scopes.includes('*') || scopes.includes(actionPermission.toLowerCase())) {
+                return next();
+            }
+            return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: ${actionPermission}` });
+        }
         if (isSuperAdmin(req)) return next();
         const perms = req.session.userPermissions || [];
         if (perms.includes(actionPermission)) {
@@ -1652,6 +1694,13 @@ function requireActionPermission(actionPermission) {
 
 function requireConfigPermission(subTab) {
     return (req, res, next) => {
+        if (req.isApiKeyAuthenticated && req.apiKey) {
+            const scopes = String(req.apiKey.scopes || '*').split(',').map(s => s.trim().toLowerCase());
+            if (scopes.includes('*') || scopes.includes('config') || scopes.includes('config-' + subTab.toLowerCase())) {
+                return next();
+            }
+            return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: config` });
+        }
         if (isSuperAdmin(req)) return next();
         const perms = req.session.userPermissions || [];
         if (perms.includes('config') || perms.includes('config-' + subTab)) {
@@ -1661,6 +1710,56 @@ function requireConfigPermission(subTab) {
     };
 }
 
+// --- GLOBAL STATIC API KEY AUTHENTICATION MIDDLEWARE ---
+// Enables external CRM systems and programmatic callers to authenticate via static API keys.
+// Supported authentication formats:
+//   Header: X-API-Key: sokrat_live_...
+//   Header: Authorization: Bearer sokrat_live_...
+//   Query Param: ?api_key=sokrat_live_... or ?apiKey=sokrat_live_... (supported on audio streaming routes)
+app.use(async (req, res, next) => {
+    let rawKey = req.headers['x-api-key'];
+    if (!rawKey && req.headers['authorization']) {
+        const authHdr = req.headers['authorization'].trim();
+        if (authHdr.startsWith('Bearer ') || authHdr.startsWith('ApiKey ')) {
+            const tokenPart = authHdr.split(/\s+/)[1];
+            if (tokenPart && (tokenPart.startsWith('sokrat_') || tokenPart.startsWith('sk_'))) {
+                rawKey = tokenPart;
+            }
+        }
+    }
+    if (!rawKey && req.query) {
+        const qKey = req.query.api_key || req.query.apiKey;
+        if (qKey && typeof qKey === 'string' && (qKey.startsWith('sokrat_') || qKey.startsWith('sk_'))) {
+            rawKey = qKey;
+        }
+    }
+
+    if (!rawKey || typeof rawKey !== 'string') {
+        return next();
+    }
+
+    try {
+        const clientIp = getClientIp(req);
+        const result = await validateApiKey(pool, rawKey.trim(), clientIp);
+        if (!result.valid) {
+            return res.status(401).json({
+                success: false,
+                error: `API key authentication failed: ${result.error || 'Invalid or revoked API key'}`
+            });
+        }
+
+        // Attach authenticated key metadata
+        req.apiKey = result.key;
+        req.isApiKeyAuthenticated = true;
+        res.locals.currentUser = result.key.name || 'API Client';
+        res.locals.isApiKey = true;
+        next();
+    } catch (err) {
+        console.error('API Key Middleware Error:', err);
+        return res.status(500).json({ success: false, error: 'Internal API key validation error' });
+    }
+});
+
 // --- PROTECT ALL OPERATIONAL ROUTES ---
 app.use((req, res, next) => {
     const publicPaths = [
@@ -1669,11 +1768,7 @@ app.use((req, res, next) => {
         '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live',
         '/401', '/403', '/404'
     ];
-    const isOpenCdrOrCallsRoute = (
-        (req.path.startsWith('/api/cdr') && req.path !== '/api/cdr/delete') ||
-        req.path.startsWith('/api/calls')
-    );
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/federation/v1/') || isOpenCdrOrCallsRoute) {
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/federation/v1/')) {
         return next();
     }
     requireAuth(req, res, next);
@@ -18765,6 +18860,119 @@ app.get('/embed/crm/live', async (req, res) => {
         res.status(500).send('Embed Error: ' + err.message);
     }
 });
+
+// --- SOKRAT ROOT-ONLY API KEY MANAGER ROUTES ---
+
+app.get(['/admin/api-keys', '/api-keys'], requireAuth, async (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).render('403', { currentLang: (req.session && req.session.lang) || 'en' });
+    }
+    try {
+        const keys = await listApiKeys(pool);
+        res.render('api-keys', {
+            keys,
+            moment,
+            currentLang: (req.session && req.session.lang) || 'en',
+            reqHost: req.get('host') || 'localhost:8080',
+            currentPage: '/admin/api-keys',
+            currentUser: req.session.username || 'root',
+            isRootUser: true,
+            isSuperAdmin: true
+        });
+    } catch (err) {
+        res.status(500).send('API Key Manager Error: ' + err.message);
+    }
+});
+
+app.get('/api/admin/api-keys', requireAuth, async (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can manage API keys.' });
+    }
+    try {
+        const keys = await listApiKeys(pool);
+        res.json({ success: true, keys });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/admin/api-keys', requireAuth, async (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can manage API keys.' });
+    }
+    try {
+        const { name, scopes, allowed_ips, expires_in_days } = req.body || {};
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, error: 'Key name / description is required.' });
+        }
+        const key = await createApiKey(pool, {
+            name: name.trim(),
+            scopes: scopes ? scopes.trim() : '*',
+            allowed_ips: allowed_ips ? allowed_ips.trim() : null,
+            expires_in_days: parseInt(expires_in_days, 10) || 0,
+            created_by: req.session.username || 'root'
+        });
+        res.json({ success: true, key });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/admin/api-keys/:id/reveal', requireAuth, async (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can reveal API keys.' });
+    }
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id < 1) {
+            return res.status(400).json({ success: false, error: 'Invalid API key ID' });
+        }
+        const data = await revealApiKey(pool, id);
+        res.json({ success: true, id: data.id, name: data.name, rawKey: data.rawKey });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/admin/api-keys/:id/status', requireAuth, async (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can manage API keys.' });
+    }
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { status } = req.body || {};
+        if (!['active', 'revoked'].includes(status)) {
+            return res.status(400).json({ success: false, error: 'Invalid status. Must be active or revoked.' });
+        }
+        await setApiKeyStatus(pool, id, status);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.delete('/api/admin/api-keys/:id', requireAuth, async (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can delete API keys.' });
+    }
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id) || id < 1) {
+            return res.status(400).json({ success: false, error: 'Invalid API key ID' });
+        }
+        await deleteApiKey(pool, id);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // 404 handler for unmatched routes
 app.use((req, res) => {
     const isApi = req.path.startsWith('/api/') || req.path.startsWith('/integrations/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));

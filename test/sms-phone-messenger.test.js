@@ -70,8 +70,8 @@ test('views/cdr.ejs renders cleanly without duplicate export buttons', async () 
         allowedTabs: ['dashboard', 'cdr', 'cdr-export']
     });
 
-    const renderedButtons = html.match(/Export CSV/g) || [];
-    assert.equal(renderedButtons.length, 1, 'Rendered HTML should have exactly one Export CSV label');
+    const renderedButtons = html.match(/Export (?:CSV|Excel)/g) || [];
+    assert.equal(renderedButtons.length, 1, 'Rendered HTML should have exactly one Export CSV/Excel label');
 });
 
 test('thread grouping logic correctly pairs two-way incoming and outgoing messages by phone endpoint', () => {
