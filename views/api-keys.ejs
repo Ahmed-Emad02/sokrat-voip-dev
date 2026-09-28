@@ -86,6 +86,66 @@
             border-color: #cbd5e1 !important;
         }
 
+        /* Root Domain Badge Styling */
+        .badge-root-domain {
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.25), rgba(153, 27, 27, 0.4));
+            color: #fecaca !important; /* High-contrast bright light-crimson */
+            border: 1px solid rgba(239, 68, 68, 0.7) !important;
+            box-shadow: 0 0 14px rgba(239, 68, 68, 0.25);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+        }
+        .badge-root-domain .indicator-dot {
+            background-color: #ef4444;
+            box-shadow: 0 0 8px #ef4444;
+        }
+
+        html.light-theme .badge-root-domain {
+            background: #fee2e2 !important; /* Soft rose background */
+            color: #991b1b !important; /* Dark solid crimson for maximum readability */
+            border: 1px solid #f87171 !important;
+            box-shadow: 0 1px 3px rgba(185, 28, 28, 0.12) !important;
+            text-shadow: none !important;
+        }
+        html.light-theme .badge-root-domain .indicator-dot {
+            background-color: #dc2626 !important;
+            box-shadow: none !important;
+        }
+
+        /* High-Contrast Code Terminal Surfaces */
+        .code-block-surface {
+            background-color: #090d16 !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+            color: #f8fafc !important;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+        }
+        html.light-theme .code-block-surface {
+            background-color: #0b0f19 !important; /* Keep code terminal deeply dark in light mode for max contrast */
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+
+        /* Light-theme badge overrides for table status tags */
+        html.light-theme .bg-emerald-950 {
+            background-color: #ecfdf5 !important;
+            border-color: #6ee7b7 !important;
+            color: #065f46 !important;
+        }
+        html.light-theme .bg-rose-950 {
+            background-color: #ffe4e6 !important;
+            border-color: #fda4af !important;
+            color: #9f1239 !important;
+        }
+        html.light-theme .bg-blue-950 {
+            background-color: #eff6ff !important;
+            border-color: #93c5fd !important;
+            color: #1e40af !important;
+        }
+        html.light-theme .bg-amber-950 {
+            background-color: #fffbeb !important;
+            border-color: #fcd34d !important;
+            color: #92400e !important;
+        }
+
         .btn-primary {
             background-color: var(--accent-color);
             color: #ffffff;
@@ -110,7 +170,8 @@
                         <h1 class="text-2xl font-black text-[var(--text-primary)]">
                             <%= currentLang === 'ar' ? 'إدارة مفاتيح API' : 'API Key Manager' %>
                         </h1>
-                        <span class="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-full bg-red-950/80 text-red-400 border border-red-800/60">
+                        <span class="badge-root-domain inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-black uppercase tracking-wider rounded-full">
+                            <span class="indicator-dot w-2 h-2 rounded-full animate-pulse"></span>
                             <%= currentLang === 'ar' ? 'حساب الجذر فقط (Root Only)' : 'Root Security Domain' %>
                         </span>
                     </div>
@@ -325,30 +386,42 @@
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs font-mono">
                     <!-- cURL Example 1: Single Call -->
                     <div class="bg-black/40 border border-[var(--border-primary)] rounded-xl p-4 space-y-2">
-                        <div class="text-[var(--text-secondary)] font-bold text-[11px]">1. Query Call by Unique ID (Header)</div>
-                        <pre class="overflow-x-auto text-emerald-400 p-2.5 bg-black/60 rounded-lg text-[11px]"><code>curl -X GET "http://<%= reqHost %>/api/cdr/1790496202.18" \
-     -H "X-API-Key: sokrat_live_your_key_here"</code></pre>
+                        <div class="text-[var(--text-primary)] font-bold text-xs flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            1. Query Call by Unique ID (Header)
+                        </div>
+                        <pre class="code-block-surface overflow-x-auto p-3 rounded-xl text-xs font-mono leading-relaxed select-all"><code><span class="text-amber-300 font-bold">curl</span> <span class="text-zinc-200 font-semibold">-X GET</span> <span class="text-sky-300 font-semibold">"http://<%= reqHost %>/api/cdr/1790496202.18"</span> \
+     <span class="text-zinc-400 font-semibold">-H</span> <span class="text-purple-300 font-bold">"X-API-Key:</span> <span class="text-emerald-300 font-bold">sokrat_live_your_key_here"</span></code></pre>
                     </div>
 
                     <!-- cURL Example 2: Phone Search -->
                     <div class="bg-black/40 border border-[var(--border-primary)] rounded-xl p-4 space-y-2">
-                        <div class="text-[var(--text-secondary)] font-bold text-[11px]">2. Search Calls by Phone (Bearer Header)</div>
-                        <pre class="overflow-x-auto text-emerald-400 p-2.5 bg-black/60 rounded-lg text-[11px]"><code>curl -X GET "http://<%= reqHost %>/api/cdr/phone/01011719380?limit=25" \
-     -H "Authorization: Bearer sokrat_live_your_key_here"</code></pre>
+                        <div class="text-[var(--text-primary)] font-bold text-xs flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                            2. Search Calls by Phone (Bearer Header)
+                        </div>
+                        <pre class="code-block-surface overflow-x-auto p-3 rounded-xl text-xs font-mono leading-relaxed select-all"><code><span class="text-amber-300 font-bold">curl</span> <span class="text-zinc-200 font-semibold">-X GET</span> <span class="text-sky-300 font-semibold">"http://<%= reqHost %>/api/cdr/phone/01011719380?limit=25"</span> \
+     <span class="text-zinc-400 font-semibold">-H</span> <span class="text-purple-300 font-bold">"Authorization: Bearer</span> <span class="text-emerald-300 font-bold">sokrat_live_your_key_here"</span></code></pre>
                     </div>
 
                     <!-- HTML Audio Player -->
                     <div class="bg-black/40 border border-[var(--border-primary)] rounded-xl p-4 space-y-2">
-                        <div class="text-[var(--text-secondary)] font-bold text-[11px]">3. HTML5 Audio Stream (Browser Player)</div>
-                        <pre class="overflow-x-auto text-amber-400 p-2.5 bg-black/60 rounded-lg text-[11px]"><code>&lt;audio controls src="http://<%= reqHost %>/api/cdr/audio/1790496202.18?api_key=sokrat_live_your_key_here"&gt;&lt;/audio&gt;</code></pre>
+                        <div class="text-[var(--text-primary)] font-bold text-xs flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                            3. HTML5 Audio Stream (Browser Player)
+                        </div>
+                        <pre class="code-block-surface overflow-x-auto p-3 rounded-xl text-xs font-mono leading-relaxed select-all"><code><span class="text-rose-400 font-bold">&lt;audio</span> <span class="text-amber-300 font-semibold">controls</span> <span class="text-cyan-300 font-semibold">src</span>=<span class="text-sky-300 font-semibold">"http://<%= reqHost %>/api/cdr/audio/1790496202.18?api_key=<span class="text-emerald-300 font-bold">sokrat_live_your_key_here</span>"</span><span class="text-rose-400 font-bold">&gt;&lt;/audio&gt;</span></code></pre>
                     </div>
 
                     <!-- PHP / Laravel Example -->
                     <div class="bg-black/40 border border-[var(--border-primary)] rounded-xl p-4 space-y-2">
-                        <div class="text-[var(--text-secondary)] font-bold text-[11px]">4. PHP / Laravel CRM HTTP Request</div>
-                        <pre class="overflow-x-auto text-cyan-400 p-2.5 bg-black/60 rounded-lg text-[11px]"><code>$response = Http::withHeaders([
-    'X-API-Key' => 'sokrat_live_your_key_here'
-])->get('http://<%= reqHost %>/api/cdr/phone/01011719380');</code></pre>
+                        <div class="text-[var(--text-primary)] font-bold text-xs flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                            4. PHP / Laravel CRM HTTP Request
+                        </div>
+                        <pre class="code-block-surface overflow-x-auto p-3 rounded-xl text-xs font-mono leading-relaxed select-all"><code><span class="text-sky-300 font-semibold">$response</span> = <span class="text-purple-300 font-bold">Http</span>::<span class="text-amber-300 font-semibold">withHeaders</span>([
+    <span class="text-sky-200 font-semibold">'X-API-Key'</span> =&gt; <span class="text-emerald-300 font-bold">'sokrat_live_your_key_here'</span>
+])-&gt;<span class="text-amber-300 font-semibold">get</span>(<span class="text-sky-300 font-semibold">'http://<%= reqHost %>/api/cdr/phone/01011719380'</span>);</code></pre>
                     </div>
                 </div>
             </div>

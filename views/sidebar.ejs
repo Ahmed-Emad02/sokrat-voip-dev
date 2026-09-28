@@ -2867,16 +2867,6 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </a>
             <% } %>
 
-            <!-- API Keys (Root only) -->
-            <% if (isRoot) { %>
-            <a href="/admin/api-keys?lang=<%= currentLang %>" title="<%= sbT.apiKeysLink || 'API Keys' %>"
-               class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= (curPage === '/admin/api-keys' || curPage === '/api-keys') ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
-                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-6 6 7 7-3 3-4-4v-4l-4-4m-2 2L4 12l2-2 3 3 2-2-3-3 2-2 4 4Z"/><circle cx="7.5" cy="7.5" r="2.5"/></svg>
-                <span class="sidebar-text"><%= sbT.apiKeysLink || 'API Keys' %></span>
-            </a>
-            <% } %>
-
             <!-- 9. Back up -->
             <% if (can('storage')) { %>
             <a href="/storage?lang=<%= currentLang %>" title="<%= sbT.storageLink %>"
