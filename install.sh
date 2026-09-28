@@ -1899,34 +1899,41 @@ if [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ]; then
     echo "  func_rnnoise.so compiled and loaded into Asterisk"
 fi
 
-# 10c — Compile and Install chan_dongle (with Sokrat decline detection and SMS ME storage patches)
-echo "  [10c] Compiling and installing chan_dongle..."
-cd /usr/src
-if [ ! -d asterisk-chan-dongle ]; then
-    git clone https://github.com/wdoekes/asterisk-chan-dongle.git
-fi
-cd asterisk-chan-dongle
-git pull origin master 2>/dev/null || true
-if [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
-    if command -v patch &>/dev/null; then
-        if patch -p1 -N --dry-run < "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
-            patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch"
-            echo "  Applied Sokrat chan_dongle patch (via patch)"
+# 10c — Install or Compile chan_dongle (with Sokrat decline detection, audio alignment, and SMS ME storage patches)
+echo "  [10c] Installing chan_dongle..."
+if [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
+    mkdir -p /usr/lib64/asterisk/modules
+    cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so
+    chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so
+    echo "  chan_dongle.so installed from bundle"
+else
+    cd /usr/src
+    if [ ! -d asterisk-chan-dongle ]; then
+        git clone https://github.com/wdoekes/asterisk-chan-dongle.git
+    fi
+    cd asterisk-chan-dongle
+    git pull origin master 2>/dev/null || true
+    if [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
+        if command -v patch &>/dev/null; then
+            if patch -p1 -N --dry-run < "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
+                patch -p1 < "$INSTALL_DIR/asterisk/chan_dongle.patch"
+                echo "  Applied Sokrat chan_dongle patch (via patch)"
+            else
+                echo "  Sokrat chan_dongle patch already applied"
+            fi
+        elif git apply --check "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
+            git apply "$INSTALL_DIR/asterisk/chan_dongle.patch"
+            echo "  Applied Sokrat chan_dongle patch (via git apply)"
         else
             echo "  Sokrat chan_dongle patch already applied"
         fi
-    elif git apply --check "$INSTALL_DIR/asterisk/chan_dongle.patch" &>/dev/null; then
-        git apply "$INSTALL_DIR/asterisk/chan_dongle.patch"
-        echo "  Applied Sokrat chan_dongle patch (via git apply)"
-    else
-        echo "  Sokrat chan_dongle patch already applied"
     fi
+    ./bootstrap
+    ./configure --with-astversion=18.19.0
+    make -j$(nproc 2>/dev/null || echo 1)
+    make install
+    echo "  chan_dongle compiled and installed"
 fi
-./bootstrap
-./configure --with-astversion=18.19.0
-make -j$(nproc 2>/dev/null || echo 1)
-make install
-echo "  chan_dongle compiled and installed"
 
 # 10d — Configure and apply dongle.conf
 echo "  [10d] Configuring and applying dongle.conf..."
