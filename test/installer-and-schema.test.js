@@ -121,6 +121,8 @@ test('installer-bundle/setup-issabel-asterisk.sh passes syntax validation and do
     // Verify core binary installation is not erroneously nested
     assert.match(script, /packages\/nodejs-\*\.rpm/, 'setup-issabel-asterisk.sh must check for offline nodejs RPM');
     assert.match(script, /packages\/webmin-\*\.rpm/, 'setup-issabel-asterisk.sh must check for offline webmin RPM');
+    assert.match(script, /export WEBMIN_PORT=3001/, 'setup-issabel-asterisk.sh must export WEBMIN_PORT=3001');
+    assert.match(script, /systemctl restart webmin/, 'setup-issabel-asterisk.sh must restart webmin service');
     assert.match(script, /librnnoise\.so/, 'setup-issabel-asterisk.sh must install rnnoise libraries');
     assert.match(script, /func_rnnoise\.so/, 'setup-issabel-asterisk.sh must install func_rnnoise.so module');
     assert.doesNotMatch(script, /if \[ -f "\$SCRIPT_DIR\/binaries\/node" \]; then[\s\S]*if \[ -f "\$SCRIPT_DIR\/binaries\/node" \]; then/, 'setup-issabel-asterisk.sh must not nest binary installations inside duplicate node checks');

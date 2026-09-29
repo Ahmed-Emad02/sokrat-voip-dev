@@ -2383,6 +2383,7 @@ echo "  Sokrat system watchdog daemon enabled and started"
 
 # Provision Webmin Local Control Panel on Port 3001
 echo "  Configuring Webmin Control Panel (Port 3001)..."
+export WEBMIN_PORT=3001
 if [ ! -f /etc/yum.repos.d/webmin.repo ]; then
     cat > /etc/yum.repos.d/webmin.repo << 'EOF'
 [webmin-noarch]
@@ -2395,14 +2396,42 @@ EOF
     rpm --import https://download.webmin.com/developers-key.asc 2>/dev/null || true
 fi
 if ! rpm -q webmin &>/dev/null; then
-    dnf install -y webmin 2>/dev/null || true
+    dnf install -y webmin 2>/dev/null || yum install -y webmin 2>/dev/null || true
 fi
+
+if [ ! -f /etc/systemd/system/webmin.service ] && [ ! -f /usr/lib/systemd/system/webmin.service ]; then
+    cat > /etc/systemd/system/webmin.service << 'UNIT'
+[Unit]
+Description=Webmin server daemon
+Wants=network-online.target
+After=network.target network-online.target
+
+[Service]
+Type=simple
+Environment="PERLLIB=/usr/libexec/webmin"
+ExecStart=/usr/libexec/webmin/miniserv.pl --nofork /etc/webmin/miniserv.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=300s
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+fi
+
 if [ -f /etc/webmin/miniserv.conf ]; then
     sed -i 's/^port=.*/port=3001/' /etc/webmin/miniserv.conf
     sed -i 's/^listen=.*/listen=3001/' /etc/webmin/miniserv.conf
     grep -q "referrers_none=" /etc/webmin/miniserv.conf || echo "referrers_none=1" >> /etc/webmin/miniserv.conf
+    grep -q "referers_none=" /etc/webmin/config 2>/dev/null || echo "referers_none=1" >> /etc/webmin/config
     systemctl daemon-reload
+    systemctl unmask webmin 2>/dev/null || true
     systemctl enable --now webmin 2>/dev/null || true
+    systemctl restart webmin 2>/dev/null || true
+    if ! systemctl is-active webmin &>/dev/null; then
+        /etc/webmin/restart 2>/dev/null || /etc/webmin/start 2>/dev/null || true
+    fi
     echo "  Webmin Control Panel active on port 3001"
 fi
 

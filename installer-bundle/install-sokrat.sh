@@ -2510,10 +2510,20 @@ for candidate in "$SCRIPT_DIR/packages" "$INSTALL_DIR/installer-bundle/packages"
     fi
 done
 
+export WEBMIN_PORT=3001
+
+# Ensure perl-Net-SSLeay is installed from bundle if available
+for rpm_cand in "$SCRIPT_DIR/all-rpms" "$INSTALL_DIR/installer-bundle/all-rpms"; do
+    if [ -d "$rpm_cand" ] && ls "$rpm_cand"/perl-Net-SSLeay*.rpm 1>/dev/null 2>&1; then
+        rpm -Uvh --replacepkgs --nodeps "$rpm_cand"/perl-Net-SSLeay*.rpm 2>/dev/null || true
+        break
+    fi
+done
+
 if ! rpm -q webmin &>/dev/null; then
     if [ -n "$WEBMIN_RPM" ] && [ -f "$WEBMIN_RPM" ]; then
         echo "  Installing Webmin from offline package $(basename "$WEBMIN_RPM")..."
-        rpm -Uvh --replacepkgs --nodeps "$WEBMIN_RPM" 2>/dev/null || true
+        rpm -Uvh --replacepkgs --nodeps --oldpackage "$WEBMIN_RPM" 2>/dev/null || true
     else
         if [ ! -f /etc/yum.repos.d/webmin.repo ]; then
             cat > /etc/yum.repos.d/webmin.repo << 'EOF'
@@ -2529,12 +2539,40 @@ EOF
         dnf install -y webmin 2>/dev/null || yum install -y webmin 2>/dev/null || true
     fi
 fi
+
+if [ ! -f /etc/systemd/system/webmin.service ] && [ ! -f /usr/lib/systemd/system/webmin.service ]; then
+    cat > /etc/systemd/system/webmin.service << 'UNIT'
+[Unit]
+Description=Webmin server daemon
+Wants=network-online.target
+After=network.target network-online.target
+
+[Service]
+Type=simple
+Environment="PERLLIB=/usr/libexec/webmin"
+ExecStart=/usr/libexec/webmin/miniserv.pl --nofork /etc/webmin/miniserv.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=300s
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+fi
+
 if [ -f /etc/webmin/miniserv.conf ]; then
     sed -i 's/^port=.*/port=3001/' /etc/webmin/miniserv.conf
     sed -i 's/^listen=.*/listen=3001/' /etc/webmin/miniserv.conf
     grep -q "referrers_none=" /etc/webmin/miniserv.conf || echo "referrers_none=1" >> /etc/webmin/miniserv.conf
+    grep -q "referers_none=" /etc/webmin/config 2>/dev/null || echo "referers_none=1" >> /etc/webmin/config
     systemctl daemon-reload
+    systemctl unmask webmin 2>/dev/null || true
     systemctl enable --now webmin 2>/dev/null || true
+    systemctl restart webmin 2>/dev/null || true
+    if ! systemctl is-active webmin &>/dev/null; then
+        /etc/webmin/restart 2>/dev/null || /etc/webmin/start 2>/dev/null || true
+    fi
     echo "  Webmin Control Panel active on port 3001"
 fi
 
