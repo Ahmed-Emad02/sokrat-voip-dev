@@ -2830,7 +2830,10 @@ function connectAMI() {
 
             // New channel = new call, always fresh timestamp
             if (event.Event === 'Newchannel') {
-                // Fire inbound call webhook for incoming GSM dongle calls
+                // Fire inbound call webhook for incoming GSM dongle calls.
+                // Numbers are forwarded EXACTLY as Asterisk reports them (no E.164
+                // reformatting, no national<->international guessing). The receiving
+                // CRM owns any normalization needed for its own lead lookup.
                 let inboundDongleId = extractDongleIdFromChannel(event.Channel);
                 if (inboundDongleId && event.CallerIDNum && event.CallerIDNum !== '<unknown>') {
                     let calledNum = event.Exten || event.ConnectedLineNum || '';
@@ -4583,6 +4586,15 @@ async function loadWebhookConfigFromDb() {
     return cachedWebhookConfig;
 }
 
+/**
+ * Deliver an inbound GSM call notification to the configured external CRM.
+ *
+ * Number handling: `callerNumber` and `calledNumber` are forwarded verbatim as
+ * received from Asterisk. Callers are identified by whatever the GSM network
+ * delivered, so the same lead may arrive as "01011719380" on one carrier and
+ * "+201011719380" on another. Reconciling those forms is the receiver's job —
+ * deliberately no normalization is applied here.
+ */
 function fireInboundCallWebhook(callerNumber, calledNumber, dongleId) {
     if (!cachedWebhookConfig.enabled || !cachedWebhookConfig.url) return;
     const payload = JSON.stringify({

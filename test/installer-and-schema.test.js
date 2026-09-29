@@ -184,6 +184,14 @@ test('inbound call webhook is wired to the asterisk database and fires on dongle
     assert.match(fire[0], /createHmac\('sha256'/, 'webhook must support HMAC-SHA256 signing');
     assert.match(fire[0], /X-Sokrat-Signature/, 'webhook must send the X-Sokrat-Signature header');
 
+    // Numbers must be forwarded verbatim: the receiving CRM owns normalization,
+    // so no E.164/national reformatting may be introduced in the webhook path.
+    assert.match(fire[0], /caller_number:\s*callerNumber \|\| ''/, 'caller_number must be forwarded as-is');
+    assert.match(fire[0], /called_number:\s*calledNumber \|\| ''/, 'called_number must be forwarded as-is');
+    assert.doesNotMatch(fire[0], /normalizeCidNumber|toE164|\+20|replace\([^)]*\\\\D/, 'fireInboundCallWebhook must not normalize or reformat numbers');
+    assert.match(newChannelBlock[0], /fireInboundCallWebhook\(event\.CallerIDNum, calledNum, inboundDongleId\)/, 'caller number must be the raw AMI CallerIDNum');
+    assert.match(newChannelBlock[0], /event\.Exten \|\| event\.ConnectedLineNum/, 'called number must be the raw AMI dialed value');
+
     // Cached config must be loaded at boot
     assert.match(server, /await loadWebhookConfigFromDb\(\)/, 'server.js must load webhook config at startup');
 

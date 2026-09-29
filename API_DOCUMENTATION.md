@@ -397,6 +397,9 @@ The 264 API endpoints are organized into 31 functional modules:
   - [`POST` /api/settings/alerts/test-email](#post-apisettingsalertstest-email)
   - [`POST` /api/settings/alerts/test-heartbeat](#post-apisettingsalertstest-heartbeat)
   - [`GET` /api/settings/alerts/watchdog-status](#get-apisettingsalertswatchdog-status)
+  - [`GET` /api/settings/webhook](#get-apisettingswebhook)
+  - [`POST` /api/settings/webhook](#post-apisettingswebhook)
+  - [`POST` /api/settings/webhook/test](#post-apisettingswebhooktest)
   - [`GET` /api/settings/client](#get-apisettingsclient)
   - [`POST` /api/settings/client](#post-apisettingsclient)
   - [`PUT` /api/settings/client](#put-apisettingsclient)
@@ -8873,6 +8876,159 @@ curl -X GET http://localhost:8080/api/settings/alerts/watchdog-status -b cookie.
 {
   "success": true,
   "watchdog": {"active": true, "intervalSec": 60, "lastRun": "2026-09-28T14:49:10Z"}
+}
+```
+
+---
+
+<a id="get-apisettingswebhook"></a>
+### `GET` /api/settings/webhook
+
+**Description**: Retrieves the outbound inbound-call webhook configuration. Sokrat issues an HTTP `POST` to the configured URL every time a GSM dongle receives a call, so an external CRM can look up the lead and pop its screen.
+
+- **Authentication**: Session Cookie (**SuperAdmin only**)
+- **Headers**: Cookie: connect.sid=<session_cookie>
+- **System Impact**: Reads `asterisk.dashboard_settings` keys `webhook_incoming_call_%`. The signing secret is never returned in clear text — a stored secret is reported as `••••••••`.
+
+#### Example Request
+
+```bash
+curl -X GET http://localhost:8080/api/settings/webhook -b cookie.txt
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "enabled": true,
+  "url": "https://crm.example.com/api/incoming-call",
+  "secret": "••••••••"
+}
+```
+
+---
+
+<a id="post-apisettingswebhook"></a>
+### `POST` /api/settings/webhook
+
+**Description**: Creates or updates the inbound-call webhook target. When enabled, every call arriving on a GSM dongle (`Dongle/*` channel) triggers one `POST` to the configured URL.
+
+- **Authentication**: Session Cookie (**SuperAdmin only**)
+- **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
+- **System Impact**: Upserts `webhook_incoming_call_enabled`, `webhook_incoming_call_url`, `webhook_incoming_call_secret` into `asterisk.dashboard_settings` and refreshes the in-memory cache immediately (no restart required).
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `enabled` | `body` | `boolean` | No | Fire the webhook on incoming calls |
+| `url` | `body` | `string` | No | Absolute `http://` or `https://` endpoint to POST to. Validated on save |
+| `secret` | `body` | `string` | No | Optional HMAC-SHA256 signing key. When set, each request carries an `X-Sokrat-Signature` header |
+
+#### Example Request
+
+```bash
+curl -X POST http://localhost:8080/api/settings/webhook -b cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled":true,"url":"https://crm.example.com/api/incoming-call","secret":"s3cr3t"}'
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Webhook settings saved successfully"
+}
+```
+
+#### Outbound Payload
+
+Sokrat sends this JSON body to your URL. **Respond with any `2xx` status**; anything else is treated as a failed delivery.
+
+```json
+{
+  "event": "incoming_call",
+  "caller_number": "01011719380",
+  "called_number": "+201156804841",
+  "dongle": "dongle0",
+  "timestamp": "2026-09-29T10:45:56.931Z"
+}
+```
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `event` | `string` | `incoming_call` for live calls, `test` for the test endpoint |
+| `caller_number` | `string` | The caller's number **exactly as the GSM network delivered it** |
+| `called_number` | `string` | The dialed SIM number, as reported by Asterisk |
+| `dongle` | `string` | Receiving dongle identifier, e.g. `dongle0` |
+| `timestamp` | `string` | ISO-8601 UTC timestamp of call arrival |
+
+> **Number formatting — important for CRM lookups.** Numbers are forwarded **verbatim**; Sokrat performs no normalization. The same subscriber can therefore appear as `01011719380` on one carrier and `+201011719380` on another, and the called SIM is usually in E.164 (`+201156804841`) while the caller may be in local form. Reconciling these forms is deliberately left to the receiving CRM — index or normalize leads on your side so a lookup succeeds regardless of which form arrives.
+
+#### Verifying Delivery
+
+If a signing secret is configured, the request includes:
+
+```
+X-Sokrat-Signature: <hex HMAC-SHA256 of the raw request body>
+```
+
+Verify it server-side before trusting the payload:
+
+```js
+const expected = crypto.createHmac('sha256', SECRET).update(rawBody).digest('hex');
+if (expected !== req.headers['x-sokrat-signature']) return res.status(401).end();
+```
+
+Delivery characteristics:
+
+- Fire-and-forget. Sokrat does not block the call path and applies a **10 second** timeout.
+- Delivery failures are logged to the `sokrat-voip` journal (`Webhook delivery failed: ...`) and are not retried.
+- One call produces exactly one delivery, triggered from the `Newchannel` AMI event for the inbound `Dongle/*` channel.
+
+---
+
+<a id="post-apisettingswebhooktest"></a>
+### `POST` /api/settings/webhook/test
+
+**Description**: Sends a single synthetic payload to the webhook URL to verify connectivity and signature handling before going live.
+
+- **Authentication**: Session Cookie (**SuperAdmin only**)
+- **Headers**: Cookie: connect.sid=<session_cookie>, Content-Type: application/json
+- **System Impact**: Outbound HTTPS/HTTP request only. No call state is touched.
+
+#### Request Parameters
+
+| Name | Location | Type | Required | Description |
+| :--- | :--- | :--- | :---: | :--- |
+| `url` | `body` | `string` | No | URL to test. Falls back to the saved configuration when omitted |
+| `secret` | `body` | `string` | No | Signing key. Falls back to the saved secret when omitted |
+
+#### Example Request
+
+```bash
+curl -X POST http://localhost:8080/api/settings/webhook/test -b cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://crm.example.com/api/incoming-call","secret":"s3cr3t"}'
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Test webhook delivered successfully"
+}
+```
+
+A non-`2xx` response from the target, a connection failure, or a 10 second timeout is reported as an error:
+
+```json
+{
+  "success": false,
+  "error": "Webhook test failed: Remote server responded with HTTP 404: Not Found"
 }
 ```
 
