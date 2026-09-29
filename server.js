@@ -4562,9 +4562,16 @@ let cachedWebhookConfig = { enabled: false, url: '', secret: '' };
 
 async function loadWebhookConfigFromDb() {
     try {
-        const [rows] = await pool.query(
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+        const [rows] = await conn.execute(
             "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key LIKE 'webhook_incoming_call_%'"
         );
+        await conn.end();
         const map = {};
         rows.forEach(r => { map[r.setting_key] = r.setting_value; });
         cachedWebhookConfig = {
@@ -4659,12 +4666,20 @@ app.post('/api/settings/webhook', requireAuth, async (req, res) => {
             ['webhook_incoming_call_secret', String(secret || '').trim()]
         ];
 
+        const conn = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'admin',
+            password: process.env.DB_PASS || 'admin',
+            database: ASTERISK_DB
+        });
+
         for (const [key, val] of settingsToSave) {
-            await pool.query(
+            await conn.execute(
                 'INSERT INTO dashboard_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
                 [key, val, val]
             );
         }
+        await conn.end();
 
         cachedWebhookConfig = {
             enabled: enabled ? true : false,

@@ -133,6 +133,69 @@ test('installer-bundle/setup-issabel-asterisk.sh passes syntax validation and do
     assert.doesNotMatch(script, /if \[ -f "\$SCRIPT_DIR\/binaries\/node" \]; then[\s\S]*if \[ -f "\$SCRIPT_DIR\/binaries\/node" \]; then/, 'setup-issabel-asterisk.sh must not nest binary installations inside duplicate node checks');
 });
 
+test('inbound call webhook is wired to the asterisk database and fires on dongle Newchannel', () => {
+    const rootDir = path.join(__dirname, '..');
+    const serverPath = path.join(rootDir, 'server.js');
+    assert.ok(fs.existsSync(serverPath), 'server.js must exist');
+
+    const server = fs.readFileSync(serverPath, 'utf8');
+
+    // Schema + installer seeding of the webhook settings keys
+    const sql = fs.readFileSync(path.join(rootDir, 'backend', 'install_db.sql'), 'utf8');
+    assert.match(sql, /'webhook_incoming_call_enabled'/, 'install_db.sql must seed webhook_incoming_call_enabled');
+    assert.match(sql, /'webhook_incoming_call_url'/, 'install_db.sql must seed webhook_incoming_call_url');
+    assert.match(sql, /'webhook_incoming_call_secret'/, 'install_db.sql must seed webhook_incoming_call_secret');
+
+    for (const installer of ['install.sh', path.join('installer-bundle', 'install-sokrat.sh')]) {
+        const s = fs.readFileSync(path.join(rootDir, installer), 'utf8');
+        assert.match(s, /'webhook_incoming_call_url'/, `${installer} must seed webhook settings`);
+    }
+
+    const safeUpgrade = fs.readFileSync(path.join(rootDir, 'scripts', 'safe-upgrade.sh'), 'utf8');
+    assert.match(safeUpgrade, /webhook_incoming_call_enabled/, 'safe-upgrade.sh must seed webhook settings idempotently');
+
+    // The shared pool points at the CDR database, so webhook reads/writes must use a
+    // dedicated connection qualified to ASTERISK_DB or they will hit the wrong schema.
+    const loader = server.match(/async function loadWebhookConfigFromDb\(\)\s*\{[\s\S]*?\n\}/);
+    assert.ok(loader, 'server.js must define loadWebhookConfigFromDb');
+    assert.match(loader[0], /database:\s*ASTERISK_DB/, 'loadWebhookConfigFromDb must connect to ASTERISK_DB (dashboard_settings lives in the asterisk schema)');
+
+    const saveHandler = server.match(/app\.post\('\/api\/settings\/webhook',[\s\S]*?\n\}\);/);
+    assert.ok(saveHandler, 'server.js must define POST /api/settings/webhook');
+    assert.match(saveHandler[0], /database:\s*ASTERISK_DB/, 'POST /api/settings/webhook must write to ASTERISK_DB');
+
+    // API surface
+    assert.match(server, /app\.get\('\/api\/settings\/webhook', requireAuth/, 'server.js must expose GET /api/settings/webhook');
+    assert.match(server, /app\.post\('\/api\/settings\/webhook\/test', requireAuth/, 'server.js must expose POST /api/settings/webhook/test');
+    assert.match(saveHandler[0], /isSuperAdmin\(req\)/, 'webhook settings must be restricted to super admin');
+
+    // Trigger on inbound GSM calls
+    const newChannelBlock = server.match(/if \(event\.Event === 'Newchannel'\)\s*\{[\s\S]{0,2000}?broadcastTrunkStatus\(\);\s*\}/);
+    assert.ok(newChannelBlock, 'server.js must have a Newchannel AMI handler');
+    assert.match(newChannelBlock[0], /extractDongleIdFromChannel\(event\.Channel\)/, 'Newchannel handler must detect dongle channels');
+    assert.match(newChannelBlock[0], /fireInboundCallWebhook\(/, 'Newchannel handler must fire the inbound call webhook for dongle calls');
+
+    // Payload contract + signing
+    const fire = server.match(/function fireInboundCallWebhook\([\s\S]*?\n\}/);
+    assert.ok(fire, 'server.js must define fireInboundCallWebhook');
+    for (const field of ['event', 'caller_number', 'called_number', 'dongle', 'timestamp']) {
+        assert.match(fire[0], new RegExp(field), `webhook payload must include ${field}`);
+    }
+    assert.match(fire[0], /createHmac\('sha256'/, 'webhook must support HMAC-SHA256 signing');
+    assert.match(fire[0], /X-Sokrat-Signature/, 'webhook must send the X-Sokrat-Signature header');
+
+    // Cached config must be loaded at boot
+    assert.match(server, /await loadWebhookConfigFromDb\(\)/, 'server.js must load webhook config at startup');
+
+    // UI
+    const sidebar = fs.readFileSync(path.join(rootDir, 'views', 'sidebar.ejs'), 'utf8');
+    assert.match(sidebar, /id="webhookModal"/, 'sidebar must contain the webhook modal');
+    assert.match(sidebar, /function openWebhookModal\(\)/, 'sidebar must define openWebhookModal');
+    assert.match(sidebar, /function saveWebhookSettings\(event\)/, 'sidebar must define saveWebhookSettings');
+    assert.match(sidebar, /function testWebhook\(\)/, 'sidebar must define testWebhook');
+    assert.match(sidebar, /\/api\/settings\/webhook/, 'sidebar must call the webhook settings API');
+});
+
 test('offline installer packages and binaries are present in installer-bundle', () => {
     const rootDir = path.join(__dirname, '..');
     const packagesDir = path.join(rootDir, 'installer-bundle', 'packages');
