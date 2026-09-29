@@ -666,7 +666,11 @@ if [ -d "$SOFTPHONE_DIR" ]; then
 fi
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
 if ! command -v ffmpeg &>/dev/null && [ ! -x /usr/local/bin/ffmpeg ]; then
-    if yum install -y ffmpeg &>/dev/null; then
+    if [ -f "$INSTALL_DIR/installer-bundle/binaries/ffmpeg" ]; then
+        echo "  Installing ffmpeg from bundle..."
+        cp "$INSTALL_DIR/installer-bundle/binaries/ffmpeg" /usr/local/bin/ffmpeg
+        chmod +x /usr/local/bin/ffmpeg
+    elif timeout 10 yum install -y ffmpeg &>/dev/null; then
         echo "  ffmpeg installed via package manager"
     else
         echo "  Checking static ffmpeg mirrors (5s timeout)..."

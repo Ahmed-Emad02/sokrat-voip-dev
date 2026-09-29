@@ -743,7 +743,19 @@ elif [ -d "$SOFTPHONE_DIR" ]; then
 fi
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
 if ! command -v ffmpeg &>/dev/null && [ ! -x /usr/local/bin/ffmpeg ]; then
-    if yum install -y ffmpeg &>/dev/null; then
+    if [ -f "$SCRIPT_DIR/binaries/ffmpeg" ]; then
+        echo "  Installing ffmpeg from offline bundle..."
+        cp "$SCRIPT_DIR/binaries/ffmpeg" /usr/local/bin/ffmpeg
+        chmod +x /usr/local/bin/ffmpeg
+    elif [ -f "$INSTALL_DIR/installer-bundle/binaries/ffmpeg" ]; then
+        echo "  Installing ffmpeg from offline bundle..."
+        cp "$INSTALL_DIR/installer-bundle/binaries/ffmpeg" /usr/local/bin/ffmpeg
+        chmod +x /usr/local/bin/ffmpeg
+    elif [ -f "/tmp/sokrat-repo/installer-bundle/binaries/ffmpeg" ]; then
+        echo "  Installing ffmpeg from offline bundle..."
+        cp "/tmp/sokrat-repo/installer-bundle/binaries/ffmpeg" /usr/local/bin/ffmpeg
+        chmod +x /usr/local/bin/ffmpeg
+    elif timeout 10 yum install -y ffmpeg &>/dev/null; then
         echo "  ffmpeg installed via package manager"
     else
         echo "  Checking static ffmpeg mirrors (5s timeout)..."

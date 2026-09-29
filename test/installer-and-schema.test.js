@@ -92,6 +92,7 @@ test('installer-bundle/install-sokrat.sh prevents duplicate cloning and passes b
     assert.match(script, /packages\/nodejs-\*\.rpm/, 'install-sokrat.sh must check for offline nodejs RPM');
     assert.match(script, /webmin-\*\.rpm/, 'install-sokrat.sh must check for offline webmin RPM');
     assert.match(script, /librnnoise\.so/, 'install-sokrat.sh must check for offline rnnoise library');
+    assert.match(script, /binaries\/ffmpeg/, 'install-sokrat.sh must check for offline ffmpeg binary');
 
     // Call transfer protection & dongle dialplan sanitization
     assert.match(script, /sed -i '\/dongle restart now\/d' \/etc\/asterisk\/extensions\*\.conf/, 'install-sokrat.sh must sanitize rogue dongle restart commands');
