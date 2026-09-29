@@ -45,7 +45,6 @@ if [ -f /etc/selinux/config ]; then
 fi
 
 # 4. Install EVERYTHING strictly offline from the local bundle
-# 4. Install EVERYTHING strictly offline from the local bundle
 echo "--> Installing all database, web, Asterisk 18 & Issabel 5 packages offline..."
 rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/*.rpm 2>/dev/null || true
 
@@ -56,16 +55,13 @@ if command -v firewall-cmd &>/dev/null && systemctl is-active firewalld &>/dev/n
     firewall-cmd --zone=public --add-port=80/tcp --add-port=443/tcp --add-port=8443/tcp --add-port=3000/tcp --add-port=3001/tcp --add-port=5060/udp --add-port=10000-20000/udp --permanent 2>/dev/null || true
     firewall-cmd --reload 2>/dev/null || true
 fi
-rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/*.rpm 2>/dev/null || true
 
-# 5. Install binaries (Node.js, ffmpeg, pico2wave, librnnoise)
+# 5. Install binaries (Node.js, ffmpeg, pico2wave, librnnoise, webmin)
 echo "--> Installing core binaries..."
 if ls "$SCRIPT_DIR"/packages/nodejs-*.rpm 1>/dev/null 2>&1; then
     echo "--> Installing Node.js 22 from local packages..."
     rpm -Uvh --replacepkgs --nodeps "$SCRIPT_DIR"/packages/nodejs-*.rpm 2>/dev/null || true
 fi
-if [ -f "$SCRIPT_DIR/binaries/node" ]; then
-echo "--> Installing core binaries..."
 if [ -f "$SCRIPT_DIR/binaries/node" ]; then
     cp "$SCRIPT_DIR/binaries/node" /usr/local/bin/
     chmod +x /usr/local/bin/node
@@ -106,9 +102,6 @@ fi
 if ls "$SCRIPT_DIR"/packages/webmin-*.rpm 1>/dev/null 2>&1; then
     echo "--> Installing Webmin from local packages..."
     rpm -Uvh --replacepkgs --nodeps "$SCRIPT_DIR"/packages/webmin-*.rpm 2>/dev/null || true
-fi
-    mkdir -p /usr/lib64/asterisk/modules
-    cp "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/
 fi
 
 # 6. Start MariaDB and Asterisk

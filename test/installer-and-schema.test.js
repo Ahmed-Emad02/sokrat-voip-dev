@@ -99,6 +99,32 @@ test('installer-bundle/install-sokrat.sh prevents duplicate cloning and passes b
     assert.doesNotMatch(script, /same => n,Set\(CHANNEL\(hangup_handler_push\)=dongle-hangup-cleanup,s,1\)/, 'install-sokrat.sh must not push dongle-hangup-cleanup');
 });
 
+test('installer-bundle/setup-issabel-asterisk.sh passes syntax validation and does not repeat package or binary installation', () => {
+    const rootDir = path.join(__dirname, '..');
+    const setupScriptPath = path.join(rootDir, 'installer-bundle', 'setup-issabel-asterisk.sh');
+    assert.ok(fs.existsSync(setupScriptPath), 'setup-issabel-asterisk.sh must exist');
+    assert.doesNotThrow(() => {
+        execSync(`bash -n "${setupScriptPath}"`, { cwd: rootDir, stdio: 'pipe' });
+    }, 'setup-issabel-asterisk.sh must pass bash -n syntax check');
+
+    const script = fs.readFileSync(setupScriptPath, 'utf8');
+
+    // Verify rpm installation command is not duplicated
+    const rpmAllMatches = script.match(/rpm -Uvh --replacepkgs --nodeps "\$\{RPM_DIR\}"\/\*\.rpm/g);
+    assert.strictEqual(rpmAllMatches ? rpmAllMatches.length : 0, 1, 'setup-issabel-asterisk.sh must not repeat the full RPM directory install');
+
+    // Verify chan_dongle copy is not duplicated
+    const chanDongleMatches = script.match(/cp "\$SCRIPT_DIR\/binaries\/chan_dongle\.so"/g);
+    assert.strictEqual(chanDongleMatches ? chanDongleMatches.length : 0, 1, 'setup-issabel-asterisk.sh must not repeat chan_dongle.so installation');
+
+    // Verify core binary installation is not erroneously nested
+    assert.match(script, /packages\/nodejs-\*\.rpm/, 'setup-issabel-asterisk.sh must check for offline nodejs RPM');
+    assert.match(script, /packages\/webmin-\*\.rpm/, 'setup-issabel-asterisk.sh must check for offline webmin RPM');
+    assert.match(script, /librnnoise\.so/, 'setup-issabel-asterisk.sh must install rnnoise libraries');
+    assert.match(script, /func_rnnoise\.so/, 'setup-issabel-asterisk.sh must install func_rnnoise.so module');
+    assert.doesNotMatch(script, /if \[ -f "\$SCRIPT_DIR\/binaries\/node" \]; then[\s\S]*if \[ -f "\$SCRIPT_DIR\/binaries\/node" \]; then/, 'setup-issabel-asterisk.sh must not nest binary installations inside duplicate node checks');
+});
+
 test('offline installer packages and binaries are present in installer-bundle', () => {
     const rootDir = path.join(__dirname, '..');
     const packagesDir = path.join(rootDir, 'installer-bundle', 'packages');

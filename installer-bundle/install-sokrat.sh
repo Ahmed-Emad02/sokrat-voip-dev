@@ -241,7 +241,6 @@ if ! command -v git &>/dev/null; then
     fi
 fi
 # Packages already provided by installer-bundle (sox, sqlite, picotts, net-tools, nano)
-# Packages already provided by installer-bundle (sox, sqlite, picotts, net-tools, nano)
 
 # Announcements in Issabel use picotts.agi, which requires both sox and pico2wave.
 PICO_AGI_SOURCE=/var/www/html/admin/modules/announcement/agi-bin/picotts.agi
