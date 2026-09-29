@@ -86,6 +86,21 @@
           <dialedNumber>true</dialedNumber>
         </forwardCallInfoDisplay>
       </line>
+
+      <!-- Optional Line 2 (for multi-line models like 7945G, 7962G, 7965G) -->
+      <!--
+      <line button="2">
+        <featureID>9</featureID>
+        <featureLabel>{{EXTENSION_2}}</featureLabel>
+        <proxy>{{PBX_IP}}</proxy>
+        <port>5060</port>
+        <name>{{EXTENSION_2}}</name>
+        <displayName>{{DISPLAY_NAME_2}}</displayName>
+        <contact>{{EXTENSION_2}}</contact>
+        <authName>{{EXTENSION_2}}</authName>
+        <authPassword>{{SECRET_2}}</authPassword>
+      </line>
+      -->
     </sipLines>
   </sipProfile>
 </device>
