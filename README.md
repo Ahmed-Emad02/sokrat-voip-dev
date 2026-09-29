@@ -207,10 +207,13 @@ Sokrat VoIP features an enterprise-grade REST and Telephony API with **259 docum
 * 📱 **GSM Cellular Gateways**: Multi-dongle USB monitoring, USSD query engine, SMS messaging threads, port remapping.
 * 📞 **Progressive Outbound Dialer**: High-concurrency automated campaigns, lead management, DNC lists, dispositions.
 * 🤝 **CRM Integration REST v1**: Bearer token authentication, customer call history matching, iframe softphone embed tickets.
+* 🪝 **Inbound Call Webhook**: Optional HMAC-signed HTTP POST to any external CRM on every incoming GSM call, for lead lookup and screen pop.
 * 🌐 **Multi-Site Federation**: Inter-branch clustering, IAX2 trunking, distributed GSM pooling.
 * 🤖 **AI Speech-to-Text (STT)**: Call & voicemail automated transcription (Whisper, Vosk, Google).
 
 👉 **[Read the Complete API Documentation (API_DOCUMENTATION.md)](API_DOCUMENTATION.md)**
+
+👉 **[Read the Inbound Call Webhook Integration Guide (WEBHOOK_INTEGRATION.md)](WEBHOOK_INTEGRATION.md)** — step-by-step guide for CRM developers receiving real-time call notifications.
 
 ---
 

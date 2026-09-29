@@ -400,6 +400,7 @@ The 264 API endpoints are organized into 31 functional modules:
   - [`GET` /api/settings/webhook](#get-apisettingswebhook)
   - [`POST` /api/settings/webhook](#post-apisettingswebhook)
   - [`POST` /api/settings/webhook/test](#post-apisettingswebhooktest)
+  - 📖 See also: [Inbound Call Webhook Integration Guide](WEBHOOK_INTEGRATION.md)
   - [`GET` /api/settings/client](#get-apisettingsclient)
   - [`POST` /api/settings/client](#post-apisettingsclient)
   - [`PUT` /api/settings/client](#put-apisettingsclient)
