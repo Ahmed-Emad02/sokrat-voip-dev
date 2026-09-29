@@ -2025,6 +2025,9 @@ if [ -f /etc/default/grub ]; then
         if [ -f /boot/grub2/grub.cfg ]; then
             grub2-mkconfig -o /boot/grub2/grub.cfg 2>/dev/null || true
         fi
+        if [ -f /boot/efi/EFI/rocky/grub.cfg ]; then
+            grub2-mkconfig -o /boot/efi/EFI/rocky/grub.cfg 2>/dev/null || true
+        fi
         if [ -f /boot/efi/EFI/centos/grub.cfg ]; then
             grub2-mkconfig -o /boot/efi/EFI/centos/grub.cfg 2>/dev/null || true
         fi

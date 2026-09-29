@@ -229,6 +229,17 @@ grep -q "8.8.8.8" /etc/resolv.conf 2>/dev/null || echo -e "nameserver 8.8.8.8\nn
 # Step 1 — System Packages + Disable Fail2Ban + Install Sokrat MOTD
 # ──────────────────────────────────────────────
 echo "[1/14] Checking system prerequisites..."
+# Ensure local offline bundle archives are unpacked if running standalone
+if [ ! -d "$SCRIPT_DIR/all-rpms" ] && ls "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* 1>/dev/null 2>&1; then
+    echo "  Reassembling multi-part offline archive and unpacking..."
+    cat "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$SCRIPT_DIR/" --exclude="binaries/chan_dongle.so"
+    git -C "$SCRIPT_DIR" checkout -- binaries/chan_dongle.so 2>/dev/null || git -C "$SCRIPT_DIR/.." checkout -- installer-bundle/binaries/chan_dongle.so 2>/dev/null || true
+elif [ ! -d "$INSTALL_DIR/installer-bundle/all-rpms" ] && ls "$INSTALL_DIR/installer-bundle"/sokrat-prereqs.tar.gz.part-* 1>/dev/null 2>&1; then
+    echo "  Reassembling multi-part offline archive and unpacking..."
+    cat "$INSTALL_DIR/installer-bundle"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$INSTALL_DIR/installer-bundle/" --exclude="binaries/chan_dongle.so"
+    git -C "$INSTALL_DIR" checkout -- installer-bundle/binaries/chan_dongle.so 2>/dev/null || true
+fi
+
 # Ensure git is installed at the beginning
 if ! command -v git &>/dev/null; then
     echo "  Installing git..."
@@ -245,7 +256,30 @@ fi
 # Announcements in Issabel use picotts.agi, which requires both sox and pico2wave.
 PICO_AGI_SOURCE=/var/www/html/admin/modules/announcement/agi-bin/picotts.agi
 PICO_AGI_TARGET=/var/lib/asterisk/agi-bin/picotts.agi
-if ! command -v pico2wave &>/dev/null; then
+
+# Install pico2wave binary from bundle if not present
+if ! command -v pico2wave &>/dev/null && [ ! -x /usr/bin/pico2wave ]; then
+    for cand_pico in "$SCRIPT_DIR/binaries" "$INSTALL_DIR/installer-bundle/binaries"; do
+        if [ -f "$cand_pico/pico2wave" ]; then
+            echo "  Installing pico2wave from offline bundle..."
+            cp "$cand_pico/pico2wave" /usr/bin/pico2wave
+            chmod +x /usr/bin/pico2wave
+            break
+        fi
+    done
+fi
+
+# Install picotts voice assets from bundle if missing
+for cand_picotts in "$SCRIPT_DIR/binaries/picotts" "$INSTALL_DIR/installer-bundle/binaries/picotts"; do
+    if [ -d "$cand_picotts" ] && [ ! -d /usr/share/picotts/lang ]; then
+        echo "  Installing picotts voice assets from bundle..."
+        mkdir -p /usr/share/picotts
+        cp -r "$cand_picotts/"* /usr/share/picotts/ 2>/dev/null || true
+        break
+    fi
+done
+
+if ! command -v pico2wave &>/dev/null && [ ! -x /usr/bin/pico2wave ]; then
     echo "  Error: picotts installed without the required pico2wave binary" >&2
     exit 1
 fi
@@ -696,9 +730,8 @@ elif [ -d "$SOFTPHONE_DIR/.git" ]; then
     fi
     cd "$INSTALL_DIR"
 else
-    if ! git clone --depth 1 --branch "$SOFTPHONE_REPO_BRANCH" --single-branch "$SOFTPHONE_REPO_URL" "$SOFTPHONE_DIR"; then
-        echo "  Shallow clone failed, retrying git clone..."
-        git clone --branch "$SOFTPHONE_REPO_BRANCH" --single-branch "$SOFTPHONE_REPO_URL" "$SOFTPHONE_DIR"
+    if ! git clone --depth 1 --branch "$SOFTPHONE_REPO_BRANCH" --single-branch "$SOFTPHONE_REPO_URL" "$SOFTPHONE_DIR" 2>/dev/null; then
+        echo "  Notice: Online clone of Sokrat VOICE softphone unavailable; skipping optional standalone phone..."
     fi
     cd "$INSTALL_DIR"
 fi
@@ -1186,26 +1219,29 @@ echo "[6b/14] Installing Sokrat Push Gateway (mobile push-to-wake)..."
 if [ -d "$PUSH_GATEWAY_DIR/.git" ]; then
     echo "  Updating sokrat-push-gateway..."
     cd "$PUSH_GATEWAY_DIR"
-    git fetch origin
+    git fetch origin 2>/dev/null || true
     git checkout origin/master -B master 2>/dev/null || git checkout origin/main -B main 2>/dev/null || true
 elif [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
     echo "  Push gateway source already present in $PUSH_GATEWAY_DIR, proceeding..."
     cd "$PUSH_GATEWAY_DIR"
 else
     rm -rf "$PUSH_GATEWAY_DIR"
-    git clone "$PUSH_GATEWAY_REPO" "$PUSH_GATEWAY_DIR"
-    cd "$PUSH_GATEWAY_DIR"
+    if ! git clone "$PUSH_GATEWAY_REPO" "$PUSH_GATEWAY_DIR" 2>/dev/null; then
+        echo "  Notice: Online clone of Sokrat Push Gateway unavailable; skipping optional push gateway..."
+    fi
+    cd "$INSTALL_DIR"
 fi
 
-if [ -d "$PUSH_GATEWAY_DIR/node_modules" ] && [ -f "$PUSH_GATEWAY_DIR/node_modules/express/package.json" ]; then
-    echo "  Push gateway dependencies already bundled in node_modules, skipping npm install."
-elif [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
-    npm install --production --prefix "$PUSH_GATEWAY_DIR" 2>/dev/null || true
-fi
+if [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
+    if [ -d "$PUSH_GATEWAY_DIR/node_modules" ] && [ -f "$PUSH_GATEWAY_DIR/node_modules/express/package.json" ]; then
+        echo "  Push gateway dependencies already bundled in node_modules, skipping npm install."
+    else
+        npm install --production --prefix "$PUSH_GATEWAY_DIR" 2>/dev/null || true
+    fi
 
-# Gateway .env (reuse the same MySQL root password and host settings)
-if [ ! -f "$PUSH_GATEWAY_DIR/.env" ]; then
-    cat > "$PUSH_GATEWAY_DIR/.env" << PUSHENV
+    # Gateway .env (reuse the same MySQL root password and host settings)
+    if [ ! -f "$PUSH_GATEWAY_DIR/.env" ]; then
+        cat > "$PUSH_GATEWAY_DIR/.env" << PUSHENV
 PORT=8095
 DB_HOST=127.0.0.1
 DB_USER=root
@@ -1214,23 +1250,26 @@ DB_NAME=asterisk
 APNS_ENABLED=false
 FCM_ENABLED=false
 PUSHENV
-    echo "  push-gateway .env created (set APNS/FCM keys to enable real pushes)"
-fi
+        echo "  push-gateway .env created (set APNS/FCM keys to enable real pushes)"
+    fi
 
-# Use a dedicated user for the gateway (mirrors the app service approach)
-if ! id sokrat-push >/dev/null 2>&1; then
-    useradd -r -s /sbin/nologin -d "$PUSH_GATEWAY_DIR" sokrat-push
-    chown -R sokrat-push:sokrat-push "$PUSH_GATEWAY_DIR"
-fi
+    # Use a dedicated user for the gateway (mirrors the app service approach)
+    if ! id sokrat-push >/dev/null 2>&1; then
+        useradd -r -s /sbin/nologin -d "$PUSH_GATEWAY_DIR" sokrat-push
+        chown -R sokrat-push:sokrat-push "$PUSH_GATEWAY_DIR"
+    fi
 
-# Install gateway systemd unit
-cp "$PUSH_GATEWAY_DIR/systemd/sokrat-push-gateway.service" /etc/systemd/system/sokrat-push-gateway.service
-sed -i 's|/opt/sokrat-voice/sokrat-push-gateway|'"$PUSH_GATEWAY_DIR"'|g' /etc/systemd/system/sokrat-push-gateway.service
-sed -i 's|^User=.*|User=sokrat-push|' /etc/systemd/system/sokrat-push-gateway.service
-sed -i 's|^Group=.*|Group=sokrat-push|' /etc/systemd/system/sokrat-push-gateway.service
-systemctl daemon-reload
-systemctl enable --now sokrat-push-gateway.service
-echo "  push-gateway service enabled and started"
+    # Install gateway systemd unit
+    if [ -f "$PUSH_GATEWAY_DIR/systemd/sokrat-push-gateway.service" ]; then
+        cp "$PUSH_GATEWAY_DIR/systemd/sokrat-push-gateway.service" /etc/systemd/system/sokrat-push-gateway.service
+        sed -i 's|/opt/sokrat-voice/sokrat-push-gateway|'"$PUSH_GATEWAY_DIR"'|g' /etc/systemd/system/sokrat-push-gateway.service
+        sed -i 's|^User=.*|User=sokrat-push|' /etc/systemd/system/sokrat-push-gateway.service
+        sed -i 's|^Group=.*|Group=sokrat-push|' /etc/systemd/system/sokrat-push-gateway.service
+        systemctl daemon-reload
+        systemctl enable --now sokrat-push-gateway.service
+        echo "  push-gateway service enabled and started"
+    fi
+fi
 
 # Install or update the Asterisk dialplan hooks. The linked ID deterministically
 # maps to the same UUID namespace used by the gateway.
@@ -2142,6 +2181,9 @@ if [ -f /etc/default/grub ]; then
         if [ -f /boot/grub2/grub.cfg ]; then
             grub2-mkconfig -o /boot/grub2/grub.cfg 2>/dev/null || true
         fi
+        if [ -f /boot/efi/EFI/rocky/grub.cfg ]; then
+            grub2-mkconfig -o /boot/efi/EFI/rocky/grub.cfg 2>/dev/null || true
+        fi
         if [ -f /boot/efi/EFI/centos/grub.cfg ]; then
             grub2-mkconfig -o /boot/efi/EFI/centos/grub.cfg 2>/dev/null || true
         fi
@@ -2219,7 +2261,17 @@ echo "  AstDB Noise and Audio defaults initialized"
 # ──────────────────────────────────────────────
 echo "[11/14] Configuring Apache reverse proxy..."
 if ! rpm -q mod_ssl &>/dev/null; then
-    yum install -y mod_ssl 2>/dev/null || true
+    MOD_SSL_INSTALLED=0
+    for cand_rpm in "$SCRIPT_DIR/all-rpms" "$INSTALL_DIR/installer-bundle/all-rpms"; do
+        if [ -d "$cand_rpm" ] && ls "$cand_rpm"/mod_ssl-*.rpm 1>/dev/null 2>&1; then
+            echo "  Installing mod_ssl from offline bundle..."
+            rpm -Uvh --replacepkgs --nodeps "$cand_rpm"/mod_ssl-*.rpm 2>/dev/null && MOD_SSL_INSTALLED=1 || true
+            break
+        fi
+    done
+    if [ "$MOD_SSL_INSTALLED" -eq 0 ]; then
+        yum install -y mod_ssl 2>/dev/null || true
+    fi
 fi
 
 # Restore Listen 80 in httpd.conf if it was replaced, and ensure Listen 3000 is present
@@ -2408,10 +2460,11 @@ systemctl enable --now sokrat-voip
 echo "  Service enabled and started"
 
 # Provision Sokrat Standalone WebRTC Softphone Daemon
-id -u sokrat-softphone &>/dev/null || useradd -r -s /sbin/nologin -d /opt/sokrat-softphone -c "Sokrat Softphone Daemon" sokrat-softphone
-usermod -aG asterisk sokrat-softphone 2>/dev/null || true
-chown -R sokrat-softphone:sokrat-softphone /opt/sokrat-softphone 2>/dev/null || true
-cat > /etc/systemd/system/sokrat-softphone.service << 'UNIT'
+if [ -f /opt/sokrat-softphone/server.js ]; then
+    id -u sokrat-softphone &>/dev/null || useradd -r -s /sbin/nologin -d /opt/sokrat-softphone -c "Sokrat Softphone Daemon" sokrat-softphone
+    usermod -aG asterisk sokrat-softphone 2>/dev/null || true
+    chown -R sokrat-softphone:sokrat-softphone /opt/sokrat-softphone 2>/dev/null || true
+    cat > /etc/systemd/system/sokrat-softphone.service << 'UNIT'
 [Unit]
 Description=Sokrat Standalone WebRTC Softphone Daemon
 After=network.target asterisk.service
@@ -2444,9 +2497,12 @@ Environment=HOST=127.0.0.1
 WantedBy=multi-user.target
 UNIT
 
-systemctl daemon-reload
-systemctl enable --now sokrat-softphone
-echo "  Sokrat softphone daemon enabled and started"
+    systemctl daemon-reload
+    systemctl enable --now sokrat-softphone 2>/dev/null || true
+    echo "  Sokrat softphone daemon enabled and started"
+else
+    echo "  Notice: /opt/sokrat-softphone not provisioned; skipping sokrat-softphone service"
+fi
 
 # Provision Sokrat Cloud AI Speech-To-Text Worker Daemon
 echo "  Provisioning Sokrat Cloud AI Speech-To-Text Worker..."
@@ -2598,9 +2654,11 @@ sleep 2
 echo "--- Sokrat VoIP Service ---"
 systemctl status sokrat-voip --no-pager -l | head -12
 echo ""
-echo "--- Sokrat VOICE Softphone Service ---"
-systemctl status sokrat-softphone --no-pager -l | head -12
-echo ""
+if [ -f /etc/systemd/system/sokrat-softphone.service ]; then
+    echo "--- Sokrat VOICE Softphone Service ---"
+    systemctl status sokrat-softphone --no-pager -l 2>/dev/null | head -12 || true
+    echo ""
+fi
 echo "--- Webmin Control Panel Service ---"
 systemctl status webmin --no-pager -l 2>/dev/null | head -10 || true
 echo ""

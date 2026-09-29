@@ -20,9 +20,10 @@ echo " Internet Dependent:   NO (100% Local Bundle)"
 echo "=================================================================="
 
 # 1. Join split parts and unpack RPMs and Binaries
-if ls "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* 1> /dev/null 2>&1; then
+if [ ! -d "$SCRIPT_DIR/all-rpms" ] && [ ! -d "$SCRIPT_DIR/rpms" ] && ls "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* 1> /dev/null 2>&1; then
     echo "--> Reassembling multi-part offline archive and unpacking..."
-    cat "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$SCRIPT_DIR/"
+    cat "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$SCRIPT_DIR/" --exclude="binaries/chan_dongle.so"
+    git -C "$SCRIPT_DIR" checkout -- binaries/chan_dongle.so 2>/dev/null || git -C "$SCRIPT_DIR/.." checkout -- installer-bundle/binaries/chan_dongle.so 2>/dev/null || true
 fi
 
 # Detect rpm directory
@@ -176,7 +177,7 @@ mysql -u root -p"$MARIADB_PASS" asterisk -e "UPDATE issabelpbx_settings SET valu
 
 # Ensure chan_sip is enabled in modules_custom.conf
 if [ -f /etc/asterisk/modules_custom.conf ]; then
-    grep -q "load = chan_sip.so" /etc/asterisk/modules_custom.conf || echo "load = chan_sip.so" >> /etc/asterisk/modules_custom.conf
+    grep -q "load => chan_sip.so" /etc/asterisk/modules_custom.conf || echo "load => chan_sip.so" >> /etc/asterisk/modules_custom.conf
 fi
 
 # 8. Set proper file ownership and permissions for Issabel web GUI

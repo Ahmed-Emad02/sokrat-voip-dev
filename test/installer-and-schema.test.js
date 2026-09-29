@@ -93,6 +93,9 @@ test('installer-bundle/install-sokrat.sh prevents duplicate cloning and passes b
     assert.match(script, /webmin-\*\.rpm/, 'install-sokrat.sh must check for offline webmin RPM');
     assert.match(script, /librnnoise\.so/, 'install-sokrat.sh must check for offline rnnoise library');
     assert.match(script, /binaries\/ffmpeg/, 'install-sokrat.sh must check for offline ffmpeg binary');
+    assert.match(script, /cand_pico.*binaries/, 'install-sokrat.sh must check for offline pico2wave binary');
+    assert.match(script, /mod_ssl-\*\.rpm/, 'install-sokrat.sh must check for offline mod_ssl package');
+    assert.match(script, /\/boot\/efi\/EFI\/rocky\/grub\.cfg/, 'install-sokrat.sh must support Rocky Linux UEFI grub path');
 
     // Call transfer protection & dongle dialplan sanitization
     assert.match(script, /sed -i '\/dongle restart now\/d' \/etc\/asterisk\/extensions\*\.conf/, 'install-sokrat.sh must sanitize rogue dongle restart commands');
@@ -125,6 +128,8 @@ test('installer-bundle/setup-issabel-asterisk.sh passes syntax validation and do
     assert.match(script, /systemctl restart webmin/, 'setup-issabel-asterisk.sh must restart webmin service');
     assert.match(script, /librnnoise\.so/, 'setup-issabel-asterisk.sh must install rnnoise libraries');
     assert.match(script, /func_rnnoise\.so/, 'setup-issabel-asterisk.sh must install func_rnnoise.so module');
+    assert.match(script, /--exclude="binaries\/chan_dongle\.so"/, 'setup-issabel-asterisk.sh must protect patched chan_dongle.so from tar overwrite');
+    assert.match(script, /load => chan_sip\.so/, 'setup-issabel-asterisk.sh must use valid Asterisk load => directive syntax');
     assert.doesNotMatch(script, /if \[ -f "\$SCRIPT_DIR\/binaries\/node" \]; then[\s\S]*if \[ -f "\$SCRIPT_DIR\/binaries\/node" \]; then/, 'setup-issabel-asterisk.sh must not nest binary installations inside duplicate node checks');
 });
 
