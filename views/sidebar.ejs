@@ -3190,6 +3190,11 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                         <span class="settings-action-label"><%= sbT.alertsSettings || (currentLang === 'ar' ? 'تنبيهات النظام' : 'System Alerts') %></span>
                         <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
                     </button>
+                    <button type="button" onclick="openWebhookModal()" id="webhookSettingsBtn" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>
+                        <span class="settings-action-label"><%= sbT.webhookSettings || (currentLang === 'ar' ? 'ويب هوك' : 'Webhooks') %></span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
                     <button type="button" onclick="openClientModal()" id="clientSettingsBtn" class="settings-action cursor-pointer">
                         <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
                         <span class="settings-action-label"><%= sbT.clientSettings || (isRtl ? 'عميل' : 'Client') %></span>
@@ -3497,6 +3502,53 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <div class="flex justify-end gap-2 pt-2 border-t border-[var(--border-primary)]">
                 <button type="button" onclick="closeAlertsModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] transition cursor-pointer">Cancel</button>
                 <button type="submit" id="saveAlertsBtn" class="px-5 py-2 rounded-lg text-xs font-bold text-white bg-[var(--accent-color)] hover:bg-[#e0352b] transition cursor-pointer">Save Alert Settings</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Inbound Call Webhook Modal -->
+<div id="webhookModal" onclick="if(event.target===this) closeWebhookModal()" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 invisible transition-all duration-200 p-4" style="pointer-events:none">
+    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] shrink-0">
+            <div class="flex items-center gap-2.5">
+                <span class="p-2 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                </span>
+                <div>
+                    <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]"><%= sbT.webhookModalTitle || (currentLang === 'ar' ? 'ويب هوك المكالمات الواردة' : 'Inbound Call Webhook') %></h3>
+                    <p class="text-[11px] text-[var(--text-muted)]">POST caller info to an external CRM on every incoming call</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeWebhookModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <form id="webhookForm" onsubmit="saveWebhookSettings(event)" class="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+            <div class="flex items-center justify-between">
+                <label class="text-xs font-bold text-[var(--text-primary)]"><%= currentLang === 'ar' ? 'تفعيل' : 'Enabled' %></label>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="webhookEnabled" class="sr-only peer">
+                    <div class="w-9 h-5 bg-[var(--bg-hover)] rounded-full peer peer-checked:bg-[var(--accent-color)] transition after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition peer-checked:after:translate-x-full"></div>
+                </label>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5"><%= currentLang === 'ar' ? 'رابط الويب هوك' : 'Webhook URL' %></label>
+                <input type="url" id="webhookUrl" placeholder="https://your-crm.com/api/incoming-call" class="w-full px-3 py-2 text-xs bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-1 focus:ring-[var(--accent-color)] outline-none">
+                <p class="text-[10px] text-[var(--text-muted)] mt-1">Sokrat will HTTP POST <code class="text-[var(--accent-color)]">{ event, caller_number, called_number, dongle, timestamp }</code> to this URL</p>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5"><%= currentLang === 'ar' ? 'مفتاح التوقيع (اختياري)' : 'Signing Secret (optional)' %></label>
+                <input type="password" id="webhookSecret" placeholder="Optional HMAC-SHA256 signing key" class="w-full px-3 py-2 text-xs bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-1 focus:ring-[var(--accent-color)] outline-none">
+                <p class="text-[10px] text-[var(--text-muted)] mt-1">If set, requests include <code class="text-[var(--accent-color)]">X-Sokrat-Signature</code> header (HMAC-SHA256 of the JSON body)</p>
+            </div>
+            <div id="webhookStatusMsg" class="text-xs hidden text-center py-1"></div>
+            <div class="flex justify-between items-center pt-2 border-t border-[var(--border-primary)]">
+                <button type="button" onclick="testWebhook()" class="px-4 py-2 rounded-lg text-xs font-bold text-blue-500 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition cursor-pointer">Test Webhook</button>
+                <div class="flex gap-2">
+                    <button type="button" onclick="closeWebhookModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] transition cursor-pointer">Cancel</button>
+                    <button type="submit" id="saveWebhookBtn" class="px-5 py-2 rounded-lg text-xs font-bold text-white bg-[var(--accent-color)] hover:bg-[#e0352b] transition cursor-pointer">Save</button>
+                </div>
             </div>
         </form>
     </div>
@@ -4859,6 +4911,130 @@ async function testHeartbeatPing() {
         if (btn) { btn.disabled = false; btn.textContent = origText; }
     }
 }
+// --- WEBHOOK SETTINGS FUNCTIONS ---
+function openWebhookModal() {
+    const menu = document.getElementById('settingsMenu');
+    if (menu) {
+        menu.classList.remove('visible', 'opacity-100', 'scale-100');
+        menu.classList.add('invisible', 'opacity-0', 'scale-95');
+        menu.style.pointerEvents = 'none';
+    }
+    const modal = document.getElementById('webhookModal');
+    if (modal) {
+        modal.classList.remove('opacity-0', 'invisible');
+        modal.style.pointerEvents = 'auto';
+    }
+    loadWebhookSettings();
+}
+window.openWebhookModal = openWebhookModal;
+
+function closeWebhookModal() {
+    const modal = document.getElementById('webhookModal');
+    if (modal) {
+        modal.classList.add('opacity-0', 'invisible');
+        modal.style.pointerEvents = 'none';
+    }
+}
+window.closeWebhookModal = closeWebhookModal;
+
+async function loadWebhookSettings() {
+    try {
+        const resp = await fetch('/api/settings/webhook');
+        const data = await resp.json();
+        if (data.success) {
+            const enEl = document.getElementById('webhookEnabled');
+            if (enEl) enEl.checked = Boolean(data.enabled);
+            const urlEl = document.getElementById('webhookUrl');
+            if (urlEl) urlEl.value = data.url || '';
+            const secEl = document.getElementById('webhookSecret');
+            if (secEl) { secEl.value = ''; secEl.placeholder = data.secret ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (Saved)' : 'Optional HMAC-SHA256 signing key'; }
+        }
+    } catch (e) {
+        console.error('Failed to load webhook settings:', e);
+    }
+}
+
+async function saveWebhookSettings(event) {
+    if (event) event.preventDefault();
+    const msgEl = document.getElementById('webhookStatusMsg');
+    if (msgEl) {
+        msgEl.classList.remove('hidden');
+        msgEl.className = 'text-xs text-zinc-400 text-center py-1';
+        msgEl.textContent = 'Saving webhook settings...';
+    }
+
+    const payload = {
+        enabled: document.getElementById('webhookEnabled') ? document.getElementById('webhookEnabled').checked : false,
+        url: document.getElementById('webhookUrl') ? document.getElementById('webhookUrl').value.trim() : '',
+        secret: document.getElementById('webhookSecret') ? document.getElementById('webhookSecret').value.trim() : ''
+    };
+
+    try {
+        const resp = await fetch('/api/settings/webhook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            if (msgEl) {
+                msgEl.className = 'text-xs text-emerald-400 text-center py-1';
+                msgEl.textContent = 'Webhook settings saved!';
+            }
+            if (typeof window.showToast === 'function') window.showToast('Webhook configured', 'success');
+            setTimeout(closeWebhookModal, 1200);
+        } else {
+            if (msgEl) {
+                msgEl.className = 'text-xs text-red-400 text-center py-1';
+                msgEl.textContent = data.error || 'Failed to save webhook settings.';
+            }
+        }
+    } catch (e) {
+        if (msgEl) {
+            msgEl.className = 'text-xs text-red-400 text-center py-1';
+            msgEl.textContent = 'Network error saving webhook settings.';
+        }
+    }
+}
+
+async function testWebhook() {
+    const msgEl = document.getElementById('webhookStatusMsg');
+    if (msgEl) {
+        msgEl.classList.remove('hidden');
+        msgEl.className = 'text-xs text-zinc-400 text-center py-1';
+        msgEl.textContent = 'Sending test webhook...';
+    }
+
+    const url = document.getElementById('webhookUrl') ? document.getElementById('webhookUrl').value.trim() : '';
+    const secret = document.getElementById('webhookSecret') ? document.getElementById('webhookSecret').value.trim() : '';
+
+    try {
+        const resp = await fetch('/api/settings/webhook/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, secret })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            if (msgEl) {
+                msgEl.className = 'text-xs text-emerald-400 text-center py-1';
+                msgEl.textContent = 'Test webhook delivered successfully!';
+            }
+            if (typeof window.showToast === 'function') window.showToast('Test webhook sent!', 'success');
+        } else {
+            if (msgEl) {
+                msgEl.className = 'text-xs text-red-400 text-center py-1';
+                msgEl.textContent = data.error || 'Webhook test failed.';
+            }
+        }
+    } catch (e) {
+        if (msgEl) {
+            msgEl.className = 'text-xs text-red-400 text-center py-1';
+            msgEl.textContent = 'Network error testing webhook.';
+        }
+    }
+}
+
 function openClientModal() {
     const menu = document.getElementById('settingsMenu');
     if (menu) {

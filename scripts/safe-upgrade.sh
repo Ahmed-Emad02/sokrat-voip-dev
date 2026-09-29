@@ -131,6 +131,15 @@ ensure_db_column "dashboard_users" "extension" "VARCHAR(20) DEFAULT NULL"
 ensure_db_column "dashboard_users" "reset_token_expires" "DATETIME DEFAULT NULL"
 ensure_db_index "dashboard_users" "idx_dash_users_extension" "KEY \`idx_dash_users_extension\` (\`extension\`)"
 ensure_db_index "dashboard_users" "idx_unique_email" "UNIQUE KEY \`idx_unique_email\` (\`email\`)"
+
+# Seed new webhook settings keys (idempotent INSERT IGNORE)
+mysql "${MYSQL_AUTH[@]}" asterisk -e "
+INSERT IGNORE INTO dashboard_settings (setting_key, setting_value) VALUES
+  ('webhook_incoming_call_enabled', 'false'),
+  ('webhook_incoming_call_url', ''),
+  ('webhook_incoming_call_secret', '');
+" 2>/dev/null || true
+
 echo "  Database schema migrations complete. All PBX and CDR data preserved."
 
 # 4. Rebuild & Patch chan_dongle Module

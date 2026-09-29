@@ -1075,6 +1075,9 @@ async function initAuthDb() {
         await loadClientNameFromDb();
     } catch (_) {}
     try {
+        await loadWebhookConfigFromDb();
+    } catch (_) {}
+    try {
         await syncFederationAsteriskConfig(pool, decrypt);
     } catch (fedSyncErr) {
         console.error('Federation config boot sync error:', fedSyncErr.message);
@@ -2827,6 +2830,13 @@ function connectAMI() {
 
             // New channel = new call, always fresh timestamp
             if (event.Event === 'Newchannel') {
+                // Fire inbound call webhook for incoming GSM dongle calls
+                let inboundDongleId = extractDongleIdFromChannel(event.Channel);
+                if (inboundDongleId && event.CallerIDNum && event.CallerIDNum !== '<unknown>') {
+                    let calledNum = event.Exten || event.ConnectedLineNum || '';
+                    fireInboundCallWebhook(event.CallerIDNum, calledNum, inboundDongleId);
+                }
+
                 let exten = getExtensionFromChannel(event.Channel);
                 if (exten) {
                     let partner = 'Connecting...';
@@ -4546,6 +4556,191 @@ const handleClientSettingsUpdate = async (req, res) => {
 
 app.post('/api/settings/client', requireAuth, handleClientSettingsUpdate);
 app.put('/api/settings/client', requireAuth, handleClientSettingsUpdate);
+
+// --- INBOUND CALL WEBHOOK SETTINGS ---
+let cachedWebhookConfig = { enabled: false, url: '', secret: '' };
+
+async function loadWebhookConfigFromDb() {
+    try {
+        const [rows] = await pool.query(
+            "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key LIKE 'webhook_incoming_call_%'"
+        );
+        const map = {};
+        rows.forEach(r => { map[r.setting_key] = r.setting_value; });
+        cachedWebhookConfig = {
+            enabled: map['webhook_incoming_call_enabled'] === 'true',
+            url: String(map['webhook_incoming_call_url'] || '').trim(),
+            secret: String(map['webhook_incoming_call_secret'] || '').trim()
+        };
+    } catch (_) {}
+    return cachedWebhookConfig;
+}
+
+function fireInboundCallWebhook(callerNumber, calledNumber, dongleId) {
+    if (!cachedWebhookConfig.enabled || !cachedWebhookConfig.url) return;
+    const payload = JSON.stringify({
+        event: 'incoming_call',
+        caller_number: callerNumber || '',
+        called_number: calledNumber || '',
+        dongle: dongleId || '',
+        timestamp: new Date().toISOString()
+    });
+    const parsed = new URL(cachedWebhookConfig.url);
+    const isHttps = parsed.protocol === 'https:';
+    const reqOptions = {
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload),
+            'User-Agent': 'SokratVoIP-Webhook/1.0'
+        },
+        timeout: 10000
+    };
+    if (cachedWebhookConfig.secret) {
+        const hmac = require('crypto').createHmac('sha256', cachedWebhookConfig.secret).update(payload).digest('hex');
+        reqOptions.headers['X-Sokrat-Signature'] = hmac;
+    }
+    const transport = isHttps ? require('https') : require('http');
+    const req = transport.request(reqOptions, (resp) => {
+        resp.resume();
+    });
+    req.on('error', (err) => {
+        console.error('Webhook delivery failed:', err.message);
+    });
+    req.on('timeout', () => {
+        req.destroy();
+    });
+    req.write(payload);
+    req.end();
+}
+
+app.get('/api/settings/webhook', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        await loadWebhookConfigFromDb();
+        res.json({
+            success: true,
+            enabled: cachedWebhookConfig.enabled,
+            url: cachedWebhookConfig.url,
+            secret: cachedWebhookConfig.secret ? '••••••••' : ''
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/settings/webhook', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        const { enabled, url, secret } = req.body || {};
+
+        const trimmedUrl = String(url || '').trim();
+        if (enabled && trimmedUrl) {
+            if (!/^https?:\/\//i.test(trimmedUrl)) {
+                return res.status(400).json({ success: false, error: 'Webhook URL must begin with http:// or https://' });
+            }
+            try {
+                new URL(trimmedUrl);
+            } catch (_) {
+                return res.status(400).json({ success: false, error: 'Invalid webhook URL format' });
+            }
+        }
+
+        const settingsToSave = [
+            ['webhook_incoming_call_enabled', enabled ? 'true' : 'false'],
+            ['webhook_incoming_call_url', trimmedUrl],
+            ['webhook_incoming_call_secret', String(secret || '').trim()]
+        ];
+
+        for (const [key, val] of settingsToSave) {
+            await pool.query(
+                'INSERT INTO dashboard_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+                [key, val, val]
+            );
+        }
+
+        cachedWebhookConfig = {
+            enabled: enabled ? true : false,
+            url: trimmedUrl,
+            secret: String(secret || '').trim()
+        };
+
+        res.json({ success: true, message: 'Webhook settings saved successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/settings/webhook/test', requireAuth, async (req, res) => {
+    try {
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
+        }
+        const testUrl = String(req.body.url || cachedWebhookConfig.url || '').trim();
+        const testSecret = req.body.secret !== undefined ? String(req.body.secret || '').trim() : cachedWebhookConfig.secret;
+
+        if (!testUrl || !/^https?:\/\//i.test(testUrl)) {
+            return res.status(400).json({ success: false, error: 'A valid webhook URL is required' });
+        }
+
+        const payload = JSON.stringify({
+            event: 'test',
+            caller_number: '+201234567890',
+            called_number: '+201212424424',
+            dongle: 'dongle0',
+            timestamp: new Date().toISOString()
+        });
+
+        const parsed = new URL(testUrl);
+        const isHttps = parsed.protocol === 'https:';
+        const reqOptions = {
+            hostname: parsed.hostname,
+            port: parsed.port || (isHttps ? 443 : 80),
+            path: parsed.pathname + parsed.search,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload),
+                'User-Agent': 'SokratVoIP-Webhook/1.0'
+            },
+            timeout: 10000
+        };
+        if (testSecret) {
+            const hmac = require('crypto').createHmac('sha256', testSecret).update(payload).digest('hex');
+            reqOptions.headers['X-Sokrat-Signature'] = hmac;
+        }
+
+        const transport = isHttps ? require('https') : require('http');
+        await new Promise((resolve, reject) => {
+            const r = transport.request(reqOptions, (resp) => {
+                let body = '';
+                resp.on('data', chunk => { body += chunk; });
+                resp.on('end', () => {
+                    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+                        resolve();
+                    } else {
+                        reject(new Error(`Remote server responded with HTTP ${resp.statusCode}: ${body.slice(0, 200)}`));
+                    }
+                });
+            });
+            r.on('error', reject);
+            r.on('timeout', () => { r.destroy(); reject(new Error('Connection timed out after 10 seconds')); });
+            r.write(payload);
+            r.end();
+        });
+
+        res.json({ success: true, message: 'Test webhook delivered successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: `Webhook test failed: ${err.message}` });
+    }
+});
 
 // POST /api/auth/forgot-password and POST /forgot-password
 const forgotPasswordHandler = async (req, res) => {

@@ -861,7 +861,10 @@ INSERT IGNORE INTO \`dashboard_settings\` (\`setting_key\`, \`setting_value\`) V
   ('alert_healthchecks_url', 'https://hc-ping.com/b8b5b103-e272-4666-bb37-561780de64f3'),
   ('alert_auto_restart', 'true'),
   ('alert_check_interval_sec', '30'),
-  ('alert_monitored_services', '[\"asterisk\",\"database\",\"sokrat-voip\",\"httpd\"]');
+  ('alert_monitored_services', '[\"asterisk\",\"database\",\"sokrat-voip\",\"httpd\"]'),
+  ('webhook_incoming_call_enabled', 'false'),
+  ('webhook_incoming_call_url', ''),
+  ('webhook_incoming_call_secret', '');
 
 CREATE TABLE IF NOT EXISTS \`sokrat_federation_peers\` (
   \`id\` INT AUTO_INCREMENT PRIMARY KEY,
