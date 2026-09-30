@@ -5338,10 +5338,15 @@ function isTabAllowed(tabName) {
                         ? `<span class="inline-flex px-2 py-0.5 text-[10px] font-mono rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">${isRtl ? 'AstDB متزامن' : 'AstDB synced'}</span>`
                         : `<span class="inline-flex px-2 py-0.5 text-[10px] font-mono rounded bg-red-500/10 text-red-400 border border-red-500/20">${isRtl ? 'AstDB يحتاج مزامنة' : 'AstDB needs sync'}</span>`;
                     const routeBadge = m.inboundRoute && m.inboundRoute.found
-                        ? `<div class="space-y-1">
-                               <div class="text-[11px] font-semibold text-purple-300 break-words">→ ${escapeHtml(m.inboundRoute.description || m.inboundRoute.destination || '-')}</div>
-                               <div class="text-[10px] text-emerald-400">${isRtl ? 'مسار وارد مسجل' : 'Registered inbound route'}</div>
-                           </div>`
+                        ? (m.inboundRoute.isCatchall
+                            ? `<div class="space-y-1">
+                                   <div class="text-[11px] font-semibold text-cyan-300 break-words">→ ${escapeHtml(m.inboundRoute.description || m.inboundRoute.destination || '-')}</div>
+                                   <div class="text-[10px] text-cyan-400 font-semibold">${isRtl ? 'مسار شامل عام (Catch-All ANY)' : 'General Catch-All (ANY)'}</div>
+                               </div>`
+                            : `<div class="space-y-1">
+                                   <div class="text-[11px] font-semibold text-purple-300 break-words">→ ${escapeHtml(m.inboundRoute.description || m.inboundRoute.destination || '-')}</div>
+                                   <div class="text-[10px] text-emerald-400">${isRtl ? 'مسار وارد مسجل' : 'Registered inbound route'}</div>
+                               </div>`)
                         : `<div class="text-[11px] font-semibold ${perDongleEnabled ? 'text-amber-400' : 'text-[var(--text-muted)]'}">${perDongleEnabled
                             ? (isRtl ? 'توجيه DID ديناميكي' : 'Dynamic DID routing')
                             : (isRtl ? 'الخريطة الديناميكية معطلة' : 'Dynamic mapping disabled')}</div>`;

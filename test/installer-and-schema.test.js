@@ -72,6 +72,9 @@ test('install.sh contains schema migrations, rnnoise builds, and inbound blackli
     assert.match(script, /sed -i '\/dongle restart now\/d' \/etc\/asterisk\/extensions\*\.conf/, 'install.sh must sanitize rogue dongle restart commands');
     assert.match(script, /re\.sub\([^)]*dongle-hangup-cleanup[^)]*\)/, 'install.sh must strip dongle-hangup-cleanup');
     assert.doesNotMatch(script, /same => n,Set\(CHANNEL\(hangup_handler_push\)=dongle-hangup-cleanup,s,1\)/, 'install.sh must not push dongle-hangup-cleanup');
+    assert.match(script, /exten => s,1,Goto\(s,process\)/, 'install.sh must branch s,1 to process');
+    assert.match(script, /same => n,Set\(DONGLE_TARGET=\$\{DONGLENAME\}\)/, 'install.sh must set DONGLE_TARGET under process');
+    assert.match(script, /same => n,Set\(CHANNEL\(hangup_handler_push\)=cdr-cause-capture,s,1\)/, 'install.sh must set cdr-cause-capture under process');
 });
 
 test('installer-bundle/install-sokrat.sh prevents duplicate cloning and passes bash syntax validation', () => {
@@ -101,6 +104,9 @@ test('installer-bundle/install-sokrat.sh prevents duplicate cloning and passes b
     assert.match(script, /sed -i '\/dongle restart now\/d' \/etc\/asterisk\/extensions\*\.conf/, 'install-sokrat.sh must sanitize rogue dongle restart commands');
     assert.match(script, /re\.sub\([^)]*dongle-hangup-cleanup[^)]*\)/, 'install-sokrat.sh must strip dongle-hangup-cleanup');
     assert.doesNotMatch(script, /same => n,Set\(CHANNEL\(hangup_handler_push\)=dongle-hangup-cleanup,s,1\)/, 'install-sokrat.sh must not push dongle-hangup-cleanup');
+    assert.match(script, /exten => s,1,Goto\(s,process\)/, 'install-sokrat.sh must branch s,1 to process');
+    assert.match(script, /same => n,Set\(DONGLE_TARGET=\$\{DONGLENAME\}\)/, 'install-sokrat.sh must set DONGLE_TARGET under process');
+    assert.match(script, /same => n,Set\(CHANNEL\(hangup_handler_push\)=cdr-cause-capture,s,1\)/, 'install-sokrat.sh must set cdr-cause-capture under process');
 });
 
 test('installer-bundle/setup-issabel-asterisk.sh passes syntax validation and does not repeat package or binary installation', () => {
@@ -249,6 +255,9 @@ test('scripts/safe-upgrade.sh passes bash syntax validation and includes non-des
     assert.match(script, /chan_dongle\.patch/, 'safe-upgrade.sh must apply chan_dongle.patch');
     assert.match(script, /re\.sub\([^)]*dongle-hangup-cleanup[^)]*\)/, 'safe-upgrade.sh must sanitize dongle-hangup-cleanup');
     assert.match(script, /sed -i '\/dongle restart now\/d'/, 'safe-upgrade.sh must strip rogue dongle restart triggers');
+    assert.match(script, /exten => s,1,Goto\(s,process\)/, 'safe-upgrade.sh must sanitize from-dongle-custom with process label');
+    assert.match(script, /Set\(DONGLE_TARGET=\$\{DONGLENAME\}\)/, 'safe-upgrade.sh must set DONGLE_TARGET');
+    assert.match(script, /Set\(CHANNEL\(hangup_handler_push\)=cdr-cause-capture,s,1\)/, 'safe-upgrade.sh must set cdr-cause-capture');
 });
 
 test('scripts/retrieve-backups.sh passes bash syntax validation and supports snapshot listing and streaming', () => {

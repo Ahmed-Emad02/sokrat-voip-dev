@@ -2837,6 +2837,9 @@ function connectAMI() {
                 let inboundDongleId = extractDongleIdFromChannel(event.Channel);
                 if (inboundDongleId && event.CallerIDNum && event.CallerIDNum !== '<unknown>') {
                     let calledNum = event.Exten || event.ConnectedLineNum || '';
+                    if (calledNum === '+1234567890' || calledNum === '1234567890' || calledNum === 's') {
+                        calledNum = '';
+                    }
                     fireInboundCallWebhook(event.CallerIDNum, calledNum, inboundDongleId);
                 }
 
@@ -3372,6 +3375,27 @@ app.use(async (req, res, next) => {
                         extMap.set(ext, { extension: ext, name: 'Extension ' + ext, photo: null, title: null, emp_group: null });
                     }
                 });
+            });
+
+            let ringGroupMap = {};
+            try {
+                const [rgRows] = await pool.query('SELECT grpnum, description, grplist FROM `asterisk`.`ringgroups`');
+                if (rgRows && rgRows.length) {
+                    rgRows.forEach(rg => {
+                        const list = String(rg.grplist || '').split(/[-#\s\n,]+/).map(s => s.trim()).filter(Boolean);
+                        list.forEach(ext => {
+                            if (!ringGroupMap[ext]) ringGroupMap[ext] = [];
+                            ringGroupMap[ext].push({
+                                grpnum: String(rg.grpnum),
+                                description: String(rg.description || rg.grpnum)
+                            });
+                        });
+                    });
+                }
+            } catch (_) {}
+
+            extMap.forEach(emp => {
+                emp.ring_groups = ringGroupMap[emp.extension] || [];
             });
 
             roster = Array.from(extMap.values()).sort((a, b) => parseInt(a.extension, 10) - parseInt(b.extension, 10));
@@ -12257,6 +12281,7 @@ app.post('/api/config/ringgroups', async (req, res) => {
         `, [num, ringStrategy, ringTime, extListFormatted, annMsgId, postDest, desc, mohRinging]);
 
         reloadPbxConfig();
+        cachedBaseRoster = null;
         res.json({ success: true, message: `Ring Group ${num} created with Skip Busy=Yes & Record=Always successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -12289,6 +12314,7 @@ app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
         `, [desc, extListFormatted, ringStrategy, ringTime, annMsgId, postDest, mohRinging, num]);
 
         reloadPbxConfig();
+        cachedBaseRoster = null;
         res.json({ success: true, message: `Ring Group ${num} updated successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -12301,6 +12327,7 @@ app.delete('/api/config/ringgroups/:grpnum', async (req, res) => {
         const num = String(req.params.grpnum).trim();
         await pool.query('DELETE FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
         reloadPbxConfig();
+        cachedBaseRoster = null;
         res.json({ success: true, message: `Ring Group ${num} deleted successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -13955,20 +13982,15 @@ app.post('/api/config/routes/inbound', async (req, res) => {
         const delayAnswerVal = parseInt(delay_answer, 10) || 0;
 
         let warningMessage = null;
-        if (ext) {
-            const [otherDid] = await pool.query(
-                'SELECT description, extension, cidnum FROM `asterisk`.`incoming` WHERE extension = ? AND cidnum = ?',
-                [ext, cid]
-            );
-            if (otherDid.length > 0 && otherDid[0].description !== desc) {
-                warningMessage = `Route for DID '${ext || '(ANY)'}' and CID '${cid || '(ANY)'}' already exists ('${otherDid[0].description || otherDid[0].extension}'); updating configuration.`;
-            }
-        }
-
-        const [existing] = await pool.query(
-            'SELECT extension, cidnum FROM `asterisk`.`incoming` WHERE extension = ? AND cidnum = ?',
+        const [otherDid] = await pool.query(
+            'SELECT description, extension, cidnum FROM `asterisk`.`incoming` WHERE extension = ? AND cidnum = ?',
             [ext, cid]
         );
+        if (otherDid.length > 0 && otherDid[0].description !== desc) {
+            warningMessage = `Route for DID '${ext || '(ANY)'}' and CID '${cid || '(ANY)'}' already exists ('${otherDid[0].description || otherDid[0].extension || 'Route'}'); updating configuration.`;
+        }
+
+        const existing = otherDid;
         if (existing.length > 0) {
             await pool.query(`
                 UPDATE \`asterisk\`.\`incoming\`
@@ -16365,12 +16387,15 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
 
         const [routes] = await pool.query('SELECT cidnum, extension, destination, description FROM `asterisk`.`incoming`');
         const routeMap = {};
+        let catchallRoute = null;
         for (const r of routes) {
             if (r.extension) {
                 const extKey = r.extension.trim();
                 if (!routeMap[extKey] || !r.cidnum) {
                     routeMap[extKey] = r;
                 }
+            } else if (!r.cidnum && !catchallRoute) {
+                catchallRoute = r;
             }
         }
 
@@ -16407,11 +16432,31 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
             };
 
             let routeMatch = null;
-            if (phoneNum) {
-                const cleanNum = phoneNum.trim();
+            const targetNum = phoneNum || (simNum && simNum !== 'Unknown' ? simNum : '');
+            if (targetNum) {
+                const cleanNum = targetNum.trim();
                 const alt1 = cleanNum.startsWith('+20') ? ('0' + cleanNum.substring(3)) : (cleanNum.startsWith('01') ? ('+20' + cleanNum.substring(1)) : cleanNum);
                 const alt2 = cleanNum.startsWith('+') ? cleanNum.substring(1) : ('+' + cleanNum);
                 routeMatch = routeMap[cleanNum] || routeMap[alt1] || routeMap[alt2] || null;
+            }
+
+            let routeInfo = { found: false };
+            if (routeMatch) {
+                routeInfo = {
+                    found: true,
+                    isCatchall: false,
+                    extension: routeMatch.extension,
+                    destination: routeMatch.destination,
+                    description: routeMatch.description
+                };
+            } else if (catchallRoute) {
+                routeInfo = {
+                    found: true,
+                    isCatchall: true,
+                    extension: '(ANY)',
+                    destination: catchallRoute.destination,
+                    description: catchallRoute.description || 'Any DID / Any CID'
+                };
             }
 
             mappings.push({
@@ -16425,12 +16470,7 @@ app.get('/api/config/dongle-mappings', requireAuth, async (req, res) => {
                 provider,
                 dynamicEnabled: Boolean(dbRow && Number(dbRow.dynamic_enabled) === 1),
                 astdb: astdbStatus,
-                inboundRoute: routeMatch ? {
-                    found: true,
-                    extension: routeMatch.extension,
-                    destination: routeMatch.destination,
-                    description: routeMatch.description
-                } : { found: false },
+                inboundRoute: routeInfo,
                 updatedAt: dbRow?.updated_at || null
             });
         }

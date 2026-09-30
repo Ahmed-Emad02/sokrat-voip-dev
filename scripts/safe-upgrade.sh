@@ -261,6 +261,13 @@ same => n(done),Hangup()
 """
     content = content.rstrip() + "\n\n" + failover_stub.strip() + "\n"
 
+    # Sanitize [from-dongle-custom] so DONGLE_TARGET and cdr-cause-capture execute for all call entries
+    content = re.sub(
+        r'exten => s,1,Set\(DONGLE_TARGET=\$\{DONGLENAME\}\)\s*\n\s*same => n,Set\(CHANNEL\(hangup_handler_push\)=cdr-cause-capture,s,1\)\s*\n\s*same => n,ExecIf\(\$\["\$\{MY_SIM_NUMBER\}" = "" \| "\$\{MY_SIM_NUMBER\}" = "\+1234567890"\]\?Set\(MY_SIM_NUMBER=\)\)\s*\n\s*same => n\(process\),NoOp\(--- Incoming call from Dongle \$\{DONGLENAME\} \(EXTEN: \$\{EXTEN\}\) ---\)',
+        'exten => s,1,Goto(s,process)\nsame => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)\nsame => n,Set(DONGLE_TARGET=${DONGLENAME})\nsame => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)\nsame => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=))',
+        content
+    )
+
     with open(conf_path, "w", encoding="utf-8") as f:
         f.write(content)
     print("  Dialplan successfully sanitized in extensions_custom.conf")
