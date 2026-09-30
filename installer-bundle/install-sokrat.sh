@@ -232,11 +232,19 @@ echo "[1/14] Checking system prerequisites..."
 # Ensure local offline bundle archives are unpacked if running standalone
 if [ ! -d "$SCRIPT_DIR/all-rpms" ] && ls "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* 1>/dev/null 2>&1; then
     echo "  Reassembling multi-part offline archive and unpacking..."
-    cat "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$SCRIPT_DIR/" --exclude="binaries/chan_dongle.so"
+    if command -v pigz &>/dev/null; then
+        cat "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* | pigz -dc | tar -x -C "$SCRIPT_DIR/" --exclude="binaries/chan_dongle.so"
+    else
+        cat "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$SCRIPT_DIR/" --exclude="binaries/chan_dongle.so"
+    fi
     git -C "$SCRIPT_DIR" checkout -- binaries/chan_dongle.so 2>/dev/null || git -C "$SCRIPT_DIR/.." checkout -- installer-bundle/binaries/chan_dongle.so 2>/dev/null || true
 elif [ ! -d "$INSTALL_DIR/installer-bundle/all-rpms" ] && ls "$INSTALL_DIR/installer-bundle"/sokrat-prereqs.tar.gz.part-* 1>/dev/null 2>&1; then
     echo "  Reassembling multi-part offline archive and unpacking..."
-    cat "$INSTALL_DIR/installer-bundle"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$INSTALL_DIR/installer-bundle/" --exclude="binaries/chan_dongle.so"
+    if command -v pigz &>/dev/null; then
+        cat "$INSTALL_DIR/installer-bundle"/sokrat-prereqs.tar.gz.part-* | pigz -dc | tar -x -C "$INSTALL_DIR/installer-bundle/" --exclude="binaries/chan_dongle.so"
+    else
+        cat "$INSTALL_DIR/installer-bundle"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$INSTALL_DIR/installer-bundle/" --exclude="binaries/chan_dongle.so"
+    fi
     git -C "$INSTALL_DIR" checkout -- installer-bundle/binaries/chan_dongle.so 2>/dev/null || true
 fi
 
@@ -761,9 +769,9 @@ fi
 if [ -d "$INSTALL_DIR/node_modules" ] && [ -f "$INSTALL_DIR/node_modules/express/package.json" ]; then
     echo "  Dependencies already bundled in node_modules, skipping npm install."
 elif [ -f package-lock.json ]; then
-    npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+    npm ci --omit=dev --prefer-offline --no-audit --no-fund 2>/dev/null || npm install --omit=dev --prefer-offline --no-audit --no-fund
 else
-    npm install --omit=dev
+    npm install --omit=dev --prefer-offline --no-audit --no-fund
 fi
 
 echo "  [4a] Installing Sokrat VOICE softphone npm dependencies..."
@@ -771,7 +779,7 @@ if [ -d "$SOFTPHONE_DIR/node_modules" ] && [ -f "$SOFTPHONE_DIR/node_modules/exp
     echo "  Softphone dependencies already bundled in node_modules, skipping npm install."
 elif [ -d "$SOFTPHONE_DIR" ]; then
     cd "$SOFTPHONE_DIR"
-    npm install --omit=dev 2>/dev/null || true
+    npm install --omit=dev --prefer-offline --no-audit --no-fund --fetch-timeout=3000 2>/dev/null || true
     cd "$INSTALL_DIR"
 fi
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."

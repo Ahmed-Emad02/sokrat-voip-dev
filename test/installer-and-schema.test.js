@@ -114,7 +114,7 @@ test('installer-bundle/setup-issabel-asterisk.sh passes syntax validation and do
     const script = fs.readFileSync(setupScriptPath, 'utf8');
 
     // Verify rpm installation command is not duplicated
-    const rpmAllMatches = script.match(/rpm -Uvh --replacepkgs --nodeps "\$\{RPM_DIR\}"\/\*\.rpm/g);
+    const rpmAllMatches = script.match(/rpm -Uvh --replacepkgs --nodeps(?:\s+--[a-zA-Z0-9\/=_-]+)*\s+"?\$\{RPM_DIR\}"?\/(\*\.rpm|\*)/g);
     assert.strictEqual(rpmAllMatches ? rpmAllMatches.length : 0, 1, 'setup-issabel-asterisk.sh must not repeat the full RPM directory install');
 
     // Verify chan_dongle copy is not duplicated

@@ -22,7 +22,11 @@ echo "=================================================================="
 # 1. Join split parts and unpack RPMs and Binaries
 if [ ! -d "$SCRIPT_DIR/all-rpms" ] && [ ! -d "$SCRIPT_DIR/rpms" ] && ls "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* 1> /dev/null 2>&1; then
     echo "--> Reassembling multi-part offline archive and unpacking..."
-    cat "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$SCRIPT_DIR/" --exclude="binaries/chan_dongle.so"
+    if command -v pigz &>/dev/null; then
+        cat "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* | pigz -dc | tar -x -C "$SCRIPT_DIR/" --exclude="binaries/chan_dongle.so"
+    else
+        cat "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* | tar -xz -C "$SCRIPT_DIR/" --exclude="binaries/chan_dongle.so"
+    fi
     git -C "$SCRIPT_DIR" checkout -- binaries/chan_dongle.so 2>/dev/null || git -C "$SCRIPT_DIR/.." checkout -- installer-bundle/binaries/chan_dongle.so 2>/dev/null || true
 fi
 
@@ -47,7 +51,7 @@ fi
 
 # 4. Install EVERYTHING strictly offline from the local bundle
 echo "--> Installing all database, web, Asterisk 18 & Issabel 5 packages offline..."
-rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/*.rpm 2>/dev/null || true
+rpm -Uvh --replacepkgs --nodeps --nosignature --nodigest --excludepath=/usr/share/doc --excludepath=/usr/share/man "${RPM_DIR}"/*.rpm 2>/dev/null || true
 
 # Open firewall ports for web, PBX, and softphone
 if command -v firewall-cmd &>/dev/null && systemctl is-active firewalld &>/dev/null; then
@@ -183,7 +187,8 @@ fi
 # 8. Set proper file ownership and permissions for Issabel web GUI
 echo "--> Setting file permissions..."
 mkdir -p /var/www/html/var/templates_c
-chown -R asterisk:asterisk /var/www/html /etc/asterisk /var/lib/asterisk /var/log/asterisk
+chown -R asterisk:asterisk /var/www/html /etc/asterisk /var/log/asterisk
+find /var/lib/asterisk -maxdepth 2 \! -user asterisk -exec chown asterisk:asterisk {} + 2>/dev/null || chown -R asterisk:asterisk /var/lib/asterisk 2>/dev/null || true
 chmod -R 775 /var/www/html/var 2>/dev/null || true
 
 # 9. Start and enable Apache and reload amportal

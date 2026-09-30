@@ -653,15 +653,15 @@ fi
 # ──────────────────────────────────────────────
 echo "[4/14] Installing npm dependencies..."
 if [ -f package-lock.json ]; then
-    npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+    npm ci --omit=dev --prefer-offline --no-audit --no-fund 2>/dev/null || npm install --omit=dev --prefer-offline --no-audit --no-fund
 else
-    npm install --omit=dev
+    npm install --omit=dev --prefer-offline --no-audit --no-fund
 fi
 
 echo "  [4a] Installing Sokrat VOICE softphone npm dependencies..."
 if [ -d "$SOFTPHONE_DIR" ]; then
     cd "$SOFTPHONE_DIR"
-    npm install --omit=dev 2>/dev/null || true
+    npm install --omit=dev --prefer-offline --no-audit --no-fund --fetch-timeout=3000 2>/dev/null || true
     cd "$INSTALL_DIR"
 fi
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
