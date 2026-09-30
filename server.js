@@ -3201,6 +3201,7 @@ async function applyDongleHotplugMappingDefaults() {
 
         cachedDevicesOutput = null;
         lastDevicesOutputFetch = 0;
+        cachedEnrichedDevices = null;
         await reconcileDongleMappings();
         io.emit('usbDevicesUpdated');
     } catch (error) {
@@ -8420,6 +8421,7 @@ function isDeviceAllowedForDongles(device, allowedDongleIdentifiers) {
 let cachedDevicesOutput = null;
 let lastDevicesOutputFetch = 0;
 const DEVICES_CACHE_TTL = 1000;
+const mappedDongleDeviceKeys = new Set();
 
 function getDevicesOutputCached(callback) {
     const now = Date.now();
@@ -8463,10 +8465,20 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
             const dId = row.ID;
             const dImei = (row.IMEI || '').trim();
             const { execFile: execFileCb } = require('child_process');
-            execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP ${dId} ${dId}`], () => {});
+            if (!mappedDongleDeviceKeys.has(dId)) {
+                mappedDongleDeviceKeys.add(dId);
+                execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP ${dId} ${dId}`], () => {});
+            }
             if (dImei && dImei !== '-' && dImei !== 'Unknown') {
-                execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP i:${dImei} ${dId}`], () => {});
-                execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP ${dImei} ${dId}`], () => {});
+                const imeiKey = `i:${dImei}`;
+                if (!mappedDongleDeviceKeys.has(imeiKey)) {
+                    mappedDongleDeviceKeys.add(imeiKey);
+                    execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP ${imeiKey} ${dId}`], () => {});
+                }
+                if (!mappedDongleDeviceKeys.has(dImei)) {
+                    mappedDongleDeviceKeys.add(dImei);
+                    execFileCb(ASTERISK_BIN, ['-rx', `database put DONGLE_DEVICE_MAP ${dImei} ${dId}`], () => {});
+                }
             }
 
             // Fallback for transpositions where the firmware reports IMEI in the IMSI field
@@ -8518,26 +8530,28 @@ function getAstDbNumbers(callback) {
         });
     }
 
-    execFile(ASTERISK_BIN, ['-rx', 'database show sim_map'], (err1, out1) => {
-        parseAstDbOutput(out1, 'sim_map');
-        execFile(ASTERISK_BIN, ['-rx', 'database show dongle_map'], (err2, out2) => {
-            parseAstDbOutput(out2, 'dongle_map');
-            execFile(ASTERISK_BIN, ['-rx', 'database show DONGLE_NUMBERS'], (err3, out3) => {
-                parseAstDbOutput(out3, 'DONGLE_NUMBERS');
-                
-                pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` WHERE phone_number IS NOT NULL AND phone_number != ""')
-                    .then(([rows]) => {
-                        rows.forEach(r => {
-                            if (r.dongle_name && r.phone_number) mappings[r.dongle_name] = r.phone_number;
-                            if (r.imsi && r.phone_number) mappings[r.imsi] = r.phone_number;
-                            if (r.imei && r.phone_number) mappings[r.imei] = r.phone_number;
-                        });
-                        callback(mappings);
-                    })
-                    .catch(() => callback(mappings));
-            });
-        });
+    const execAst = (cmd) => new Promise(resolve => {
+        execFile(ASTERISK_BIN, ['-rx', cmd], (err, stdout) => resolve(stdout || ''));
     });
+
+    Promise.all([
+        execAst('database show sim_map'),
+        execAst('database show dongle_map'),
+        execAst('database show DONGLE_NUMBERS'),
+        pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` WHERE phone_number IS NOT NULL AND phone_number != ""').catch(() => [[]])
+    ]).then(([out1, out2, out3, [rows]]) => {
+        parseAstDbOutput(out1, 'sim_map');
+        parseAstDbOutput(out2, 'dongle_map');
+        parseAstDbOutput(out3, 'DONGLE_NUMBERS');
+        if (Array.isArray(rows)) {
+            rows.forEach(r => {
+                if (r.dongle_name && r.phone_number) mappings[r.dongle_name] = r.phone_number;
+                if (r.imsi && r.phone_number) mappings[r.imsi] = r.phone_number;
+                if (r.imei && r.phone_number) mappings[r.imei] = r.phone_number;
+            });
+        }
+        callback(mappings);
+    }).catch(() => callback(mappings));
 }
 
 // Start background tail log monitor on the Asterisk verbose log file
@@ -8864,6 +8878,7 @@ app.post('/api/gsm-dongles/save-number', async (req, res) => {
         const routeExists = dpCheck && dpCheck.includes(rawNum);
 
         cachedDevicesOutput = null;
+        cachedEnrichedDevices = null;
         io.emit('dongleNumberUpdated', { dongleId: dId, imsi: foundImsi, number: rawNum });
         io.emit('usbDevicesUpdated');
 
@@ -8918,10 +8933,16 @@ app.post('/api/gsm-dongles/reset-usb-port', (req, res) => {
             res.json({ success: false, error: 'Module reload failed: ' + error, results });
         });
 });
-// Page View route
-app.get('/gsm-dongles', async (req, res) => {
-    try {
-        const allowedDongles = await getUserAllowedDongles(req);
+let cachedEnrichedDevices = null;
+let lastEnrichedDevicesTime = 0;
+const ENRICHED_DEVICES_CACHE_TTL = 1500;
+
+function getEnrichedDevices() {
+    const now = Date.now();
+    if (cachedEnrichedDevices && (now - lastEnrichedDevicesTime) < ENRICHED_DEVICES_CACHE_TTL) {
+        return Promise.resolve(cachedEnrichedDevices);
+    }
+    return new Promise((resolve) => {
         getAstDbNumbers(astDbMappings => {
             getDevicesOutputCached((error, stdout) => {
                 let devices = [];
@@ -8929,13 +8950,26 @@ app.get('/gsm-dongles', async (req, res) => {
                     devices = parseDevicesOutput(stdout, false, astDbMappings);
                 }
                 enrichDongleRouting(devices).then(enriched => {
-                    const filteredDevices = allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
-                    res.render('gsm-dongles', {
-                        devices: filteredDevices,
-                        moment
-                    });
-                });
+                    cachedEnrichedDevices = enriched;
+                    lastEnrichedDevicesTime = Date.now();
+                    resolve(enriched);
+                }).catch(() => resolve(devices));
             });
+        });
+    });
+}
+
+// Page View route
+app.get('/gsm-dongles', async (req, res) => {
+    try {
+        const [allowedDongles, enriched] = await Promise.all([
+            getUserAllowedDongles(req),
+            getEnrichedDevices()
+        ]);
+        const filteredDevices = allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
+        res.render('gsm-dongles', {
+            devices: filteredDevices,
+            moment
         });
     } catch (error) {
         res.status(500).send("GSM Dongle System Error: " + error.message);
@@ -8944,19 +8978,16 @@ app.get('/gsm-dongles', async (req, res) => {
 
 // API Endpoint to fetch latest device status
 app.get('/api/gsm-dongles', async (req, res) => {
-    const allowedDongles = await getUserAllowedDongles(req);
-    getAstDbNumbers(astDbMappings => {
-        getDevicesOutputCached((error, stdout) => {
-            if (error) {
-                return res.status(500).json({ success: false, error: error.message });
-            }
-            const devices = parseDevicesOutput(stdout, false, astDbMappings);
-            enrichDongleRouting(devices).then(enriched => {
-                const filteredDevices = allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
-                res.json({ success: true, devices: filteredDevices });
-            });
-        });
-    });
+    try {
+        const [allowedDongles, enriched] = await Promise.all([
+            getUserAllowedDongles(req),
+            getEnrichedDevices()
+        ]);
+        const filteredDevices = allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
+        res.json({ success: true, devices: filteredDevices });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // API Endpoint to reload specific dongle
@@ -9384,7 +9415,16 @@ function getDongleSiblingPorts(dongleId) {
 }
 
 // Helper function to parse live USB hardware via lsusb and sysfs
+let cachedLiveUsbStatus = null;
+let lastLiveUsbStatusTime = 0;
+const LIVE_USB_CACHE_TTL = 3000;
+
 function getLiveUsbStatus() {
+    const now = Date.now();
+    if (cachedLiveUsbStatus && (now - lastLiveUsbStatusTime) < LIVE_USB_CACHE_TTL) {
+        return cachedLiveUsbStatus;
+    }
+
     const { execSync } = require('child_process');
     const fs = require('fs');
     const path = require('path');
@@ -9527,7 +9567,7 @@ function getLiveUsbStatus() {
         }));
     } catch (_) {}
 
-    return {
+    cachedLiveUsbStatus = {
         summary: {
             totalUsbDevices: allUsbDevices.length,
             totalModems: physicalModems.length,
@@ -9540,6 +9580,8 @@ function getLiveUsbStatus() {
         configuredSlots,
         confPortMap
     };
+    lastLiveUsbStatusTime = now;
+    return cachedLiveUsbStatus;
 }
 
 // API Endpoint to list live USB hardware (lsusb) and /dev/ttyUSB* devices
