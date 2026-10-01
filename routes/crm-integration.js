@@ -6,6 +6,10 @@
 const express = require('express');
 const moment = require('moment');
 const path = require('path');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
+const ASTERISK_BIN = '/usr/sbin/asterisk';
 const pkg = require('../package.json');
 const {
     authenticateClientToken,
@@ -345,6 +349,183 @@ function createCrmRouter(pool, options = {}) {
         } catch (err) {
             console.error('CRM Embed Ticket creation error:', err.message);
             res.status(500).json({ success: false, error: 'Failed to create embed ticket' });
+        }
+    });
+
+    // 9. AGENT PRESENCE & AVAILABILITY STATUS
+    router.post('/agent-status', requireCrmScope('stats:read'), async (req, res) => {
+        const { extension, status, display_name } = req.body || {};
+        const ext = String(extension || '').trim();
+        if (!ext || !/^[0-9A-Za-z_-]+$/.test(ext)) {
+            return res.status(400).json({ success: false, error: 'Valid extension is required' });
+        }
+        const newStatus = String(status || 'available').toLowerCase().trim();
+        const name = String(display_name || ext).trim();
+
+        try {
+            const [currentRows] = await pool.query(
+                'SELECT status, last_update FROM asterisk.synq_agent_status WHERE extension = ? LIMIT 1',
+                [ext]
+            );
+            const current = currentRows && currentRows[0];
+
+            if (current && current.status !== newStatus) {
+                const startTime = current.last_update;
+                await pool.query(
+                    `INSERT INTO asterisk.synq_agent_status_log (extension, status, start_time, end_time, duration_seconds)
+                     VALUES (?, ?, ?, NOW(), TIMESTAMPDIFF(SECOND, ?, NOW()))`,
+                    [ext, current.status, startTime, startTime]
+                );
+            }
+
+            await pool.query(
+                `INSERT INTO asterisk.synq_agent_status (extension, display_name, status, last_update)
+                 VALUES (?, ?, ?, NOW())
+                 ON DUPLICATE KEY UPDATE status = ?, display_name = ?, last_update = NOW()`,
+                [ext, name, newStatus, newStatus, name]
+            );
+
+            // Asterisk DND and Queue Pause Control
+            if (newStatus === 'available') {
+                await execFileAsync(ASTERISK_BIN, ['-rx', `database del DND ${ext}`]).catch(() => {});
+                await execFileAsync(ASTERISK_BIN, ['-rx', `queue unpause member PJSIP/${ext}`]).catch(() => {});
+                await pool.query(
+                    `INSERT INTO asterisk.extension_policies (extension, dnd) VALUES (?, 'user_choice')
+                     ON DUPLICATE KEY UPDATE dnd = 'user_choice'`,
+                    [ext]
+                ).catch(() => {});
+            } else {
+                await execFileAsync(ASTERISK_BIN, ['-rx', `database put DND ${ext} YES`]).catch(() => {});
+                await execFileAsync(ASTERISK_BIN, ['-rx', `queue pause member PJSIP/${ext} reason ${newStatus}`]).catch(() => {});
+                await pool.query(
+                    `INSERT INTO asterisk.extension_policies (extension, dnd) VALUES (?, 'enabled')
+                     ON DUPLICATE KEY UPDATE dnd = 'enabled'`,
+                    [ext]
+                ).catch(() => {});
+            }
+
+            res.json({
+                success: true,
+                extension: ext,
+                status: newStatus,
+                display_name: name,
+                updated_at: new Date().toISOString()
+            });
+        } catch (err) {
+            console.error('Agent status update error:', err.message);
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    router.get('/agent-status/:extension', requireCrmScope('stats:read'), async (req, res) => {
+        const ext = String(req.params.extension || '').trim();
+        try {
+            const [rows] = await pool.query(
+                'SELECT status, display_name, last_update, TIMESTAMPDIFF(SECOND, last_update, NOW()) AS elapsed_seconds FROM asterisk.synq_agent_status WHERE extension = ? LIMIT 1',
+                [ext]
+            );
+            if (!rows || rows.length === 0) {
+                return res.json({
+                    success: true,
+                    extension: ext,
+                    status: 'available',
+                    display_name: ext,
+                    elapsed_seconds: 0
+                });
+            }
+            res.json({
+                success: true,
+                extension: ext,
+                status: rows[0].status,
+                display_name: rows[0].display_name,
+                last_update: rows[0].last_update,
+                elapsed_seconds: Number(rows[0].elapsed_seconds) || 0
+            });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    router.get('/agent-status-stats', requireCrmScope('stats:read'), async (req, res) => {
+        const { extension, from, to } = req.query;
+        try {
+            let sql = `
+                SELECT extension, status, SUM(duration_seconds) AS total_seconds, COUNT(*) AS count
+                FROM asterisk.synq_agent_status_log
+                WHERE 1=1
+            `;
+            const params = [];
+            if (extension) {
+                sql += ' AND extension = ?';
+                params.push(extension);
+            }
+            if (from) {
+                sql += ' AND start_time >= ?';
+                params.push(from + ' 00:00:00');
+            }
+            if (to) {
+                sql += ' AND start_time <= ?';
+                params.push(to + ' 23:59:59');
+            }
+            sql += ' GROUP BY extension, status';
+            const [rows] = await pool.query(sql, params);
+            res.json({
+                success: true,
+                stats: rows || []
+            });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // 10. DESKTOP TELEPHONY SESSION PROVISIONING
+    router.get('/desktop-session', requireCrmScope(['live:read', 'softphone:use', 'extensions:read']), async (req, res) => {
+        const ext = String(req.query.extension || '').trim();
+        try {
+            let password = 'sss333';
+            if (ext) {
+                try {
+                    const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', `pjsip show auth ${ext}-auth`]);
+                    const match = stdout.match(/password\s*:\s*(\S+)/i);
+                    if (match && match[1]) {
+                        password = match[1];
+                    }
+                } catch (_) {}
+            }
+            const host = '192.168.100.50';
+            res.json({
+                success: true,
+                ws_url: `ws://${host}:8088/ws`,
+                wss_url: `wss://${host}:8089/ws`,
+                sip_domain: host,
+                extension: ext || '150',
+                password: password,
+                api_url: `http://${host}:8080/api/integrations/crm/v1`,
+                softphone_api_url: `http://${host}:8090`
+            });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // 11. DESKTOP CALL TRANSFER (Server-Side Asterisk Channel Redirect)
+    router.post('/transfer', requireCrmScope(['live:read', 'softphone:use', 'live:barge']), async (req, res) => {
+        try {
+            const { sourceExtension, targetExtension } = req.body;
+            const src = String(sourceExtension || '').trim();
+            const dst = String(targetExtension || '').trim();
+            if (!src || !dst) {
+                return res.status(400).json({ success: false, error: 'Source and target extensions are required.' });
+            }
+            const { executeCallTransfer } = require('../lib/call-control');
+            const result = await executeCallTransfer(pool, amiClient, ASTERISK_BIN, {
+                sourceExt: src,
+                destinationExt: dst
+            });
+            res.json({ success: true, message: `Call on extension ${src} successfully transferred to ${dst}.`, result });
+        } catch (err) {
+            console.error('[CRM Integration] Transfer error:', err.message);
+            res.status(400).json({ success: false, error: err.message });
         }
     });
 

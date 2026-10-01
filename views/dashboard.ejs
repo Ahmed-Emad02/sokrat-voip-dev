@@ -743,12 +743,42 @@ const isRtl = currentLang === 'ar';
 
         <!-- Charts Row 2: Hourly Distribution + Top Talkers -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 shrink-0">
-            <div class="panel-surface border border-[#27272a]/30 rounded-2xl">
-                <div class="px-5 py-4 border-b border-[#27272a] bg-black/20">
-                    <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartHourly %></h2>
+            <div class="panel-surface border border-[#27272a]/30 rounded-2xl flex flex-col h-full overflow-hidden">
+                <div class="px-5 py-3 border-b border-[#27272a] bg-black/20 flex items-center justify-between gap-3 min-h-[64px] shrink-0">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="p-1.5 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </span>
+                        <div class="min-w-0">
+                            <h2 id="hourlyChartTitle" class="text-sm font-bold text-white uppercase tracking-wider truncate"><%= t.chartHourly %></h2>
+                            <p id="hourlyChartSubtitle" class="text-[11px] text-[var(--text-muted)] font-mono truncate"></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <!-- Peak Badge -->
+                        <span id="hourlyPeakBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono whitespace-nowrap">
+                            <span>🔥</span>
+                            <span id="hourlyPeakText"></span>
+                        </span>
+
+                        <!-- Specific Day Dropdown Selector (only visible when multiple days exist) -->
+                        <select id="hourlyDaySelect" onchange="onHourlyDaySelect(this.value)" class="no-enhance hidden bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer shrink-0">
+                            <option value="all"><%= isRtl ? 'جميع الأيام' : 'All Days' %></option>
+                        </select>
+
+                        <!-- Switcher (Hours vs Days) -->
+                        <div id="hourlyTimeModeWrapper" class="inline-flex items-center p-0.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] gap-0.5 shrink-0">
+                            <button type="button" id="btn-dist-hours" onclick="setDistributionMode('hours')" class="px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer btn-primary whitespace-nowrap">
+                                <span><%= isRtl ? 'بالساعات' : 'Hourly' %></span>
+                            </button>
+                            <button type="button" id="btn-dist-days" onclick="setDistributionMode('days')" class="px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] whitespace-nowrap">
+                                <span><%= isRtl ? 'بالأيام' : 'Daily' %></span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="p-4">
-                    <div id="hourlyChart" class="w-full h-64"></div>
+                <div class="p-4 flex-1 flex flex-col justify-center">
+                    <div id="hourlyChart" class="w-full h-64 min-h-[256px]"></div>
                 </div>
             </div>
             <div class="panel-surface border border-[#27272a]/30 rounded-2xl">
@@ -786,6 +816,7 @@ const isRtl = currentLang === 'ar';
         const trendData = <%- (typeof trendData !== 'undefined' && trendData) ? trendData : '[]' %>;
         const dispositionData = <%- (typeof dispositionData !== 'undefined' && dispositionData) ? dispositionData : '[]' %>;
         const hourlyData = <%- (typeof hourlyData !== 'undefined' && hourlyData) ? hourlyData : '[]' %>;
+        const hourlyByDayData = <%- (typeof hourlyByDay !== 'undefined' && hourlyByDay) ? hourlyByDay : '{}' %>;
         const topTalkersData = <%- (typeof topTalkers !== 'undefined' && topTalkers) ? topTalkers : '[]' %>;
         const durationData = <%- (typeof durationData !== 'undefined' && durationData) ? durationData : '[]' %>;
         const scopeData = <%- (typeof scopeData !== 'undefined' && scopeData) ? scopeData : '[]' %>;
@@ -817,9 +848,9 @@ const isRtl = currentLang === 'ar';
             'UNKNOWN': '<%= isRtl ? "غير معروف" : "UNKNOWN" %>'
         };
         const _durTranslations = {
-            'Short (<30s)': '<%= isRtl ? "قصيرة (<30ث)" : "Short (<30s)" %>',
-            'Medium (30s-3m)': '<%= isRtl ? "متوسطة (30ث-3د)" : "Medium (30s-3m)" %>',
-            'Long (>3m)': '<%= isRtl ? "طويلة (>3د)" : "Long (>3m)" %>'
+            'Short (<30s)': '<%= isRtl ? "قصيرة (أقل من 30 ث)" : "Short (< 30s)" %>',
+            'Medium (30s-3m)': '<%= isRtl ? "متوسطة (30 ث - 3 د)" : "Medium (30s - 3m)" %>',
+            'Long (>3m)': '<%= isRtl ? "طويلة (أكثر من 3 د)" : "Long (> 3m)" %>'
         };
         const _scopeTranslations = {
             'Internal': '<%= isRtl ? "داخلي" : "Internal" %>',
@@ -963,46 +994,342 @@ const isRtl = currentLang === 'ar';
             });
             window.addEventListener('resize', () => dispChart.resize());
 
-            // -- Hourly Distribution --
+            // -- Hourly / Daily Call Distribution --
             const hourlyChart = echarts.init(document.getElementById('hourlyChart'), isLight ? null : 'dark');
-            hourlyChart.setOption({
-                textStyle: {
-                    fontFamily: _isRtl ? "'JetBrains Mono', 'Cairo', monospace" : "'JetBrains Mono', monospace"
-                },
-                backgroundColor: 'transparent',
-                tooltip: {
-                    trigger: 'axis',
-                    backgroundColor: isLight ? '#ffffff' : '#18181b',
-                    borderColor: isLight ? '#e4e4e7' : '#27272a',
-                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 }
-                },
-                grid: { left: 40, right: 20, top: 20, bottom: 30 },
-                xAxis: {
-                    type: 'category',
-                    data: hourlyData.map(d => d.hour),
-                    axisLine: { lineStyle: { color: '#27272a' } },
-                    axisLabel: { color: isLight ? '#52525b' : '#a1a1aa', fontSize: 9, fontWeight: 'bold' }
-                },
-                yAxis: {
-                    type: 'value',
-                    splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } },
-                    axisLabel: { color: isLight ? '#52525b' : '#71717a', fontSize: 9 }
-                },
-                series: [{
-                    type: 'bar',
-                    barWidth: '70%',
-                    itemStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: accent },
-                            { offset: 1, color: accent + '40' }
-                        ]),
-                        borderRadius: [4, 4, 0, 0]
-                    },
-                    data: hourlyData.map(d => d.calls),
-                    animationEasing: 'cubicOut',
-                    animationDuration: 500
-                }]
+
+            const _dashStartDate = '<%= filters.startDate %>';
+            const _dashEndDate = '<%= filters.endDate %>';
+            const _filterHours = (typeof moment !== 'undefined') ? Math.max(1, moment(_dashEndDate).diff(moment(_dashStartDate), 'hours')) : 24;
+            const _filterDaysCalc = (typeof moment !== 'undefined') ? Math.max(1, Math.ceil(moment(_dashEndDate).diff(moment(_dashStartDate), 'days', true))) : 1;
+            const _availableDays = Object.keys(hourlyByDayData || {}).sort();
+            const _trendDaysCount = (trendData || []).filter(d => (d.total || 0) > 0).length || _availableDays.length || (trendData || []).length || 1;
+            const _effectiveDays = Math.max(_trendDaysCount, _filterDaysCalc, _availableDays.length);
+            const _isMultiDay = _effectiveDays > 1 && _availableDays.length > 1;
+
+            let currentDistMode = 'hours';
+            let selectedSpecificDay = 'all';
+
+            function formatDayLabel(rawDate) {
+                if (!rawDate) return '';
+                if (typeof moment !== 'undefined') {
+                    const fullDate = rawDate.length === 5 ? (moment().year() + '-' + rawDate) : rawDate;
+                    const m = moment(fullDate);
+                    if (m.isValid()) {
+                        return _isRtl ? m.format('D MMM') : m.format('MMM D');
+                    }
+                }
+                return rawDate;
+            }
+
+            function formatFullDayName(rawDate) {
+                if (!rawDate) return '';
+                if (typeof moment !== 'undefined') {
+                    const m = moment(rawDate);
+                    if (m.isValid()) {
+                        return _isRtl ? m.format('dddd، D MMMM YYYY') : m.format('dddd, MMMM D, YYYY');
+                    }
+                }
+                return rawDate;
+            }
+
+            // Populate the day selector dropdown if multiple days exist
+            const daySelectEl = document.getElementById('hourlyDaySelect');
+            if (daySelectEl && _isMultiDay) {
+                daySelectEl.classList.remove('hidden');
+                daySelectEl.innerHTML = '';
+
+                const optAll = document.createElement('option');
+                optAll.value = 'all';
+                optAll.textContent = _isRtl ? 'جميع الأيام (تجميعي)' : 'All Days (Aggregated)';
+                daySelectEl.appendChild(optAll);
+
+                _availableDays.forEach(dayStr => {
+                    const opt = document.createElement('option');
+                    opt.value = dayStr;
+                    opt.textContent = formatDayLabel(dayStr);
+                    daySelectEl.appendChild(opt);
+                });
+            }
+
+            window.onHourlyDaySelect = function(val) {
+                selectedSpecificDay = val;
+                if (val !== 'all') {
+                    currentDistMode = 'hours';
+                    updateDistButtons();
+                }
+                renderHourlyChart();
+            };
+
+            window.setDistributionMode = function(mode) {
+                currentDistMode = mode;
+                if (mode === 'days') {
+                    selectedSpecificDay = 'all';
+                    if (daySelectEl) daySelectEl.value = 'all';
+                }
+                updateDistButtons();
+                renderHourlyChart();
+            };
+
+            function updateDistButtons() {
+                const btnH = document.getElementById('btn-dist-hours');
+                const btnD = document.getElementById('btn-dist-days');
+                const activeCls = 'px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer btn-primary whitespace-nowrap';
+                const inactiveCls = 'px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] whitespace-nowrap';
+                if (btnH && btnD) {
+                    btnH.className = currentDistMode === 'hours' ? activeCls : inactiveCls;
+                    btnD.className = currentDistMode === 'days' ? activeCls : inactiveCls;
+                }
+            }
+
+            function renderHourlyChart() {
+                const titleEl = document.getElementById('hourlyChartTitle');
+                const subEl = document.getElementById('hourlyChartSubtitle');
+                const peakBadge = document.getElementById('hourlyPeakBadge');
+                const peakText = document.getElementById('hourlyPeakText');
+
+                // Locked, unified grid margins for zero layout shifts
+                const commonGrid = { left: 45, right: 20, top: 22, bottom: 32, containLabel: true };
+
+                if (currentDistMode === 'days') {
+                    // Daily Distribution Mode
+                    if (titleEl) titleEl.textContent = _isRtl ? 'توزيع المكالمات بالأيام' : 'Daily Call Distribution';
+                    if (subEl) {
+                        subEl.textContent = _effectiveDays === 1 
+                            ? (_isRtl ? 'يوم واحد (اليوم)' : 'Single Day (Today)')
+                            : (_isRtl ? `عبر ${_effectiveDays} أيام` : `Across ${_effectiveDays} days`);
+                    }
+
+                    const rawDates = (trendData || []).map(d => d.date ? d.date.slice(5) : '');
+                    const dayLabels = rawDates.map(d => formatDayLabel(d));
+                    const dayValues = (trendData || []).map(d => d.total || 0);
+                    const maxDayVal = Math.max(...dayValues, 0);
+                    const peakDayIndex = dayValues.indexOf(maxDayVal);
+
+                    if (peakBadge && peakText) {
+                        if (maxDayVal > 0 && peakDayIndex >= 0) {
+                            peakBadge.classList.remove('hidden');
+                            peakText.textContent = (_isRtl ? 'الذروة: ' : 'Peak: ') + dayLabels[peakDayIndex] + ` (${maxDayVal} ${_t.calls})`;
+                        } else {
+                            peakBadge.classList.add('hidden');
+                        }
+                    }
+
+                    hourlyChart.setOption({
+                        textStyle: {
+                            fontFamily: _isRtl ? "'JetBrains Mono', 'Cairo', monospace" : "'JetBrains Mono', monospace"
+                        },
+                        backgroundColor: 'transparent',
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'shadow',
+                                shadowStyle: { color: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)' }
+                            },
+                            backgroundColor: isLight ? '#ffffff' : '#18181b',
+                            borderColor: isLight ? '#e4e4e7' : '#27272a',
+                            borderWidth: 1,
+                            padding: [8, 12],
+                            textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 },
+                            formatter: function(params) {
+                                const p = params[0];
+                                const d = (trendData || [])[p.dataIndex] || {};
+                                const isPeak = p.value === maxDayVal && maxDayVal > 0;
+                                return `
+                                    <div class="font-bold text-xs text-white mb-1.5 flex items-center gap-1.5">
+                                        <span>📅 ${dayLabels[p.dataIndex] || d.date || p.name}</span>
+                                        ${isPeak ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono">${_isRtl ? 'الذروة' : 'Peak'}</span>` : ''}
+                                    </div>
+                                    <div class="text-xs text-zinc-300 font-semibold space-y-1">
+                                        <div class="flex justify-between gap-4"><span>${_t.total}:</span><b class="text-white">${p.value}</b></div>
+                                        <div class="flex justify-between gap-4 text-emerald-400"><span>${_t.inbound}:</span><b>${d.inbound || 0}</b></div>
+                                        <div class="flex justify-between gap-4 text-sky-400"><span>${_t.outbound}:</span><b>${d.outbound || 0}</b></div>
+                                    </div>
+                                    <div class="text-[10px] text-zinc-500 mt-1 italic">${_isRtl ? 'انقر لعرض تفاصيل ساعات هذا اليوم' : 'Click bar to view this day\'s hourly breakdown'}</div>
+                                `;
+                            }
+                        },
+                        grid: commonGrid,
+                        xAxis: {
+                            type: 'category',
+                            data: dayLabels,
+                            axisLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a' } },
+                            axisTick: { show: false },
+                            axisLabel: {
+                                color: isLight ? '#52525b' : '#a1a1aa',
+                                fontSize: 10,
+                                fontWeight: 'bold',
+                                interval: (dayLabels.length > 12) ? Math.ceil(dayLabels.length / 10) : 0,
+                                rotate: (dayLabels.length > 14) ? 25 : 0
+                            }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } },
+                            axisLabel: { color: isLight ? '#52525b' : '#71717a', fontSize: 9 }
+                        },
+                        series: [{
+                            name: _t.calls,
+                            type: 'bar',
+                            barMaxWidth: 36,
+                            barWidth: (dayLabels.length > 14) ? '60%' : '45%',
+                            itemStyle: {
+                                borderRadius: [6, 6, 0, 0],
+                                color: function(params) {
+                                    if (params.value === maxDayVal && maxDayVal > 0) {
+                                        return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                            { offset: 0, color: '#f59e0b' },
+                                            { offset: 1, color: '#b45309' }
+                                        ]);
+                                    }
+                                    return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                        { offset: 0, color: accent },
+                                        { offset: 1, color: accent + '30' }
+                                    ]);
+                                }
+                            },
+                            data: dayValues,
+                            animationEasing: 'cubicOut',
+                            animationDuration: 400
+                        }]
+                    }, true);
+
+                } else {
+                    // Hourly Distribution Mode (24 Hours)
+                    const isSingleSpecificDay = selectedSpecificDay !== 'all' && Boolean(hourlyByDayData[selectedSpecificDay]);
+                    const activeHoursList = isSingleSpecificDay ? hourlyByDayData[selectedSpecificDay] : (hourlyData || []);
+
+                    if (titleEl) titleEl.textContent = _isRtl ? 'توزيع المكالمات بالساعة' : 'Hourly Call Distribution';
+                    if (subEl) {
+                        if (isSingleSpecificDay) {
+                            subEl.textContent = formatFullDayName(selectedSpecificDay);
+                        } else {
+                            subEl.textContent = _effectiveDays === 1 
+                                ? (_isRtl ? 'ساعات اليوم (24 ساعة)' : '24 Hours Timeline')
+                                : (_isRtl ? `تجميع عبر ${_effectiveDays} أيام • بالساعة` : `Aggregated across ${_effectiveDays} days`);
+                        }
+                    }
+
+                    const hourVals = (activeHoursList || []).map(d => d.calls || 0);
+                    const maxHourVal = Math.max(...hourVals, 0);
+                    const peakHourIndex = hourVals.indexOf(maxHourVal);
+
+                    if (peakBadge && peakText) {
+                        if (maxHourVal > 0 && peakHourIndex >= 0) {
+                            peakBadge.classList.remove('hidden');
+                            const hStart = String(peakHourIndex).padStart(2, '0') + ':00';
+                            peakText.textContent = (_isRtl ? 'الذروة: ' : 'Peak: ') + hStart + ` (${maxHourVal} ${_t.calls})`;
+                        } else {
+                            peakBadge.classList.add('hidden');
+                        }
+                    }
+
+                    hourlyChart.setOption({
+                        textStyle: {
+                            fontFamily: _isRtl ? "'JetBrains Mono', 'Cairo', monospace" : "'JetBrains Mono', monospace"
+                        },
+                        backgroundColor: 'transparent',
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'shadow',
+                                shadowStyle: { color: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)' }
+                            },
+                            backgroundColor: isLight ? '#ffffff' : '#18181b',
+                            borderColor: isLight ? '#e4e4e7' : '#27272a',
+                            borderWidth: 1,
+                            padding: [8, 12],
+                            textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 },
+                            formatter: function(params) {
+                                const p = params[0];
+                                const h = parseInt(p.name, 10);
+                                const nextH = (h + 1) % 24;
+                                const timeRange = `${String(h).padStart(2, '0')}:00 - ${String(nextH).padStart(2, '0')}:00`;
+                                const isPeak = p.value === maxHourVal && maxHourVal > 0;
+                                const dayContext = isSingleSpecificDay 
+                                    ? `<div class="text-[11px] text-sky-400 font-mono mb-1">📅 ${formatDayLabel(selectedSpecificDay)}</div>` 
+                                    : (_isMultiDay ? `<div class="text-[11px] text-zinc-400 mt-1 flex justify-between gap-4"><span>${_isRtl ? 'المعدل اليومي' : 'Daily Avg'}:</span><b class="text-amber-400">${(p.value / _effectiveDays).toFixed(1)} ${_t.calls}/${_isRtl ? 'يوم' : 'day'}</b></div>` : '');
+                                return `
+                                    <div class="font-bold text-xs text-white mb-1 flex items-center gap-1.5">
+                                        <span>🕒 ${timeRange}</span>
+                                        ${isPeak ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono">${_isRtl ? '🔥 ساعة الذروة' : '🔥 Peak Hour'}</span>` : ''}
+                                    </div>
+                                    ${isSingleSpecificDay ? dayContext : ''}
+                                    <div class="text-xs text-zinc-300 font-semibold flex justify-between gap-4">
+                                        <span>${_isRtl ? 'المكالمات' : 'Calls'}:</span>
+                                        <b class="text-white">${p.value} ${_t.calls}</b>
+                                    </div>
+                                    ${!isSingleSpecificDay ? dayContext : ''}
+                                `;
+                            }
+                        },
+                        grid: commonGrid,
+                        xAxis: {
+                            type: 'category',
+                            data: (activeHoursList || []).map(d => d.hour),
+                            axisLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a' } },
+                            axisTick: { show: false },
+                            axisLabel: {
+                                color: isLight ? '#52525b' : '#a1a1aa',
+                                fontSize: 10,
+                                fontWeight: 'bold',
+                                interval: function(index) {
+                                    return index % 3 === 0 || index === 23;
+                                },
+                                formatter: function(val) {
+                                    return val + ':00';
+                                }
+                            }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } },
+                            axisLabel: { color: isLight ? '#52525b' : '#71717a', fontSize: 9 }
+                        },
+                        series: [{
+                            name: _t.calls,
+                            type: 'bar',
+                            barMaxWidth: 36,
+                            barWidth: '60%',
+                            itemStyle: {
+                                borderRadius: [6, 6, 0, 0],
+                                color: function(params) {
+                                    if (params.value === maxHourVal && maxHourVal > 0) {
+                                        return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                            { offset: 0, color: '#f59e0b' },
+                                            { offset: 1, color: '#b45309' }
+                                        ]);
+                                    }
+                                    return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                        { offset: 0, color: accent },
+                                        { offset: 1, color: accent + '30' }
+                                    ]);
+                                }
+                            },
+                            data: hourVals,
+                            animationEasing: 'cubicOut',
+                            animationDuration: 400
+                        }]
+                    }, true);
+                }
+
+                hourlyChart.resize();
+            }
+
+            // Drill down when clicking a daily bar
+            hourlyChart.on('click', function(params) {
+                if (currentDistMode === 'days') {
+                    const rawDate = (trendData || [])[params.dataIndex]?.date;
+                    if (rawDate && hourlyByDayData[rawDate]) {
+                        selectedSpecificDay = rawDate;
+                        if (daySelectEl) daySelectEl.value = rawDate;
+                        currentDistMode = 'hours';
+                        updateDistButtons();
+                        renderHourlyChart();
+                    }
+                }
             });
+
+            renderHourlyChart();
             window.addEventListener('resize', () => hourlyChart.resize());
 
             // -- Top Talkers --
@@ -1065,73 +1392,112 @@ const isRtl = currentLang === 'ar';
             });
             window.addEventListener('resize', () => talkersChart.resize());
 
-            // -- Call Duration Breakdown --
+            // -- Call Duration Breakdown (Modern Donut with Center Metric & Non-Clipping Legend) --
             const durationChart = echarts.init(document.getElementById('durationChart'), isLight ? null : 'dark');
             const durationColors = {
                 'Short (<30s)': '#38bdf8',
                 'Medium (30s-3m)': '#f59e0b',
-                'Long (>3m)': '#e11d48'
+                'Long (>3m)': '#f43f5e'
             };
-            const totalDurVal = durationData.reduce((acc, curr) => acc + (curr.value || 0), 0) || 1;
+            const totalDurActual = durationData.reduce((acc, curr) => acc + (curr.value || 0), 0);
+            const totalDurVal = totalDurActual || 1;
 
-            durationChart.setOption({
-                textStyle: {
-                    fontFamily: _isRtl ? "'JetBrains Mono', 'Cairo', monospace" : "'JetBrains Mono', monospace"
-                },
-                backgroundColor: 'transparent',
-                tooltip: { 
-                    trigger: 'axis',
-                    axisPointer: { type: 'shadow' },
-                    backgroundColor: isLight ? '#ffffff' : '#18181b',
-                    borderColor: isLight ? '#e4e4e7' : '#27272a',
-                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 },
-                    formatter: function(params) {
-                        const p = params[0];
-                        const pct = Math.round((p.value / totalDurVal) * 100);
-                        return p.name + ': ' + p.value + ' ' + _t.calls + ' (' + pct + '%)';
-                    }
-                },
-                grid: { left: 110, right: 60, top: 20, bottom: 20, containLabel: true },
-                xAxis: {
-                    type: 'value',
-                    splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } },
-                    axisLabel: { color: isLight ? '#52525b' : '#71717a', fontSize: 9 }
-                },
-                yAxis: {
-                    type: 'category',
-                    data: durationData.map(d => _durTranslations[d.name] || d.name),
-                    axisLine: { show: false },
-                    axisTick: { show: false },
-                    axisLabel: { color: isLight ? '#27272a' : '#ffffff', fontSize: 10, fontWeight: 'bold' }
-                },
-                series: [{
-                    name: 'Calls',
-                    type: 'bar',
-                    barWidth: '45%',
-                    itemStyle: {
-                        borderRadius: [0, 6, 6, 0]
+            function renderDurationChart() {
+                const chartEl = document.getElementById('durationChart');
+                const width = chartEl ? chartEl.offsetWidth : 753;
+                const isNarrow = width < 480;
+
+                const centerPos = isNarrow ? ['50%', '38%'] : (_isRtl ? ['68%', '50%'] : ['32%', '50%']);
+                const titleLeft = isNarrow ? '50%' : (_isRtl ? '68%' : '32%');
+                const titleTop = isNarrow ? '28%' : '38%';
+
+                durationChart.setOption({
+                    textStyle: {
+                        fontFamily: _isRtl ? "'JetBrains Mono', 'Cairo', monospace" : "'JetBrains Mono', monospace"
                     },
-                    data: durationData.map(d => ({
-                        value: d.value,
-                        name: _durTranslations[d.name] || d.name,
-                        itemStyle: { color: durationColors[d.name] || '#64748b' }
-                    })),
-                    label: {
-                        show: true,
-                        position: 'right',
+                    backgroundColor: 'transparent',
+                    tooltip: {
+                        trigger: 'item',
+                        backgroundColor: isLight ? '#ffffff' : '#18181b',
+                        borderColor: isLight ? '#e4e4e7' : '#27272a',
+                        borderWidth: 1,
+                        padding: [8, 12],
+                        textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 },
                         formatter: function(params) {
-                            const pct = Math.round((params.value / totalDurVal) * 100);
-                            return params.value + ' (' + pct + '%)';
-                        },
-                        fontSize: 10,
-                        fontWeight: 'bold',
-                        color: isLight ? '#52525b' : '#a1a1aa'
+                            const pct = totalDurActual > 0 ? Math.round((params.value / totalDurVal) * 100) : 0;
+                            return `<b>${params.name}</b><br/>${params.value} ${_t.calls} (${pct}%)`;
+                        }
                     },
-                    animationEasing: 'cubicOut',
-                    animationDuration: 650
-                }]
+                    legend: {
+                        orient: isNarrow ? 'horizontal' : 'vertical',
+                        left: isNarrow ? 'center' : (_isRtl ? '6%' : 'auto'),
+                        right: isNarrow ? 'auto' : (_isRtl ? 'auto' : '6%'),
+                        top: isNarrow ? 'bottom' : 'middle',
+                        itemGap: isNarrow ? 10 : 16,
+                        itemWidth: 12,
+                        itemHeight: 12,
+                        textStyle: {
+                            color: isLight ? '#27272a' : '#d4d4d8',
+                            fontSize: 11,
+                            fontWeight: 'bold'
+                        },
+                        formatter: function(name) {
+                            const item = durationData.find(d => (_durTranslations[d.name] || d.name) === name);
+                            const val = item ? (item.value || 0) : 0;
+                            const pct = totalDurActual > 0 ? Math.round((val / totalDurVal) * 100) : 0;
+                            return `${name} :  ${val} (${pct}%)`;
+                        }
+                    },
+                    title: {
+                        text: String(totalDurActual),
+                        subtext: _isRtl ? 'مكالمة' : 'Calls',
+                        left: titleLeft,
+                        top: titleTop,
+                        textAlign: 'center',
+                        textStyle: {
+                            fontSize: 20,
+                            fontWeight: '900',
+                            color: isLight ? '#09090b' : '#ffffff'
+                        },
+                        subtextStyle: {
+                            fontSize: 10,
+                            fontWeight: 'bold',
+                            color: isLight ? '#71717a' : '#a1a1aa'
+                        }
+                    },
+                    series: [{
+                        name: _isRtl ? 'تصنيف مدة المكالمات' : 'Call Duration',
+                        type: 'pie',
+                        radius: ['52%', '78%'],
+                        center: centerPos,
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 8,
+                            borderColor: isLight ? '#ffffff' : '#18181b',
+                            borderWidth: 3
+                        },
+                        label: { show: false },
+                        emphasis: {
+                            scale: true,
+                            scaleSize: 6,
+                            label: { show: false }
+                        },
+                        data: durationData.map(d => ({
+                            value: d.value || 0,
+                            name: _durTranslations[d.name] || d.name,
+                            itemStyle: { color: durationColors[d.name] || '#64748b' }
+                        })),
+                        animationEasing: 'cubicOut',
+                        animationDuration: 650
+                    }]
+                });
+            }
+
+            renderDurationChart();
+            window.addEventListener('resize', () => {
+                renderDurationChart();
+                durationChart.resize();
             });
-            window.addEventListener('resize', () => durationChart.resize());
 
             // -- Call Scope Breakdown (Internal vs External) --
             const scopeChart = echarts.init(document.getElementById('scopeChart'), isLight ? null : 'dark');

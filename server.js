@@ -2662,7 +2662,7 @@ function connectAMI() {
                 if (name) {
                     let contactId = event.ID || event.URI || (name + '_contact');
                     let statusLower = contactStatus.toLowerCase();
-                    let isOnline = statusLower === 'reachable' || statusLower === 'created' || statusLower === 'updated' || statusLower === 'unqualified' || statusLower === 'nonqualified';
+                    let isOnline = statusLower === 'reachable' || statusLower === 'created' || statusLower === 'updated' || statusLower === 'unqualified' || statusLower === 'nonqualified' || statusLower.startsWith('nonqual');
                     let now = Date.now();
                     let uri = event.URI || '';
                     let match = uri.match(/@(\d+\.\d+\.\d+\.\d+)/);
@@ -2718,7 +2718,7 @@ function connectAMI() {
                 if (name) {
                     let contactId = event.ID || event.Uri || (name + '_contact');
                     let statusLower = contactStatus.toLowerCase();
-                    let isOnline = statusLower === 'reachable' || statusLower === 'created' || statusLower === 'updated' || statusLower === 'unqualified' || statusLower === 'nonqualified';
+                    let isOnline = statusLower === 'reachable' || statusLower === 'created' || statusLower === 'updated' || statusLower === 'unqualified' || statusLower === 'nonqualified' || statusLower.startsWith('nonqual');
 
                     pjsipBatchContactIds.add(contactId);
 
@@ -5298,6 +5298,7 @@ app.get('/', async (req, res) => {
         const trendMap = {};
         const dispCounts = {};
         const hourlyMap = {};
+        const hourlyByDayMap = {};
         const durationCounts = { short: 0, medium: 0, long: 0 };
         rows.forEach(row => {
             const day = moment(row.calldate).format('YYYY-MM-DD');
@@ -5312,6 +5313,8 @@ app.get('/', async (req, res) => {
 
             const hour = moment(row.calldate).format('H');
             hourlyMap[hour] = (hourlyMap[hour] || 0) + 1;
+            hourlyByDayMap[day] = hourlyByDayMap[day] || {};
+            hourlyByDayMap[day][hour] = (hourlyByDayMap[day][hour] || 0) + 1;
 
             if (row.disposition === 'ANSWERED') {
                 const sec = parseInt(row.billsec) || 0;
@@ -5331,6 +5334,14 @@ app.get('/', async (req, res) => {
             hour: String(i).padStart(2, '0'),
             calls: hourlyMap[String(i)] || 0
         }));
+
+        const hourlyByDay = {};
+        Object.keys(hourlyByDayMap).sort().forEach(day => {
+            hourlyByDay[day] = Array.from({ length: 24 }, (_, i) => ({
+                hour: String(i).padStart(2, '0'),
+                calls: (hourlyByDayMap[day] && hourlyByDayMap[day][String(i)]) || 0
+            }));
+        });
 
         const topTalkers = Object.values(employeeMetrics)
             .sort((a, b) => b.totalTalkSec - a.totalTalkSec)
@@ -5366,6 +5377,7 @@ app.get('/', async (req, res) => {
             trendData: JSON.stringify(trendData),
             dispositionData: JSON.stringify(dispositionData),
             hourlyData: JSON.stringify(hourlyData),
+            hourlyByDay: JSON.stringify(hourlyByDay),
             topTalkers: JSON.stringify(topTalkers),
             durationData: JSON.stringify(durationData),
             scopeData: JSON.stringify(scopeData)
