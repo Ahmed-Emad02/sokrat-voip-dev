@@ -535,6 +535,32 @@
             this.activePreset = preset;
             this.isDnd = Boolean(preset.dnd);
             this.isAutoAnswer = Boolean(preset.autoAnswer);
+
+            // Fetch server-side WebRTC extension policy and enforce force_on / force_off
+            this._extensionPolicy = null;
+            try {
+                const policyUrl = (preset.policyBaseUrl || '') + '/api/extension-policy/' + encodeURIComponent(preset.extension);
+                const policyRes = await fetch(policyUrl, { cache: 'no-store' });
+                if (policyRes.ok) {
+                    const policyData = await policyRes.json();
+                    if (policyData && policyData.policy) {
+                        this._extensionPolicy = policyData.policy;
+                        if (policyData.policy.auto_answer === 'force_on') {
+                            this.isAutoAnswer = true;
+                        } else if (policyData.policy.auto_answer === 'force_off') {
+                            this.isAutoAnswer = false;
+                        }
+                        if (policyData.policy.dnd === 'force_on') {
+                            this.isDnd = true;
+                        } else if (policyData.policy.dnd === 'force_off') {
+                            this.isDnd = false;
+                        }
+                    }
+                }
+            } catch (_policyErr) {
+                console.warn('Could not fetch extension policy, using preset defaults.');
+            }
+
             if (!this.micPermissionGranted) {
                 try {
                     await this.acquireMicrophone(this.selectedAudioInputId);

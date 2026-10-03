@@ -955,6 +955,7 @@
             this.core.on('regStateChange', ({ state }) => this.updateStatusUi(state));
             this.core.on('registered', () => {
                 this.updateViewMode('console');
+                this._syncPolicyToUi();
             });
             this.core.on('unregistered', () => {
                 this.updateViewMode('login');
@@ -1063,6 +1064,57 @@
                     this.dom.connectBtn.className = 'btn btn-primary';
                     if (this.dom.callBtn) this.dom.callBtn.disabled = true;
                     break;
+            }
+        }
+
+        _syncPolicyToUi() {
+            const policy = this.core._extensionPolicy;
+            if (!policy) return;
+
+            if (this.dom.autoAnswerCheckbox) {
+                this.dom.autoAnswerCheckbox.checked = this.core.isAutoAnswer;
+                if (policy.auto_answer === 'force_on' || policy.auto_answer === 'force_off') {
+                    this.dom.autoAnswerCheckbox.disabled = true;
+                    this.dom.autoAnswerCheckbox.title = policy.auto_answer === 'force_on'
+                        ? 'Auto-answer enforced by admin policy'
+                        : 'Auto-answer disabled by admin policy';
+                } else {
+                    this.dom.autoAnswerCheckbox.disabled = false;
+                    this.dom.autoAnswerCheckbox.title = '';
+                }
+            }
+            if (this.dom.toolBtnAuto) {
+                this.dom.toolBtnAuto.classList.toggle('active-auto', this.core.isAutoAnswer);
+                if (policy.auto_answer === 'force_on' || policy.auto_answer === 'force_off') {
+                    this.dom.toolBtnAuto.style.opacity = '0.5';
+                    this.dom.toolBtnAuto.style.pointerEvents = 'none';
+                } else {
+                    this.dom.toolBtnAuto.style.opacity = '';
+                    this.dom.toolBtnAuto.style.pointerEvents = '';
+                }
+            }
+
+            if (this.dom.dndCheckbox) {
+                this.dom.dndCheckbox.checked = this.core.isDnd;
+                if (policy.dnd === 'force_on' || policy.dnd === 'force_off') {
+                    this.dom.dndCheckbox.disabled = true;
+                    this.dom.dndCheckbox.title = policy.dnd === 'force_on'
+                        ? 'DND enforced by admin policy'
+                        : 'DND disabled by admin policy';
+                } else {
+                    this.dom.dndCheckbox.disabled = false;
+                    this.dom.dndCheckbox.title = '';
+                }
+            }
+            if (this.dom.toolBtnDnd) {
+                this.dom.toolBtnDnd.classList.toggle('active-dnd', this.core.isDnd);
+                if (policy.dnd === 'force_on' || policy.dnd === 'force_off') {
+                    this.dom.toolBtnDnd.style.opacity = '0.5';
+                    this.dom.toolBtnDnd.style.pointerEvents = 'none';
+                } else {
+                    this.dom.toolBtnDnd.style.opacity = '';
+                    this.dom.toolBtnDnd.style.pointerEvents = '';
+                }
             }
         }
 

@@ -611,6 +611,16 @@ function createCrmRouter(pool, options = {}) {
                     }
                 } catch (_) {}
             }
+            let policy = { auto_answer: 'user_choice', dnd: 'user_choice', disable_outbound_ringing_cancel: 0 };
+            if (ext) {
+                try {
+                    const [rows] = await pool.query('SELECT auto_answer, dnd, COALESCE(disable_outbound_ringing_cancel, 0) AS disable_outbound_ringing_cancel FROM `asterisk`.`extension_policies` WHERE extension = ?', [ext]);
+                    if (rows && rows.length > 0) {
+                        policy = rows[0];
+                    }
+                } catch (_) {}
+            }
+
             const requestHost = req.hostname || (req.headers.host ? req.headers.host.split(':')[0] : '192.168.100.50');
             const host = (requestHost === 'localhost' || requestHost === '127.0.0.1' || requestHost === 'host.docker.internal')
                 ? '192.168.100.50'
@@ -622,6 +632,9 @@ function createCrmRouter(pool, options = {}) {
                 sip_domain: host,
                 extension: ext || '150',
                 password: password,
+                auto_answer: policy.auto_answer || 'user_choice',
+                dnd: policy.dnd || 'user_choice',
+                disable_outbound_ringing_cancel: Boolean(policy.disable_outbound_ringing_cancel),
                 api_url: `http://${host}:8080/api/integrations/crm/v1`,
                 softphone_api_url: `http://${host}:8090`
             });

@@ -1788,7 +1788,7 @@ app.use((req, res, next) => {
         '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live',
         '/401', '/403', '/404'
     ];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/federation/v1/')) {
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/federation/v1/')) {
         return next();
     }
     requireAuth(req, res, next);
