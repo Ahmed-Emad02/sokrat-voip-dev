@@ -36,6 +36,11 @@
             </div>
 
             <div class="flex items-center gap-3 self-end sm:self-auto">
+                <button type="button" onclick="openGroupManager()" class="text-xs font-extrabold bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                    <span>إدارة المجموعات وحالات PJSIP</span>
+                </button>
+
                 <span id="crmUserNameBadge" class="text-xs font-bold bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200"></span>
                 
                 <div id="supervisorBadge" class="text-xs font-semibold bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5 <%= session.supervisor_extension ? '' : 'hidden' %>">
@@ -432,6 +437,308 @@
                 });
             }
         })();
+
+        // Group & PJSIP Status Manager
+        let cachedGroupsData = [];
+
+        function switchGroupModalTab(tab) {
+            const btnGroups = document.getElementById('tabBtnGroups');
+            const btnStatuses = document.getElementById('tabBtnStatuses');
+            const contentGroups = document.getElementById('tabContentGroups');
+            const contentStatuses = document.getElementById('tabContentStatuses');
+
+            if (tab === 'statuses') {
+                btnStatuses.className = 'flex-1 py-1.5 px-3 text-xs font-extrabold rounded-lg transition bg-red-600 text-white cursor-pointer shadow-sm';
+                btnGroups.className = 'flex-1 py-1.5 px-3 text-xs font-extrabold rounded-lg transition text-slate-400 hover:text-slate-800 cursor-pointer';
+                contentGroups.classList.add('hidden');
+                contentStatuses.classList.remove('hidden');
+                loadPjsipStatusesList();
+            } else {
+                btnGroups.className = 'flex-1 py-1.5 px-3 text-xs font-extrabold rounded-lg transition bg-red-600 text-white cursor-pointer shadow-sm';
+                btnStatuses.className = 'flex-1 py-1.5 px-3 text-xs font-extrabold rounded-lg transition text-slate-400 hover:text-slate-800 cursor-pointer';
+                contentStatuses.classList.add('hidden');
+                contentGroups.classList.remove('hidden');
+                loadGroupsList();
+            }
+        }
+
+        function openGroupManager() {
+            document.getElementById('groupManagerModal').classList.remove('hidden');
+            switchGroupModalTab('groups');
+        }
+
+        function closeGroupManager() {
+            document.getElementById('groupManagerModal').classList.add('hidden');
+        }
+
+        function loadGroupsList() {
+            fetch('/api/employee/groups')
+                .then(r => r.json())
+                .then(data => {
+                    cachedGroupsData = data.groups || [];
+                    const list = document.getElementById('groupsList');
+                    list.replaceChildren();
+
+                    const selectGrp = document.getElementById('newStatusGroupSelect');
+                    if (selectGrp) {
+                        selectGrp.innerHTML = `<option value="all">جميع المجموعات (All Groups)</option>` +
+                            cachedGroupsData.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+                    }
+
+                    if (!cachedGroupsData.length) {
+                        const empty = document.createElement('div');
+                        empty.className = 'text-center text-slate-400 text-xs py-5';
+                        empty.textContent = 'لا توجد مجموعات بعد';
+                        list.appendChild(empty);
+                        return;
+                    }
+
+                    cachedGroupsData.forEach(group => {
+                        const row = document.createElement('div');
+                        row.className = 'flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold';
+                        row.innerHTML = `
+                            <span>${group.name}</span>
+                            <button type="button" onclick="deleteGroup(${group.id}, '${group.name}')" class="text-red-500 hover:text-red-700 cursor-pointer p-1">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                        `;
+                        list.appendChild(row);
+                    });
+                })
+                .catch(err => {
+                    document.getElementById('groupsList').innerHTML = `<div class="text-center text-red-500 text-xs py-3">${err.message}</div>`;
+                });
+        }
+
+        function addGroup(e) {
+            e.preventDefault();
+            const input = document.getElementById('newGroupName');
+            const btn = document.getElementById('addGroupButton');
+            const name = input.value.trim();
+            if (!name) return;
+
+            btn.disabled = true;
+            fetch('/api/employee/groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'Failed to add group');
+                input.value = '';
+                loadGroupsList();
+            })
+            .catch(err => alert(err.message))
+            .finally(() => { btn.disabled = false; });
+        }
+
+        function deleteGroup(id, name) {
+            if (!confirm('هل أنت متأكد من حذف المجموعة ' + name + '؟')) return;
+            fetch('/api/employee/groups/' + id, { method: 'DELETE' })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) throw new Error(data.error || 'Failed to delete');
+                    loadGroupsList();
+                })
+                .catch(err => alert(err.message));
+        }
+
+        function loadPjsipStatusesList() {
+            fetch('/api/employee/statuses')
+                .then(r => r.json())
+                .then(data => {
+                    const list = document.getElementById('pjsipStatusesList');
+                    list.replaceChildren();
+
+                    const statuses = data.statuses || [];
+                    if (!statuses.length) {
+                        list.innerHTML = `<div class="text-center text-slate-400 text-xs py-4">لا توجد حالات مخصصة بعد</div>`;
+                        return;
+                    }
+
+                    statuses.forEach(st => {
+                        const row = document.createElement('div');
+                        row.className = 'flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs';
+                        const dotColor = st.color || '#f59e0b';
+                        const grpLabel = (st.target_group && st.target_group !== 'all') ? st.target_group : 'جميع المجموعات';
+
+                        row.innerHTML = `
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${dotColor}; box-shadow:0 0 0 2px ${dotColor}33;"></span>
+                                <strong class="text-slate-800 font-bold">${st.label_ar} (${st.label_en || st.status_key})</strong>
+                                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">${grpLabel}</span>
+                            </div>
+                            <button type="button" onclick="deletePjsipStatus(${st.id}, '${st.label_ar}')" class="text-red-500 hover:text-red-700 cursor-pointer p-1">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                        `;
+                        list.appendChild(row);
+                    });
+                })
+                .catch(err => {
+                    document.getElementById('pjsipStatusesList').innerHTML = `<div class="text-center text-red-500 text-xs py-3">${err.message}</div>`;
+                });
+        }
+
+        function addPjsipStatus(e) {
+            e.preventDefault();
+            const keyInput = document.getElementById('newStatusKey');
+            const arInput = document.getElementById('newStatusLabelAr');
+            const enInput = document.getElementById('newStatusLabelEn');
+            const colInput = document.getElementById('newStatusColor');
+            const grpInput = document.getElementById('newStatusGroupSelect');
+            const btn = document.getElementById('addStatusButton');
+
+            const payload = {
+                status_key: keyInput.value.trim(),
+                label_ar: arInput.value.trim(),
+                label_en: enInput.value.trim(),
+                color: colInput.value.trim(),
+                target_group: grpInput.value
+            };
+
+            btn.disabled = true;
+            fetch('/api/employee/statuses', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'Failed to add status');
+                keyInput.value = '';
+                arInput.value = '';
+                enInput.value = '';
+                loadPjsipStatusesList();
+            })
+            .catch(err => alert(err.message))
+            .finally(() => { btn.disabled = false; });
+        }
+
+        function deletePjsipStatus(id, name) {
+            if (!confirm('هل تريد حذف الحالة ' + name + '؟')) return;
+            fetch('/api/employee/statuses/' + id, { method: 'DELETE' })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) throw new Error(data.error || 'Failed to delete status');
+                    loadPjsipStatusesList();
+                })
+                .catch(err => alert(err.message));
+        }
     </script>
+
+    <!-- Enhanced Group & PJSIP Status Manager Modal -->
+    <div id="groupManagerModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 max-w-xl w-full p-6 text-slate-900 shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                <div>
+                    <h3 class="text-base font-extrabold flex items-center gap-2">
+                        <svg class="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        <span>إدارة المجموعات وحالات الوكلاء (PJSIP)</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-1">ربط حالات الوكلاء بمجموعات العمل والتحويلات للسنترال و CRM</p>
+                </div>
+                <button type="button" onclick="closeGroupManager()" class="text-slate-400 hover:text-slate-800 cursor-pointer p-1.5 rounded-lg hover:bg-slate-100">&#10005;</button>
+            </div>
+
+            <!-- Tab Buttons -->
+            <div class="flex items-center gap-2 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+                <button type="button" id="tabBtnGroups" onclick="switchGroupModalTab('groups')" class="flex-1 py-1.5 px-3 text-xs font-extrabold rounded-lg transition bg-red-600 text-white cursor-pointer shadow-sm">
+                    مجموعات الموظفين (Groups)
+                </button>
+                <button type="button" id="tabBtnStatuses" onclick="switchGroupModalTab('statuses')" class="flex-1 py-1.5 px-3 text-xs font-extrabold rounded-lg transition text-slate-500 hover:text-slate-800 cursor-pointer">
+                    حالات الوكلاء و PJSIP (Statuses)
+                </button>
+            </div>
+
+            <!-- TAB 1: GROUPS MANAGEMENT -->
+            <div id="tabContentGroups" class="space-y-4 flex-1 overflow-y-auto pr-1">
+                <form id="groupForm" onsubmit="addGroup(event)" class="flex gap-2">
+                    <input type="text" id="newGroupName" maxlength="100" required placeholder="اسم المجموعة الجديدة..." class="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-red-500">
+                    <button id="addGroupButton" type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg cursor-pointer whitespace-nowrap">
+                        إضافة مجموعة
+                    </button>
+                </form>
+
+                <div id="groupsList" class="space-y-2 max-h-64 overflow-y-auto">
+                    <div class="text-center text-slate-400 text-sm py-4">جاري التحميل...</div>
+                </div>
+            </div>
+
+            <!-- TAB 2: PJSIP AGENT STATUSES (CONNECTED TO GROUPS) -->
+            <div id="tabContentStatuses" class="hidden space-y-4 flex-1 overflow-y-auto pr-1">
+                <!-- Static Core Statuses Notice -->
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div class="text-[11px] font-bold text-slate-600 mb-2 flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        <span>الحالات الأساسية الثابتة (Static Core - لا يوجد مؤقت وقت):</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                            <span>متاح (Available)</span>
+                        </div>
+                        <div class="flex items-center gap-2 p-2 rounded-lg bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700">
+                            <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                            <span>غير متاح (Offline)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Dynamic PJSIP Status Form -->
+                <form id="pjsipStatusForm" onsubmit="addPjsipStatus(event)" class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2.5">
+                    <div class="text-xs font-extrabold text-slate-800 mb-1 flex items-center justify-between">
+                        <span>+ إضافة حالة ديناميكية جديدة</span>
+                        <span class="text-[10px] text-amber-600 font-normal">(تتضمن مؤقت وقت لتعقب الجاهزية)</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 block mb-1">المعرف (Key)</label>
+                            <input type="text" id="newStatusKey" required placeholder="e.g. prayer" pattern="^[a-zA-Z0-9_-]+$" class="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg outline-none">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 block mb-1">الاسم بالعربي</label>
+                            <input type="text" id="newStatusLabelAr" required placeholder="مثال: صلاة" class="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg outline-none">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 block mb-1">الاسم بالإنجليزي</label>
+                            <input type="text" id="newStatusLabelEn" required placeholder="e.g. Prayer" class="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg outline-none">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 items-end">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 block mb-1">اللون</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="color" id="newStatusColorPicker" value="#f59e0b" onchange="document.getElementById('newStatusColor').value=this.value" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0">
+                                <input type="text" id="newStatusColor" value="#f59e0b" class="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg uppercase">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 block mb-1">المجموعة المرتبطة</label>
+                            <select id="newStatusGroupSelect" class="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg outline-none">
+                                <option value="all">جميع المجموعات (All Groups)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button id="addStatusButton" type="submit" class="w-full py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg cursor-pointer transition">
+                                إضافة الحالة
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Statuses List -->
+                <div class="space-y-1.5">
+                    <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
+                        الحالات الحالية المعتمدة:
+                    </div>
+                    <div id="pjsipStatusesList" class="space-y-1.5 max-h-56 overflow-y-auto">
+                        <div class="text-center text-slate-400 text-sm py-4">جاري التحميل...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

@@ -40,6 +40,9 @@ function createCrmRouter(pool, options = {}) {
     const getActiveCalls = typeof options === 'object' && typeof options.getActiveCalls === 'function'
         ? options.getActiveCalls
         : (() => options.activeCalls || {});
+    const getAmiClient = typeof options === 'object' && typeof options.getAmiClient === 'function'
+        ? options.getAmiClient
+        : (() => options.amiClient || null);
     const router = express.Router();
 
     // 1. PUBLIC HEALTH ENDPOINT
@@ -352,7 +355,122 @@ function createCrmRouter(pool, options = {}) {
         }
     });
 
-    // 9. AGENT PRESENCE & AVAILABILITY STATUS
+    // 9. AGENT PRESENCE & AVAILABILITY STATUS (STATIC + DYNAMIC STATUSES)
+    const STATIC_AGENT_STATUSES = [
+        {
+            key: 'available',
+            label_ar: 'متاح',
+            label_en: 'Available',
+            desc_ar: 'جاهز لاستقبال المكالمات',
+            desc_en: 'Ready to receive calls',
+            color: '#10b981',
+            type: 'static',
+            has_timer: false
+        },
+        {
+            key: 'offline',
+            label_ar: 'غير متاح',
+            label_en: 'Offline',
+            desc_ar: 'حجب المكالمات مؤقتاً',
+            desc_en: 'Temporarily not taking calls',
+            color: '#94a3b8',
+            type: 'static',
+            has_timer: false
+        }
+    ];
+
+    async function getDynamicStatuses(targetGroup = null) {
+        try {
+            let sql = `SELECT status_key AS \`key\`, label_ar, label_en, desc_ar, desc_en, color, target_group, sort_order, is_active
+                       FROM asterisk.synq_agent_status_definitions
+                       WHERE is_active = 1`;
+            const params = [];
+            if (targetGroup) {
+                sql += ` AND (target_group IS NULL OR target_group = '' OR target_group = 'all' OR target_group = ?)`;
+                params.push(targetGroup);
+            }
+            sql += ` ORDER BY sort_order ASC, id ASC`;
+            const [rows] = await pool.query(sql, params);
+            return (rows || []).map(r => ({
+                ...r,
+                type: 'dynamic',
+                has_timer: true
+            }));
+        } catch (_) {
+            return [
+                { key: 'break', label_ar: 'استراحة', label_en: 'Break', desc_ar: 'فترة راحة قصيرة', desc_en: 'Short break', color: '#f59e0b', type: 'dynamic', has_timer: true },
+                { key: 'lunch', label_ar: 'غداء', label_en: 'Lunch', desc_ar: 'فترة تناول الغداء', desc_en: 'Lunch break', color: '#ea580c', type: 'dynamic', has_timer: true },
+                { key: 'meeting', label_ar: 'اجتماع', label_en: 'Meeting', desc_ar: 'اجتماع داخلي أو مقابلة عميل', desc_en: 'Internal meeting', color: '#8b5cf6', type: 'dynamic', has_timer: true },
+                { key: 'training', label_ar: 'تدريب', label_en: 'Training', desc_ar: 'جلسة تدريب أو ورشة عمل', desc_en: 'Training session', color: '#3b82f6', type: 'dynamic', has_timer: true }
+            ];
+        }
+    }
+
+    router.get('/agent-statuses', requireCrmScope('stats:read'), async (req, res) => {
+        try {
+            const ext = String(req.query.extension || '').trim();
+            let targetGroup = String(req.query.group || '').trim();
+
+            if (!targetGroup && ext) {
+                const [extRows] = await pool.query(
+                    'SELECT emp_group FROM asterisk.employee_extras WHERE extension = ? LIMIT 1',
+                    [ext]
+                );
+                if (extRows && extRows[0] && extRows[0].emp_group) {
+                    targetGroup = extRows[0].emp_group;
+                }
+            }
+
+            const dynamic = await getDynamicStatuses(targetGroup || null);
+            const availableStatic = STATIC_AGENT_STATUSES.find(s => s.key === 'available');
+            const offlineStatic = STATIC_AGENT_STATUSES.find(s => s.key === 'offline');
+            const all = [
+                availableStatic,
+                ...dynamic,
+                offlineStatic
+            ].filter(Boolean);
+
+            res.json({
+                success: true,
+                extension: ext || null,
+                group: targetGroup || null,
+                static: STATIC_AGENT_STATUSES,
+                dynamic: dynamic,
+                statuses: all
+            });
+        } catch (err) {
+            console.error('Fetch agent statuses error:', err.message);
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    router.post('/agent-statuses', requireCrmScope('stats:read'), async (req, res) => {
+        const { status_key, label_ar, label_en, desc_ar, desc_en, color, sort_order } = req.body || {};
+        const key = String(status_key || '').toLowerCase().trim();
+        if (!key || !/^[a-z0-9_-]+$/.test(key)) {
+            return res.status(400).json({ success: false, error: 'Valid status_key is required' });
+        }
+        if (key === 'available' || key === 'offline') {
+            return res.status(400).json({ success: false, error: 'Cannot override static status (available, offline)' });
+        }
+        const nameAr = String(label_ar || key).trim();
+        const nameEn = String(label_en || key).trim();
+        const col = String(color || '#f59e0b').trim();
+        const order = parseInt(sort_order, 10) || 10;
+
+        try {
+            await pool.query(
+                `INSERT INTO asterisk.synq_agent_status_definitions (status_key, label_ar, label_en, desc_ar, desc_en, color, is_active, sort_order)
+                 VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+                 ON DUPLICATE KEY UPDATE label_ar = VALUES(label_ar), label_en = VALUES(label_en), desc_ar = VALUES(desc_ar), desc_en = VALUES(desc_en), color = VALUES(color), is_active = 1, sort_order = VALUES(sort_order)`,
+                [key, nameAr, nameEn, desc_ar || null, desc_en || null, col, order]
+            );
+            res.json({ success: true, key, label_ar: nameAr, label_en: nameEn, color: col });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
     router.post('/agent-status', requireCrmScope('stats:read'), async (req, res) => {
         const { extension, status, display_name } = req.body || {};
         const ext = String(extension || '').trim();
@@ -404,11 +522,14 @@ function createCrmRouter(pool, options = {}) {
                 ).catch(() => {});
             }
 
+            const hasTimer = (newStatus !== 'available' && newStatus !== 'offline');
+
             res.json({
                 success: true,
                 extension: ext,
                 status: newStatus,
                 display_name: name,
+                has_timer: hasTimer,
                 updated_at: new Date().toISOString()
             });
         } catch (err) {
@@ -424,22 +545,20 @@ function createCrmRouter(pool, options = {}) {
                 'SELECT status, display_name, last_update, TIMESTAMPDIFF(SECOND, last_update, NOW()) AS elapsed_seconds FROM asterisk.synq_agent_status WHERE extension = ? LIMIT 1',
                 [ext]
             );
-            if (!rows || rows.length === 0) {
-                return res.json({
-                    success: true,
-                    extension: ext,
-                    status: 'available',
-                    display_name: ext,
-                    elapsed_seconds: 0
-                });
-            }
+            const currentStatus = (rows && rows[0] && rows[0].status) ? rows[0].status : 'available';
+            const displayName = (rows && rows[0] && rows[0].display_name) ? rows[0].display_name : ext;
+            const lastUpdate = (rows && rows[0]) ? rows[0].last_update : new Date();
+            const elapsed = (rows && rows[0]) ? Number(rows[0].elapsed_seconds) || 0 : 0;
+            const hasTimer = (currentStatus !== 'available' && currentStatus !== 'offline');
+
             res.json({
                 success: true,
                 extension: ext,
-                status: rows[0].status,
-                display_name: rows[0].display_name,
-                last_update: rows[0].last_update,
-                elapsed_seconds: Number(rows[0].elapsed_seconds) || 0
+                status: currentStatus,
+                display_name: displayName,
+                last_update: lastUpdate,
+                has_timer: hasTimer,
+                elapsed_seconds: hasTimer ? elapsed : 0
             });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
@@ -492,7 +611,10 @@ function createCrmRouter(pool, options = {}) {
                     }
                 } catch (_) {}
             }
-            const host = '192.168.100.50';
+            const requestHost = req.hostname || (req.headers.host ? req.headers.host.split(':')[0] : '192.168.100.50');
+            const host = (requestHost === 'localhost' || requestHost === '127.0.0.1' || requestHost === 'host.docker.internal')
+                ? '192.168.100.50'
+                : requestHost;
             res.json({
                 success: true,
                 ws_url: `ws://${host}:8088/ws`,
@@ -517,8 +639,12 @@ function createCrmRouter(pool, options = {}) {
             if (!src || !dst) {
                 return res.status(400).json({ success: false, error: 'Source and target extensions are required.' });
             }
+            const ami = typeof getAmiClient === 'function' ? getAmiClient() : null;
+            if (!ami) {
+                return res.status(503).json({ success: false, error: 'Asterisk AMI client is temporarily unavailable.' });
+            }
             const { executeCallTransfer } = require('../lib/call-control');
-            const result = await executeCallTransfer(pool, amiClient, ASTERISK_BIN, {
+            const result = await executeCallTransfer(pool, ami, ASTERISK_BIN, {
                 sourceExt: src,
                 destinationExt: dst
             });
@@ -526,6 +652,118 @@ function createCrmRouter(pool, options = {}) {
         } catch (err) {
             console.error('[CRM Integration] Transfer error:', err.message);
             res.status(400).json({ success: false, error: err.message });
+        }
+    });
+
+    // 12. ADVANCED WEBRTC CALL TELEMETRY & BUSINESS STATS INGESTION
+    router.post('/telemetry/call-session', requireCrmScope(['calls:read', 'softphone:use', 'live:read', 'stats:read']), async (req, res) => {
+        try {
+            const body = req.body || {};
+            const ext = String(body.extension || '').trim();
+            if (!ext) {
+                return res.status(400).json({ success: false, error: 'Extension is required' });
+            }
+
+            let uniqueid = body.uniqueid ? String(body.uniqueid).trim() : null;
+            const phone = body.phone ? String(body.phone).trim() : null;
+
+            // Auto-bind to Asterisk CDR uniqueid if not provided by client
+            if (!uniqueid && phone) {
+                const cleanPhone = phone.replace(/[^0-9]/g, '');
+                if (cleanPhone.length >= 7) {
+                    const [cdrRows] = await pool.query(
+                        `SELECT uniqueid FROM asteriskcdrdb.cdr
+                         WHERE (src = ? OR dst = ? OR dst LIKE ? OR src LIKE ?)
+                           AND calldate >= NOW() - INTERVAL 15 MINUTE
+                         ORDER BY calldate DESC LIMIT 1`,
+                        [ext, ext, `%${cleanPhone.slice(-8)}%`, `%${cleanPhone.slice(-8)}%`]
+                    );
+                    if (cdrRows && cdrRows.length > 0) {
+                        uniqueid = cdrRows[0].uniqueid;
+                    }
+                }
+            }
+
+            const callId = body.call_id ? String(body.call_id).trim() : null;
+            const direction = String(body.direction || 'outbound').toLowerCase() === 'inbound' ? 'inbound' : 'outbound';
+            const leadId = body.lead_id ? Number(body.lead_id) || null : null;
+            const leadName = body.lead_name ? String(body.lead_name).trim().slice(0, 150) : null;
+            const holdSec = Math.max(0, parseInt(body.hold_seconds, 10) || 0);
+            const holdCount = Math.max(0, parseInt(body.hold_count, 10) || 0);
+            const muteSec = Math.max(0, parseInt(body.mute_seconds, 10) || 0);
+            const wrapUpSec = Math.max(0, parseInt(body.wrap_up_seconds, 10) || 0);
+            const jitterMs = Math.max(0, parseFloat(body.jitter_ms) || 0);
+            const packetLossPct = Math.max(0, parseFloat(body.packet_loss_pct) || 0);
+            const rttMs = Math.max(0, parseInt(body.rtt_ms, 10) || 0);
+            const outcome = body.disposition_outcome ? String(body.disposition_outcome).trim().slice(0, 100) : null;
+            const deviceName = body.audio_device_name ? String(body.audio_device_name).trim().slice(0, 150) : null;
+
+            await pool.query(
+                `INSERT INTO asterisk.crm_call_telemetry
+                 (uniqueid, call_id, extension, phone, direction, lead_id, lead_name,
+                  hold_seconds, hold_count, mute_seconds, wrap_up_seconds, jitter_ms,
+                  packet_loss_pct, rtt_ms, disposition_outcome, audio_device_name)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [uniqueid, callId, ext, phone, direction, leadId, leadName,
+                 holdSec, holdCount, muteSec, wrapUpSec, jitterMs,
+                 packetLossPct, rttMs, outcome, deviceName]
+            );
+
+            res.json({
+                success: true,
+                message: 'Telemetry recorded successfully',
+                uniqueid: uniqueid
+            });
+        } catch (err) {
+            console.error('[CRM Integration] Telemetry ingestion error:', err.message);
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    // 13. RETRIEVE ADVANCED AGENT TELEMETRY STATS
+    router.get('/telemetry/stats', requireCrmScope('stats:read'), async (req, res) => {
+        const { extension, from, to } = req.query;
+        try {
+            let sql = `
+                SELECT 
+                    extension,
+                    COUNT(*) AS telemetry_calls_count,
+                    AVG(hold_seconds) AS avg_hold_sec,
+                    SUM(hold_seconds) AS total_hold_sec,
+                    SUM(hold_count) AS total_hold_count,
+                    AVG(mute_seconds) AS avg_mute_sec,
+                    SUM(mute_seconds) AS total_mute_sec,
+                    AVG(wrap_up_seconds) AS avg_wrap_up_sec,
+                    SUM(wrap_up_seconds) AS total_wrap_up_sec,
+                    AVG(jitter_ms) AS avg_jitter_ms,
+                    AVG(packet_loss_pct) AS avg_packet_loss_pct,
+                    AVG(rtt_ms) AS avg_rtt_ms
+                FROM asterisk.crm_call_telemetry
+                WHERE 1=1
+            `;
+            const params = [];
+            if (extension) {
+                sql += ' AND extension = ?';
+                params.push(extension);
+            }
+            if (from) {
+                sql += ' AND created_at >= ?';
+                params.push(from + ' 00:00:00');
+            }
+            if (to) {
+                sql += ' AND created_at <= ?';
+                params.push(to + ' 23:59:59');
+            }
+            sql += ' GROUP BY extension';
+
+            const [rows] = await pool.query(sql, params);
+            res.json({
+                success: true,
+                stats: rows || []
+            });
+        } catch (err) {
+            console.error('[CRM Integration] Telemetry stats error:', err.message);
+            res.status(500).json({ success: false, error: err.message });
         }
     });
 

@@ -1953,7 +1953,8 @@ let sipSnapshotStartTime = 0;
 // Mount CRM Integration REST API Router
 app.use('/api/integrations/crm/v1', createCrmRouter(pool, {
     getPeerStatus: () => peerStatus,
-    getActiveCalls: () => activeCalls
+    getActiveCalls: () => activeCalls,
+    getAmiClient: () => amiClient
 }));
 
 // Register /crm-live Socket.io namespace
@@ -3444,11 +3445,23 @@ app.use(async (req, res, next) => {
                 cachedEmployeeGroupTimestamp = now;
             } catch (_) {}
         }
+        let agentStatusMap = {};
+        try {
+            const [statusRows] = await pool.query('SELECT extension, status, display_name, last_update FROM asterisk.synq_agent_status');
+            if (Array.isArray(statusRows)) {
+                statusRows.forEach(r => {
+                    agentStatusMap[String(r.extension)] = r;
+                });
+            }
+        } catch (_) {}
+
         res.locals.employeeGroups = cachedEmployeeGroupNames;
         res.locals.roster = roster.map(emp => ({ 
             ...emp, 
             online: onlineMap[emp.extension] || false,
-            ip: peerIPs[emp.extension] || null
+            ip: peerIPs[emp.extension] || null,
+            agentStatus: agentStatusMap[emp.extension] ? agentStatusMap[emp.extension].status : 'available',
+            agentStatusTime: agentStatusMap[emp.extension] ? agentStatusMap[emp.extension].last_update : null
         }));
         res.locals.peerIPs = peerIPs;
         res.locals.activeCalls = activeCalls;
@@ -7292,6 +7305,47 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
             [extension, startDate, endDate]
         );
         stats.statusLogs = recentStatusLogs;
+
+        try {
+            const [telemetryRows] = await pool.query(
+                `SELECT 
+                    COUNT(*) AS telemetry_count,
+                    COALESCE(AVG(hold_seconds), 0) AS avg_hold_sec,
+                    COALESCE(SUM(hold_seconds), 0) AS total_hold_sec,
+                    COALESCE(SUM(hold_count), 0) AS total_hold_count,
+                    COALESCE(AVG(mute_seconds), 0) AS avg_mute_sec,
+                    COALESCE(SUM(mute_seconds), 0) AS total_mute_sec,
+                    COALESCE(AVG(wrap_up_seconds), 0) AS avg_wrap_up_sec,
+                    COALESCE(SUM(wrap_up_seconds), 0) AS total_wrap_up_sec,
+                    COALESCE(AVG(jitter_ms), 0) AS avg_jitter_ms,
+                    COALESCE(AVG(packet_loss_pct), 0) AS avg_packet_loss_pct,
+                    COALESCE(AVG(rtt_ms), 0) AS avg_rtt_ms
+                 FROM asterisk.crm_call_telemetry
+                 WHERE extension = ? AND created_at >= ? AND created_at <= ?`,
+                [extension, startDate, endDate]
+            );
+            const t = telemetryRows[0] || {};
+            const avgHold = Math.round(Number(t.avg_hold_sec) || 0);
+            const avgWrap = Math.round(Number(t.avg_wrap_up_sec) || 0);
+            const ahtSec = (stats.avgTalkSec || 0) + avgHold + avgWrap;
+
+            stats.telemetry = {
+                count: Number(t.telemetry_count) || 0,
+                avgHoldSec: avgHold,
+                totalHoldSec: Number(t.total_hold_sec) || 0,
+                totalHoldCount: Number(t.total_hold_count) || 0,
+                avgMuteSec: Math.round(Number(t.avg_mute_sec) || 0),
+                totalMuteSec: Number(t.total_mute_sec) || 0,
+                avgWrapUpSec: avgWrap,
+                totalWrapUpSec: Number(t.total_wrap_up_sec) || 0,
+                ahtSec: ahtSec,
+                avgJitterMs: Number((Number(t.avg_jitter_ms) || 0).toFixed(1)),
+                avgPacketLossPct: Number((Number(t.avg_packet_loss_pct) || 0).toFixed(2)),
+                avgRttMs: Math.round(Number(t.avg_rtt_ms) || 0)
+            };
+        } catch (_) {
+            stats.telemetry = { count: 0, ahtSec: stats.avgTalkSec || 0 };
+        }
 
         res.json(stats);
     } catch (error) {
@@ -12132,6 +12186,68 @@ app.delete('/api/employee/groups/:id', requireAuth, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     } finally {
         connection.release();
+    }
+});
+
+// --- PJSIP / AGENT STATUS DEFINITIONS CRUD (CONNECTED TO GROUPS) ---
+app.get('/api/employee/statuses', async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            `SELECT id, status_key, label_ar, label_en, desc_ar, desc_en, color, target_group, is_active, sort_order, created_at
+             FROM asterisk.synq_agent_status_definitions
+             ORDER BY sort_order ASC, id ASC`
+        );
+        res.json({
+            success: true,
+            static: [
+                { key: 'available', label_ar: 'متاح', label_en: 'Available', color: '#10b981', type: 'static', has_timer: false },
+                { key: 'offline', label_ar: 'غير متاح', label_en: 'Offline', color: '#94a3b8', type: 'static', has_timer: false }
+            ],
+            statuses: rows
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/employee/statuses', async (req, res) => {
+    try {
+        const { status_key, label_ar, label_en, desc_ar, color, target_group } = req.body || {};
+        const key = String(status_key || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '');
+        if (!key) return res.status(400).json({ success: false, error: 'Valid status key is required' });
+        if (key === 'available' || key === 'offline') {
+            return res.status(400).json({ success: false, error: 'Cannot override static status (available / offline)' });
+        }
+        const nameAr = String(label_ar || key).trim();
+        const nameEn = String(label_en || key).trim();
+        const group = (target_group && target_group !== 'all' && target_group !== '') ? String(target_group).trim() : null;
+        const col = String(color || '#f59e0b').trim();
+
+        const [result] = await pool.query(
+            `INSERT INTO asterisk.synq_agent_status_definitions (status_key, label_ar, label_en, desc_ar, color, target_group, is_active, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, 1, 10)
+             ON DUPLICATE KEY UPDATE label_ar = VALUES(label_ar), label_en = VALUES(label_en), desc_ar = VALUES(desc_ar), color = VALUES(color), target_group = VALUES(target_group), is_active = 1`,
+            [key, nameAr, nameEn, desc_ar || null, col, group]
+        );
+        res.json({ success: true, id: result.insertId || null, key, label_ar: nameAr, label_en: nameEn, target_group: group, color: col });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.delete('/api/employee/statuses/:id', async (req, res) => {
+    try {
+        const id = Number.parseInt(req.params.id, 10);
+        if (!Number.isInteger(id) || id < 1) {
+            return res.status(400).json({ success: false, error: 'Valid status ID is required' });
+        }
+        await pool.query(
+            `DELETE FROM asterisk.synq_agent_status_definitions WHERE id = ?`,
+            [id]
+        );
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
