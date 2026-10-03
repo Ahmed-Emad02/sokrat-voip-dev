@@ -1899,9 +1899,21 @@
                     this.updatePresetInStorage(preset);
                 }
             } else {
-                if (autoBox) autoBox.disabled = false;
+                if (autoBox) {
+                    autoBox.disabled = false;
+                    if (this.core._wasForcedAutoAnswer) {
+                        this.core.isAutoAnswer = false;
+                        this.core._wasForcedAutoAnswer = false;
+                        autoBox.checked = false;
+                        if (preset) {
+                            preset.autoAnswer = false;
+                            this.updatePresetInStorage(preset);
+                        }
+                    }
+                }
                 if (autoBtn) {
                     autoBtn.classList.remove('policy-locked', 'policy-disabled');
+                    autoBtn.classList.toggle('active-auto', Boolean(this.core.isAutoAnswer));
                     autoBtn.title = isAr ? 'الرد التلقائي' : 'Auto Answer';
                 }
             }

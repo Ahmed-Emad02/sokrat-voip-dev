@@ -11702,7 +11702,7 @@ app.get('/api/extension-policies', requireAuth, async (req, res) => {
             LEFT JOIN \`asterisk\`.\`sip\` s ON s.id = u.extension AND s.keyword = 'webrtc'
             LEFT JOIN \`asterisk\`.\`sip\` s_tr ON s_tr.id = u.extension AND s_tr.keyword = 'transport'
             LEFT JOIN \`asterisk\`.\`extension_policies\` ep ON ep.extension = u.extension
-            WHERE s.data = 'yes' OR s_tr.data LIKE '%ws%' OR d.tech LIKE '%webrtc%' OR u.extension IN ('150', '151')
+            WHERE d.tech IN ('pjsip', 'webrtc') OR s.data = 'yes' OR s_tr.data LIKE '%ws%' OR d.tech LIKE '%webrtc%' OR u.extension IN ('150', '151')
             ORDER BY CAST(u.extension AS UNSIGNED) ASC
         `);
         res.json({ success: true, policies: rows });
@@ -11744,6 +11744,8 @@ app.post('/api/extension-policies/:extension', requireAuth, async (req, res) => 
             ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd), disable_outbound_ringing_cancel = VALUES(disable_outbound_ringing_cancel)
         `, [extension, auto_answer, dnd, disable_cancel]);
 
+        io.emit('extensionPolicyUpdate', { extension, auto_answer, dnd, disable_outbound_ringing_cancel: disable_cancel });
+
         res.json({ success: true, message: `Policy updated for extension ${extension}` });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -11782,6 +11784,8 @@ app.post('/api/extension-policies-bulk', requireAuth, async (req, res) => {
                 ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd), disable_outbound_ringing_cancel = VALUES(disable_outbound_ringing_cancel)
             `, [ext, finalAuto, finalDnd, finalCancel]);
         }
+
+        io.emit('extensionPolicyBulkUpdate', { extensions: targetExts, auto_answer: autoAnswerVal, dnd: dndVal, disable_outbound_ringing_cancel: disableCancelVal });
 
         res.json({ success: true, count: targetExts.length, message: `Policies updated for ${targetExts.length} extension(s)` });
     } catch (err) {
