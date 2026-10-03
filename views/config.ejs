@@ -5814,7 +5814,7 @@ function isTabAllowed(tabName) {
                             ? `<span class="text-xs font-bold text-[var(--text-primary)] truncate">${escapeHtml(ext.title)}</span>`
                             : `<span class="text-[11px] text-[var(--text-muted)]">${isRtl ? 'بدون مسمى وظيفي' : 'No job title'}</span>`;
                         const adminBadge = ext.is_group_admin ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono" title="${isRtl ? 'مدير المجموعة (صلاحية التقاط المكالمات)' : 'Group Admin (Call Pickup Authority)'}"><svg class="w-2.5 h-2.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg><span>Admin</span></span>` : '';
-                        const groupLabel = ext.emp_group ? escapeHtml(ext.emp_group) : (isRtl ? 'بدون مجموعة' : 'Ungrouped');
+                        const groupLabel = ext.emp_group ? escapeHtml(formatGroupName(ext.emp_group, isRtl)) : (isRtl ? 'بدون مجموعة' : 'Ungrouped');
                         const groupClass = ext.emp_group ? 'text-red-400 font-bold' : 'text-[var(--text-muted)]';
                         const groupText = `<div class="flex items-center gap-1.5 flex-wrap"><span class="text-[10px] truncate ${groupClass}">${groupLabel}</span>${adminBadge}</div>`;
                         const isWebRtcExt = (ext.tech === 'pjsip' || ext.tech === 'webrtc');
@@ -5913,6 +5913,44 @@ function isTabAllowed(tabName) {
             showEmployeePhotoPreview('', '');
         }
 
+        function formatGroupName(groupOrName, isRtl) {
+            if (!groupOrName) return isRtl ? 'بدون مجموعة' : 'Ungrouped';
+            let name = '';
+            let nameAr = '';
+            let nameEn = '';
+            if (typeof groupOrName === 'object') {
+                name = groupOrName.name || '';
+                nameAr = groupOrName.name_ar || '';
+                nameEn = groupOrName.name_en || '';
+            } else {
+                name = String(groupOrName || '');
+            }
+            if (name === '___ungrouped___') return isRtl ? 'بدون مجموعة' : 'Ungrouped';
+            if (isRtl && nameAr) return nameAr;
+            if (!isRtl && nameEn) return nameEn;
+            const parenMatch = name.match(/^([^(]+?)\s*\(([^)]+)\)$/);
+            if (parenMatch) {
+                const p1 = parenMatch[1].trim();
+                const p2 = parenMatch[2].trim();
+                const hasAr1 = /[\u0600-\u06FF]/.test(p1);
+                const hasAr2 = /[\u0600-\u06FF]/.test(p2);
+                if (hasAr1 && !hasAr2) return isRtl ? p1 : p2;
+                if (!hasAr1 && hasAr2) return isRtl ? p2 : p1;
+                return isRtl ? p1 : p2;
+            }
+            const slashMatch = name.match(/^([^\/]+?)\s*[\/|]\s*(.+)$/);
+            if (slashMatch) {
+                const p1 = slashMatch[1].trim();
+                const p2 = slashMatch[2].trim();
+                const hasAr1 = /[\u0600-\u06FF]/.test(p1);
+                const hasAr2 = /[\u0600-\u06FF]/.test(p2);
+                if (hasAr1 && !hasAr2) return isRtl ? p1 : p2;
+                if (!hasAr1 && hasAr2) return isRtl ? p2 : p1;
+                return isRtl ? p1 : p2;
+            }
+            return name;
+        }
+
         function setEmployeeGroupOptions(groups, selectedValue = '') {
             const select = document.getElementById('extGroup');
             select.innerHTML = '';
@@ -5923,7 +5961,7 @@ function isTabAllowed(tabName) {
             groups.forEach(group => {
                 const option = document.createElement('option');
                 option.value = group.name;
-                option.textContent = group.name;
+                option.textContent = formatGroupName(group, isRtl);
                 select.appendChild(option);
             });
             select.value = selectedValue;

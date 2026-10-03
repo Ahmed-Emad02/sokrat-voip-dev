@@ -1,9 +1,13 @@
+<%
+const lang = (typeof currentLang !== 'undefined' && currentLang) ? currentLang : 'ar';
+const isRtl = (lang === 'ar');
+%>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<%= lang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة المراقبة المباشرة للسنترال</title>
+    <title><%= isRtl ? 'لوحة المراقبة المباشرة للسنترال' : 'Live PBX Monitor' %></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
@@ -13,7 +17,7 @@
             appearance: none;
             background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2064748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
             background-repeat: no-repeat;
-            background-position: left 0.75rem center;
+            background-position: <%= isRtl ? 'left 0.75rem center' : 'right 0.75rem center' %>;
             background-size: 1em;
         }
     </style>
@@ -27,10 +31,10 @@
                 <div class="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse"></div>
                 <div>
                     <h1 class="text-lg font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
-                        <span>لوحة المراقبة المباشرة للسنترال</span>
+                        <span><%= isRtl ? 'لوحة المراقبة المباشرة للسنترال' : 'Live PBX Monitor' %></span>
                     </h1>
                     <p class="text-xs text-slate-500 mt-0.5">
-                        مراقبة فورية للتحويلات والمكالمات في السنترال
+                        <%= isRtl ? 'مراقبة فورية للتحويلات والمكالمات في السنترال' : 'Real-time monitoring of extensions and calls' %>
                     </p>
                 </div>
             </div>
@@ -38,14 +42,14 @@
             <div class="flex items-center gap-3 self-end sm:self-auto">
                 <button type="button" onclick="openGroupManager()" class="text-xs font-extrabold bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition cursor-pointer">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                    <span>إدارة المجموعات وحالات PJSIP</span>
+                    <span><%= isRtl ? 'إدارة المجموعات وحالات PJSIP' : 'Manage Groups & PJSIP' %></span>
                 </button>
 
                 <span id="crmUserNameBadge" class="text-xs font-bold bg-white text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200"></span>
                 
                 <div id="supervisorBadge" class="text-xs font-semibold bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5 <%= session.supervisor_extension ? '' : 'hidden' %>">
                     <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                    <span>المشرف:</span>
+                    <span><%= isRtl ? 'المشرف:' : 'Supervisor:' %></span>
                     <span id="supervisorExtVal" class="font-mono font-extrabold"><%= session.supervisor_extension || '' %></span>
                 </div>
             </div>
@@ -55,7 +59,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div class="bg-white p-4 rounded-xl border border-slate-200/80 flex items-center justify-between">
                 <div>
-                    <div class="text-xs font-bold text-slate-500">إجمالي التحويلات</div>
+                    <div class="text-xs font-bold text-slate-500"><%= isRtl ? 'إجمالي التحويلات' : 'Total Extensions' %></div>
                     <div id="statTotal" class="text-2xl font-black text-slate-900 mt-1">0</div>
                 </div>
                 <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
@@ -65,7 +69,7 @@
 
             <div class="bg-white p-4 rounded-xl border border-slate-200/80 flex items-center justify-between">
                 <div>
-                    <div class="text-xs font-bold text-slate-500">الخطوط المتصلة</div>
+                    <div class="text-xs font-bold text-slate-500"><%= isRtl ? 'الخطوط المتصلة' : 'Online Extensions' %></div>
                     <div id="statOnline" class="text-2xl font-black text-emerald-600 mt-1">0</div>
                 </div>
                 <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -75,7 +79,7 @@
 
             <div class="bg-white p-4 rounded-xl border border-slate-200/80 flex items-center justify-between">
                 <div>
-                    <div class="text-xs font-bold text-slate-500">المكالمات الجارية</div>
+                    <div class="text-xs font-bold text-slate-500"><%= isRtl ? 'المكالمات الجارية' : 'Active Calls' %></div>
                     <div id="statActive" class="text-2xl font-black text-amber-600 mt-1">0</div>
                 </div>
                 <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
@@ -87,24 +91,24 @@
         <!-- Search & Filter Bar -->
         <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200/80">
             <div class="relative w-full sm:w-72">
-                <input id="searchInput" type="text" placeholder="بحث بالاسم أو رقم التحويلة..." class="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900">
-                <span class="absolute left-3 top-2.5 text-slate-400">
+                <input id="searchInput" type="text" placeholder="<%= isRtl ? 'بحث بالاسم أو رقم التحويلة...' : 'Search by name or extension...' %>" class="w-full <%= isRtl ? 'pl-9 pr-3' : 'pr-9 pl-3' %> py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900">
+                <span class="absolute <%= isRtl ? 'left-3' : 'right-3' %> top-2.5 text-slate-400">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 </span>
             </div>
 
             <div class="flex items-center gap-1.5 text-xs font-bold self-end sm:self-auto">
-                <button data-filter="all" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-900 text-white transition">الكل</button>
-                <button data-filter="online" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition">متصل</button>
-                <button data-filter="busy" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition">في مكالمة</button>
-                <button data-filter="offline" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition">غير متصل</button>
+                <button data-filter="all" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-900 text-white transition"><%= isRtl ? 'الكل' : 'All' %></button>
+                <button data-filter="online" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition"><%= isRtl ? 'متصل' : 'Online' %></button>
+                <button data-filter="busy" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition"><%= isRtl ? 'في مكالمة' : 'In Call' %></button>
+                <button data-filter="offline" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition"><%= isRtl ? 'غير متصل' : 'Offline' %></button>
             </div>
         </div>
 
         <!-- Extensions Grid -->
         <div id="extensionsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             <div id="loadingStatus" class="col-span-full text-center py-12 text-slate-400 text-sm font-semibold">
-                جاري الاتصال بالخادم وتحميل الخطوط...
+                <%= isRtl ? 'جاري الاتصال بالخادم وتحميل الخطوط...' : 'Connecting to PBX and loading extensions...' %>
             </div>
         </div>
 
@@ -440,6 +444,45 @@
 
         // Group & PJSIP Status Manager
         let cachedGroupsData = [];
+        const isRtl = <%= isRtl %>;
+
+        function formatGroupName(groupOrName, isRtl) {
+            if (!groupOrName) return isRtl ? 'بدون مجموعة' : 'Ungrouped';
+            let name = '';
+            let nameAr = '';
+            let nameEn = '';
+            if (typeof groupOrName === 'object') {
+                name = groupOrName.name || '';
+                nameAr = groupOrName.name_ar || '';
+                nameEn = groupOrName.name_en || '';
+            } else {
+                name = String(groupOrName || '');
+            }
+            if (name === '___ungrouped___') return isRtl ? 'بدون مجموعة' : 'Ungrouped';
+            if (isRtl && nameAr) return nameAr;
+            if (!isRtl && nameEn) return nameEn;
+            const parenMatch = name.match(/^([^(]+?)\s*\(([^)]+)\)$/);
+            if (parenMatch) {
+                const p1 = parenMatch[1].trim();
+                const p2 = parenMatch[2].trim();
+                const hasAr1 = /[\u0600-\u06FF]/.test(p1);
+                const hasAr2 = /[\u0600-\u06FF]/.test(p2);
+                if (hasAr1 && !hasAr2) return isRtl ? p1 : p2;
+                if (!hasAr1 && hasAr2) return isRtl ? p2 : p1;
+                return isRtl ? p1 : p2;
+            }
+            const slashMatch = name.match(/^([^\/]+?)\s*[\/|]\s*(.+)$/);
+            if (slashMatch) {
+                const p1 = slashMatch[1].trim();
+                const p2 = slashMatch[2].trim();
+                const hasAr1 = /[\u0600-\u06FF]/.test(p1);
+                const hasAr2 = /[\u0600-\u06FF]/.test(p2);
+                if (hasAr1 && !hasAr2) return isRtl ? p1 : p2;
+                if (!hasAr1 && hasAr2) return isRtl ? p2 : p1;
+                return isRtl ? p1 : p2;
+            }
+            return name;
+        }
 
         function switchGroupModalTab(tab) {
             const btnGroups = document.getElementById('tabBtnGroups');
@@ -472,7 +515,9 @@
         }
 
         function loadGroupsList() {
-            fetch('/api/employee/groups')
+            fetch('/api/employee/groups?lang=' + (isRtl ? 'ar' : 'en'), {
+                headers: { 'Authorization': 'Bearer ' + EMBED_TOKEN, 'X-Embed-Token': EMBED_TOKEN }
+            })
                 .then(r => r.json())
                 .then(data => {
                     cachedGroupsData = data.groups || [];
@@ -481,14 +526,14 @@
 
                     const selectGrp = document.getElementById('newStatusGroupSelect');
                     if (selectGrp) {
-                        selectGrp.innerHTML = `<option value="all">جميع المجموعات (All Groups)</option>` +
-                            cachedGroupsData.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+                        selectGrp.innerHTML = `<option value="all">${isRtl ? 'جميع المجموعات (All Groups)' : 'All Groups'}</option>` +
+                            cachedGroupsData.map(g => `<option value="${g.name}">${formatGroupName(g, isRtl)}</option>`).join('');
                     }
 
                     if (!cachedGroupsData.length) {
                         const empty = document.createElement('div');
                         empty.className = 'text-center text-slate-400 text-xs py-5';
-                        empty.textContent = 'لا توجد مجموعات بعد';
+                        empty.textContent = isRtl ? 'لا توجد مجموعات بعد' : 'No groups yet';
                         list.appendChild(empty);
                         return;
                     }
@@ -496,8 +541,13 @@
                     cachedGroupsData.forEach(group => {
                         const row = document.createElement('div');
                         row.className = 'flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold';
+                        const dispName = formatGroupName(group, isRtl);
+                        const subName = isRtl ? (group.name_en || '') : (group.name_ar || '');
+                        const titleHtml = (subName && subName !== dispName) 
+                            ? `${dispName} <span class="text-xs font-normal text-slate-400">(${subName})</span>` 
+                            : dispName;
                         row.innerHTML = `
-                            <span>${group.name}</span>
+                            <span>${titleHtml}</span>
                             <button type="button" onclick="deleteGroup(${group.id}, '${group.name}')" class="text-red-500 hover:text-red-700 cursor-pointer p-1">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                             </button>
@@ -512,21 +562,42 @@
 
         function addGroup(e) {
             e.preventDefault();
-            const input = document.getElementById('newGroupName');
+            const inputAr = document.getElementById('newGroupNameAr');
+            const inputEn = document.getElementById('newGroupNameEn');
+            const inputLegacy = document.getElementById('newGroupName');
             const btn = document.getElementById('addGroupButton');
-            const name = input.value.trim();
-            if (!name) return;
+
+            const nameAr = inputAr ? inputAr.value.trim() : '';
+            const nameEn = inputEn ? inputEn.value.trim() : '';
+            const nameLegacy = inputLegacy ? inputLegacy.value.trim() : '';
+
+            let payload = {};
+            if (nameAr || nameEn) {
+                payload.name_ar = nameAr;
+                payload.name_en = nameEn;
+                payload.name = (nameAr && nameEn) ? `${nameAr} (${nameEn})` : (nameAr || nameEn);
+            } else if (nameLegacy) {
+                payload.name = nameLegacy;
+            } else {
+                return;
+            }
 
             btn.disabled = true;
             fetch('/api/employee/groups', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name })
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + EMBED_TOKEN,
+                    'X-Embed-Token': EMBED_TOKEN
+                },
+                body: JSON.stringify(payload)
             })
             .then(r => r.json())
             .then(data => {
                 if (!data.success) throw new Error(data.error || 'Failed to add group');
-                input.value = '';
+                if (inputAr) inputAr.value = '';
+                if (inputEn) inputEn.value = '';
+                if (inputLegacy) inputLegacy.value = '';
                 loadGroupsList();
             })
             .catch(err => alert(err.message))
@@ -534,8 +605,14 @@
         }
 
         function deleteGroup(id, name) {
-            if (!confirm('هل أنت متأكد من حذف المجموعة ' + name + '؟')) return;
-            fetch('/api/employee/groups/' + id, { method: 'DELETE' })
+            if (!confirm((isRtl ? 'هل أنت متأكد من حذف المجموعة ' : 'Delete group ') + name + '?')) return;
+            fetch('/api/employee/groups/' + id, { 
+                method: 'DELETE',
+                headers: { 
+                    'Authorization': 'Bearer ' + EMBED_TOKEN,
+                    'X-Embed-Token': EMBED_TOKEN
+                }
+            })
                 .then(r => r.json())
                 .then(data => {
                     if (!data.success) throw new Error(data.error || 'Failed to delete');
@@ -545,7 +622,12 @@
         }
 
         function loadPjsipStatusesList() {
-            fetch('/api/employee/statuses')
+            fetch('/api/employee/statuses', {
+                headers: { 
+                    'Authorization': 'Bearer ' + EMBED_TOKEN,
+                    'X-Embed-Token': EMBED_TOKEN
+                }
+            })
                 .then(r => r.json())
                 .then(data => {
                     const list = document.getElementById('pjsipStatusesList');
@@ -553,7 +635,7 @@
 
                     const statuses = data.statuses || [];
                     if (!statuses.length) {
-                        list.innerHTML = `<div class="text-center text-slate-400 text-xs py-4">لا توجد حالات مخصصة بعد</div>`;
+                        list.innerHTML = `<div class="text-center text-slate-400 text-xs py-4">${isRtl ? 'لا توجد حالات مخصصة بعد' : 'No custom statuses yet'}</div>`;
                         return;
                     }
 
@@ -561,12 +643,12 @@
                         const row = document.createElement('div');
                         row.className = 'flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs';
                         const dotColor = st.color || '#f59e0b';
-                        const grpLabel = (st.target_group && st.target_group !== 'all') ? st.target_group : 'جميع المجموعات';
+                        const grpLabel = (st.target_group && st.target_group !== 'all') ? formatGroupName(st.target_group, isRtl) : (isRtl ? 'جميع المجموعات' : 'All Groups');
 
                         row.innerHTML = `
                             <div class="flex items-center gap-2 min-w-0">
                                 <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${dotColor}; box-shadow:0 0 0 2px ${dotColor}33;"></span>
-                                <strong class="text-slate-800 font-bold">${st.label_ar} (${st.label_en || st.status_key})</strong>
+                                <strong class="text-slate-800 font-bold">${isRtl ? st.label_ar : (st.label_en || st.label_ar)}</strong>
                                 <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">${grpLabel}</span>
                             </div>
                             <button type="button" onclick="deletePjsipStatus(${st.id}, '${st.label_ar}')" class="text-red-500 hover:text-red-700 cursor-pointer p-1">
@@ -628,7 +710,11 @@
             btn.disabled = true;
             fetch('/api/employee/statuses', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + EMBED_TOKEN,
+                    'X-Embed-Token': EMBED_TOKEN
+                },
                 body: JSON.stringify(payload)
             })
             .then(r => r.json())
@@ -643,8 +729,14 @@
         }
 
         function deletePjsipStatus(id, name) {
-            if (!confirm('هل تريد حذف الحالة ' + name + '؟')) return;
-            fetch('/api/employee/statuses/' + id, { method: 'DELETE' })
+            if (!confirm((isRtl ? 'هل تريد حذف الحالة ' : 'Delete status ') + name + '?')) return;
+            fetch('/api/employee/statuses/' + id, { 
+                method: 'DELETE',
+                headers: { 
+                    'Authorization': 'Bearer ' + EMBED_TOKEN,
+                    'X-Embed-Token': EMBED_TOKEN
+                }
+            })
                 .then(r => r.json())
                 .then(data => {
                     if (!data.success) throw new Error(data.error || 'Failed to delete status');
@@ -661,9 +753,9 @@
                 <div>
                     <h3 class="text-base font-extrabold flex items-center gap-2">
                         <svg class="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                        <span>إدارة المجموعات وحالات الوكلاء (PJSIP)</span>
+                        <span><%= isRtl ? 'إدارة المجموعات وحالات الوكلاء (PJSIP)' : 'Manage Groups & PJSIP Statuses' %></span>
                     </h3>
-                    <p class="text-xs text-slate-500 mt-1">ربط حالات الوكلاء بمجموعات العمل والتحويلات للسنترال و CRM</p>
+                    <p class="text-xs text-slate-500 mt-1"><%= isRtl ? 'ربط حالات الوكلاء بمجموعات العمل والتحويلات للسنترال و CRM' : 'Configure extension groups and connected PJSIP presence statuses' %></p>
                 </div>
                 <button type="button" onclick="closeGroupManager()" class="text-slate-400 hover:text-slate-800 cursor-pointer p-1.5 rounded-lg hover:bg-slate-100">&#10005;</button>
             </div>
@@ -671,24 +763,38 @@
             <!-- Tab Buttons -->
             <div class="flex items-center gap-2 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
                 <button type="button" id="tabBtnGroups" onclick="switchGroupModalTab('groups')" class="flex-1 py-1.5 px-3 text-xs font-extrabold rounded-lg transition bg-red-600 text-white cursor-pointer shadow-sm">
-                    مجموعات الموظفين (Groups)
+                    <%= isRtl ? 'مجموعات الموظفين (Groups)' : 'Employee Groups' %>
                 </button>
                 <button type="button" id="tabBtnStatuses" onclick="switchGroupModalTab('statuses')" class="flex-1 py-1.5 px-3 text-xs font-extrabold rounded-lg transition text-slate-500 hover:text-slate-800 cursor-pointer">
-                    حالات الوكلاء و PJSIP (Statuses)
+                    <%= isRtl ? 'حالات الوكلاء و PJSIP (Statuses)' : 'PJSIP Agent Statuses' %>
                 </button>
             </div>
 
             <!-- TAB 1: GROUPS MANAGEMENT -->
             <div id="tabContentGroups" class="space-y-4 flex-1 overflow-y-auto pr-1">
-                <form id="groupForm" onsubmit="addGroup(event)" class="flex gap-2">
-                    <input type="text" id="newGroupName" maxlength="100" required placeholder="اسم المجموعة الجديدة..." class="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-red-500">
-                    <button id="addGroupButton" type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg cursor-pointer whitespace-nowrap">
-                        إضافة مجموعة
-                    </button>
+                <form id="groupForm" onsubmit="addGroup(event)" class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+                    <div class="text-xs font-extrabold text-slate-800">
+                        <%= isRtl ? '+ إضافة مجموعة عمل جديدة' : '+ Add New Extension Group' %>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 block mb-1"><%= isRtl ? 'اسم المجموعة (عربي)' : 'Group Name (Arabic)' %></label>
+                            <input type="text" id="newGroupNameAr" required placeholder="<%= isRtl ? 'مثال: المبيعات أو الدعم الفني' : 'e.g. Sales' %>" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-none">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-500 block mb-1"><%= isRtl ? 'اسم المجموعة (إنجليزي)' : 'Group Name (English)' %></label>
+                            <input type="text" id="newGroupNameEn" required placeholder="<%= isRtl ? 'e.g. Sales or Support' : 'e.g. Sales' %>" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-none">
+                        </div>
+                    </div>
+                    <div class="flex justify-end pt-1">
+                        <button id="addGroupButton" type="submit" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg cursor-pointer whitespace-nowrap transition">
+                            <%= isRtl ? 'إضافة مجموعة' : 'Add Group' %>
+                        </button>
+                    </div>
                 </form>
 
                 <div id="groupsList" class="space-y-2 max-h-64 overflow-y-auto">
-                    <div class="text-center text-slate-400 text-sm py-4">جاري التحميل...</div>
+                    <div class="text-center text-slate-400 text-sm py-4"><%= isRtl ? 'جاري التحميل...' : 'Loading...' %></div>
                 </div>
             </div>
 

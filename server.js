@@ -1665,13 +1665,27 @@ function getClientIp(req) {
 }
 
 // --- AUTH MIDDLEWARE ---
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
     if (req.isApiKeyAuthenticated && req.apiKey) {
         return next();
     }
     if (req.session && req.session.userId) {
         res.locals.currentUser = req.session.username;
         return next();
+    }
+    const authHeader = req.headers['authorization'] || '';
+    const embedToken = req.headers['x-embed-token'] || (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '');
+    if (embedToken && embedToken.startsWith('ses_')) {
+        try {
+            const { verifyEmbedSession } = require('./lib/integration-auth');
+            const embedSession = await verifyEmbedSession(pool, embedToken);
+            if (embedSession) {
+                req.isEmbedAuthenticated = true;
+                req.embedSession = embedSession;
+                res.locals.currentUser = embedSession.crm_user_name || 'crm_embed';
+                return next();
+            }
+        } catch (_) {}
     }
     if (req.path.startsWith('/api/') || req.path.startsWith('/integrations/') || req.path.startsWith('/audio/') || req.path.startsWith('/voicemail/audio/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
         return res.status(401).json({ success: false, error: 'Unauthorized. Please log in or provide a valid X-API-Key header.' });
@@ -12078,13 +12092,47 @@ app.delete('/api/config/extensions/:extension', async (req, res) => {
     }
 });
 
+// Helper to parse bilingual group names: "Arabic (English)" or separate ar/en columns
+function parseBilingualName(name, nameAr = null, nameEn = null) {
+    if (nameAr && nameEn) return { ar: String(nameAr).trim(), en: String(nameEn).trim() };
+    const raw = String(name || '').trim();
+    if (!raw) return { ar: '', en: '' };
+    const parenMatch = raw.match(/^([^(]+?)\s*\(([^)]+)\)$/);
+    if (parenMatch) {
+        const p1 = parenMatch[1].trim(), p2 = parenMatch[2].trim();
+        const hasAr1 = /[\u0600-\u06FF]/.test(p1), hasAr2 = /[\u0600-\u06FF]/.test(p2);
+        if (hasAr1 && !hasAr2) return { ar: nameAr || p1, en: nameEn || p2 };
+        if (!hasAr1 && hasAr2) return { ar: nameAr || p2, en: nameEn || p1 };
+        return { ar: nameAr || p1, en: nameEn || p2 };
+    }
+    const slashMatch = raw.match(/^([^\/]+?)\s*[\/|]\s*(.+)$/);
+    if (slashMatch) {
+        const p1 = slashMatch[1].trim(), p2 = slashMatch[2].trim();
+        const hasAr1 = /[\u0600-\u06FF]/.test(p1), hasAr2 = /[\u0600-\u06FF]/.test(p2);
+        if (hasAr1 && !hasAr2) return { ar: nameAr || p1, en: nameEn || p2 };
+        if (!hasAr1 && hasAr2) return { ar: nameAr || p2, en: nameEn || p1 };
+        return { ar: nameAr || p1, en: nameEn || p2 };
+    }
+    return { ar: nameAr || raw, en: nameEn || raw };
+}
+
 // --- EMPLOYEE GROUPS CRUD ---
 app.get('/api/employee/groups', requireAuth, async (req, res) => {
     try {
         const [rows] = await pool.query(
-            `SELECT id, name, description, created_at FROM ${tables.employeeGroups} ORDER BY name ASC`
+            `SELECT id, name, name_ar, name_en, description, created_at FROM ${tables.employeeGroups} ORDER BY name ASC`
         );
-        res.json({ success: true, groups: rows });
+        const reqLang = String(req.query.lang || (req.session && req.session.lang) || 'ar').toLowerCase();
+        const formatted = rows.map(r => {
+            const parsed = parseBilingualName(r.name, r.name_ar, r.name_en);
+            return {
+                ...r,
+                name_ar: parsed.ar,
+                name_en: parsed.en,
+                display_name: reqLang === 'en' ? parsed.en : parsed.ar
+            };
+        });
+        res.json({ success: true, groups: formatted });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -12092,16 +12140,35 @@ app.get('/api/employee/groups', requireAuth, async (req, res) => {
 
 app.post('/api/employee/groups', requireAuth, async (req, res) => {
     try {
-        const name = String(req.body.name || '').trim();
+        let nameAr = String(req.body.name_ar || '').trim();
+        let nameEn = String(req.body.name_en || '').trim();
+        let name = String(req.body.name || '').trim();
         const description = String(req.body.description || '').trim();
+
+        if (!name && (nameAr || nameEn)) {
+            if (nameAr && nameEn) {
+                name = `${nameAr} (${nameEn})`;
+            } else {
+                name = nameAr || nameEn;
+            }
+        }
         if (!name) return res.status(400).json({ success: false, error: 'Group name is required' });
         if (name.length > 100) return res.status(400).json({ success: false, error: 'Group name must be 100 characters or fewer' });
+
+        const parsed = parseBilingualName(name, nameAr, nameEn);
+        nameAr = parsed.ar;
+        nameEn = parsed.en;
+
         const [result] = await pool.query(
-            `INSERT INTO ${tables.employeeGroups} (name, description) VALUES (?, ?)`,
-            [name, description || null]
+            `INSERT INTO ${tables.employeeGroups} (name, name_ar, name_en, description) VALUES (?, ?, ?, ?)`,
+            [name, nameAr || null, nameEn || null, description || null]
         );
         syncExtensionCallPickupGroups().catch(() => {});
-        res.json({ success: true, id: result.insertId, group: { id: result.insertId, name, description } });
+        res.json({
+            success: true,
+            id: result.insertId,
+            group: { id: result.insertId, name, name_ar: nameAr, name_en: nameEn, description }
+        });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, error: 'Group name already exists' });
@@ -12114,13 +12181,26 @@ app.put('/api/employee/groups/:id', requireAuth, async (req, res) => {
     const connection = await pool.getConnection();
     try {
         const id = Number.parseInt(req.params.id, 10);
-        const name = String(req.body.name || '').trim();
+        let nameAr = String(req.body.name_ar || '').trim();
+        let nameEn = String(req.body.name_en || '').trim();
+        let name = String(req.body.name || '').trim();
         const description = String(req.body.description || '').trim();
         if (!Number.isInteger(id) || id < 1) {
             return res.status(400).json({ success: false, error: 'Valid group ID is required' });
         }
+        if (!name && (nameAr || nameEn)) {
+            if (nameAr && nameEn) {
+                name = `${nameAr} (${nameEn})`;
+            } else {
+                name = nameAr || nameEn;
+            }
+        }
         if (!name) return res.status(400).json({ success: false, error: 'Group name is required' });
         if (name.length > 100) return res.status(400).json({ success: false, error: 'Group name must be 100 characters or fewer' });
+
+        const parsed = parseBilingualName(name, nameAr, nameEn);
+        nameAr = parsed.ar;
+        nameEn = parsed.en;
 
         await connection.beginTransaction();
         const [rows] = await connection.query(
@@ -12133,8 +12213,8 @@ app.put('/api/employee/groups/:id', requireAuth, async (req, res) => {
         }
         const previousName = rows[0].name;
         await connection.query(
-            `UPDATE ${tables.employeeGroups} SET name = ?, description = ? WHERE id = ?`,
-            [name, description || null, id]
+            `UPDATE ${tables.employeeGroups} SET name = ?, name_ar = ?, name_en = ?, description = ? WHERE id = ?`,
+            [name, nameAr || null, nameEn || null, description || null, id]
         );
         if (previousName !== name) {
             await connection.query(
@@ -12144,7 +12224,7 @@ app.put('/api/employee/groups/:id', requireAuth, async (req, res) => {
         }
         await connection.commit();
         syncExtensionCallPickupGroups().catch(() => {});
-        res.json({ success: true, group: { id, name, description } });
+        res.json({ success: true, group: { id, name, name_ar: nameAr, name_en: nameEn, description } });
     } catch (error) {
         await connection.rollback();
         if (error.code === 'ER_DUP_ENTRY') {

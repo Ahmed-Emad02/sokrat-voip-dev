@@ -803,6 +803,30 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                 }
 
                 // Group roster by emp_group; every defined group gets a section even when empty
+                function formatGroupName(gName, isRtl) {
+                    if (!gName || gName === '___ungrouped___') return isRtl ? t.ungrouped : 'Ungrouped';
+                    const str = String(gName).trim();
+                    const m = str.match(/^([^(]+?)\s*\(([^)]+)\)$/);
+                    if (m) {
+                        const p1 = m[1].trim(), p2 = m[2].trim();
+                        const hasAr1 = /[\u0600-\u06FF]/.test(p1);
+                        const hasAr2 = /[\u0600-\u06FF]/.test(p2);
+                        if (hasAr1 && !hasAr2) return isRtl ? p1 : p2;
+                        if (!hasAr1 && hasAr2) return isRtl ? p2 : p1;
+                        return isRtl ? p1 : p2;
+                    }
+                    const s = str.match(/^([^\/]+?)\s*[\/|]\s*(.+)$/);
+                    if (s) {
+                        const p1 = s[1].trim(), p2 = s[2].trim();
+                        const hasAr1 = /[\u0600-\u06FF]/.test(p1);
+                        const hasAr2 = /[\u0600-\u06FF]/.test(p2);
+                        if (hasAr1 && !hasAr2) return isRtl ? p1 : p2;
+                        if (!hasAr1 && hasAr2) return isRtl ? p2 : p1;
+                        return isRtl ? p1 : p2;
+                    }
+                    return str;
+                }
+
                 var groups = {};
                 var definedGroups = Array.isArray(employeeGroups) ? employeeGroups : [];
                 definedGroups.forEach(function(gName) {
@@ -820,11 +844,11 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                 });
                 %>
                 <% groupNames.forEach(function(gName) { %>
-                <section class="mb-5" aria-label="<%= gName === '___ungrouped___' ? t.ungrouped : gName %>" data-group="<%= gName %>">
+                <section class="mb-5" aria-label="<%= formatGroupName(gName, isRtl) %>" data-group="<%= gName %>">
                     <div class="employee-group-header mb-2">
                         <span class="h-2 w-2 rounded-full bg-[var(--accent-color)] shrink-0"></span>
                         <h3 class="text-sm font-extrabold text-[var(--text-primary)] truncate">
-                            <%= gName === '___ungrouped___' ? t.ungrouped : gName %>
+                            <%= formatGroupName(gName, isRtl) %>
                         </h3>
                         <span class="employee-group-count"><%= groups[gName].length %></span>
                         <span class="h-px bg-[var(--border-primary)] flex-1"></span>
@@ -841,7 +865,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                 startTimeStamp = live.start || '';
                             }
                             const isOnline = emp.online;
-                            const groupLabel = emp.emp_group || t.ungrouped;
+                            const groupLabel = emp.emp_group ? formatGroupName(emp.emp_group, isRtl) : t.ungrouped;
                             const profileInitial = String(emp.name || emp.extension || '?').trim().charAt(0).toUpperCase();
                             let stateClass = 'state-offline';
                             if (isOnline) {
@@ -1828,6 +1852,44 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
 
         let cachedGroupsData = [];
 
+        function formatGroupName(groupOrName, isRtl) {
+            if (!groupOrName) return isRtl ? 'بدون مجموعة' : 'Ungrouped';
+            let name = '';
+            let nameAr = '';
+            let nameEn = '';
+            if (typeof groupOrName === 'object') {
+                name = groupOrName.name || '';
+                nameAr = groupOrName.name_ar || '';
+                nameEn = groupOrName.name_en || '';
+            } else {
+                name = String(groupOrName || '');
+            }
+            if (name === '___ungrouped___') return isRtl ? 'بدون مجموعة' : 'Ungrouped';
+            if (isRtl && nameAr) return nameAr;
+            if (!isRtl && nameEn) return nameEn;
+            const parenMatch = name.match(/^([^(]+?)\s*\(([^)]+)\)$/);
+            if (parenMatch) {
+                const p1 = parenMatch[1].trim();
+                const p2 = parenMatch[2].trim();
+                const hasAr1 = /[\u0600-\u06FF]/.test(p1);
+                const hasAr2 = /[\u0600-\u06FF]/.test(p2);
+                if (hasAr1 && !hasAr2) return isRtl ? p1 : p2;
+                if (!hasAr1 && hasAr2) return isRtl ? p2 : p1;
+                return isRtl ? p1 : p2;
+            }
+            const slashMatch = name.match(/^([^\/]+?)\s*[\/|]\s*(.+)$/);
+            if (slashMatch) {
+                const p1 = slashMatch[1].trim();
+                const p2 = slashMatch[2].trim();
+                const hasAr1 = /[\u0600-\u06FF]/.test(p1);
+                const hasAr2 = /[\u0600-\u06FF]/.test(p2);
+                if (hasAr1 && !hasAr2) return isRtl ? p1 : p2;
+                if (!hasAr1 && hasAr2) return isRtl ? p2 : p1;
+                return isRtl ? p1 : p2;
+            }
+            return name;
+        }
+
         function switchGroupModalTab(tab) {
             const btnGroups = document.getElementById('tabBtnGroups');
             const btnStatuses = document.getElementById('tabBtnStatuses');
@@ -1872,7 +1934,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                     const selectGrp = document.getElementById('newStatusGroupSelect');
                     if (selectGrp) {
                         selectGrp.innerHTML = `<option value="all">${isRtl ? 'جميع المجموعات (All Groups)' : 'All Groups'}</option>` +
-                            cachedGroupsData.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+                            cachedGroupsData.map(g => `<option value="${g.name}">${formatGroupName(g, isRtl)}</option>`).join('');
                     }
 
                     if (!data.groups.length) {
@@ -1888,7 +1950,13 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                         row.className = 'flex items-center justify-between gap-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-3 py-2';
                         const name = document.createElement('span');
                         name.className = 'text-sm font-bold min-w-0 truncate';
-                        name.textContent = group.name;
+                        const primaryTitle = formatGroupName(group, isRtl);
+                        const secondaryTitle = isRtl ? (group.name_en || '') : (group.name_ar || '');
+                        if (secondaryTitle && secondaryTitle !== primaryTitle) {
+                            name.innerHTML = `${primaryTitle} <span class="text-xs font-normal text-[var(--text-muted)]">(${secondaryTitle})</span>`;
+                        } else {
+                            name.textContent = primaryTitle;
+                        }
                         const remove = document.createElement('button');
                         remove.type = 'button';
                         remove.className = 'text-red-500 hover:text-red-400 cursor-pointer p-1 rounded focus:outline-none focus:ring-2 focus:ring-red-500/40';
@@ -1949,7 +2017,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                         grpBadge.className = 'px-1.5 py-0.5 rounded text-[10px] font-bold border';
                         if (st.target_group && st.target_group !== 'all') {
                             grpBadge.className += ' bg-blue-500/10 text-blue-400 border-blue-500/20';
-                            grpBadge.textContent = st.target_group;
+                            grpBadge.textContent = formatGroupName(st.target_group, isRtl);
                         } else {
                             grpBadge.className += ' bg-slate-500/10 text-slate-400 border-slate-500/20';
                             grpBadge.textContent = isRtl ? 'جميع المجموعات' : 'All Groups';
@@ -2048,21 +2116,39 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
 
         function addGroup(event) {
             event.preventDefault();
-            const input = document.getElementById('newGroupName');
+            const inputAr = document.getElementById('newGroupNameAr');
+            const inputEn = document.getElementById('newGroupNameEn');
+            const inputLegacy = document.getElementById('newGroupName');
             const button = document.getElementById('addGroupButton');
-            const name = input.value.trim();
-            if (!name) return;
+
+            const nameAr = inputAr ? inputAr.value.trim() : '';
+            const nameEn = inputEn ? inputEn.value.trim() : '';
+            const nameLegacy = inputLegacy ? inputLegacy.value.trim() : '';
+
+            let payload = {};
+            if (nameAr || nameEn) {
+                payload.name_ar = nameAr;
+                payload.name_en = nameEn;
+                payload.name = (nameAr && nameEn) ? `${nameAr} (${nameEn})` : (nameAr || nameEn);
+            } else if (nameLegacy) {
+                payload.name = nameLegacy;
+            } else {
+                return;
+            }
+
             button.disabled = true;
 
             fetch('/api/employee/groups', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name })
+                body: JSON.stringify(payload)
             })
                 .then(response => response.json().then(data => ({ response, data })))
                 .then(({ response, data }) => {
                     if (!response.ok || !data.success) throw new Error(data.error || 'Failed to create group');
-                    input.value = '';
+                    if (inputAr) inputAr.value = '';
+                    if (inputEn) inputEn.value = '';
+                    if (inputLegacy) inputLegacy.value = '';
                     loadGroupsList();
                 })
                 .catch(error => alert(error.message))
@@ -2149,12 +2235,25 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
 
             <!-- TAB 1: GROUPS MANAGEMENT -->
             <div id="tabContentGroups" class="space-y-4 flex-1 overflow-y-auto pr-1">
-                <form id="groupForm" onsubmit="addGroup(event)" class="flex gap-2">
-                    <label for="newGroupName" class="sr-only"><%= t.groupName %></label>
-                    <input type="text" id="newGroupName" maxlength="100" required placeholder="<%= t.groupName %>" class="config-input flex-1 text-xs min-w-0">
-                    <button id="addGroupButton" type="submit" class="config-btn-primary px-3 py-2 text-xs cursor-pointer whitespace-nowrap disabled:opacity-50">
-                        <%= t.addGroup %>
-                    </button>
+                <form id="groupForm" onsubmit="addGroup(event)" class="bg-[var(--bg-card)] p-3.5 rounded-xl border border-[var(--border-primary)] space-y-2.5">
+                    <div class="text-xs font-extrabold text-[var(--text-primary)]">
+                        <%= isRtl ? '+ إضافة مجموعة عمل جديدة' : '+ Add New Extension Group' %>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[10px] font-bold text-[var(--text-muted)] block mb-1"><%= isRtl ? 'اسم المجموعة (عربي)' : 'Group Name (Arabic)' %></label>
+                            <input type="text" id="newGroupNameAr" required placeholder="<%= isRtl ? 'مثال: المبيعات أو الدعم الفني' : 'e.g. Sales' %>" class="config-input text-xs w-full">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-[var(--text-muted)] block mb-1"><%= isRtl ? 'اسم المجموعة (إنجليزي)' : 'Group Name (English)' %></label>
+                            <input type="text" id="newGroupNameEn" required placeholder="<%= isRtl ? 'e.g. Sales or Support' : 'e.g. Sales' %>" class="config-input text-xs w-full">
+                        </div>
+                    </div>
+                    <div class="flex justify-end pt-1">
+                        <button id="addGroupButton" type="submit" class="config-btn-primary px-4 py-1.5 text-xs font-bold cursor-pointer whitespace-nowrap disabled:opacity-50">
+                            <%= t.addGroup %>
+                        </button>
+                    </div>
                 </form>
 
                 <div id="groupsList" class="space-y-2 max-h-64 overflow-y-auto">
@@ -2703,7 +2802,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                 <div class="text-xs font-bold text-[var(--text-primary)] truncate">${emp.name || emp.extension}</div>
                                 <div class="text-[10px] font-mono text-[var(--text-muted)] flex items-center gap-1.5">
                                     <span>ext: ${emp.extension}</span>
-                                    ${emp.emp_group && emp.emp_group !== '___ungrouped___' ? `<span class="text-[var(--text-muted)]">&bull;</span><span class="truncate">${emp.emp_group}</span>` : ''}
+                                    ${emp.emp_group && emp.emp_group !== '___ungrouped___' ? `<span class="text-[var(--text-muted)]">&bull;</span><span class="truncate">${formatGroupName(emp.emp_group, isRtl)}</span>` : ''}
                                 </div>
                             </div>
                         </div>
