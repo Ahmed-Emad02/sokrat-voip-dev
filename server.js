@@ -3325,9 +3325,13 @@ app.use(async (req, res, next) => {
             `);
 
             let devices = [];
+            const deviceTechMap = new Map();
             try {
-                const [devRows] = await pool.query(`SELECT id as extension, description as name FROM ${tables.devices}`);
+                const [devRows] = await pool.query(`SELECT id as extension, tech, dial, description as name FROM ${tables.devices}`);
                 devices = devRows;
+                devRows.forEach(d => {
+                    if (d.extension) deviceTechMap.set(String(d.extension), String(d.tech || '').toLowerCase());
+                });
             } catch (_) {}
 
             let sipExts = [];
@@ -3340,6 +3344,9 @@ app.use(async (req, res, next) => {
             try {
                 const [psRows] = await pool.query(`SELECT DISTINCT id as extension FROM ${tables.psEndpoints} WHERE id REGEXP '^[0-9]{2,5}$'`);
                 psExts = psRows;
+                psRows.forEach(p => {
+                    if (p.extension) deviceTechMap.set(String(p.extension), 'pjsip');
+                });
             } catch (_) {}
 
             let cdrChannels = [];
@@ -3356,20 +3363,28 @@ app.use(async (req, res, next) => {
 
             users.forEach(u => {
                 if (u.extension && /^\d+$/.test(u.extension)) {
+                    const extStr = String(u.extension);
+                    const tech = deviceTechMap.get(extStr) || (extStr === '150' ? 'pjsip' : 'sip');
+                    const isPjsip = (tech === 'pjsip');
                     extMap.set(u.extension, {
                         extension: u.extension,
                         name: u.name || u.extension,
                         photo: u.photo,
                         title: u.title,
                         emp_group: u.emp_group,
-                        is_group_admin: Boolean(u.is_group_admin === 1 || u.is_group_admin === true || u.is_group_admin === '1')
+                        is_group_admin: Boolean(u.is_group_admin === 1 || u.is_group_admin === true || u.is_group_admin === '1'),
+                        tech: tech,
+                        isPjsip: isPjsip
                     });
                 }
             });
 
             devices.forEach(d => {
                 if (d.extension && /^\d+$/.test(d.extension) && !extMap.has(d.extension)) {
-                    extMap.set(d.extension, { extension: d.extension, name: d.name || d.extension, photo: null, title: null, emp_group: null });
+                    const extStr = String(d.extension);
+                    const tech = deviceTechMap.get(extStr) || (extStr === '150' ? 'pjsip' : 'sip');
+                    const isPjsip = (tech === 'pjsip');
+                    extMap.set(d.extension, { extension: d.extension, name: d.name || d.extension, photo: null, title: null, emp_group: null, tech: tech, isPjsip: isPjsip });
                 }
             });
 
@@ -3470,13 +3485,18 @@ app.use(async (req, res, next) => {
         } catch (_) {}
 
         res.locals.employeeGroups = cachedEmployeeGroupNames;
-        res.locals.roster = roster.map(emp => ({ 
-            ...emp, 
-            online: onlineMap[emp.extension] || false,
-            ip: peerIPs[emp.extension] || null,
-            agentStatus: agentStatusMap[emp.extension] ? agentStatusMap[emp.extension].status : 'available',
-            agentStatusTime: agentStatusMap[emp.extension] ? agentStatusMap[emp.extension].last_update : null
-        }));
+        res.locals.roster = roster.map(emp => {
+            const isPjsip = Boolean(emp.isPjsip || (emp.tech === 'pjsip') || (emp.extension === '150'));
+            return { 
+                ...emp, 
+                online: onlineMap[emp.extension] || false,
+                ip: peerIPs[emp.extension] || null,
+                tech: emp.tech || (isPjsip ? 'pjsip' : 'sip'),
+                isPjsip: isPjsip,
+                agentStatus: isPjsip ? (agentStatusMap[emp.extension] ? agentStatusMap[emp.extension].status : 'available') : null,
+                agentStatusTime: (isPjsip && agentStatusMap[emp.extension]) ? agentStatusMap[emp.extension].last_update : null
+            };
+        });
         res.locals.peerIPs = peerIPs;
         res.locals.activeCalls = activeCalls;
         res.locals.currentPage = req.path;

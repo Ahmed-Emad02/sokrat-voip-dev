@@ -908,6 +908,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                             <% if (emp.ring_groups && emp.ring_groups.length > 0) { %>
                                                 <span class="ring-group-tag" title="<%= isRtl ? 'مجموعات الاتصال: ' : 'Ring Groups: ' %><%= emp.ring_groups.map(function(rg){ return (rg.description && rg.description !== rg.grpnum) ? (rg.grpnum + ' (' + rg.description + ')') : rg.grpnum; }).join(', ') %>">RG <%= emp.ring_groups.map(function(rg){ return rg.grpnum; }).join(', ') %></span>
                                             <% } %>
+                                            <% if (emp.isPjsip || emp.tech === 'pjsip' || emp.extension === '150') { %>
                                             <% 
                                                 const statusSlug = emp.agentStatus || 'available';
                                                 const startTimeMs = emp.agentStatusTime ? new Date(emp.agentStatusTime).getTime() : null;
@@ -920,18 +921,19 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                                 else if (statusSlug === 'available') statusLabel = isRtl ? 'متاح' : 'Available';
                                                 else if (statusSlug === 'offline') statusLabel = isRtl ? 'غير متاح' : 'Offline';
                                 
-                                                let statusBgClass = 'bg-zinc-800 text-zinc-400 border border-zinc-700';
-                                                if (statusSlug === 'break') statusBgClass = 'bg-amber-500/15 text-amber-400 border border-amber-500/30';
-                                                else if (statusSlug === 'lunch') statusBgClass = 'bg-sky-500/15 text-sky-400 border border-sky-500/30';
-                                                else if (statusSlug === 'meeting') statusBgClass = 'bg-purple-500/15 text-purple-400 border border-purple-500/30';
-                                                else if (statusSlug === 'training') statusBgClass = 'bg-blue-500/15 text-blue-400 border border-blue-500/30';
-                                                else if (statusSlug === 'available') statusBgClass = 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
-                                                else if (statusSlug === 'offline') statusBgClass = 'bg-slate-500/15 text-slate-400 border border-slate-500/20';
+                                                let statusBgClass = 'bg-zinc-800 text-zinc-300 border border-zinc-700';
+                                                if (statusSlug === 'break') statusBgClass = 'bg-amber-950/80 text-amber-300 border border-amber-500/50 shadow-sm';
+                                                else if (statusSlug === 'lunch') statusBgClass = 'bg-sky-950/80 text-sky-300 border border-sky-500/50 shadow-sm';
+                                                else if (statusSlug === 'meeting') statusBgClass = 'bg-purple-950/80 text-purple-300 border border-purple-500/50 shadow-sm';
+                                                else if (statusSlug === 'training') statusBgClass = 'bg-blue-950/80 text-blue-300 border border-blue-500/50 shadow-sm';
+                                                else if (statusSlug === 'available') statusBgClass = 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm';
+                                                else if (statusSlug === 'offline') statusBgClass = 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
                                             %>
-                                            <span id="agentStatusBadge-<%= emp.cardId %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" class="inline-flex items-center px-3 py-1 rounded-md text-base font-extrabold font-mono tracking-wide <%= statusBgClass %>" title="<%= isRtl ? 'حالة الموظف في CRM: ' : 'CRM Agent Status: ' %><%= statusLabel %>">
+                                            <span id="agentStatusBadge-<%= emp.cardId %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono tracking-wide <%= statusBgClass %>" title="<%= isRtl ? 'حالة الموظف في CRM: ' : 'CRM Agent Status: ' %><%= statusLabel %>">
                                                 <span class="agent-status-label"><%= statusLabel %></span>
-                                                <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-2 text-sm font-black <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
+                                                <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-1.5 text-xs font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
                                             </span>
+                                            <% } %>
                                         </div>
                                     </div>
                                 </div>

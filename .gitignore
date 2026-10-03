@@ -6,5 +6,6 @@ sms_inbox.json
 telemetry_history.json
 .omo/
 .codegraph/
+.opencode/
 backups/
 *.bak_*

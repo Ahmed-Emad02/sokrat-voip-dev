@@ -51,10 +51,11 @@ function registerCrmLiveSocket(io, pool, dependencies = {}) {
 
         try {
             const [rows] = await pool.query(`
-                SELECT extension AS id, name
-                FROM asterisk.users
-                WHERE extension REGEXP '^[0-9]+$'
-                ORDER BY CAST(extension AS UNSIGNED) ASC
+                SELECT u.extension AS id, u.name, d.tech
+                FROM asterisk.users u
+                LEFT JOIN asterisk.devices d ON d.id = u.extension
+                WHERE u.extension REGEXP '^[0-9]+$'
+                ORDER BY CAST(u.extension AS UNSIGNED) ASC
             `);
 
             for (const r of rows) {
@@ -69,12 +70,15 @@ function registerCrmLiveSocket(io, pool, dependencies = {}) {
                     isOnline = statusVal.toLowerCase().includes('ok') || Boolean(data.online);
                 }
 
+                const tech = String(r.tech || (ext === '150' ? 'pjsip' : 'sip')).toLowerCase();
+                const isPjsip = (tech === 'pjsip');
+
                 const statusRow = statusMapByExt[ext];
-                let agentStatus = 'available';
+                let agentStatus = null;
                 let agentStatusTime = null;
-                if (statusRow) {
-                    agentStatus = statusRow.status;
-                    if (statusRow.last_update) {
+                if (isPjsip) {
+                    agentStatus = statusRow ? statusRow.status : 'available';
+                    if (statusRow && statusRow.last_update) {
                         const d = new Date(statusRow.last_update);
                         agentStatusTime = !isNaN(d.getTime()) ? d.getTime() : null;
                     }
@@ -84,6 +88,8 @@ function registerCrmLiveSocket(io, pool, dependencies = {}) {
                     extension: ext,
                     name: r.name || `Extension ${ext}`,
                     online: isOnline,
+                    tech: tech,
+                    isPjsip: isPjsip,
                     agentStatus: agentStatus,
                     agentStatusTime: agentStatusTime
                 };

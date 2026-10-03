@@ -168,11 +168,13 @@ const isRtl = (lang === 'ar');
                 updateAllCardsInPlace();
             });
 
-            // Presence status duration timers (dynamic states only - no timer for static available/offline)
+            // Presence status duration timers (dynamic states only - PJSIP only - no timer for static available/offline)
             setInterval(() => {
                 const exts = Object.keys(localPeerStatus);
                 exts.forEach(ext => {
                     const info = localPeerStatus[ext] || {};
+                    const isPjsip = Boolean(info.isPjsip || info.tech === 'pjsip' || ext === '150');
+                    if (!isPjsip) return;
                     const presenceTimer = document.getElementById('presenceTimer-' + ext);
                     if (presenceTimer && info.agentStatus && info.agentStatusTime) {
                         const isDynamic = (info.agentStatus !== 'available' && info.agentStatus !== 'offline');
@@ -297,11 +299,11 @@ const isRtl = (lang === 'ar');
                                 </div>
                             </div>
 
-                            <!-- Live Agent Presence Status Box -->
-                            <div id="presenceBox-${ext}" class="mt-2 text-xs font-mono p-2.5 rounded-lg border space-y-1 transition-all bg-slate-50 border-slate-200/80">
+                            <!-- Live Agent Presence Status Box (PJSIP Extensions Only) -->
+                            <div id="presenceBox-${ext}" class="mt-2 text-xs font-mono p-2 rounded-lg border space-y-1 transition-all bg-slate-50 border-slate-200/80 ${info.isPjsip || info.tech === 'pjsip' || ext === '150' ? '' : 'hidden'}">
                                 <div class="flex justify-between items-center">
-                                    <span id="presenceLabel-${ext}" class="font-mono text-base font-bold text-slate-800">متاح (Available)</span>
-                                    <strong id="presenceTimer-${ext}" class="font-mono text-base font-extrabold text-slate-600 hidden">00:00</strong>
+                                    <span id="presenceLabel-${ext}" class="font-mono text-xs font-bold text-slate-800">متاح (Available)</span>
+                                    <strong id="presenceTimer-${ext}" class="font-mono text-xs font-bold text-slate-600 hidden">00:00</strong>
                                 </div>
                             </div>
 
@@ -413,62 +415,68 @@ const isRtl = (lang === 'ar');
                     dot.className = 'w-2 h-2 rounded-full ' + (isAnswered ? 'bg-amber-500' : (isBusy ? 'bg-yellow-500' : (isOnline ? 'bg-emerald-500' : 'bg-slate-400')));
                     badgeText.textContent = isBusy ? (isAnswered ? 'في مكالمة' : 'يرن...') : (isOnline ? 'متصل' : 'غير متصل');
 
-                    // Live Agent Presence Status
+                    // Live Agent Presence Status (PJSIP extensions only)
                     if (presenceBox && presenceLabel) {
-                        const agentStatus = info.agentStatus || 'available';
-                        const agentStatusTime = info.agentStatusTime || null;
-                        const isDynamicStatus = (agentStatus !== 'available' && agentStatus !== 'offline');
+                        const isPjsip = Boolean(info.isPjsip || info.tech === 'pjsip' || ext === '150');
+                        if (!isPjsip) {
+                            presenceBox.classList.add('hidden');
+                        } else {
+                            presenceBox.classList.remove('hidden');
+                            const agentStatus = info.agentStatus || 'available';
+                            const agentStatusTime = info.agentStatusTime || null;
+                            const isDynamicStatus = (agentStatus !== 'available' && agentStatus !== 'offline');
 
-                        let statusLabel = agentStatus;
-                        if (agentStatus === 'break') statusLabel = isRtl ? 'استراحة (Break)' : 'Break';
-                        else if (agentStatus === 'lunch') statusLabel = isRtl ? 'غداء (Lunch)' : 'Lunch';
-                        else if (agentStatus === 'meeting') statusLabel = isRtl ? 'اجتماع (Meeting)' : 'Meeting';
-                        else if (agentStatus === 'training') statusLabel = isRtl ? 'تدريب (Training)' : 'Training';
-                        else if (agentStatus === 'available') statusLabel = isRtl ? 'متاح (Available)' : 'Available';
-                        else if (agentStatus === 'offline') statusLabel = isRtl ? 'غير متاح (Offline)' : 'Offline';
+                            let statusLabel = agentStatus;
+                            if (agentStatus === 'break') statusLabel = isRtl ? 'استراحة (Break)' : 'Break';
+                            else if (agentStatus === 'lunch') statusLabel = isRtl ? 'غداء (Lunch)' : 'Lunch';
+                            else if (agentStatus === 'meeting') statusLabel = isRtl ? 'اجتماع (Meeting)' : 'Meeting';
+                            else if (agentStatus === 'training') statusLabel = isRtl ? 'تدريب (Training)' : 'Training';
+                            else if (agentStatus === 'available') statusLabel = isRtl ? 'متاح (Available)' : 'Available';
+                            else if (agentStatus === 'offline') statusLabel = isRtl ? 'غير متاح (Offline)' : 'Offline';
 
-                        presenceLabel.textContent = statusLabel;
+                            presenceLabel.textContent = statusLabel;
 
-                        let presenceBgClass = 'bg-slate-50 border-slate-200/80 text-slate-800';
-                        let presenceLabelClass = 'text-slate-800';
-                        let presenceTimerClass = 'text-slate-600';
+                            let presenceBgClass = 'bg-slate-100 border-slate-200 text-slate-800';
+                            let presenceLabelClass = 'text-slate-800';
+                            let presenceTimerClass = 'text-slate-600';
 
-                        if (agentStatus === 'break') {
-                            presenceBgClass = 'bg-amber-50/70 border-amber-200/80';
-                            presenceLabelClass = 'text-amber-800 font-bold';
-                            presenceTimerClass = 'text-amber-600';
-                        } else if (agentStatus === 'lunch') {
-                            presenceBgClass = 'bg-sky-50/70 border-sky-200/80';
-                            presenceLabelClass = 'text-sky-800 font-bold';
-                            presenceTimerClass = 'text-sky-600';
-                        } else if (agentStatus === 'meeting') {
-                            presenceBgClass = 'bg-purple-50/70 border-purple-200/80';
-                            presenceLabelClass = 'text-purple-800 font-bold';
-                            presenceTimerClass = 'text-purple-600';
-                        } else if (agentStatus === 'training') {
-                            presenceBgClass = 'bg-blue-50/70 border-blue-200/80';
-                            presenceLabelClass = 'text-blue-800 font-bold';
-                            presenceTimerClass = 'text-blue-600';
-                        } else if (agentStatus === 'available') {
-                            presenceBgClass = 'bg-emerald-50/70 border-emerald-200/80';
-                            presenceLabelClass = 'text-emerald-800 font-bold';
-                            presenceTimerClass = 'text-emerald-600';
-                        } else if (agentStatus === 'offline') {
-                            presenceBgClass = 'bg-slate-100 border-slate-200';
-                            presenceLabelClass = 'text-slate-600 font-bold';
-                            presenceTimerClass = 'text-slate-500';
-                        }
+                            if (agentStatus === 'break') {
+                                presenceBgClass = 'bg-amber-100 border-amber-300 text-amber-950 shadow-sm';
+                                presenceLabelClass = 'text-amber-950 font-bold';
+                                presenceTimerClass = 'text-amber-900 font-extrabold';
+                            } else if (agentStatus === 'lunch') {
+                                presenceBgClass = 'bg-sky-100 border-sky-300 text-sky-950 shadow-sm';
+                                presenceLabelClass = 'text-sky-950 font-bold';
+                                presenceTimerClass = 'text-sky-900 font-extrabold';
+                            } else if (agentStatus === 'meeting') {
+                                presenceBgClass = 'bg-purple-100 border-purple-300 text-purple-950 shadow-sm';
+                                presenceLabelClass = 'text-purple-950 font-bold';
+                                presenceTimerClass = 'text-purple-900 font-extrabold';
+                            } else if (agentStatus === 'training') {
+                                presenceBgClass = 'bg-blue-100 border-blue-300 text-blue-950 shadow-sm';
+                                presenceLabelClass = 'text-blue-950 font-bold';
+                                presenceTimerClass = 'text-blue-900 font-extrabold';
+                            } else if (agentStatus === 'available') {
+                                presenceBgClass = 'bg-emerald-100 border-emerald-300 text-emerald-950 shadow-sm';
+                                presenceLabelClass = 'text-emerald-950 font-bold';
+                                presenceTimerClass = 'text-emerald-900 font-extrabold';
+                            } else if (agentStatus === 'offline') {
+                                presenceBgClass = 'bg-slate-200 border-slate-300 text-slate-800';
+                                presenceLabelClass = 'text-slate-800 font-bold';
+                                presenceTimerClass = 'text-slate-700 font-extrabold';
+                            }
 
-                        presenceBox.className = 'mt-2 text-xs font-mono p-2.5 rounded-lg border space-y-1 transition-all ' + presenceBgClass;
-                        presenceLabel.className = 'font-mono text-base font-bold ' + presenceLabelClass;
+                            presenceBox.className = 'mt-2 text-xs font-mono p-2 rounded-lg border space-y-1 transition-all ' + presenceBgClass;
+                            presenceLabel.className = 'font-mono text-xs font-bold ' + presenceLabelClass;
 
-                        if (isDynamicStatus && agentStatusTime && presenceTimer) {
-                            presenceTimer.classList.remove('hidden');
-                            presenceTimer.className = 'font-mono text-base font-extrabold ' + presenceTimerClass;
-                            const elapsedSec = Math.max(0, Math.floor((Date.now() - agentStatusTime) / 1000));
-                            presenceTimer.textContent = formatTimer(elapsedSec);
-                        } else if (presenceTimer) {
-                            presenceTimer.classList.add('hidden');
+                            if (isDynamicStatus && agentStatusTime && presenceTimer) {
+                                presenceTimer.classList.remove('hidden');
+                                presenceTimer.className = 'font-mono text-xs font-extrabold ' + presenceTimerClass;
+                                const elapsedSec = Math.max(0, Math.floor((Date.now() - agentStatusTime) / 1000));
+                                presenceTimer.textContent = formatTimer(elapsedSec);
+                            } else if (presenceTimer) {
+                                presenceTimer.classList.add('hidden');
+                            }
                         }
                     }
 
