@@ -1052,6 +1052,41 @@ const isRtl = currentLang === 'ar';
                 html += '</div>';
             }
 
+            // WebRTC Client & Contact Center Telemetry Row
+            if (data.telemetry && data.telemetry.count > 0) {
+                const tel = data.telemetry;
+                html += '<div class="mb-6 shrink-0">';
+                html += `<div class="px-1 mb-2.5 flex items-center justify-between">
+                    <span class="text-xs font-black uppercase tracking-wider text-[var(--accent-color)] flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <span><%= isRtl ? 'بيانات وإحصائيات العميل (WebRTC Telemetry)' : 'Contact Center & WebRTC Telemetry' %></span>
+                    </span>
+                    <span class="text-[11px] font-bold text-zinc-500 font-mono">${tel.count} <%= isRtl ? 'جلسة مسجلة' : 'sessions tracked' %></span>
+                </div>`;
+                html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+                html += `<div class="panel-surface rounded-xl p-3.5 border border-[#27272a]/30">
+                    <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= isRtl ? 'متوسط وقت المعالجة (AHT)' : 'Avg Handling Time (AHT)' %></p>
+                    <p class="text-xl font-black text-amber-400 mt-1 font-mono">${fmtHumanDur(tel.ahtSec)}</p>
+                    <p class="text-[10px] text-zinc-500 mt-0.5"><%= isRtl ? 'تحدث + انتظار + تدوين' : 'Talk + Hold + Wrap-Up' %></p>
+                </div>`;
+                html += `<div class="panel-surface rounded-xl p-3.5 border border-[#27272a]/30">
+                    <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= isRtl ? 'وقت الانتظار (Hold)' : 'Customer Hold Time' %></p>
+                    <p class="text-xl font-black text-sky-400 mt-1 font-mono">${fmtHumanDur(tel.totalHoldSec)}</p>
+                    <p class="text-[10px] text-zinc-500 mt-0.5">${tel.totalHoldCount} <%= isRtl ? 'مرات انتظار (معدل ' : 'holds (avg ' %>${tel.avgHoldSec}s)</p>
+                </div>`;
+                html += `<div class="panel-surface rounded-xl p-3.5 border border-[#27272a]/30">
+                    <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= isRtl ? 'تدوين ما بعد المكالمة (ACW)' : 'After-Call Work (Wrap-Up)' %></p>
+                    <p class="text-xl font-black text-purple-400 mt-1 font-mono">${fmtHumanDur(tel.totalWrapUpSec)}</p>
+                    <p class="text-[10px] text-zinc-500 mt-0.5"><%= isRtl ? 'معدل التدوين: ' : 'Avg wrap-up: ' %>${tel.avgWrapUpSec}s</p>
+                </div>`;
+                html += `<div class="panel-surface rounded-xl p-3.5 border border-[#27272a]/30">
+                    <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= isRtl ? 'جودة شبكة الصوت' : 'WebRTC Quality / MOS' %></p>
+                    <p class="text-xl font-black text-emerald-400 mt-1 font-mono">${tel.avgRttMs ? tel.avgRttMs + ' ms' : 'Good'}</p>
+                    <p class="text-[10px] text-zinc-500 mt-0.5"><%= isRtl ? 'التذبذب: ' : 'Jitter: ' %>${tel.avgJitterMs}ms • <%= isRtl ? 'الفقد: ' : 'Loss: ' %>${tel.avgPacketLossPct}%</p>
+                </div>`;
+                html += '</div></div>';
+            }
+
             // Charts Grid
             html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6 shrink-0">';
             html += `<div class="panel-surface rounded-xl p-5 border border-[#27272a]/30">

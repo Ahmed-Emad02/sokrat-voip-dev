@@ -908,11 +908,30 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                             <% if (emp.ring_groups && emp.ring_groups.length > 0) { %>
                                                 <span class="ring-group-tag" title="<%= isRtl ? 'مجموعات الاتصال: ' : 'Ring Groups: ' %><%= emp.ring_groups.map(function(rg){ return (rg.description && rg.description !== rg.grpnum) ? (rg.grpnum + ' (' + rg.description + ')') : rg.grpnum; }).join(', ') %>">RG <%= emp.ring_groups.map(function(rg){ return rg.grpnum; }).join(', ') %></span>
                                             <% } %>
-                                            <% if (emp.agentStatus && emp.agentStatus !== 'available') { %>
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-mono tracking-wide <%= emp.agentStatus === 'break' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : (emp.agentStatus === 'lunch' ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30' : (emp.agentStatus === 'meeting' ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-zinc-800 text-zinc-400 border border-zinc-700')) %>" title="<%= isRtl ? 'حالة الموظف في CRM: ' : 'CRM Agent Status: ' %><%= emp.agentStatus %>">
-                                                    <span><%= emp.agentStatus === 'break' ? (isRtl ? 'استراحة' : 'Break') : (emp.agentStatus === 'lunch' ? (isRtl ? 'غداء' : 'Lunch') : (emp.agentStatus === 'meeting' ? (isRtl ? 'اجتماع' : 'Meeting') : emp.agentStatus)) %></span>
-                                                </span>
-                                            <% } %>
+                                            <% 
+                                                const statusSlug = emp.agentStatus || 'available';
+                                                const startTimeMs = emp.agentStatusTime ? new Date(emp.agentStatusTime).getTime() : null;
+                                                const isDynamicStatus = (statusSlug !== 'available' && statusSlug !== 'offline');
+                                                let statusLabel = statusSlug;
+                                                if (statusSlug === 'break') statusLabel = isRtl ? 'استراحة (Break)' : 'Break';
+                                                else if (statusSlug === 'lunch') statusLabel = isRtl ? 'غداء (Lunch)' : 'Lunch';
+                                                else if (statusSlug === 'meeting') statusLabel = isRtl ? 'اجتماع (Meeting)' : 'Meeting';
+                                                else if (statusSlug === 'training') statusLabel = isRtl ? 'تدريب (Training)' : 'Training';
+                                                else if (statusSlug === 'available') statusLabel = isRtl ? 'متاح' : 'Available';
+                                                else if (statusSlug === 'offline') statusLabel = isRtl ? 'غير متاح' : 'Offline';
+                                
+                                                let statusBgClass = 'bg-zinc-800 text-zinc-400 border border-zinc-700';
+                                                if (statusSlug === 'break') statusBgClass = 'bg-amber-500/15 text-amber-400 border border-amber-500/30';
+                                                else if (statusSlug === 'lunch') statusBgClass = 'bg-sky-500/15 text-sky-400 border border-sky-500/30';
+                                                else if (statusSlug === 'meeting') statusBgClass = 'bg-purple-500/15 text-purple-400 border border-purple-500/30';
+                                                else if (statusSlug === 'training') statusBgClass = 'bg-blue-500/15 text-blue-400 border border-blue-500/30';
+                                                else if (statusSlug === 'available') statusBgClass = 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+                                                else if (statusSlug === 'offline') statusBgClass = 'bg-slate-500/15 text-slate-400 border border-slate-500/20';
+                                            %>
+                                            <span id="agentStatusBadge-<%= emp.cardId %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" class="inline-flex items-center px-3 py-1 rounded-md text-base font-extrabold font-mono tracking-wide <%= statusBgClass %>" title="<%= isRtl ? 'حالة الموظف في CRM: ' : 'CRM Agent Status: ' %><%= statusLabel %>">
+                                                <span class="agent-status-label"><%= statusLabel %></span>
+                                                <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-2 text-sm font-black <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -1466,6 +1485,44 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             };
 
             socket.on('callUpdate', handleCallUpdate);
+
+            // Initialize & run presence duration timers for employee agent status cards
+            window.dynamicStatusTimers = window.dynamicStatusTimers || {};
+
+            function formatStatusTimer(totalSeconds) {
+                const m = Math.floor(totalSeconds / 60);
+                const s = totalSeconds % 60;
+                return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+            }
+
+            function initDynamicStatusTimers() {
+                document.querySelectorAll('[id^="agentStatusBadge-"]').forEach(badge => {
+                    const cardId = badge.id.replace('agentStatusBadge-', '');
+                    const timerEl = document.getElementById('agentStatusTimer-' + cardId);
+                    const statusSlug = badge.getAttribute('data-status');
+                    const startMsStr = badge.getAttribute('data-start');
+
+                    if (window.dynamicStatusTimers[cardId]) {
+                        clearInterval(window.dynamicStatusTimers[cardId]);
+                    }
+
+                    const isDynamic = (statusSlug !== 'available' && statusSlug !== 'offline');
+                    if (isDynamic && startMsStr && timerEl) {
+                        timerEl.classList.remove('hidden');
+                        const start = parseInt(startMsStr, 10);
+                        const update = () => {
+                            const elapsed = Math.max(0, Math.floor((Date.now() - start) / 1000));
+                            timerEl.textContent = formatStatusTimer(elapsed);
+                        };
+                        update();
+                        window.dynamicStatusTimers[cardId] = setInterval(update, 1000);
+                    } else if (timerEl) {
+                        timerEl.classList.add('hidden');
+                    }
+                });
+            }
+
+            initDynamicStatusTimers();
 
             <% if (typeof federationSettings !== 'undefined' && federationSettings.panel_role === 'central') { %>
             socket.on('operator:federation_state', (fedState) => {

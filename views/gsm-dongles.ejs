@@ -1255,6 +1255,16 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             background: #ffffff;
             border-color: rgba(0, 0, 0, 0.4);
         }
+        .dongle-action-button.toolbar-icon-btn {
+            width: 2.25rem !important;
+            height: 2.25rem !important;
+            min-height: 2.25rem !important;
+            padding: 0 !important;
+            border-radius: 0.75rem !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
         .gsm-console-panel {
             min-height: 0;
             min-width: 0;
@@ -1417,32 +1427,28 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 </div>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2.5">
-                <div class="inline-flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1">
-                    <button type="button" id="btn-view-grid" onclick="setDongleViewMode('grid')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                        <span><%= t.viewGrid %></span>
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="h-9 inline-flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1 shrink-0">
+                    <button type="button" id="btn-view-grid" onclick="setDongleViewMode('grid')" title="<%= t.viewGrid %>" aria-label="<%= t.viewGrid %>" class="w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer bg-[var(--accent-color)] text-white">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                     </button>
-                    <button type="button" id="btn-view-minimal" onclick="setDongleViewMode('minimal')" class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-                        <span><%= t.viewMinimal %></span>
+                    <button type="button" id="btn-view-minimal" onclick="setDongleViewMode('minimal')" title="<%= t.viewMinimal %>" aria-label="<%= t.viewMinimal %>" class="w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                     </button>
                 </div>
-                <div class="px-3 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
-                    <span class="text-[9px] uppercase tracking-wider text-[var(--text-muted)] block"><%= isRtl ? 'الأجهزة' : 'Devices' %></span>
+                <div class="h-9 px-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] flex items-center gap-2 shrink-0">
+                    <span class="text-[10px] uppercase font-bold tracking-wider text-[var(--text-muted)]"><%= isRtl ? 'الأجهزة' : 'Devices' %></span>
                     <span id="gsm-device-total" class="text-sm font-black text-[var(--text-primary)] font-mono">0</span>
                 </div>
-                <div class="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                    <span class="text-[9px] uppercase tracking-wider text-emerald-400/80 block"><%= isRtl ? 'جاهز' : 'Ready' %></span>
+                <div class="h-9 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 shrink-0">
+                    <span class="text-[10px] uppercase font-bold tracking-wider text-emerald-400/80"><%= isRtl ? 'جاهز' : 'Ready' %></span>
                     <span id="gsm-device-ready" class="text-sm font-black text-emerald-400 font-mono">0</span>
                 </div>
-                <button id="global-audit-btn" type="button" onclick="openDongleAuditModal()" class="dongle-action-button dongle-action-secondary cursor-pointer px-3.5 py-2 font-bold text-xs flex items-center gap-2">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-                    <span><%= t.btnAuditHardware %></span>
+                <button id="global-audit-btn" type="button" onclick="openDongleAuditModal()" title="<%= t.btnAuditHardware %>" aria-label="<%= t.btnAuditHardware %>" class="dongle-action-button dongle-action-secondary toolbar-icon-btn cursor-pointer shrink-0">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                 </button>
-                <button id="global-reset-usb-btn" class="dongle-action-button dongle-action-primary cursor-pointer px-3.5 py-2 font-bold text-xs flex items-center gap-2">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
-                    <span><%= t.btnResetAllUsb %></span>
+                <button id="global-reset-usb-btn" type="button" title="<%= t.btnResetAllUsb %>" aria-label="<%= t.btnResetAllUsb %>" class="dongle-action-button dongle-action-primary toolbar-icon-btn cursor-pointer shrink-0">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
                 </button>
             </div>
         </div>
@@ -2656,12 +2662,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const btnGrid = document.getElementById('btn-view-grid');
                 const btnMinimal = document.getElementById('btn-view-minimal');
                 if (!btnGrid || !btnMinimal) return;
+                const activeClass = 'w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer bg-[var(--accent-color)] text-white';
+                const inactiveClass = 'w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]';
                 if (currentViewMode === 'minimal') {
-                    btnMinimal.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white';
-                    btnGrid.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]';
+                    btnMinimal.className = activeClass;
+                    btnGrid.className = inactiveClass;
                 } else {
-                    btnGrid.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer bg-[var(--accent-color)] text-white';
-                    btnMinimal.className = 'px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)]';
+                    btnGrid.className = activeClass;
+                    btnMinimal.className = inactiveClass;
                 }
             }
             window.updateViewButtons = updateViewButtons;

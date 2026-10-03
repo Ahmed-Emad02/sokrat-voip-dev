@@ -36,6 +36,19 @@ function registerCrmLiveSocket(io, pool, dependencies = {}) {
         const rawMap = typeof getPeerStatus === 'function' ? getPeerStatus() : {};
         const sanitized = {};
 
+        let statusRows = [];
+        try {
+            const [rows] = await pool.query('SELECT extension, status, display_name, last_update FROM asterisk.synq_agent_status');
+            if (Array.isArray(rows)) {
+                statusRows = rows;
+            }
+        } catch (_) {}
+
+        const statusMapByExt = {};
+        statusRows.forEach(r => {
+            statusMapByExt[String(r.extension)] = r;
+        });
+
         try {
             const [rows] = await pool.query(`
                 SELECT extension AS id, name
@@ -56,10 +69,23 @@ function registerCrmLiveSocket(io, pool, dependencies = {}) {
                     isOnline = statusVal.toLowerCase().includes('ok') || Boolean(data.online);
                 }
 
+                const statusRow = statusMapByExt[ext];
+                let agentStatus = 'available';
+                let agentStatusTime = null;
+                if (statusRow) {
+                    agentStatus = statusRow.status;
+                    if (statusRow.last_update) {
+                        const d = new Date(statusRow.last_update);
+                        agentStatusTime = !isNaN(d.getTime()) ? d.getTime() : null;
+                    }
+                }
+
                 sanitized[ext] = {
                     extension: ext,
                     name: r.name || `Extension ${ext}`,
-                    online: isOnline
+                    online: isOnline,
+                    agentStatus: agentStatus,
+                    agentStatusTime: agentStatusTime
                 };
             }
         } catch (err) {

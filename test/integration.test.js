@@ -124,6 +124,28 @@ class MockPool {
             ]];
         }
 
+        if (sqlStr.includes('crm_call_telemetry')) {
+            if (sqlStr.startsWith('INSERT')) {
+                return [{ affectedRows: 1, insertId: 1 }];
+            }
+            if (sqlStr.startsWith('SELECT')) {
+                return [[{
+                    extension: '150',
+                    telemetry_calls_count: 5,
+                    avg_hold_sec: 14.2,
+                    total_hold_sec: 71,
+                    total_hold_count: 7,
+                    avg_mute_sec: 4.0,
+                    total_mute_sec: 20,
+                    avg_wrap_up_sec: 25.0,
+                    total_wrap_up_sec: 125,
+                    avg_jitter_ms: 1.5,
+                    avg_packet_loss_pct: 0.1,
+                    avg_rtt_ms: 22
+                }]];
+            }
+        }
+
         return [[]];
     }
 }
@@ -261,6 +283,60 @@ test('CRM REST Router health and pairing endpoints work correctly', async () => 
         });
         assert.equal(deniedTicketRes.status, 403);
         assert.equal(pool.tickets.size, ticketCountBeforeDeniedRequest);
+
+        // 10. Desktop Session Provisioning with dynamic host
+        client.allowed_scopes = JSON.stringify(['live:read', 'softphone:use', 'calls:read', 'stats:read', 'extensions:read']);
+        const desktopSessionRes = await fetch(`${baseUrl}/desktop-session?extension=150`, {
+            headers: { 'Authorization': `Bearer ${pairData.client_secret}` }
+        });
+        assert.equal(desktopSessionRes.status, 200);
+        const desktopSessionData = await desktopSessionRes.json();
+        assert.equal(desktopSessionData.success, true);
+        assert.equal(desktopSessionData.extension, '150');
+        assert.ok(desktopSessionData.ws_url);
+        assert.ok(desktopSessionData.wss_url);
+        assert.ok(desktopSessionData.sip_domain);
+
+        // 11. Telemetry Ingestion endpoint
+        const telemetryPostRes = await fetch(`${baseUrl}/telemetry/call-session`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${pairData.client_secret}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                uniqueid: '1727778000.1',
+                call_id: 'call-uuid-12345',
+                extension: '150',
+                phone: '01011719380',
+                direction: 'outbound',
+                lead_id: 42,
+                lead_name: 'Khaled Test',
+                hold_seconds: 14,
+                hold_count: 2,
+                mute_seconds: 6,
+                wrap_up_seconds: 25,
+                jitter_ms: 1.5,
+                packet_loss_pct: 0.1,
+                rtt_ms: 22,
+                disposition_outcome: 'Meeting Scheduled',
+                audio_device_name: 'Jabra Evolve 65'
+            })
+        });
+        assert.equal(telemetryPostRes.status, 200);
+        const telemetryPostData = await telemetryPostRes.json();
+        assert.equal(telemetryPostData.success, true);
+        assert.equal(telemetryPostData.uniqueid, '1727778000.1');
+
+        // 12. Telemetry Stats endpoint
+        const telemetryStatsRes = await fetch(`${baseUrl}/telemetry/stats?extension=150`, {
+            headers: { 'Authorization': `Bearer ${pairData.client_secret}` }
+        });
+        assert.equal(telemetryStatsRes.status, 200);
+        const telemetryStatsData = await telemetryStatsRes.json();
+        assert.equal(telemetryStatsData.success, true);
+        assert.equal(telemetryStatsData.stats[0].extension, '150');
+        assert.equal(telemetryStatsData.stats[0].telemetry_calls_count, 5);
     } finally {
         server.close();
     }

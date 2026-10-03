@@ -537,3 +537,29 @@ CREATE TABLE IF NOT EXISTS `dashboard_api_keys` (
   INDEX idx_api_key_hash (`key_hash`),
   INDEX idx_api_key_status (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `crm_call_telemetry` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `uniqueid` VARCHAR(50) DEFAULT NULL,
+  `call_id` VARCHAR(100) DEFAULT NULL,
+  `extension` VARCHAR(20) NOT NULL,
+  `phone` VARCHAR(50) DEFAULT NULL,
+  `direction` ENUM('inbound', 'outbound') DEFAULT 'outbound',
+  `lead_id` BIGINT DEFAULT NULL,
+  `lead_name` VARCHAR(150) DEFAULT NULL,
+  `hold_seconds` INT DEFAULT 0,
+  `hold_count` TINYINT DEFAULT 0,
+  `mute_seconds` INT DEFAULT 0,
+  `wrap_up_seconds` INT DEFAULT 0,
+  `jitter_ms` FLOAT DEFAULT 0,
+  `packet_loss_pct` FLOAT DEFAULT 0,
+  `rtt_ms` INT DEFAULT 0,
+  `disposition_outcome` VARCHAR(100) DEFAULT NULL,
+  `audio_device_name` VARCHAR(150) DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_telemetry_uniqueid` (`uniqueid`),
+  INDEX `idx_telemetry_ext` (`extension`),
+  INDEX `idx_telemetry_lead` (`lead_id`),
+  INDEX `idx_telemetry_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

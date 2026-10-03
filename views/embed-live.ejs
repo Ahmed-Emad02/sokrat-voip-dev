@@ -20,6 +20,11 @@ const isRtl = (lang === 'ar');
             background-position: <%= isRtl ? 'left 0.75rem center' : 'right 0.75rem center' %>;
             background-size: 1em;
         }
+        .presence-timer-badge {
+            background-color: rgba(255,255,255,0.6);
+            border-radius: 4px;
+            padding: 0 4px;
+        }
     </style>
 </head>
 <body class="p-4 sm:p-6 select-none bg-slate-50 text-slate-900">
@@ -163,6 +168,25 @@ const isRtl = (lang === 'ar');
                 updateAllCardsInPlace();
             });
 
+            // Presence status duration timers (dynamic states only - no timer for static available/offline)
+            setInterval(() => {
+                const exts = Object.keys(localPeerStatus);
+                exts.forEach(ext => {
+                    const info = localPeerStatus[ext] || {};
+                    const presenceTimer = document.getElementById('presenceTimer-' + ext);
+                    if (presenceTimer && info.agentStatus && info.agentStatusTime) {
+                        const isDynamic = (info.agentStatus !== 'available' && info.agentStatus !== 'offline');
+                        if (isDynamic) {
+                            presenceTimer.classList.remove('hidden');
+                            const elapsedSec = Math.max(0, Math.floor((Date.now() - info.agentStatusTime) / 1000));
+                            presenceTimer.textContent = formatTimer(elapsedSec);
+                        } else {
+                            presenceTimer.classList.add('hidden');
+                        }
+                    }
+                });
+            }, 1000);
+
             // Search & Filter Listeners
             document.getElementById('searchInput').addEventListener('input', (e) => {
                 searchQuery = e.target.value.toLowerCase().trim();
@@ -273,6 +297,14 @@ const isRtl = (lang === 'ar');
                                 </div>
                             </div>
 
+                            <!-- Live Agent Presence Status Box -->
+                            <div id="presenceBox-${ext}" class="mt-2 text-xs font-mono p-2.5 rounded-lg border space-y-1 transition-all bg-slate-50 border-slate-200/80">
+                                <div class="flex justify-between items-center">
+                                    <span id="presenceLabel-${ext}" class="font-mono text-base font-bold text-slate-800">متاح (Available)</span>
+                                    <strong id="presenceTimer-${ext}" class="font-mono text-base font-extrabold text-slate-600 hidden">00:00</strong>
+                                </div>
+                            </div>
+
                             <div id="callBox-${ext}" class="hidden mt-2 text-xs font-mono bg-amber-50/70 p-3 rounded-lg border border-amber-200/80 text-slate-800 space-y-1 mb-3">
                                 <div class="flex justify-between items-center">
                                     <span class="text-slate-500 font-mono text-[11px]">الطرف الآخر:</span>
@@ -360,6 +392,10 @@ const isRtl = (lang === 'ar');
                     const timerEl = document.getElementById('timer-' + ext);
                     const selectEl = document.getElementById('actionSelect-' + ext);
 
+                    const presenceBox = document.getElementById('presenceBox-' + ext);
+                    const presenceLabel = document.getElementById('presenceLabel-' + ext);
+                    const presenceTimer = document.getElementById('presenceTimer-' + ext);
+
                     // Avatar styling
                     avatar.className = 'w-9 h-9 rounded-xl font-mono font-extrabold text-xs flex items-center justify-center ' + 
                         (isAnswered ? 'bg-amber-500 text-white' : (isBusy ? 'bg-yellow-400 text-slate-900' : (isOnline ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500 border border-slate-200')));
@@ -376,6 +412,65 @@ const isRtl = (lang === 'ar');
 
                     dot.className = 'w-2 h-2 rounded-full ' + (isAnswered ? 'bg-amber-500' : (isBusy ? 'bg-yellow-500' : (isOnline ? 'bg-emerald-500' : 'bg-slate-400')));
                     badgeText.textContent = isBusy ? (isAnswered ? 'في مكالمة' : 'يرن...') : (isOnline ? 'متصل' : 'غير متصل');
+
+                    // Live Agent Presence Status
+                    if (presenceBox && presenceLabel) {
+                        const agentStatus = info.agentStatus || 'available';
+                        const agentStatusTime = info.agentStatusTime || null;
+                        const isDynamicStatus = (agentStatus !== 'available' && agentStatus !== 'offline');
+
+                        let statusLabel = agentStatus;
+                        if (agentStatus === 'break') statusLabel = isRtl ? 'استراحة (Break)' : 'Break';
+                        else if (agentStatus === 'lunch') statusLabel = isRtl ? 'غداء (Lunch)' : 'Lunch';
+                        else if (agentStatus === 'meeting') statusLabel = isRtl ? 'اجتماع (Meeting)' : 'Meeting';
+                        else if (agentStatus === 'training') statusLabel = isRtl ? 'تدريب (Training)' : 'Training';
+                        else if (agentStatus === 'available') statusLabel = isRtl ? 'متاح (Available)' : 'Available';
+                        else if (agentStatus === 'offline') statusLabel = isRtl ? 'غير متاح (Offline)' : 'Offline';
+
+                        presenceLabel.textContent = statusLabel;
+
+                        let presenceBgClass = 'bg-slate-50 border-slate-200/80 text-slate-800';
+                        let presenceLabelClass = 'text-slate-800';
+                        let presenceTimerClass = 'text-slate-600';
+
+                        if (agentStatus === 'break') {
+                            presenceBgClass = 'bg-amber-50/70 border-amber-200/80';
+                            presenceLabelClass = 'text-amber-800 font-bold';
+                            presenceTimerClass = 'text-amber-600';
+                        } else if (agentStatus === 'lunch') {
+                            presenceBgClass = 'bg-sky-50/70 border-sky-200/80';
+                            presenceLabelClass = 'text-sky-800 font-bold';
+                            presenceTimerClass = 'text-sky-600';
+                        } else if (agentStatus === 'meeting') {
+                            presenceBgClass = 'bg-purple-50/70 border-purple-200/80';
+                            presenceLabelClass = 'text-purple-800 font-bold';
+                            presenceTimerClass = 'text-purple-600';
+                        } else if (agentStatus === 'training') {
+                            presenceBgClass = 'bg-blue-50/70 border-blue-200/80';
+                            presenceLabelClass = 'text-blue-800 font-bold';
+                            presenceTimerClass = 'text-blue-600';
+                        } else if (agentStatus === 'available') {
+                            presenceBgClass = 'bg-emerald-50/70 border-emerald-200/80';
+                            presenceLabelClass = 'text-emerald-800 font-bold';
+                            presenceTimerClass = 'text-emerald-600';
+                        } else if (agentStatus === 'offline') {
+                            presenceBgClass = 'bg-slate-100 border-slate-200';
+                            presenceLabelClass = 'text-slate-600 font-bold';
+                            presenceTimerClass = 'text-slate-500';
+                        }
+
+                        presenceBox.className = 'mt-2 text-xs font-mono p-2.5 rounded-lg border space-y-1 transition-all ' + presenceBgClass;
+                        presenceLabel.className = 'font-mono text-base font-bold ' + presenceLabelClass;
+
+                        if (isDynamicStatus && agentStatusTime && presenceTimer) {
+                            presenceTimer.classList.remove('hidden');
+                            presenceTimer.className = 'font-mono text-base font-extrabold ' + presenceTimerClass;
+                            const elapsedSec = Math.max(0, Math.floor((Date.now() - agentStatusTime) / 1000));
+                            presenceTimer.textContent = formatTimer(elapsedSec);
+                        } else if (presenceTimer) {
+                            presenceTimer.classList.add('hidden');
+                        }
+                    }
 
                     // Active Call details & timer
                     if (call) {

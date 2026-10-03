@@ -35,6 +35,7 @@ test('backend/install_db.sql has full schema parity for extension scoping, dongl
     assert.match(sql, /DELETE FROM `asterisk`\.`notifications` WHERE `id` = 'RCONFFAIL';/, 'install_db.sql must delete stale RCONFFAIL notifications');
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `asterisk`\.`sipsettings`/, 'install_db.sql must ensure sipsettings table exists before updates');
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `asterisk`\.`pjsipsettings`/, 'install_db.sql must ensure pjsipsettings table exists before updates');
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS `crm_call_telemetry`/, 'install_db.sql must define crm_call_telemetry table');
 });
 
 test('install.sh contains schema migrations, rnnoise builds, and inbound blacklist dialplan', () => {
@@ -252,6 +253,8 @@ test('scripts/safe-upgrade.sh passes bash syntax validation and includes non-des
     const script = fs.readFileSync(upgradeScriptPath, 'utf8');
     assert.match(script, /backend\/install_db\.sql/, 'safe-upgrade.sh must apply install_db.sql schema');
     assert.match(script, /ensure_db_column/, 'safe-upgrade.sh must define ensure_db_column migration');
+    assert.match(script, /ensure_db_column "gsm_dongles" "dynamic_enabled"/, 'safe-upgrade.sh must ensure gsm_dongles.dynamic_enabled');
+    assert.match(script, /ensure_db_column "employee_extras" "is_group_admin"/, 'safe-upgrade.sh must ensure employee_extras.is_group_admin');
     assert.match(script, /chan_dongle\.patch/, 'safe-upgrade.sh must apply chan_dongle.patch');
     assert.match(script, /re\.sub\([^)]*dongle-hangup-cleanup[^)]*\)/, 'safe-upgrade.sh must sanitize dongle-hangup-cleanup');
     assert.match(script, /sed -i '\/dongle restart now\/d'/, 'safe-upgrade.sh must strip rogue dongle restart triggers');
