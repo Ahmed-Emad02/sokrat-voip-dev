@@ -1091,10 +1091,11 @@ fi
 # Step 6b — Sokrat Push Gateway (mobile push-to-wake)
 # ──────────────────────────────────────────────
 echo "[6b/14] Installing Sokrat Push Gateway (mobile push-to-wake)..."
+git config --global --add safe.directory "$PUSH_GATEWAY_DIR" 2>/dev/null || true
 if [ -d "$PUSH_GATEWAY_DIR/.git" ]; then
     echo "  Updating sokrat-push-gateway..."
     cd "$PUSH_GATEWAY_DIR"
-    git fetch origin
+    git fetch origin 2>/dev/null || true
     git checkout origin/master -B master 2>/dev/null || git checkout origin/main -B main 2>/dev/null || true
 else
     git clone "$PUSH_GATEWAY_REPO" "$PUSH_GATEWAY_DIR"
