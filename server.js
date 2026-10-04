@@ -3758,8 +3758,12 @@ app.post('/login', async (req, res) => {
 
 // GET /logout - destroy session
 app.get('/logout', (req, res) => {
+    const redirect = req.query.redirect;
     req.session.destroy(() => {
-        res.redirect('/login');
+        const target = redirect && typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')
+            ? '/login?redirect=' + encodeURIComponent(redirect)
+            : '/login';
+        res.redirect(target);
     });
 });
 
