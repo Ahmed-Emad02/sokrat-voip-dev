@@ -2248,20 +2248,20 @@ echo "  [10h] Initializing AstDB Noise and Audio defaults..."
 asterisk -rx "database put AUDIO_GLOBALS vad_threshold 0.20" 2>/dev/null || true
 asterisk -rx "database put AUDIO_GLOBALS vad_hangover 250" 2>/dev/null || true
 asterisk -rx "database put AUDIO_GLOBALS vad_db_threshold -90" 2>/dev/null || true
-for ext in $(asterisk -rx "database show AMPUSER" 2>/dev/null | grep "/cidname" | awk -F'/' '{print $2}' | sort -u); do
-    curr_denoise=$(asterisk -rx "database get AMPUSER $ext/ai_denoise" 2>/dev/null | grep "Value:" | awk '{print $2}')
+for ext in $(asterisk -rx "database show AMPUSER" 2>/dev/null | grep "/cidname" | awk -F'/' '{print $2}' | sort -u || true); do
+    curr_denoise=$(asterisk -rx "database get AMPUSER $ext/ai_denoise" 2>/dev/null | grep "Value:" | awk '{print $2}' || true)
     if [ -z "$curr_denoise" ]; then
         asterisk -rx "database put AMPUSER $ext/ai_denoise both" 2>/dev/null || true
     fi
-    curr_vad=$(asterisk -rx "database get AMPUSER $ext/vad_gate" 2>/dev/null | grep "Value:" | awk '{print $2}')
+    curr_vad=$(asterisk -rx "database get AMPUSER $ext/vad_gate" 2>/dev/null | grep "Value:" | awk '{print $2}' || true)
     if [ -z "$curr_vad" ]; then
         asterisk -rx "database put AMPUSER $ext/vad_gate 1" 2>/dev/null || true
     fi
-    curr_vad_db=$(asterisk -rx "database get AMPUSER $ext/vad_db" 2>/dev/null | grep "Value:" | awk '{print $2}')
+    curr_vad_db=$(asterisk -rx "database get AMPUSER $ext/vad_db" 2>/dev/null | grep "Value:" | awk '{print $2}' || true)
     if [ -z "$curr_vad_db" ]; then
         asterisk -rx "database put AMPUSER $ext/vad_db off" 2>/dev/null || true
     fi
-    curr_agc=$(asterisk -rx "database get AMPUSER $ext/agc" 2>/dev/null | grep "Value:" | awk '{print $2}')
+    curr_agc=$(asterisk -rx "database get AMPUSER $ext/agc" 2>/dev/null | grep "Value:" | awk '{print $2}' || true)
     if [ -z "$curr_agc" ]; then
         asterisk -rx "database put AMPUSER $ext/agc 8000" 2>/dev/null || true
     fi
