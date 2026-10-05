@@ -11881,7 +11881,7 @@ async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', te
     ];
     for (const cmd of commands) {
         try {
-            await execPromise(`${ASTERISK_BIN} -rx '${cmd}'`);
+            await execFileAsync(ASTERISK_BIN, ['-rx', cmd]);
         } catch (err) {
             console.error(`AstDB error (${cmd}):`, err.message);
         }
