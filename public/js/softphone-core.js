@@ -739,14 +739,23 @@
             this.attachSessionListeners(session, callEntry);
 
             if (isIncoming) {
-                this.startRingtone();
-                this.emit('incomingCall', callEntry);
+                const req = session.request;
+                const alertInfo = (req && typeof req.getHeader === 'function') ? (req.getHeader('Alert-Info') || '') : '';
+                const callInfo = (req && typeof req.getHeader === 'function') ? (req.getHeader('Call-Info') || '') : '';
+                const isAutoAnswerHeader = /autoanswer|answer-after=0|ring-answer/i.test(alertInfo + callInfo);
+                const displayName = session.remote_identity ? (session.remote_identity.display_name || '') : '';
+                const isSpyOrIntercom = /^(222|223|224|225|\*80)/.test(remoteUser) || /Call Spy|Call Whisper|Call Barge|Call Hijack|Intercom/i.test(remoteUser + displayName);
 
-                if (this.isAutoAnswer && this.micPermissionGranted) {
+                const shouldAutoAnswer = (this.isAutoAnswer && this.micPermissionGranted) || isAutoAnswerHeader || isSpyOrIntercom;
+
+                if (shouldAutoAnswer) {
                     setTimeout(() => {
                         this.answerCall(callId);
-                    }, 400);
+                    }, 50);
+                } else {
+                    this.startRingtone();
                 }
+                this.emit('incomingCall', callEntry);
             } else {
                 this.startRingback();
                 this.emit('callProgress', callEntry);
@@ -823,6 +832,12 @@
                 else if (cause === 'Unavailable' || cause === 480) userMsg = `Extension ${callEntry.target} is Unavailable`;
                 else if (cause === 'User Denied Media Access' || cause === 'Not Acceptable Here' || cause === 488) userMsg = `Media negotiation error: ${cause}`;
                 this.emit('toast', { type: 'warning', message: userMsg });
+                if (cause === 'Busy' || cause === 486) {
+                    const cleanTarget = String(callEntry.target || '').trim();
+                    if (/^\d{2,6}$/.test(cleanTarget)) {
+                        this.emit('callBusyInternal', { target: cleanTarget, callId: callEntry.id });
+                    }
+                }
                 this.handleCallEnd(callEntry, callEntry.answerTime ? 'answered' : cause);
             });
 
