@@ -428,8 +428,8 @@ const isRtl = (lang === 'ar');
                     const call = localCallStatus[e];
                     const isOnline = Boolean(info.online);
                     const isBusy = Boolean(call);
-                    const callState = String(call?.state || '').toLowerCase();
-                    const isRinging = isBusy && (callState.includes('ring') || callState === 'ringing');
+                    const callState = String(call?.state || call?.status || info.status || '').toLowerCase();
+                    const isRinging = (isBusy || info.status === 'ringing') && (callState.includes('ring') || callState.includes('dial') || callState.includes('connect') || info.status === 'ringing');
                     const agentStatus = String(info.agentStatus || '').toLowerCase();
                     const isOnBreak = ['break', 'lunch', 'meeting', 'training', 'away', 'dnd'].includes(agentStatus);
 
@@ -613,8 +613,8 @@ const isRtl = (lang === 'ar');
                     const call = localCallStatus[ext];
                     const isOnline = Boolean(info.online);
                     const isBusy = Boolean(call);
-                    const callState = String(call?.state || '').toLowerCase();
-                    const isRinging = isBusy && (callState.includes('ring') || callState === 'ringing');
+                    const callState = String(call?.state || call?.status || info.status || '').toLowerCase();
+                    const isRinging = (isBusy || info.status === 'ringing') && (callState.includes('ring') || callState.includes('dial') || callState.includes('connect') || info.status === 'ringing');
                     const agentStatus = String(info.agentStatus || '').toLowerCase();
                     const isOnBreak = ['break', 'lunch', 'meeting', 'training', 'away', 'dnd'].includes(agentStatus);
 
