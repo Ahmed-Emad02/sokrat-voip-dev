@@ -200,7 +200,7 @@ if [ -f /etc/asterisk/extensions_custom.conf ]; then
     sed -i '/dongle restart now/d' /etc/asterisk/extensions*.conf 2>/dev/null || true
 
     python3 - << 'PYEOF'
-import re
+import re, os
 
 conf_path = "/etc/asterisk/extensions_custom.conf"
 try:
