@@ -668,6 +668,57 @@ function createCrmRouter(pool, options = {}) {
         }
     });
 
+    // 11.1 CHANNEL ACTION (Listen, Whisper, Barge, Hangup, Transfer)
+    router.post('/channels/action', requireCrmScope(['live:read']), async (req, res) => {
+        try {
+            const { action, targetExtension, supervisorExtension, destinationExtension } = req.body || {};
+            const act = String(action || '').trim().toLowerCase();
+            const target = String(targetExtension || '').trim();
+            const supervisor = String(supervisorExtension || '').trim();
+
+            if (!act || !target) {
+                return res.status(400).json({ success: false, error: 'action and targetExtension are required.' });
+            }
+
+            const ami = typeof getAmiClient === 'function' ? getAmiClient() : null;
+            const { executeCallSpy, executeCallHangup, executeCallTransfer } = require('../lib/call-control');
+
+            if (act === 'hangup') {
+                await executeCallHangup(ami, ASTERISK_BIN, getActiveCalls, target);
+                return res.json({ success: true, message: `Call on extension ${target} hung up.` });
+            }
+
+            if (['listen', 'whisper', 'barge'].includes(act)) {
+                if (!supervisor) {
+                    return res.status(400).json({ success: false, error: 'supervisorExtension is required for monitoring spy actions.' });
+                }
+                await executeCallSpy(pool, ami, ASTERISK_BIN, {
+                    supervisorExt: supervisor,
+                    targetExt: target,
+                    mode: act
+                });
+                return res.json({ success: true, message: `Spy action (${act}) initiated to supervisor ${supervisor}.` });
+            }
+
+            if (act === 'transfer') {
+                const dst = String(destinationExtension || '').trim();
+                if (!dst) {
+                    return res.status(400).json({ success: false, error: 'destinationExtension is required for transfer.' });
+                }
+                const result = await executeCallTransfer(pool, ami, ASTERISK_BIN, {
+                    sourceExt: target,
+                    destinationExt: dst
+                });
+                return res.json({ success: true, message: `Call on extension ${target} transferred to ${dst}.`, result });
+            }
+
+            return res.status(400).json({ success: false, error: `Unsupported channel action: ${act}` });
+        } catch (err) {
+            console.error('[CRM Integration] Channels action error:', err.message);
+            res.status(400).json({ success: false, error: err.message });
+        }
+    });
+
     // 12. ADVANCED WEBRTC CALL TELEMETRY & BUSINESS STATS INGESTION
     router.post('/telemetry/call-session', requireCrmScope(['calls:read', 'softphone:use', 'live:read', 'stats:read']), async (req, res) => {
         try {
