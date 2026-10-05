@@ -2191,7 +2191,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
         <!-- Collapsible logs console (Bottom) -->
         <div class="panel-surface rounded-2xl flex flex-col shrink-0 mt-4">
-            <div class="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/40 border-b border-[var(--border-primary)] rounded-t-2xl <%= isRtl ? 'sm:flex-row-reverse' : '' %>">
+            <div class="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/40 border-b border-[var(--border-primary)] rounded-t-2xl">
                 <h3 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
                     <div class="relative flex items-center justify-center">
                         <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-[var(--accent-color)] opacity-75"></span>
@@ -2200,7 +2200,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <%= t.logTitle %>
                 </h3>
                 
-                <div class="w-full sm:w-auto flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-semibold select-none <%= isRtl ? 'flex-row-reverse' : '' %>">
+                <div class="w-full sm:w-auto flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-semibold select-none">
                     <div class="flex items-center gap-2">
                         <span><%= t.logToggle %></span>
                         <label class="relative inline-flex items-center cursor-pointer">

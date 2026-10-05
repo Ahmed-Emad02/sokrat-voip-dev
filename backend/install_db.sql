@@ -563,3 +563,16 @@ CREATE TABLE IF NOT EXISTS `crm_call_telemetry` (
   INDEX `idx_telemetry_lead` (`lead_id`),
   INDEX `idx_telemetry_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sokrat_camp_on_callbacks` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `caller_ext` VARCHAR(20) NOT NULL,
+  `target_ext` VARCHAR(20) NOT NULL,
+  `status` ENUM('pending', 'originating', 'connected', 'cancelled', 'expired', 'failed') NOT NULL DEFAULT 'pending',
+  `attempt_count` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `expires_at` DATETIME NOT NULL,
+  `completed_at` DATETIME DEFAULT NULL,
+  INDEX `idx_camp_pending` (`status`, `target_ext`, `caller_ext`),
+  INDEX `idx_camp_expires` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

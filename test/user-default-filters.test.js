@@ -57,7 +57,7 @@ test('views/sidebar.ejs renders Default Filters modal correctly in Arabic (ar)',
     });
 
     assert.ok(html.includes('الفلاتر الافتراضية'), 'Sidebar must render Arabic Default Filters label');
-    assert.ok(html.includes('افتراضيات لوحة التحكم'), 'Sidebar must render Arabic Dashboard Defaults section');
+    assert.ok(html.includes('افتراضيات النظرة العامة') || html.includes('افتراضيات لوحة التحكم'), 'Sidebar must render Arabic Overview Defaults section');
     assert.ok(html.includes('افتراضيات سجل المكالمات'), 'Sidebar must render Arabic Call History Defaults section');
     assert.ok(html.includes('الفترة الزمنية الافتراضية'), 'Sidebar must render Arabic Date Range label');
     assert.ok(html.includes('حفظ الفلاتر الافتراضية'), 'Sidebar must render Arabic Save button');

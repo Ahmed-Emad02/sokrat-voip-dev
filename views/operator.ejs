@@ -35,7 +35,25 @@ const words = {
         transferSuccess: "Call successfully transferred",
         transferSelectColleague: "Or select an extension from roster:",
         cannotTransferToSelf: "Cannot transfer call to the same extension",
-        noActiveCallToTransfer: "No active call found on this extension"
+        noActiveCallToTransfer: "No active call found on this extension",
+        callCodesBtn: "Call Codes",
+        callCodesGuideTitle: "Call Control Codes Guide",
+        callCodesGuideDesc: "Complete telephony commands, in-call DTMF codes, and feature shortcuts in Asterisk",
+        callCodesSearchPlaceholder: "Search code, command, action...",
+        callCodesCatAll: "All Codes",
+        callCodesCatInCall: "In-Call DTMF",
+        callCodesCatCampOn: "Camp-On & Pickup",
+        callCodesCatSpy: "Spy & Intercept",
+        callCodesCatIntercom: "Intercom & Paging",
+        callCodesCatParking: "Call Parking",
+        callCodesCatForward: "Forward & DND",
+        callCodesCatDiagnostics: "Diagnostics & AI",
+        callCodesCopied: "Copied!",
+        callCodesDialNow: "Dial",
+        callCodesHowToDial: "How to dial:",
+        callCodesTimingInCall: "In-Call DTMF",
+        callCodesTimingPreCall: "Direct Dial",
+        callCodesTimingBusy: "Busy Signal"
     },
     ar: {
         title: "لوحة", subtitle: "المراقبة المباشرة",
@@ -72,7 +90,25 @@ const words = {
         transferSuccess: "تم تحويل المكالمة بنجاح",
         transferSelectColleague: "أو اختر تحويلة مباشرة من القائمة:",
         cannotTransferToSelf: "لا يمكن تحويل المكالمة إلى نفس التحويلة",
-        noActiveCallToTransfer: "لا توجد مكالمة نشطة على هذه التحويلة للتحويل"
+        noActiveCallToTransfer: "لا توجد مكالمة نشطة على هذه التحويلة للتحويل",
+        callCodesBtn: "أكواد التحكم",
+        callCodesGuideTitle: "دليل أكواد التحكم بالمكالمات",
+        callCodesGuideDesc: "جميع الأوامر الصوتية، أكواد لوحة المفاتيح أثناء المكالمة، وميزات أستيركس",
+        callCodesSearchPlaceholder: "بحث بالكود، الأمر، الوظيفة...",
+        callCodesCatAll: "جميع الأكواد",
+        callCodesCatInCall: "أثناء المكالمة",
+        callCodesCatCampOn: "حجز الخط والسحب",
+        callCodesCatSpy: "المراقبة والتدريب",
+        callCodesCatIntercom: "الإذاعة الصوتية",
+        callCodesCatParking: "مواقف الانتظار",
+        callCodesCatForward: "التحويل والتواجد",
+        callCodesCatDiagnostics: "الفحص وعزل الضوضاء",
+        callCodesCopied: "تم النسخ!",
+        callCodesDialNow: "اتصال",
+        callCodesHowToDial: "طريقة الطلب:",
+        callCodesTimingInCall: "أثناء المكالمة",
+        callCodesTimingPreCall: "طلب مباشر",
+        callCodesTimingBusy: "نغمة المشغول"
     }
 };
 const t = words[currentLang];
@@ -716,8 +752,8 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
     <div class="flex-1 p-8 relative flex flex-col min-h-screen">
         
         <div class="live-panel-header mb-4 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div class="min-w-0">
-                <h2 class="text-xl font-vibrant-display text-[var(--text-primary)] tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
+            <div class="min-w-0 <%= isRtl ? 'text-right' : '' %>">
+                <h2 class="text-xl font-vibrant-display text-[var(--text-primary)] tracking-tight <%= isRtl ? 'text-right' : '' %>"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
             <div class="flex items-center gap-2 shrink-0 flex-wrap">
                 <div class="inline-flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1">
@@ -751,6 +787,9 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                 </button>
                 <button onclick="openGroupManager()" class="config-btn-primary shrink-0 w-8 h-8 rounded-xl cursor-pointer flex items-center justify-center transition" title="<%= t.manageGroups %>" aria-label="<%= t.manageGroups %>">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                </button>
+                <button type="button" id="btn-call-codes-guide" onclick="openCallCodesGuideModal()" class="shrink-0 w-8 h-8 rounded-xl cursor-pointer flex items-center justify-center transition border border-rose-500/40 text-rose-400 bg-rose-500/15 hover:bg-rose-500/25 hover:border-rose-500/70 shadow-sm" title="<%= t.callCodesGuideTitle %>" aria-label="<%= t.callCodesGuideTitle %>">
+                    <svg class="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
                 </button>
 
             </div>
@@ -971,6 +1010,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                         <% if (canBarge) { %><option value="barge"><%= isRtl ? 'تدخل (Barge)' : 'Barge' %></option><% } %>
                                         <% if (canHijack) { %><option value="hijack" class="text-amber-400 font-bold"><%= isRtl ? 'سحب المكالمة (Hijack)' : 'Hijack Call' %></option><% } %>
                                         <% if (canTransfer) { %><option value="transfer" class="text-sky-400 font-bold"><%= t.transferTo %></option><% } %>
+                                        <option value="campon" class="text-amber-400 font-bold"><%= isRtl ? 'اتصل بي عند التفرغ (Camp-On)' : 'Callback When Free' %></option>
                                         <% if (canHangup) { %><option value="hangup" class="text-rose-400 font-bold"><%= isRtl ? 'إنهاء المكالمة' : 'End Call' %></option><% } %>
                                     </select>
                                 </div>
@@ -1470,6 +1510,26 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                     if (typeof openTransferModal === 'function') {
                         openTransferModal(extension);
                     }
+                } else if (action === 'campon') {
+                    fetch('/api/telephony/camp-on/request', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ targetExtension: extension })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        const isAr = <%= isRtl ? 'true' : 'false' %>;
+                        const msg = data.success ? (data.message || (isAr ? 'تم جدولة الاتصال التلقائي' : 'Callback scheduled')) : (data.error || 'Failed');
+                        if (typeof window.showToast === 'function') {
+                            window.showToast(msg, data.success ? 'success' : 'error');
+                        } else {
+                            alert(msg);
+                        }
+                    })
+                    .catch(err => {
+                        if (typeof window.showToast === 'function') window.showToast(err.message, 'error');
+                        else alert('Error: ' + err.message);
+                    });
                 } else if (action === 'hangup') {
                     if (confirm('<%= isRtl ? "هل أنت متأكد من إنهاء المكالمة؟" : "Are you sure you want to end this call?" %>')) {
                         fetch('/api/hangup/' + extension, { method: 'POST' })
@@ -1487,6 +1547,17 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             };
 
             socket.on('callUpdate', handleCallUpdate);
+            socket.on('campOn:triggered', function(data) {
+                if (data) {
+                    const isAr = <%= isRtl ? 'true' : 'false' %>;
+                    const msg = isAr
+                        ? 'التحويلة ' + data.targetExt + ' أصبحت متاحة الآن! جاري استرجاع المكالمة...'
+                        : 'Extension ' + data.targetExt + ' is now free! Callback call initiated...';
+                    if (typeof window.showToast === 'function') {
+                        window.showToast(msg, 'info');
+                    }
+                }
+            });
 
             // Initialize & run presence duration timers for employee agent status cards
             window.dynamicStatusTimers = window.dynamicStatusTimers || {};
@@ -2957,6 +3028,694 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                             submitCallTransfer();
                         }
                     });
+                }
+            });
+        })();
+    </script>
+
+    <!-- Call Control Codes Cheat-Sheet Guide Modal -->
+    <div id="callCodesGuideModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center hidden p-3 sm:p-5" onclick="if(event.target===this)closeCallCodesGuideModal()">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-4xl w-full p-4 sm:p-6 text-[var(--text-primary)] shadow-2xl flex flex-col max-h-[92vh] animate-fade-in" onclick="event.stopPropagation()">
+            <!-- Header -->
+            <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-3 shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <span class="p-2.5 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 shrink-0 shadow-sm">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                        </svg>
+                    </span>
+                    <div class="min-w-0">
+                        <h3 class="text-base sm:text-lg font-extrabold text-[var(--text-primary)] tracking-tight truncate flex items-center gap-2">
+                            <span><%= t.callCodesGuideTitle %></span>
+                            <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/40 uppercase tracking-wider">Asterisk 18</span>
+                        </h3>
+                        <p class="text-xs text-[var(--text-muted)] truncate"><%= t.callCodesGuideDesc %></p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeCallCodesGuideModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1.5 rounded-lg hover:bg-[var(--bg-hover)] transition cursor-pointer shrink-0" aria-label="<%= t.close %>">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="flex items-center gap-2.5 mb-2.5 shrink-0">
+                <div class="relative flex-1">
+                    <input type="text" id="callCodesSearchInput" oninput="filterCallCodesList()" placeholder="<%= t.callCodesSearchPlaceholder %>" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl pl-9 pr-9 py-2 text-xs sm:text-sm text-[var(--text-primary)] placeholder:[var(--text-muted)] focus:outline-none focus:border-rose-500/70 transition">
+                    <svg class="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <button type="button" id="clearCallCodesSearchBtn" onclick="clearCallCodesSearch()" class="hidden absolute right-3 top-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer" title="Clear">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <span id="callCodesCountBadge" class="text-xs font-mono font-bold text-rose-400 px-2.5 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 whitespace-nowrap shrink-0">
+                    -- codes
+                </span>
+            </div>
+
+            <!-- Category Pills Bar -->
+            <div id="callCodesCategoriesBar" class="flex items-center gap-2 overflow-x-auto pb-2 mb-3 shrink-0 custom-scrollbar">
+                <button type="button" onclick="setCallCodesCategory('all')" data-cat="all" class="call-code-cat-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer bg-rose-500 text-white border border-rose-500 shadow-md">
+                    <span><%= t.callCodesCatAll %></span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-black/25 text-white/90 leading-none">37</span>
+                </button>
+                <button type="button" onclick="setCallCodesCategory('incall')" data-cat="incall" class="call-code-cat-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)]">
+                    <span><%= t.callCodesCatInCall %></span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-black/20 text-current leading-none">5</span>
+                </button>
+                <button type="button" onclick="setCallCodesCategory('campon')" data-cat="campon" class="call-code-cat-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)]">
+                    <span><%= t.callCodesCatCampOn %></span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-black/20 text-current leading-none">4</span>
+                </button>
+                <button type="button" onclick="setCallCodesCategory('spy')" data-cat="spy" class="call-code-cat-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)]">
+                    <span><%= t.callCodesCatSpy %></span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-black/20 text-current leading-none">5</span>
+                </button>
+                <button type="button" onclick="setCallCodesCategory('intercom')" data-cat="intercom" class="call-code-cat-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)]">
+                    <span><%= t.callCodesCatIntercom %></span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-black/20 text-current leading-none">2</span>
+                </button>
+                <button type="button" onclick="setCallCodesCategory('parking')" data-cat="parking" class="call-code-cat-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)]">
+                    <span><%= t.callCodesCatParking %></span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-black/20 text-current leading-none">2</span>
+                </button>
+                <button type="button" onclick="setCallCodesCategory('forward')" data-cat="forward" class="call-code-cat-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)]">
+                    <span><%= t.callCodesCatForward %></span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-black/20 text-current leading-none">10</span>
+                </button>
+                <button type="button" onclick="setCallCodesCategory('diagnostics')" data-cat="diagnostics" class="call-code-cat-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)]">
+                    <span><%= t.callCodesCatDiagnostics %></span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-black/20 text-current leading-none">9</span>
+                </button>
+            </div>
+
+            <!-- Codes Cards Container -->
+            <div id="callCodesListContainer" class="flex-1 overflow-y-auto pr-1 my-1 max-h-[54vh] custom-scrollbar">
+                <div id="callCodesGrid" class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    <!-- Populated dynamically via JS -->
+                </div>
+                <div id="callCodesEmptyState" class="hidden text-center py-12 text-[var(--text-muted)] space-y-2">
+                    <svg class="w-10 h-10 mx-auto opacity-40 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <p class="text-xs font-bold"><%= isRtl ? 'لم يتم العثور على أكواد مطابقة لبحثك' : 'No matching call control codes found' %></p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="border-t border-[var(--border-primary)] pt-3 mt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
+                <div class="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                    <span><%= isRtl ? 'تعمل هذه الأكواد من أجهزة IP الهاتفية (Cisco/Grandstream) وتطبيقات السوفت فون (MicroSIP, Zoiper, WebRTC).' : 'Usable via desk IP phones (Cisco/Grandstream) and softphones (MicroSIP, Zoiper, WebRTC).' %></span>
+                </div>
+                <button type="button" onclick="closeCallCodesGuideModal()" class="self-end px-4 py-1.5 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] rounded-xl transition cursor-pointer">
+                    <%= t.close %>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const isAr = <%= isRtl ? 'true' : 'false' %>;
+
+            const CALL_CONTROL_CODES = [
+                // 1. IN-CALL DTMF
+                {
+                    code: '##',
+                    cat: 'incall',
+                    timing: 'incall',
+                    dial: false,
+                    example: '## + [Target Extension]',
+                    nameEn: 'In-Call Blind Transfer',
+                    nameAr: 'تحويل أعمى مباشر (Blind Transfer)',
+                    descEn: 'Transfers active call immediately to another extension without announcing.',
+                    descAr: 'تحويل المكالمة الجارية فوراً إلى رقم داخلي أو خارجي دون انتظار رده.'
+                },
+                {
+                    code: '*2',
+                    cat: 'incall',
+                    timing: 'incall',
+                    dial: false,
+                    example: '*2 + [Target Extension]',
+                    nameEn: 'In-Call Attended Transfer',
+                    nameAr: 'تحويل مشروط بعد استئذان (Attended)',
+                    descEn: 'Puts caller on hold, calls recipient to announce, then bridges upon hangup.',
+                    descAr: 'وضع المتصل في الانتظار والتحدث مع المستلم أولاً قبل تأكيد التحويل.'
+                },
+                {
+                    code: '*1',
+                    cat: 'incall',
+                    timing: 'incall',
+                    dial: false,
+                    example: '*1',
+                    nameEn: 'One-Touch Call Recording',
+                    nameAr: 'تسجيل المكالمة الحالية (One-Touch)',
+                    descEn: 'Toggles on-demand live audio recording for the active conversation.',
+                    descAr: 'بدء أو إيقاف تسجيل المكالمة الجارية يدوياً أثناء التحدث.'
+                },
+                {
+                    code: '**',
+                    cat: 'incall',
+                    timing: 'incall',
+                    dial: false,
+                    example: '**',
+                    nameEn: 'Keypad Call Disconnect',
+                    nameAr: 'إنهاء وفصل المكالمة عبر اللوحة',
+                    descEn: 'Immediately terminates the current active call via phone DTMF.',
+                    descAr: 'إنهاء المكالمة الحالية فوراً من لوحة المفاتيح دون لمس زر السماعة.'
+                },
+                {
+                    code: '6',
+                    cat: 'incall',
+                    timing: 'busy',
+                    dial: false,
+                    example: isAr ? 'اضغط 6 أثناء نغمة المشغول' : 'Press 6 during busy tone',
+                    nameEn: 'Camp-On Callback (When Busy)',
+                    nameAr: 'حجز التحويلة المشغولة (Camp-On)',
+                    descEn: 'While hearing busy tone on an internal extension, press 6 to auto-callback when free.',
+                    descAr: 'عند سماع نغمة المشغول، اضغط 6 لحجز التحويلة والاتصال بك تلقائياً عند فراغها.'
+                },
+
+                // 2. CAMP-ON & PICKUP
+                {
+                    code: '*82',
+                    cat: 'campon',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*82',
+                    nameEn: 'Camp-On Activate (Post-Hangup)',
+                    nameAr: 'طلب معاودة الاتصال التلقائي (*82)',
+                    descEn: 'Dial after hanging up on a busy extension to schedule automatic callback.',
+                    descAr: 'اطلب *82 بعد إغلاق الخط مع تحويلة مشغولة لحجز معاودة الاتصال التلقائي.'
+                },
+                {
+                    code: '*83',
+                    cat: 'campon',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*83',
+                    nameEn: 'Camp-On Cancel',
+                    nameAr: 'إلغاء حجز معاودة الاتصال (*83)',
+                    descEn: 'Cancels any pending automatic callbacks queued for your extension.',
+                    descAr: 'إلغاء كافة طلبات معاودة الاتصال التلقائي المحجوزة لتحويلتك.'
+                },
+                {
+                    code: '*',
+                    cat: 'campon',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*',
+                    nameEn: 'Group Call Pickup (*)',
+                    nameAr: 'التقاط مكالمة المجموعة (*)',
+                    descEn: 'Answers any incoming call currently ringing in your department/pickup group.',
+                    descAr: 'الرد على أي مكالمة ترن حالياً داخل قسمك أو مجموعة الرنين الخاصة بك.'
+                },
+                {
+                    code: '*[Ext]',
+                    cat: 'campon',
+                    timing: 'precall',
+                    dial: false,
+                    example: '*102 / **102',
+                    nameEn: 'Directed Call Pickup',
+                    nameAr: 'سحب مكالمة تحويلة محددة (* + الرقم)',
+                    descEn: 'Intercepts and answers a call currently ringing on a specific colleague\'s phone.',
+                    descAr: 'سحب مكالمة ترن على هاتف زميل معين والرد عليها من جهازك (مثال: 102* أو 102**).'
+                },
+
+                // 3. SPYING & COACHING
+                {
+                    code: '222[Ext]',
+                    cat: 'spy',
+                    timing: 'precall',
+                    dial: false,
+                    example: '222102',
+                    nameEn: 'Spy: Listen-Only Mode',
+                    nameAr: 'تنصت صامت (استماع فقط)',
+                    descEn: 'Silently listens to an active call on target extension without either party hearing.',
+                    descAr: 'الاستماع لمكالمة الموظف الجارية بسرية تامة دون أن يعلم أي طرف بوجودك.'
+                },
+                {
+                    code: '223[Ext]',
+                    cat: 'spy',
+                    timing: 'precall',
+                    dial: false,
+                    example: '223102',
+                    nameEn: 'Whisper: Coaching Mode',
+                    nameAr: 'تدريب وتوجيه الموظف (همس)',
+                    descEn: 'Speaks only into agent\'s headset for live guidance without client hearing.',
+                    descAr: 'التحدث مع الموظف فقط لتوجيهه وتدريبه دون أن يسمع العميل صوتك.'
+                },
+                {
+                    code: '224[Ext]',
+                    cat: 'spy',
+                    timing: 'precall',
+                    dial: false,
+                    example: '224102',
+                    nameEn: 'Barge: Conference In',
+                    nameAr: 'اقتحام المكالمة (مكالمة ثلاثية)',
+                    descEn: 'Barges into active conversation as a 3rd party where all participants can speak.',
+                    descAr: 'الدخول في المكالمة كمشارك ثالث يتحدث مع الطرفين ويسمعه الجميع.'
+                },
+                {
+                    code: '225[Ext]',
+                    cat: 'spy',
+                    timing: 'precall',
+                    dial: false,
+                    example: '225102',
+                    nameEn: 'Instant Call Hijack',
+                    nameAr: 'سحب وفصل المكالمة (Hijack)',
+                    descEn: 'Immediately disconnects the agent and redirects the customer leg to your phone.',
+                    descAr: 'فصل الموظف فوراً وتحويل مكالمة العميل إلى هاتفك لمتابعتها بنفسك.'
+                },
+                {
+                    code: '555',
+                    cat: 'spy',
+                    timing: 'precall',
+                    dial: true,
+                    example: '555',
+                    nameEn: 'ChanSpy Interactive Menu',
+                    nameAr: 'قائمة تصفح المكالمات النشطة',
+                    descEn: 'Interactive Asterisk menu to cycle through all live channels (press * to skip).',
+                    descAr: 'الدخول لقائمة استعراض جميع القنوات النشطة والتنقل بينها بالزر *.'
+                },
+
+                // 4. INTERCOM & PAGING
+                {
+                    code: '*80[Ext]',
+                    cat: 'intercom',
+                    timing: 'precall',
+                    dial: false,
+                    example: '*80102',
+                    nameEn: 'Direct 1-to-1 Intercom',
+                    nameAr: 'نداء داخلي فوري (1 إلى 1)',
+                    descEn: 'Auto-answers destination extension on speakerphone for instant two-way voice.',
+                    descAr: 'فتح مكبر صوت هاتف الزميل فوراً والتحدث معه مباشرة دون انتظار رنين.'
+                },
+                {
+                    code: '*800 / 800',
+                    cat: 'intercom',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*800',
+                    nameEn: 'Mass Intercom / Paging',
+                    nameAr: 'إذاعة صوتية جماعية (Paging)',
+                    descEn: 'Broadcasts audio announcement across all available deskphone speakerphones.',
+                    descAr: 'بث نداء صوتي جماعي عبر مكبرات صوت كافة الهواتف المتاحة في الشركة.'
+                },
+
+                // 5. CALL PARKING
+                {
+                    code: '70',
+                    cat: 'parking',
+                    timing: 'precall',
+                    dial: true,
+                    example: isAr ? 'تحويل المكالمة إلى 70' : 'Transfer to 70',
+                    nameEn: 'Park Call (Lot 70)',
+                    nameAr: 'تعليق المكالمة في الموقف (70)',
+                    descEn: 'Transfer call to 70 to park it; system announces assigned parking slot (71-78).',
+                    descAr: 'تحويل المكالمة إلى 70 لتعليقها؛ يعلن النظام صوتياً رقم الموقف (71-78).'
+                },
+                {
+                    code: '71 – 78',
+                    cat: 'parking',
+                    timing: 'precall',
+                    dial: false,
+                    example: '71, 72, 73...',
+                    nameEn: 'Retrieve Parked Call',
+                    nameAr: 'استرجاع المكالمة المعلقة (71-78)',
+                    descEn: 'Dial announced slot number (71 through 78) from any phone to resume the call.',
+                    descAr: 'طلب رقم الموقف المعلن (من 71 حتى 78) من أي هاتف لاستئناف المكالمة.'
+                },
+
+                // 6. FORWARDING & DND
+                {
+                    code: '*72',
+                    cat: 'forward',
+                    timing: 'precall',
+                    dial: false,
+                    example: '*72 + [Destination]',
+                    nameEn: 'Call Forward All - Activate',
+                    nameAr: 'تحويل كافة المكالمات - تفعيل',
+                    descEn: 'Unconditionally forwards all incoming calls to another internal or external number.',
+                    descAr: 'تحويل كافة المكالمات الواردة دائماً إلى رقم داخلي أو رقم خارجي.'
+                },
+                {
+                    code: '*73',
+                    cat: 'forward',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*73',
+                    nameEn: 'Call Forward All - Deactivate',
+                    nameAr: 'إلغاء تحويل كافة المكالمات (*73)',
+                    descEn: 'Cancels unconditional call forwarding and resumes normal ringing.',
+                    descAr: 'إلغاء التحويل الدائم وإعادة استقبال المكالمات على جهازك.'
+                },
+                {
+                    code: '*740',
+                    cat: 'forward',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*740',
+                    nameEn: 'Call Forward Toggle',
+                    nameAr: 'تبديل حالة التحويل (Toggle)',
+                    descEn: 'One-touch toggle for preconfigured call forward destination.',
+                    descAr: 'تشغيل أو إيقاف التحويل المسبق بضغطة زر واحدة.'
+                },
+                {
+                    code: '*90 / *91',
+                    cat: 'forward',
+                    timing: 'precall',
+                    dial: false,
+                    example: '*90 + [Number] / *91',
+                    nameEn: 'Call Forward Busy (On / Off)',
+                    nameAr: 'تحويل عند الانشغال (تشغيل/إلغاء)',
+                    descEn: 'Forwards incoming calls only when line is engaged on another call.',
+                    descAr: 'تحويل المكالمات الواردة فقط إذا كان خطك مشغولاً بمكالمة أخرى.'
+                },
+                {
+                    code: '*52 / *53',
+                    cat: 'forward',
+                    timing: 'precall',
+                    dial: false,
+                    example: '*52 + [Number] / *53',
+                    nameEn: 'Call Forward No Answer (On / Off)',
+                    nameAr: 'تحويل عند عدم الرد (تشغيل/إلغاء)',
+                    descEn: 'Forwards calls when not answered within the configured ring duration.',
+                    descAr: 'تحويل المكالمة بعد انتهاء مدة الرنين المحددة دون رد.'
+                },
+                {
+                    code: '*78 / *79',
+                    cat: 'forward',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*78 / *79',
+                    nameEn: 'Do Not Disturb (DND On / Off)',
+                    nameAr: 'وضع عدم الإزعاج (تشغيل/إلغاء)',
+                    descEn: 'Blocks all incoming calls and directs callers to busy signal or voicemail.',
+                    descAr: 'رفض كافة المكالمات الواردة تلقائياً وتحويلها للمشغول أو البريد.'
+                },
+                {
+                    code: '*76',
+                    cat: 'forward',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*76',
+                    nameEn: 'DND Toggle',
+                    nameAr: 'تبديل وضع عدم الإزعاج (*76)',
+                    descEn: 'One-touch toggle for Do Not Disturb availability state.',
+                    descAr: 'تبديل وضع عدم الإزعاج (تشغيل / إيقاف) بالتناوب.'
+                },
+                {
+                    code: '*70 / *71',
+                    cat: 'forward',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*70 / *71',
+                    nameEn: 'Call Waiting (On / Off)',
+                    nameAr: 'انتظار المكالمات (تفعيل/إلغاء)',
+                    descEn: 'Enables or disables receiving a second incoming call while talking.',
+                    descAr: 'السماح باستقبال مكالمة ثانية أثناء التحدث في مكالمة أولى.'
+                },
+                {
+                    code: '*45',
+                    cat: 'forward',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*45',
+                    nameEn: 'Queue Agent Login / Logout',
+                    nameAr: 'تسجيل دخول/خروج من الطابور (*45)',
+                    descEn: 'Toggles customer care queue dynamic agent membership.',
+                    descAr: 'تسجيل دخول أو خروج الموظف من طابور خدمة العملاء.'
+                },
+                {
+                    code: '*46',
+                    cat: 'forward',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*46',
+                    nameEn: 'Queue Agent Pause / Resume',
+                    nameAr: 'استراحة مؤقتة في الطابور (*46)',
+                    descEn: 'Puts agent on temporary break pause without unregistering from queue.',
+                    descAr: 'أخذ استراحة مؤقتة داخل الطابور دون تسجيل خروج كامل.'
+                },
+
+                // 7. DIAGNOSTICS & AI
+                {
+                    code: '*43',
+                    cat: 'diagnostics',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*43',
+                    nameEn: 'Audio Echo & Latency Test',
+                    nameAr: 'اختبار صدى الصوت وزمن الاستجابة (*43)',
+                    descEn: 'Echoes back spoken voice in real-time to assess network latency and audio fidelity.',
+                    descAr: 'إعادة سماع صوتك فوراً لفحص زمن استجابة الشبكة وجودة الصوت.'
+                },
+                {
+                    code: '*88',
+                    cat: 'diagnostics',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*88',
+                    nameEn: 'AI RNNoise + VAD Gate Echo Test',
+                    nameAr: 'فحص عزل الضوضاء الذكي مع كتم الصمت (*88)',
+                    descEn: 'Live test of neural noise suppression with VAD gate (total silence on breath/pauses).',
+                    descAr: 'اختبار عزل الضوضاء بالذكاء الاصطناعي مع كتم تام أثناء الوقفات.'
+                },
+                {
+                    code: '*87',
+                    cat: 'diagnostics',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*87',
+                    nameEn: 'AI RNNoise Continuous Echo Test',
+                    nameAr: 'فحص عزل الضوضاء المستمر (*87)',
+                    descEn: 'Live test of continuous neural noise cancellation without hard silence gate.',
+                    descAr: 'اختبار فلترة التشويش والضوضاء العصبية المستمرة دون كتم تام.'
+                },
+                {
+                    code: '*89',
+                    cat: 'diagnostics',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*89',
+                    nameEn: 'Raw Audio Baseline Test',
+                    nameAr: 'اختبار الصوت الخام للمقارنة (*89)',
+                    descEn: 'Raw unfiltered microphone stream to benchmark noise cancellation performance.',
+                    descAr: 'سماع الصوت الطبيعي بدون فلترة لمقارنة فاعلية الذكاء الاصطناعي.'
+                },
+                {
+                    code: '*97',
+                    cat: 'diagnostics',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*97',
+                    nameEn: 'My Voicemail',
+                    nameAr: 'صندوق البريد الصوتي الشخصي (*97)',
+                    descEn: 'Direct access to your extension\'s voicemail inbox.',
+                    descAr: 'الدخول إلى صندوق البريد الصوتي الخاص بتحويلتك لسماع الرسائل.'
+                },
+                {
+                    code: '*30 / *32',
+                    cat: 'diagnostics',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*30 / *32',
+                    nameEn: 'Blacklist Caller (*30 / *32)',
+                    nameAr: 'إضافة رقم للقائمة السوداء (*30 / *32)',
+                    descEn: 'Blocks nuisance numbers from calling your PBX (*32 blocks the last caller immediately).',
+                    descAr: 'حظر الأرقام المزعجة من الاتصال بالمقسم (*32 لحظر آخر متصل فوراً).'
+                },
+                {
+                    code: '*65',
+                    cat: 'diagnostics',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*65',
+                    nameEn: 'Speak Extension Number',
+                    nameAr: 'نطق رقم التحويلة (*65)',
+                    descEn: 'Speaks out the registered internal extension number of this phone.',
+                    descAr: 'ينطق النظام صوتياً رقم تحويلتك المسجلة للتأكد من هويتها.'
+                },
+                {
+                    code: '*60',
+                    cat: 'diagnostics',
+                    timing: 'precall',
+                    dial: true,
+                    example: '*60',
+                    nameEn: 'Speaking Server Clock',
+                    nameAr: 'ساعة النظام الرسمية (*60)',
+                    descEn: 'Speaks current official server date and time.',
+                    descAr: 'سماع التوقيت الرسمي المسجل على سيرفر المقسم صوتياً.'
+                }
+            ];
+
+            let activeCallCodesCategory = 'all';
+
+            window.openCallCodesGuideModal = function() {
+                const modal = document.getElementById('callCodesGuideModal');
+                if (!modal) return;
+                modal.classList.remove('hidden');
+                const searchInput = document.getElementById('callCodesSearchInput');
+                if (searchInput) {
+                    searchInput.value = '';
+                    setTimeout(() => searchInput.focus(), 100);
+                }
+                activeCallCodesCategory = 'all';
+                updateCategoryPills();
+                renderCallCodesList();
+            };
+
+            window.closeCallCodesGuideModal = function() {
+                const modal = document.getElementById('callCodesGuideModal');
+                if (modal) modal.classList.add('hidden');
+            };
+
+            window.setCallCodesCategory = function(cat) {
+                activeCallCodesCategory = cat || 'all';
+                updateCategoryPills();
+                renderCallCodesList();
+            };
+
+            function updateCategoryPills() {
+                const activeClass = 'call-code-cat-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer bg-rose-500 text-white border border-rose-500 shadow-md';
+                const inactiveClass = 'call-code-cat-btn shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)]';
+                document.querySelectorAll('.call-code-cat-btn').forEach(btn => {
+                    const cat = btn.getAttribute('data-cat');
+                    btn.className = (cat === activeCallCodesCategory) ? activeClass : inactiveClass;
+                });
+            }
+
+            window.clearCallCodesSearch = function() {
+                const searchInput = document.getElementById('callCodesSearchInput');
+                if (searchInput) {
+                    searchInput.value = '';
+                    searchInput.focus();
+                    renderCallCodesList();
+                }
+            };
+
+            window.filterCallCodesList = function() {
+                renderCallCodesList();
+            };
+
+            window.copyCallCode = function(text, btnEl) {
+                if (!text) return;
+                const clean = String(text).split(' ')[0].trim();
+                navigator.clipboard.writeText(clean).then(() => {
+                    if (btnEl) {
+                        const originalHTML = btnEl.innerHTML;
+                        btnEl.innerHTML = '<span class="text-emerald-400 font-bold">' + (isAr ? 'تم النسخ' : 'Copied!') + '</span>';
+                        setTimeout(() => { btnEl.innerHTML = originalHTML; }, 1200);
+                    }
+                    if (typeof window.showToast === 'function') {
+                        window.showToast(isAr ? 'تم نسخ الكود للحافظة' : 'Code copied to clipboard', 'success');
+                    }
+                }).catch(() => {});
+            };
+
+            window.dialCallCode = function(code) {
+                if (!code) return;
+                const clean = String(code).split(' ')[0].trim();
+                if (typeof launchSipUrl === 'function') {
+                    launchSipUrl('sip:' + clean);
+                } else {
+                    window.location.href = 'sip:' + clean;
+                }
+            };
+
+            function renderCallCodesList() {
+                const query = (document.getElementById('callCodesSearchInput')?.value || '').toLowerCase().trim();
+                const clearBtn = document.getElementById('clearCallCodesSearchBtn');
+                if (clearBtn) clearBtn.classList.toggle('hidden', !query);
+
+                const grid = document.getElementById('callCodesGrid');
+                const emptyState = document.getElementById('callCodesEmptyState');
+                const countBadge = document.getElementById('callCodesCountBadge');
+                if (!grid) return;
+
+                const filtered = CALL_CONTROL_CODES.filter(item => {
+                    // Category check
+                    if (activeCallCodesCategory !== 'all' && item.cat !== activeCallCodesCategory) {
+                        return false;
+                    }
+                    // Query check
+                    if (!query) return true;
+                    return (
+                        item.code.toLowerCase().includes(query) ||
+                        item.nameEn.toLowerCase().includes(query) ||
+                        item.nameAr.toLowerCase().includes(query) ||
+                        item.descEn.toLowerCase().includes(query) ||
+                        item.descAr.toLowerCase().includes(query) ||
+                        (item.example && item.example.toLowerCase().includes(query))
+                    );
+                });
+
+                if (countBadge) {
+                    countBadge.textContent = filtered.length + ' ' + (isAr ? 'كود' : (filtered.length === 1 ? 'code' : 'codes'));
+                }
+
+                if (filtered.length === 0) {
+                    grid.innerHTML = '';
+                    if (emptyState) emptyState.classList.remove('hidden');
+                    return;
+                }
+
+                if (emptyState) emptyState.classList.add('hidden');
+
+                grid.innerHTML = filtered.map((item, idx) => {
+                    const title = isAr ? item.nameAr : item.nameEn;
+                    const subTitle = isAr ? item.nameEn : item.nameAr;
+                    const desc = isAr ? item.descAr : item.descEn;
+
+                    let timingBadge = '';
+                    if (item.timing === 'incall') {
+                        timingBadge = '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 whitespace-nowrap">' + (isAr ? 'أثناء المكالمة' : 'In-Call DTMF') + '</span>';
+                    } else if (item.timing === 'busy') {
+                        timingBadge = '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 whitespace-nowrap">' + (isAr ? 'نغمة المشغول' : 'When Busy') + '</span>';
+                    } else {
+                        timingBadge = '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 whitespace-nowrap">' + (isAr ? 'طلب مباشر' : 'Direct Dial') + '</span>';
+                    }
+
+                    const dialBtn = item.dial ? `
+                        <button type="button" onclick="dialCallCode('${item.code}')" class="px-2 py-1 text-[11px] font-extrabold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition flex items-center gap-1 cursor-pointer shadow-sm" title="${isAr ? 'اتصال الآن' : 'Dial Now'}">
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1.1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                            <span>${isAr ? 'اتصال' : 'Dial'}</span>
+                        </button>
+                    ` : '';
+
+                    return `
+                        <div class="bg-[var(--bg-card)] border border-[var(--border-primary)] hover:border-rose-500/40 rounded-xl p-3 flex flex-col justify-between transition-all group">
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-mono font-black text-sm text-rose-400 bg-rose-500/15 px-2.5 py-0.5 rounded-lg border border-rose-500/30 tracking-wider select-all shadow-sm">${item.code}</span>
+                                        ${timingBadge}
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        ${dialBtn}
+                                        <button type="button" onclick="copyCallCode('${item.code}', this)" class="px-2 py-1 text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-hover)] border border-[var(--border-primary)] rounded-lg transition flex items-center gap-1 cursor-pointer" title="${isAr ? 'نسخ الكود' : 'Copy Code'}">
+                                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                            <span>${isAr ? 'نسخ' : 'Copy'}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <h4 class="text-xs sm:text-sm font-extrabold text-[var(--text-primary)] leading-tight mb-0.5">${title}</h4>
+                                <div class="text-[10px] text-[var(--text-muted)] font-medium mb-1.5">${subTitle}</div>
+                                <p class="text-[11px] text-[var(--text-secondary)] leading-relaxed">${desc}</p>
+                            </div>
+                            <div class="mt-2.5 pt-2 border-t border-[var(--border-primary)]/50 flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)]">
+                                <span>${isAr ? 'طريقة الطلب:' : 'Example:'} <span class="text-zinc-300 font-bold">${item.example}</span></span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Keyboard shortcut (Escape to close)
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    const modal = document.getElementById('callCodesGuideModal');
+                    if (modal && !modal.classList.contains('hidden')) {
+                        closeCallCodesGuideModal();
+                    }
                 }
             });
         })();

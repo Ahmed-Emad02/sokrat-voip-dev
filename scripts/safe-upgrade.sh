@@ -155,6 +155,22 @@ INSERT IGNORE INTO dashboard_settings (setting_key, setting_value) VALUES
   ('webhook_incoming_call_secret', '');
 " 2>/dev/null || true
 
+# Camp-On (Callback When Free) callbacks table
+mysql "${MYSQL_AUTH[@]}" asterisk -e "
+CREATE TABLE IF NOT EXISTS \`sokrat_camp_on_callbacks\` (
+  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+  \`caller_ext\` VARCHAR(20) NOT NULL,
+  \`target_ext\` VARCHAR(20) NOT NULL,
+  \`status\` ENUM('pending', 'originating', 'connected', 'cancelled', 'expired', 'failed') NOT NULL DEFAULT 'pending',
+  \`attempt_count\` INT NOT NULL DEFAULT 0,
+  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`expires_at\` DATETIME NOT NULL,
+  \`completed_at\` DATETIME DEFAULT NULL,
+  INDEX \`idx_camp_pending\` (\`status\`, \`target_ext\`, \`caller_ext\`),
+  INDEX \`idx_camp_expires\` (\`expires_at\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+" 2>/dev/null || true
+
 echo "  Database schema migrations complete. All PBX and CDR data preserved."
 
 # 4. Rebuild & Patch chan_dongle Module
@@ -240,6 +256,150 @@ same => n,Return()
 """
         content = content.rstrip() + "\n\n" + dialer_stub.strip() + "\n"
 
+    # Ensure Camp-On (Callback When Free) contexts exist if missing
+    if "[ext-campon-bridge]" not in content:
+        campon_stub = """
+[campon-hangup-capture]
+exten => s,1,NoOp(--- Sokrat Camp-On Hangup Capture: DIALSTATUS=${DIALSTATUS} HANGUPCAUSE=${HANGUPCAUSE} ---)
+same => n,ExecIf($["${DIALSTATUS}" = "BUSY" | "${HANGUPCAUSE}" = "17"]?Set(DB(CAMP_ON_LAST_BUSY/${CALLERID(num)})=${DB(CAMP_ON_LAST_TARGET/${CALLERID(num)})}))
+same => n,Return()
+
+[sub-campon-busy-menu]
+exten => s,1,NoOp(--- Sokrat Camp-On Busy Menu: Caller ${CALLERID(num)} Target ${EXTTOCALL} ---)
+same => n,Set(CALLER_EXT=${IF($["${CALLERID(num)}" != ""]?${CALLERID(num)}:${CUT(CUT(CHANNEL,-,1),/,2)})})
+same => n,Answer()
+same => n,Playtones(busy)
+same => n,Read(PRESSED_DIGIT,,1,,,8)
+same => n,StopPlaytones()
+same => n,GotoIf($["${PRESSED_DIGIT}" = "6"]?activate)
+same => n,Busy(15)
+same => n,Hangup()
+same => n(activate),Goto(sub-campon-activate,s,1)
+
+[macro-exten-vm-custom]
+exten => s-BUSY,1,NoOp(--- Sokrat Camp-On: Target ${EXTTOCALL} is BUSY for ${CALLERID(num)} ---)
+same => n,Set(CALLER_EXT=${IF($["${CALLERID(num)}" != ""]?${CALLERID(num)}:${CUT(CUT(CHANNEL,-,1),/,2)})})
+same => n,Set(DB(CAMP_ON_LAST_BUSY/${CALLER_EXT})=${EXTTOCALL})
+same => n,Set(DB(CAMP_ON_LAST_TARGET/${CALLER_EXT})=${EXTTOCALL})
+same => n,Goto(sub-campon-busy-menu,s,1)
+
+[sub-campon-activate]
+exten => s,1,NoOp(--- Sokrat Camp-On Activated via DTMF 6: ${CALLERID(num)} -> ${EXTTOCALL} ---)
+same => n,ExecIf($["${EXTTOCALL}" = ""]?Set(EXTTOCALL=${DB(CAMP_ON_LAST_BUSY/${CALLERID(num)})}))
+same => n,GotoIf($["${EXTTOCALL}" = "" | "${EXTTOCALL}" = "${CALLERID(num)}"]?invalid)
+same => n,AGI(sokrat-campon.py,register,${CALLERID(num)},${EXTTOCALL})
+same => n,Playback(beep)
+same => n,Playback(activated)
+same => n,Wait(1)
+same => n,Hangup()
+same => n(invalid),Playback(beeperr)
+same => n,Playback(cannot-complete-as-dialed)
+same => n,Hangup()
+
+[ext-campon-bridge]
+exten => failed,1,NoOp(--- Sokrat Camp-On: Caller ${CALLER_EXT} did not answer callback ring ---)
+same => n,Hangup()
+exten => _[0-9*#+a-zA-Z]!,1,NoOp(--- Sokrat Camp-On Bridge: Connecting ${CALLER_EXT} to ${EXTEN} ---)
+same => n,Set(CALLERID(num)=${CALLER_EXT})
+same => n,Set(CALLERID(name)=${DB(AMPUSER/${CALLER_EXT}/cidname)})
+same => n,ExecIf($["${CALLERID(name)}" = ""]?Set(CALLERID(name)=${CALLER_EXT}))
+same => n,Goto(from-internal,${EXTEN},1)
+"""
+        content = content.rstrip() + "\n\n" + campon_stub.strip() + "\n"
+
+    # Ensure *82 and *83 exist in [from-internal-custom]
+    if "*82" not in content and "[from-internal-custom]" in content:
+        campon_fc = """
+; === Sokrat Camp-On (Callback When Free) Feature Codes (*82 / *83) ===
+exten => *82,1,NoOp(--- Feature Code *82: Camp-On Request from ${CALLERID(num)} Channel: ${CHANNEL} ---)
+same => n,Set(CALLER_EXT=${CALLERID(num)})
+same => n,ExecIf($["${CALLER_EXT}" = ""]?Set(CALLER_EXT=${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)}))
+same => n,ExecIf($["${CALLER_EXT}" = ""]?Set(CALLER_EXT=${CUT(CUT(CHANNEL,-,1),/,2)}))
+same => n,Answer()
+same => n,Set(EXTTOCALL=${DB(CAMP_ON_LAST_BUSY/${CALLER_EXT})})
+same => n,ExecIf($["${EXTTOCALL}" = ""]?Set(EXTTOCALL=${DB(CAMP_ON_LAST_TARGET/${CALLER_EXT})}))
+same => n,GotoIf($["${EXTTOCALL}" = "" | "${EXTTOCALL}" = "${CALLER_EXT}"]?no_target)
+same => n,AGI(sokrat-campon.py,register,${CALLER_EXT},${EXTTOCALL})
+same => n,Playback(beep)
+same => n,Playback(activated)
+same => n,Wait(1)
+same => n,Hangup()
+same => n(no_target),Playback(beeperr)
+same => n,Playback(cannot-complete-as-dialed)
+same => n,Hangup()
+
+exten => *83,1,NoOp(--- Feature Code *83: Camp-On Cancel from ${CALLERID(num)} Channel: ${CHANNEL} ---)
+same => n,Set(CALLER_EXT=${CALLERID(num)})
+same => n,ExecIf($["${CALLER_EXT}" = ""]?Set(CALLER_EXT=${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)}))
+same => n,ExecIf($["${CALLER_EXT}" = ""]?Set(CALLER_EXT=${CUT(CUT(CHANNEL,-,1),/,2)}))
+same => n,Answer()
+same => n,AGI(sokrat-campon.py,cancel,${CALLER_EXT})
+same => n,Playback(beep)
+same => n,Playback(cancelled)
+same => n,Wait(1)
+same => n,Hangup()
+"""
+        content = re.sub(r'(\[from-internal-custom\][\s\S]*?)(?=\n\[|\Z)', r'\1\n' + campon_fc, content, count=1)
+
+    override_conf = "/etc/asterisk/extensions_override_issabel.conf"
+    if os.path.exists(override_conf):
+        with open(override_conf, "r", encoding="utf-8") as f:
+            ov_content = f.read()
+        if "[macro-exten-vm]" not in ov_content:
+            exten_vm_override = """
+; === Sokrat VoIP: Macro Extension Voicemail & Camp-On Override ===
+[macro-exten-vm]
+include => macro-exten-vm-custom
+exten => s,1,Macro(user-callerid,)
+exten => s,n,Set(RingGroupMethod=none)
+exten => s,n,Set(__EXTTOCALL=${ARG2})
+exten => s,n,Set(__PICKUPMARK=${ARG2})
+exten => s,n,Set(DB(CAMP_ON_LAST_TARGET/${CALLERID(num)})=${EXTTOCALL})
+exten => s,n,ExecIf($["${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)}" != ""]?Set(DB(CAMP_ON_LAST_TARGET/${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)})=${EXTTOCALL}))
+exten => s,n,Set(RT=${IF($["${ARG1}"!="novm" | "${DB(CFU/${EXTTOCALL})}"!="" | "${DB(CFB/${EXTTOCALL})}"!="" | "${ARG3}"="1" | "${ARG4}"="1" | "${ARG5}"="1"]?${RINGTIMER}:)})
+exten => s,n(checkrecord),Gosub(sub-record-check,s,1(exten,${EXTTOCALL},))
+exten => s,n(macrodial),Macro(dial-one,${RT},${DIAL_OPTIONS},${EXTTOCALL})
+exten => s,n,Set(SV_DIALSTATUS=${DIALSTATUS})
+exten => s,n(calldocfu),GosubIf($[("${SV_DIALSTATUS}"="NOANSWER"|"${SV_DIALSTATUS}"="CHANUNAVAIL") & "${DB(CFU/${EXTTOCALL})}"!="" & "${SCREEN}"=""]?docfu,1())
+exten => s,n(calldocfb),GosubIf($["${SV_DIALSTATUS}"="BUSY" & "${DB(CFB/${EXTTOCALL})}"!="" & "${SCREEN}"=""]?docfb,1())
+exten => s,n,Set(DIALSTATUS=${SV_DIALSTATUS})
+exten => s,n,ExecIf($[("${DIALSTATUS}"="NOANSWER"&"${ARG3}"="1")|("${DIALSTATUS}"="BUSY"&"${ARG4}"="1")|("${DIALSTATUS}"="CHANUNAVAIL"&"${ARG5}"="1")]?MacroExit())
+exten => s,n,GotoIf($["${ARG1}"="novm"]?s-${DIALSTATUS},1)
+exten => s,n,Macro(vm,${ARG1},${DIALSTATUS},${IVR_RETVM})
+
+exten => docfu,1(docfu),ExecIf($["${DB(AMPUSER/${EXTTOCALL}/cfringtimer)}"="-1"|("${ARG1}"="novm"&"${ARG3}"="1")]?StackPop())
+exten => docfu,n,GotoIf($["${DB(AMPUSER/${EXTTOCALL}/cfringtimer)}"="-1"|("${ARG1}"="novm"&"${ARG3}"="1")]?from-internal,${DB(CFU/${EXTTOCALL})},1)
+exten => docfu,n,Set(RTCF=${IF($["${DB(AMPUSER/${EXTTOCALL}/cfringtimer)}"="0"]?${RT}:${DB(AMPUSER/${EXTTOCALL}/cfringtimer)})})
+exten => docfu,n,ExecIf($["${DIRECTION}" = "INBOUND"]?Set(DIAL_OPTIONS=${STRREPLACE(DIAL_OPTIONS,T)}))
+exten => docfu,n,Dial(Local/${DB(CFU/${EXTTOCALL})}@from-internal/n,${RTCF},${DIAL_OPTIONS})
+exten => docfu,n,Return()
+
+exten => docfb,1(docfu),ExecIf($["${DB(AMPUSER/${EXTTOCALL}/cfringtimer)}"="-1"|("${ARG1}"="novm"&"${ARG4}"="1")]?StackPop())
+exten => docfb,n,GotoIf($["${DB(AMPUSER/${EXTTOCALL}/cfringtimer)}"="-1"|("${ARG1}"="novm"&"${ARG4}"="1")]?from-internal,${DB(CFB/${EXTTOCALL})},1)
+exten => docfb,n,Set(RTCF=${IF($["${DB(AMPUSER/${EXTTOCALL}/cfringtimer)}"="0"]?${RT}:${DB(AMPUSER/${EXTTOCALL}/cfringtimer)})})
+exten => docfb,n,ExecIf($["${DIRECTION}" = "INBOUND"]?Set(DIAL_OPTIONS=${STRREPLACE(DIAL_OPTIONS,T)}))
+exten => docfb,n,Dial(Local/${DB(CFB/${EXTTOCALL})}@from-internal/n,${RTCF},${DIAL_OPTIONS})
+exten => docfb,n,Return()
+
+exten => s-BUSY,1,GotoIf($["${IVR_RETVM}"="RETURN" & "${IVR_CONTEXT}"!=""]?exit,1)
+exten => s-BUSY,n,NoOp(--- Sokrat Camp-On: Target ${EXTTOCALL} is BUSY for ${CALLERID(num)} ---)
+exten => s-BUSY,n,Set(DB(CAMP_ON_LAST_BUSY/${CALLERID(num)})=${EXTTOCALL})
+exten => s-BUSY,n,ExecIf($["${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)}" != ""]?Set(DB(CAMP_ON_LAST_BUSY/${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)})=${EXTTOCALL}))
+exten => s-BUSY,n,Set(DB(CAMP_ON_LAST_TARGET/${CALLERID(num)})=${EXTTOCALL})
+exten => s-BUSY,n,ExecIf($["${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)}" != ""]?Set(DB(CAMP_ON_LAST_TARGET/${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)})=${EXTTOCALL}))
+exten => s-BUSY,n,Goto(sub-campon-busy-menu,s,1)
+
+exten => _s-!,1,GotoIf($["${IVR_RETVM}"="RETURN" & "${IVR_CONTEXT}"!=""]?exit,1)
+exten => _s-!,n,Playtones(congestion)
+exten => _s-!,n,Congestion(10)
+
+exten => exit,1,Playback(beep&line-busy-transfer-menu&silence/1)
+exten => exit,n,MacroExit()
+"""
+            ov_content = ov_content.rstrip() + "\n\n" + exten_vm_override.strip() + "\n"
+            with open(override_conf, "w", encoding="utf-8") as f:
+                f.write(ov_content)
+
     # Update [ext-external-failover] with smart alternate dongle selection
     content = re.sub(r'\[ext-external-failover\].*?(?=\n\[|\Z)', '', content, flags=re.DOTALL)
     failover_stub = """
@@ -289,6 +449,12 @@ same => n(done),Hangup()
 except Exception as e:
     print(f"  Warning: Dialplan sanitization encountered: {e}")
 PYEOF
+    if [ -f "$INSTALL_DIR/scripts/sokrat-campon.py" ]; then
+        mkdir -p /var/lib/asterisk/agi-bin
+        cp "$INSTALL_DIR/scripts/sokrat-campon.py" /var/lib/asterisk/agi-bin/sokrat-campon.py
+        chmod +x /var/lib/asterisk/agi-bin/sokrat-campon.py
+        chown asterisk:asterisk /var/lib/asterisk/agi-bin/sokrat-campon.py
+    fi
     asterisk -rx "dialplan reload" >/dev/null 2>&1 || true
 fi
 

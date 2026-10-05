@@ -700,6 +700,19 @@ function createCrmRouter(pool, options = {}) {
                 return res.json({ success: true, message: `Spy action (${act}) initiated to supervisor ${supervisor}.` });
             }
 
+            if (act === 'hijack') {
+                if (!supervisor) {
+                    return res.status(400).json({ success: false, error: 'supervisorExtension is required for hijack action.' });
+                }
+                const { executeCallHijack } = require('../lib/call-control');
+                await executeCallHijack(pool, ami, ASTERISK_BIN, {
+                    supervisorExt: supervisor,
+                    targetExt: target,
+                    activeCallsObj: getActiveCalls
+                });
+                return res.json({ success: true, message: `Call on extension ${target} hijacked to supervisor ${supervisor}.` });
+            }
+
             if (act === 'transfer') {
                 const dst = String(destinationExtension || '').trim();
                 if (!dst) {

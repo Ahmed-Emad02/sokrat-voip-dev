@@ -1,7 +1,7 @@
 <%
 const words = {
     en: {
-        title: "Dashboard", subtitle: "",
+        title: "Overview", subtitle: "",
         desc: "Real-time call center performance overview",
         startTime: "Start Time", endTime: "End Time",
         roster: "Extension Roster", allExt: "All Extensions",
@@ -37,7 +37,7 @@ const words = {
         errorImport: "Error: Failed to import CSV"
     },
     ar: {
-        title: "لوحة التحكم", subtitle: "",
+        title: "نظرة عامة", subtitle: "",
         desc: "نظرة عامة على أداء مركز الاتصال في الوقت الفعلي",
         startTime: "وقت البداية", endTime: "وقت النهاية",
         roster: "قائمة الموظفين", allExt: "جميع التحويلات",
@@ -215,9 +215,9 @@ const isRtl = currentLang === 'ar';
     <%- include('sidebar') %>
     <div class="flex-1 p-5 md:p-6 relative flex flex-col min-h-screen">
 
-        <div class="mb-3 shrink-0 flex justify-between items-center <%= isRtl ? 'flex-row-reverse' : '' %>">
-            <div>
-                <h2 class="text-3xl font-vibrant-display text-white tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
+        <div class="mb-3 shrink-0 flex items-center <%= isRtl ? 'justify-start text-right' : 'justify-between' %>">
+            <div class="<%= isRtl ? 'text-right w-full' : '' %>">
+                <h2 class="text-3xl font-vibrant-display text-white tracking-tight <%= isRtl ? 'text-right' : '' %>"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
         </div>
 

@@ -13,6 +13,7 @@ const configEjsPath = path.join(viewsDir, 'config.ejs');
 function analyzeDivNesting(html) {
     const stack = [];
     const nestedModals = [];
+    let extraCloses = 0;
     let inScript = false;
     let inStyle = false;
     html = html.replace(/<%[\s\S]*?%>/g, '');
@@ -27,7 +28,11 @@ function analyzeDivNesting(html) {
         if (/^<\/style/.test(t)) { inStyle = false; continue; }
         if (inScript || inStyle) continue;
         if (/^<\//.test(t)) {
-            if (stack.length > 0) stack.pop();
+            if (stack.length > 0) {
+                stack.pop();
+            } else {
+                extraCloses++;
+            }
             continue;
         }
         if (/\/>$/.test(t)) continue;
@@ -38,7 +43,7 @@ function analyzeDivNesting(html) {
         }
         stack.push({ id: idM ? idM[1] : null });
     }
-    return { finalDepth: stack.length, nestedModals };
+    return { finalDepth: stack.length, extraCloses, nestedModals };
 }
 
 test('config.ejs renders fully balanced markup with no unclosed wrapper divs (en + ar)', () => {
@@ -89,9 +94,49 @@ test('all view templates have balanced top-level div structure', () => {
         if (r.finalDepth !== 0) {
             problems.push(`${f}: ${r.finalDepth} unclosed <div>`);
         }
+        if (r.extraCloses > 0) {
+            problems.push(`${f}: ${r.extraCloses} extra/orphan </div> closing tag(s)`);
+        }
         if (r.nestedModals.length > 0) {
             problems.push(`${f}: ${r.nestedModals.join(', ')}`);
         }
     }
     assert.deepEqual(problems, [], 'Unbalanced or nested-modal templates detected:\n' + problems.join('\n'));
+});
+
+test('all view templates have balanced interactive tags and valid script syntax', () => {
+    const vm = require('vm');
+    const problems = [];
+
+    for (const f of fs.readdirSync(viewsDir).filter(x => x.endsWith('.ejs')).sort()) {
+        const content = fs.readFileSync(path.join(viewsDir, f), 'utf8');
+
+        // Check common pair tags
+        for (const tag of ['button', 'script', 'select', 'form', 'label']) {
+            const openRegex = new RegExp(`<${tag}[\\s>]`, 'gi');
+            const closeRegex = new RegExp(`</${tag}>`, 'gi');
+            const opens = (content.match(openRegex) || []).length;
+            const closes = (content.match(closeRegex) || []).length;
+            if (opens !== closes) {
+                problems.push(`${f}: <${tag}> tag mismatch (${opens} opens vs ${closes} closes)`);
+            }
+        }
+
+        // Validate syntax of client-side <script> blocks
+        const scripts = content.match(/<script\b[^>]*>([\s\S]*?)<\/script>/gi) || [];
+        scripts.forEach((scr, idx) => {
+            let code = scr.replace(/<script\b[^>]*>/i, '').replace(/<\/script>/i, '');
+            code = code.replace(/<%[=-]?([\s\S]*?)%>/g, '"placeholder"');
+            code = code.replace(/<%([\s\S]*?)%>/g, '');
+            try {
+                new vm.Script(code);
+            } catch (err) {
+                if (err.message.includes('missing') || err.message.includes('Unterminated') || err.message.includes('Unexpected end of input')) {
+                    problems.push(`${f} script block #${idx + 1} syntax/bracket error: ${err.message}`);
+                }
+            }
+        });
+    }
+
+    assert.deepEqual(problems, [], 'Interactive tag or script bracket issues detected:\n' + problems.join('\n'));
 });

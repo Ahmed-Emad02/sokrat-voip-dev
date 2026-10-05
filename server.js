@@ -409,7 +409,7 @@ const PERMISSION_CATEGORIES = [
             { key: 'call_history', label: 'Call History', labelAr: 'سجل المكالمات' },
             { key: 'operator', label: 'Live Switchboard', labelAr: 'لوحة التحكم الحية' },
             { key: 'ext-stats', label: 'Extension Statistics', labelAr: 'إحصائيات التحويلات' },
-            { key: 'contacts', label: 'Address Book', labelAr: 'دليل الهاتف' },
+            { key: 'contacts', label: 'Contacts', labelAr: 'جهات الاتصال' },
             { key: 'voicemails', label: 'Voicemails', labelAr: 'البريد الصوتي' },
             { key: 'gsm-dongles', label: 'GSM Dongles', labelAr: 'دونجلات GSM' },
             { key: 'campaigns', label: 'Campaigns & Dialer', labelAr: 'الحملات والاتصال الآلي' },
@@ -927,6 +927,21 @@ async function initAuthDb() {
     `);
     try { await conn.execute('ALTER TABLE `asteriskcdrdb`.`voicemail_transcriptions` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci'); } catch (_) {}
     await conn.execute(`
+        CREATE TABLE IF NOT EXISTS \`asterisk\`.\`sokrat_camp_on_callbacks\` (
+            \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+            \`caller_ext\` VARCHAR(20) NOT NULL,
+            \`target_ext\` VARCHAR(20) NOT NULL,
+            \`status\` ENUM('pending', 'originating', 'connected', 'cancelled', 'expired', 'failed') NOT NULL DEFAULT 'pending',
+            \`attempt_count\` INT NOT NULL DEFAULT 0,
+            \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            \`expires_at\` DATETIME NOT NULL,
+            \`completed_at\` DATETIME DEFAULT NULL,
+            INDEX \`idx_camp_pending\` (\`status\`, \`target_ext\`, \`caller_ext\`),
+            INDEX \`idx_camp_expires\` (\`expires_at\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
         CREATE TABLE IF NOT EXISTS \`asterisk\`.\`stt_settings\` (
             \`id\` INT PRIMARY KEY DEFAULT 1,
             \`enabled\` TINYINT(1) DEFAULT 1,
@@ -1055,6 +1070,11 @@ async function initAuthDb() {
     }
     await conn.end();
     await syncAllExtensionsAstdb();
+    try {
+        await initCampOnCallbacks();
+    } catch (campErr) {
+        console.error('CampOn boot sync error:', campErr.message);
+    }
     await acquireDialerLeaderLock();
     try {
         const [vmRows] = await pool.query('SELECT * FROM `asterisk`.`voicemail_storage_settings` WHERE id = 1');
@@ -1786,7 +1806,7 @@ app.use((req, res, next) => {
         '/login', '/logout', '/forgot-password', '/reset-password',
         '/api/auth/forgot-password', '/api/auth/reset-password', '/api/network-info',
         '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live',
-        '/401', '/403', '/404'
+        '/401', '/403', '/404', '/api/telephony/camp-on/dialplan-trigger'
     ];
     if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/federation/v1/')) {
         return next();
@@ -2122,6 +2142,215 @@ async function closeAllOpenExtensionStatusIntervals() {
         }
         await pool.query(`UPDATE ${tables.extensionStatusCurrent} SET status = 'offline', partner = NULL, status_since = NOW() WHERE status != 'offline'`);
     } catch (_) {}
+}
+
+// --- SOKRAT CAMP-ON (AUTOMATIC CALLBACK ON BUSY) ENGINE ---
+const pendingCampOn = {}; // targetExt -> [ { id, callerExt, targetExt, expiresAt } ]
+const campOnCheckDebounceTimers = {};
+
+async function initCampOnCallbacks() {
+    try {
+        const [rows] = await pool.query(
+            "SELECT id, caller_ext, target_ext, expires_at FROM `asterisk`.`sokrat_camp_on_callbacks` WHERE status = 'pending' AND expires_at > NOW()"
+        );
+        for (const row of rows) {
+            const t = String(row.target_ext);
+            if (!pendingCampOn[t]) pendingCampOn[t] = [];
+            pendingCampOn[t].push({
+                id: row.id,
+                callerExt: String(row.caller_ext),
+                targetExt: t,
+                expiresAt: new Date(row.expires_at).getTime()
+            });
+        }
+        console.log(`[CampOn] Initialized with ${rows.length} pending callbacks.`);
+    } catch (err) {
+        console.error('[CampOn] Failed to load pending callbacks:', err.message);
+    }
+}
+
+// Clean expired callbacks every 60s
+setInterval(async () => {
+    try {
+        const now = Date.now();
+        for (const [target, queue] of Object.entries(pendingCampOn)) {
+            pendingCampOn[target] = queue.filter(item => item.expiresAt > now);
+            if (pendingCampOn[target].length === 0) delete pendingCampOn[target];
+        }
+        await pool.query("UPDATE `asterisk`.`sokrat_camp_on_callbacks` SET status = 'expired' WHERE status = 'pending' AND expires_at <= NOW()");
+    } catch (_) {}
+}, 60000);
+
+function isExtensionIdleForCampOn(ext) {
+    if (!ext) return false;
+    const clean = String(ext).trim();
+    if (!/^\d{2,6}$/.test(clean)) return false;
+    if (activeCalls[clean]) return false;
+    if (peerStatus && peerStatus[clean] === false) return false;
+    return true;
+}
+
+function scheduleCampOnCheck(ext) {
+    if (!ext) return;
+    const clean = String(ext).trim();
+    if (campOnCheckDebounceTimers[clean]) clearTimeout(campOnCheckDebounceTimers[clean]);
+    campOnCheckDebounceTimers[clean] = setTimeout(() => {
+        delete campOnCheckDebounceTimers[clean];
+        checkAndExecuteCampOn(clean);
+    }, 750);
+}
+
+async function checkAndExecuteCampOn(ext) {
+    try {
+        const clean = String(ext).trim();
+        if (!clean) return;
+
+        // Scenario 1: ext is a TARGET that just became free!
+        if (pendingCampOn[clean] && pendingCampOn[clean].length > 0) {
+            if (isExtensionIdleForCampOn(clean)) {
+                for (let i = 0; i < pendingCampOn[clean].length; i++) {
+                    const item = pendingCampOn[clean][i];
+                    if (isExtensionIdleForCampOn(item.callerExt)) {
+                        pendingCampOn[clean].splice(i, 1);
+                        if (pendingCampOn[clean].length === 0) delete pendingCampOn[clean];
+                        await executeCampOnOriginate(item);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Scenario 2: ext is a CALLER who just became free, and their target is ALREADY free!
+        for (const [targetExt, queue] of Object.entries(pendingCampOn)) {
+            const idx = queue.findIndex(item => item.callerExt === clean);
+            if (idx !== -1) {
+                if (isExtensionIdleForCampOn(clean) && isExtensionIdleForCampOn(targetExt)) {
+                    const [item] = queue.splice(idx, 1);
+                    if (queue.length === 0) delete pendingCampOn[targetExt];
+                    await executeCampOnOriginate(item);
+                    return;
+                }
+            }
+        }
+    } catch (err) {
+        console.error(`[CampOn] Check error for ext ${ext}:`, err.message);
+    }
+}
+
+async function executeCampOnOriginate(item) {
+    const { id, callerExt, targetExt } = item;
+    console.log(`[CampOn] Triggering automatic callback: ${callerExt} <-> ${targetExt}`);
+    try {
+        await pool.query("UPDATE `asterisk`.`sokrat_camp_on_callbacks` SET status = 'originating', attempt_count = attempt_count + 1 WHERE id = ?", [id]);
+        
+        io.emit('campOn:triggered', { callerExt, targetExt });
+
+        if (amiClient && !amiClient.destroyed) {
+            const originateMsg = [
+                'Action: Originate',
+                `Channel: Local/${callerExt}@from-internal`,
+                'Context: ext-campon-bridge',
+                `Exten: ${targetExt}`,
+                'Priority: 1',
+                `CallerID: "Callback: ${targetExt}" <${targetExt}>`,
+                'Timeout: 30000',
+                'Async: true',
+                `Variable: CALLER_EXT=${callerExt}`,
+                `Variable: TARGET_EXT=${targetExt}`,
+                'Variable: SOKRAT_CAMP_ON=1',
+                'Variable: ALERT_INFO=Ring-Answer',
+                ''
+            ].join('\r\n') + '\r\n';
+
+            amiClient.write(originateMsg);
+            console.log(`[CampOn] Originated callback call for ${callerExt} -> ${targetExt} via AMI`);
+            await pool.query("UPDATE `asterisk`.`sokrat_camp_on_callbacks` SET status = 'connected', completed_at = NOW() WHERE id = ?", [id]).catch(() => {});
+        } else {
+            const cmd = `channel originate Local/${callerExt}@from-internal extension ${targetExt}@ext-campon-bridge`;
+            execFile(ASTERISK_BIN, ['-rx', cmd], (err) => {
+                if (err) console.error(`[CampOn] CLI originate fallback error:`, err.message);
+            });
+            console.log(`[CampOn] Originated callback call for ${callerExt} -> ${targetExt} via CLI fallback`);
+            await pool.query("UPDATE `asterisk`.`sokrat_camp_on_callbacks` SET status = 'connected', completed_at = NOW() WHERE id = ?", [id]).catch(() => {});
+        }
+    } catch (err) {
+        console.error(`[CampOn] Failed to execute originate for ${callerExt}:`, err.message);
+        await pool.query("UPDATE `asterisk`.`sokrat_camp_on_callbacks` SET status = 'failed' WHERE id = ?", [id]).catch(() => {});
+    }
+}
+
+async function registerCampOnCallback(callerExt, targetExt) {
+    const cExt = String(callerExt || '').trim();
+    const tExt = String(targetExt || '').trim();
+
+    if (!/^\d{2,6}$/.test(cExt) || !/^\d{2,6}$/.test(tExt)) {
+        throw new Error('Both caller and target must be valid internal extension numbers.');
+    }
+    if (cExt === tExt) {
+        throw new Error('Cannot set automatic callback to your own extension.');
+    }
+
+    const expiresAt = new Date(Date.now() + 45 * 60 * 1000); // 45 minutes
+
+    if (!pendingCampOn[tExt]) pendingCampOn[tExt] = [];
+    const existing = pendingCampOn[tExt].find(i => i.callerExt === cExt);
+
+    let insertId;
+    if (existing) {
+        existing.expiresAt = expiresAt.getTime();
+        await pool.query(
+            "UPDATE `asterisk`.`sokrat_camp_on_callbacks` SET expires_at = ?, status = 'pending' WHERE id = ?",
+            [expiresAt, existing.id]
+        );
+        insertId = existing.id;
+    } else {
+        const [result] = await pool.query(
+            "INSERT INTO `asterisk`.`sokrat_camp_on_callbacks` (caller_ext, target_ext, status, expires_at) VALUES (?, ?, 'pending', ?)",
+            [cExt, tExt, expiresAt]
+        );
+        insertId = result.insertId;
+        pendingCampOn[tExt].push({
+            id: insertId,
+            callerExt: cExt,
+            targetExt: tExt,
+            expiresAt: expiresAt.getTime()
+        });
+    }
+
+    console.log(`[CampOn] Registered callback: ${cExt} waiting for ${tExt} (ID: ${insertId})`);
+    io.emit('campOn:registered', { callerExt: cExt, targetExt: tExt });
+
+    scheduleCampOnCheck(tExt);
+
+    return { id: insertId, callerExt: cExt, targetExt: tExt, expiresAt };
+}
+
+async function cancelCampOnCallback(callerExt, targetExt) {
+    const cExt = String(callerExt || '').trim();
+    const tExt = targetExt ? String(targetExt).trim() : null;
+
+    if (tExt) {
+        if (pendingCampOn[tExt]) {
+            pendingCampOn[tExt] = pendingCampOn[tExt].filter(i => i.callerExt !== cExt);
+            if (pendingCampOn[tExt].length === 0) delete pendingCampOn[tExt];
+        }
+        await pool.query(
+            "UPDATE `asterisk`.`sokrat_camp_on_callbacks` SET status = 'cancelled' WHERE caller_ext = ? AND target_ext = ? AND status = 'pending'",
+            [cExt, tExt]
+        );
+    } else {
+        for (const [t, queue] of Object.entries(pendingCampOn)) {
+            pendingCampOn[t] = queue.filter(i => i.callerExt !== cExt);
+            if (pendingCampOn[t].length === 0) delete pendingCampOn[t];
+        }
+        await pool.query(
+            "UPDATE `asterisk`.`sokrat_camp_on_callbacks` SET status = 'cancelled' WHERE caller_ext = ? AND status = 'pending'",
+            [cExt]
+        );
+    }
+
+    io.emit('campOn:cancelled', { callerExt: cExt, targetExt: tExt });
+    return true;
 }
 
 function updateExtensionPresence(name) {
@@ -2805,6 +3034,27 @@ function connectAMI() {
                 }
             }
 
+            // Track last dialed target & busy extension for Camp-On (*82)
+            if (event.Event === 'DialBegin' || event.Event === 'DialState') {
+                const caller = event.CallerIDNum;
+                const callee = event.DestCallerIDNum || event.DialString;
+                if (caller && callee && /^\d{2,6}$/.test(caller) && /^\d{2,6}$/.test(callee) && caller !== callee) {
+                    if (amiClient && !amiClient.destroyed) {
+                        amiClient.write(`Action: DBPut\r\nFamily: CAMP_ON_LAST_TARGET\r\nKey: ${caller}\r\nVal: ${callee}\r\n\r\n`);
+                    }
+                }
+            }
+            if (event.Event === 'DialEnd') {
+                const caller = event.CallerIDNum;
+                const callee = event.DestCallerIDNum || event.DialString;
+                if (event.DialStatus === 'BUSY' && caller && callee && /^\d{2,6}$/.test(caller) && /^\d{2,6}$/.test(callee) && caller !== callee) {
+                    if (amiClient && !amiClient.destroyed) {
+                        amiClient.write(`Action: DBPut\r\nFamily: CAMP_ON_LAST_BUSY\r\nKey: ${caller}\r\nVal: ${callee}\r\n\r\n`);
+                        amiClient.write(`Action: DBPut\r\nFamily: CAMP_ON_LAST_TARGET\r\nKey: ${caller}\r\nVal: ${callee}\r\n\r\n`);
+                    }
+                }
+            }
+
             // Instant Asterisk DeviceStateChange event handling
             if (event.Event === 'DeviceStateChange') {
                 let rawDev = event.Device ? event.Device.replace(/^(SIP|PJSIP)\//, '') : '';
@@ -2814,6 +3064,9 @@ function connectAMI() {
                     let isOnline = !(state === 'unavailable' || state === 'invalid' || state === 'unknown' || state === '5' || state === '4');
                     if (isOnline) {
                         setExtensionOnline(name, 'DeviceStateChange');
+                        if (state === 'not_inuse') {
+                            scheduleCampOnCheck(name);
+                        }
                     } else {
                         setExtensionOffline(name, 'DeviceStateChange');
                     }
@@ -2835,6 +3088,9 @@ function connectAMI() {
                     if ((statusStr === '0' || !isOnline) && activeCalls[name]) {
                         delete activeCalls[name];
                         notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: name, callData: null });
+                    }
+                    if (statusStr === '0') {
+                        scheduleCampOnCheck(name);
                     }
                     scheduleExtensionStatusTracking(name);
                 }
@@ -2970,6 +3226,7 @@ function connectAMI() {
                         delete activeCalls[e];
                         notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: e, callData: null });
                         scheduleExtensionStatusTracking(e);
+                        scheduleCampOnCheck(e);
                     }
                 });
                 broadcastTrunkStatus();
@@ -8206,6 +8463,80 @@ app.post('/api/transfer', requireAuth, requireActionPermission('operator-transfe
         res.json({ success: true, message: `Call on extension ${src} successfully transferred to ${dst}.`, result });
     } catch (error) {
         res.status(400).json({ success: false, error: error.message });
+    }
+});
+
+// --- SOKRAT CAMP-ON (AUTOMATIC CALLBACK ON BUSY) REST APIS ---
+
+// POST /api/telephony/camp-on/dialplan-trigger - Internal trigger called by sokrat-campon.py AGI
+app.post('/api/telephony/camp-on/dialplan-trigger', async (req, res) => {
+    try {
+        const clientIp = req.ip || req.connection?.remoteAddress || '';
+        if (!clientIp.includes('127.0.0.1') && !clientIp.includes('::1') && !clientIp.includes('localhost')) {
+            return res.status(403).json({ success: false, error: 'Forbidden. Dialplan trigger is restricted to localhost.' });
+        }
+        const { action, callerExt, targetExt } = req.body;
+        if (action === 'cancel') {
+            await cancelCampOnCallback(callerExt, targetExt);
+            return res.json({ success: true, message: `Camp-On callback cancelled for ${callerExt}.` });
+        }
+        const result = await registerCampOnCallback(callerExt, targetExt);
+        return res.json({ success: true, result });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/telephony/camp-on/request - Register a callback request from WebRTC softphone or switchboard
+app.post('/api/telephony/camp-on/request', requireAuth, async (req, res) => {
+    try {
+        let callerExt = req.body.callerExtension || req.session?.extension || '';
+        if (!callerExt && req.session?.userId) {
+            const [uRows] = await pool.query('SELECT extension FROM dashboard_users WHERE id = ?', [req.session.userId]);
+            if (uRows.length && uRows[0].extension) callerExt = uRows[0].extension;
+        }
+        const targetExt = req.body.targetExtension;
+        const result = await registerCampOnCallback(callerExt, targetExt);
+        res.json({ success: true, message: `Callback scheduled. You will be called as soon as extension ${targetExt} is free.`, result });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/telephony/camp-on/cancel - Cancel pending callback request(s)
+app.post('/api/telephony/camp-on/cancel', requireAuth, async (req, res) => {
+    try {
+        let callerExt = req.body.callerExtension || req.session?.extension || '';
+        if (!callerExt && req.session?.userId) {
+            const [uRows] = await pool.query('SELECT extension FROM dashboard_users WHERE id = ?', [req.session.userId]);
+            if (uRows.length && uRows[0].extension) callerExt = uRows[0].extension;
+        }
+        const targetExt = req.body.targetExtension;
+        await cancelCampOnCallback(callerExt, targetExt);
+        res.json({ success: true, message: 'Callback request cancelled.' });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/telephony/camp-on/pending - Fetch active callback requests for user
+app.get('/api/telephony/camp-on/pending', requireAuth, async (req, res) => {
+    try {
+        let callerExt = req.query.callerExtension || req.session?.extension || '';
+        if (!callerExt && req.session?.userId) {
+            const [uRows] = await pool.query('SELECT extension FROM dashboard_users WHERE id = ?', [req.session.userId]);
+            if (uRows.length && uRows[0].extension) callerExt = uRows[0].extension;
+        }
+        if (!callerExt) {
+            return res.json({ success: true, requests: [] });
+        }
+        const [rows] = await pool.query(
+            "SELECT id, caller_ext, target_ext, status, created_at, expires_at FROM `asterisk`.`sokrat_camp_on_callbacks` WHERE caller_ext = ? AND status = 'pending' AND expires_at > NOW() ORDER BY created_at DESC",
+            [callerExt]
+        );
+        res.json({ success: true, requests: rows });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
