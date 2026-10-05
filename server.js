@@ -35,6 +35,7 @@ const createCrmRouter = require('./routes/crm-integration');
 const registerCrmLiveSocket = require('./socket/crm-live');
 const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
 const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
+const gitHistoryService = require('./backend/git-history-service');
 const {
     initApiKeyTables,
     createApiKey,
@@ -19897,6 +19898,80 @@ app.delete('/api/admin/api-keys/:id', requireAuth, async (req, res) => {
         }
         await deleteApiKey(pool, id);
         res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// ROOT-ONLY GIT REPOSITORY HISTORY INSPECTOR
+// ==========================================
+
+// Page View: GET /admin/git-history
+app.get('/admin/git-history', requireAuth, async (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).render('403', { currentLang: (req.session && req.session.lang) || 'en' });
+    }
+    try {
+        const overview = await gitHistoryService.getRepoOverview();
+        res.render('git-history', {
+            overview,
+            moment,
+            currentLang: (req.session && req.session.lang) || 'en',
+            currentPage: '/admin/git-history',
+            currentUser: req.session.username || 'root',
+            isRootUser: true,
+            isSuperAdmin: true
+        });
+    } catch (err) {
+        console.error('Git History Page Error:', err);
+        res.status(500).send('Git History Error: ' + err.message);
+    }
+});
+
+// API: GET /api/admin/git-history/overview
+app.get('/api/admin/git-history/overview', requireAuth, async (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can view Git history.' });
+    }
+    try {
+        const overview = await gitHistoryService.getRepoOverview();
+        res.json({ success: true, overview });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// API: GET /api/admin/git-history/commits
+app.get('/api/admin/git-history/commits', requireAuth, async (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can view Git history.' });
+    }
+    try {
+        const { page, limit, search, author, since, until } = req.query;
+        const result = await gitHistoryService.getCommitsList({ page, limit, search, author, since, until });
+        res.json({ success: true, ...result });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// API: GET /api/admin/git-history/commit/:hash
+app.get('/api/admin/git-history/commit/:hash', requireAuth, async (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can view Git history.' });
+    }
+    try {
+        const hash = req.params.hash;
+        if (!hash || !/^[0-9a-fA-F]{7,40}$/.test(hash.trim())) {
+            return res.status(400).json({ success: false, error: 'Invalid commit hash format.' });
+        }
+        const details = await gitHistoryService.getCommitDetails(hash);
+        res.json({ success: true, ...details });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

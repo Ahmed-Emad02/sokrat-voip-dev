@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="<%= currentLang %>" dir="<%= currentLang === 'ar' ? 'rtl' : 'ltr' %>" class="h-full">
+<head>
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            if (theme === 'light') { document.documentElement.classList.add('light-theme'); }
+            else { document.documentElement.classList.remove('light-theme'); }
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VoIP — <%= currentLang === 'ar' ? 'سجل Git للنظام' : 'Git History' %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/moment.min.js"></script>
+    <% if (currentLang === 'ar') { %>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.30.1/locale/ar.js"></script>
+    <% } %>
+    <style>
+        :root {
+            --bg-primary: #050507;
+            --bg-secondary: #0a0a0d;
+            --bg-card: #101014;
+            --bg-hover: #1c1c24;
+            --text-primary: #f4f4f5;
+            --text-secondary: #a1a1aa;
+            --text-muted: #85858f;
+            --border-primary: rgba(255, 255, 255, 0.08);
+            --border-accent: rgba(255, 255, 255, 0.16);
+            --accent-color: #ef4444;
+            --accent-hover: #dc2626;
+        }
+
+        html.light-theme, body.light-theme {
+            --bg-primary: #f8fafc !important;
+            --bg-secondary: #ffffff !important;
+            --bg-card: #ffffff !important;
+            --bg-hover: #f1f5f9 !important;
+            --text-primary: #0f172a !important;
+            --text-secondary: #334155 !important;
+            --text-muted: #64748b !important;
+            --border-primary: #e2e8f0 !important;
+            --border-accent: #cbd5e1 !important;
+            --accent-color: #ef4444 !important;
+            --accent-hover: #dc2626 !important;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .panel-surface {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+        }
+
+        .card-surface {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-primary);
+        }
+
+        /* Diff styling */
+        .diff-line {
+            font-family: 'JetBrains Mono', monospace !important;
+            font-size: 0.8125rem;
+            line-height: 1.35rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .diff-add {
+            background-color: rgba(16, 185, 129, 0.12);
+            color: #34d399;
+            border-left: 3px solid #10b981;
+        }
+        html.light-theme .diff-add {
+            background-color: rgba(16, 185, 129, 0.16);
+            color: #065f46;
+        }
+        .diff-del {
+            background-color: rgba(239, 68, 68, 0.12);
+            color: #f87171;
+            border-left: 3px solid #ef4444;
+        }
+        html.light-theme .diff-del {
+            background-color: rgba(239, 68, 68, 0.14);
+            color: #991b1b;
+        }
+        .diff-hunk {
+            background-color: rgba(59, 130, 246, 0.08);
+            color: #60a5fa;
+            border-left: 3px solid #3b82f6;
+            font-weight: 600;
+        }
+        html.light-theme .diff-hunk {
+            background-color: rgba(59, 130, 246, 0.12);
+            color: #1d4ed8;
+        }
+        .diff-context {
+            color: var(--text-secondary);
+            border-left: 3px solid transparent;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 9999px; }
+        html.light-theme ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.18); }
+
+        .custom-select-wrapper { position: relative; }
+    </style>
+</head>
+<body class="h-full flex overflow-hidden">
+    <!-- Sidebar -->
+    <%- include('sidebar') %>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg-primary)]">
+        <!-- Top Sticky Header -->
+        <header class="panel-surface border-b px-6 py-4 shrink-0 flex flex-wrap items-center justify-between gap-4 z-10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 shrink-0">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="18" cy="18" r="3"/>
+                        <circle cx="6" cy="6" r="3"/>
+                        <path d="M6 9v12"/>
+                        <path d="M18 9a9 9 0 0 0-9 9"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg font-bold text-[var(--text-primary)]">
+                            <%= currentLang === 'ar' ? 'سجل Git للنظام' : 'Git Repository History' %>
+                        </h1>
+                        <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-red-500/10 text-red-400 border border-red-500/20 uppercase tracking-wider">
+                            ROOT ONLY
+                        </span>
+                        <span id="headerBranchBadge" class="px-2.5 py-0.5 text-xs font-mono font-medium rounded-md bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border-primary)]">
+                            <%= overview.branch %>
+                        </span>
+                    </div>
+                    <p class="text-xs text-[var(--text-secondary)] mt-0.5">
+                        <%= currentLang === 'ar' ? 'فحص ومتابعة جميع التعديلات والترقيات وسجل الأكواد في خادم سقراط' : 'Deep commit inspector, file diffs, and codebase revision tracking' %>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Actions Bar -->
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="refreshGitHistory()" id="refreshBtn" title="<%= currentLang === 'ar' ? 'تحديث السجل' : 'Refresh History' %>"
+                    class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg panel-surface hover:bg-[var(--bg-hover)] text-[var(--text-primary)] transition cursor-pointer">
+                    <svg id="refreshSpinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                    </svg>
+                    <span><%= currentLang === 'ar' ? 'تحديث' : 'Refresh' %></span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Scrollable Body Content -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <!-- Summary Overview Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Card 1: Branch & HEAD -->
+                <div class="card-surface rounded-xl p-4 flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                        <span><%= currentLang === 'ar' ? 'الفرع والإصدار الحالي' : 'Active Branch & HEAD' %></span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="m21 3-7.5 7.5"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                    </div>
+                    <div class="mt-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg font-bold text-[var(--text-primary)] font-mono"><%= overview.branch %></span>
+                            <button type="button" onclick="copyToClipboard('<%= overview.currentSha %>')" title="<%= currentLang === 'ar' ? 'نسخ معرف التعديل' : 'Copy Full SHA' %>"
+                                class="px-2 py-0.5 text-xs font-mono rounded bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition cursor-pointer">
+                                <%= overview.shortSha %>
+                            </button>
+                        </div>
+                        <p class="text-xs text-[var(--text-muted)] truncate mt-1" title="<%= overview.latestCommit ? overview.latestCommit.subject : '' %>">
+                            <%= overview.latestCommit ? overview.latestCommit.subject : '—' %>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Card 2: Working Tree Status -->
+                <div class="card-surface rounded-xl p-4 flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                        <span><%= currentLang === 'ar' ? 'حالة ملفات العمل' : 'Working Directory' %></span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                    </div>
+                    <div class="mt-3">
+                        <div class="flex items-center gap-2">
+                            <% if (overview.isClean) { %>
+                                <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    <%= currentLang === 'ar' ? 'شجرة العمل نظيفة' : 'Clean Working Tree' %>
+                                </span>
+                            <% } else { %>
+                                <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                    <%= currentLang === 'ar' ? `${overview.workingTree.totalChanged} ملفات معدلة` : `${overview.workingTree.totalChanged} uncommitted files` %>
+                                </span>
+                            <% } %>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs text-[var(--text-muted)] mt-1 font-mono">
+                            <span>M: <%= overview.workingTree.modified %></span>
+                            <span>S: <%= overview.workingTree.staged %></span>
+                            <span>?: <%= overview.workingTree.untracked %></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 3: Remote Sync -->
+                <div class="card-surface rounded-xl p-4 flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                        <span><%= currentLang === 'ar' ? 'المزامنة مع المستودع البعيد' : 'Remote Tracking' %></span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <div class="mt-3">
+                        <div class="flex items-center gap-2">
+                            <% if (overview.aheadBehind.ahead === 0 && overview.aheadBehind.behind === 0) { %>
+                                <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                    <%= currentLang === 'ar' ? 'متزامن مع origin' : 'In Sync with origin' %>
+                                </span>
+                            <% } else { %>
+                                <% if (overview.aheadBehind.ahead > 0) { %>
+                                    <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                        +<%= overview.aheadBehind.ahead %> <%= currentLang === 'ar' ? 'تعديل للأمام' : 'ahead' %>
+                                    </span>
+                                <% } %>
+                                <% if (overview.aheadBehind.behind > 0) { %>
+                                    <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                        -<%= overview.aheadBehind.behind %> <%= currentLang === 'ar' ? 'تعديل للخلف' : 'behind' %>
+                                    </span>
+                                <% } %>
+                            <% } %>
+                        </div>
+                        <p class="text-xs text-[var(--text-muted)] mt-1 font-mono">
+                            origin/<%= overview.branch %>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Card 4: Total Commits -->
+                <div class="card-surface rounded-xl p-4 flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                        <span><%= currentLang === 'ar' ? 'إجمالي التعديلات' : 'Total Revisions' %></span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    </div>
+                    <div class="mt-3">
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-2xl font-bold text-[var(--text-primary)] font-mono"><%= overview.totalCommits %></span>
+                            <span class="text-xs text-[var(--text-muted)]"><%= currentLang === 'ar' ? 'تعديل مسجل' : 'commits' %></span>
+                        </div>
+                        <p class="text-xs text-[var(--text-muted)] mt-1">
+                            <%= overview.authors.length %> <%= currentLang === 'ar' ? 'مطور ومساهم' : 'contributors' %>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters & Search Toolbar -->
+            <div class="card-surface rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+                    <!-- Search Input -->
+                    <div class="relative flex-1 min-w-[200px]">
+                        <svg class="absolute <%= currentLang === 'ar' ? 'right-3' : 'left-3' %> top-1/2 -translate-y-1/2 text-[var(--text-muted)]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                        </svg>
+                        <input type="text" id="searchInput" placeholder="<%= currentLang === 'ar' ? 'ابحث في وصف التعديل، المعرف، أو الملفات...' : 'Search commit message, hash, or author...' %>"
+                            class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg <%= currentLang === 'ar' ? 'pr-9 pl-3' : 'pl-9 pr-3' %> py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-red-500 transition">
+                    </div>
+
+                    <!-- Author Dropdown -->
+                    <div class="min-w-[150px]">
+                        <select id="authorSelect" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-red-500 transition cursor-pointer">
+                            <option value=""><%= currentLang === 'ar' ? 'جميع المطورين' : 'All Authors' %></option>
+                            <% overview.authors.forEach(function(author) { %>
+                                <option value="<%= author %>"><%= author %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+
+                    <!-- Date Range Input -->
+                    <div class="min-w-[180px]">
+                        <input type="text" id="dateRangeInput" placeholder="<%= currentLang === 'ar' ? 'اختر الفترة الزمنية...' : 'Filter by date range...' %>"
+                            class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-red-500 transition cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- Per Page & Reset -->
+                <div class="flex items-center gap-2">
+                    <select id="limitSelect" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-red-500 transition cursor-pointer">
+                        <option value="25">25 <%= currentLang === 'ar' ? 'في الصفحة' : '/ page' %></option>
+                        <option value="50">50 <%= currentLang === 'ar' ? 'في الصفحة' : '/ page' %></option>
+                        <option value="100">100 <%= currentLang === 'ar' ? 'في الصفحة' : '/ page' %></option>
+                    </select>
+
+                    <button type="button" onclick="resetFilters()" id="resetFiltersBtn" title="<%= currentLang === 'ar' ? 'إعادة ضبط الفلاتر' : 'Reset Filters' %>"
+                        class="p-2 text-xs rounded-lg panel-surface hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Commits Feed Section -->
+            <div class="card-surface rounded-xl overflow-hidden shadow-sm">
+                <!-- Table Header -->
+                <div class="panel-surface border-b px-6 py-3 flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)]">
+                    <div class="flex items-center gap-3">
+                        <span><%= currentLang === 'ar' ? 'سجل التعديلات' : 'Commit History' %></span>
+                        <span id="commitsCountBadge" class="px-2 py-0.5 text-[11px] font-mono rounded-full bg-[var(--bg-hover)] text-[var(--text-muted)]">...</span>
+                    </div>
+                    <div class="text-[11px] text-[var(--text-muted)] hidden sm:block">
+                        <%= currentLang === 'ar' ? 'اضغط على أي تعديل لمعاينة الفروقات (Diff) كاملة' : 'Click any commit to inspect unified file diff' %>
+                    </div>
+                </div>
+
+                <!-- Commits List Container -->
+                <div id="commitsContainer" class="divide-y divide-[var(--border-primary)]">
+                    <!-- Dynamic commits rendered here -->
+                    <div class="p-12 text-center text-xs text-[var(--text-muted)]">
+                        <svg class="animate-spin inline-block w-6 h-6 text-red-500 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <p><%= currentLang === 'ar' ? 'جارٍ تحميل سجل Git...' : 'Loading Git repository history...' %></p>
+                    </div>
+                </div>
+
+                <!-- Pagination Footer -->
+                <div class="panel-surface border-t px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 text-xs">
+                    <div class="text-[var(--text-muted)]">
+                        <span id="paginationInfo">—</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="prevPageBtn" onclick="changePage(-1)" disabled
+                            class="px-3 py-1.5 rounded-lg panel-surface border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">
+                            <%= currentLang === 'ar' ? 'السابق' : 'Previous' %>
+                        </button>
+                        <span id="currentPageIndicator" class="px-3 py-1.5 font-mono font-semibold text-[var(--text-primary)]">
+                            1
+                        </span>
+                        <button type="button" id="nextPageBtn" onclick="changePage(1)" disabled
+                            class="px-3 py-1.5 rounded-lg panel-surface border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer">
+                            <%= currentLang === 'ar' ? 'التالي' : 'Next' %>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Deep Commit Diff Inspector Modal -->
+    <div id="diffModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-hidden">
+        <div class="card-surface rounded-2xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl border border-[var(--border-accent)] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <!-- Modal Header -->
+            <div class="panel-surface border-b px-6 py-4 flex items-center justify-between gap-4 shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 shrink-0">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                        </svg>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-semibold text-red-400 uppercase tracking-wider">
+                                <%= currentLang === 'ar' ? 'تفاصيل التعديل' : 'Commit Details' %>
+                            </span>
+                            <span id="modalShortHash" class="px-2 py-0.5 text-xs font-mono font-semibold rounded bg-red-500/10 text-red-400 border border-red-500/20">
+                                ...
+                            </span>
+                        </div>
+                        <h2 id="modalSubject" class="text-sm font-bold text-[var(--text-primary)] truncate mt-0.5">
+                            ...
+                        </h2>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" onclick="copyFullHashFromModal()" title="<%= currentLang === 'ar' ? 'نسخ معرف التعديل كاملاً' : 'Copy Full SHA' %>"
+                        class="px-2.5 py-1.5 text-xs rounded-lg panel-surface hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer flex items-center gap-1.5">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                        <span class="hidden sm:inline"><%= currentLang === 'ar' ? 'نسخ SHA' : 'Copy SHA' %></span>
+                    </button>
+                    <button type="button" onclick="closeDiffModal()" title="<%= currentLang === 'ar' ? 'إغلاق' : 'Close' %>"
+                        class="p-2 text-xs rounded-lg panel-surface hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Content (Scrollable) -->
+            <div id="modalBody" class="flex-1 overflow-y-auto p-6 space-y-6">
+                <!-- Meta Details Card -->
+                <div class="panel-surface rounded-xl p-4 text-xs space-y-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <span class="text-[var(--text-muted)]"><%= currentLang === 'ar' ? 'المطور:' : 'Author:' %></span>
+                            <span id="modalAuthor" class="font-medium text-[var(--text-primary)] ms-1.5">...</span>
+                        </div>
+                        <div>
+                            <span class="text-[var(--text-muted)]"><%= currentLang === 'ar' ? 'التاريخ:' : 'Date:' %></span>
+                            <span id="modalDate" class="font-medium text-[var(--text-primary)] ms-1.5">...</span>
+                        </div>
+                        <div class="md:col-span-2">
+                            <span class="text-[var(--text-muted)]">SHA:</span>
+                            <span id="modalFullHash" class="font-mono text-[var(--text-secondary)] ms-1.5 break-all select-all">...</span>
+                        </div>
+                    </div>
+                    <div id="modalBodyMessageContainer" class="pt-2 border-t border-[var(--border-primary)] hidden">
+                        <p class="text-[var(--text-muted)] mb-1"><%= currentLang === 'ar' ? 'الوصف الإضافي:' : 'Commit Message Body:' %></p>
+                        <pre id="modalBodyMessage" class="font-mono text-xs text-[var(--text-secondary)] bg-[var(--bg-primary)] p-3 rounded-lg overflow-x-auto whitespace-pre-wrap"></pre>
+                    </div>
+                </div>
+
+                <!-- Changed Files Summary Banner -->
+                <div class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl card-surface border border-[var(--border-primary)] text-xs">
+                    <div class="flex items-center gap-3">
+                        <span class="font-semibold text-[var(--text-primary)]">
+                            <span id="modalFilesCount">0</span> <%= currentLang === 'ar' ? 'ملفات تم تغييرها' : 'files changed' %>
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-3 font-mono font-semibold">
+                        <span id="modalInsertions" class="text-emerald-400">+0</span>
+                        <span id="modalDeletions" class="text-rose-400">-0</span>
+                    </div>
+                </div>
+
+                <!-- Changed Files List Badges -->
+                <div id="modalFilesList" class="flex flex-wrap gap-2">
+                    <!-- Files pills rendered here -->
+                </div>
+
+                <!-- Unified File Diffs View -->
+                <div id="modalDiffBlocks" class="space-y-4">
+                    <!-- Per file diffs rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inline Client Script -->
+    <script>
+        const CURRENT_LANG = '<%= currentLang %>';
+        const IS_RTL = CURRENT_LANG === 'ar';
+
+        let currentPage = 1;
+        let totalPages = 1;
+        let activeFullHash = '';
+        let searchTimeout = null;
+
+        // Flatpickr date range instance
+        let datePicker = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof moment !== 'undefined') {
+                moment.locale(CURRENT_LANG);
+            }
+
+            // Initialize Flatpickr for date filtering
+            const dateInput = document.getElementById('dateRangeInput');
+            if (dateInput && typeof flatpickr !== 'undefined') {
+                datePicker = flatpickr(dateInput, {
+                    mode: 'range',
+                    dateFormat: 'Y-m-d',
+                    onChange: function(selectedDates) {
+                        if (selectedDates.length === 2 || selectedDates.length === 0) {
+                            currentPage = 1;
+                            loadCommits();
+                        }
+                    }
+                });
+            }
+
+            // Search input listener with debounce
+            document.getElementById('searchInput').addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    currentPage = 1;
+                    loadCommits();
+                }, 250);
+            });
+
+            // Author select listener
+            document.getElementById('authorSelect').addEventListener('change', function() {
+                currentPage = 1;
+                loadCommits();
+            });
+
+            // Limit select listener
+            document.getElementById('limitSelect').addEventListener('change', function() {
+                currentPage = 1;
+                loadCommits();
+            });
+
+            // Close modal on Escape
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeDiffModal();
+                }
+            });
+
+            // Initial load
+            loadCommits();
+        });
+
+        async function loadCommits() {
+            const container = document.getElementById('commitsContainer');
+            const search = document.getElementById('searchInput').value.trim();
+            const author = document.getElementById('authorSelect').value.trim();
+            const limit = document.getElementById('limitSelect').value;
+
+            let since = '';
+            let until = '';
+            if (datePicker && datePicker.selectedDates.length === 2) {
+                since = moment(datePicker.selectedDates[0]).format('YYYY-MM-DD 00:00:00');
+                until = moment(datePicker.selectedDates[1]).format('YYYY-MM-DD 23:59:59');
+            }
+
+            const queryParams = new URLSearchParams({
+                page: currentPage,
+                limit: limit,
+                search: search,
+                author: author,
+                since: since,
+                until: until
+            });
+
+            container.innerHTML = `
+                <div class="p-12 text-center text-xs text-[var(--text-muted)]">
+                    <svg class="animate-spin inline-block w-6 h-6 text-red-500 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    <p>${IS_RTL ? 'جارٍ تحميل التعديلات...' : 'Fetching commits...'}</p>
+                </div>
+            `;
+
+            try {
+                const res = await fetch('/api/admin/git-history/commits?' + queryParams.toString());
+                const data = await res.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to fetch commits');
+                }
+
+                renderCommits(data.commits, data.pagination);
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="p-12 text-center text-xs text-rose-400">
+                        <p>${IS_RTL ? 'خطأ في تحميل سجل التعديلات:' : 'Failed to load commits:'} ${escapeHtml(err.message)}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderCommits(commits, pagination) {
+            const container = document.getElementById('commitsContainer');
+            totalPages = pagination.totalPages || 1;
+            currentPage = pagination.page || 1;
+
+            document.getElementById('commitsCountBadge').textContent = pagination.total || 0;
+            document.getElementById('currentPageIndicator').textContent = `${currentPage} / ${totalPages}`;
+            document.getElementById('prevPageBtn').disabled = currentPage <= 1;
+            document.getElementById('nextPageBtn').disabled = currentPage >= totalPages;
+
+            const fromItem = pagination.total === 0 ? 0 : (currentPage - 1) * pagination.limit + 1;
+            const toItem = Math.min(currentPage * pagination.limit, pagination.total);
+            document.getElementById('paginationInfo').textContent = IS_RTL
+                ? `عرض ${fromItem} - ${toItem} من إجمالي ${pagination.total} تعديل`
+                : `Showing ${fromItem}-${toItem} of ${pagination.total} commits`;
+
+            if (!commits || commits.length === 0) {
+                container.innerHTML = `
+                    <div class="p-12 text-center text-xs text-[var(--text-muted)] space-y-2">
+                        <svg class="w-8 h-8 mx-auto text-[var(--text-muted)] opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>
+                        </svg>
+                        <p class="font-semibold text-[var(--text-secondary)]">${IS_RTL ? 'لم يتم العثور على أي تعديلات مطابقة' : 'No matching commits found'}</p>
+                        <p>${IS_RTL ? 'جرّب تعديل مصطلحات البحث أو الفلاتر المختارة.' : 'Try adjusting your search query or date filters.'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            commits.forEach(commit => {
+                const relativeTime = moment(commit.date).fromNow();
+                const exactTime = moment(commit.date).format('YYYY-MM-DD HH:mm:ss');
+                const initials = (commit.authorName || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+                // Decorated tags badges
+                let refsHtml = '';
+                if (commit.refNames && commit.refNames.length > 0) {
+                    commit.refNames.forEach(ref => {
+                        let refClass = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+                        if (ref.includes('tag:')) refClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                        else if (ref.includes('HEAD')) refClass = 'bg-red-500/10 text-red-400 border-red-500/20';
+                        refsHtml += `<span class="px-2 py-0.5 text-[10px] font-mono rounded border ${refClass}">${escapeHtml(ref)}</span>`;
+                    });
+                }
+
+                html += `
+                    <div class="p-4 sm:p-5 hover:bg-[var(--bg-hover)] transition cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4"
+                         onclick="openCommitDiff('${escapeHtml(commit.hash)}')">
+                        <div class="flex items-start gap-3.5 min-w-0 flex-1">
+                            <!-- Author Avatar Initials -->
+                            <div class="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center font-bold text-xs text-red-400 shrink-0 mt-0.5">
+                                ${escapeHtml(initials)}
+                            </div>
+
+                            <div class="min-w-0 flex-1">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button type="button" onclick="event.stopPropagation(); copyToClipboard('${escapeHtml(commit.hash)}')"
+                                        title="${IS_RTL ? 'نسخ معرف التعديل' : 'Copy Hash'}"
+                                        class="px-2 py-0.5 text-xs font-mono font-semibold rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-red-400 hover:bg-red-500/20 transition cursor-pointer">
+                                        ${escapeHtml(commit.shortHash)}
+                                    </button>
+                                    ${refsHtml}
+                                    <h3 class="text-xs sm:text-sm font-bold text-[var(--text-primary)] truncate" title="${escapeHtml(commit.subject)}">
+                                        ${escapeHtml(commit.subject)}
+                                    </h3>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-muted)] mt-1.5">
+                                    <span class="font-medium text-[var(--text-secondary)]">${escapeHtml(commit.authorName)}</span>
+                                    <span>•</span>
+                                    <span title="${escapeHtml(exactTime)}">${escapeHtml(relativeTime)}</span>
+                                    <span>•</span>
+                                    <span class="font-mono text-[11px]">${escapeHtml(commit.authorEmail)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stats & Inspect Action -->
+                        <div class="flex items-center gap-3 shrink-0 self-end md:self-center" onclick="event.stopPropagation();">
+                            <div class="flex items-center gap-2 font-mono text-xs">
+                                <span class="px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)]" title="${IS_RTL ? 'عدد الملفات' : 'Files Changed'}">
+                                    ${commit.stats.filesChanged} ${IS_RTL ? 'ملف' : 'files'}
+                                </span>
+                                <span class="text-emerald-400 font-semibold" title="${IS_RTL ? 'أسطر مضافة' : 'Insertions'}">+${commit.stats.insertions}</span>
+                                <span class="text-rose-400 font-semibold" title="${IS_RTL ? 'أسطر محذوفة' : 'Deletions'}">-${commit.stats.deletions}</span>
+                            </div>
+
+                            <button type="button" onclick="openCommitDiff('${escapeHtml(commit.hash)}')"
+                                class="px-2.5 py-1.5 text-xs font-medium rounded-lg panel-surface hover:bg-red-500 hover:text-white text-[var(--text-primary)] transition cursor-pointer flex items-center gap-1.5">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <span>${IS_RTL ? 'فحص' : 'Diff'}</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function openCommitDiff(hash) {
+            const modal = document.getElementById('diffModal');
+            activeFullHash = hash;
+
+            // Reset modal fields to loading
+            document.getElementById('modalShortHash').textContent = hash.substring(0, 7);
+            document.getElementById('modalSubject').textContent = IS_RTL ? 'جارٍ تحميل الفروقات...' : 'Loading diff...';
+            document.getElementById('modalAuthor').textContent = '...';
+            document.getElementById('modalDate').textContent = '...';
+            document.getElementById('modalFullHash').textContent = hash;
+            document.getElementById('modalBodyMessageContainer').classList.add('hidden');
+            document.getElementById('modalFilesCount').textContent = '0';
+            document.getElementById('modalInsertions').textContent = '+0';
+            document.getElementById('modalDeletions').textContent = '-0';
+            document.getElementById('modalFilesList').innerHTML = '';
+            document.getElementById('modalDiffBlocks').innerHTML = `
+                <div class="p-12 text-center text-xs text-[var(--text-muted)]">
+                    <svg class="animate-spin inline-block w-6 h-6 text-red-500 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    <p>${IS_RTL ? 'جارٍ إعداد وتوليد الفروقات الموحدة للملفات...' : 'Generating unified file diffs...'}</p>
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`/api/admin/git-history/commit/${encodeURIComponent(hash)}`);
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed to load commit diff');
+
+                const commit = data.commit;
+                document.getElementById('modalSubject').textContent = commit.subject;
+                document.getElementById('modalAuthor').textContent = `${commit.authorName} <${commit.authorEmail}>`;
+                document.getElementById('modalDate').textContent = moment(commit.authorDate).format('YYYY-MM-DD HH:mm:ss') + ` (${moment(commit.authorDate).fromNow()})`;
+                document.getElementById('modalFullHash').textContent = commit.hash;
+                document.getElementById('modalFilesCount').textContent = commit.totalFiles;
+                document.getElementById('modalInsertions').textContent = `+${commit.totalInsertions}`;
+                document.getElementById('modalDeletions').textContent = `-${commit.totalDeletions}`;
+
+                if (commit.body) {
+                    document.getElementById('modalBodyMessage').textContent = commit.body;
+                    document.getElementById('modalBodyMessageContainer').classList.remove('hidden');
+                }
+
+                // Render file pills
+                let filesHtml = '';
+                data.files.forEach(file => {
+                    filesHtml += `
+                        <a href="#diff-${escapeHtml(file.path)}" onclick="event.stopPropagation();"
+                           class="px-2.5 py-1 text-[11px] font-mono rounded-lg border flex items-center gap-1.5 ${file.statusBadge} hover:opacity-80 transition">
+                            <span class="font-bold">${file.statusLetter}</span>
+                            <span class="truncate max-w-[200px]" title="${escapeHtml(file.path)}">${escapeHtml(file.path)}</span>
+                            <span class="text-emerald-400">+${file.insertions}</span>
+                            <span class="text-rose-400">-${file.deletions}</span>
+                        </a>
+                    `;
+                });
+                document.getElementById('modalFilesList').innerHTML = filesHtml;
+
+                // Render unified diff blocks
+                let diffsHtml = '';
+                if (!data.diffs || data.diffs.length === 0) {
+                    diffsHtml = `<div class="p-8 text-center text-xs text-[var(--text-muted)]">${IS_RTL ? 'لا توجد فروقات مرئية (قد يكون التعديل دمج أو ملفات ثنائية)' : 'No text diff available (merge commit or binary files)'}</div>`;
+                } else {
+                    data.diffs.forEach(diff => {
+                        diffsHtml += `
+                            <div id="diff-${escapeHtml(diff.filename)}" class="panel-surface rounded-xl overflow-hidden border border-[var(--border-primary)]">
+                                <div class="px-4 py-2.5 bg-[var(--bg-card)] border-b border-[var(--border-primary)] flex items-center justify-between text-xs font-mono font-medium">
+                                    <div class="flex items-center gap-2 truncate">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-400 shrink-0"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                        <span class="text-[var(--text-primary)] truncate" title="${escapeHtml(diff.filename)}">${escapeHtml(diff.filename)}</span>
+                                    </div>
+                                    <span class="text-[var(--text-muted)] text-[11px]">${diff.hunks.length} ${IS_RTL ? 'كتل' : 'hunks'}</span>
+                                </div>
+                                <div class="p-2 sm:p-3 overflow-x-auto bg-[var(--bg-primary)]">
+                        `;
+
+                        diff.hunks.forEach(hunk => {
+                            diffsHtml += `<div class="diff-line diff-hunk px-2 py-0.5 rounded my-1">${escapeHtml(hunk.header)}</div>`;
+                            hunk.lines.forEach(line => {
+                                let lineClass = 'diff-context';
+                                if (line.type === 'add') lineClass = 'diff-add';
+                                else if (line.type === 'del') lineClass = 'diff-del';
+                                diffsHtml += `<div class="diff-line ${lineClass} px-2">${escapeHtml(line.text)}</div>`;
+                            });
+                        });
+
+                        diffsHtml += `
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                document.getElementById('modalDiffBlocks').innerHTML = diffsHtml;
+
+            } catch (err) {
+                document.getElementById('modalDiffBlocks').innerHTML = `
+                    <div class="p-12 text-center text-xs text-rose-400">
+                        <p>${IS_RTL ? 'فشل تحميل الفروقات:' : 'Failed to generate diff:'} ${escapeHtml(err.message)}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function closeDiffModal() {
+            document.getElementById('diffModal').classList.add('hidden');
+        }
+
+        function copyFullHashFromModal() {
+            if (activeFullHash) copyToClipboard(activeFullHash);
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            loadCommits();
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('authorSelect').value = '';
+            document.getElementById('limitSelect').value = '25';
+            if (datePicker) datePicker.clear();
+            currentPage = 1;
+            loadCommits();
+        }
+
+        async function refreshGitHistory() {
+            const spinner = document.getElementById('refreshSpinner');
+            spinner.classList.add('animate-spin');
+            try {
+                const res = await fetch('/api/admin/git-history/overview');
+                const data = await res.json();
+                if (data.success && data.overview) {
+                    document.getElementById('headerBranchBadge').textContent = data.overview.branch;
+                }
+                await loadCommits();
+            } finally {
+                setTimeout(() => spinner.classList.remove('animate-spin'), 300);
+            }
+        }
+
+        function copyToClipboard(text) {
+            if (!navigator.clipboard) {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast(IS_RTL ? 'تم النسخ إلى الحافظة' : 'Copied to clipboard');
+                return;
+            }
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(IS_RTL ? 'تم النسخ إلى الحافظة' : 'Copied to clipboard');
+            }).catch(() => {});
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-6 right-6 z-50 px-4 py-2 rounded-xl bg-red-600 text-white font-medium text-xs shadow-lg transition duration-200 animate-in fade-in slide-in-from-bottom-2';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 200);
+            }, 2000);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+    </script>
+</body>
+</html>
