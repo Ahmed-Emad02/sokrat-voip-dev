@@ -2228,7 +2228,7 @@ if [ ! -f /usr/lib64/asterisk/modules/func_rnnoise.so ] && [ -f "$INSTALL_DIR/as
     asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
     echo "  func_rnnoise.so compiled and loaded into Asterisk"
 fi
-# 10c — Compile and Install chan_dongle (with Sokrat decline detection and SMS ME storage patches)
+# 10c — Compile and Install chan_dongle (with Sokrat decline detection, Call Waiting rejection, CRING ring detection, and SMS ME storage patches)
 echo "  [10c] Installing chan_dongle..."
 if [ -f "$SCRIPT_DIR/binaries/chan_dongle.so" ]; then
     mkdir -p /usr/lib64/asterisk/modules

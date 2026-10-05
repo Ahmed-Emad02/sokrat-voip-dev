@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS \`sokrat_camp_on_callbacks\` (
 echo "  Database schema migrations complete. All PBX and CDR data preserved."
 
 # 4. Rebuild & Patch chan_dongle Module
-echo "[4/7] Applying Asterisk / chan_dongle stability patches..."
+echo "[4/7] Applying Asterisk / chan_dongle stability patches (Call Waiting UDUB, CRING detection, and Master audio recovery)..."
 if [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
     mkdir -p "$MODULES_DIR"
     cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" "$MODULES_DIR/chan_dongle.so"

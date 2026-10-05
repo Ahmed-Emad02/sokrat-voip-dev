@@ -1,8 +1,17 @@
 diff --git a/at_command.c b/at_command.c
-index 5f0137e..2956cf4 100644
+index 5f0137e..28b7e90 100644
 --- a/at_command.c
 +++ b/at_command.c
-@@ -160,7 +160,7 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
+@@ -118,6 +118,8 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
+ 		ATQ_CMD_DECLARE_ST(CMD_AT_Z, "ATZ\r"),
+ 		/* disable echo */
+ 		ATQ_CMD_DECLARE_ST(CMD_AT_E, "ATE0\r"),
++		/* disable cellular result codes (use standard RING) */
++		ATQ_CMD_DECLARE_STI(CMD_AT_CRC, "AT+CRC=0\r"),
+ 		/* optional, Enable or disable some devices */
+ 		ATQ_CMD_DECLARE_DYN(CMD_AT_U2DIAG),
+ 		/* Get manufacturer info */
+@@ -160,7 +162,7 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
  		ATQ_CMD_DECLARE_ST(CMD_AT_CMGF, "AT+CMGF=0\r"),
  
  		/* SMS Storage Selection */
@@ -11,11 +20,81 @@ index 5f0137e..2956cf4 100644
  		/* New SMS Notification Setting +CNMI=[<mode>[,<mt>[,<bm>[,<ds>[,<bfr>]]]]] */
  		/* pvt->initialized = 1 after successful of CMD_AT_CNMI */
  		ATQ_CMD_DECLARE_ST(CMD_AT_CNMI, "AT+CNMI=2,1,0,2,0\r"),
+@@ -912,6 +914,22 @@ EXPORT_DEF int at_enqueue_hangup(struct cpvt *cpvt, int call_idx)
+ 	return 0;
+ }
+ 
++/*!
++ * \brief Enqueue AT+CHLD=0 to reject waiting incoming call (User Determined User Busy)
++ * \param cpvt -- cpvt structure
++ * \return 0 on success
++ */
++EXPORT_DEF int at_enqueue_reject_waiting(struct cpvt *cpvt)
++{
++	static const char cmd_chld0[] = "AT+CHLD=0\r";
++	at_queue_cmd_t at_cmd = ATQ_CMD_DECLARE_ST(CMD_AT_CHLD_0, cmd_chld0);
++	if (at_queue_insert(cpvt, &at_cmd, 1, 1) != 0) {
++		chan_dongle_err = E_QUEUE;
++		return -1;
++	}
++	return 0;
++}
++
+ /*!
+  * \brief Enqueue AT+CLVL commands for volume synchronization
+  * \param cpvt -- cpvt structure
+diff --git a/at_command.h b/at_command.h
+index 0aeb441..0609513 100644
+--- a/at_command.h
++++ b/at_command.h
+@@ -71,8 +71,10 @@
+ 	_( AT_U2DIAG,       "AT^U2DIAG") \
+ 	_( AT_Z,            "ATZ") \
+ 	_( AT_CMEE,         "AT+CMEE") \
++	_( AT_CRC,          "AT+CRC") \
+ 	_( AT_CSCA,         "AT+CSCA") \
+ \
++	_( AT_CHLD_0,       "AT+CHLD=0") \
+ 	_( AT_CHLD_1x,      "AT+CHLD=1x") \
+ 	_( AT_CHLD_2x,      "AT+CHLD=2x") \
+ 	_( AT_CHLD_2,       "AT+CHLD=2") \
+@@ -121,6 +123,7 @@ EXPORT_DECL void at_retrieve_next_sms(struct cpvt *cpvt, at_cmd_suppress_error_t
+ EXPORT_DECL int at_enqueue_retrieve_sms(struct cpvt *cpvt, int index, at_cmd_suppress_error_t suppress_error);
+ EXPORT_DECL int at_enqueue_delete_sms(struct cpvt *cpvt, int index);
+ EXPORT_DECL int at_enqueue_hangup(struct cpvt *cpvt, int call_idx);
++EXPORT_DECL int at_enqueue_reject_waiting(struct cpvt *cpvt);
+ EXPORT_DECL int at_enqueue_volsync(struct cpvt *cpvt);
+ EXPORT_DECL int at_enqueue_clcc(struct cpvt *cpvt);
+ EXPORT_DECL int at_enqueue_activate(struct cpvt *cpvt);
 diff --git a/at_response.c b/at_response.c
-index 1832dae..2702803 100644
+index 1832dae..309747d 100644
 --- a/at_response.c
 +++ b/at_response.c
-@@ -200,6 +200,16 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+@@ -43,6 +43,7 @@ static const at_response_t at_responses_list[] = {
+ #define DEF_STR(str)	str,STRLEN(str)
+ 	{ RES_CNUM, "+CNUM",DEF_STR("ERROR+CNUM:") },
+ 	{ RES_ERROR,"ERROR",DEF_STR("COMMAND NOT SUPPORT\r") },
++	{ RES_RING, "RING", DEF_STR("+CRING:") },
+ #undef DEF_STR
+ 	};
+ 
+@@ -87,6 +88,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+ 			case CMD_AT:
+ 			case CMD_AT_Z:
+ 			case CMD_AT_E:
++			case CMD_AT_CRC:
+ 			case CMD_AT_U2DIAG:
+ 			case CMD_AT_CGMI:
+ 			case CMD_AT_CGMM:
+@@ -97,6 +99,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+ 			case CMD_AT_CPIN:
+ 			case CMD_AT_CCWA_SET:
+ 			case CMD_AT_CCWA_STATUS:
++			case CMD_AT_CHLD_0:
+ 			case CMD_AT_CHLD_2:
+ 			case CMD_AT_CHLD_3:
+ 			case CMD_AT_CSCA:
+@@ -200,6 +203,16 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
  			case CMD_AT_CHLD_1x:
  				CPVT_RESET_FLAGS(task->cpvt, CALL_FLAG_NEED_HANGUP);
  				ast_debug (1, "[%s] Successful hangup for call idx %d\n", PVT_ID(pvt), task->cpvt->call_idx);
@@ -32,7 +111,7 @@ index 1832dae..2702803 100644
  				break;
  
  			case CMD_AT_CMGS:
-@@ -259,7 +269,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+@@ -259,7 +272,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
  	}
  	else
  	{
@@ -41,7 +120,18 @@ index 1832dae..2702803 100644
  	}
  
  	return 0;
-@@ -445,6 +455,16 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -427,6 +440,10 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+ 				log_cmd_response_error(pvt, ecmd, "[%s] Setting CLIR failed\n", PVT_ID(pvt));
+ 				break;
+ 
++			case CMD_AT_CHLD_0:
++				ast_debug (1, "[%s] Error or rejected AT+CHLD=0\n", PVT_ID(pvt));
++				break;
++
+ 			case CMD_AT_CHLD_2:
+ 				if (!CPVT_TEST_FLAG(task->cpvt, CALL_FLAG_HOLD_OTHER) ||
+ 						task->cpvt->state != CALL_STATE_INIT) {
+@@ -445,6 +462,16 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  			case CMD_AT_CHUP:
  			case CMD_AT_CHLD_1x:
  				log_cmd_response_error(pvt, ecmd, "[%s] Error sending hangup for call idx %d\n", PVT_ID(pvt), task->cpvt->call_idx);
@@ -58,7 +148,7 @@ index 1832dae..2702803 100644
  				break;
  
  			case CMD_AT_CMGR:
-@@ -523,7 +543,7 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -523,7 +550,7 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  	}
  	else
  	{
@@ -67,7 +157,48 @@ index 1832dae..2702803 100644
  	}
  
  	return 0;
-@@ -1754,16 +1774,21 @@ static int at_response_cimi (struct pvt* pvt, const char* str)
+@@ -945,6 +972,12 @@ static int at_response_clcc (struct pvt* pvt, char* str)
+ 					}
+ 					else if(dir == CALL_DIR_INCOMING && (state == CALL_STATE_INCOMING || state == CALL_STATE_WAITING))
+ 					{
++						if (state == CALL_STATE_WAITING && CONF_SHARED(pvt, callwaiting) == CALL_WAITING_DISALLOWED)
++						{
++							ast_log (LOG_NOTICE, "[%s] Dropping waiting call idx %u because callwaiting=no, rejecting with AT+CHLD=0\n", PVT_ID(pvt), call_idx);
++							at_enqueue_reject_waiting(&pvt->sys_chan);
++							continue;
++						}
+ 						if(state == CALL_STATE_INCOMING)
+ 							PVT_STAT(pvt, in_calls) ++;
+ 						else
+@@ -1080,9 +1113,14 @@ static int at_response_ccwa(struct pvt* pvt, char* str)
+ //		if (sscanf (str, "+CCWA: \"%*[+0-9*#ABCabc]\",%*d,%d", &class) == 1)
+ 		if (at_parse_ccwa(str, &class) == 0)
+ 		{
+-//			if (CONF_SHARED(pvt, callwaiting) != CALL_WAITING_DISALLOWED && class == CCWA_CLASS_VOICE)
+ 			if (class == CCWA_CLASS_VOICE)
+ 			{
++				if (CONF_SHARED(pvt, callwaiting) == CALL_WAITING_DISALLOWED)
++				{
++					ast_log (LOG_NOTICE, "[%s] Call waiting disabled in config. Rejecting incoming waiting call with User Busy (AT+CHLD=0)\n", PVT_ID(pvt));
++					at_enqueue_reject_waiting(&pvt->sys_chan);
++					return 0;
++				}
+ 				pvt->rings++;
+ 				pvt->cwaiting = 1;
+ 				request_clcc(pvt);
+@@ -1643,11 +1681,9 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
+ 
+ 	if (d)
+ 	{
+-//#ifdef ISSUE_CCWA_STATUS_CHECK
+ 		/* only if gsm_registered 0 -> 1 ? */
+ 		if(!pvt->gsm_registered && CONF_SHARED(pvt, callwaiting) != CALL_WAITING_AUTO)
+ 			at_enqueue_set_ccwa(&pvt->sys_chan, CONF_SHARED(pvt, callwaiting));
+-//#endif
+ 		pvt->gsm_registered = 1;
+ 		manager_event_device_status(PVT_ID(pvt), "Register");
+ 	}
+@@ -1754,16 +1790,21 @@ static int at_response_cimi (struct pvt* pvt, const char* str)
  static void at_response_busy(struct pvt* pvt, enum ast_control_frame_type control)
  {
  	const struct at_queue_task * task = at_queue_head_task (pvt);
@@ -91,7 +222,7 @@ index 1832dae..2702803 100644
  }
  
  /*!
-@@ -1917,15 +1942,18 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
+@@ -1917,15 +1958,18 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
  			case RES_BUSY:
  				ast_log (LOG_ERROR, "[%s] Receive BUSY\n", PVT_ID(pvt));
  				at_response_busy(pvt, AST_CONTROL_BUSY);
@@ -142,7 +273,7 @@ index 72e9b51..40e4b0d 100644
  //	struct ringbuffer	a_write_rb;			/*!< audio ring buffer */
  
 diff --git a/channel.c b/channel.c
-index 3cb2815..21d07d9 100644
+index 3cb2815..a69acbd 100644
 --- a/channel.c
 +++ b/channel.c
 @@ -17,6 +17,8 @@
@@ -163,10 +294,24 @@ index 3cb2815..21d07d9 100644
  		CPVT_SET_FLAGS(cpvt, CALL_FLAG_ACTIVATED | CALL_FLAG_MASTER);
  		if(cpvt->channel)
  		{
-@@ -404,6 +408,18 @@ static int channel_hangup (struct ast_channel* channel)
+@@ -404,6 +408,32 @@ static int channel_hangup (struct ast_channel* channel)
  
  		disactivate_call (cpvt);
  
++		/* Restore audio master on any remaining active call */
++		{
++			struct cpvt * remaining;
++			AST_LIST_TRAVERSE(&pvt->chans, remaining, entry)
++			{
++				if (remaining != cpvt && CPVT_IS_ACTIVE(remaining) && remaining->channel)
++				{
++					ast_log (LOG_NOTICE, "[%s] Restoring audio master on remaining active call idx %d after hangup\n", PVT_ID(pvt), remaining->call_idx);
++					activate_call(remaining);
++					break;
++				}
++			}
++		}
++
 +		/* If call is still in initiating or dialing state when local hangup occurs, force released state */
 +		if (cpvt->dir == CALL_DIR_OUTGOING && (cpvt->state == CALL_STATE_INIT || cpvt->state == CALL_STATE_DIALING || cpvt->state == CALL_STATE_ALERTING)) {
 +			pvt->dialing = 0;
@@ -182,7 +327,7 @@ index 3cb2815..21d07d9 100644
  		/* drop cpvt->channel reference */
  		cpvt->channel = NULL;
  		ast_mutex_unlock (&pvt->lock);
-@@ -463,6 +479,14 @@ static int channel_digit_begin (struct ast_channel* channel, char digit)
+@@ -463,6 +493,14 @@ static int channel_digit_begin (struct ast_channel* channel, char digit)
  
  	ast_mutex_lock (&pvt->lock);
  
@@ -197,7 +342,7 @@ index 3cb2815..21d07d9 100644
  	rv = at_enqueue_dtmf(cpvt, digit);
  	if (rv)
  	{
-@@ -505,6 +529,9 @@ again:
+@@ -505,6 +543,9 @@ again:
  			{
  				--count;
  				if(count != 0) {
@@ -207,7 +352,7 @@ index 3cb2815..21d07d9 100644
  					goto again;
  				}
  				ast_debug (1, "[%s] Deadlock avoided for write!\n", PVT_ID(pvt));
-@@ -525,7 +552,9 @@ again:
+@@ -525,7 +566,9 @@ again:
  				}
  				else
  				{
@@ -217,7 +362,7 @@ index 3cb2815..21d07d9 100644
  					goto again;
  				}
  			} while(written > 0);
-@@ -574,7 +603,6 @@ static void timing_write(struct pvt* pvt)
+@@ -574,7 +617,6 @@ static void timing_write(struct pvt* pvt)
  		if (used >= FRAME_SIZE)
  		{
  			iovcnt = mixb_read_n_iov (&pvt->a_write_mixb, iov, FRAME_SIZE);
@@ -225,7 +370,7 @@ index 3cb2815..21d07d9 100644
  			mixb_read_upd (&pvt->a_write_mixb, FRAME_SIZE);
  			change_audio_endianness_to_le(iov, iovcnt);
  		}
-@@ -584,7 +612,6 @@ static void timing_write(struct pvt* pvt)
+@@ -584,7 +626,6 @@ static void timing_write(struct pvt* pvt)
  			msg = "[%s] write truncated frame\n";
  
  			iovcnt = mixb_read_all_iov (&pvt->a_write_mixb, iov);
@@ -233,7 +378,7 @@ index 3cb2815..21d07d9 100644
  			mixb_read_upd (&pvt->a_write_mixb, used);
  
  			iov[iovcnt].iov_base	= silence_frame;
-@@ -668,6 +695,12 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -668,6 +709,12 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  		CHANNEL_DEADLOCK_AVOIDANCE (channel);
  	}
  
@@ -246,7 +391,7 @@ index 3cb2815..21d07d9 100644
  	ast_debug (7, "[%s] read call idx %d state %d audio_fd %d\n", PVT_ID(pvt), cpvt->call_idx, cpvt->state, pvt->audio_fd);
  
  	/* FIXME: move down for enable timing_write() to device ? */
-@@ -685,6 +718,9 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -685,6 +732,9 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  
  	else
  	{
@@ -256,7 +401,7 @@ index 3cb2815..21d07d9 100644
  		memset (&cpvt->a_read_frame, 0, sizeof (cpvt->a_read_frame));
  
  		cpvt->a_read_frame.frametype = AST_FRAME_VOICE;
-@@ -695,24 +731,52 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -695,24 +745,52 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  #else /* 10- */
  		cpvt->a_read_frame.subclass_codec = AST_FORMAT_SLINEAR;
  #endif /* ^10- */
@@ -319,7 +464,7 @@ index 3cb2815..21d07d9 100644
  
  		if(CPVT_IS_MASTER(cpvt))
  		{
-@@ -843,6 +907,12 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
+@@ -843,6 +921,12 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
  		CHANNEL_DEADLOCK_AVOIDANCE (channel);
  	}
  
@@ -332,7 +477,7 @@ index 3cb2815..21d07d9 100644
  	if(!CPVT_IS_ACTIVE(cpvt))
  		goto e_return;
  
-@@ -1065,6 +1135,15 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
+@@ -1065,6 +1149,15 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
  #if ASTERISK_VERSION_NUM >= 110000 /* 11+ */
  		case AST_CONTROL_PVT_CAUSE_CODE:
  #endif /* ^11+ */
@@ -348,6 +493,37 @@ index 3cb2815..21d07d9 100644
  			break;
  
  		case AST_CONTROL_HOLD:
+@@ -1076,8 +1169,8 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
+ 			break;
+ 
+ 		default:
+-			ast_log (LOG_WARNING, "[%s] Don't know how to indicate condition %d\n", ast_channel_name(channel), condition);
+-			res = -1;
++			ast_debug (1, "[%s] Ignored unhandled control condition %d\n", ast_channel_name(channel), condition);
++			res = 0;
+ 			break;
+ 	}
+ 
+@@ -1186,6 +1279,19 @@ EXPORT_DEF void change_channel_state(struct cpvt * cpvt, unsigned newstate, int
+ 					disactivate_call(cpvt);
+ 					/* from +CEND, restart or disconnect */
+ 
++					/* Restore audio master on any remaining active call */
++					{
++						struct cpvt * remaining;
++						AST_LIST_TRAVERSE(&pvt->chans, remaining, entry)
++						{
++							if (remaining != cpvt && CPVT_IS_ACTIVE(remaining) && remaining->channel)
++							{
++								ast_log (LOG_NOTICE, "[%s] Restoring audio master on remaining active call idx %d after release\n", PVT_ID(pvt), remaining->call_idx);
++								activate_call(remaining);
++								break;
++							}
++						}
++					}
+ 
+ 					/* drop channel -> cpvt reference */
+ 					ast_channel_tech_pvt_set(channel, NULL);
 diff --git a/cpvt.c b/cpvt.c
 index babe428..fc59006 100644
 --- a/cpvt.c
