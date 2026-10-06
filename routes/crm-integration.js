@@ -6,6 +6,7 @@
 const express = require('express');
 const moment = require('moment');
 const path = require('path');
+const fs = require('fs');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
@@ -20,7 +21,7 @@ const {
     SUPPORTED_SCOPES
 } = require('../lib/integration-auth');
 const { getCustomerCallHistory, getExtensionStats } = require('../lib/cdr-aggregation');
-const { resolveRecordingPath, streamRecordingFile } = require('../lib/recordings');
+const { createMediaId, resolveRecordingPath, streamRecordingFile } = require('../lib/recordings');
 
 // Rate limiting map for pairing attempts (IP -> timestamps array)
 const pairingRateLimitMap = new Map();
@@ -34,6 +35,431 @@ const pairingRateLimitTimer = setInterval(() => {
     }
 }, 5 * 60 * 1000);
 if (pairingRateLimitTimer.unref) pairingRateLimitTimer.unref();
+
+const CDR_DISPOSITION_SQL = `
+    CASE
+        WHEN c.billsec > 0 THEN c.disposition
+        WHEN c.userfield = '17' OR c.userfield = '21' THEN 'BUSY'
+        WHEN c.userfield IN ('18', '19') THEN 'NO ANSWER'
+        WHEN c.userfield IN ('34', '38', '41', '42', '44') THEN 'CONGESTION'
+        WHEN c.disposition IN ('CONGESTION', 'BUSY') AND c.duration >= 5 THEN 'NO ANSWER'
+        ELSE c.disposition
+    END
+`;
+
+const CDR_EXTERNAL_DST_SQL = `(c.dst REGEXP '^[0-9+]+$' AND CHAR_LENGTH(c.dst) >= 7)`;
+
+const CDR_DIRECTION_CASE = `
+    CASE
+        WHEN c.channel LIKE 'Dongle/%' OR c.channel LIKE 'DAHDI/%'
+             OR c.dcontext LIKE 'from-dongle%' OR c.dcontext LIKE 'from-trunk%' OR c.dcontext LIKE 'from-pstn%'
+             OR (c.did != '' AND c.did IS NOT NULL)
+        THEN 'INBOUND'
+
+        WHEN (c.channel LIKE 'SIP/%' OR c.channel LIKE 'PJSIP/%' OR c.channel LIKE 'IAX2/%' OR c.dcontext = 'from-internal' OR c.dcontext LIKE 'from-internal%')
+             AND (c.dstchannel LIKE 'Dongle/%' OR c.dstchannel LIKE 'DAHDI/%' OR c.lastdata LIKE 'dongle/%' OR c.lastdata LIKE 'DAHDI/%'
+                  OR ${CDR_EXTERNAL_DST_SQL})
+        THEN 'OUTBOUND'
+
+        ELSE 'INTERNAL'
+    END
+`;
+
+const CDR_CALL_SCOPE_CASE = `
+    CASE
+        WHEN c.dcontext = 'ext-external-failover' OR c.userfield LIKE 'Failover:%'
+        THEN 'FAILOVER'
+
+        WHEN (c.channel LIKE 'SIP/%' OR c.channel LIKE 'PJSIP/%' OR c.channel LIKE 'IAX2/%' OR c.dcontext = 'from-internal' OR c.dcontext LIKE 'from-internal%' OR c.dcontext LIKE 'from-intercom%')
+             AND (c.dstchannel NOT LIKE 'Dongle/%' AND c.dstchannel NOT LIKE 'DAHDI/%' AND c.lastdata NOT LIKE 'dongle/%' AND c.lastdata NOT LIKE 'DAHDI/%')
+             AND (NOT ${CDR_EXTERNAL_DST_SQL} OR c.dst IN ('101','102','111','200','600','300'))
+             AND c.channel NOT LIKE 'Dongle/%' AND c.channel NOT LIKE 'DAHDI/%'
+             AND (c.did = '' OR c.did IS NULL)
+             AND c.dcontext NOT LIKE 'from-dongle%' AND c.dcontext NOT LIKE 'from-trunk%' AND c.dcontext NOT LIKE 'from-pstn%'
+        THEN 'INTERNAL'
+
+        ELSE 'EXTERNAL'
+    END
+`;
+
+const CDR_HISTORY_FILTERS_SQL = `
+    AND c.dst NOT IN ('ussd','sms','report','s','*87','*88','*89')
+    AND c.dcontext NOT LIKE 'test-%'
+    AND c.dcontext NOT LIKE '%benchmark%'
+    AND c.dcontext <> 'play_audio'
+    AND NOT EXISTS (
+        SELECT 1 FROM \`asteriskcdrdb\`.\`cdr\` cx
+        WHERE cx.uniqueid = c.uniqueid
+          AND (cx.duration > c.duration OR (cx.duration = c.duration AND cx.sequence > c.sequence))
+    )
+`;
+
+function parseVoicemailMeta(filePath) {
+    try {
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const meta = {};
+        for (const line of raw.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith(';') || trimmed.startsWith('[')) continue;
+            const idx = trimmed.indexOf('=');
+            if (idx > 0) meta[trimmed.substring(0, idx).trim()] = trimmed.substring(idx + 1).trim();
+        }
+        return meta;
+    } catch { return null; }
+}
+
+async function getGeneralCdr(pool, queryParams) {
+    const page = Math.max(1, parseInt(queryParams.page, 10) || 1);
+    const perPage = Math.min(200, Math.max(1, parseInt(queryParams.per_page || queryParams.perPage || queryParams.limit, 10) || 25));
+    const offset = (page - 1) * perPage;
+
+    let startDate = queryParams.startDate || queryParams.from || '';
+    let endDate = queryParams.endDate || queryParams.to || '';
+
+    if (startDate) {
+        startDate = moment(startDate).format('YYYY-MM-DD HH:mm:ss');
+    } else {
+        startDate = moment().subtract(30, 'days').startOf('day').format('YYYY-MM-DD HH:mm:ss');
+    }
+    if (endDate) {
+        endDate = moment(endDate).format('YYYY-MM-DD HH:mm:ss');
+    } else {
+        endDate = moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+    }
+
+    const whereClauses = ['c.calldate BETWEEN ? AND ?'];
+    const params = [startDate, endDate];
+
+    const extFilter = queryParams.extension || queryParams.targetExtension;
+    if (extFilter && extFilter !== 'ALL') {
+        const exts = Array.isArray(extFilter) ? extFilter : [extFilter];
+        const regexpPattern = exts.map(e => String(e).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+        whereClauses.push("(c.src IN (?) OR c.dst IN (?) OR c.cnum IN (?) OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/(', ?, ')([^0-9]|$)'))");
+        params.push(exts, exts, exts, regexpPattern, regexpPattern);
+    }
+
+    const statusFilter = queryParams.status || queryParams.statusFilter || queryParams.disposition;
+    if (statusFilter && statusFilter !== 'ALL') {
+        const statuses = Array.isArray(statusFilter) ? statusFilter : [statusFilter];
+        const matchStatuses = [...statuses];
+        if (matchStatuses.includes('FAILED') && !matchStatuses.includes('CONGESTION')) {
+            matchStatuses.push('CONGESTION');
+        }
+        whereClauses.push(`((${CDR_DISPOSITION_SQL}) IN (?) OR ('FAILED' IN (?) AND (${CDR_DISPOSITION_SQL}) = 'CONGESTION'))`);
+        params.push(matchStatuses, statuses);
+    }
+
+    const dirFilter = queryParams.direction || queryParams.directionFilter;
+    if (dirFilter && dirFilter !== 'ALL') {
+        whereClauses.push(`(${CDR_DIRECTION_CASE}) = ?`);
+        params.push(dirFilter.toUpperCase());
+    }
+
+    const search = queryParams.search || queryParams.q;
+    if (search) {
+        whereClauses.push("(c.src LIKE ? OR c.dst LIKE ? OR c.did LIKE ? OR COALESCE(u.name, '') LIKE ?)");
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    const whereSql = whereClauses.join(' AND ') + ' ' + CDR_HISTORY_FILTERS_SQL;
+
+    const countSql = `
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN ${CDR_DISPOSITION_SQL} = 'ANSWERED' THEN 1 ELSE 0 END) as answered_count,
+            SUM(c.duration) as total_duration_sec,
+            AVG(CASE WHEN ${CDR_DISPOSITION_SQL} = 'ANSWERED' THEN c.duration ELSE NULL END) as avg_duration_sec
+        FROM \`asteriskcdrdb\`.\`cdr\` c
+        LEFT JOIN \`asterisk\`.\`users\` u ON c.src = u.extension
+        WHERE ${whereSql}
+    `;
+    const [countRows] = await pool.query(countSql, params);
+    const total = countRows[0] ? Number(countRows[0].total) || 0 : 0;
+    const answeredCount = countRows[0] ? Number(countRows[0].answered_count) || 0 : 0;
+    const totalDuration = countRows[0] ? Number(countRows[0].total_duration_sec) || 0 : 0;
+    const avgDuration = countRows[0] ? Math.round(Number(countRows[0].avg_duration_sec) || 0) : 0;
+    const totalPages = Math.ceil(total / perPage) || 0;
+
+    const dataSql = `
+        SELECT 
+            c.calldate, c.src, c.dst, c.duration, c.billsec,
+            ${CDR_DISPOSITION_SQL} as disposition,
+            c.uniqueid, c.recordingfile, c.did,
+            COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            ${CDR_DIRECTION_CASE} as direction,
+            ${CDR_CALL_SCOPE_CASE} as call_scope,
+            stt.transcript, stt.status as stt_status
+        FROM \`asteriskcdrdb\`.\`cdr\` c
+        LEFT JOIN \`asterisk\`.\`users\` u ON c.src = u.extension
+        LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
+        WHERE ${whereSql}
+        ORDER BY c.calldate DESC
+        LIMIT ? OFFSET ?
+    `;
+    const dataParams = [...params, perPage, offset];
+    const [rows] = await pool.query(dataSql, dataParams);
+
+    const calls = rows.map(r => ({
+        uniqueid: r.uniqueid,
+        calldate: r.calldate,
+        src: r.src,
+        dst: r.dst,
+        src_name: r.src_name,
+        duration: Number(r.duration) || 0,
+        billsec: Number(r.billsec) || 0,
+        disposition: r.disposition,
+        direction: r.direction,
+        call_scope: r.call_scope,
+        did: r.did || '',
+        recordingfile: r.recordingfile || '',
+        has_recording: Boolean(r.recordingfile && r.recordingfile.length > 0),
+        media_id: r.uniqueid ? createMediaId(r.uniqueid) : null,
+        transcript: r.transcript || '',
+        stt_status: r.stt_status || 'none'
+    }));
+
+    return {
+        success: true,
+        data: calls,
+        meta: {
+            total,
+            page,
+            per_page: perPage,
+            total_pages: totalPages
+        },
+        summary: {
+            total_calls: total,
+            answered_calls: answeredCount,
+            answer_rate: total > 0 ? Math.round((answeredCount / total) * 100) : 0,
+            total_duration_sec: totalDuration,
+            avg_duration_sec: avgDuration
+        }
+    };
+}
+
+async function getVoicemailMessages(pool, queryParams, vmRoot = '/var/spool/asterisk/voicemail/default') {
+    const messages = [];
+    const targetMailbox = queryParams.mailbox || queryParams.extension || '';
+    const searchCaller = queryParams.search || queryParams.searchCallerid || queryParams.q || '';
+    const page = Math.max(1, parseInt(queryParams.page, 10) || 1);
+    const perPage = Math.min(200, Math.max(1, parseInt(queryParams.per_page || queryParams.perPage, 10) || 25));
+
+    const mailboxes = new Set();
+    if (fs.existsSync(vmRoot)) {
+        const extDirs = fs.readdirSync(vmRoot, { withFileTypes: true }).filter(d => d.isDirectory());
+        for (const ext of extDirs) {
+            mailboxes.add(ext.name);
+            if (targetMailbox && targetMailbox !== 'ALL' && ext.name !== targetMailbox) {
+                continue;
+            }
+            const inbox = path.join(vmRoot, ext.name, 'INBOX');
+            if (!fs.existsSync(inbox)) continue;
+            const files = fs.readdirSync(inbox).filter(f => f.endsWith('.txt'));
+            for (const txt of files) {
+                const meta = parseVoicemailMeta(path.join(inbox, txt));
+                if (!meta) continue;
+
+                let wavFile = null;
+                for (const audioExt of ['.wav', '.WAV', '.gsm', '.mp3', '.sln']) {
+                    const candidate = txt.replace(/\.txt$/, audioExt);
+                    if (fs.existsSync(path.join(inbox, candidate))) {
+                        wavFile = candidate;
+                        break;
+                    }
+                }
+
+                const duration = parseInt(meta.duration, 10) || 0;
+                const origtime = meta.origtime ? parseInt(meta.origtime, 10) * 1000 : 0;
+                const callerid = (meta.callerid || '').replace(/"/g, '');
+
+                messages.push({
+                    mailbox: ext.name,
+                    callerid,
+                    origdate: meta.origdate || '',
+                    origtime,
+                    duration,
+                    context: meta.context || '',
+                    extension: meta.extension || '',
+                    wavFile,
+                    txtFile: txt,
+                    transcript: '',
+                    stt_status: 'none'
+                });
+            }
+        }
+    }
+
+    try {
+        const [transcripts] = await pool.query('SELECT mailbox, msg_file, transcript, status FROM `asteriskcdrdb`.`voicemail_transcriptions`');
+        const transMap = new Map();
+        for (const t of transcripts) {
+            transMap.set(`${t.mailbox}:${t.msg_file}`, t);
+        }
+        for (const m of messages) {
+            if (m.wavFile) {
+                const tr = transMap.get(`${m.mailbox}:${m.wavFile}`);
+                if (tr) {
+                    m.transcript = tr.transcript || '';
+                    m.stt_status = tr.status || 'completed';
+                }
+            }
+        }
+    } catch (_) {}
+
+    let filtered = messages;
+    if (searchCaller) {
+        filtered = filtered.filter(m => m.callerid.toLowerCase().includes(searchCaller.toLowerCase()));
+    }
+    if (queryParams.startDate) {
+        const startMs = moment(queryParams.startDate).valueOf();
+        filtered = filtered.filter(m => m.origtime && m.origtime >= startMs);
+    }
+    if (queryParams.endDate) {
+        const endMs = moment(queryParams.endDate).valueOf();
+        filtered = filtered.filter(m => m.origtime && m.origtime <= endMs);
+    }
+
+    filtered.sort((a, b) => (b.origtime || 0) - (a.origtime || 0));
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / perPage) || 1;
+    const paged = filtered.slice((page - 1) * perPage, page * perPage);
+
+    return {
+        success: true,
+        messages: paged,
+        mailboxes: [...mailboxes].sort((a, b) => parseInt(a, 10) - parseInt(b, 10)),
+        pagination: {
+            total,
+            totalPages,
+            page,
+            perPage
+        }
+    };
+}
+
+async function getTelephonyReportsSummary(pool, queryParams) {
+    let startDate = queryParams.startDate || queryParams.from || '';
+    let endDate = queryParams.endDate || queryParams.to || '';
+
+    if (startDate) {
+        startDate = moment(startDate).format('YYYY-MM-DD HH:mm:ss');
+    } else {
+        startDate = moment().subtract(30, 'days').startOf('day').format('YYYY-MM-DD HH:mm:ss');
+    }
+    if (endDate) {
+        endDate = moment(endDate).format('YYYY-MM-DD HH:mm:ss');
+    } else {
+        endDate = moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+    }
+
+    const params = [startDate, endDate];
+
+    const totalsSql = `
+        SELECT 
+            COUNT(*) as total_calls,
+            SUM(CASE WHEN ${CDR_DISPOSITION_SQL} = 'ANSWERED' THEN 1 ELSE 0 END) as answered_calls,
+            SUM(CASE WHEN (${CDR_DIRECTION_CASE}) = 'INBOUND' THEN 1 ELSE 0 END) as inbound_calls,
+            SUM(CASE WHEN (${CDR_DIRECTION_CASE}) = 'OUTBOUND' THEN 1 ELSE 0 END) as outbound_calls,
+            SUM(CASE WHEN (${CDR_DIRECTION_CASE}) = 'INBOUND' AND ${CDR_DISPOSITION_SQL} != 'ANSWERED' THEN 1 ELSE 0 END) as missed_inbound_calls,
+            SUM(c.duration) as total_duration_sec,
+            AVG(CASE WHEN ${CDR_DISPOSITION_SQL} = 'ANSWERED' THEN c.duration ELSE NULL END) as avg_talk_sec
+        FROM \`asteriskcdrdb\`.\`cdr\` c
+        WHERE c.calldate BETWEEN ? AND ? ${CDR_HISTORY_FILTERS_SQL}
+    `;
+    const [totalsRows] = await pool.query(totalsSql, params);
+    const totals = totalsRows[0] || {};
+
+    const hourlySql = `
+        SELECT 
+            HOUR(c.calldate) as hour_num,
+            SUM(CASE WHEN (${CDR_DIRECTION_CASE}) = 'INBOUND' THEN 1 ELSE 0 END) as inbound_count,
+            SUM(CASE WHEN (${CDR_DIRECTION_CASE}) = 'OUTBOUND' THEN 1 ELSE 0 END) as outbound_count,
+            COUNT(*) as total_count
+        FROM \`asteriskcdrdb\`.\`cdr\` c
+        WHERE c.calldate BETWEEN ? AND ? ${CDR_HISTORY_FILTERS_SQL}
+        GROUP BY HOUR(c.calldate)
+        ORDER BY hour_num ASC
+    `;
+    const [hourlyRows] = await pool.query(hourlySql, params);
+    const hourlyMap = {};
+    for (const h of hourlyRows) {
+        hourlyMap[h.hour_num] = {
+            inbound: Number(h.inbound_count) || 0,
+            outbound: Number(h.outbound_count) || 0,
+            total: Number(h.total_count) || 0
+        };
+    }
+    const hourlyDistribution = [];
+    for (let h = 0; h < 24; h++) {
+        hourlyDistribution.push({
+            hour: h,
+            label: `${String(h).padStart(2, '0')}:00`,
+            inbound: hourlyMap[h]?.inbound || 0,
+            outbound: hourlyMap[h]?.outbound || 0,
+            total: hourlyMap[h]?.total || 0
+        });
+    }
+
+    const extSql = `
+        SELECT 
+            c.src as extension,
+            COALESCE(u.name, c.src) as name,
+            COUNT(*) as total_calls,
+            SUM(CASE WHEN ${CDR_DISPOSITION_SQL} = 'ANSWERED' THEN 1 ELSE 0 END) as answered_calls,
+            SUM(c.duration) as total_talk_sec,
+            AVG(CASE WHEN ${CDR_DISPOSITION_SQL} = 'ANSWERED' THEN c.duration ELSE NULL END) as avg_talk_sec
+        FROM \`asteriskcdrdb\`.\`cdr\` c
+        LEFT JOIN \`asterisk\`.\`users\` u ON c.src = u.extension
+        WHERE c.calldate BETWEEN ? AND ? ${CDR_HISTORY_FILTERS_SQL}
+          AND c.src REGEXP '^[0-9]{3,4}$'
+        GROUP BY c.src, u.name
+        ORDER BY total_calls DESC
+        LIMIT 25
+    `;
+    const [extRows] = await pool.query(extSql, params);
+    const extensionStats = extRows.map(r => ({
+        extension: r.extension,
+        name: r.name,
+        total_calls: Number(r.total_calls) || 0,
+        answered_calls: Number(r.answered_calls) || 0,
+        answer_rate: Number(r.total_calls) > 0 ? Math.round((Number(r.answered_calls) / Number(r.total_calls)) * 100) : 0,
+        total_talk_sec: Number(r.total_talk_sec) || 0,
+        avg_talk_sec: Math.round(Number(r.avg_talk_sec) || 0)
+    }));
+
+    const dispSql = `
+        SELECT 
+            ${CDR_DISPOSITION_SQL} as disp,
+            COUNT(*) as count
+        FROM \`asteriskcdrdb\`.\`cdr\` c
+        WHERE c.calldate BETWEEN ? AND ? ${CDR_HISTORY_FILTERS_SQL}
+        GROUP BY disp
+    `;
+    const [dispRows] = await pool.query(dispSql, params);
+    const dispositionBreakdown = {};
+    for (const d of dispRows) {
+        dispositionBreakdown[d.disp] = Number(d.count) || 0;
+    }
+
+    return {
+        success: true,
+        date_range: { start_date: startDate, end_date: endDate },
+        totals: {
+            total_calls: Number(totals.total_calls) || 0,
+            answered_calls: Number(totals.answered_calls) || 0,
+            answer_rate: Number(totals.total_calls) > 0 ? Math.round((Number(totals.answered_calls) / Number(totals.total_calls)) * 100) : 0,
+            inbound_calls: Number(totals.inbound_calls) || 0,
+            outbound_calls: Number(totals.outbound_calls) || 0,
+            missed_inbound_calls: Number(totals.missed_inbound_calls) || 0,
+            total_duration_sec: Number(totals.total_duration_sec) || 0,
+            avg_talk_sec: Math.round(Number(totals.avg_talk_sec) || 0)
+        },
+        hourly_distribution: hourlyDistribution,
+        extension_stats: extensionStats,
+        disposition_breakdown: dispositionBreakdown
+    };
+}
 
 function createCrmRouter(pool, options = {}) {
     const getPeerStatus = typeof options === 'function' ? options : (options.getPeerStatus || (() => options.peerStatus || {}));
@@ -188,6 +614,8 @@ function createCrmRouter(pool, options = {}) {
                 recordings: true,
                 extension_stats: true,
                 live_panel: true,
+                voicemails: true,
+                reports_summary: true,
                 live_controls: ['listen', 'whisper', 'barge', 'hangup', 'hijack']
             },
             granted_scopes: clientScopes,
@@ -261,23 +689,82 @@ function createCrmRouter(pool, options = {}) {
         }
     });
 
-    // 5. CUSTOMER CALL HISTORY API
+    // 5. CALL HISTORY (CDR) API (Supports both single-phone and general multi-filter CDR)
     router.get('/calls', requireCrmScope('calls:read'), async (req, res) => {
         const { phone } = req.query;
-        if (!phone) {
-            return res.status(400).json({ success: false, error: 'Missing required parameter: phone' });
+        if (phone) {
+            try {
+                const countryCode = req.crmClient.default_country_code || '20';
+                const history = await getCustomerCallHistory(pool, req.query, countryCode);
+                return res.json(history);
+            } catch (err) {
+                if (err.message.includes('required') || err.message.includes('End date')) {
+                    return res.status(400).json({ success: false, error: err.message });
+                }
+                console.error('CRM Call History error:', err.message);
+                return res.status(500).json({ success: false, error: 'Failed to retrieve customer call history' });
+            }
         }
 
         try {
-            const countryCode = req.crmClient.default_country_code || '20';
-            const history = await getCustomerCallHistory(pool, req.query, countryCode);
-            res.json(history);
+            const history = await getGeneralCdr(pool, req.query);
+            return res.json(history);
         } catch (err) {
-            if (err.message.includes('required') || err.message.includes('End date')) {
-                return res.status(400).json({ success: false, error: err.message });
-            }
-            console.error('CRM Call History error:', err.message);
-            res.status(500).json({ success: false, error: 'Failed to retrieve customer call history' });
+            console.error('CRM General CDR error:', err.message);
+            return res.status(500).json({ success: false, error: 'Failed to retrieve call detail records' });
+        }
+    });
+
+    router.get('/cdr', requireCrmScope('calls:read'), async (req, res) => {
+        try {
+            const history = await getGeneralCdr(pool, req.query);
+            return res.json(history);
+        } catch (err) {
+            console.error('CRM General CDR error:', err.message);
+            return res.status(500).json({ success: false, error: 'Failed to retrieve call detail records' });
+        }
+    });
+
+    // VOICEMAIL INBOX API
+    router.get('/voicemails', requireCrmScope('calls:read'), async (req, res) => {
+        try {
+            const VM_ROOT = options.VM_ROOT || '/var/spool/asterisk/voicemail/default';
+            const result = await getVoicemailMessages(pool, req.query, VM_ROOT);
+            return res.json(result);
+        } catch (err) {
+            console.error('CRM Voicemails fetch error:', err.message);
+            return res.status(500).json({ success: false, error: 'Failed to retrieve voicemails' });
+        }
+    });
+
+    // VOICEMAIL AUDIO STREAMING
+    router.get('/voicemails/:mailbox/:file/audio', requireCrmScope('recordings:read'), (req, res) => {
+        const { mailbox, file } = req.params;
+        const safeMailbox = String(mailbox).replace(/[^a-zA-Z0-9_-]/g, '');
+        const safeFile = path.basename(file);
+        const VM_ROOT = options.VM_ROOT || '/var/spool/asterisk/voicemail/default';
+        const filePath = path.join(VM_ROOT, safeMailbox, 'INBOX', safeFile);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ success: false, error: 'Voicemail audio file not found' });
+        }
+
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeTypes = { '.wav': 'audio/wav', '.WAV': 'audio/wav', '.gsm': 'audio/x-gsm', '.mp3': 'audio/mpeg' };
+        const contentType = mimeTypes[ext] || 'audio/wav';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Accept-Ranges', 'bytes');
+        fs.createReadStream(filePath).pipe(res);
+    });
+
+    // TELEPHONY ANALYTICS / REPORTS SUMMARY
+    router.get('/reports/summary', requireCrmScope('stats:read'), async (req, res) => {
+        try {
+            const reports = await getTelephonyReportsSummary(pool, req.query);
+            return res.json(reports);
+        } catch (err) {
+            console.error('CRM Telephony Reports Summary error:', err.message);
+            return res.status(500).json({ success: false, error: 'Failed to generate telephony reports summary' });
         }
     });
 
