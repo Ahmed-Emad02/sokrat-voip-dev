@@ -64,9 +64,9 @@ test('Softphone UI: softphone-core.js and softphone-ui.js handle callBusyInterna
     assert.match(ui, /campOnBtn_/, 'showCampOnPrompt must generate action button');
 });
 
-test('Live Panel: views/operator.ejs defines call codes guide button and interactive modal', () => {
-    const operatorView = fs.readFileSync(path.join(rootDir, 'views', 'operator.ejs'), 'utf8');
-    assert.match(operatorView, /btn-call-codes-guide/, 'operator.ejs must define call codes button');
-    assert.match(operatorView, /callCodesGuideModal/, 'operator.ejs must define callCodesGuideModal');
-    assert.match(operatorView, /openCallCodesGuideModal/, 'operator.ejs must define openCallCodesGuideModal function');
+test('PBX Configurations: views/config.ejs defines call codes section and modal for feature discovery', () => {
+    const configView = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8');
+    assert.match(configView, /section-callcodes/, 'config.ejs must define section-callcodes');
+    assert.match(configView, /callCodeModal/, 'config.ejs must define callCodeModal');
+    assert.match(configView, /openConfigCallCodeModal/, 'config.ejs must define openConfigCallCodeModal function');
 });

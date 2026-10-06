@@ -9,3 +9,5 @@ telemetry_history.json
 .opencode/
 backups/
 *.bak_*
+__pycache__/
+*.pyc

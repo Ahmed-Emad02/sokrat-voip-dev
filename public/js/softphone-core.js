@@ -744,7 +744,7 @@
                 const callInfo = (req && typeof req.getHeader === 'function') ? (req.getHeader('Call-Info') || '') : '';
                 const isAutoAnswerHeader = /autoanswer|answer-after=0|ring-answer/i.test(alertInfo + callInfo);
                 const displayName = session.remote_identity ? (session.remote_identity.display_name || '') : '';
-                const isSpyOrIntercom = /^(222|223|224|225|\*80)/.test(remoteUser) || /Call Spy|Call Whisper|Call Barge|Call Hijack|Intercom/i.test(remoteUser + displayName);
+                const isSpyOrIntercom = (typeof window !== 'undefined' && window.customSpyOrIntercomRegex ? window.customSpyOrIntercomRegex.test(remoteUser) : /^(222|223|224|225|\*80)/.test(remoteUser)) || /Call Spy|Call Whisper|Call Barge|Call Hijack|Intercom/i.test(remoteUser + displayName);
 
                 const shouldAutoAnswer = (this.isAutoAnswer && this.micPermissionGranted) || isAutoAnswerHeader || isSpyOrIntercom;
 

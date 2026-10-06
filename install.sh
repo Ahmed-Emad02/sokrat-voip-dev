@@ -1978,6 +1978,20 @@ touch /etc/asterisk/sokrat_federation_iax.conf
 chown asterisk:asterisk /etc/asterisk/sokrat_federation*.conf 2>/dev/null || true
 chmod 644 /etc/asterisk/sokrat_federation*.conf 2>/dev/null || true
 
+# 9a-codes — Sokrat Dynamic Call Control Codes Include
+touch /etc/asterisk/extensions_sokrat_callcodes.conf
+chown asterisk:asterisk /etc/asterisk/extensions_sokrat_callcodes.conf 2>/dev/null || true
+chmod 644 /etc/asterisk/extensions_sokrat_callcodes.conf 2>/dev/null || true
+
+if ! grep -qF '#include extensions_sokrat_callcodes.conf' /etc/asterisk/extensions_custom.conf 2>/dev/null; then
+    echo '' >> /etc/asterisk/extensions_custom.conf
+    echo '; Sokrat Dynamic Call Control Codes' >> /etc/asterisk/extensions_custom.conf
+    echo '#include extensions_sokrat_callcodes.conf' >> /etc/asterisk/extensions_custom.conf
+fi
+if ! grep -qF 'include => sokrat-call-codes-custom' /etc/asterisk/extensions_custom.conf 2>/dev/null; then
+    sed -i '/\[from-internal-custom\]/a include => sokrat-call-codes-custom' /etc/asterisk/extensions_custom.conf
+fi
+
 if ! grep -qF '#include sokrat_federation.conf' /etc/asterisk/extensions_custom.conf 2>/dev/null; then
     echo '' >> /etc/asterisk/extensions_custom.conf
     echo '; Sokrat IAX2 Federation Custom Dialplan Contexts' >> /etc/asterisk/extensions_custom.conf

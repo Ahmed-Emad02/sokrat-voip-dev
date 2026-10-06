@@ -67,6 +67,13 @@ const {
 } = require('./lib/federation-bootstrap');
 const FederationHub = require('./lib/federation-hub');
 let federationHub = null;
+const {
+    DEFAULT_CALL_CODES,
+    initSokratCallCodes,
+    getCallCodes,
+    applyCallCodeBackendUpdate,
+    resetCallCodesToDefaults
+} = require('./lib/call-codes');
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
 let rawEncryptionKey = process.env.ENCRYPTION_KEY;
@@ -941,6 +948,9 @@ async function initAuthDb() {
             INDEX \`idx_camp_expires\` (\`expires_at\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Sokrat Live Panel Call Control Codes Engine
+    await initSokratCallCodes(conn);
 
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS \`asterisk\`.\`stt_settings\` (
@@ -8541,6 +8551,110 @@ app.get('/api/telephony/camp-on/pending', requireAuth, async (req, res) => {
     }
 });
 
+// --- SOKRAT CALL CONTROL CODES REST APIs (Configurable via Live Panel Guide) ---
+
+// GET /api/telephony/call-codes - Fetch all 36 telephony codes with custom status
+app.get('/api/telephony/call-codes', async (req, res) => {
+    try {
+        const codes = await getCallCodes(pool);
+        res.json({ success: true, count: codes.length, codes });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// PUT /api/telephony/call-codes/:id - Update an individual code, its active state, or examples
+app.put('/api/telephony/call-codes/:id', requireAuth, async (req, res) => {
+    try {
+        const canManage = isSuperAdmin(req) || (req.session && (req.session.isAdmin || req.session.role === 'admin' || (req.session.userPermissions && (req.session.userPermissions.includes('config') || req.session.userPermissions.includes('operator')))));
+        if (!canManage) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Admin or Configuration permission required' });
+        }
+
+        const { id } = req.params;
+        const { code, enabled, example_en, example_ar } = req.body || {};
+
+        if (!code || typeof code !== 'string' || !code.trim()) {
+            return res.status(400).json({ success: false, error: 'Call code cannot be empty' });
+        }
+
+        const trimmedCode = code.trim();
+        if (!/^[0-9*#[\]+\-/ ]+$/.test(trimmedCode)) {
+            return res.status(400).json({ success: false, error: 'Invalid characters in call code' });
+        }
+
+        const [existingRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_call_codes` WHERE id = ?', [id]);
+        if (!existingRows.length) {
+            return res.status(404).json({ success: false, error: 'Call code not found' });
+        }
+
+        const row = existingRows[0];
+        const isEnabled = enabled !== undefined ? (enabled ? 1 : 0) : row.enabled;
+
+        // Prevent conflicts against other active codes
+        if (isEnabled) {
+            const cleanCode = trimmedCode.replace(/\[Ext\]/gi, '').trim();
+            const [conflicts] = await pool.query(
+                'SELECT id, name_en, code FROM `asterisk`.`sokrat_call_codes` WHERE id != ? AND enabled = 1 AND (code = ? OR REPLACE(code, "[Ext]", "") = ?)',
+                [id, trimmedCode, cleanCode]
+            );
+            if (conflicts.length > 0) {
+                return res.status(409).json({ success: false, error: `Code conflicts with active code "${conflicts[0].name_en}" (${conflicts[0].code})` });
+            }
+        }
+
+        await pool.query(
+            'UPDATE `asterisk`.`sokrat_call_codes` SET code = ?, enabled = ?, example_en = COALESCE(?, example_en), example_ar = COALESCE(?, example_ar) WHERE id = ?',
+            [trimmedCode, isEnabled, example_en ? example_en.trim() : null, example_ar ? example_ar.trim() : null, id]
+        );
+
+        // Apply FreePBX/Asterisk/dialplan changes
+        await applyCallCodeBackendUpdate(pool, row, trimmedCode, isEnabled);
+
+        // Reload PBX config
+        await reloadPbxConfigPromise();
+
+        const [updatedRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_call_codes` WHERE id = ?', [id]);
+        const updated = {
+            ...updatedRows[0],
+            dial: Boolean(updatedRows[0].dial),
+            enabled: Boolean(updatedRows[0].enabled),
+            is_custom: (updatedRows[0].code !== updatedRows[0].default_code || !updatedRows[0].enabled)
+        };
+
+        if (typeof io !== 'undefined' && io) {
+            io.emit('call-codes-updated', updated);
+        }
+
+        res.json({ success: true, item: updated });
+    } catch (err) {
+        console.error('Call code update error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/telephony/call-codes/reset-defaults - Revert all call codes to factory defaults
+app.post('/api/telephony/call-codes/reset-defaults', requireAuth, async (req, res) => {
+    try {
+        const canManage = isSuperAdmin(req) || (req.session && (req.session.isAdmin || req.session.role === 'admin' || (req.session.userPermissions && (req.session.userPermissions.includes('config') || req.session.userPermissions.includes('operator')))));
+        if (!canManage) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Admin or Configuration permission required' });
+        }
+
+        await resetCallCodesToDefaults(pool);
+        await reloadPbxConfigPromise();
+
+        if (typeof io !== 'undefined' && io) {
+            io.emit('call-codes-updated', { reset: true });
+        }
+
+        res.json({ success: true, message: 'All call control codes have been successfully reset to factory defaults.' });
+    } catch (err) {
+        console.error('Call codes reset error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // POST /api/intercom/call - Originate instant intercom meeting call to selected available extensions
 app.post('/api/intercom/call', requireAuth, async (req, res) => {
     try {
@@ -14925,7 +15039,7 @@ app.get('/api/config/routes/outbound', async (req, res) => {
             FROM \`asterisk\`.\`outbound_routes\` r
             LEFT JOIN \`asterisk\`.\`outbound_route_sequence\` s ON s.route_id = r.route_id
             GROUP BY r.route_id, r.name
-            ORDER BY seq ASC, r.route_id ASC
+            ORDER BY seq ASC, r.route_id ASC /* ORDER BY COALESCE(s.seq, 9999) ASC */
         `);
         const [patternsRows] = await pool.query(`
             SELECT route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits
