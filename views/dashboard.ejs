@@ -744,30 +744,27 @@ const isRtl = currentLang === 'ar';
         <!-- Charts Row 2: Hourly Distribution + Top Talkers -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 shrink-0">
             <div class="panel-surface border border-[#27272a]/30 rounded-2xl flex flex-col h-full overflow-hidden">
-                <div class="px-5 py-3 border-b border-[#27272a] bg-black/20 flex items-center justify-between gap-3 min-h-[64px] shrink-0">
-                    <div class="flex items-center gap-2.5 min-w-0">
+                <div class="px-5 py-3 border-b border-[#27272a] bg-black/20 flex items-center flex-wrap gap-x-4 gap-y-2 shrink-0">
+                    <div class="flex items-center gap-2.5 min-w-0 mr-auto">
                         <span class="p-1.5 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                         </span>
                         <div class="min-w-0">
-                            <h2 id="hourlyChartTitle" class="text-sm font-bold text-white uppercase tracking-wider truncate"><%= t.chartHourly %></h2>
-                            <p id="hourlyChartSubtitle" class="text-[11px] text-[var(--text-muted)] font-mono truncate"></p>
+                            <h2 id="hourlyChartTitle" class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartHourly %></h2>
+                            <p id="hourlyChartSubtitle" class="text-[11px] text-[var(--text-muted)] font-mono"></p>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 shrink-0">
-                        <!-- Peak Badge -->
-                        <span id="hourlyPeakBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono whitespace-nowrap">
-                            <span>🔥</span>
-                            <span id="hourlyPeakText"></span>
-                        </span>
-
-                        <!-- Specific Day Dropdown Selector (only visible when multiple days exist) -->
-                        <select id="hourlyDaySelect" onchange="onHourlyDaySelect(this.value)" class="no-enhance hidden bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer shrink-0">
-                            <option value="all"><%= isRtl ? 'جميع الأيام' : 'All Days' %></option>
-                        </select>
-
-                        <!-- Switcher (Hours vs Days) -->
-                        <div id="hourlyTimeModeWrapper" class="inline-flex items-center p-0.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] gap-0.5 shrink-0">
+                    <!-- Peak Badge -->
+                    <span id="hourlyPeakBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 23c-4.97 0-9-3.58-9-8 0-2.52 1.17-5.13 3.08-7.46.58-.71 1.26-1.39 1.92-1.97V5c0-.55.45-1 1-1s1 .45 1 1v.57c0 .27-.11.52-.29.71C8.25 7.74 7 9.87 7 12c0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.09-.37-2.13-1-3 .71.88 1.2 1.91 1.44 3.01C17.79 13.35 18 14.16 18 15c0 4.42-4.03 8-6 8z"/><path d="M12 21c2.76 0 5-2.24 5-5 0-1.4-.58-2.67-1.5-3.6-.25-.24-.54-.46-.84-.64.09.42.14.85.14 1.24 0 2.76-2.24 5-5 5-1.38 0-2.63-.56-3.54-1.46C7.32 17.62 9.42 21 12 21z" opacity=".6"/></svg>
+                        <span id="hourlyPeakText"></span>
+                    </span>
+                    <!-- Specific Day Dropdown Selector (only visible when multiple days exist) -->
+                    <select id="hourlyDaySelect" onchange="onHourlyDaySelect(this.value)" class="hidden bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer shrink-0">
+                        <option value="all"><%= isRtl ? 'جميع الأيام' : 'All Days' %></option>
+                    </select>
+                    <!-- Switcher (Hours vs Days) -->
+                    <div id="hourlyTimeModeWrapper" class="inline-flex items-center p-0.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] gap-0.5 shrink-0">
                             <button type="button" id="btn-dist-hours" onclick="setDistributionMode('hours')" class="px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer btn-primary whitespace-nowrap">
                                 <span><%= isRtl ? 'بالساعات' : 'Hourly' %></span>
                             </button>
@@ -775,7 +772,6 @@ const isRtl = currentLang === 'ar';
                                 <span><%= isRtl ? 'بالأيام' : 'Daily' %></span>
                             </button>
                         </div>
-                    </div>
                 </div>
                 <div class="p-4 flex-1 flex flex-col justify-center">
                     <div id="hourlyChart" class="w-full h-64 min-h-[256px]"></div>
@@ -786,7 +782,7 @@ const isRtl = currentLang === 'ar';
                     <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartTopTalkers %></h2>
                 </div>
                 <div class="p-4">
-                    <div id="topTalkersChart" class="w-full h-64"></div>
+                    <div id="topTalkersChart" class="w-full" style="height: 280px"></div>
                 </div>
             </div>
         </div>
@@ -1136,7 +1132,7 @@ const isRtl = currentLang === 'ar';
                                 const isPeak = p.value === maxDayVal && maxDayVal > 0;
                                 return `
                                     <div class="font-bold text-xs text-white mb-1.5 flex items-center gap-1.5">
-                                        <span>📅 ${dayLabels[p.dataIndex] || d.date || p.name}</span>
+                                        <span><svg style="display:inline-block;vertical-align:middle;width:12px;height:12px;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dayLabels[p.dataIndex] || d.date || p.name}</span>
                                         ${isPeak ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono">${_isRtl ? 'الذروة' : 'Peak'}</span>` : ''}
                                     </div>
                                     <div class="text-xs text-zinc-300 font-semibold space-y-1">
@@ -1246,12 +1242,12 @@ const isRtl = currentLang === 'ar';
                                 const timeRange = `${String(h).padStart(2, '0')}:00 - ${String(nextH).padStart(2, '0')}:00`;
                                 const isPeak = p.value === maxHourVal && maxHourVal > 0;
                                 const dayContext = isSingleSpecificDay 
-                                    ? `<div class="text-[11px] text-sky-400 font-mono mb-1">📅 ${formatDayLabel(selectedSpecificDay)}</div>` 
+                                    ? `<div class="text-[11px] text-sky-400 font-mono mb-1"><svg style="display:inline-block;vertical-align:middle;width:11px;height:11px;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${formatDayLabel(selectedSpecificDay)}</div>` 
                                     : (_isMultiDay ? `<div class="text-[11px] text-zinc-400 mt-1 flex justify-between gap-4"><span>${_isRtl ? 'المعدل اليومي' : 'Daily Avg'}:</span><b class="text-amber-400">${(p.value / _effectiveDays).toFixed(1)} ${_t.calls}/${_isRtl ? 'يوم' : 'day'}</b></div>` : '');
                                 return `
                                     <div class="font-bold text-xs text-white mb-1 flex items-center gap-1.5">
-                                        <span>🕒 ${timeRange}</span>
-                                        ${isPeak ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono">${_isRtl ? '🔥 ساعة الذروة' : '🔥 Peak Hour'}</span>` : ''}
+                                        <span><svg style="display:inline-block;vertical-align:middle;width:12px;height:12px;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${timeRange}</span>
+                                        ${isPeak ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono">${_isRtl ? '<svg style="display:inline-block;vertical-align:middle;width:10px;height:10px;margin-left:2px" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg> ساعة الذروة' : '<svg style="display:inline-block;vertical-align:middle;width:10px;height:10px;margin-right:2px" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg> Peak Hour'}</span>` : ''}
                                     </div>
                                     ${isSingleSpecificDay ? dayContext : ''}
                                     <div class="text-xs text-zinc-300 font-semibold flex justify-between gap-4">
@@ -1333,7 +1329,14 @@ const isRtl = currentLang === 'ar';
             window.addEventListener('resize', () => hourlyChart.resize());
 
             // -- Top Talkers --
-            const talkersChart = echarts.init(document.getElementById('topTalkersChart'), isLight ? null : 'dark');
+            const talkersEl = document.getElementById('topTalkersChart');
+            const talkersCount = topTalkersData.length;
+            const talkersVisibleMax = 8;
+            const needsScroll = talkersCount > talkersVisibleMax;
+            if (talkersCount > talkersVisibleMax) {
+                talkersEl.style.height = '320px';
+            }
+            const talkersChart = echarts.init(talkersEl, isLight ? null : 'dark');
             talkersChart.setOption({
                 textStyle: {
                     fontFamily: _isRtl ? "'JetBrains Mono', 'Cairo', monospace" : "'JetBrains Mono', monospace"
@@ -1341,38 +1344,128 @@ const isRtl = currentLang === 'ar';
                 backgroundColor: 'transparent',
                 tooltip: {
                     trigger: 'axis',
-                    axisPointer: { type: 'shadow' },
-                    backgroundColor: isLight ? '#ffffff' : '#18181b',
+                    axisPointer: { type: 'shadow', shadowStyle: { color: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)' } },
+                    backgroundColor: isLight ? 'rgba(255,255,255,0.96)' : 'rgba(24,24,27,0.96)',
                     borderColor: isLight ? '#e4e4e7' : '#27272a',
-                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 },
+                    borderRadius: 10,
+                    padding: [10, 14],
+                    textStyle: { color: isLight ? '#09090b' : '#fafafa', fontSize: 11, fontFamily: "'JetBrains Mono', monospace" },
+                    extraCssText: 'box-shadow: 0 8px 24px rgba(0,0,0,0.16); backdrop-filter: blur(8px);',
                     formatter: function(params) {
                         const p = params[0];
                         const data = topTalkersData[p.dataIndex];
-                        return p.name + '<br/>' + _t.talkTime + ': ' + Math.round(data.talkSec / 60) + ' ' + _t.min + '<br/>' + _t.calls + ': ' + data.calls;
+                        const mins = Math.round(data.talkSec / 60);
+                        return '<span style="font-weight:700;font-size:12px">' + p.name + '</span><br/>'
+                            + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:6px"></span>'
+                            + _t.talkTime + ': <b>' + mins + '</b> ' + _t.min + '<br/>'
+                            + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#71717a;margin-right:6px"></span>'
+                            + _t.calls + ': <b>' + data.calls + '</b>';
                     }
                 },
-                grid: { left: 120, right: 40, top: 10, bottom: 30 },
+                grid: { left: 120, right: needsScroll ? 60 : 50, top: 10, bottom: 30 },
+                dataZoom: needsScroll ? [{
+                    type: 'slider',
+                    yAxisIndex: 0,
+                    right: 5,
+                    width: 8,
+                    startValue: 0,
+                    endValue: talkersVisibleMax - 1,
+                    minValueSpan: talkersVisibleMax - 1,
+                    zoomLock: true,
+                    brushSelect: false,
+                    handleSize: '60%',
+                    borderColor: 'transparent',
+                    fillerColor: 'rgba(239,68,68,0.18)',
+                    handleStyle: { color: '#ef4444', borderColor: '#dc2626' },
+                    dataBackground: { lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 } },
+                    selectedDataBackground: { lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 } },
+                    textStyle: { color: 'transparent' }
+                }, {
+                    type: 'inside',
+                    yAxisIndex: 0,
+                    orient: 'vertical',
+                    zoomLock: true,
+                    zoomOnMouseWheel: false,
+                    moveOnMouseWheel: true,
+                    moveOnMouseMove: false,
+                    preventDefaultMouseMove: true
+                }] : [],
                 xAxis: {
                     type: 'value',
-                    splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } },
-                    axisLabel: { color: isLight ? '#52525b' : '#71717a', fontSize: 9, formatter: function(v) { return v + ' ' + _t.min; } }
+                    splitLine: { lineStyle: { color: isLight ? '#f4f4f5' : '#1e1e22', type: 'dashed' } },
+                    axisLabel: { color: isLight ? '#a1a1aa' : '#52525b', fontSize: 9, formatter: function(v) { return v + ' ' + _t.min; } },
+                    axisLine: { show: false },
+                    axisTick: { show: false }
                 },
                 yAxis: {
                     type: 'category',
                     data: topTalkersData.map(d => d.name.split(' (')[0]),
+                    inverse: true,
                     axisLine: { show: false },
                     axisTick: { show: false },
-                    axisLabel: { color: isLight ? '#27272a' : '#ffffff', fontSize: 10, fontWeight: 'bold' }
+                    axisLabel: {
+                        color: isLight ? '#27272a' : '#e4e4e7',
+                        fontSize: 10,
+                        fontWeight: '600',
+                        rich: {
+                            trophy: {
+                                backgroundColor: {
+                                    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23f59e0b'%3E%3Cpath d='M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z'/%3E%3C/svg%3E"
+                                },
+                                width: 13,
+                                height: 13,
+                                align: 'center'
+                            },
+                            name: {
+                                color: isLight ? '#27272a' : '#e4e4e7',
+                                fontSize: 10,
+                                fontWeight: '600',
+                                padding: [0, 0, 0, 3]
+                            }
+                        },
+                        formatter: function(name, idx) {
+                            return talkersCount > 0 && idx === 0 ? '{trophy|}{name|' + name + '}' : name;
+                        }
+                    }
                 },
                 series: [{
                     type: 'bar',
-                    barWidth: '60%',
+                    barWidth: '55%',
+                    barCategoryGap: '25%',
+                    showBackground: true,
+                    backgroundStyle: {
+                        color: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)',
+                        borderRadius: [0, 20, 20, 0]
+                    },
                     itemStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                            { offset: 0, color: accent },
-                            { offset: 1, color: '#00b4d8' }
-                        ]),
-                        borderRadius: [0, 4, 4, 0]
+                        borderRadius: [0, 20, 20, 0],
+                        color: function(params) {
+                            const rank = params.dataIndex / Math.max(talkersCount - 1, 1);
+                            const palette = [
+                                ['#dc2626', '#ef4444', '#f87171'],
+                                ['#e04040', '#f06060', '#f98080'],
+                                ['#c44', '#d66', '#e88'],
+                                ['#a33', '#c55', '#d77']
+                            ];
+                            const i = Math.min(Math.floor(rank * palette.length), palette.length - 1);
+                            const c = palette[i];
+                            return new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                                { offset: 0, color: c[0] },
+                                { offset: 0.6, color: c[1] },
+                                { offset: 1, color: c[2] }
+                            ]);
+                        },
+                        shadowColor: 'rgba(220,38,38,0.18)',
+                        shadowBlur: 8,
+                        shadowOffsetX: 2,
+                        shadowOffsetY: 0
+                    },
+                    emphasis: {
+                        itemStyle: {
+                            shadowColor: 'rgba(220,38,38,0.35)',
+                            shadowBlur: 14,
+                            shadowOffsetX: 3
+                        }
                     },
                     data: topTalkersData.map(d => Math.round(d.talkSec / 60)),
                     label: {
@@ -1383,11 +1476,13 @@ const isRtl = currentLang === 'ar';
                             return data.calls + ' ' + _t.calls;
                         },
                         fontSize: 9,
-                        fontWeight: 'bold',
-                        color: isLight ? '#52525b' : '#a1a1aa'
+                        fontWeight: '600',
+                        color: isLight ? '#71717a' : '#a1a1aa',
+                        fontFamily: "'JetBrains Mono', monospace"
                     },
-                    animationEasing: 'cubicOut',
-                    animationDuration: 600
+                    animationEasing: 'elasticOut',
+                    animationDuration: 800,
+                    animationDelay: function(idx) { return idx * 60; }
                 }]
             });
             window.addEventListener('resize', () => talkersChart.resize());
