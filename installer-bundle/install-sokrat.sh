@@ -1598,30 +1598,30 @@ exten => _222X.,1,NoOp(Spying on extension ${EXTEN:3} in Listen-only mode)
 exten => _222X.,n,Answer()
 exten => _222X.,n,Set(spyee_dial=${DB(DEVICE/${EXTEN:3}/dial)})
 exten => _222X.,n,GotoIf($["${spyee_dial}" = ""]?fallback)
-exten => _222X.,n,ChanSpy(${spyee_dial},q)
+exten => _222X.,n,ChanSpy(${spyee_dial},qv(2))
 exten => _222X.,n,Hangup()
-exten => _222X.,n(fallback),ChanSpy(PJSIP/${EXTEN:3},q)
-exten => _222X.,n,ChanSpy(SIP/${EXTEN:3},q)
+exten => _222X.,n(fallback),ChanSpy(PJSIP/${EXTEN:3},qv(2))
+exten => _222X.,n,ChanSpy(SIP/${EXTEN:3},qv(2))
 exten => _222X.,n,Hangup()
 
 exten => _223X.,1,NoOp(Spying on extension ${EXTEN:3} in Whisper mode)
 exten => _223X.,n,Answer()
 exten => _223X.,n,Set(spyee_dial=${DB(DEVICE/${EXTEN:3}/dial)})
 exten => _223X.,n,GotoIf($["${spyee_dial}" = ""]?fallback)
-exten => _223X.,n,ChanSpy(${spyee_dial},qw)
+exten => _223X.,n,ChanSpy(${spyee_dial},qwv(2))
 exten => _223X.,n,Hangup()
-exten => _223X.,n(fallback),ChanSpy(PJSIP/${EXTEN:3},qw)
-exten => _223X.,n,ChanSpy(SIP/${EXTEN:3},qw)
+exten => _223X.,n(fallback),ChanSpy(PJSIP/${EXTEN:3},qwv(2))
+exten => _223X.,n,ChanSpy(SIP/${EXTEN:3},qwv(2))
 exten => _223X.,n,Hangup()
 
 exten => _224X.,1,NoOp(Spying on extension ${EXTEN:3} in Barge mode)
 exten => _224X.,n,Answer()
 exten => _224X.,n,Set(spyee_dial=${DB(DEVICE/${EXTEN:3}/dial)})
 exten => _224X.,n,GotoIf($["${spyee_dial}" = ""]?fallback)
-exten => _224X.,n,ChanSpy(${spyee_dial},qB)
+exten => _224X.,n,ChanSpy(${spyee_dial},qBv(2))
 exten => _224X.,n,Hangup()
-exten => _224X.,n(fallback),ChanSpy(PJSIP/${EXTEN:3},qB)
-exten => _224X.,n,ChanSpy(SIP/${EXTEN:3},qB)
+exten => _224X.,n(fallback),ChanSpy(PJSIP/${EXTEN:3},qBv(2))
+exten => _224X.,n,ChanSpy(SIP/${EXTEN:3},qBv(2))
 exten => _224X.,n,Hangup()
 
 exten => _225X.,1,NoOp(--- Instant AGI Hijack Call for Extension ${EXTEN:3} ---)
@@ -2013,6 +2013,98 @@ exten => _s-!,n,Congestion(10)
 exten => exit,1,Playback(beep&line-busy-transfer-menu&silence/1)
 exten => exit,n,MacroExit()
 EXTENVM_OVERRIDE
+    fi
+
+    if ! grep -q '\[sub-record-check\]' "$OVERRIDE_CONF"; then
+        echo "  Adding [sub-record-check] recording balance override to $OVERRIDE_CONF..."
+        cat >> "$OVERRIDE_CONF" << 'SUBRECORD_OVERRIDE'
+
+; === Sokrat VoIP: Recording Volume Balance Override (MixMonitor v(3)V(-1)) ===
+; Boosts the heard audio (remote customer) by ~+9 dB and gently tames the
+; spoken audio (local agent microphone) by ~-3 dB in the recorded audio file on disk,
+; ensuring clean, balanced call recordings without altering the live call audio.
+[sub-record-check]
+include => sub-record-check-custom
+exten => s,1,Set(REC_POLICY_MODE_SAVE=${REC_POLICY_MODE})
+exten => s,n,GotoIf($["${BLINDTRANSFER}" = ""]?check)
+exten => s,n,ResetCDR()
+exten => s,n,GotoIf($["${REC_STATUS}" != "RECORDING"]?check)
+exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
+exten => s,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},a${MIXMON_OPTS},${MIXMON_POST})
+exten => s,n(check),Set(__MON_FMT=${IF($["${MIXMON_FORMAT}"="wav49"]?WAV:${MIXMON_FORMAT})})
+exten => s,n,GotoIf($["${REC_STATUS}"!="RECORDING"]?next)
+exten => s,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
+exten => s,n,Return()
+exten => s,n(next),ExecIf($[!${LEN(${ARG1})}]?Return())
+exten => s,n,ExecIf($["${REC_POLICY_MODE}"="" & "${ARG3}"!=""]?Set(__REC_POLICY_MODE=${ARG3}))
+exten => s,n,GotoIf($["${REC_STATUS}"!=""]?${ARG1},1)
+exten => s,n,Set(__REC_STATUS=INITIALIZED)
+exten => s,n,Set(NOW=${EPOCH})
+exten => s,n,Set(__DAY=${STRFTIME(${NOW},,%d)})
+exten => s,n,Set(__MONTH=${STRFTIME(${NOW},,%m)})
+exten => s,n,Set(__YEAR=${STRFTIME(${NOW},,%Y)})
+exten => s,n,Set(__TIMESTR=${YEAR}${MONTH}${DAY}-${STRFTIME(${NOW},,%H%M%S)})
+exten => s,n,Set(__FROMEXTEN=${IF($[${LEN(${AMPUSER})}]?${AMPUSER}:${IF($[${LEN(${REALCALLERIDNUM})}]?${REALCALLERIDNUM}:${CALLERID(num)})})})
+exten => s,n,Set(__CALLFILENAME=${ARG1}-${ARG2}-${FROMEXTEN}-${TIMESTR}-${UNIQUEID})
+exten => s,n,Goto(${ARG1},1)
+
+exten => rg,1,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${REC_POLICY_MODE},${FROMEXTEN}))
+exten => rg,n,Return()
+
+exten => force,1,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${REC_POLICY_MODE},${FROMEXTEN}))
+exten => force,n,Return()
+
+exten => q,1,GosubIf($["${REC_POLICY_MODE}"="always"]?recq,1(${EXTEN},${ARG2},${FROMEXTEN}))
+exten => q,n,Return()
+
+exten => out,1,ExecIf($["${REC_POLICY_MODE}"=""]?Set(__REC_POLICY_MODE=${DB(AMPUSER/${FROMEXTEN}/recording/out/external)}))
+exten => out,n,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(exten,${ARG2},${FROMEXTEN}))
+exten => out,n,Return()
+
+exten => exten,1,GotoIf($["${REC_POLICY_MODE}"!=""]?callee)
+exten => exten,n,Set(__REC_POLICY_MODE=${IF($[${LEN(${FROM_DID})}]?${DB(AMPUSER/${ARG2}/recording/in/external)}:${DB(AMPUSER/${ARG2}/recording/in/internal)})})
+exten => exten,n,GotoIf($["${REC_POLICY_MODE}"="dontcare"]?caller)
+exten => exten,n,GotoIf($["${DB(AMPUSER/${FROMEXTEN}/recording/out/internal)}"="dontcare" | "${FROM_DID}"!=""]?callee)
+exten => exten,n,ExecIf($[${LEN(${DB(AMPUSER/${FROMEXTEN}/recording/priority)})}]?Set(CALLER_PRI=${DB(AMPUSER/${FROMEXTEN}/recording/priority)}):Set(CALLER_PRI=0))
+exten => exten,n,ExecIf($[${LEN(${DB(AMPUSER/${ARG2}/recording/priority)})}]?Set(CALLEE_PRI=${DB(AMPUSER/${ARG2}/recording/priority)}):Set(CALLEE_PRI=0))
+exten => exten,n,GotoIf($["${CALLER_PRI}"="${CALLEE_PRI}"]?${REC_POLICY}:${IF($[${CALLER_PRI}>${CALLEE_PRI}]?caller:callee)})
+exten => exten,n(callee),GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${ARG2},${FROMEXTEN}))
+exten => exten,n,Return()
+exten => exten,n(caller),Set(__REC_POLICY_MODE=${DB(AMPUSER/${FROMEXTEN}/recording/out/internal)})
+exten => exten,n,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${ARG2},${FROMEXTEN}))
+exten => exten,n,Return()
+
+exten => conf,1,Gosub(recconf,1(${EXTEN},${ARG2},${ARG2}))
+exten => conf,n,Return()
+
+exten => page,1,GosubIf($["${REC_POLICY_MODE}"="always"]?recconf,1(${EXTEN},${ARG2},${FROMEXTEN}))
+exten => page,n,Return()
+
+exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
+exten => record,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
+exten => record,n,Set(__REC_STATUS=RECORDING)
+exten => record,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
+exten => record,n,Return()
+
+exten => recq,1,Set(MONITOR_FILENAME=${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME})
+exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
+exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS}${MONITOR_OPTIONS},${MIXMON_POST})
+exten => recq,n,Set(__REC_STATUS=RECORDING)
+exten => recq,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
+exten => recq,n,Return()
+
+exten => recconf,1,Set(__CALLFILENAME=${IF($[${CONFBRIDGE_INFO(parties,${ARG2})}]?${DB(RECCONF/${ARG2})}:${ARG1}-${ARG2}-${ARG3}-${TIMESTR}-${UNIQUEID})})
+exten => recconf,n,ExecIf($[!${CONFBRIDGE_INFO(parties,${ARG2})}]?Set(DB(RECCONF/${ARG2})=${CALLFILENAME}))
+exten => recconf,n,Set(CONFBRIDGE(bridge,record_file)=${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MON_FMT})
+exten => recconf,n,ExecIf($["${REC_POLICY_MODE}"!="always"]?Return())
+exten => recconf,n,Set(CONFBRIDGE(bridge,record_conference)=yes)
+exten => recconf,n,Set(CONFBRIDGE(bridge,record_file_timestamp)=no)
+exten => recconf,n,Set(__REC_STATUS=RECORDING)
+exten => recconf,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
+exten => recconf,n,Return()
+
+;--== end of [sub-record-check] ==--;
+SUBRECORD_OVERRIDE
     fi
 fi
 
