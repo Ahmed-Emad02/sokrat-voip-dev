@@ -1,3 +1,15 @@
+diff --git a/ast_compat.h b/ast_compat.h
+index 1ad407a..dec019b 100644
+--- a/ast_compat.h
++++ b/ast_compat.h
+@@ -54,3 +54,7 @@ static inline struct ast_format ast_channel_writeformat(const struct ast_channel
+ #endif /* ^11- */
+ 
+ #endif /* CHAN_DONGLE_AST_COMPAT_H_INCLUDED */
++
++#ifndef DEBUG_ATLEAST
++#define DEBUG_ATLEAST(level) (option_debug >= (level))
++#endif
 diff --git a/at_command.c b/at_command.c
 index 5f0137e..28b7e90 100644
 --- a/at_command.c
@@ -273,7 +285,7 @@ index 72e9b51..40e4b0d 100644
  //	struct ringbuffer	a_write_rb;			/*!< audio ring buffer */
  
 diff --git a/channel.c b/channel.c
-index 3cb2815..a69acbd 100644
+index 3cb2815..e0f9f6d 100644
 --- a/channel.c
 +++ b/channel.c
 @@ -17,6 +17,8 @@
@@ -285,6 +297,15 @@ index 3cb2815..a69acbd 100644
  
  #include "ast_compat.h"
  #if ASTERISK_VERSION_NUM >= 130000 /* 13+ */
+@@ -338,7 +340,7 @@ static void activate_call(struct cpvt* cpvt)
+ 			if(cpvt2->channel)
+ 			{
+ 				ast_channel_set_fd (cpvt2->channel, 1, -1);
+-				if(CPVT_TEST_FLAG(cpvt, CALL_FLAG_ACTIVATED))
++				if(CPVT_TEST_FLAG(cpvt2, CALL_FLAG_ACTIVATED))
+ 				{
+ 					ast_channel_set_fd (cpvt2->channel, 0, cpvt2->rd_pipe[PIPE_READ]);
+ 					ast_debug (6, "[%s] call idx %d still active fd %d\n", PVT_ID(pvt), cpvt2->call_idx, cpvt2->rd_pipe[PIPE_READ]);
 @@ -359,6 +361,8 @@ static void activate_call(struct cpvt* cpvt)
  
  	if (pvt->audio_fd >= 0)
