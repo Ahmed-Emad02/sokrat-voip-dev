@@ -2,7 +2,64 @@
 <html lang="<%= currentLang %>" dir="<%= currentLang === 'ar' ? 'rtl' : 'ltr' %>" class="h-full">
 <head>
     <script>
-        (function() {
+    function copyCrmEndpoint() {
+        var input = document.getElementById('crmApiEndpointUrl');
+        if (!input) return;
+        input.select();
+        input.setSelectionRange(0, 99999);
+        try {
+            document.execCommand('copy');
+        } catch (_) {}
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(input.value).catch(function() {});
+        }
+        var label = document.getElementById('btnCopyEndpointText');
+        if (label) {
+            var orig = label.textContent;
+            label.textContent = '<%= currentLang === "ar" ? "تم النسخ!" : "Copied!" %>';
+            setTimeout(function() { label.textContent = orig; }, 2000);
+        }
+    }
+
+    function copyPairingCode() {
+        var el = document.getElementById('pairingCodeValue');
+        if (!el) return;
+        var code = el.textContent.trim();
+        if (!code) return;
+        try {
+            var temp = document.createElement('textarea');
+            temp.value = code;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+        } catch (_) {}
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(code).catch(function() {});
+        }
+        var label = document.getElementById('btnCopyPairingText');
+        if (label) {
+            var orig = label.textContent;
+            label.textContent = '<%= currentLang === "ar" ? "تم النسخ!" : "Copied!" %>';
+            setTimeout(function() { label.textContent = orig; }, 2000);
+        }
+    }
+
+    // Auto-populate URL on load
+    function initCrmEndpointUrl() {
+        var input = document.getElementById('crmApiEndpointUrl');
+        if (input) {
+            var host = window.location.hostname || '100.98.185.86';
+            input.value = 'http://' + host + ':8080/api/integrations/crm/v1';
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCrmEndpointUrl);
+    } else {
+        initCrmEndpointUrl();
+    }
+
+    (function() {
             const theme = localStorage.getItem('theme') || 'dark';
             if (theme === 'light') { document.documentElement.classList.add('light-theme'); }
             else { document.documentElement.classList.remove('light-theme'); }
@@ -166,7 +223,7 @@
                         <input type="text" id="crmApiEndpointUrl" readonly 
                                class="font-mono text-xs px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] w-full md:w-[380px] focus:outline-none select-all" 
                                value="http://100.98.185.86:8080/api/integrations/crm/v1">
-                        <button type="button" id="btnCopyEndpointUrl" class="btn-primary px-3 py-2 text-xs font-bold whitespace-nowrap flex items-center gap-1.5 cursor-pointer" title="Copy to clipboard">
+                        <button type="button" id="btnCopyEndpointUrl" onclick="copyCrmEndpoint()" class="btn-primary px-3 py-2 text-xs font-bold whitespace-nowrap flex items-center gap-1.5 cursor-pointer" title="Copy to clipboard">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -188,6 +245,7 @@
                 </div>
                 <div class="mt-4 flex items-center gap-4">
                     <div id="pairingCodeValue" class="font-mono text-3xl font-black tracking-widest bg-black/40 px-5 py-2.5 rounded-xl border border-emerald-500/30 text-white"></div>
+                    <button type="button" id="btnCopyPairingCode" onclick="copyPairingCode()" class="btn-primary px-3 py-2 text-xs font-bold flex items-center gap-1 cursor-pointer" title="Copy pairing code"><span id="btnCopyPairingText"><%= currentLang === "ar" ? "نسخ الكود" : "Copy PIN" %></span></button>
                     <span class="text-xs text-emerald-400 font-mono" id="pairingCodeExpires"></span>
                 </div>
             </div>
