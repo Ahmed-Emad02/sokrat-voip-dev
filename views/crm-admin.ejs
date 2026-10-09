@@ -143,6 +143,40 @@
                 </button>
             </div>
 
+                        <!-- CRM Integration API Endpoint Card -->
+            <div class="panel-surface border border-[var(--border-primary)] rounded-2xl p-5 bg-[var(--bg-card)]">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[var(--accent-color)]">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                            <h2 class="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">
+                                <%= currentLang === 'ar' ? 'رابط خادم PBX للربط مع CRM' : 'CRM Integration API Endpoint' %>
+                            </h2>
+                        </div>
+                        <p class="text-xs text-[var(--text-secondary)] mt-1">
+                            <%= currentLang === 'ar' 
+                                ? 'انسخ هذا الرابط وألصقه في حقل \'رابط خادم السنترال (PBX)\' في شاشة إعدادات CRM' 
+                                : 'Copy this URL into the \'PBX Server URL\' field in your CRM VoIP settings' %>
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2 w-full md:w-auto">
+                        <input type="text" id="crmApiEndpointUrl" readonly 
+                               class="font-mono text-xs px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] w-full md:w-[380px] focus:outline-none select-all" 
+                               value="http://100.98.185.86:8080/api/integrations/crm/v1">
+                        <button type="button" id="btnCopyEndpointUrl" class="btn-primary px-3 py-2 text-xs font-bold whitespace-nowrap flex items-center gap-1.5 cursor-pointer" title="Copy to clipboard">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            <span id="btnCopyEndpointText"><%= currentLang === 'ar' ? 'نسخ الرابط' : 'Copy URL' %></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Pairing Code Banner -->
             <div id="pairingCodeBanner" class="hidden bg-emerald-950/60 border border-emerald-500/40 rounded-2xl p-5 text-emerald-200">
                 <div class="flex items-start justify-between">
