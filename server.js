@@ -12034,37 +12034,74 @@ async function getCurrentPjsipSecret(extNum) {
 }
 
 function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create') {
-    const pjsipPath = '/etc/asterisk/pjsip_custom_post.conf';
-
+    const pjsipPath = '/etc/asterisk/pjsip_custom.conf';
     let content = '';
     try {
         if (fs.existsSync(pjsipPath)) {
             content = fs.readFileSync(pjsipPath, 'utf8');
         }
     } catch (e) {
-        console.error('Error reading pjsip_custom_post.conf:', e.message);
+        console.error('Error reading pjsip_custom.conf:', e.message);
     }
 
     const startMarker = `; BEGIN WEBRTC EXTENSION ${extNum}`;
     const endMarker = `; END WEBRTC EXTENSION ${extNum}`;
 
-    const markerRegex = new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g');
+    const markerRegex = new RegExp(`${startMarker}[\s\S]*?${endMarker}\r?\n?`, 'g');
     content = content.replace(markerRegex, '');
 
-    const sectionRegex = new RegExp(`\\[${extNum}\\]\\(\\+[^)]*\\)[\\s\\S]*?(?=\\n\\[|\\n\\n|$)`, 'g');
-    content = content.replace(sectionRegex, '');
+    const bareSectionRegex = new RegExp(`\[(${extNum}|${extNum}-auth)\][\s\S]*?(?=\n\[|\n; BEGIN|$)`, 'g');
+    content = content.replace(bareSectionRegex, '');
 
     content = content.trim();
 
     if (action !== 'delete') {
-        const newBlock = `\n${startMarker}\n[${extNum}](+)\nwebrtc=yes\nice_support=yes\nuse_avpf=yes\nmedia_use_received_transport=yes\ndirect_media=no\nrtcp_mux=yes\nmedia_encryption=dtls\ndtls_cert_file=/etc/asterisk/keys/asterisk.pem\ndtls_private_key=/etc/asterisk/keys/asterisk.pem\ndtls_ca_file=/etc/asterisk/keys/asterisk.pem\ndtls_verify=fingerprint\ndtls_setup=actpass\n\n[${extNum}](+type=aor)\nmax_contacts=10\nremove_existing=no\nremove_unavailable=yes\n${endMarker}`;
+        const safeSecret = String(secret || '').trim();
+        const safeName = String(displayName || `Extension ${extNum}`).trim();
+        const newBlock = `
+${startMarker}
+[${extNum}]
+type=endpoint
+context=from-internal
+disallow=all
+allow=opus,ulaw,alaw
+dtls_auto_generate_cert=yes
+webrtc=yes
+media_encryption=dtls
+dtls_verify=fingerprint
+dtls_setup=actpass
+ice_support=yes
+use_avpf=yes
+rtcp_mux=yes
+force_rport=yes
+rewrite_contact=yes
+auth=${extNum}-auth
+aors=${extNum}
+callerid=${safeName} <${extNum}>
+
+[${extNum}-auth]
+type=auth
+auth_type=userpass
+username=${extNum}
+password=${safeSecret}
+
+[${extNum}]
+type=aor
+max_contacts=5
+remove_existing=yes
+qualify_frequency=30
+${endMarker}
+`;
         content += (content ? '\n' : '') + newBlock;
     }
+
     try {
         fs.writeFileSync(pjsipPath, (content ? content.trim() + '\n' : ''), 'utf8');
     } catch (e) {
-        console.error('Error writing pjsip_custom_post.conf:', e.message);
+        console.error('Error writing pjsip_custom.conf:', e.message);
     }
+
+    reloadPjsip();
 }
 
 function reloadPjsip() {
