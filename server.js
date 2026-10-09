@@ -1718,11 +1718,19 @@ async function requireAuth(req, res, next) {
             }
         } catch (_) {}
     }
-    if (req.path.startsWith('/api/') || req.path.startsWith('/integrations/') || req.path.startsWith('/audio/') || req.path.startsWith('/voicemail/audio/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
+        const isApiRequest = req.path.startsWith('/api/') || 
+                         req.path.startsWith('/audio/') || 
+                         req.path.startsWith('/recordings/') || 
+                         (req.path.startsWith('/integrations/') && req.path !== '/integrations/crm') || 
+                         req.xhr || 
+                         (req.headers.accept && req.headers.accept.includes('application/json') && !req.headers.accept.includes('text/html'));
+
+    if (isApiRequest) {
         return res.status(401).json({ success: false, error: 'Unauthorized. Please log in or provide a valid X-API-Key header.' });
     }
+
     const loginUrl = '/login' + (req.originalUrl !== '/' ? '?redirect=' + encodeURIComponent(req.originalUrl) : '');
-    res.redirect(loginUrl);
+    return res.redirect(loginUrl);
 }
 
 function requireActionPermission(actionPermission) {
@@ -19756,7 +19764,15 @@ app.post('/log_error', (req, res) => {
 });
 // --- SOKRAT SUPER ADMIN CRM INTEGRATION MANAGEMENT ROUTES ---
 app.get('/integrations/crm', requireAuth, async (req, res) => {
-    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) return res.redirect('/');
+    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+        const currentLang = (req.session && req.session.lang) || 'en';
+        return res.status(403).render('403', {
+            currentLang,
+            isRtl: currentLang === 'ar',
+            username: (req.session && req.session.username) || 'user',
+            permission: 'crm-integrations'
+        });
+    }
     try {
         const [clients] = await pool.query('SELECT id, client_id, name, allowed_origin, default_country_code, allowed_scopes, created_at, last_used_at, revoked_at FROM `asterisk`.`dashboard_crm_clients` ORDER BY id DESC');
         const [auditLogs] = await pool.query('SELECT id, client_id, crm_user_id, supervisor_extension, target_extension, action, success, details, created_at FROM `asterisk`.`dashboard_crm_audit_logs` ORDER BY id DESC LIMIT 100');

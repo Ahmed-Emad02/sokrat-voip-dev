@@ -649,56 +649,129 @@ const isRtl = activeLang === 'ar';
                         : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allAgents) %>}</span>`;
 
                     const card = document.createElement('div');
-                    card.className = 'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 flex flex-col justify-between';
+                    card.className = 'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 flex flex-col justify-between shadow-lg hover:border-[var(--border-hover,rgba(255,255,255,0.15))] transition-all relative';
                     card.innerHTML = `
                         <div>
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-base font-extrabold text-[var(--text-primary)] truncate">${escapeHtml(c.name)}</h4>
-                                <div class="flex items-center gap-1.5 shrink-0">
-                                    ${c.mask_phone_numbers ? `<span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-purple-500/20 text-purple-400 border border-purple-500/30" title="${<%- JSON.stringify(isRtl ? 'تم إخفاء الأرقام الوسطى لحماية الخصوصية' : 'Middle digits masked for agent privacy') %>}">${<%- JSON.stringify(isRtl ? 'إخفاء الرقم' : 'Masked CID') %>}</span>` : ''}
-                                    <span class="px-2 py-0.5 text-[10px] font-extrabold rounded uppercase ${c.status === 'running' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (c.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-slate-500/20 text-slate-400')}">${escapeHtml(c.status === 'running' ? (isRtl ? 'نشط' : 'running') : (c.status === 'completed' ? (isRtl ? 'مكتمل' : 'completed') : (c.status === 'paused' ? (isRtl ? 'متوقف مؤقتاً' : 'paused') : c.status)))}</span>
+                            <!-- Header: Title, Mode Pill, Status & 3-Dot Menu -->
+                            <div class="flex items-start justify-between gap-2 mb-3">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <h4 class="text-base font-extrabold text-[var(--text-primary)] truncate max-w-[200px]" title="${escapeHtml(c.name || '')}">${escapeHtml(c.name || 'Untitled')}</h4>
+                                        <span class="px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-muted)] shrink-0">${escapeHtml(c.mode || 'progressive')}</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1.5 shrink-0 relative">
+                                    ${c.mask_phone_numbers ? `<span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">🔒 <span class="hidden sm:inline">${<%- JSON.stringify(t.mask) %>}</span></span>` : ''}
+                                    <span class="px-2.5 py-0.5 text-[10px] font-extrabold rounded-full uppercase tracking-wider ${
+                                        c.status === 'running' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]' :
+                                        c.status === 'paused' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                        c.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                        'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                                    }">${c.status}</span>
+                                    
+                                    <!-- 3-Dot Dropdown -->
+                                    <div class="relative">
+                                        <button type="button" onclick="toggleCampaignMenu(event, ${c.id})" class="p-1.5 rounded-lg hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-white transition cursor-pointer" title="More Options">
+                                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                                        </button>
+                                        <div id="campaignMenu-${c.id}" class="hidden campaign-dropdown-menu absolute right-0 top-full mt-1 w-44 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] shadow-2xl z-30 py-1.5 text-xs font-semibold backdrop-blur-md">
+                                            <button onclick="openEditCampaignModal(${JSON.stringify(c).replace(/"/g, '&quot;')})" class="w-full text-start px-3 py-2 hover:bg-[var(--bg-card)] text-[var(--text-primary)] flex items-center gap-2 cursor-pointer">
+                                                <svg class="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                                <span>${<%- JSON.stringify(isRtl ? 'تعديل الحملة' : 'Edit Campaign') %>}</span>
+                                            </button>
+                                            <button onclick="controlCampaign(${c.id}, 'reset')" class="w-full text-start px-3 py-2 hover:bg-[var(--bg-card)] text-[var(--text-primary)] flex items-center gap-2 cursor-pointer">
+                                                <svg class="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                                <span>${<%- JSON.stringify(isRtl ? 'إعادة تعيين الأرقام' : 'Reset Leads') %>}</span>
+                                            </button>
+                                            <a href="/api/dialer/leads/template?campaign_id=${c.id}" class="w-full text-start px-3 py-2 hover:bg-[var(--bg-card)] text-[var(--text-primary)] flex items-center gap-2 cursor-pointer">
+                                                <svg class="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                                <span>${<%- JSON.stringify(isRtl ? 'نموذج الإكسيل' : 'Download Template') %>}</span>
+                                            </a>
+                                            <div class="my-1 border-t border-[var(--border-primary)]"></div>
+                                            <button onclick="controlCampaign(${c.id}, 'delete')" class="w-full text-start px-3 py-2 hover:bg-rose-950/40 text-rose-400 flex items-center gap-2 cursor-pointer">
+                                                <svg class="w-3.5 h-3.5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                <span>${<%- JSON.stringify(isRtl ? 'حذف الحملة' : 'Delete Campaign') %>}</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="space-y-1.5 mb-3 text-xs">
-                                <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[var(--text-muted)] text-[10px] uppercase font-bold">${<%- JSON.stringify(isRtl ? 'الشرائح:' : 'Dongles:') %>}</span> ${dongleBadges}</div>
-                                <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[var(--text-muted)] text-[10px] uppercase font-bold">${<%- JSON.stringify(isRtl ? 'الموظفون:' : 'Agents:') %>}</span> ${agentBadges}</div>
-                            </div>
-                            <!-- PROGRESS BAR & CONNECT RATE -->
-                            <div class="mb-3">
-                                <div class="flex items-center justify-between text-[11px] font-mono text-[var(--text-muted)] mb-1">
-                                    <span>${<%- JSON.stringify(isRtl ? 'التقدم:' : 'Progress:') %>} <strong class="text-white">${progressPct}%</strong></span>
-                                    <span>${<%- JSON.stringify(isRtl ? 'نسبة الرد:' : 'Connect Rate:') %>} <strong class="text-emerald-400">${connectRate}%</strong></span>
+
+                            <!-- Meta Strip: Dongles & Agents -->
+                            <div class="flex items-center gap-2 mb-3.5 text-[11px] flex-wrap">
+                                <div class="flex items-center gap-1.5 bg-[var(--bg-card)] px-2.5 py-1 rounded-lg border border-[var(--border-primary)]">
+                                    <span class="text-[var(--text-muted)] text-[10px] font-bold uppercase">${<%- JSON.stringify(t.dongles) %>}:</span>
+                                    ${dongleBadges}
                                 </div>
-                                <div class="w-full bg-[var(--bg-card)] rounded-full h-1.5 overflow-hidden border border-[var(--border-primary)]">
-                                    <div class="bg-emerald-500 h-1.5 transition-all duration-300" style="width: ${progressPct}%"></div>
+                                <div class="flex items-center gap-1.5 bg-[var(--bg-card)] px-2.5 py-1 rounded-lg border border-[var(--border-primary)]">
+                                    <span class="text-[var(--text-muted)] text-[10px] font-bold uppercase">${<%- JSON.stringify(t.agents) %>}:</span>
+                                    ${agentBadges}
                                 </div>
                             </div>
+
+                            <!-- Progress Bar & Connect Rate -->
+                            <div class="mb-4 bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border-primary)]">
+                                <div class="flex items-center justify-between text-xs font-mono mb-1.5">
+                                    <span class="text-[var(--text-muted)]">${<%- JSON.stringify(isRtl ? 'التقدم:' : 'Progress:') %>} <strong class="text-white font-bold text-xs">${progressPct}%</strong></span>
+                                    <span class="text-[var(--text-muted)]">${<%- JSON.stringify(isRtl ? 'نسبة الرد:' : 'Connect Rate:') %>} <strong class="text-emerald-400 font-bold text-xs">${connectRate}%</strong></span>
+                                </div>
+                                <div class="w-full bg-[var(--bg-primary)] rounded-full h-2 overflow-hidden border border-[var(--border-primary)]/40">
+                                    <div class="h-2 rounded-full transition-all duration-500 ${c.status === 'running' ? 'bg-emerald-500' : 'bg-emerald-600'}" style="width: ${progressPct}%"></div>
+                                </div>
+                            </div>
+
+                            <!-- Metric Stat Cards -->
                             <div class="grid grid-cols-4 gap-2 mb-4 text-center">
-                                <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.total) %>}</span><span class="text-sm font-black">${total}</span></div>
-                                <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.pending) %>}</span><span class="text-sm font-black text-amber-400">${pending}</span></div>
-                                <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.connected) %>}</span><span class="text-sm font-black text-emerald-400">${connected}</span></div>
-                                <div class="bg-[var(--bg-card)] p-2 rounded-lg"><span class="text-[10px] text-[var(--text-muted)] uppercase block">${<%- JSON.stringify(t.failed) %>}</span><span class="text-sm font-black text-rose-400">${failed}</span></div>
+                                <div class="bg-[var(--bg-card)] py-2 px-1 rounded-xl border border-[var(--border-primary)]/50">
+                                    <span class="text-[9px] text-[var(--text-muted)] uppercase font-bold tracking-wider block mb-0.5">${<%- JSON.stringify(t.total) %>}</span>
+                                    <span class="text-base font-black text-white font-mono">${total}</span>
+                                </div>
+                                <div class="bg-[var(--bg-card)] py-2 px-1 rounded-xl border border-[var(--border-primary)]/50">
+                                    <span class="text-[9px] text-amber-400/90 uppercase font-bold tracking-wider block mb-0.5">${<%- JSON.stringify(t.pending) %>}</span>
+                                    <span class="text-base font-black text-amber-400 font-mono">${pending}</span>
+                                </div>
+                                <div class="bg-[var(--bg-card)] py-2 px-1 rounded-xl border border-[var(--border-primary)]/50">
+                                    <span class="text-[9px] text-emerald-400/90 uppercase font-bold tracking-wider block mb-0.5">${<%- JSON.stringify(t.connected) %>}</span>
+                                    <span class="text-base font-black text-emerald-400 font-mono">${connected}</span>
+                                </div>
+                                <div class="bg-[var(--bg-card)] py-2 px-1 rounded-xl border border-[var(--border-primary)]/50">
+                                    <span class="text-[9px] text-rose-400/90 uppercase font-bold tracking-wider block mb-0.5">${<%- JSON.stringify(t.failed) %>}</span>
+                                    <span class="text-base font-black text-rose-400 font-mono">${failed}</span>
+                                </div>
                             </div>
                         </div>
-                        <div class="flex flex-wrap items-center justify-center gap-2 pt-3 border-t border-[var(--border-primary)]">
-                            ${c.status === 'running'
-                                ? `<button onclick="controlCampaign(${c.id}, 'pause')" class="dialer-control dialer-control-warning">${<%- JSON.stringify(t.pause) %>}</button>`
-                                : `<button onclick="controlCampaign(${c.id}, 'start')" class="dialer-control dialer-control-primary">${<%- JSON.stringify(t.start) %>}</button>`
-                            }
-                            <button onclick="controlCampaign(${c.id}, 'reset')" class="dialer-control dialer-control-neutral" title="${<%- JSON.stringify(isRtl ? 'إعادة ضبط الأرقام غير المتصلة إلى قيد الانتظار' : 'Reset non-connected leads to pending') %>}">${<%- JSON.stringify(t.resetLeads) %>}</button>
-                            <button onclick="openImportModal(${c.id})" class="dialer-control dialer-control-info">${<%- JSON.stringify(isRtl ? '+ استيراد' : '+ Import') %>}</button>
-                            <button onclick="openManualLeadModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(normalizeLeadFields(c.lead_fields)))})" class="dialer-control dialer-control-primary">${<%- JSON.stringify(t.addLead) %>}</button>
-                            <button onclick="openViewLeadsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(normalizeLeadFields(c.lead_fields)))})" class="dialer-control dialer-control-purple">${<%- JSON.stringify(t.viewLeads) %>}</button>
-                            <a href="/api/dialer/leads/template?campaign_id=${c.id}" class="dialer-control dialer-control-neutral" title="${<%- JSON.stringify(t.downloadCampaignTemplate) %>}">
-                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                                <span>${<%- JSON.stringify(isRtl ? 'نموذج' : 'Template') %>}</span>
-                            </a>
-                            <a href="/api/dialer/campaigns/${c.id}/export" class="dialer-control dialer-control-neutral" title="${<%- JSON.stringify(isRtl ? 'تصدير الأرقام إلى CSV' : 'Export leads to CSV') %>}">
-                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                                <span>${<%- JSON.stringify(isRtl ? 'تصدير' : 'Export') %>}</span>
-                            </a>
-                            <button onclick="openEditCampaignModal(${JSON.stringify(c).replace(/"/g, '&quot;')})" class="dialer-control dialer-control-neutral">${<%- JSON.stringify(t.editCamp) %>}</button>
-                            <button onclick="controlCampaign(${c.id}, 'delete')" class="dialer-control dialer-control-danger">${<%- JSON.stringify(t.deleteCamp) %>}</button>
+
+                        <!-- Action Footer: Main Controls -->
+                        <div class="flex items-center justify-between gap-1.5 pt-3 border-t border-[var(--border-primary)] flex-wrap">
+                            <div class="flex items-center gap-1.5">
+                                ${c.status === 'running'
+                                    ? `<button onclick="controlCampaign(${c.id}, 'pause')" class="dialer-control dialer-control-warning shadow-md" title="Pause Campaign">
+                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        <span>${<%- JSON.stringify(t.pause) %>}</span>
+                                       </button>`
+                                    : `<button onclick="controlCampaign(${c.id}, 'start')" class="dialer-control dialer-control-primary shadow-md" title="Start Campaign">
+                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        <span>${<%- JSON.stringify(t.start) %>}</span>
+                                       </button>`
+                                }
+                                <button onclick="openViewLeadsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))})" class="dialer-control dialer-control-purple" title="View & Filter Leads">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                    <span>${<%- JSON.stringify(t.viewLeads) %>}</span>
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="openImportModal(${c.id})" class="dialer-control dialer-control-info" title="Import Leads from CSV / Excel">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                    <span>${<%- JSON.stringify(t.import) %>}</span>
+                                </button>
+                                <button onclick="openManualLeadModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))})" class="dialer-control dialer-control-neutral" title="Add Single Lead">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                    <span>${<%- JSON.stringify(isRtl ? 'إضافة' : 'Add') %>}</span>
+                                </button>
+                                <a href="/api/dialer/campaigns/${c.id}/export" class="dialer-control dialer-control-neutral px-2" title="Export Leads to CSV">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                </a>
+                            </div>
                         </div>
                     `;
                     container.appendChild(card);
@@ -883,6 +956,18 @@ const isRtl = activeLang === 'ar';
                 button.disabled = false;
             }
         }
+
+        
+        window.toggleCampaignMenu = function(event, id) {
+            event.stopPropagation();
+            const menu = document.getElementById(`campaignMenu-${id}`);
+            const isClosed = !menu || menu.classList.contains('hidden');
+            document.querySelectorAll('.campaign-dropdown-menu').forEach(m => m.classList.add('hidden'));
+            if (isClosed && menu) menu.classList.remove('hidden');
+        };
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.campaign-dropdown-menu').forEach(m => m.classList.add('hidden'));
+        });
 
         async function controlCampaign(id, action) {
             if (action === 'delete' && !confirm(<%- JSON.stringify(isRtl ? 'هل أنت متأكد من حذف هذه الحملة وجميع أرقامها؟' : 'Are you sure you want to delete this campaign and all its leads?') %>)) return;
