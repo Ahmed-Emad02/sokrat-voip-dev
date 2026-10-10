@@ -12097,8 +12097,9 @@ password=${safeSecret}
 
 [${extNum}]
 type=aor
-max_contacts=5
-remove_existing=yes
+max_contacts=10
+remove_existing=no
+remove_unavailable=yes
 qualify_frequency=30
 ${endMarker}
 `;
