@@ -12055,10 +12055,10 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create')
     const startMarker = `; BEGIN WEBRTC EXTENSION ${extNum}`;
     const endMarker = `; END WEBRTC EXTENSION ${extNum}`;
 
-    const markerRegex = new RegExp(`${startMarker}[\s\S]*?${endMarker}\r?\n?`, 'g');
+    const markerRegex = new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g');
     content = content.replace(markerRegex, '');
 
-    const bareSectionRegex = new RegExp(`\[(${extNum}|${extNum}-auth)\][\s\S]*?(?=\n\[|\n; BEGIN|$)`, 'g');
+    const bareSectionRegex = new RegExp(`\\[(${extNum}|${extNum}-auth)\\][\\s\\S]*?(?=\\n\\[|\\n; BEGIN|$)`, 'g');
     content = content.replace(bareSectionRegex, '');
 
     content = content.trim();
@@ -12459,6 +12459,7 @@ app.post('/api/config/extensions', async (req, res) => {
             extension: { extension: extNum, name: displayName, secret: extSecret, tech: devTech, isWebRTC }
         });
     } catch (error) {
+        console.error("[POST /api/config/extensions] Error:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
