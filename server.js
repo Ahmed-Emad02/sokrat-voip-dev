@@ -1367,9 +1367,10 @@ async function syncExtensionCallPickupGroups() {
         });
 
         const [extRows] = await pool.query(`
-            SELECT u.extension, ee.emp_group, ee.is_group_admin
+            SELECT u.extension, ee.emp_group, ee.is_group_admin, COALESCE(d.tech, "sip") AS tech
             FROM \`asterisk\`.\`users\` u
             LEFT JOIN \`asterisk\`.\`employee_extras\` ee ON u.extension = ee.extension
+            LEFT JOIN \`asterisk\`.\`devices\` d ON u.extension = d.id
         `);
 
         // Determine which groups (including ungrouped) have at least one designated Group Admin
@@ -1417,7 +1418,9 @@ async function syncExtensionCallPickupGroups() {
             const pjsipNamedCallgroupLine = `named_call_group=${namedGroup}\n`;
             const pjsipNamedPickupgroupLine = `named_pickup_group=${namedPickupGroup}\n`;
             sipCustomPostContent += `\n[${ext}](+)\n${callgroupLine}${pickupgroupLine}${namedCallgroupLine}${namedPickupgroupLine}`;
-            pjsipCustomPostContent += `\n[${ext}](+)\n${pjsipNamedCallgroupLine}${pjsipNamedPickupgroupLine}`;
+            if (row.tech === "pjsip") {
+                pjsipCustomPostContent += `\n[${ext}](+)\n${pjsipNamedCallgroupLine}${pjsipNamedPickupgroupLine}`;
+            }
 
             try {
                 await pool.query(`
