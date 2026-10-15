@@ -4,7 +4,7 @@
 ### Comprehensive Technical Reference for Asterisk 18 & Issabel 5 PBX Architecture
 **Complete Endpoint Inventory • Authentication • Dialplan Operations • Real-Time Media**
 
-[![API Version](https://img.shields.io/badge/API-v1.0.4-blue?style=for-the-badge)](package.json)
+[![API Version](https://img.shields.io/badge/API-v1.1.0-blue?style=for-the-badge)](package.json)
 [![Asterisk](https://img.shields.io/badge/Asterisk-18.19.0-f38b00?style=for-the-badge&logo=asterisk)](https://www.asterisk.org/)
 [![Issabel](https://img.shields.io/badge/Issabel-5.0.0-cb2026?style=for-the-badge)](https://www.issabel.org/)
 [![Node.js Version](https://img.shields.io/badge/Node.js-v22.x-68a063?style=for-the-badge&logo=node.js)](https://nodejs.org/)
@@ -6748,7 +6748,7 @@ curl -X GET http://localhost:8080/api/integrations/crm/v1/health
   "service": "sokrat-voip",
   "status": "ok",
   "api_version": "1.0",
-  "application_version": "1.0.4",
+  "application_version": "1.1.0",
   "timestamp": "2026-09-28T14:45:00.000Z"
 }
 ```

@@ -168,7 +168,7 @@ test('views/sidebar.ejs renders User and Version labels in English and Arabic', 
     });
 
     assert.ok(htmlEn.includes('User') && htmlEn.includes('Version'), 'Must render User and Version labels in English');
-    assert.ok(htmlEn.includes('v1.0.4'), 'Must render version text v1.0.4');
+    assert.ok(htmlEn.includes('v1.1.0'), 'Must render version text v1.1.0');
 
     const htmlAr = await ejs.renderFile(sidebarViewPath, {
         currentLang: 'ar',

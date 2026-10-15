@@ -61,7 +61,7 @@ test('views/sidebar.ejs includes light theme overrides for fallback classes', ()
     assert.ok(content.includes('.light-theme .bg-black\\/40'), 'sidebar.ejs should define .light-theme .bg-black/40 override');
     assert.ok(content.includes('.light-theme ::-webkit-scrollbar-thumb'), 'sidebar.ejs should define dark red scrollbar thumb for light theme');
     assert.ok(content.includes('#991b1b'), 'sidebar.ejs should use dark red #991b1b for light theme scrollbar');
-    assert.ok(content.includes('v1.0.4'), 'sidebar.ejs should display version v1.0.4');
+    assert.ok(content.includes('v1.1.0'), 'sidebar.ejs should display version v1.1.0');
 });
 
 test('views/gsm-dongles.ejs defines dark red scrollbar overrides for light theme', () => {

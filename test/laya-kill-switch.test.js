@@ -30,7 +30,7 @@ test('Schema & Multi-Installer Parity: laya_kill_switch_active is seeded across 
 
 test('UI Gating: Kill switch button in views/gsm-dongles.ejs is strictly wrapped in root-only check', () => {
     const ejsContent = fs.readFileSync(path.join(rootDir, 'views', 'gsm-dongles.ejs'), 'utf8');
-    assert.match(ejsContent, /<% if \(isRootUser\) \{\s*%>[\s\S]*?id="btn-laya-kill-switch"[\s\S]*?<% \}\s*%>/, 'Kill switch button must be strictly gated by <% if (isRootUser) { %>');
+    assert.match(ejsContent, /<% if \((?:typeof isRootUser !== 'undefined' && )?isRootUser\) \{\s*%>[\s\S]*?id="btn-laya-kill-switch"[\s\S]*?<% \}\s*%>/, 'Kill switch button must be strictly gated by isRootUser');
     assert.match(ejsContent, /id="laya-killed-banner"/, 'Must contain laya-killed-banner element');
     assert.match(ejsContent, /toggleLayaKillSwitch/, 'Must contain toggleLayaKillSwitch function');
 });

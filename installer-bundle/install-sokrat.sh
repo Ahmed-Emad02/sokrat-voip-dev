@@ -21,7 +21,7 @@ NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep -i '^mysqlrootpwd=' /etc/issabel.conf 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ' | xargs 2>/dev/null || echo "admin")
 if [ -z "$MYSQL_ROOT_PWD" ]; then MYSQL_ROOT_PWD="admin"; fi
 echo "============================================"
-echo " Sokrat VOIP Installer v1.0.4"
+echo " Sokrat VOIP Installer v1.1.0"
 echo " Target: Asterisk 18"
 echo "============================================"
 # Collect required interactive input BEFORE any system checks or package installations.

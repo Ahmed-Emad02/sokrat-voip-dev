@@ -2666,7 +2666,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
                         <span><%= isRtl ? 'تشخيص شامل الآن' : 'Run Fleet Triage' %></span>
                     </button>
-                    <% if (isRootUser) { %>
+                    <% if (typeof isRootUser !== 'undefined' && isRootUser) { %>
                     <button type="button" onclick="toggleLayaKillSwitch()" id="btn-laya-kill-switch" class="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="<%= isRtl ? 'مفتاح إيقاف الطوارئ للمساعد الذكي لَيا (صلاحية root فقط)' : 'Emergency kill switch for Laya Agent (root only)' %>">
                         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
                         <span id="btn-laya-kill-switch-label"><%= isRtl ? 'إيقاف الطوارئ (Kill)' : 'Kill Switch' %></span>

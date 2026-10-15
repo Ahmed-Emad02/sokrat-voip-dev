@@ -4,6 +4,7 @@
 ### Next-Generation Enterprise PBX Analytics, WebRTC Softphone & Campaign Switchboard
 **Engineered for Issabel 5 & Asterisk 18 on Rocky Linux 8**
 
+[![Version](https://img.shields.io/badge/version-v1.1.0-blue?style=for-the-badge)](package.json)
 [![Node.js Version](https://img.shields.io/badge/node.js-v22.x-68a063?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 [![Asterisk](https://img.shields.io/badge/Asterisk-18.19.0-f38b00?style=for-the-badge&logo=asterisk)](https://www.asterisk.org/)
 [![Issabel](https://img.shields.io/badge/Issabel-5.0.0-cb2026?style=for-the-badge)](https://www.issabel.org/)
@@ -74,6 +75,8 @@ curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/u
 | 📱 **Mobile Push Gateway** | Dedicated microservice waking up iOS and Android mobile softphones via Apple Push Notification Service (APNS) and Firebase Cloud Messaging (FCM). |
 | 🕵️ **Live Operator Switchboard** | Real-time extension matrix showing idle, ringing, and in-call channels with live duration timers. One-click **Listen**, **Whisper**, and **Barge** via Asterisk ChanSpy. |
 | 📶 **GSM Dongle Engine** | Direct multi-modem monitoring (up to 25 dongles). Live RSSI signal gauges, SMS inbox/composer with reply threads, USSD execution console, and hardware disconnect popups. |
+| 🛡️ **Laya GSM Autonomous Agent** | Autonomous self-healing daemon monitoring dongle health and registration. Features heuristic anomaly detection, 5-level recovery ladder, off-hours scheduled 1-by-1 sequential restarts with 0-call active guards, and a root-only Emergency Kill Switch. |
+| 🔍 **IP Scanner & Web Console** | Physical local LAN scanner with strict VPN network isolation. Discovers active VoIP devices, open ports, and live HTTP/HTTPS server banners/titles. Includes a built-in reverse proxy bridge to configure remote devices directly over VPN. |
 | 📢 **Smart Audio Studio** | Built-in sound studio: upload MP3, WAV, OGG, AAC, or FLAC up to 50 MB; auto-converts via static `ffmpeg` to Asterisk-compatible 8000 Hz / 16-bit mono PCM WAV and registers directly in Issabel IVR. |
 | 🤖 **AI Speech-to-Text** | Background transcription daemon transcribing recorded calls and indexing transcripts for instant full-text search across the CDR database. |
 | 🎯 **Outbound Campaign Dialer** | Create progressive/predictive calling campaigns, import contact lists from Excel/CSV, track lead attempts, agent allocations, and export call disposition reports. |
@@ -102,8 +105,9 @@ curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/u
 ```text
 /opt/sokrat-voip/
 ├── server.js               # Main Express + Socket.IO server (REST API, AMI & Live Engine)
+├── laya/                   # Sokrat Laya Autonomous GSM Watcher & Healing Daemon Engine
 ├── routes/                 # Modular API routes (CRM, Dialer, Recordings, Dongles)
-├── lib/                    # Core libraries (CDR aggregation, Phone normalization, Auth)
+├── lib/                    # Core libraries (IP Scanner & Web Proxy, CDR, Auth)
 ├── views/                  # EJS Frontend Templates (Tailwind v4, ECharts 5, JetBrains Mono)
 ├── public/                 # Static assets, WebRTC softphone UI core, custom audio players
 ├── installer-bundle/       # 100% Offline Rocky Linux 8 Appliance & Dependencies

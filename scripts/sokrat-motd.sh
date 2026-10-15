@@ -29,7 +29,7 @@ echo -e "  ███████╗██║   ██║█████╔╝ �
 echo -e "  ╚════██║██║   ██║██╔═██╗ ██╔══██╗██╔══██║   ██║   "
 echo -e "  ███████║╚██████╔╝██║  ██╗██║  ██║██║  ██║   ██║   "
 echo -e "  ╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ${RESET}"
-echo -e "  ${WHITE}${BOLD}SOKRAT VOIP Enterprise PBX Dashboard v1.0.4${RESET}"
+echo -e "  ${WHITE}${BOLD}SOKRAT VOIP Enterprise PBX Dashboard v1.1.0${RESET}"
 echo ""
 
 # Web URL

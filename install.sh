@@ -18,7 +18,7 @@ PUSH_GATEWAY_REPO=https://github.com/Ahmed-Emad02/sokrat-push-gateway.git
 NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
 MYSQL_ROOT_PWD=$(grep mysqlrootpwd /etc/issabel.conf 2>/dev/null | cut -d= -f2- | xargs || true)
 echo "============================================"
-echo " Sokrat VOIP Installer v1.0.4"
+echo " Sokrat VOIP Installer v1.1.0"
 echo " Target: Asterisk 18"
 echo "============================================"
 # Collect required interactive input BEFORE any system checks or package installations.
