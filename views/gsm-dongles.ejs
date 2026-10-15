@@ -427,7 +427,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
     <script src="/js/flatpickr.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/flatpickr'"></script>
     <style>
         .flatpickr-input {
-            font-family: 'JetBrains Mono', monospace !important;
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         }
         #top-alert-container,
         #top-alert-container * {
@@ -540,7 +540,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         .log-screen {
             background-color: #050505;
             border: 1px solid #1f1f23;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'JetBrains Mono', 'Cairo', monospace;
             max-height: 250px;
             overflow-y: auto;
         }
@@ -1444,6 +1444,15 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <span class="text-[10px] uppercase font-bold tracking-wider text-emerald-400/80"><%= isRtl ? 'جاهز' : 'Ready' %></span>
                     <span id="gsm-device-ready" class="text-sm font-black text-emerald-400 font-mono">0</span>
                 </div>
+                <!-- Laya Autonomous Watcher Agent Status Pill -->
+                <button type="button" id="btn-open-laya-modal" onclick="openLayaModal()" class="h-9 px-3 rounded-xl bg-purple-500/15 border border-purple-500/30 hover:bg-purple-500/25 flex items-center gap-2 shrink-0 transition cursor-pointer shadow-sm" title="<%= isRtl ? 'المساعد الذكي لَيا للرقابة الذاتية على المودمات' : 'Laya Autonomous GSM Watcher & Healing Agent' %>">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-600 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-purple-600"></span>
+                    </span>
+                    <span class="text-[10px] uppercase font-black tracking-wider"><%= isRtl ? 'لَيا للرقابة' : 'Laya Watcher' %></span>
+                    <span id="laya-badge-score" class="text-xs font-black font-mono px-1.5 py-0.5 rounded-md bg-purple-500/30">100%</span>
+                </button>
                 <button id="global-audit-btn" type="button" onclick="openDongleAuditModal()" title="<%= t.btnAuditHardware %>" aria-label="<%= t.btnAuditHardware %>" class="dongle-action-button dongle-action-secondary toolbar-icon-btn cursor-pointer shrink-0">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                 </button>
@@ -1973,19 +1982,19 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <div class="mt-3 pt-2.5 border-t border-blue-500/20 grid grid-cols-2 gap-2">
                         <div class="p-2 rounded-xl bg-cyan-300 border border-cyan-400 flex flex-col text-black">
                             <div class="flex items-center gap-1 text-black text-[10px] font-bold">
-                                <svg class="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
-                                <span class="text-black font-black"><%= t.reportInboundBranch %></span>
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                                <span><%= t.reportInboundBranch %></span>
                             </div>
-                            <span class="text-sm font-black font-mono text-black mt-1" id="report-kpi-inbound-dur">0s</span>
-                            <span class="text-[10px] text-black font-mono font-bold" id="report-kpi-inbound-calls">0 calls</span>
+                            <span class="text-sm font-black font-mono text-cyan-200 mt-1" id="report-kpi-inbound-dur">0s</span>
+                            <span class="text-[10px] text-cyan-300/80 font-mono font-bold" id="report-kpi-inbound-calls">0 calls</span>
                         </div>
                         <div class="p-2 rounded-xl bg-indigo-200 border border-indigo-300 flex flex-col text-black">
                             <div class="flex items-center gap-1 text-black text-[10px] font-bold">
-                                <svg class="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-                                <span class="text-black font-black"><%= t.reportOutboundBranch %></span>
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                                <span><%= t.reportOutboundBranch %></span>
                             </div>
-                            <span class="text-sm font-black font-mono text-black mt-1" id="report-kpi-outbound-dur">0s</span>
-                            <span class="text-[10px] text-black font-mono font-bold" id="report-kpi-outbound-calls">0 calls</span>
+                            <span class="text-sm font-black font-mono text-indigo-200 mt-1" id="report-kpi-outbound-dur">0s</span>
+                            <span class="text-[10px] text-indigo-300/80 font-mono font-bold" id="report-kpi-outbound-calls">0 calls</span>
                         </div>
                     </div>
                 </div>
@@ -2594,17 +2603,17 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <div class="p-4 sm:p-5 rounded-2xl border transition-all" id="at-diag-explanation-card">
                         <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
                             <span class="text-xs font-black uppercase tracking-wider text-[var(--text-secondary)]"><%= t.atDiagExplanationTitle %></span>
-                            <span id="at-diag-badge" class="px-3 py-1 rounded-full text-xs font-black tracking-wide shadow-sm text-black"></span>
+                            <span id="at-diag-badge" class="px-3 py-1 rounded-full text-xs font-black tracking-wide shadow-sm"></span>
                         </div>
                         <h4 id="at-diag-summary" class="text-base sm:text-lg font-black text-[var(--text-primary)] mb-3 leading-snug"></h4>
                         <ul id="at-diag-details" class="space-y-2 text-xs sm:text-sm text-[var(--text-primary)] list-disc list-inside mb-4 font-semibold"></ul>
-                        <div id="at-diag-recommendation-box" class="p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 font-black shadow-sm text-black">
+                        <div id="at-diag-recommendation-box" class="p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 font-black shadow-sm">
                             <span id="at-diag-recommendation-icon" class="shrink-0 mt-0.5 text-amber-500">
                                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" />
                                 </svg>
                             </span>
-                            <span id="at-diag-recommendation" class="font-black text-black leading-relaxed"></span>
+                            <span id="at-diag-recommendation" class="font-black leading-relaxed"></span>
                         </div>
                     </div>
 
@@ -2630,6 +2639,258 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 <button type="button" onclick="closeAtDiagModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-hover)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] transition cursor-pointer">
                     <%= t.close %>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Laya Autonomous GSM Maintenance Agent Modal -->
+    <div id="laya-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-200 p-4">
+        <div id="laya-modal-card" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-5xl scale-95 opacity-0 transition-all duration-200 flex flex-col max-h-[90vh] overflow-hidden shadow-2xl">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between border-b border-[var(--border-primary)] px-5 py-4 shrink-0 bg-[var(--bg-card)]">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base sm:text-lg font-black text-[var(--text-primary)] flex items-center gap-2">
+                            <span><%= isRtl ? 'لَيا' : 'LAYA' %></span>
+                            <span id="laya-modal-status-badge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase">ONLINE</span>
+                        </h3>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="runLayaTriage()" id="btn-laya-triage" class="px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
+                        <span><%= isRtl ? 'تشخيص شامل الآن' : 'Run Fleet Triage' %></span>
+                    </button>
+                    <% if (isRootUser) { %>
+                    <button type="button" onclick="toggleLayaKillSwitch()" id="btn-laya-kill-switch" class="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm" title="<%= isRtl ? 'مفتاح إيقاف الطوارئ للمساعد الذكي لَيا (صلاحية root فقط)' : 'Emergency kill switch for Laya Agent (root only)' %>">
+                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                        <span id="btn-laya-kill-switch-label"><%= isRtl ? 'إيقاف الطوارئ (Kill)' : 'Kill Switch' %></span>
+                    </button>
+                    <% } %>
+                    <button type="button" onclick="closeLayaModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Content (Scrollable) -->
+            <div class="p-5 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
+                <!-- Kill Switch Warning Banner (Visible only when Laya is killed) -->
+                <div id="laya-killed-banner" class="hidden p-4 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 flex items-start gap-3 shadow-inner">
+                    <span class="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    </span>
+                    <div class="flex-1">
+                        <h4 class="text-xs font-black uppercase text-rose-200 tracking-wider flex items-center gap-2">
+                            <span><%= isRtl ? 'تم تفعيل مفتاح الإيقاف الطارئ (Laya Disarmed)' : 'Laya Agent is Disarmed (Kill Switch Engaged)' %></span>
+                        </h4>
+                        <p class="text-[11px] text-rose-300/90 mt-0.5 leading-relaxed">
+                            <%= isRtl ? 'تم إيقاف خدمة المساعد الذكي وتعطيل كافة عمليات الرقابة الذاتية، والمعالجة التلقائية، ونوافذ إعادة التشغيل المجدولة بالكامل بأمر المشرف الرئيسي (Root).' : 'The autonomous agent service is stopped and disabled. All background monitoring, self-healing, and scheduled restart cycles are completely halted.' %>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Summary KPI Cards -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div class="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] flex flex-col justify-between">
+                        <span class="text-[10px] font-bold uppercase text-[var(--text-muted)]"><%= isRtl ? 'متوسط الصحة' : 'Fleet Health' %></span>
+                        <div class="flex items-baseline gap-1 mt-1">
+                            <span id="laya-summary-score" class="text-2xl font-black font-mono text-purple-400">100%</span>
+                        </div>
+                    </div>
+                    <div class="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] flex flex-col justify-between">
+                        <span class="text-[10px] font-bold uppercase text-[var(--text-muted)]"><%= isRtl ? 'أجهزة سليمة' : 'Healthy Dongles' %></span>
+                        <div class="flex items-baseline gap-1 mt-1">
+                            <span id="laya-summary-healthy" class="text-2xl font-black font-mono text-emerald-400">0</span>
+                        </div>
+                    </div>
+                    <div class="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] flex flex-col justify-between">
+                        <span class="text-[10px] font-bold uppercase text-[var(--text-muted)]"><%= isRtl ? 'تحتاج عناية' : 'Degraded' %></span>
+                        <div class="flex items-baseline gap-1 mt-1">
+                            <span id="laya-summary-degraded" class="text-2xl font-black font-mono text-amber-400">0</span>
+                        </div>
+                    </div>
+                    <div class="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] flex flex-col justify-between">
+                        <span class="text-[10px] font-bold uppercase text-[var(--text-muted)]"><%= isRtl ? 'غير متصلة' : 'Offline' %></span>
+                        <div class="flex items-baseline gap-1 mt-1">
+                            <span id="laya-summary-offline" class="text-2xl font-black font-mono text-rose-400">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Live Health Matrix Table -->
+                <div class="border border-[var(--border-primary)] rounded-xl overflow-hidden bg-[var(--bg-card)]">
+                    <div class="px-4 py-2.5 bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] flex items-center justify-between">
+                        <span class="text-xs font-black uppercase text-[var(--text-primary)] tracking-wider"><%= isRtl ? 'حالة المودمات في الرقابة الذاتية' : 'Monitored GSM Dongles Matrix' %></span>
+                        <span class="text-[11px] text-[var(--text-muted)] font-mono"><%= isRtl ? 'تحديث تلقائي مستمر' : 'Auto-monitored 5s' %></span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-[var(--bg-primary)]/50 border-b border-[var(--border-primary)] text-[10px] uppercase font-bold text-[var(--text-muted)]">
+                                <tr>
+                                    <th class="py-2 px-3"><%= isRtl ? 'المودم' : 'Dongle' %></th>
+                                    <th class="py-2 px-3"><%= isRtl ? 'درجة الصحة' : 'Health Score' %></th>
+                                    <th class="py-2 px-3"><%= isRtl ? 'الحالة' : 'Status' %></th>
+                                    <th class="py-2 px-3"><%= isRtl ? 'حالة أستيركس' : 'State' %></th>
+                                    <th class="py-2 px-3"><%= isRtl ? 'الإشارة' : 'RSSI' %></th>
+                                    <th class="py-2 px-3"><%= isRtl ? 'آخر إجراء' : 'Last Heal' %></th>
+                                    <th class="py-2 px-3 text-right"><%= isRtl ? 'إجراء' : 'Action' %></th>
+                                </tr>
+                            </thead>
+                            <tbody id="laya-dongles-tbody" class="divide-y divide-[var(--border-primary)]">
+                                <tr>
+                                    <td colspan="7" class="py-4 text-center text-xs text-[var(--text-muted)]">Loading Laya telemetry...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section: Off-Hours Scheduled Maintenance Window -->
+                <div class="border border-[var(--border-primary)] rounded-xl overflow-hidden bg-[var(--bg-card)] shadow-xs">
+                    <div class="px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5 flex-wrap">
+                            <span class="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <polyline points="12 6 12 12 16 14"/>
+                                </svg>
+                            </span>
+                            <div>
+                                <h4 class="text-xs font-black uppercase text-[var(--text-primary)] tracking-wider flex items-center gap-2">
+                                    <span><%= isRtl ? 'نافذة إعادة التشغيل المجدولة (خارج أوقات العمل)' : 'Off-Hours Scheduled Restart Window' %></span>
+                                    <span id="laya-sched-window-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-500/20 text-zinc-300 border border-zinc-500/30">...</span>
+                                </h4>
+                                <p class="text-[11px] text-[var(--text-muted)] mt-0.5">
+                                    <%= isRtl ? 'إعادة تشغيل المودمات بالتتابع (1 تلو الآخر) لتنظيف الذاكرة وتبريد الراديو فقط عند عدم وجود أي مكالمات جارية' : 'Sequentially restarts dongles 1-by-1 to flush memory & cool radios strictly when 0 calls are active' %>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span id="laya-sched-last-run-pill" class="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-primary)] px-2.5 py-1 rounded-lg border border-[var(--border-primary)]">Last run: ...</span>
+                            <button type="button" onclick="runLayaScheduledRestartNow()" id="btn-laya-run-schedule-now" class="px-3 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs" title="<%= isRtl ? 'تشغيل دورة إعادة التشغيل المتتالية الآن مع حماية المكالمات' : 'Run 1-by-1 sequential restart sequence now with call safety checks' %>">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <span><%= isRtl ? 'اختبار التشغيل الآن' : 'Test Run Now' %></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Controls Form Grid -->
+                    <form id="laya-schedule-form" onsubmit="saveLayaSchedule(event)" class="p-4 bg-[var(--bg-card)] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
+                        <!-- Enable Toggle -->
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
+                                <span><%= isRtl ? 'الحالة المجدولة' : 'Schedule Status' %></span>
+                            </label>
+                            <label class="relative inline-flex items-center cursor-pointer select-none">
+                                <input type="checkbox" id="laya-sched-enabled" class="sr-only peer">
+                                <div class="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                                <span id="laya-sched-enabled-label" class="ml-2.5 text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'مفعل' : 'Enabled' %></span>
+                            </label>
+                        </div>
+
+                        <!-- Start Time -->
+                        <div class="flex flex-col gap-1.5">
+                            <label for="laya-sched-start" class="text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+                                <span><%= isRtl ? 'بداية النافذة' : 'Window Start' %></span>
+                            </label>
+                            <input type="time" id="laya-sched-start" value="03:00" required class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-[var(--text-primary)] focus:outline-none focus:border-purple-500">
+                        </div>
+
+                        <!-- End Time -->
+                        <div class="flex flex-col gap-1.5">
+                            <label for="laya-sched-end" class="text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 16 14"/></svg>
+                                <span><%= isRtl ? 'نهاية النافذة' : 'Window End' %></span>
+                            </label>
+                            <input type="time" id="laya-sched-end" value="07:00" required class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-[var(--text-primary)] focus:outline-none focus:border-purple-500">
+                        </div>
+
+                        <!-- Pacing Cooldown -->
+                        <div class="flex flex-col gap-1.5">
+                            <label for="laya-sched-cooldown" class="text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5" title="<%= isRtl ? 'الوقت بالثواني للانتظار بين كل مودم والآخر لإعادة التهيئة بسلام' : 'Delay in seconds between restarting each dongle' %>">
+                                <svg class="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                <span><%= isRtl ? 'الفاصل الزمني (ثواني)' : 'Cooldown Delay' %></span>
+                            </label>
+                            <div class="relative">
+                                <input type="number" id="laya-sched-cooldown" min="10" max="180" value="25" required class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-[var(--text-primary)] focus:outline-none focus:border-purple-500">
+                                <span class="absolute right-3 top-1.5 text-[10px] text-[var(--text-muted)] font-mono">sec</span>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div>
+                            <button type="submit" id="btn-save-laya-schedule" class="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm">
+                                <svg class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                <span><%= isRtl ? 'حفظ إعدادات النافذة' : 'Save Window' %></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Section: Maintenance Intervention Log (Detailed Diagnostics Audit Trail) -->
+                <div class="border border-[var(--border-primary)] rounded-xl overflow-hidden bg-[var(--bg-card)] shadow-sm">
+                    <div class="px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs font-black uppercase text-[var(--text-primary)] tracking-wider flex items-center gap-2">
+                                <svg class="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                <span><%= isRtl ? 'سجل التدخلات والتشخيصات الذاتية التفصيلي' : 'Detailed Autonomous Interventions & Diagnostics Audit Trail' %></span>
+                            </span>
+                            <span id="laya-events-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">0 events</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="loadLayaEvents()" id="btn-refresh-laya-events" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1.5 transition cursor-pointer" title="<%= isRtl ? 'تحديث السجل' : 'Refresh Logs' %>">
+                                <svg id="icon-refresh-laya-events" class="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                <span><%= isRtl ? 'تحديث السجل' : 'Refresh' %></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filters and Search Toolbar -->
+                    <div class="p-3 bg-[var(--bg-primary)]/40 border-b border-[var(--border-primary)] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-xs">
+                        <div class="relative lg:col-span-2">
+                            <input type="text" id="laya-log-search" oninput="debounceLayaLogFilter()" placeholder="<%= isRtl ? 'بحث في التشخيصات، الأخطاء، أو سبب التدخل...' : 'Search diagnostics, triggers, actions, errors...' %>" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder:[var(--text-muted)] focus:outline-none focus:border-purple-500">
+                            <svg class="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        </div>
+                        <div>
+                            <select id="laya-log-dongle-filter" onchange="loadLayaEvents()" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-purple-500 font-mono">
+                                <option value="all"><%= isRtl ? 'جميع الشرائح' : 'All Dongles' %></option>
+                            </select>
+                        </div>
+                        <div>
+                            <select id="laya-log-level-filter" onchange="loadLayaEvents()" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-purple-500">
+                                <option value="all"><%= isRtl ? 'جميع المستويات (L1-L5)' : 'All Levels (L1-L5)' %></option>
+                                <option value="1">L1 · Soft Probe</option>
+                                <option value="2">L2 · Channel Hangup</option>
+                                <option value="3">L3 · Module Restart</option>
+                                <option value="4">L4 · USB Re-bind</option>
+                                <option value="5">L5 · Hardware Escalation</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select id="laya-log-result-filter" onchange="loadLayaEvents()" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-purple-500">
+                                <option value="all"><%= isRtl ? 'جميع النتائج' : 'All Outcomes' %></option>
+                                <option value="success"><%= isRtl ? 'ناجح (Success)' : 'Success' %></option>
+                                <option value="failed"><%= isRtl ? 'فشل (Failed)' : 'Failed' %></option>
+                                <option value="in_progress"><%= isRtl ? 'قيد التنفيذ' : 'In Progress' %></option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Events Stream Container -->
+                    <div id="laya-events-container" class="p-3.5 max-h-[460px] overflow-y-auto space-y-3 custom-scrollbar">
+                        <div class="text-center py-6 text-xs text-[var(--text-muted)] flex flex-col items-center gap-2">
+                            <span class="inline-block animate-spin text-purple-400 text-lg">⏳</span>
+                            <span>Loading detailed Laya maintenance logs...</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -4356,7 +4617,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             window.deleteActiveThread = async function() {
                 if (!activeThreadEndpoint) return;
-                if (!confirm(isRtl ? 'هل أنت متأكد من حذف هذه المحادثة؟' : 'Are you sure you want to delete this conversation thread?')) return;
+                const ok = await window.sokratConfirm({
+                    title: isRtl ? 'حذف المحادثة' : 'Delete Thread',
+                    message: isRtl ? 'هل أنت متأكد من حذف هذه المحادثة بالكامل؟' : 'Are you sure you want to delete this conversation thread?',
+                    confirmText: isRtl ? 'حذف' : 'Delete',
+                    type: 'danger'
+                });
+                if (!ok) return;
 
                 try {
                     const res = await fetch('/api/gsm-dongles/delete-thread', {
@@ -4432,7 +4699,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             };
 
             window.clearSmsInbox = async function() {
-                if (!confirm(isRtl ? 'هل أنت متأكد من مسح صندوق الرسائل؟' : 'Are you sure you want to clear the SMS inbox?')) return;
+                const ok = await window.sokratConfirm({
+                    title: isRtl ? 'مسح صندوق الرسائل' : 'Clear SMS Inbox',
+                    message: isRtl ? 'هل أنت متأكد من مسح صندوق الرسائل بالكامل؟' : 'Are you sure you want to clear the entire SMS inbox?',
+                    confirmText: isRtl ? 'مسح الكل' : 'Clear All',
+                    type: 'danger'
+                });
+                if (!ok) return;
                 try {
                     await fetch('/api/gsm-dongles/clear-sms', { method: 'POST' });
                 } catch (e) {
@@ -4528,7 +4801,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 shadow-xs"></span>
                                     <span class="font-black text-xs text-[var(--text-primary)] truncate">${escapeUsbText(modem.vendorName || '')} ${escapeUsbText(modem.modelName || 'GSM Modem')}</span>
                                 </div>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black text-black bg-purple-300 border border-purple-400 shrink-0">${escapeUsbText(modem.hardwareId)}</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-purple-300 border border-purple-400 shrink-0">${escapeUsbText(modem.hardwareId)}</span>
                             </div>
 
                             <div class="grid grid-cols-2 gap-2 text-[10px] font-mono pt-2 border-t border-purple-500/20">
@@ -4596,8 +4869,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                 try {
                     const response = await fetch('/api/gsm-dongles/ttyusb-devices', { cache: 'no-store' });
+                    if (!response.ok) return;
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!contentType.includes('application/json')) return;
                     const data = await response.json();
-                    if (!response.ok || !data.success) {
+                    if (!data.success) {
                         throw new Error(data.error || 'Failed to fetch USB devices');
                     }
 
@@ -4832,13 +5108,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 if (atDiagBadge) {
                     atDiagBadge.textContent = exp.badge || data.command;
                     if (sev === 'success') {
-                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-emerald-500/25 text-black border border-emerald-500/50 shadow-sm';
+                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-emerald-500/25 text-emerald-300 border border-emerald-500/50 shadow-sm';
                     } else if (sev === 'danger') {
-                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-rose-500/25 text-black border border-rose-500/50 shadow-sm';
+                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-rose-500/25 text-rose-300 border border-rose-500/50 shadow-sm';
                     } else if (sev === 'warning') {
-                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-amber-500/25 text-black border border-amber-500/50 shadow-sm';
+                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-amber-500/25 text-amber-300 border border-amber-500/50 shadow-sm';
                     } else {
-                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-sky-500/25 text-black border border-sky-500/50 shadow-sm';
+                        atDiagBadge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-sky-500/25 text-sky-300 border border-sky-500/50 shadow-sm';
                     }
                 }
                 // Summary
@@ -4862,13 +5138,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         atDiagRecommendation.textContent = exp.recommendation;
                         atDiagRecommendationBox.classList.remove('hidden');
                         if (sev === 'danger') {
-                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-rose-500/20 border border-rose-500/40 text-black font-black';
+                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-rose-500/20 border border-rose-500/40 font-black';
                         } else if (sev === 'warning') {
-                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-amber-500/20 border border-amber-500/40 text-black font-black';
+                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-amber-500/20 border border-amber-500/40 font-black';
                         } else if (sev === 'success') {
-                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-emerald-500/20 border border-emerald-500/40 text-black font-black';
+                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-emerald-500/20 border border-emerald-500/40 font-black';
                         } else {
-                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-sky-500/20 border border-sky-500/40 text-black font-black';
+                            atDiagRecommendationBox.className = 'p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5 bg-sky-500/20 border border-sky-500/40 font-black';
                         }
                     } else {
                         atDiagRecommendationBox.classList.add('hidden');
@@ -4948,8 +5224,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             // Reload single dongle action
             // 1. Reload / Restart single dongle action
-            window.reloadDongle = function(id) {
-                if (!confirm((isRtl ? 'هل أنت متأكد من إعادة تشغيل الشريحة ' : 'Are you sure you want to restart ') + id + '?')) return;
+            window.reloadDongle = async function(id) {
+                const ok = await window.sokratConfirm({
+                    title: isRtl ? 'إعادة تشغيل الشريحة' : 'Restart Dongle',
+                    message: (isRtl ? 'هل أنت متأكد من إعادة تشغيل الشريحة ' : 'Are you sure you want to restart ') + id + '?',
+                    confirmText: isRtl ? 'إعادة تشغيل' : 'Restart',
+                    type: 'warning'
+                });
+                if (!ok) return;
                 const btn = document.getElementById('reloadBtn-' + id);
                 if (btn) btn.disabled = true;
                 showToast(isRtl ? 'إعادة تشغيل' : 'Restarting', (isRtl ? 'جاري إعادة تشغيل الشريحة ' : 'Restarting dongle ') + id + '...', 'info');
@@ -4969,8 +5251,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             };
 
             // 2. Reboot modem firmware via AT command (AT+CFUN=1,1)
-            window.rebootModem = function(id) {
-                if (!confirm((isRtl ? 'هل أنت متأكد من إعادة تشغيل مودم الجهاز ' : 'Are you sure you want to reboot modem ') + id + '?')) return;
+            window.rebootModem = async function(id) {
+                const ok = await window.sokratConfirm({
+                    title: isRtl ? 'إعادة تشغيل مودم الجهاز' : 'Reboot Modem Firmware',
+                    message: (isRtl ? 'هل أنت متأكد من إعادة تشغيل مودم الجهاز ' : 'Are you sure you want to reboot modem ') + id + '?',
+                    confirmText: isRtl ? 'إعادة تشغيل' : 'Reboot',
+                    type: 'warning'
+                });
+                if (!ok) return;
                 const btn = document.getElementById('rebootBtn-' + id);
                 if (btn) btn.disabled = true;
                 showToast(isRtl ? 'إعادة تشغيل المودم' : 'Modem Reboot', (isRtl ? 'جاري إرسال أمر إعادة تشغيل المودم ' : 'Sending modem reboot command to ') + id + '...', 'warning');
@@ -4990,8 +5278,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             };
 
             // 3. Virtual USB Unplug & Re-plug (Kernel sysfs unbind/bind)
-            window.virtualReplug = function(id) {
-                if (!confirm((isRtl ? 'هل أنت متأكد من محاكاة إعادة توصيل USB لـ ' : 'Are you sure you want to simulate virtual USB re-plug for ') + id + '?')) return;
+            window.virtualReplug = async function(id) {
+                const ok = await window.sokratConfirm({
+                    title: isRtl ? 'محاكاة إعادة توصيل USB' : 'Virtual USB Re-plug',
+                    message: (isRtl ? 'هل أنت متأكد من محاكاة إعادة توصيل USB لـ ' : 'Are you sure you want to simulate virtual USB re-plug for ') + id + '?',
+                    confirmText: isRtl ? 'إعادة توصيل' : 'Re-plug',
+                    type: 'danger'
+                });
+                if (!ok) return;
                 const btn = document.getElementById('virtualReplugBtn-' + id);
                 if (btn) btn.disabled = true;
                 showToast(isRtl ? 'إعادة توصيل USB' : 'Virtual USB Re-plug', (isRtl ? 'جاري فصل وإعادة توصيل USB لـ ' : 'Simulating virtual USB re-plug for ') + id + '...', 'warning');
@@ -5011,7 +5305,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             };
 
             // 4. Populate IMEI & IMSI in /etc/asterisk/dongle.conf
-            window.populateDongleHardware = function(id, imei, imsi) {
+            window.populateDongleHardware = async function(id, imei, imsi) {
                 const cleanImei = String(imei || '').trim();
                 const cleanImsi = String(imsi || '').trim();
                 if (!cleanImei || cleanImei === '-' || cleanImei === 'Unknown' || !cleanImsi || cleanImsi === '-' || cleanImsi === 'Unknown') {
@@ -5020,7 +5314,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 }
 
                 const confirmMsg = `${words.populateHardwareConfirm || (isRtl ? 'هل تريد حفظ كود IMEI و IMSI في ملف dongle.conf للشريحة ' : 'Do you want to populate IMEI and IMSI in dongle.conf for ')}${id}?\n\nIMEI: ${cleanImei}\nIMSI: ${cleanImsi}`;
-                if (!confirm(confirmMsg)) return;
+                const ok = await window.sokratConfirm({
+                    title: isRtl ? 'حفظ معرفات المودم' : 'Populate Hardware Identifiers',
+                    message: confirmMsg,
+                    confirmText: isRtl ? 'حفظ في dongle.conf' : 'Save to dongle.conf',
+                    type: 'info'
+                });
+                if (!ok) return;
 
                 const btn = document.getElementById('populateBtn-' + id);
                 if (btn) btn.disabled = true;
@@ -5383,12 +5683,12 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     </div>
                     <div class="flex-1 min-w-0 font-mono">
                         <div class="flex items-center justify-between gap-2 mb-1.5">
-                            <h4 class="text-sm sm:text-base font-bold tracking-wide uppercase font-mono" style="color: #ff6b6b !important; font-family: 'JetBrains Mono', monospace !important;">${title}</h4>
+                            <h4 class="text-sm sm:text-base font-bold tracking-wide uppercase font-mono" style="color: #ff6b6b !important; font-family: 'JetBrains Mono', 'Cairo', monospace !important;">${title}</h4>
                             <button type="button" class="p-1 rounded-lg transition cursor-pointer" style="color: #ffffff !important; background-color: rgba(255, 255, 255, 0.1) !important;" onclick="this.closest('.pointer-events-auto').remove()">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             </button>
                         </div>
-                        <p class="text-sm sm:text-base font-medium leading-relaxed font-mono" style="color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.5); font-family: 'JetBrains Mono', monospace !important;">${message}</p>
+                        <p class="text-sm sm:text-base font-medium leading-relaxed font-mono" style="color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.5); font-family: 'JetBrains Mono', 'Cairo', monospace !important;">${message}</p>
                     </div>
                 `;
                 topContainer.appendChild(alertEl);
@@ -5408,9 +5708,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 devicesRefreshInFlight = true;
 
                 fetch('/api/gsm-dongles')
-                    .then(res => res.json())
+                    .then(res => {
+                        if (!res.ok) return null;
+                        const contentType = res.headers.get('content-type') || '';
+                        if (!contentType.includes('application/json')) return null;
+                        return res.json().catch(() => null);
+                    })
                     .then(data => {
-                        if (!data.success || !Array.isArray(data.devices)) return;
+                        if (!data || !data.success || !Array.isArray(data.devices)) return;
 
                         const newSignature = JSON.stringify(data.devices);
                         if (!force && newSignature === lastDevicesSignature) {
@@ -5483,8 +5788,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     });
             }
 
-            window.resetServerUsbPorts = function(btn) {
-                if (!confirm(isRtl ? 'هل أنت متأكد من إعادة تعيين كافة منافذ USB في السيرفر؟' : 'Are you sure you want to reset all USB ports on the server?')) return;
+            window.resetServerUsbPorts = async function(btn) {
+                const ok = await window.sokratConfirm({
+                    title: isRtl ? 'إعادة تعيين منافذ USB' : 'Reset All USB Ports',
+                    message: isRtl ? 'هل أنت متأكد من إعادة تعيين كافة منافذ USB في السيرفر؟ قد يؤدي هذا لفصل مؤقت للمودمات.' : 'Are you sure you want to reset all USB ports on the server? This may temporarily disconnect attached cellular modems.',
+                    confirmText: isRtl ? 'إعادة تعيين' : 'Reset USB',
+                    type: 'danger'
+                });
+                if (!ok) return;
                 if (btn) btn.disabled = true;
                 showToast(isRtl ? 'إعادة تعيين USB' : 'Resetting USB', isRtl ? 'جاري إعادة تعيين كافة منافذ USB في السيرفر...' : 'Resetting all USB ports on the server...', 'warning');
 
@@ -5758,13 +6069,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                         <span class="duration-busy-text text-[11px] font-mono font-bold">(${busy.pct}%)</span>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-1 mt-0.5">
-                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-300 text-black border border-cyan-400 text-[10px] font-mono font-black" title="${isRtl ? 'المكالمات الواردة' : 'Incoming Calls'}">
-                                            <svg class="w-2.5 h-2.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
-                                            <span class="text-black font-bold">${inDur} (${inCalls})</span>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-mono font-black" title="${isRtl ? 'المكالمات الواردة' : 'Incoming Calls'}">
+                                            <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                                            <span class="font-bold">${inDur} (${inCalls})</span>
                                         </span>
-                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-300 text-black border border-indigo-400 text-[10px] font-mono font-black" title="${isRtl ? 'المكالمات الصادرة' : 'Outgoing Calls'}">
-                                            <svg class="w-2.5 h-2.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-                                            <span class="text-black font-bold">${outDur} (${outCalls})</span>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-mono font-black" title="${isRtl ? 'المكالمات الصادرة' : 'Outgoing Calls'}">
+                                            <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                                            <span class="font-bold">${outDur} (${outCalls})</span>
                                         </span>
                                     </div>
                                 </div>
@@ -5920,6 +6231,480 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             setTimeout(() => {
                 fetchDongleStateReports();
             }, 200);
+
+            // -----------------------------------------------------------------
+            // Sokrat Laya Autonomous GSM Maintenance Agent Controller
+            // -----------------------------------------------------------------
+            const layaModal = document.getElementById('laya-modal');
+            const layaModalCard = document.getElementById('laya-modal-card');
+            const layaBadgeScore = document.getElementById('laya-badge-score');
+            const layaSummaryScore = document.getElementById('laya-summary-score');
+            const layaSummaryHealthy = document.getElementById('laya-summary-healthy');
+            const layaSummaryDegraded = document.getElementById('laya-summary-degraded');
+            const layaSummaryOffline = document.getElementById('laya-summary-offline');
+            const layaDonglesTbody = document.getElementById('laya-dongles-tbody');
+            const layaEventsContainer = document.getElementById('laya-events-container');
+
+            window.openLayaModal = function() {
+                if (!layaModal || !layaModalCard) return;
+                layaModal.classList.remove('opacity-0', 'pointer-events-none');
+                layaModalCard.classList.remove('scale-95', 'opacity-0');
+                fetchLayaStatus();
+                loadLayaSchedule();
+                loadLayaEvents();
+            };
+
+            window.closeLayaModal = function() {
+                if (!layaModal || !layaModalCard) return;
+                layaModal.classList.add('opacity-0', 'pointer-events-none');
+                layaModalCard.classList.add('scale-95', 'opacity-0');
+            };
+
+            let isLayaKillSwitchActive = false;
+
+            window.fetchLayaStatus = async function() {
+                try {
+                    const res = await fetch('/api/laya/status');
+                    const data = await res.json();
+                    if (!data.success) return;
+
+                    isLayaKillSwitchActive = Boolean(data.kill_switch_active);
+                    const isKilled = isLayaKillSwitchActive;
+
+                    const summary = data.summary || {};
+                    if (layaBadgeScore) layaBadgeScore.textContent = isKilled ? 'DISARMED' : `${summary.avg_score || 0}%`;
+                    if (layaSummaryScore) layaSummaryScore.textContent = isKilled ? '0%' : `${summary.avg_score || 0}%`;
+                    if (layaSummaryHealthy) layaSummaryHealthy.textContent = isKilled ? 0 : (summary.healthy || 0);
+                    if (layaSummaryDegraded) layaSummaryDegraded.textContent = summary.degraded || 0;
+                    if (layaSummaryOffline) layaSummaryOffline.textContent = isKilled ? (summary.total || 0) : (summary.offline || 0);
+
+                    const badgeEl = document.getElementById('laya-modal-status-badge');
+                    if (badgeEl) {
+                        if (isKilled) {
+                            badgeEl.textContent = isRtl ? 'معطل / مفتاح الطوارئ' : 'DISARMED / KILLED';
+                            badgeEl.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 uppercase';
+                        } else {
+                            badgeEl.textContent = data.daemon_online ? 'ONLINE' : 'STANDALONE';
+                            badgeEl.className = data.daemon_online
+                                ? 'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase'
+                                : 'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 uppercase';
+                        }
+                    }
+
+                    const bannerEl = document.getElementById('laya-killed-banner');
+                    if (bannerEl) {
+                        bannerEl.classList.toggle('hidden', !isKilled);
+                    }
+
+                    const killBtn = document.getElementById('btn-laya-kill-switch');
+                    const killBtnLabel = document.getElementById('btn-laya-kill-switch-label');
+                    if (killBtn && killBtnLabel) {
+                        if (isKilled) {
+                            killBtn.className = 'px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm';
+                            killBtnLabel.textContent = isRtl ? 'استئناف تشغيل لَيا' : 'Resume Laya Agent';
+                            killBtnLabel.className = '';
+                            killBtn.title = isRtl ? 'إلغاء تفعيل مفتاح الطوارئ وإعادة تشغيل المساعد' : 'Disarm kill switch and start Laya service';
+                        } else {
+                            killBtn.className = 'px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm';
+                            killBtnLabel.textContent = isRtl ? 'إيقاف الطوارئ (Kill)' : 'Kill Switch';
+                            killBtnLabel.className = '';
+                            killBtn.title = isRtl ? 'مفتاح إيقاف الطوارئ للمساعد الذكي لَيا (صلاحية root فقط)' : 'Emergency kill switch for Laya Agent (root only)';
+                        }
+                    }
+
+                    renderLayaDonglesTable(data.dongles || []);
+                } catch (e) {
+                    console.error('Failed to fetch Laya status:', e);
+                }
+            };
+
+            window.toggleLayaKillSwitch = async function() {
+                const isCurrentlyKilled = isLayaKillSwitchActive;
+                const confirmTitle = isCurrentlyKilled
+                    ? (isRtl ? 'استئناف تشغيل المساعد الذكي' : 'Resume Laya Agent')
+                    : (isRtl ? 'إيقاف الطوارئ لمساعد لَيا' : 'Emergency Kill Switch');
+                const confirmMsg = isCurrentlyKilled
+                    ? (isRtl ? 'هل تريد استئناف تشغيل المساعد الذكي لَيا؟ سيتم تمكين الخدمة وإعادة تشغيل المراقبة الذاتية.' : 'Resume Laya Autonomous Agent? Service will be enabled and background monitoring will restart.')
+                    : (isRtl ? 'هل أنت متأكد من تفعيل مفتاح إيقاف الطوارئ (Kill Switch) لمساعد لَيا؟\nسيتم إيقاف الخدمة وتعطيل كافة الرقابة التلقائية ونوافذ الصيانة فوراً.' : 'Are you sure you want to activate the Emergency Kill Switch for Laya Agent?\nThe background service will be immediately stopped and disabled. All autonomous monitoring and scheduled restarts will cease.');
+
+                const ok = await window.sokratConfirm({
+                    title: confirmTitle,
+                    message: confirmMsg,
+                    confirmText: isCurrentlyKilled ? (isRtl ? 'استئناف التشغيل' : 'Resume Agent') : (isRtl ? 'إيقاف الطوارئ' : 'Kill Agent'),
+                    type: isCurrentlyKilled ? 'success' : 'danger'
+                });
+                if (!ok) return;
+
+                const btn = document.getElementById('btn-laya-kill-switch');
+                if (btn) btn.disabled = true;
+                showToast('Laya Kill Switch', isRtl ? 'جاري تطبيق الإجراء...' : 'Applying kill switch action...', 'info');
+
+                try {
+                    const action = isCurrentlyKilled ? 'resume' : 'kill';
+                    const res = await fetch('/api/laya/kill-switch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('Laya Kill Switch', data.message || (isCurrentlyKilled ? 'Resumed' : 'Killed'), 'success');
+                        await fetchLayaStatus();
+                        loadLayaEvents();
+                    } else {
+                        showToast('Laya Kill Switch', data.error || 'Action failed', 'error');
+                    }
+                } catch (err) {
+                    showToast('Laya Kill Switch', err.message, 'error');
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+            };
+
+            function renderLayaDonglesTable(dongles) {
+                if (!layaDonglesTbody) return;
+                if (!dongles || dongles.length === 0) {
+                    layaDonglesTbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-xs text-[var(--text-muted)]">No GSM dongles found.</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                dongles.forEach(d => {
+                    const name = d.dongle_name || '';
+                    const score = d.health_score || 0;
+                    const status = d.status || 'unknown';
+                    const state = d.curr_state || d.state || 'N/A';
+                    const rssi = d.rssi !== null && d.rssi !== undefined ? `${d.rssi} dB` : '--';
+                    const lastHeal = d.last_heal_action || 'None';
+
+                    const scoreColor = score >= 85 ? 'text-emerald-400' : (score >= 50 ? 'text-amber-400' : 'text-rose-400');
+                    const statusBg = status === 'healthy' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : (status === 'degraded' || status === 'healing' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-rose-500/15 text-rose-300 border-rose-500/30');
+
+                    html += `
+                        <tr class="hover:bg-[var(--bg-hover)] transition-colors">
+                            <td class="py-2.5 px-3 font-black text-[var(--text-primary)] font-mono">${escapeHtml(name)}</td>
+                            <td class="py-2.5 px-3 font-mono font-bold ${scoreColor}">${score}%</td>
+                            <td class="py-2.5 px-3">
+                                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase ${statusBg}">${escapeHtml(status)}</span>
+                            </td>
+                            <td class="py-2.5 px-3 font-mono text-[var(--text-secondary)]">${escapeHtml(state)}</td>
+                            <td class="py-2.5 px-3 font-mono text-[var(--text-muted)]">${escapeHtml(rssi)}</td>
+                            <td class="py-2.5 px-3 text-[11px] text-[var(--text-muted)] truncate max-w-[140px]" title="${escapeHtml(lastHeal)}">${escapeHtml(lastHeal)}</td>
+                            <td class="py-2.5 px-3 text-right">
+                                <button type="button" onclick="triggerLayaHeal('${escapeHtml(name)}')" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 transition cursor-pointer shadow-sm">
+                                    ${isRtl ? 'إصلاح' : 'Heal'}
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                layaDonglesTbody.innerHTML = html;
+                updateLayaDongleFilterOptions(dongles);
+            }
+
+            let layaLogFilterDebounce = null;
+            window.debounceLayaLogFilter = function() {
+                if (layaLogFilterDebounce) clearTimeout(layaLogFilterDebounce);
+                layaLogFilterDebounce = setTimeout(() => {
+                    loadLayaEvents();
+                }, 300);
+            };
+
+            function updateLayaDongleFilterOptions(dongles) {
+                const select = document.getElementById('laya-log-dongle-filter');
+                if (!select) return;
+                const currentVal = select.value || 'all';
+                const dongleSet = new Set();
+                (dongles || []).forEach(d => { if (d.dongle_name) dongleSet.add(d.dongle_name); });
+                if (Array.isArray(loadedDevices)) {
+                    loadedDevices.forEach(d => { if (d.ID) dongleSet.add(d.ID.toLowerCase()); });
+                }
+
+                let html = `<option value="all">${isRtl ? 'جميع الشرائح' : 'All Dongles'}</option>`;
+                Array.from(dongleSet).sort().forEach(d => {
+                    const sel = (d === currentVal) ? 'selected' : '';
+                    html += `<option value="${escapeHtml(d)}" ${sel}>${escapeHtml(d)}</option>`;
+                });
+                select.innerHTML = html;
+            }
+
+            window.loadLayaEvents = async function() {
+                if (!layaEventsContainer) return;
+                const iconRefresh = document.getElementById('icon-refresh-laya-events');
+                if (iconRefresh) iconRefresh.classList.add('animate-spin');
+
+                const searchInput = document.getElementById('laya-log-search');
+                const dongleFilter = document.getElementById('laya-log-dongle-filter');
+                const levelFilter = document.getElementById('laya-log-level-filter');
+                const resultFilter = document.getElementById('laya-log-result-filter');
+                const countBadge = document.getElementById('laya-events-count-badge');
+
+                const search = searchInput ? searchInput.value.trim() : '';
+                const dongle = dongleFilter ? dongleFilter.value : 'all';
+                const level = levelFilter ? levelFilter.value : 'all';
+                const result = resultFilter ? resultFilter.value : 'all';
+
+                try {
+                    const params = new URLSearchParams({ limit: '100' });
+                    if (search) params.set('search', search);
+                    if (dongle && dongle !== 'all') params.set('dongle', dongle);
+                    if (level && level !== 'all') params.set('level', level);
+                    if (result && result !== 'all') params.set('result', result);
+
+                    const res = await fetch('/api/laya/events?' + params.toString());
+                    const data = await res.json();
+
+                    if (countBadge) {
+                        countBadge.textContent = `${(data.events || []).length} events`;
+                    }
+
+                    if (!data.success || !data.events || data.events.length === 0) {
+                        layaEventsContainer.innerHTML = `
+                            <div class="text-center py-8 text-[var(--text-muted)] flex flex-col items-center gap-1.5">
+                                <svg class="w-8 h-8 opacity-40 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                <span class="font-bold text-xs">${isRtl ? 'لا توجد سجلات مطابقة للفلاتر الحالية' : 'No maintenance events match the selected filters.'}</span>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    // Level label and styling map
+                    const levelMeta = {
+                        1: { label: isRtl ? 'مستوى 1 · فحص خفيف' : 'L1 · Soft AT Probe', cls: 'bg-sky-500/15 text-sky-300 border-sky-500/30' },
+                        2: { label: isRtl ? 'مستوى 2 · إنهاء قناة' : 'L2 · Channel Hangup', cls: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' },
+                        3: { label: isRtl ? 'مستوى 3 · إعادة تشغيل' : 'L3 · Module Restart', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+                        4: { label: isRtl ? 'مستوى 4 · إعادة ربط USB' : 'L4 · USB Re-bind', cls: 'bg-orange-500/15 text-orange-300 border-orange-500/30' },
+                        5: { label: isRtl ? 'مستوى 5 · تصعيد حرج' : 'L5 · Escalation Alarm', cls: 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-black' },
+                    };
+
+                    let html = '';
+                    data.events.forEach((ev) => {
+                        const timeFull = String(ev.created_at || '').replace('T', ' ').substring(0, 19);
+                        const resColor = ev.result === 'success'
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                            : (ev.result === 'in_progress' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30');
+                        const resIcon = ev.result === 'success'
+                            ? '<svg class="w-3 h-3 text-emerald-400 inline shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>'
+                            : (ev.result === 'in_progress'
+                                ? '<span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-ping mr-1"></span>'
+                                : '<svg class="w-3 h-3 text-rose-400 inline shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>');
+
+                        const lvl = levelMeta[ev.recovery_level] || { label: `L${ev.recovery_level}`, cls: 'bg-zinc-500/15 text-zinc-300 border-zinc-500/30' };
+                        const cleanDetails = String(ev.details || '').trim().replace(/^\|\s*/, '').replace(/\s*\|\s*$/, '').trim();
+                        const hasDetails = Boolean(cleanDetails.length > 0);
+                        const detailEsc = escapeHtml(cleanDetails);
+
+                        html += `
+                            <div class="p-2.5 rounded-xl bg-[var(--bg-primary)]/70 border border-[var(--border-primary)] hover:border-purple-500/30 transition-all flex flex-col gap-1.5 shadow-xs group">
+                                <!-- Card Header: Dongle, Level, Result, Time, Actions -->
+                                <div class="flex items-center justify-between gap-2 flex-wrap">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="px-2 py-0.5 rounded-md text-xs font-mono font-black bg-purple-500/20 text-purple-300 border border-purple-500/35 tracking-wider select-all">${escapeHtml(ev.dongle_name)}</span>
+                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold border ${lvl.cls}">${lvl.label}</span>
+                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold border inline-flex items-center gap-1 uppercase tracking-wider ${resColor}">
+                                            ${resIcon}
+                                            <span>${escapeHtml(ev.result || '')}</span>
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] font-mono text-[var(--text-muted)]" title="${escapeHtml(timeFull)}">${escapeHtml(timeFull)}</span>
+                                        ${hasDetails ? `
+                                            <button type="button" onclick="copyLayaDiagnostic('${detailEsc.replace(/'/g, "\\'")}', this)" class="px-2 py-0.5 rounded-md bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1 transition cursor-pointer" title="${isRtl ? 'نسخ التشخيص' : 'Copy diagnostic output'}">
+                                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                                <span>${isRtl ? 'نسخ' : 'Copy'}</span>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </div>
+
+                                <!-- Action and Trigger Reason -->
+                                <div class="text-xs">
+                                    <div class="font-extrabold text-[var(--text-primary)] flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                        <span>${escapeHtml(ev.action_taken || 'Autonomous Action')}</span>
+                                    </div>
+                                    <div class="text-[11px] text-[var(--text-muted)] mt-0.5 flex items-start gap-1">
+                                        <span class="font-semibold text-zinc-400 shrink-0">${isRtl ? 'السبب:' : 'Trigger:'}</span>
+                                        <span class="italic">${escapeHtml(ev.trigger_reason || 'Periodic health check')}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Detailed Diagnostic Terminal Block (Compact) -->
+                                ${hasDetails ? `
+                                    <div class="mt-0.5 px-2.5 py-1.5 rounded-md bg-black/60 dark:bg-[#08080c] border border-zinc-800/80 font-mono text-[11px] select-all text-emerald-400/90 leading-tight shadow-inner">
+                                        <div class="text-[8px] font-bold uppercase tracking-wider text-zinc-400 mb-1 flex items-center justify-between border-b border-zinc-800/50 pb-0.5">
+                                            <span class="flex items-center gap-1.5 text-zinc-400 font-semibold">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 inline-block"></span>
+                                                <span>${isRtl ? 'بيانات التشخيص' : 'Diagnostic Output'}</span>
+                                            </span>
+                                            <span class="font-normal text-[8px] text-zinc-400 font-mono">#${ev.id}</span>
+                                        </div>
+                                        <div class="break-words select-all whitespace-pre-wrap">${detailEsc}</div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    });
+                    layaEventsContainer.innerHTML = html;
+                } catch (e) {
+                    console.error('Failed to load Laya events:', e);
+                } finally {
+                    if (iconRefresh) iconRefresh.classList.remove('animate-spin');
+                }
+            };
+
+            window.copyLayaDiagnostic = function(text, btn) {
+                if (!text) return;
+                copyToClipboard(text, btn);
+                showToast('Laya Diagnostic', isRtl ? 'تم نسخ بيانات التشخيص إلى الحافظة' : 'Diagnostic telemetry copied to clipboard', 'success');
+            };
+
+            window.triggerLayaHeal = async function(dongleName) {
+                if (!dongleName) return;
+                showToast(dongleName, isRtl ? 'جاري تفعيل سلم المعالجة...' : 'Initiating Laya recovery ladder...', 'info');
+                try {
+                    const res = await fetch('/api/laya/heal/' + encodeURIComponent(dongleName), { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast(dongleName, isRtl ? 'تم إصلاح المودم بنجاح' : 'Heal action executed successfully', 'success');
+                        fetchLayaStatus();
+                        loadLayaEvents();
+                    } else {
+                        showToast(dongleName, data.error || 'Healing failed', 'error');
+                    }
+                } catch (err) {
+                    showToast(dongleName, err.message, 'error');
+                }
+            };
+
+            window.runLayaTriage = async function() {
+                const btn = document.getElementById('btn-laya-triage');
+                if (btn) btn.disabled = true;
+                showToast('Laya Agent', isRtl ? 'جاري إجراء الفحص العميق لكافة المودمات...' : 'Running deep fleet triage...', 'info');
+                try {
+                    await fetchLayaStatus();
+                    await loadLayaEvents();
+                    showToast('Laya Agent', isRtl ? 'اكتمل الفحص بنجاح' : 'Fleet triage completed', 'success');
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+            };
+
+            window.loadLayaSchedule = async function() {
+                try {
+                    const res = await fetch('/api/laya/schedule');
+                    const data = await res.json();
+                    if (!data.success || !data.schedule) return;
+
+                    const s = data.schedule;
+                    const enabledCheck = document.getElementById('laya-sched-enabled');
+                    const enabledLabel = document.getElementById('laya-sched-enabled-label');
+                    const startInput = document.getElementById('laya-sched-start');
+                    const endInput = document.getElementById('laya-sched-end');
+                    const cooldownInput = document.getElementById('laya-sched-cooldown');
+                    const windowBadge = document.getElementById('laya-sched-window-badge');
+                    const lastRunPill = document.getElementById('laya-sched-last-run-pill');
+
+                    if (enabledCheck) {
+                        enabledCheck.checked = Boolean(s.enabled);
+                        if (enabledLabel) enabledLabel.textContent = s.enabled ? (isRtl ? 'مفعل' : 'Enabled') : (isRtl ? 'معطل' : 'Disabled');
+                    }
+                    if (startInput && s.start_time) startInput.value = s.start_time;
+                    if (endInput && s.end_time) endInput.value = s.end_time;
+                    if (cooldownInput && s.cooldown_sec) cooldownInput.value = s.cooldown_sec;
+
+                    if (windowBadge) {
+                        if (s.in_window) {
+                            windowBadge.textContent = isRtl ? 'داخل النافذة الآن' : 'CURRENTLY IN WINDOW';
+                            windowBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+                        } else {
+                            windowBadge.textContent = isRtl ? 'خارج النافذة' : 'OUTSIDE WINDOW';
+                            windowBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-500/20 text-zinc-300 border border-zinc-500/30';
+                        }
+                    }
+
+                    if (lastRunPill) {
+                        lastRunPill.textContent = (isRtl ? 'آخر تشغيل: ' : 'Last run: ') + (s.last_run || (isRtl ? 'لم ينفذ بعد' : 'Never'));
+                    }
+                } catch (e) {
+                    console.error('Failed to load Laya schedule:', e);
+                }
+            };
+
+            window.saveLayaSchedule = async function(e) {
+                if (e) e.preventDefault();
+                const btn = document.getElementById('btn-save-laya-schedule');
+                const enabled = document.getElementById('laya-sched-enabled')?.checked;
+                const start_time = document.getElementById('laya-sched-start')?.value;
+                const end_time = document.getElementById('laya-sched-end')?.value;
+                const cooldown_sec = parseInt(document.getElementById('laya-sched-cooldown')?.value, 10) || 25;
+
+                if (btn) btn.disabled = true;
+                try {
+                    const res = await fetch('/api/laya/schedule', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled, start_time, end_time, cooldown_sec })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('Laya Maintenance', isRtl ? 'تم تحديث نافذة الصيانة وإعادة التشغيل بنجاح' : 'Maintenance window schedule updated successfully', 'success');
+                        loadLayaSchedule();
+                    } else {
+                        showToast('Laya Maintenance', data.error || 'Failed to update schedule', 'error');
+                    }
+                } catch (err) {
+                    showToast('Laya Maintenance', err.message, 'error');
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+            };
+
+            window.runLayaScheduledRestartNow = async function() {
+                const ok = await window.sokratConfirm({
+                    title: isRtl ? 'إعادة تشغيل المودمات بالتتابع' : 'Sequential Dongle Restarts',
+                    message: isRtl ? 'هل تريد تشغيل دورة إعادة تشغيل المودمات بالتتابع الآن؟ سيتم فحص المكالمات والامتناع عن أي إجراء إذا كان هناك اتصال نشط.' : 'Run sequential 1-by-1 dongle restart sequence now? Active call guards will prevent restarts if any call is in progress.',
+                    confirmText: isRtl ? 'تشغيل الآن' : 'Run Now',
+                    type: 'warning'
+                });
+                if (!ok) return;
+
+                const btn = document.getElementById('btn-laya-run-schedule-now');
+                if (btn) btn.disabled = true;
+                showToast('Laya Maintenance', isRtl ? 'جاري بدء دورة إعادة التشغيل بالتتابع مع حماية المكالمات...' : 'Initiating sequential restart sequence with call safety checks...', 'info');
+
+                try {
+                    const res = await fetch('/api/laya/schedule/run', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ force: false })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('Laya Maintenance', isRtl ? 'اكتملت أو بدأت دورة إعادة التشغيل في الخلفية' : 'Restart sequence triggered successfully in background', 'success');
+                        setTimeout(() => {
+                            fetchLayaStatus();
+                            loadLayaSchedule();
+                            loadLayaEvents();
+                        }, 3000);
+                    } else {
+                        showToast('Laya Maintenance', data.error || 'Action failed', 'error');
+                    }
+                } catch (err) {
+                    showToast('Laya Maintenance', err.message, 'error');
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+            };
+
+            document.getElementById('laya-sched-enabled')?.addEventListener('change', function() {
+                const lbl = document.getElementById('laya-sched-enabled-label');
+                if (lbl) lbl.textContent = this.checked ? (isRtl ? 'مفعل' : 'Enabled') : (isRtl ? 'معطل' : 'Disabled');
+            });
+
+            // Background Laya badge poll every 10s
+            fetchLayaStatus();
+            setInterval(fetchLayaStatus, 10000);
         }
 
         if (document.readyState === 'loading') {

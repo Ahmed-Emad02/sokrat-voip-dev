@@ -119,7 +119,7 @@ function fmtDur(s) {
         #vmFilterForm input[type="datetime-local"],
         #vmFilterForm .font-mono,
         .flatpickr-input {
-            font-family: 'JetBrains Mono', monospace !important;
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         }
         /* Media Slider range input styling */
         .media-slider {
@@ -336,7 +336,7 @@ function fmtDur(s) {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <select id="vm_speed_<%= msg.id %>" name="vm_speed" aria-label="Voicemail speed" data-player-speed class="no-enhance shrink-0 appearance-none bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border-primary)] rounded-md text-[10px] font-bold px-1.5 py-0.5 focus:outline-none focus:border-[var(--accent-color)] cursor-pointer" title="Playback Speed">
+                                                <select id="vm_speed_<%= msg.id %>" name="vm_speed" aria-label="Voicemail speed" data-player-speed class="no-enhance shrink-0 appearance-none bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold cursor-pointer border-0 shadow-none focus:outline-none w-auto min-w-0 max-w-fit text-center" style="border: 0 !important; border-width: 0 !important; border-style: none !important; border-color: transparent !important; background-image: none !important; background: transparent !important; background-color: transparent !important; -webkit-appearance: none !important; -moz-appearance: none !important; appearance: none !important; outline: none !important; box-shadow: none !important; width: auto !important; width: fit-content !important; max-width: fit-content !important; min-width: 0 !important; padding: 1px 2px !important; margin: 0 !important; text-align: center !important; text-align-last: center !important;" title="Playback Speed">
                                                     <option value="0.5">0.5x</option>
                                                     <option value="1" selected>1x</option>
                                                     <option value="1.25">1.25x</option>

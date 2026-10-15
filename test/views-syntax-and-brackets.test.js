@@ -74,7 +74,6 @@ test('views/dialer.ejs card template has balanced HTML tags and brackets', () =>
     // Extract the card template definition
     const cardTemplateMatch = content.match(/card\.innerHTML\s*=\s*`([\s\S]*?)`;/);
     assert.ok(cardTemplateMatch, 'dialer.ejs must contain card.innerHTML template literal');
-
     const cardHtml = cardTemplateMatch[1];
 
     // Check balanced <div> tags in card template
@@ -126,4 +125,47 @@ test('views/crm-admin.ejs renders cleanly with zero script syntax errors and bal
         }
         assert.ok(count > 0, `crm-admin.ejs in ${lang} should contain script blocks`);
     });
+});
+
+test('all dynamic template literals across views have non-empty interpolations and valid brackets', () => {
+    const problems = [];
+
+    for (const f of fs.readdirSync(viewsDir).filter(x => x.endsWith('.ejs')).sort()) {
+        const content = fs.readFileSync(path.join(viewsDir, f), 'utf8');
+        const emptyInterpolations = content.match(/\$\{\s*\}/g);
+        if (emptyInterpolations) {
+            problems.push(`${f}: contains ${emptyInterpolations.length} empty string interpolation(s) \${}`);
+        }
+
+        // Verify all ${...} interpolations in template strings have balanced braces
+        let idx = 0;
+        const len = content.length;
+        while ((idx = content.indexOf('`', idx)) !== -1) {
+            let endIdx = idx + 1;
+            while (endIdx < len && content[endIdx] !== '`') {
+                if (content[endIdx] === '\\') { endIdx += 2; continue; }
+                if (content[endIdx] === '$' && content[endIdx + 1] === '{') {
+                    // Check balanced expression inside ${...}
+                    let depth = 1;
+                    let exprIdx = endIdx + 2;
+                    while (exprIdx < len && depth > 0) {
+                        if (content[exprIdx] === '\\') { exprIdx += 2; continue; }
+                        if (content[exprIdx] === '{') depth++;
+                        else if (content[exprIdx] === '}') depth--;
+                        exprIdx++;
+                    }
+                    if (depth !== 0) {
+                        const line = content.slice(0, endIdx).split('\n').length;
+                        problems.push(`${f}: unclosed \${} interpolation starting at line ${line}`);
+                    }
+                    endIdx = exprIdx;
+                    continue;
+                }
+                endIdx++;
+            }
+            idx = endIdx + 1;
+        }
+    }
+
+    assert.deepEqual(problems, [], 'Template literal bracket or interpolation issues found:\n' + problems.join('\n'));
 });

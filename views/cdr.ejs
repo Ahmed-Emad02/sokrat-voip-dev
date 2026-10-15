@@ -135,7 +135,7 @@ function fmtDur(s) {
         #cdrFilterForm input[type="datetime-local"],
         #cdrFilterForm .font-mono,
         .flatpickr-input {
-            font-family: 'JetBrains Mono', monospace !important;
+            font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         }
         .filter-action-btn {
             display: inline-flex;
@@ -288,6 +288,37 @@ function fmtDur(s) {
         .light-theme .cdr-failover-name {
             color: #78350f !important;
             font-weight: 700;
+        }
+        select[data-player-speed],
+        select[name="cdr_speed"] {
+            border: 0 !important;
+            border-width: 0 !important;
+            border-style: none !important;
+            border-color: transparent !important;
+            background-image: none !important;
+            background: transparent !important;
+            background-color: transparent !important;
+            -webkit-appearance: none !important;
+            -moz-appearance: none !important;
+            appearance: none !important;
+            width: auto !important;
+            width: fit-content !important;
+            max-width: fit-content !important;
+            min-width: 0 !important;
+            padding-left: 2px !important;
+            padding-right: 2px !important;
+            padding-top: 1px !important;
+            padding-bottom: 1px !important;
+            margin: 0 !important;
+            text-align: center !important;
+            text-align-last: center !important;
+            -moz-text-align-last: center !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        select[data-player-speed]::-ms-expand,
+        select[name="cdr_speed"]::-ms-expand {
+            display: none !important;
         }
     </style>
 </head>
@@ -520,7 +551,12 @@ function fmtDur(s) {
                                 <% const failoverViaMatch = call.userfield ? String(call.userfield).match(/via\s+([^\s,]+)/i) : null; %>
                                 <% const failoverVia = failoverViaMatch ? failoverViaMatch[1] : (call.dstchannel && call.dstchannel.startsWith('Dongle/') ? call.dstchannel.split('-')[0].replace('Dongle/', '') : ''); %>
                                 <tr class="hover:bg-zinc-900/60 transition <%= isFailover ? 'bg-amber-500/[0.03]' : '' %>">
-                                    <td class="p-4 text-slate-400 whitespace-nowrap"><%= moment(call.calldate).format('YYYY-MM-DD HH:mm:ss') %></td>
+                                    <td class="px-4 py-1.5 text-slate-400 whitespace-nowrap leading-none">
+                                        <div class="flex flex-col gap-0.5 justify-center leading-none">
+                                            <span class="text-xs text-slate-300 font-mono"><%= moment(call.calldate).format('YYYY-MM-DD') %></span>
+                                            <span class="text-[11px] text-slate-400 font-mono"><%= moment(call.calldate).format('HH:mm:ss') %></span>
+                                        </div>
+                                    </td>
                                     <td class="p-4 text-zinc-400 text-[11px] font-mono whitespace-nowrap"><%= call.uniqueid %></td>
                                     <td class="p-4 font-bold text-white font-mono whitespace-nowrap">
                                         <%= call.src %>
@@ -614,7 +650,7 @@ function fmtDur(s) {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <select id="cdr_speed_<%= call.uniqueid %>" name="cdr_speed" aria-label="Playback speed" data-player-speed class="no-enhance shrink-0 appearance-none bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border-primary)] rounded-md text-[10px] font-bold px-1.5 py-0.5 focus:outline-none focus:border-[var(--accent-color)] cursor-pointer" title="Playback Speed">
+                                                    <select id="cdr_speed_<%= call.uniqueid %>" name="cdr_speed" aria-label="Playback speed" data-player-speed class="no-enhance shrink-0 appearance-none bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold cursor-pointer border-0 shadow-none focus:outline-none w-auto min-w-0 max-w-fit text-center" style="border: 0 !important; border-width: 0 !important; border-style: none !important; border-color: transparent !important; background-image: none !important; background: transparent !important; background-color: transparent !important; -webkit-appearance: none !important; -moz-appearance: none !important; appearance: none !important; outline: none !important; box-shadow: none !important; width: auto !important; width: fit-content !important; max-width: fit-content !important; min-width: 0 !important; padding: 1px 2px !important; margin: 0 !important; text-align: center !important; text-align-last: center !important;" title="Playback Speed">
                                                         <option value="0.5">0.5x</option>
                                                         <option value="1" selected>1x</option>
                                                         <option value="1.25">1.25x</option>

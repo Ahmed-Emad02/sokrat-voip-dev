@@ -992,7 +992,15 @@ INSERT IGNORE INTO \`dashboard_settings\` (\`setting_key\`, \`setting_value\`) V
   ('alert_monitored_services', '[\"asterisk\",\"database\",\"sokrat-voip\",\"httpd\"]'),
   ('webhook_incoming_call_enabled', 'false'),
   ('webhook_incoming_call_url', ''),
-  ('webhook_incoming_call_secret', '');
+  ('webhook_incoming_call_secret', ''),
+  ('laya_scheduled_restart_enabled', 'true'),
+  ('laya_scheduled_restart_start', '03:00'),
+  ('laya_scheduled_restart_end', '07:00'),
+  ('laya_scheduled_restart_cooldown_sec', '25'),
+  ('laya_scheduled_restart_last_run', ''),
+  ('laya_kill_switch_active', 'true');
+
+
 
 CREATE TABLE IF NOT EXISTS \`sokrat_federation_peers\` (
   \`id\` INT AUTO_INCREMENT PRIMARY KEY,
@@ -1496,6 +1504,15 @@ ON DUPLICATE KEY UPDATE data='yes';
 INSERT INTO sip (id, keyword, data, flags)
 SELECT id, 'direct_media', 'no', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
 ON DUPLICATE KEY UPDATE data='no';
+INSERT INTO sip (id, keyword, data, flags)
+SELECT id, 'rtp_timeout', '30', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
+ON DUPLICATE KEY UPDATE data='30';
+INSERT INTO sip (id, keyword, data, flags)
+SELECT id, 'rtp_timeout_hold', '60', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
+ON DUPLICATE KEY UPDATE data='60';
+INSERT INTO sip (id, keyword, data, flags)
+SELECT id, 'rtp_keepalive', '5', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
+ON DUPLICATE KEY UPDATE data='5';
 " 2>/dev/null || true
 /var/lib/asterisk/bin/retrieve_conf 2>/dev/null || true
 
@@ -1917,6 +1934,8 @@ same => n,Return()
 [sub-campon-busy-menu]
 exten => s,1,NoOp(--- Sokrat Camp-On Busy Menu: Caller ${CALLERID(num)} Target ${EXTTOCALL} ---)
 same => n,Set(CALLER_EXT=${IF($["${CALLERID(num)}" != ""]?${CALLERID(num)}:${CUT(CUT(CHANNEL,-,1),/,2)})})
+same => n,GotoIf($["${DIRECTION}" = "INBOUND"]?ext_busy)
+same => n,GotoIf($["${LEN(${CALLER_EXT})}" > 5]?ext_busy)
 same => n,Answer()
 same => n,Playtones(busy)
 same => n,Read(PRESSED_DIGIT,,1,,,8)
@@ -1925,6 +1944,8 @@ same => n,GotoIf($["${PRESSED_DIGIT}" = "6"]?activate)
 same => n,Busy(15)
 same => n,Hangup()
 same => n(activate),Goto(sub-campon-activate,s,1)
+same => n(ext_busy),Busy(10)
+same => n,Hangup()
 
 [macro-exten-vm-custom]
 exten => s-BUSY,1,NoOp(--- Sokrat Camp-On: Target ${EXTTOCALL} is BUSY for ${CALLERID(num)} ---)
@@ -1999,6 +2020,8 @@ exten => docfb,n,Dial(Local/${DB(CFB/${EXTTOCALL})}@from-internal/n,${RTCF},${DI
 exten => docfb,n,Return()
 
 exten => s-BUSY,1,GotoIf($["${IVR_RETVM}"="RETURN" & "${IVR_CONTEXT}"!=""]?exit,1)
+exten => s-BUSY,n,ExecIf($["${DIRECTION}" = "INBOUND"]?Hangup(17))
+exten => s-BUSY,n,ExecIf($["${LEN(${CALLERID(num)})}" > 5]?Hangup(17))
 exten => s-BUSY,n,NoOp(--- Sokrat Camp-On: Target ${EXTTOCALL} is BUSY for ${CALLERID(num)} ---)
 exten => s-BUSY,n,Set(DB(CAMP_ON_LAST_BUSY/${CALLERID(num)})=${EXTTOCALL})
 exten => s-BUSY,n,ExecIf($["${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)}" != ""]?Set(DB(CAMP_ON_LAST_BUSY/${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)})=${EXTTOCALL}))
@@ -2820,6 +2843,40 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now sokrat-watchdog.service 2>/dev/null || true
 echo "  Sokrat system watchdog daemon enabled and started"
+
+# Provision Sokrat Laya GSM Dongle Maintenance & Autonomous Watcher Daemon
+echo "  Provisioning Sokrat Laya GSM Dongle Maintenance Agent..."
+chmod +x "$INSTALL_DIR/laya/cli.py" 2>/dev/null || true
+ln -sf "$INSTALL_DIR/laya/cli.py" /usr/local/bin/laya 2>/dev/null || true
+ln -sf "$INSTALL_DIR/laya/cli.py" /usr/local/bin/laya-cli 2>/dev/null || true
+cat > /etc/systemd/system/sokrat-laya.service << 'UNIT'
+[Unit]
+Description=Sokrat Laya GSM Dongle Maintenance & Autonomous Watcher Daemon
+After=network.target mariadb.service mysqld.service asterisk.service
+Wants=asterisk.service mariadb.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/sokrat-voip
+ExecStart=/usr/bin/python3 /opt/sokrat-voip/laya/engine.py
+Restart=always
+RestartSec=5
+Nice=5
+CPUShares=256
+Environment=PYTHONPATH=/opt/sokrat-voip
+Environment=PYTHONUNBUFFERED=1
+Environment=LANG=en_US.UTF-8
+Environment=LC_ALL=en_US.UTF-8
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+# Laya Autonomous Agent is installed but disabled by default until switched on by root in the UI
+systemctl disable sokrat-laya.service 2>/dev/null || true
+systemctl stop sokrat-laya.service 2>/dev/null || true
+echo "  Sokrat Laya GSM maintenance daemon installed (disabled by default until enabled in UI)"
 
 # Provision Webmin Local Control Panel on Port 3001
 echo "  Configuring Webmin Control Panel (Port 3001)..."

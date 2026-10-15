@@ -888,6 +888,13 @@ const isRtl = currentLang === 'ar';
                 if (netChannelsChartInstance) netChannelsChartInstance.resize();
             });
 
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(() => {
+                    if (cpuRamChartInstance) cpuRamChartInstance.resize();
+                    if (netChannelsChartInstance) netChannelsChartInstance.resize();
+                });
+            }
+
             // Pause polling when tab is hidden
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
@@ -945,10 +952,12 @@ const isRtl = currentLang === 'ar';
             const isDark = !document.documentElement.classList.contains('light-theme');
             const textColor = isDark ? '#a1a1aa' : '#71717a';
             const splitColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+            const _storageChartFont = <%= isRtl %> ? "'Cairo', 'JetBrains Mono', sans-serif" : "'JetBrains Mono', 'Cairo', monospace";
 
             if (chart1El && window.echarts) {
                 cpuRamChartInstance = echarts.init(chart1El);
                 cpuRamChartInstance.setOption({
+                    textStyle: { fontFamily: _storageChartFont },
                     animation: false,
                     tooltip: { trigger: 'axis' },
                     grid: { top: 20, right: 15, bottom: 42, left: 35 },
@@ -1019,6 +1028,7 @@ const isRtl = currentLang === 'ar';
             if (chart2El && window.echarts) {
                 netChannelsChartInstance = echarts.init(chart2El);
                 netChannelsChartInstance.setOption({
+                    textStyle: { fontFamily: _storageChartFont },
                     animation: false,
                     tooltip: { trigger: 'axis' },
                     grid: { top: 20, right: 35, bottom: 42, left: 40 },

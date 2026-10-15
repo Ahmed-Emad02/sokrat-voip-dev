@@ -420,7 +420,7 @@ const PERMISSION_CATEGORIES = [
             { key: 'contacts', label: 'Contacts', labelAr: 'جهات الاتصال' },
             { key: 'voicemails', label: 'Voicemails', labelAr: 'البريد الصوتي' },
             { key: 'gsm-dongles', label: 'GSM Dongles', labelAr: 'دونجلات GSM' },
-            { key: 'campaigns', label: 'Campaigns & Dialer', labelAr: 'الحملات والاتصال الآلي' },
+            { key: 'campaigns', label: 'Auto-Dial', labelAr: 'الاتصال التلقائي' },
             { key: 'storage', label: 'Storage & System Health', labelAr: 'التخزين وحالة النظام' },
             { key: 'config', label: 'PBX Configuration', labelAr: 'إعدادات المقسم بالكامل' }
         ]
@@ -464,8 +464,8 @@ const PERMISSION_CATEGORIES = [
     },
     {
         id: 'campaigns',
-        label: 'Campaigns & Dialer Controls',
-        labelAr: 'إجراءات الحملات والاتصال الآلي',
+        label: 'Auto-Dial Controls',
+        labelAr: 'إجراءات الاتصال التلقائي',
         icon: 'phone-outgoing',
         permissions: [
             { key: 'campaigns-manage', label: 'Create / Edit / Delete Campaigns', labelAr: 'إنشاء وتعديل وحذف الحملات' },
@@ -531,7 +531,8 @@ permissions: [
 { key: 'config-dongles', label: 'Dongle Mappings', labelAr: 'ربط الشرائح والخطوط' },
 { key: 'config-modem', label: 'Audio & DSP Gains', labelAr: 'إعدادات الصوت والمودم' },
 { key: 'config-diagram', label: 'Call Flow Diagram', labelAr: 'مخطط سير المكالمات' },
-{ key: 'config-terminal', label: 'TTY Terminal & PBX Reload', labelAr: 'الطرفية وإعادة تحميل المقسم' }
+{ key: 'config-terminal', label: 'TTY Terminal & PBX Reload', labelAr: 'الطرفية وإعادة تحميل المقسم' },
+{ key: 'config-ipscan', label: 'IP Network Scanner', labelAr: 'فحص الشبكة والأجهزة المحلية' }
 ]
 }
 ];
@@ -1862,13 +1863,22 @@ app.use(async (req, res, next) => {
         res.locals.allowedTabs = ALL_TABS;
         return next();
     }
+    // Auto-Dial (Campaigns) tab is root only
+    if (tab === 'campaigns') {
+        if (!res.locals.isRootUser) {
+            const first = getFirstAllowedRoute(req.session.userPermissions);
+            return res.redirect(first || '/no-access');
+        }
+        res.locals.allowedTabs = ALL_TABS;
+        return next();
+    }
     if (res.locals.isSuperAdmin) {
         res.locals.allowedTabs = ALL_TABS;
         return next();
     }
     const userPerms = req.session.userPermissions || [];
     res.locals.allowedTabs = userPerms;
-    if (userPerms.includes(tab) || (tab === 'call_history' && userPerms.includes('cdr')) || (tab === 'campaigns' && userPerms.includes('dialer'))) return next();
+    if (userPerms.includes(tab) || (tab === 'call_history' && userPerms.includes('cdr'))) return next();
     // Hierarchical permissions: access to any operator action permits viewing the live operator board
     if (tab === 'operator' && userPerms.some(p => p.startsWith('operator-'))) {
         return next();
@@ -9907,6 +9917,344 @@ app.post('/api/gsm-dongles/emit-usb-update', (req, res) => {
     res.json({ ok: true });
 });
 
+// ==========================================
+// LAYA GSM MAINTENANCE AGENT REST APIS
+// ==========================================
+
+function queryLayaDaemon(cmdObj) {
+    return new Promise((resolve, reject) => {
+        const socketPath = '/run/sokrat-laya.sock';
+        if (!fs.existsSync(socketPath)) {
+            return reject(new Error('Laya daemon socket not active'));
+        }
+        const client = net.createConnection(socketPath, () => {
+            client.write(JSON.stringify(cmdObj) + '\n');
+        });
+        client.setTimeout(3500);
+        let buffer = '';
+        client.on('data', (data) => {
+            buffer += data.toString('utf8');
+            if (buffer.includes('\n')) {
+                client.end();
+            }
+        });
+        client.on('end', () => {
+            try {
+                const parsed = JSON.parse(buffer.trim());
+                resolve(parsed);
+            } catch (err) {
+                reject(err);
+            }
+        });
+        client.on('timeout', () => {
+            client.destroy();
+            reject(new Error('Laya daemon timeout'));
+        });
+        client.on('error', (err) => {
+            reject(err);
+        });
+    });
+}
+
+// GET /api/laya/status - Real-time Dongle Health Status & Agent Telemetry
+app.get('/api/laya/status', async (req, res) => {
+    try {
+        let daemonOnline = false;
+        let dongles = [];
+
+        try {
+            const resp = await queryLayaDaemon({ command: 'status' });
+            if (resp && resp.success) {
+                daemonOnline = true;
+                dongles = resp.dongles || [];
+            }
+        } catch (_) {}
+
+        if (!daemonOnline) {
+            const [rows] = await pool.query('SELECT * FROM `asterisk`.`laya_dongle_health` ORDER BY `dongle_name` ASC');
+            dongles = rows || [];
+        }
+
+        const total = dongles.length;
+        const healthy = dongles.filter(d => (d.status || '').toLowerCase() === 'healthy').length;
+        const degraded = dongles.filter(d => (d.status || '').toLowerCase() === 'degraded').length;
+        const offline = dongles.filter(d => (d.status || '').toLowerCase() === 'offline').length;
+        const scores = dongles.map(d => Number(d.health_score || 0));
+        const avgScore = total > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / total) : 100;
+
+        let killSwitchActive = false;
+        try {
+            const [settingRows] = await pool.query("SELECT setting_value FROM `asterisk`.`dashboard_settings` WHERE setting_key = 'laya_kill_switch_active' LIMIT 1");
+            killSwitchActive = settingRows.length > 0 && String(settingRows[0].setting_value).toLowerCase() === 'true';
+        } catch (_) {}
+
+        res.json({
+            success: true,
+            daemon_online: daemonOnline,
+            kill_switch_active: killSwitchActive,
+            summary: {
+                total,
+                healthy,
+                degraded,
+                offline,
+                avg_score: avgScore
+            },
+            dongles
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET /api/laya/events - Recent Maintenance Audit Log (with rich filtering & pagination)
+app.get('/api/laya/events', async (req, res) => {
+    try {
+        const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 50));
+        const dongle = String(req.query.dongle || '').trim().toLowerCase();
+        const result = String(req.query.result || '').trim().toLowerCase();
+        const level = parseInt(req.query.level, 10);
+        const search = String(req.query.search || '').trim();
+
+        let whereClauses = [];
+        let params = [];
+
+        if (dongle && dongle !== 'all') {
+            whereClauses.push('dongle_name = ?');
+            params.push(dongle);
+        }
+        if (result && result !== 'all') {
+            whereClauses.push('result = ?');
+            params.push(result);
+        }
+        if (!isNaN(level) && level >= 1 && level <= 5) {
+            whereClauses.push('recovery_level = ?');
+            params.push(level);
+        }
+        if (search) {
+            whereClauses.push('(dongle_name LIKE ? OR trigger_reason LIKE ? OR action_taken LIKE ? OR details LIKE ?)');
+            const sTerm = `%${search}%`;
+            params.push(sTerm, sTerm, sTerm, sTerm);
+        }
+
+        const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+        const [events] = await pool.query(
+            `SELECT * FROM \`asterisk\`.\`laya_maintenance_events\` ${whereSql} ORDER BY \`id\` DESC LIMIT ?`,
+            [...params, limit]
+        );
+        res.json({ success: true, count: events.length, events: events || [] });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/laya/heal/:dongle - Trigger autonomous recovery ladder on single dongle
+app.post('/api/laya/heal/:dongle', requireAuth, async (req, res) => {
+    try {
+        const dongleId = String(req.params.dongle || '').trim().toLowerCase();
+        if (!dongleId) {
+            return res.status(400).json({ success: false, error: 'Dongle ID required' });
+        }
+
+        try {
+            const resp = await queryLayaDaemon({ command: 'heal', dongle: dongleId });
+            return res.json({ success: true, result: resp });
+        } catch (_) {
+            const { execFile } = require('child_process');
+            execFile('/usr/local/bin/laya', ['heal', dongleId], (err, stdout, stderr) => {
+                if (err) {
+                    return res.status(500).json({ success: false, error: stderr || err.message });
+                }
+                res.json({ success: true, output: stdout.trim() });
+            });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET /api/laya/schedule - Query maintenance window schedule & status
+app.get('/api/laya/schedule', requireAuth, async (req, res) => {
+    try {
+        try {
+            const resp = await queryLayaDaemon({ command: 'get-schedule' });
+            if (resp && resp.success) {
+                return res.json({ success: true, schedule: resp.schedule });
+            }
+        } catch (_) {}
+
+        // Fallback to database query if daemon is restarting/offline
+        const [rows] = await pool.query("SELECT setting_key, setting_value FROM `asterisk`.`dashboard_settings` WHERE setting_key LIKE 'laya_scheduled_restart%'");
+        const sched = {
+            enabled: true,
+            start_time: '03:00',
+            end_time: '07:00',
+            cooldown_sec: 25,
+            last_run: ''
+        };
+        for (const r of (rows || [])) {
+            if (r.setting_key === 'laya_scheduled_restart_enabled') sched.enabled = (String(r.setting_value).toLowerCase() === 'true');
+            if (r.setting_key === 'laya_scheduled_restart_start') sched.start_time = String(r.setting_value);
+            if (r.setting_key === 'laya_scheduled_restart_end') sched.end_time = String(r.setting_value);
+            if (r.setting_key === 'laya_scheduled_restart_cooldown_sec') sched.cooldown_sec = parseInt(r.setting_value, 10) || 25;
+            if (r.setting_key === 'laya_scheduled_restart_last_run') sched.last_run = String(r.setting_value);
+        }
+        res.json({ success: true, schedule: sched });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/laya/schedule - Update maintenance window schedule
+app.post('/api/laya/schedule', requireAuth, async (req, res) => {
+    try {
+        const { start_time, end_time, enabled, cooldown_sec } = req.body;
+        const payload = { command: 'set-schedule' };
+        if (start_time) payload.start = String(start_time).trim();
+        if (end_time) payload.end = String(end_time).trim();
+        if (typeof enabled !== 'undefined') payload.enabled = Boolean(enabled);
+        if (cooldown_sec) payload.cooldown = parseInt(cooldown_sec, 10);
+
+        try {
+            const resp = await queryLayaDaemon(payload);
+            if (resp && resp.success) {
+                return res.json({ success: true, message: resp.message, schedule: resp.schedule });
+            }
+        } catch (_) {}
+
+        // Fallback direct DB update
+        if (start_time) await pool.query("INSERT INTO `asterisk`.`dashboard_settings` (setting_key, setting_value) VALUES ('laya_scheduled_restart_start', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", [start_time]);
+        if (end_time) await pool.query("INSERT INTO `asterisk`.`dashboard_settings` (setting_key, setting_value) VALUES ('laya_scheduled_restart_end', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", [end_time]);
+        if (typeof enabled !== 'undefined') await pool.query("INSERT INTO `asterisk`.`dashboard_settings` (setting_key, setting_value) VALUES ('laya_scheduled_restart_enabled', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", [enabled ? 'true' : 'false']);
+        if (cooldown_sec) await pool.query("INSERT INTO `asterisk`.`dashboard_settings` (setting_key, setting_value) VALUES ('laya_scheduled_restart_cooldown_sec', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", [String(cooldown_sec)]);
+
+        res.json({ success: true, message: 'Settings updated in database' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/laya/schedule/run - Trigger manual sequential restart sequence
+app.post('/api/laya/schedule/run', requireAuth, async (req, res) => {
+    try {
+        const force = Boolean(req.body.force);
+        try {
+            const resp = await queryLayaDaemon({ command: 'run-scheduled-restart', force, async: true });
+            return res.json({ success: true, message: resp.message || 'Restart sequence triggered' });
+        } catch (_) {
+            const { execFile } = require('child_process');
+            const args = ['schedule', '--run-now'];
+            if (force) args.push('--force');
+            execFile('/usr/local/bin/laya', args, (err, stdout, stderr) => {
+                if (err) return res.status(500).json({ success: false, error: stderr || err.message });
+                res.json({ success: true, output: stdout.trim() });
+            });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/laya/kill-switch - Emergency Kill Switch for Laya Agent (root only)
+app.post('/api/laya/kill-switch', requireAuth, async (req, res) => {
+    try {
+        const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+        if (!isRoot) {
+            return res.status(403).json({
+                success: false,
+                error: 'Forbidden. Only the root administrator can toggle the Laya kill switch.'
+            });
+        }
+
+        const action = String(req.body.action || '').trim().toLowerCase();
+        if (action !== 'kill' && action !== 'resume') {
+            return res.status(400).json({ success: false, error: 'Invalid action. Must be "kill" or "resume".' });
+        }
+
+        const { exec } = require('child_process');
+        const util = require('util');
+        const execAsync = util.promisify(exec);
+
+        if (action === 'kill') {
+            // Stop and disable sokrat-laya service immediately
+            try {
+                await execAsync('systemctl stop sokrat-laya.service && systemctl disable sokrat-laya.service');
+            } catch (cmdErr) {
+                console.error('[Laya Kill Switch] Error stopping service:', cmdErr);
+            }
+
+            // Remove socket file if lingering
+            try {
+                const fs = require('fs');
+                if (fs.existsSync('/run/sokrat-laya.sock')) {
+                    fs.unlinkSync('/run/sokrat-laya.sock');
+                }
+            } catch (_) {}
+
+            // Persist setting in database
+            await pool.query(
+                "INSERT INTO `asterisk`.`dashboard_settings` (setting_key, setting_value) VALUES ('laya_kill_switch_active', 'true') ON DUPLICATE KEY UPDATE setting_value = 'true'"
+            );
+
+            // Log maintenance audit event
+            await pool.query(
+                "INSERT INTO `asterisk`.`laya_maintenance_events` (`dongle_name`, `trigger_reason`, `recovery_level`, `action_taken`, `result`, `details`, `created_at`) VALUES (?, ?, ?, ?, ?, ?, NOW())",
+                [
+                    'all',
+                    'Emergency Kill Switch Activated by root',
+                    5,
+                    'Laya Agent Killed (Service Stopped & Disabled)',
+                    'success',
+                    'Autonomous watcher disarmed. No automatic healing, channel hangups, or restarts will take place.'
+                ]
+            );
+
+            return res.json({
+                success: true,
+                action: 'kill',
+                kill_switch_active: true,
+                message: 'Laya Agent killed successfully. Service stopped and disabled.'
+            });
+        } else {
+            // Resume: Enable and start sokrat-laya service
+            try {
+                await execAsync('systemctl enable sokrat-laya.service && systemctl start sokrat-laya.service');
+            } catch (cmdErr) {
+                console.error('[Laya Kill Switch] Error starting service:', cmdErr);
+            }
+
+            // Persist setting in database
+            await pool.query(
+                "INSERT INTO `asterisk`.`dashboard_settings` (setting_key, setting_value) VALUES ('laya_kill_switch_active', 'false') ON DUPLICATE KEY UPDATE setting_value = 'false'"
+            );
+
+            // Log maintenance audit event
+            await pool.query(
+                "INSERT INTO `asterisk`.`laya_maintenance_events` (`dongle_name`, `trigger_reason`, `recovery_level`, `action_taken`, `result`, `details`, `created_at`) VALUES (?, ?, ?, ?, ?, ?, NOW())",
+                [
+                    'all',
+                    'Kill Switch Disarmed by root',
+                    1,
+                    'Laya Agent Resumed (Service Enabled & Started)',
+                    'success',
+                    'Autonomous watcher re-armed. Background monitoring and auto-healing resumed.'
+                ]
+            );
+
+            return res.json({
+                success: true,
+                action: 'resume',
+                kill_switch_active: false,
+                message: 'Laya Agent resumed successfully. Service enabled and started.'
+            });
+        }
+    } catch (error) {
+        console.error('[Laya Kill Switch Error]:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+
 function getDongleSiblingPorts(dongleId) {
     if (!dongleId) return [];
     try {
@@ -11891,15 +12239,20 @@ app.get('/config', requireAuth, (req, res) => {
         isRoot
     });
 });
-// GET /dialer - render Auto-Dialer Center view
+// GET /dialer - render Auto-Dial Center view (Root Only)
 app.get('/dialer', requireAuth, (req, res) => {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).render('403', { currentLang: res.locals.currentLang || 'en', isRtl: res.locals.isRtl || false });
+    }
     const currentLang = res.locals.currentLang || 'en';
     res.render('dialer', {
         moment,
         currentPage: '/dialer',
         currentLang,
         isRtl: currentLang === 'ar',
-        isSuperAdmin: isSuperAdmin(req)
+        isSuperAdmin: true,
+        isRootUser: true
     });
 });
 
@@ -12088,6 +12441,12 @@ use_avpf=yes
 rtcp_mux=yes
 force_rport=yes
 rewrite_contact=yes
+rtp_timeout=30
+rtp_timeout_hold=60
+rtp_keepalive=5
+timers=yes
+timers_min_se=90
+timers_sess_expires=1800
 auth=${extNum}-auth
 aors=${extNum}
 callerid=${safeName} <${extNum}>
@@ -12104,6 +12463,7 @@ max_contacts=10
 remove_existing=no
 remove_unavailable=yes
 qualify_frequency=30
+qualify_timeout=5
 ${endMarker}
 `;
         content += (content ? '\n' : '') + newBlock;
@@ -15942,6 +16302,80 @@ app.delete('/api/config/timeconditions/:id', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// --- LOCAL NETWORK IP & PORT SCANNER (nmap) ---
+const ipScanner = require('./lib/ip-scanner');
+
+// GET /api/config/ipscan/interfaces - Returns detected physical local network subnets only (VPN/Virtual excluded)
+app.get('/api/config/ipscan/interfaces', requireConfigPermission('ipscan'), (req, res) => {
+    try {
+        const ifaces = ipScanner.getLocalPhysicalInterfaces();
+        res.json({ success: true, interfaces: ifaces });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/config/ipscan/scan - Start scan on authorized local target
+app.post('/api/config/ipscan/scan', requireConfigPermission('ipscan'), (req, res) => {
+    try {
+        const { target, profile, customPorts } = req.body;
+        if (!target) {
+            return res.status(400).json({ success: false, error: 'Target subnet or IP address is required' });
+        }
+        const scanRes = ipScanner.startScan({ target, profile, customPorts });
+        res.json(scanRes);
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/config/ipscan/status - Get current scan progress and live results
+app.get('/api/config/ipscan/status', requireConfigPermission('ipscan'), (req, res) => {
+    try {
+        const status = ipScanner.getScanStatus();
+        res.json({ success: true, status });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/config/ipscan/stop - Cancel active scan
+app.post('/api/config/ipscan/stop', requireConfigPermission('ipscan'), (req, res) => {
+    try {
+        const stopRes = ipScanner.stopScan();
+        res.json(stopRes);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/config/ipscan/export - Export scan results as CSV
+app.get('/api/config/ipscan/export', requireConfigPermission('ipscan'), (req, res) => {
+    try {
+        const status = ipScanner.getScanStatus();
+        const results = status.results || [];
+        let csv = 'IP Address,Vendor / Manufacturer,Hostname,HTTP/HTTPS Server,MAC Address,Status,Latency (ms),VoIP Device,Open Ports\n';
+        for (const h of results) {
+            const portsStr = (h.ports || []).map(p => `${p.port}/${p.protocol} (${p.service || 'unknown'})`).join('; ');
+            csv += `"${h.ip}","${(h.vendor || '').replace(/"/g, '""')}","${(h.hostname || '').replace(/"/g, '""')}","${(h.httpServerName || '').replace(/"/g, '""')}","${h.mac}","${h.status}","${h.latencyMs}","${h.isVoipDevice ? 'Yes' : 'No'}","${portsStr.replace(/"/g, '""')}"\n`;
+        }
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="sokrat_ip_scan_${moment().format('YYYYMMDD_HHmmss')}.csv"`);
+        res.send(csv);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ALL /api/config/ipscan/proxy/:targetIp/:targetPort/* - Built-in reverse proxy bridge for local device Web Console
+app.all('/api/config/ipscan/proxy/:targetIp/:targetPort/*', requireConfigPermission('ipscan'), (req, res) => {
+    ipScanner.handleDeviceProxy(req, res);
+});
+app.all('/api/config/ipscan/proxy/:targetIp/:targetPort', requireConfigPermission('ipscan'), (req, res) => {
+    ipScanner.handleDeviceProxy(req, res);
+});
+
 // GET /api/config/modem - List modem gain settings from dongle.conf
 app.get('/api/config/modem', async (req, res) => {
     try {
@@ -18348,8 +18782,17 @@ async function finalizeAttempt(attemptUuid, terminalStatus, causeCode = 0) {
     }
 }
 
+// Middleware: Restrict Auto-Dial Campaign Management APIs to Root User Only
+function requireRootForDialer(req, res, next) {
+    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    if (!isRoot) {
+        return res.status(403).json({ success: false, error: 'Access denied. Auto-dial campaigns are restricted to the root user only.' });
+    }
+    next();
+}
+
 // GET /api/dialer/attempts/recent - Recent attempt ledger logs for live monitoring
-app.get('/api/dialer/attempts/recent', async (req, res) => {
+app.get('/api/dialer/attempts/recent', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         if (dialerRecentAttempts.length > 0) {
             return res.json({ success: true, attempts: dialerRecentAttempts.slice(0, 30) });
@@ -18370,7 +18813,7 @@ app.get('/api/dialer/attempts/recent', async (req, res) => {
     }
 });
 // GET /api/dialer/dongles - Available GSM dongles from Asterisk
-app.get('/api/dialer/dongles', async (req, res) => {
+app.get('/api/dialer/dongles', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const stdout = await execFileAsync(ASTERISK_BIN, ['-rx', 'dongle show devices']);
         const dongles = [];
@@ -18412,7 +18855,7 @@ app.get('/api/dialer/dongles', async (req, res) => {
 });
 
 // GET /api/dialer/campaigns
-app.get('/api/dialer/campaigns', async (req, res) => {
+app.get('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const [campaigns] = await pool.query('SELECT * FROM `asterisk`.`dialer_campaigns` ORDER BY id DESC');
         for (const c of campaigns) {
@@ -18446,7 +18889,7 @@ app.get('/api/dialer/campaigns', async (req, res) => {
 });
 
 // POST /api/dialer/campaigns
-app.get('/api/dialer/campaigns/:id', async (req, res) => {
+app.get('/api/dialer/campaigns/:id', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ success: false, error: 'Invalid campaign ID' });
@@ -18459,7 +18902,7 @@ app.get('/api/dialer/campaigns/:id', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
-app.post('/api/dialer/campaigns', requireAuth, async (req, res) => {
+app.post('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req, res) => {
     const perms = req.session.userPermissions || [];
     if (!isSuperAdmin(req) && !perms.includes('campaigns-manage') && !perms.includes('campaigns')) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Missing campaigns-manage permission' });
@@ -18509,7 +18952,7 @@ app.post('/api/dialer/campaigns', requireAuth, async (req, res) => {
 });
 
 // PUT /api/dialer/campaigns/:id
-app.put('/api/dialer/campaigns/:id', requireAuth, async (req, res) => {
+app.put('/api/dialer/campaigns/:id', requireAuth, requireRootForDialer, async (req, res) => {
     const perms = req.session.userPermissions || [];
     if (!isSuperAdmin(req) && !perms.includes('campaigns-manage') && !perms.includes('campaigns')) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Missing campaigns-manage permission' });
@@ -18556,7 +18999,7 @@ app.put('/api/dialer/campaigns/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/dialer/campaigns/:id/control
-app.post('/api/dialer/campaigns/:id/control', requireAuth, async (req, res) => {
+app.post('/api/dialer/campaigns/:id/control', requireAuth, requireRootForDialer, async (req, res) => {
     const perms = req.session.userPermissions || [];
     const isControlAction = ['start', 'pause', 'stop', 'reset'].includes(req.body.action);
     const isDeleteAction = req.body.action === 'delete';
@@ -18605,7 +19048,7 @@ app.post('/api/dialer/campaigns/:id/control', requireAuth, async (req, res) => {
 });
 
 // GET /api/dialer/leads/template - Download CSV Template (MUST be before :campaignId or Express shadows it)
-app.get('/api/dialer/leads/template', async (req, res) => {
+app.get('/api/dialer/leads/template', requireAuth, requireRootForDialer, async (req, res) => {
     const format = String(req.query.format || '').toLowerCase();
     let leadFields = [];
     const campaignId = parseInt(req.query.campaign_id, 10);
@@ -18656,7 +19099,7 @@ app.get('/api/dialer/leads/template', async (req, res) => {
 });
 
 // GET /api/dialer/leads/:campaignId (Supports pagination, search, and status filter)
-app.get('/api/dialer/leads/:campaignId', async (req, res) => {
+app.get('/api/dialer/leads/:campaignId', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const campaignId = parseInt(req.params.campaignId, 10);
         if (!Number.isInteger(campaignId) || campaignId <= 0) {
@@ -18710,7 +19153,7 @@ app.get('/api/dialer/leads/:campaignId', async (req, res) => {
 });
 
 // GET /api/dialer/campaigns/:id/export - Export campaign leads with call outcomes as CSV
-app.get('/api/dialer/campaigns/:id/export', requireAuth, requireActionPermission('campaigns-export-leads'), async (req, res) => {
+app.get('/api/dialer/campaigns/:id/export', requireAuth, requireRootForDialer, requireActionPermission('campaigns-export-leads'), async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         const [cRows] = await pool.query('SELECT name, lead_fields FROM `asterisk`.`dialer_campaigns` WHERE id = ?', [id]);
@@ -18782,7 +19225,7 @@ app.get('/api/dialer/campaigns/:id/export', requireAuth, requireActionPermission
 });
 
 // DELETE /api/dialer/leads/:id - Delete single lead
-app.delete('/api/dialer/leads/:id', async (req, res) => {
+app.delete('/api/dialer/leads/:id', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         await pool.query('DELETE FROM `asterisk`.`dialer_leads` WHERE id = ?', [id]);
@@ -18793,7 +19236,7 @@ app.delete('/api/dialer/leads/:id', async (req, res) => {
 });
 
 // POST /api/dialer/leads/:id/reset - Reset single lead to pending
-app.post('/api/dialer/leads/:id/reset', async (req, res) => {
+app.post('/api/dialer/leads/:id/reset', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         await pool.query("UPDATE `asterisk`.`dialer_leads` SET status = 'pending', attempts = 0, last_called_at = NULL, disposition = NULL WHERE id = ?", [id]);
@@ -18843,7 +19286,7 @@ app.get('/api/dialer/dispositions', async (req, res) => {
 });
 
 // GET /api/dialer/dnc
-app.get('/api/dialer/dnc', async (req, res) => {
+app.get('/api/dialer/dnc', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const [dnc] = await pool.query('SELECT * FROM `asterisk`.`dialer_dnc` ORDER BY created_at DESC');
         res.json({ success: true, dnc });
@@ -18853,7 +19296,7 @@ app.get('/api/dialer/dnc', async (req, res) => {
 });
 
 // POST /api/dialer/dnc
-app.post('/api/dialer/dnc', requireAuth, requireActionPermission('campaigns-dnc'), async (req, res) => {
+app.post('/api/dialer/dnc', requireAuth, requireRootForDialer, requireActionPermission('campaigns-dnc'), async (req, res) => {
     try {
         const { phone_number, reason } = req.body;
         if (!phone_number) return res.status(400).json({ success: false, error: 'Phone number is required' });
@@ -18868,7 +19311,7 @@ app.post('/api/dialer/dnc', requireAuth, requireActionPermission('campaigns-dnc'
     }
 });
 // DELETE /api/dialer/dnc/:phone
-app.delete('/api/dialer/dnc/:phone', async (req, res) => {
+app.delete('/api/dialer/dnc/:phone', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const phone = String(req.params.phone || '').trim();
         await pool.query('DELETE FROM `asterisk`.`dialer_dnc` WHERE phone_number = ?', [phone]);
@@ -18883,7 +19326,7 @@ const csvUpload = multer({
 });
 
 // POST /api/dialer/leads - Create a single lead without a file upload
-app.post('/api/dialer/leads', async (req, res) => {
+app.post('/api/dialer/leads', requireAuth, requireRootForDialer, async (req, res) => {
     try {
         const campaignId = parseInt(req.body.campaign_id, 10);
         if (!Number.isInteger(campaignId) || campaignId <= 0) {
@@ -18928,7 +19371,7 @@ app.post('/api/dialer/leads', async (req, res) => {
 });
 
 // POST /api/dialer/leads/import
-app.post('/api/dialer/leads/import', requireAuth, requireActionPermission('campaigns-import-leads'), csvUpload.single('file'), async (req, res) => {
+app.post('/api/dialer/leads/import', requireAuth, requireRootForDialer, requireActionPermission('campaigns-import-leads'), csvUpload.single('file'), async (req, res) => {
     try {
         const campaignId = parseInt(req.body.campaign_id, 10);
         if (!campaignId) {
@@ -20149,6 +20592,20 @@ app.get('/api/admin/git-history/commit/:hash', requireAuth, async (req, res) => 
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
+});
+
+// Catch-all Referer fallback: Auto-proxy escaped subresources/links originating from proxied device consoles
+app.use((req, res, next) => {
+    if (req.headers.referer) {
+        const refMatch = req.headers.referer.match(/\/api\/config\/ipscan\/proxy\/([0-9.]+)\/([0-9]+)/);
+        if (refMatch) {
+            const refIp = refMatch[1];
+            const refPort = refMatch[2];
+            req.params = { targetIp: refIp, targetPort: refPort, 0: req.path.replace(/^\/+/, '') };
+            return ipScanner.handleDeviceProxy(req, res);
+        }
+    }
+    next();
 });
 
 // 404 handler for unmatched routes

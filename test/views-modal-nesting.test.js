@@ -3,47 +3,67 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const ejs = require('ejs');
+const vm = require('vm');
 
 const viewsDir = path.join(__dirname, '../views');
 const configEjsPath = path.join(viewsDir, 'config.ejs');
 
 // Walks HTML tracking <div> nesting while skipping <script>/<style>/comments.
-// Returns { finalDepth, nestedModals } where nestedModals lists modal elements
-// that opened while another [id$="Modal"] element was still open on the stack.
+// Returns line-accurate records for unclosed and orphaned tags.
 function analyzeDivNesting(html) {
     const stack = [];
     const nestedModals = [];
-    let extraCloses = 0;
+    const orphanCloses = [];
     let inScript = false;
     let inStyle = false;
-    html = html.replace(/<%[\s\S]*?%>/g, '');
-    const re = /<\/?div\b[^>]*>?|<script\b[^>]*>|<\/script>|<style\b[^>]*>|<\/style>|<!--[\s\S]*?-->/g;
+
+    // Strip EJS tags while preserving line breaks for accurate line reporting
+    const cleanHtml = html.replace(/<%[\s\S]*?%>/g, (m) => '\n'.repeat((m.match(/\n/g) || []).length));
+    const re = /<\/?div\b[^>]*>?|<script\b[^>]*>|<\/script>|<style\b[^>]*>|<\/style>|<!--[\s\S]*?-->/gi;
     let m;
-    while ((m = re.exec(html)) !== null) {
+
+    while ((m = re.exec(cleanHtml)) !== null) {
         const t = m[0];
+        const line = cleanHtml.slice(0, m.index).split('\n').length;
+
         if (t.startsWith('<!--')) continue;
-        if (/^<script/.test(t)) { inScript = true; continue; }
-        if (/^<\/script/.test(t)) { inScript = false; continue; }
-        if (/^<style/.test(t)) { inStyle = true; continue; }
-        if (/^<\/style/.test(t)) { inStyle = false; continue; }
+        if (/^<script/i.test(t)) { inScript = true; continue; }
+        if (/^<\/script/i.test(t)) { inScript = false; continue; }
+        if (/^<style/i.test(t)) { inStyle = true; continue; }
+        if (/^<\/style/i.test(t)) { inStyle = false; continue; }
         if (inScript || inStyle) continue;
+
         if (/^<\//.test(t)) {
             if (stack.length > 0) {
                 stack.pop();
             } else {
-                extraCloses++;
+                orphanCloses.push({ line, tag: '</div>' });
             }
             continue;
         }
-        if (/\/>$/.test(t)) continue;
-        const idM = t.match(/id="([^"]+)"/);
+
+        // Skip self-closing tags (<div ... />)
+        if (/\/\s*>$/.test(t)) continue;
+
+        const idM = t.match(/id=["']([^"']+)["']/i);
+        const tagPreview = t.replace(/\s+/g, ' ').slice(0, 60);
+
         if (idM && /^[a-zA-Z]+Modal$/.test(idM[1])) {
             const enclosing = [...stack].reverse().find(s => s.id && /Modal$/.test(s.id));
-            if (enclosing) nestedModals.push(`${idM[1]} nested inside ${enclosing.id}`);
+            if (enclosing) {
+                nestedModals.push(`${idM[1]} (line ${line}) nested inside ${enclosing.id} (line ${enclosing.line})`);
+            }
         }
-        stack.push({ id: idM ? idM[1] : null });
+        stack.push({ id: idM ? idM[1] : null, line, tag: tagPreview });
     }
-    return { finalDepth: stack.length, extraCloses, nestedModals };
+
+    return {
+        finalDepth: stack.length,
+        extraCloses: orphanCloses.length,
+        unclosedDivs: stack.map(s => `line ${s.line}: ${s.tag}`),
+        orphanCloses: orphanCloses.map(c => `line ${c.line}: ${c.tag}`),
+        nestedModals
+    };
 }
 
 test('config.ejs renders fully balanced markup with no unclosed wrapper divs (en + ar)', () => {
@@ -62,7 +82,8 @@ test('config.ejs renders fully balanced markup with no unclosed wrapper divs (en
         }, { filename: configEjsPath });
 
         const r = analyzeDivNesting(html);
-        assert.equal(r.finalDepth, 0, `config.ejs [${lang}] has ${r.finalDepth} unclosed <div> element(s) — an unclosed modal wrapper swallows every later sibling modal into its display:none shell`);
+        assert.equal(r.finalDepth, 0, `config.ejs [${lang}] has ${r.finalDepth} unclosed <div> element(s): [${r.unclosedDivs.join('; ')}]`);
+        assert.equal(r.extraCloses, 0, `config.ejs [${lang}] has ${r.extraCloses} orphan </div> closing tag(s): [${r.orphanCloses.join('; ')}]`);
     }
 });
 
@@ -82,7 +103,7 @@ test('no PBX modal in config.ejs is nested inside another modal (they must be bo
         }, { filename: configEjsPath });
 
         const r = analyzeDivNesting(html);
-        assert.deepEqual(r.nestedModals, [], `config.ejs [${lang}]: modals must not nest inside each other — a closed parent modal (display:none !important from closeAllModals) hides any child modal permanently`);
+        assert.deepEqual(r.nestedModals, [], `config.ejs [${lang}]: modals must not nest inside each other — a closed parent modal hides any child modal permanently: [${r.nestedModals.join('; ')}]`);
     }
 });
 
@@ -92,10 +113,10 @@ test('all view templates have balanced top-level div structure', () => {
         const src = fs.readFileSync(path.join(viewsDir, f), 'utf8');
         const r = analyzeDivNesting(src);
         if (r.finalDepth !== 0) {
-            problems.push(`${f}: ${r.finalDepth} unclosed <div>`);
+            problems.push(`${f}: ${r.finalDepth} unclosed <div> [${r.unclosedDivs.join('; ')}]`);
         }
         if (r.extraCloses > 0) {
-            problems.push(`${f}: ${r.extraCloses} extra/orphan </div> closing tag(s)`);
+            problems.push(`${f}: ${r.extraCloses} extra/orphan </div> closing tag(s) [${r.orphanCloses.join('; ')}]`);
         }
         if (r.nestedModals.length > 0) {
             problems.push(`${f}: ${r.nestedModals.join(', ')}`);
@@ -105,14 +126,13 @@ test('all view templates have balanced top-level div structure', () => {
 });
 
 test('all view templates have balanced interactive tags and valid script syntax', () => {
-    const vm = require('vm');
     const problems = [];
 
     for (const f of fs.readdirSync(viewsDir).filter(x => x.endsWith('.ejs')).sort()) {
         const content = fs.readFileSync(path.join(viewsDir, f), 'utf8');
 
         // Check common pair tags
-        for (const tag of ['button', 'script', 'select', 'form', 'label']) {
+        for (const tag of ['button', 'script', 'select', 'form', 'label', 'textarea']) {
             const openRegex = new RegExp(`<${tag}[\\s>]`, 'gi');
             const closeRegex = new RegExp(`</${tag}>`, 'gi');
             const opens = (content.match(openRegex) || []).length;
@@ -126,13 +146,23 @@ test('all view templates have balanced interactive tags and valid script syntax'
         const scripts = content.match(/<script\b[^>]*>([\s\S]*?)<\/script>/gi) || [];
         scripts.forEach((scr, idx) => {
             let code = scr.replace(/<script\b[^>]*>/i, '').replace(/<\/script>/i, '');
-            code = code.replace(/<%[=-]?([\s\S]*?)%>/g, '"placeholder"');
-            code = code.replace(/<%([\s\S]*?)%>/g, '');
+            const contextName = `${f} script block #${idx + 1}`;
+
+            // Clean EJS expressions for VM evaluation while preserving lines
+            let vmCode = code.replace(/<%[=-]?([\s\S]*?)%>/g, '"placeholder"');
+            vmCode = vmCode.replace(/<%([\s\S]*?)%>/g, (m) => '\n'.repeat((m.match(/\n/g) || []).length));
             try {
-                new vm.Script(code);
+                new vm.Script(vmCode);
             } catch (err) {
-                if (err.message.includes('missing') || err.message.includes('Unterminated') || err.message.includes('Unexpected end of input')) {
-                    problems.push(`${f} script block #${idx + 1} syntax/bracket error: ${err.message}`);
+                const msg = err.message || '';
+                const isBracketOrSyntaxError = msg.includes('missing')
+                    || msg.includes('Unterminated')
+                    || msg.includes('Unexpected end of input')
+                    || msg.includes("Unexpected token '}'")
+                    || msg.includes("Unexpected token ')'")
+                    || msg.includes("Unexpected token ']'");
+                if (isBracketOrSyntaxError) {
+                    problems.push(`${contextName} syntax/bracket error: ${msg}`);
                 }
             }
         });

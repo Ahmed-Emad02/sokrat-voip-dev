@@ -12,7 +12,7 @@ const words = {
         inboundLabel: "Inbound", outboundLabel: "Outbound",
         talkTime: "Talk Time", sec: "s", min: "min",
         disposition: "Call Disposition", daily: "Daily Call Volume",
-        hourly: "Peak Hours Distribution", duration: "Call Duration Breakdown", exportPdf: "Save PDF",
+        hourly: "Peak Hours Distribution", duration: "Call Duration", exportPdf: "Save PDF",
         recentCalls: "Recent Calls", noData: "No data found",
         src: "Source", dst: "Destination", duration: "Duration", status: "Status",
         footerLeft: "Agent Analytics Engine", footerRight: "Monitored Extensions:",
@@ -70,7 +70,7 @@ const words = {
         inboundLabel: "وارد", outboundLabel: "صادر",
         talkTime: "وقت التحدث", sec: "ث", min: "د",
         disposition: "حالة المكالمة", daily: "حجم المكالمات اليومي",
-        hourly: "توزيع المكالمات بالساعات", duration: "تصنيف مدة المكالمات", exportPdf: "حفظ PDF",
+        hourly: "توزيع المكالمات بالساعات", duration: "مدة المكالمات", exportPdf: "حفظ PDF",
         recentCalls: "آخر المكالمات", noData: "لا توجد بيانات",
         src: "المصدر", dst: "الوجهة", duration: "المدة", status: "الحالة",
         footerLeft: "محرك تحليلات الوكلاء", footerRight: "الوكلاء المراقبة:",
@@ -1256,6 +1256,7 @@ const isRtl = currentLang === 'ar';
             });
         }
         let statusChart = null;
+        const _extChartFont = <%= isRtl %> ? "'Cairo', 'JetBrains Mono', sans-serif" : "'JetBrains Mono', 'Cairo', monospace";
         function initStatusChart(data) {
             const container = document.getElementById('statusChart');
             if (!container) return;
@@ -1272,12 +1273,13 @@ const isRtl = currentLang === 'ar';
             };
 
             statusChart.setOption({
+                textStyle: { fontFamily: _extChartFont },
                 backgroundColor: 'transparent',
                 tooltip: {
                     trigger: 'item',
                     backgroundColor: isLight ? '#ffffff' : '#18181b',
                     borderColor: isLight ? '#e4e4e7' : '#27272a',
-                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 },
+                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11, fontFamily: _extChartFont },
                     formatter: function(params) {
                         const pct = totalSec > 0 ? Math.round((params.value / totalSec) * 100) : 0;
                         return `<b>${params.name}</b>: ${fmtDur(params.value)} (${pct}%)`;
@@ -1285,7 +1287,7 @@ const isRtl = currentLang === 'ar';
                 },
                 legend: {
                     bottom: '0%',
-                    textStyle: { color: isLight ? '#09090b' : '#a1a1aa', fontSize: 10, fontWeight: 700 }
+                    textStyle: { color: isLight ? '#09090b' : '#a1a1aa', fontSize: 10, fontWeight: 700, fontFamily: _extChartFont }
                 },
                 series: [{
                     name: 'Status',
@@ -1352,17 +1354,18 @@ const isRtl = currentLang === 'ar';
             const defaultMatte = isLight ? '#3f3f46' : '#71717a';
 
             dispositionChart.setOption({
+                textStyle: { fontFamily: _extChartFont },
                 backgroundColor: 'transparent',
                 tooltip: { 
                     trigger: 'item', 
                     formatter: '{b}: {c} ({d}%)',
                     backgroundColor: isLight ? '#ffffff' : '#18181b',
                     borderColor: isLight ? '#e4e4e7' : '#27272a',
-                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 }
+                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11, fontFamily: _extChartFont }
                 },
                 legend: { 
                     bottom: '0%', 
-                    textStyle: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 10, fontWeight: 'bold' } 
+                    textStyle: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 10, fontWeight: 'bold', fontFamily: _extChartFont } 
                 },
                 series: [{
                     name: 'Disposition',
@@ -1394,27 +1397,28 @@ const isRtl = currentLang === 'ar';
             dailyChart = echarts.init(document.getElementById('dailyChart'), isLight ? null : 'dark');
 
             dailyChart.setOption({
+                textStyle: { fontFamily: _extChartFont },
                 backgroundColor: 'transparent',
                 tooltip: { 
                     trigger: 'axis',
                     backgroundColor: isLight ? '#ffffff' : '#18181b',
                     borderColor: isLight ? '#e4e4e7' : '#27272a',
-                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 }
+                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11, fontFamily: _extChartFont }
                 },
                 legend: { 
                     bottom: '0%', 
-                    textStyle: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 10, fontWeight: 'bold' } 
+                    textStyle: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 10, fontWeight: 'bold', fontFamily: _extChartFont } 
                 },
                 grid: { left: '3%', right: '3%', top: '14%', bottom: '12%', containLabel: true },
                 xAxis: {
                     type: 'category',
                     data: data.map(d => d.date.slice(5)),
-                    axisLabel: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 9, fontWeight: 'bold' },
+                    axisLabel: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 9, fontWeight: 'bold', fontFamily: _extChartFont },
                     axisLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a' } }
                 },
                 yAxis: {
                     type: 'value',
-                    axisLabel: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 9 },
+                    axisLabel: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 9, fontFamily: _extChartFont },
                     splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } }
                 },
                 series: [
@@ -1453,23 +1457,24 @@ const isRtl = currentLang === 'ar';
             hourlyChart = echarts.init(document.getElementById('hourlyChart'), isLight ? null : 'dark');
 
             hourlyChart.setOption({
+                textStyle: { fontFamily: _extChartFont },
                 backgroundColor: 'transparent',
                 tooltip: { 
                     trigger: 'axis',
                     backgroundColor: isLight ? '#ffffff' : '#18181b',
                     borderColor: isLight ? '#e4e4e7' : '#27272a',
-                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 }
+                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11, fontFamily: _extChartFont }
                 },
                 grid: { left: '3%', right: '3%', top: '14%', bottom: '12%', containLabel: true },
                 xAxis: {
                     type: 'category',
                     data: data.map(d => d.hour),
-                    axisLabel: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 8, interval: 2 },
+                    axisLabel: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 8, interval: 2, fontFamily: _extChartFont },
                     axisLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a' } }
                 },
                 yAxis: {
                     type: 'value',
-                    axisLabel: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 9 },
+                    axisLabel: { color: isLight ? '#27272a' : '#a1a1aa', fontSize: 9, fontFamily: _extChartFont },
                     splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } }
                 },
                 series: [{
@@ -1501,13 +1506,14 @@ const isRtl = currentLang === 'ar';
             const totalDurVal = data.reduce((acc, curr) => acc + (curr.value || 0), 0) || 1;
 
             durationChart.setOption({
+                textStyle: { fontFamily: _extChartFont },
                 backgroundColor: 'transparent',
                 tooltip: { 
                     trigger: 'axis',
                     axisPointer: { type: 'shadow' },
                     backgroundColor: isLight ? '#ffffff' : '#18181b',
                     borderColor: isLight ? '#e4e4e7' : '#27272a',
-                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11 },
+                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11, fontFamily: _extChartFont },
                     formatter: function(params) {
                         const p = params[0];
                         const pct = Math.round((p.value / totalDurVal) * 100);
@@ -1518,14 +1524,14 @@ const isRtl = currentLang === 'ar';
                 xAxis: {
                     type: 'value',
                     splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } },
-                    axisLabel: { color: isLight ? '#52525b' : '#71717a', fontSize: 9 }
+                    axisLabel: { color: isLight ? '#52525b' : '#71717a', fontSize: 9, fontFamily: _extChartFont }
                 },
                 yAxis: {
                     type: 'category',
                     data: data.map(d => d.name),
                     axisLine: { show: false },
                     axisTick: { show: false },
-                    axisLabel: { color: isLight ? '#27272a' : '#ffffff', fontSize: 10, fontWeight: 'bold' }
+                    axisLabel: { color: isLight ? '#27272a' : '#ffffff', fontSize: 10, fontWeight: 'bold', fontFamily: _extChartFont }
                 },
                 series: [{
                     name: 'Duration',
@@ -1555,6 +1561,14 @@ const isRtl = currentLang === 'ar';
                 }]
             });
             window.addEventListener('resize', () => durationChart && durationChart.resize());
+        }
+
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => {
+                [statusChart, dispositionChart, dailyChart, hourlyChart, durationChart].forEach(c => {
+                    if (c && typeof c.resize === 'function') c.resize();
+                });
+            });
         }
     </script>
     <script>

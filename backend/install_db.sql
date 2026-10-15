@@ -56,7 +56,15 @@ INSERT IGNORE INTO `dashboard_settings` (`setting_key`, `setting_value`) VALUES
   ('alert_monitored_services', '["asterisk","database","sokrat-voip","httpd"]'),
   ('webhook_incoming_call_enabled', 'false'),
   ('webhook_incoming_call_url', ''),
-  ('webhook_incoming_call_secret', '');
+  ('webhook_incoming_call_secret', ''),
+  ('laya_scheduled_restart_enabled', 'true'),
+  ('laya_scheduled_restart_start', '03:00'),
+  ('laya_scheduled_restart_end', '07:00'),
+  ('laya_scheduled_restart_cooldown_sec', '25'),
+  ('laya_scheduled_restart_last_run', ''),
+  ('laya_kill_switch_active', 'true');
+
+
 
 CREATE TABLE IF NOT EXISTS `dashboard_groups` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -654,3 +662,42 @@ ON DUPLICATE KEY UPDATE
   backend_module = VALUES(backend_module),
   backend_feature = VALUES(backend_feature),
   backend_feature_secondary = VALUES(backend_feature_secondary);
+
+-- Sokrat Laya GSM Maintenance Agent: Real-time Dongle Health Status
+CREATE TABLE IF NOT EXISTS `laya_dongle_health` (
+  `dongle_name` VARCHAR(50) NOT NULL PRIMARY KEY,
+  `health_score` TINYINT NOT NULL DEFAULT 100,
+  `status` ENUM('healthy', 'degraded', 'healing', 'frozen', 'offline') NOT NULL DEFAULT 'healthy',
+  `rssi` TINYINT DEFAULT NULL,
+  `carrier_registered` TINYINT(1) DEFAULT 1,
+  `provider_name` VARCHAR(100) DEFAULT NULL,
+  `model` VARCHAR(50) DEFAULT NULL,
+  `firmware` VARCHAR(50) DEFAULT NULL,
+  `imei` VARCHAR(30) DEFAULT NULL,
+  `imsi` VARCHAR(30) DEFAULT NULL,
+  `phone_number` VARCHAR(30) DEFAULT NULL,
+  `active_channel` VARCHAR(100) DEFAULT NULL,
+  `stuck_state_duration` INT DEFAULT 0,
+  `healing_level` TINYINT DEFAULT 0,
+  `last_heal_action` VARCHAR(100) DEFAULT NULL,
+  `last_heal_at` DATETIME DEFAULT NULL,
+  `consecutive_errors` INT DEFAULT 0,
+  `last_check_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_laya_status` (`status`),
+  INDEX `idx_laya_score` (`health_score`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Sokrat Laya GSM Maintenance Agent: Audit Trail of Autonomous Interventions
+CREATE TABLE IF NOT EXISTS `laya_maintenance_events` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `dongle_name` VARCHAR(50) NOT NULL,
+  `trigger_reason` VARCHAR(150) NOT NULL,
+  `recovery_level` TINYINT NOT NULL,
+  `action_taken` VARCHAR(150) NOT NULL,
+  `result` ENUM('success', 'failed', 'in_progress') NOT NULL DEFAULT 'in_progress',
+  `details` TEXT DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_laya_dongle_time` (`dongle_name`, `created_at`),
+  INDEX `idx_laya_result` (`result`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

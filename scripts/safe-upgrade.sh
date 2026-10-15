@@ -152,8 +152,16 @@ mysql "${MYSQL_AUTH[@]}" asterisk -e "
 INSERT IGNORE INTO dashboard_settings (setting_key, setting_value) VALUES
   ('webhook_incoming_call_enabled', 'false'),
   ('webhook_incoming_call_url', ''),
-  ('webhook_incoming_call_secret', '');
+  ('webhook_incoming_call_secret', ''),
+  ('laya_scheduled_restart_enabled', 'true'),
+  ('laya_scheduled_restart_start', '03:00'),
+  ('laya_scheduled_restart_end', '07:00'),
+  ('laya_scheduled_restart_cooldown_sec', '25'),
+  ('laya_scheduled_restart_last_run', ''),
+  ('laya_kill_switch_active', 'true');
+
 " 2>/dev/null || true
+
 
 # Camp-On (Callback When Free) callbacks table
 mysql "${MYSQL_AUTH[@]}" asterisk -e "
@@ -168,6 +176,42 @@ CREATE TABLE IF NOT EXISTS \`sokrat_camp_on_callbacks\` (
   \`completed_at\` DATETIME DEFAULT NULL,
   INDEX \`idx_camp_pending\` (\`status\`, \`target_ext\`, \`caller_ext\`),
   INDEX \`idx_camp_expires\` (\`expires_at\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS \`laya_dongle_health\` (
+  \`dongle_name\` VARCHAR(50) NOT NULL PRIMARY KEY,
+  \`health_score\` TINYINT NOT NULL DEFAULT 100,
+  \`status\` ENUM('healthy', 'degraded', 'healing', 'frozen', 'offline') NOT NULL DEFAULT 'healthy',
+  \`rssi\` TINYINT DEFAULT NULL,
+  \`carrier_registered\` TINYINT(1) DEFAULT 1,
+  \`provider_name\` VARCHAR(100) DEFAULT NULL,
+  \`model\` VARCHAR(50) DEFAULT NULL,
+  \`firmware\` VARCHAR(50) DEFAULT NULL,
+  \`imei\` VARCHAR(30) DEFAULT NULL,
+  \`imsi\` VARCHAR(30) DEFAULT NULL,
+  \`phone_number\` VARCHAR(30) DEFAULT NULL,
+  \`active_channel\` VARCHAR(100) DEFAULT NULL,
+  \`stuck_state_duration\` INT DEFAULT 0,
+  \`healing_level\` TINYINT DEFAULT 0,
+  \`last_heal_action\` VARCHAR(100) DEFAULT NULL,
+  \`last_heal_at\` DATETIME DEFAULT NULL,
+  \`consecutive_errors\` INT DEFAULT 0,
+  \`last_check_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX \`idx_laya_status\` (\`status\`),
+  INDEX \`idx_laya_score\` (\`health_score\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS \`laya_maintenance_events\` (
+  \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  \`dongle_name\` VARCHAR(50) NOT NULL,
+  \`trigger_reason\` VARCHAR(150) NOT NULL,
+  \`recovery_level\` TINYINT NOT NULL,
+  \`action_taken\` VARCHAR(150) NOT NULL,
+  \`result\` ENUM('success', 'failed', 'in_progress') NOT NULL DEFAULT 'in_progress',
+  \`details\` TEXT DEFAULT NULL,
+  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX \`idx_laya_dongle_time\` (\`dongle_name\`, \`created_at\`),
+  INDEX \`idx_laya_result\` (\`result\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 " 2>/dev/null || true
 
@@ -267,6 +311,8 @@ same => n,Return()
 [sub-campon-busy-menu]
 exten => s,1,NoOp(--- Sokrat Camp-On Busy Menu: Caller ${CALLERID(num)} Target ${EXTTOCALL} ---)
 same => n,Set(CALLER_EXT=${IF($["${CALLERID(num)}" != ""]?${CALLERID(num)}:${CUT(CUT(CHANNEL,-,1),/,2)})})
+same => n,GotoIf($["${DIRECTION}" = "INBOUND"]?ext_busy)
+same => n,GotoIf($["${LEN(${CALLER_EXT})}" > 5]?ext_busy)
 same => n,Answer()
 same => n,Playtones(busy)
 same => n,Read(PRESSED_DIGIT,,1,,,8)
@@ -275,6 +321,8 @@ same => n,GotoIf($["${PRESSED_DIGIT}" = "6"]?activate)
 same => n,Busy(15)
 same => n,Hangup()
 same => n(activate),Goto(sub-campon-activate,s,1)
+same => n(ext_busy),Busy(10)
+same => n,Hangup()
 
 [macro-exten-vm-custom]
 exten => s-BUSY,1,NoOp(--- Sokrat Camp-On: Target ${EXTTOCALL} is BUSY for ${CALLERID(num)} ---)
@@ -382,6 +430,8 @@ exten => docfb,n,Dial(Local/${DB(CFB/${EXTTOCALL})}@from-internal/n,${RTCF},${DI
 exten => docfb,n,Return()
 
 exten => s-BUSY,1,GotoIf($["${IVR_RETVM}"="RETURN" & "${IVR_CONTEXT}"!=""]?exit,1)
+exten => s-BUSY,n,ExecIf($["${DIRECTION}" = "INBOUND"]?Hangup(17))
+exten => s-BUSY,n,ExecIf($["${LEN(${CALLERID(num)})}" > 5]?Hangup(17))
 exten => s-BUSY,n,NoOp(--- Sokrat Camp-On: Target ${EXTTOCALL} is BUSY for ${CALLERID(num)} ---)
 exten => s-BUSY,n,Set(DB(CAMP_ON_LAST_BUSY/${CALLERID(num)})=${EXTTOCALL})
 exten => s-BUSY,n,ExecIf($["${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)}" != ""]?Set(DB(CAMP_ON_LAST_BUSY/${DB(DEVICE/${CUT(CUT(CHANNEL,-,1),/,2)}/user)})=${EXTTOCALL}))
@@ -586,6 +636,51 @@ systemctl daemon-reload 2>/dev/null || true
 systemctl restart sokrat-voip.service 2>/dev/null || true
 systemctl restart sokrat-watchdog.service 2>/dev/null || true
 systemctl restart sokrat-stt.service 2>/dev/null || true
+
+# Provision/Restart Sokrat Laya GSM Maintenance Agent Daemon
+if [ -f "$INSTALL_DIR/laya/engine.py" ]; then
+    chmod +x "$INSTALL_DIR/laya/cli.py" 2>/dev/null || true
+    ln -sf "$INSTALL_DIR/laya/cli.py" /usr/local/bin/laya 2>/dev/null || true
+    ln -sf "$INSTALL_DIR/laya/cli.py" /usr/local/bin/laya-cli 2>/dev/null || true
+    if [ ! -f /etc/systemd/system/sokrat-laya.service ]; then
+        cat > /etc/systemd/system/sokrat-laya.service << 'UNIT'
+[Unit]
+Description=Sokrat Laya GSM Dongle Maintenance & Autonomous Watcher Daemon
+After=network.target mariadb.service mysqld.service asterisk.service
+Wants=asterisk.service mariadb.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/sokrat-voip
+ExecStart=/usr/bin/python3 /opt/sokrat-voip/laya/engine.py
+Restart=always
+RestartSec=5
+Nice=5
+CPUShares=256
+Environment=PYTHONPATH=/opt/sokrat-voip
+Environment=PYTHONUNBUFFERED=1
+Environment=LANG=en_US.UTF-8
+Environment=LC_ALL=en_US.UTF-8
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+        systemctl daemon-reload 2>/dev/null || true
+    fi
+
+    # Sokrat Laya is disabled by default unless explicitly activated by operator
+    LAYA_KILL_ACTIVE=$(mysql "${MYSQL_AUTH[@]}" asterisk -N -e "SELECT setting_value FROM dashboard_settings WHERE setting_key='laya_kill_switch_active' LIMIT 1" 2>/dev/null || echo "true")
+    if [ "$LAYA_KILL_ACTIVE" = "false" ]; then
+        systemctl enable sokrat-laya.service 2>/dev/null || true
+        systemctl restart sokrat-laya.service 2>/dev/null || true
+        echo "  Sokrat Laya GSM maintenance daemon restarted (active)"
+    else
+        systemctl stop sokrat-laya.service 2>/dev/null || true
+        systemctl disable sokrat-laya.service 2>/dev/null || true
+        echo "  Sokrat Laya GSM maintenance daemon is disabled (kill switch active)"
+    fi
+fi
 
 # 7. Post-Upgrade Verification
 echo "[7/7] Verifying system status..."

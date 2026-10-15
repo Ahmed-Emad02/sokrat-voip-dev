@@ -18,7 +18,7 @@ const sidebarWords = {
         vmGreetingResetConfirm: "Reset to default Asterisk voicemail prompts?",
         vmGreetingChangeMode: "Changing mode will save a new greeting. Continue?",
         vmSelectAll: "Select All",
-        dashLink: "Overview", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Campaigns", contactsLink: "Contacts", usersLink: "Users", apiKeysLink: "API Keys", storageLink: "SysMon", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Server SMTP", alertsSettings: "System Alerts", alertsModalTitle: "System Alerts & Monitoring", cpanelLink: "Control Panel (Webmin)", userLabel: "User", versionLabel: "Version", issabelGuiLink: "Issabel GUI (:3000)",
+        dashLink: "Overview", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Auto-Dial", contactsLink: "Contacts", usersLink: "Users", apiKeysLink: "API Keys", storageLink: "SysMon", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Server SMTP", alertsSettings: "System Alerts", alertsModalTitle: "System Alerts & Monitoring", cpanelLink: "Control Panel (Webmin)", userLabel: "User", versionLabel: "Version", issabelGuiLink: "Issabel GUI (:3000)",
         logoutLabel: "Sign Out", updateSokrat: "Update Sokrat", restoreBackup: "Restore Backup", gitHistory: "Git History", aiSttSettings: "Cloud AI Speech-to-Text", aiSttModalTitle: "Cloud AI Speech-to-Text API Keys", netInfo: "Network Interfaces", settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", coreToolsLabel: "Core Tools", systemAdminLabel: "Administration & Tools", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
         recTitle: "Add a Recording", recName: "Recording Name", recPlaceholder: "e.g. welcome_greeting", recFile: "Audio File", recNote: "Accepted: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (max 50MB)", recUploadStatus: "Uploading...", recCancel: "Cancel", recUpload: "Upload", recComplete: "Complete!", recFailed: "Failed", recSelectFileErr: "Please select a file", recNameErr: "Please enter a recording name",
         timeSettings: "Time Settings", timeModalTitle: "Time & Timezone", currentTime: "Current Time", timezone: "Timezone", searchTimezone: "Search timezone...", ntpSync: "NTP Synchronization", setManually: "Set Manually", dateLabel: "Date", timeLabel: "Time", saveSettings: "Save Settings", saving: "Saving...", savedSuccess: "Time settings saved successfully", saveFailed: "Failed to save time settings", timezoneChanged: "Timezone changed", ntpToggled: "NTP toggled", timeSetManually: "Time set manually", loadingTimezone: "Loading...",
@@ -42,7 +42,7 @@ const sidebarWords = {
         vmGreetingResetConfirm: "إعادة تعيين ترحيب البريد الصوتي للافتراضي؟",
         vmGreetingChangeMode: "تغيير الوضع سيحفظ ترحيباً جديداً. هل تريد المتابعة؟",
         vmSelectAll: "اختر الكل",
-        dashLink: "نظرة عامة", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", softphoneLink: "هاتف Sokrat VOICE", configLink: "الإعدادات", dialerLink: "الحملات", contactsLink: "جهات الاتصال", usersLink: "المستخدمين", apiKeysLink: "مفاتيح API", storageLink: "SysMon", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعدادات SMTP", alertsSettings: "تنبيهات النظام", alertsModalTitle: "تنبيهات ومراقبة النظام", cpanelLink: "لوحة التحكم (Webmin)", userLabel: "المستخدم", versionLabel: "الإصدار", issabelGuiLink: "واجهة Issabel (منفذ 3000)",
+        dashLink: "نظرة عامة", cdrLink: "سجل المكالمات", vmLink: "البريد الصوتي", empLink: "مقاييس الموظفين", extLink: "الموظفين", opLink: "لوحه المراقبه", dongleLink: "شرائح GSM", softphoneLink: "هاتف Sokrat VOICE", configLink: "الإعدادات", dialerLink: "الاتصال التلقائي", contactsLink: "جهات الاتصال", usersLink: "المستخدمين", apiKeysLink: "مفاتيح API", storageLink: "SysMon", liveClock: "ساعة النظام", themeLabel: "المظهر", langLabel: "اللغة", settingsTitle: "الإعدادات", rowsLabel: "عدد الصفوف", addRec: "إضافة تسجيل صوتي", smtpSettings: "إعدادات SMTP", alertsSettings: "تنبيهات النظام", alertsModalTitle: "تنبيهات ومراقبة النظام", cpanelLink: "لوحة التحكم (Webmin)", userLabel: "المستخدم", versionLabel: "الإصدار", issabelGuiLink: "واجهة Issabel (منفذ 3000)",
         logoutLabel: "تسجيل الخروج", updateSokrat: "ترقية سقراط الآمنة", restoreBackup: "استعادة النسخة الاحتياطية", gitHistory: "سجل Git للنظام", aiSttSettings: "تحويل الصوت لنصوص بالذكاء الاصطناعي", aiSttModalTitle: "مفاتيح API لتحويل الصوت لنصوص", netInfo: "بطاقات الشبكة", settingsSubtitle: "التفضيلات وعناصر تحكم النظام", preferencesLabel: "التفضيلات", systemLabel: "النظام", coreToolsLabel: "الأدوات الأساسية", systemAdminLabel: "إدارة وأدوات النظام", appearanceLabel: "المظهر", darkModeLabel: "الوضع الداكن", lightModeLabel: "الوضع الفاتح",
         recTitle: "إضافة تسجيل صوتي", recName: "اسم التسجيل", recPlaceholder: "مثال: welcome_greeting", recFile: "ملف الصوت", recNote: "المرفقات المقبولة: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (الحد الأقصى 50 ميجابايت)", recUploadStatus: "جاري الرفع...", recCancel: "إلغاء", recUpload: "رفع", recComplete: "اكتمل الرفع!", recFailed: "فشل الرفع", recSelectFileErr: "يرجى اختيار ملف", recNameErr: "يرجى إدخال اسم التسجيل",
         timeSettings: "إعدادات الوقت", timeModalTitle: "الوقت والمنطقة الزمنية", currentTime: "الوقت الحالي", timezone: "المنطقة الزمنية", searchTimezone: "ابحث عن المنطقة الزمنية...", ntpSync: "مزامنة NTP", setManually: "ضبط يدوي", dateLabel: "التاريخ", timeLabel: "الوقت", saveSettings: "حفظ الإعدادات", saving: "جاري الحفظ...", savedSuccess: "تم حفظ إعدادات الوقت بنجاح", saveFailed: "فشل حفظ إعدادات الوقت", timezoneChanged: "تم تغيير المنطقة الزمنية", ntpToggled: "تم تبديل NTP", timeSetManually: "تم ضبط الوقت يدوياً", loadingTimezone: "جارٍ التحميل...",
@@ -52,17 +52,16 @@ const sidebarWords = {
 const sbT = sidebarWords[currentLang] || sidebarWords['en'];
 const isRtl = currentLang === 'ar';
 const allowed = typeof allowedTabs !== 'undefined' ? allowedTabs : [];
-const isSuper = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) || (typeof currentUser !== 'undefined' && (currentUser === 'admin' || currentUser === 'root'));
-const isRoot = (typeof isRootUser !== 'undefined' && isRootUser) || (typeof currentUser !== 'undefined' && currentUser === 'root');
+const isRoot = Boolean((typeof isRootUser !== 'undefined' && isRootUser) || (typeof currentUser !== 'undefined' && (currentUser === 'root' || (typeof currentUser === 'object' && currentUser && (currentUser.username === 'root' || currentUser.isRoot)))) || (typeof user !== 'undefined' && (user === 'root' || (typeof user === 'object' && user && (user.username === 'root' || user.isRoot)))));
+const isSuper = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) || (typeof currentUser !== 'undefined' && (currentUser === 'admin' || currentUser === 'root')) || isRoot;
 const curPage = typeof currentPage !== 'undefined' ? currentPage : '';
 function can(tab) {
+    if (tab === 'campaigns' || tab === 'dialer') return isRoot;
     if (isSuper) return true;
     if (allowed.includes(tab)) return true;
     if (tab === 'call_history' && (allowed.includes('cdr') || allowed.some(p => p.startsWith('cdr-')))) return true;
     if (tab === 'cdr' && (allowed.includes('call_history') || allowed.some(p => p.startsWith('cdr-')))) return true;
     if (tab === 'operator' && allowed.some(p => p.startsWith('operator-'))) return true;
-    if (tab === 'campaigns' && (allowed.includes('dialer') || allowed.some(p => p.startsWith('campaigns-')))) return true;
-    if (tab === 'dialer' && (allowed.includes('campaigns') || allowed.some(p => p.startsWith('campaigns-')))) return true;
     if (tab === 'contacts' && allowed.some(p => p.startsWith('contacts-'))) return true;
     if (tab === 'voicemails' && allowed.some(p => p.startsWith('voicemail-'))) return true;
     if (tab === 'gsm-dongles' && allowed.some(p => p.startsWith('gsm-'))) return true;
@@ -269,7 +268,7 @@ function can(tab) {
     }
     :root {
         --font-sans: 'JetBrains Mono', 'Cairo', monospace;
-        --font-mono: 'JetBrains Mono', monospace;
+        --font-mono: 'JetBrains Mono', 'Cairo', monospace;
         --bg-primary: #050507; /* OLED black background */
         --bg-secondary: #0a0a0d; /* Dark-tech surface */
         --bg-card: #101014; /* Card background */
@@ -341,14 +340,18 @@ function can(tab) {
         font-weight: 800 !important;
     }
     
-    /* Telemetry, numbers, tables, codes, logs, terminal - JetBrains Mono */
+    /* Telemetry, numbers, tables, codes, logs, terminal - JetBrains Mono with Cairo Arabic fallback */
     .font-mono, .font-numeric, #digitalClock, input[type="time"], input[type="datetime-local"] {
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
     }
     
     /* Arabic text overrides fallback gracefully to Cairo for Arabic characters */
     [lang="ar"], [dir="rtl"], [dir="rtl"] * {
         font-family: 'JetBrains Mono', 'Cairo', monospace !important;
+    }
+    [dir="rtl"] .font-arabic, html[dir="rtl"] .font-arabic,
+    [dir="rtl"] .font-sans, html[dir="rtl"] .font-sans {
+        font-family: 'Cairo', 'JetBrains Mono', sans-serif !important;
     }
     input, select, textarea {
         accent-color: var(--accent-color) !important;
@@ -864,6 +867,103 @@ function can(tab) {
         background: rgba(185, 28, 28, 0.20) !important;
     }
 
+    /* ==========================================================================
+       GLOBAL BUTTON TEXT CONTRAST ENGINE
+       Invariant:
+         • White mode (html.light-theme) -> ALL button text & icons are BLACK (#000000).
+         • Dark mode (default)          -> ALL button text & icons are WHITE (#ffffff).
+       (Except solid dark primary buttons like .btn-primary, .config-btn-primary,
+        .bg-red-600, .bg-red-700, .bg-rose-600, .bg-rose-700, .bg-emerald-600,
+        .bg-blue-600, .bg-purple-600, .bg-indigo-600, .bg-sky-600, .bg-amber-600,
+        and active nav/tab items which have dark red backgrounds in light mode)
+       ========================================================================== */
+    
+    /* 1. DARK MODE: ALL button labels, text, spans, and icons must be WHITE */
+    html:not(.light-theme) button,
+    html:not(.light-theme) button *,
+    html:not(.light-theme) input[type="button"],
+    html:not(.light-theme) input[type="submit"],
+    html:not(.light-theme) input[type="reset"],
+    html:not(.light-theme) a.btn,
+    html:not(.light-theme) a.btn *,
+    html:not(.light-theme) a.btn-link,
+    html:not(.light-theme) a.btn-link *,
+    html:not(.light-theme) a.config-btn-secondary,
+    html:not(.light-theme) a.config-btn-secondary *,
+    html:not(.light-theme) .btn-ghost,
+    html:not(.light-theme) .btn-ghost *,
+    html:not(.light-theme) .config-tab-btn,
+    html:not(.light-theme) .config-tab-btn *,
+    html:not(.light-theme) .call-code-cat-btn,
+    html:not(.light-theme) .call-code-cat-btn *,
+    html:not(.light-theme) .cfg-call-code-cat-btn,
+    html:not(.light-theme) .cfg-call-code-cat-btn *,
+    html:not(.light-theme) .ipscan-chip-btn,
+    html:not(.light-theme) .ipscan-chip-btn *,
+    html:not(.light-theme) .op-node-filter-btn,
+    html:not(.light-theme) .op-node-filter-btn *,
+    html:not(.light-theme) .status-log-btn,
+    html:not(.light-theme) .status-log-btn *,
+    html:not(.light-theme) .dongle-action-button,
+    html:not(.light-theme) .dongle-action-button * {
+        color: #ffffff !important;
+    }
+
+    html:not(.light-theme) button svg,
+    html:not(.light-theme) button svg *,
+    html:not(.light-theme) a.btn svg,
+    html:not(.light-theme) a.btn svg *,
+    html:not(.light-theme) a.config-btn-secondary svg,
+    html:not(.light-theme) a.config-btn-secondary svg *,
+    html:not(.light-theme) a.btn-link svg,
+    html:not(.light-theme) a.btn-link svg *,
+    html:not(.light-theme) .btn-ghost svg,
+    html:not(.light-theme) .btn-ghost svg *,
+    html:not(.light-theme) .dongle-action-button svg,
+    html:not(.light-theme) .dongle-action-button svg * {
+        stroke: currentColor !important;
+    }
+
+    /* 2. WHITE MODE (html.light-theme): Button labels, text, spans, and icons must be BLACK */
+    html.light-theme button:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]):not(.bg-\[var\(--accent-hover\)\]):not(.config-tab-active):not(.nav-item.bg-\[var\(--accent-color\)\]):not(.bg-emerald-600):not(.bg-blue-600):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-sky-600):not(.bg-amber-600):not([class*="bg-red-"]):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]),
+    html.light-theme button:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]):not(.bg-\[var\(--accent-hover\)\]):not(.config-tab-active):not(.nav-item.bg-\[var\(--accent-color\)\]):not(.bg-emerald-600):not(.bg-blue-600):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-sky-600):not(.bg-amber-600):not([class*="bg-red-"]):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]) *,
+    html.light-theme input[type="button"],
+    html.light-theme input[type="submit"]:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]),
+    html.light-theme input[type="reset"],
+    html.light-theme a.btn:not(.btn-primary):not(.bg-red-600):not(.bg-rose-600),
+    html.light-theme a.btn:not(.btn-primary):not(.bg-red-600):not(.bg-rose-600) *,
+    html.light-theme a.btn-link:not(.btn-primary),
+    html.light-theme a.btn-link:not(.btn-primary) *,
+    html.light-theme a.config-btn-secondary,
+    html.light-theme a.config-btn-secondary *,
+    html.light-theme .btn-ghost,
+    html.light-theme .btn-ghost *,
+    html.light-theme .config-tab-btn.config-tab-inactive,
+    html.light-theme .config-tab-btn.config-tab-inactive *,
+    html.light-theme .call-code-cat-btn,
+    html.light-theme .call-code-cat-btn *,
+    html.light-theme .cfg-call-code-cat-btn,
+    html.light-theme .cfg-call-code-cat-btn *,
+    html.light-theme .ipscan-chip-btn,
+    html.light-theme .ipscan-chip-btn *,
+    html.light-theme .op-node-filter-btn,
+    html.light-theme .op-node-filter-btn *,
+    html.light-theme .status-log-btn,
+    html.light-theme .status-log-btn *,
+    html.light-theme .dongle-action-button,
+    html.light-theme .dongle-action-button * {
+        color: #000000 !important;
+    }
+
+    html.light-theme button:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]):not(.bg-\[var\(--accent-hover\)\]):not(.config-tab-active):not(.nav-item.bg-\[var\(--accent-color\)\]):not(.bg-emerald-600):not(.bg-blue-600):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-sky-600):not(.bg-amber-600):not([class*="bg-red-"]):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]) svg,
+    html.light-theme button:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]):not(.bg-\[var\(--accent-hover\)\]):not(.config-tab-active):not(.nav-item.bg-\[var\(--accent-color\)\]):not(.bg-emerald-600):not(.bg-blue-600):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-sky-600):not(.bg-amber-600):not([class*="bg-red-"]):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]) svg *,
+    html.light-theme a.config-btn-secondary svg,
+    html.light-theme a.btn-link:not(.btn-primary) svg,
+    html.light-theme .btn-ghost svg {
+        stroke: #000000 !important;
+        color: #000000 !important;
+    }
+
     /* Semantic utility colors with WCAG-AA contrast on light surfaces. */
     .light-theme .text-green-400,
     .light-theme .text-green-500,
@@ -895,7 +995,7 @@ function can(tab) {
     }
 
     /* Unified stylized appearance for all select elements across Sokrat VoIP */
-    select:not([multiple]):not(.flatpickr-monthDropdown-months) {
+    select:not([multiple]):not(.flatpickr-monthDropdown-months):not([data-player-speed]):not([name="cdr_speed"]):not([name="vm_speed"]):not([name="moh_speed"]) {
         appearance: none !important;
         -webkit-appearance: none !important;
         -moz-appearance: none !important;
@@ -911,18 +1011,18 @@ function can(tab) {
         cursor: pointer;
         transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
-    html[dir="rtl"] select:not([multiple]):not(.flatpickr-monthDropdown-months),
-    [dir="rtl"] select:not([multiple]):not(.flatpickr-monthDropdown-months) {
+    html[dir="rtl"] select:not([multiple]):not(.flatpickr-monthDropdown-months):not([data-player-speed]):not([name="cdr_speed"]):not([name="vm_speed"]):not([name="moh_speed"]),
+    [dir="rtl"] select:not([multiple]):not(.flatpickr-monthDropdown-months):not([data-player-speed]):not([name="cdr_speed"]):not([name="vm_speed"]):not([name="moh_speed"]) {
         background-position: left 0.65rem center !important;
         padding-right: 0.75rem !important;
         padding-left: 2rem !important;
     }
-    select:not([multiple]):not(.flatpickr-monthDropdown-months):focus {
+    select:not([multiple]):not(.flatpickr-monthDropdown-months):not([data-player-speed]):not([name="cdr_speed"]):not([name="vm_speed"]):not([name="moh_speed"]):focus {
         border-color: var(--accent-color) !important;
         outline: none !important;
         box-shadow: 0 0 0 2px var(--accent-transparent) !important;
     }
-    select:not([multiple]):not(.flatpickr-monthDropdown-months):disabled {
+    select:not([multiple]):not(.flatpickr-monthDropdown-months):not([data-player-speed]):not([name="cdr_speed"]):not([name="vm_speed"]):not([name="moh_speed"]):disabled {
         opacity: 0.5 !important;
         cursor: not-allowed !important;
     }
@@ -930,16 +1030,68 @@ function can(tab) {
         background-color: var(--bg-secondary) !important;
         color: var(--text-primary) !important;
     }
-    select[data-player-speed] {
-        padding-right: 1.25rem !important;
-        background-position: right 0.25rem center !important;
-        background-size: 0.65rem 0.65rem !important;
+    select[data-player-speed],
+    select.no-enhance[data-player-speed],
+    select[name="cdr_speed"],
+    select[name="vm_speed"],
+    select[name="moh_speed"] {
+        border: 0 !important;
+        border-width: 0 !important;
+        border-style: none !important;
+        border-color: transparent !important;
+        background-image: none !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        width: auto !important;
+        width: fit-content !important;
+        max-width: fit-content !important;
+        min-width: 0 !important;
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+        padding-top: 1px !important;
+        padding-bottom: 1px !important;
+        margin: 0 !important;
+        text-align: center !important;
+        text-align-last: center !important;
+        -moz-text-align-last: center !important;
+        box-shadow: none !important;
+        outline: none !important;
+    }
+    select[data-player-speed]::-ms-expand,
+    select[name="cdr_speed"]::-ms-expand {
+        display: none !important;
     }
     html[dir="rtl"] select[data-player-speed],
-    [dir="rtl"] select[data-player-speed] {
-        padding-left: 1.25rem !important;
-        padding-right: 0.35rem !important;
-        background-position: left 0.25rem center !important;
+    [dir="rtl"] select[data-player-speed],
+    html[dir="rtl"] select[name="cdr_speed"],
+    [dir="rtl"] select[name="cdr_speed"] {
+        border: 0 !important;
+        border-width: 0 !important;
+        border-style: none !important;
+        border-color: transparent !important;
+        background-image: none !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        width: auto !important;
+        width: fit-content !important;
+        max-width: fit-content !important;
+        min-width: 0 !important;
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+        padding-top: 1px !important;
+        padding-bottom: 1px !important;
+        margin: 0 !important;
+        text-align: center !important;
+        text-align-last: center !important;
+        -moz-text-align-last: center !important;
+        box-shadow: none !important;
+        outline: none !important;
     }
 
     /* Shared dropdown contract for native selects and application comboboxes. */
@@ -948,7 +1100,7 @@ function can(tab) {
         background: var(--bg-card) !important;
         border-color: var(--border-primary) !important;
         color: var(--text-primary) !important;
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         font-size: 0.75rem;
         font-weight: 600;
         line-height: 1rem;
@@ -993,7 +1145,7 @@ function can(tab) {
         background: var(--bg-card) !important;
         border: 1px solid var(--border-primary) !important;
         border-radius: 0.5rem;
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         font-size: 0.75rem;
         line-height: 1rem;
         outline: none;
@@ -1012,7 +1164,7 @@ function can(tab) {
         padding: 0.5rem 0.75rem;
         color: var(--text-secondary) !important;
         border-radius: 0.5rem;
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         font-size: 0.75rem;
         line-height: 1rem;
         overflow-wrap: anywhere;
@@ -1344,6 +1496,12 @@ function can(tab) {
     html[dir="rtl"] #toastContainer, html[dir="rtl"] #toast-container {
         left: 1.25rem !important;
         right: auto !important;
+    }
+    #toastContainer .text-white,
+    #toast-container .text-white,
+    .light-theme #toastContainer .text-white,
+    .light-theme #toast-container .text-white {
+        color: #ffffff !important;
     }
     /* Premium smooth collapse transition */
     @media (min-width: 768px) {
@@ -1844,7 +2002,7 @@ function can(tab) {
         border: 1px solid var(--border-primary);
         border-radius: 0.4rem;
         color: var(--text-primary);
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'JetBrains Mono', 'Cairo', monospace;
         font-size: 0.64rem;
         font-weight: 900;
         min-width: 2rem;
@@ -2281,7 +2439,7 @@ function can(tab) {
         border: 1px solid var(--border-primary) !important;
         border-radius: 9px !important;
         color: var(--text-primary) !important;
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         font-weight: 700 !important;
         font-size: 0.95rem !important;
         text-align: center !important;
@@ -2316,7 +2474,7 @@ function can(tab) {
         border: 1px solid var(--border-primary) !important;
         border-radius: 9px !important;
         color: var(--text-primary) !important;
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         font-weight: 800 !important;
         font-size: 0.82rem !important;
         letter-spacing: 0.05em !important;
@@ -2347,7 +2505,7 @@ function can(tab) {
         border: 1px solid var(--border-primary) !important;
         border-radius: 0.65rem !important;
         color: var(--text-primary) !important;
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         font-weight: 700 !important;
         font-size: 0.875rem !important;
         padding: 0.55rem 0.85rem !important;
@@ -2939,8 +3097,8 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </a>
             <% } %>
 
-            <!-- 8. Campaigns -->
-            <% if (can('campaigns')) { %>
+            <!-- 8. Auto-Dial (Root Only) -->
+            <% if (isRoot) { %>
             <a href="/dialer?lang=<%= currentLang %>" title="<%= sbT.dialerLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
                <%= curPage === '/dialer' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
@@ -3907,6 +4065,32 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
     </div>
 </div>
 
+<!-- Sokrat Enterprise Global Confirmation Modal -->
+<div id="sokratConfirmModal" class="fixed inset-0 z-[999999] flex items-center justify-center bg-black/75 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-200 p-4 select-none" style="visibility:hidden">
+    <div id="sokratConfirmCard" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md scale-95 opacity-0 transition-all duration-200 overflow-hidden shadow-2xl flex flex-col">
+        <!-- Dialog Body -->
+        <div class="p-5 pb-4 flex items-start gap-3.5">
+            <div id="sokratConfirmIconBox" class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border">
+                <span id="sokratConfirmIcon"></span>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h3 id="sokratConfirmTitle" class="text-sm font-black text-[var(--text-primary)] tracking-tight"></h3>
+                <p id="sokratConfirmMessage" class="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed whitespace-pre-line break-words font-medium"></p>
+            </div>
+        </div>
+
+        <!-- Dialog Footer Actions -->
+        <div class="p-3.5 px-5 bg-[var(--bg-card)] border-t border-[var(--border-primary)] flex items-center justify-end gap-2.5">
+            <button type="button" id="sokratConfirmCancelBtn" class="px-4 py-2 rounded-xl text-xs font-bold bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] text-[var(--text-primary)] transition cursor-pointer">
+                <span id="sokratConfirmCancelText"><%= isRtl ? 'إلغاء' : 'Cancel' %></span>
+            </button>
+            <button type="button" id="sokratConfirmActionBtn" class="px-4 py-2 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+                <span id="sokratConfirmActionText"><%= isRtl ? 'تأكيد' : 'Confirm' %></span>
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Toast Notification -->
 <div id="toastContainer" class="fixed bottom-5 z-[999999] flex flex-col gap-2 pointer-events-none <%= isRtl ? 'left-5' : 'right-5' %>" style="min-width:280px;max-width:420px"></div>
 
@@ -3921,6 +4105,158 @@ function isRtlLang() {
     if (typeof isRtl !== 'undefined' && typeof isRtl === 'boolean') return isRtl;
     return document.documentElement.getAttribute('dir') === 'rtl' || document.documentElement.dir === 'rtl';
 }
+
+window.sokratConfirm = function(optionsOrMessage, extraOptions = {}) {
+    return new Promise((resolve) => {
+        let opts = {};
+        if (typeof optionsOrMessage === 'string') {
+            opts = { message: optionsOrMessage, ...extraOptions };
+        } else if (typeof optionsOrMessage === 'object' && optionsOrMessage !== null) {
+            opts = { ...optionsOrMessage };
+        }
+
+        const modal = document.getElementById('sokratConfirmModal');
+        const card = document.getElementById('sokratConfirmCard');
+        const titleEl = document.getElementById('sokratConfirmTitle');
+        const msgEl = document.getElementById('sokratConfirmMessage');
+        const iconBox = document.getElementById('sokratConfirmIconBox');
+        const iconEl = document.getElementById('sokratConfirmIcon');
+        const cancelBtn = document.getElementById('sokratConfirmCancelBtn');
+        const actionBtn = document.getElementById('sokratConfirmActionBtn');
+        const cancelTextEl = document.getElementById('sokratConfirmCancelText');
+        const actionTextEl = document.getElementById('sokratConfirmActionText');
+
+        if (!modal || !card) {
+            return resolve(window.confirm(opts.message || ''));
+        }
+
+        const isRtl = (typeof isRtlLang === 'function') ? isRtlLang() : (document.documentElement.dir === 'rtl');
+        const type = opts.type || (opts.danger ? 'danger' : (opts.warning ? 'warning' : 'danger'));
+
+        const defaultTitles = {
+            danger: isRtl ? 'تأكيد الإجراء الحرج' : 'Confirm Critical Action',
+            warning: isRtl ? 'تحذير وتأكيد' : 'Warning Confirmation',
+            info: isRtl ? 'تأكيد الإجراء' : 'Confirm Action',
+            success: isRtl ? 'تأكيد واستئناف' : 'Confirmation'
+        };
+
+        const defaultConfirmText = {
+            danger: isRtl ? 'تأكيد وتنفيذ' : 'Confirm',
+            warning: isRtl ? 'متابعة' : 'Proceed',
+            info: isRtl ? 'موافق' : 'Confirm',
+            success: isRtl ? 'استئناف' : 'Confirm'
+        };
+
+        titleEl.textContent = opts.title || defaultTitles[type] || (isRtl ? 'تأكيد' : 'Confirmation');
+        msgEl.textContent = opts.message || '';
+        cancelTextEl.textContent = opts.cancelText || (isRtl ? 'إلغاء' : 'Cancel');
+        actionTextEl.textContent = opts.confirmText || defaultConfirmText[type] || (isRtl ? 'تأكيد' : 'Confirm');
+
+        const typeThemes = {
+            danger: {
+                box: 'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-rose-500/15 border-rose-500/30 text-rose-400',
+                btn: 'px-4 py-2 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm bg-rose-600 hover:bg-rose-700 shadow-rose-900/30',
+                svg: '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>'
+            },
+            warning: {
+                box: 'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-amber-500/15 border-amber-500/30 text-amber-400',
+                btn: 'px-4 py-2 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm bg-amber-600 hover:bg-amber-700 shadow-amber-900/30',
+                svg: '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+            },
+            success: {
+                box: 'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+                btn: 'px-4 py-2 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm bg-emerald-600 hover:bg-emerald-700 shadow-emerald-900/30',
+                svg: '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>'
+            },
+            info: {
+                box: 'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-purple-500/15 border-purple-500/30 text-purple-400',
+                btn: 'px-4 py-2 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm bg-purple-600 hover:bg-purple-700 shadow-purple-900/30',
+                svg: '<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+            }
+        };
+
+        const theme = typeThemes[type] || typeThemes.danger;
+        iconBox.className = theme.box;
+        actionBtn.className = theme.btn;
+        iconEl.innerHTML = theme.svg;
+
+        modal.style.visibility = 'visible';
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        card.classList.remove('scale-95', 'opacity-0');
+
+        let settled = false;
+        function finish(result) {
+            if (settled) return;
+            settled = true;
+
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            card.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                if (modal.classList.contains('opacity-0')) {
+                    modal.style.visibility = 'hidden';
+                }
+            }, 200);
+
+            cleanup();
+            resolve(result);
+        }
+
+        function onConfirm() { finish(true); }
+        function onCancel() { finish(false); }
+        function onBackdrop(e) {
+            if (e.target === modal) finish(false);
+        }
+        function onKey(e) {
+            if (e.key === 'Escape') finish(false);
+            else if (e.key === 'Enter' && !e.shiftKey) finish(true);
+        }
+
+        actionBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click', onBackdrop);
+        document.addEventListener('keydown', onKey);
+
+        function cleanup() {
+            actionBtn.removeEventListener('click', onConfirm);
+            cancelBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onBackdrop);
+            document.removeEventListener('keydown', onKey);
+        }
+
+        setTimeout(() => { actionBtn.focus(); }, 100);
+    });
+};
+window.showConfirmDialog = window.sokratConfirm;
+
+// Intercept standard form submissions with onsubmit="return confirm(...)"
+document.addEventListener('submit', function(e) {
+    const form = e.target;
+    if (!form || form.dataset.sokratConfirmed === 'true') return;
+
+    const onsubmitAttr = form.getAttribute('onsubmit') || '';
+    const match = onsubmitAttr.match(/return\s+confirm\((.*?)\)/);
+    if (match) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        let rawPrompt = match[1];
+        try { rawPrompt = Function(`"use strict"; return (${rawPrompt});`)(); }
+        catch (_) { rawPrompt = rawPrompt.replace(/^['"]|['"]$/g, ''); }
+
+        const isRtl = (typeof isRtlLang === 'function') ? isRtlLang() : (document.documentElement.dir === 'rtl');
+        window.sokratConfirm({
+            title: isRtl ? 'تأكيد الحذف' : 'Confirm Deletion',
+            message: rawPrompt,
+            confirmText: isRtl ? 'حذف' : 'Delete',
+            type: 'danger'
+        }).then((confirmed) => {
+            if (confirmed) {
+                form.dataset.sokratConfirmed = 'true';
+                form.submit();
+            }
+        });
+    }
+}, true);
+
 
 function openRecordingModal() {
     document.getElementById('recordingModal').classList.remove('opacity-0', 'invisible');
@@ -3942,24 +4278,30 @@ function showToast(msg, type) {
     var toastContainer = document.getElementById('toastContainer') || document.getElementById('toast-container');
     if (!toastContainer) return;
     var el = document.createElement('div');
-    el.className = 'pointer-events-auto px-5 py-3 rounded-xl text-sm font-semibold';
+    el.className = 'pointer-events-auto px-5 py-3 rounded-xl text-sm font-semibold shadow-xl backdrop-blur-md flex items-center gap-2.5';
     var initialX = isRtlLang() ? 'translateX(-120%)' : 'translateX(120%)';
     el.style.opacity = '0';
     el.style.transition = 'all 0.3s';
+    var isLight = document.documentElement.classList.contains('light-theme');
+
     if (type === 'error') {
-        el.style.backgroundColor = 'rgba(255,59,48,0.15)';
-        el.style.border = '1px solid rgba(255,59,48,0.35)';
-        el.style.color = '#ff6b6b';
+        el.style.backgroundColor = isLight ? '#fee2e2' : 'rgba(239, 68, 68, 0.20)';
+        el.style.border = isLight ? '1px solid #f87171' : '1px solid rgba(239, 68, 68, 0.45)';
+        el.style.color = isLight ? '#991b1b' : '#fca5a5';
     } else if (type === 'warning') {
-        el.style.backgroundColor = 'rgba(245,158,11,0.15)';
-        el.style.border = '1px solid rgba(245,158,11,0.35)';
-        el.style.color = '#fbbf24';
+        el.style.backgroundColor = isLight ? '#fef3c7' : 'rgba(245, 158, 11, 0.20)';
+        el.style.border = isLight ? '1px solid #fbbf24' : '1px solid rgba(245, 158, 11, 0.45)';
+        el.style.color = isLight ? '#92400e' : '#fde047';
+    } else if (type === 'info') {
+        el.style.backgroundColor = isLight ? '#e0f2fe' : 'rgba(14, 165, 233, 0.20)';
+        el.style.border = isLight ? '1px solid #38bdf8' : '1px solid rgba(14, 165, 233, 0.45)';
+        el.style.color = isLight ? '#0369a1' : '#38bdf8';
     } else {
-        el.style.backgroundColor = 'rgba(34,197,94,0.15)';
-        el.style.border = '1px solid rgba(34,197,94,0.35)';
-        el.style.color = '#4ade80';
+        el.style.backgroundColor = isLight ? '#dcfce7' : 'rgba(16, 185, 129, 0.20)';
+        el.style.border = isLight ? '1px solid #34d399' : '1px solid rgba(16, 185, 129, 0.45)';
+        el.style.color = isLight ? '#166534' : '#6ee7b7';
     }
-    el.textContent = msg;
+    el.innerHTML = '<span style="color: inherit !important;">' + String(msg || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
     toastContainer.appendChild(el);
     requestAnimationFrame(function() {
         el.style.transform = 'translateX(0)';
@@ -5174,12 +5516,19 @@ function closeNetworkModal() {
     document.getElementById('networkModal').classList.add('opacity-0', 'invisible');
     document.getElementById('networkModal').style.pointerEvents = 'none';
 }
-function triggerDashboardUpdate() {
+async function triggerDashboardUpdate() {
     const isAr = <%- JSON.stringify(currentLang === 'ar') %>;
     const confirmMsg = isAr
         ? 'هل أنت متأكد من بدء الترقية الآمنة لـ Sokrat VoIP؟ سيتم أخذ نسخة احتياطية كاملة وتطبيق أحدث التحديثات وإصلاحات الاستقرار.'
         : 'Are you sure you want to perform a safe upgrade of Sokrat VoIP? A full pre-upgrade backup will be taken automatically before applying updates.';
-    if (!confirm(confirmMsg)) return;
+    const ok = await window.sokratConfirm({
+        title: isAr ? 'تأكيد الترقية الآمنة' : 'Confirm Safe Upgrade',
+        message: confirmMsg,
+        confirmText: isAr ? 'بدء الترقية' : 'Start Upgrade',
+        cancelText: isAr ? 'إلغاء' : 'Cancel',
+        type: 'warning'
+    });
+    if (!ok) return;
     
     const sm = document.getElementById('settingsMenu');
     if (sm) {
@@ -5239,12 +5588,19 @@ function triggerDashboardUpdate() {
         });
 }
 
-function triggerRestoreBackup() {
+async function triggerRestoreBackup() {
     const isAr = <%- JSON.stringify(currentLang === 'ar') %>;
     const confirmMsg = isAr
         ? 'هل أنت متأكد من استعادة النسخة الاحتياطية السابقة للترقية؟ سيتم استرجاع إعدادات المقسم وقواعد البيانات السابقة وإعادة تشغيل الخدمات.'
         : 'Are you sure you want to restore the pre-upgrade backup? This will revert PBX dialplans and database schemas to the snapshot taken before the last upgrade.';
-    if (!confirm(confirmMsg)) return;
+    const ok = await window.sokratConfirm({
+        title: isAr ? 'استعادة النسخة الاحتياطية' : 'Restore Pre-Upgrade Snapshot',
+        message: confirmMsg,
+        confirmText: isAr ? 'استعادة الآن' : 'Restore Now',
+        cancelText: isAr ? 'إلغاء' : 'Cancel',
+        type: 'danger'
+    });
+    if (!ok) return;
 
     const sm = document.getElementById('settingsMenu');
     if (sm) {

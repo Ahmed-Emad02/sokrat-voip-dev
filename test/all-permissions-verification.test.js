@@ -94,7 +94,7 @@ test('1. PERMISSION_CATEGORIES covers all 9 categories and 55 unique permissions
     assert.deepEqual(PERMISSION_CATEGORIES.map(c => c.id), expectedCategories, 'All 9 permission categories must exist');
 
     const totalPermissions = PERMISSION_CATEGORIES.reduce((acc, cat) => acc + cat.permissions.length, 0);
-    assert.equal(totalPermissions, 55, 'There must be exactly 55 granular permissions defined');
+    assert.equal(totalPermissions, 56, 'There must be exactly 56 granular permissions defined');
 
     // Every permission key in every category must be present in ALL_TABS
     for (const cat of PERMISSION_CATEGORIES) {
@@ -141,10 +141,10 @@ test('2. Verification of all action permissions with requireActionPermission', (
     }
 });
 
-test('3. Verification of all 16 PBX configuration sub-tab permissions with requireConfigPermission', () => {
+test('3. Verification of all 17 PBX configuration sub-tab permissions with requireConfigPermission', () => {
     const configCategory = PERMISSION_CATEGORIES.find(c => c.id === 'config');
     assert.ok(configCategory, 'Config category must exist');
-    assert.equal(configCategory.permissions.length, 16, 'Config category must have 16 sub-tab permissions');
+    assert.equal(configCategory.permissions.length, 17, 'Config category must have 17 sub-tab permissions');
 
     for (const p of configCategory.permissions) {
         const subTab = p.key.replace(/^config-/, '');
@@ -212,7 +212,7 @@ test('4. Verification of group permission resolution and parent-child hierarchy 
     assert.ok(allResolved.includes('dialer'), 'dialer alias must be present when campaigns is granted');
 });
 
-test('5. Verification of Sidebar navigation visibility for all 10 main pages', async () => {
+test('5. Verification of Sidebar navigation visibility for all 9 standard pages and root-only Auto-Dial', async () => {
     const sidebarEjsPath = path.join(__dirname, '../views/sidebar.ejs');
     const pageKeys = [
         { key: 'dashboard', url: '/?lang=' },
@@ -222,7 +222,6 @@ test('5. Verification of Sidebar navigation visibility for all 10 main pages', a
         { key: 'contacts', url: '/contacts?lang=' },
         { key: 'voicemails', url: '/voicemails?lang=' },
         { key: 'gsm-dongles', url: '/gsm-dongles?lang=' },
-        { key: 'campaigns', url: '/dialer?lang=' },
         { key: 'storage', url: '/storage?lang=' },
         { key: 'config', url: '/config?lang=' }
     ];
@@ -252,6 +251,29 @@ test('5. Verification of Sidebar navigation visibility for all 10 main pages', a
             }
         }
     }
+
+    // Auto-Dial (Campaigns) Root-Only Verification
+    const rootHtml = await ejs.renderFile(sidebarEjsPath, {
+        currentLang: 'en',
+        currentPage: '/',
+        isRtl: false,
+        isSuperAdmin: true,
+        isRootUser: true,
+        currentUser: 'root',
+        allowedTabs: ['campaigns']
+    });
+    assert.ok(rootHtml.includes('/dialer?lang='), 'Sidebar must render Auto-Dial link for root user');
+
+    const nonRootHtml = await ejs.renderFile(sidebarEjsPath, {
+        currentLang: 'en',
+        currentPage: '/',
+        isRtl: false,
+        isSuperAdmin: false,
+        isRootUser: false,
+        currentUser: 'standard_user',
+        allowedTabs: ['campaigns']
+    });
+    assert.equal(nonRootHtml.includes('/dialer?lang='), false, 'Sidebar must NOT render Auto-Dial link for non-root user');
 });
 
 test('6. Verification of requireTabPermission across all tabs and backward-compatibility aliases', () => {
