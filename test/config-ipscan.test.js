@@ -212,6 +212,35 @@ test('Proxy Persistence & URL Rewriting: Rewrites absolute device URLs and form 
     assert.ok(capturedBody.includes('__sokrat_proxy_bridge'), 'Must inject client proxy bridge script');
 });
 
+test('Proxy POST Forwarding: Serializes and sends parsed req.body to prevent gateway timeouts on forms', async () => {
+    const mockReq = {
+        params: { targetIp: '192.168.100.50', targetPort: '80', 0: 'login' },
+        query: {},
+        headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            'user-agent': 'test-agent'
+        },
+        method: 'POST',
+        body: { username: 'testuser', password: 'testpassword' },
+        readableEnded: true,
+        url: '/api/config/ipscan/proxy/192.168.100.50/80/login',
+        path: '/login'
+    };
+
+    let postResCode = null;
+    await new Promise((resolve) => {
+        const mockRes = {
+            status: function(code) { this.statusCode = code; return this; },
+            send: function() { resolve(); },
+            writeHead: function(code) { postResCode = code; },
+            end: function() { resolve(); }
+        };
+        ipScanner.handleDeviceProxy(mockReq, mockRes);
+    });
+
+    assert.ok(postResCode !== null && postResCode !== 504, 'Must forward POST body without timing out');
+});
+
 test('UI Template Integration: views/config.ejs removes iframe sandbox to prevent permissions policy warnings', () => {
     const configHtml = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8');
     assert.strictEqual(
