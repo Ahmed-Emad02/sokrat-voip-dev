@@ -275,6 +275,19 @@ test('API Security & Scope Gating: requireConfigPermission strictly protects all
     assert.match(serverCode, /app\.all\('\/api\/config\/ipscan\/proxy\/:targetIp\/:targetPort',\s*requireConfigPermission\('ipscan'\)/);
 });
 
+test('Agnostic Cookie Isolation & Virtualization: Namespaces target cookies and prevents session poisoning', () => {
+    const scannerCode = fs.readFileSync(path.join(rootDir, 'lib', 'ip-scanner.js'), 'utf8');
+    assert.match(scannerCode, /__dev_/, 'Must define device cookie prefix for virtualization');
+    assert.match(scannerCode, /delete forwardHeaders\['cookie'\]|forwardHeaders\['cookie'\] = targetCookies/, 'Must isolate target cookies from host session');
+    assert.match(scannerCode, /connect\.sid=;\s*Path=\$\{proxyBase\}/, 'Must clear legacy shadowed connect.sid cookies');
+});
+
+test('Pre-Session Sanitizer & Intelligent Auth: server.js cleans foreign cookies and redirects HTML navigations', () => {
+    const serverCode = fs.readFileSync(path.join(rootDir, 'server.js'), 'utf8');
+    assert.match(serverCode, /cleanSessionCookies/, 'Must include cleanSessionCookies pre-session middleware');
+    assert.match(serverCode, /isProxyBrowserRequest/, 'requireAuth must distinguish HTML browser navigations to proxy routes from JSON APIs');
+});
+
 function makeGetRequest(endpoint) {
     return new Promise((resolve) => {
         http.get({

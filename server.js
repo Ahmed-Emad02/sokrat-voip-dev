@@ -387,6 +387,46 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// --- PRE-SESSION COOKIE SANITIZER ---
+// Protects Sokrat VoIP session from foreign/duplicate connect.sid cookies sent by proxied devices
+const cookieSignature = require('cookie-signature');
+function cleanSessionCookies(cookieHeader, secret) {
+    if (!cookieHeader || typeof cookieHeader !== 'string' || !cookieHeader.includes('connect.sid=')) {
+        return cookieHeader;
+    }
+    const parts = cookieHeader.split(';').map(p => p.trim());
+    const validConnectSids = [];
+    const otherCookies = [];
+
+    for (const part of parts) {
+        if (part.startsWith('connect.sid=')) {
+            let rawVal = part.slice('connect.sid='.length).trim();
+            try { rawVal = decodeURIComponent(rawVal); } catch (_) {}
+            if (rawVal.startsWith('s:')) {
+                const unsigned = cookieSignature.unsign(rawVal.slice(2), secret);
+                if (unsigned !== false) {
+                    validConnectSids.push(part);
+                }
+            }
+        } else {
+            otherCookies.push(part);
+        }
+    }
+
+    if (validConnectSids.length > 0) {
+        return [validConnectSids[0], ...otherCookies].join('; ');
+    }
+    return cookieHeader;
+}
+
+app.use((req, res, next) => {
+    if (req.headers && req.headers.cookie && req.headers.cookie.includes('connect.sid=')) {
+        req.headers.cookie = cleanSessionCookies(req.headers.cookie, SESSION_SECRET);
+    }
+    next();
+});
+
 const sessionMiddleware = session({
     secret: SESSION_SECRET,
     resave: false,
@@ -1722,12 +1762,19 @@ async function requireAuth(req, res, next) {
             }
         } catch (_) {}
     }
-        const isApiRequest = req.path.startsWith('/api/') || 
+    const isProxyBrowserRequest = req.path.startsWith('/api/config/ipscan/proxy') && 
+                                  req.headers.accept && 
+                                  req.headers.accept.includes('text/html') && 
+                                  !req.xhr;
+
+    const isApiRequest = !isProxyBrowserRequest && (
+                         req.path.startsWith('/api/') || 
                          req.path.startsWith('/audio/') || 
                          req.path.startsWith('/recordings/') || 
                          (req.path.startsWith('/integrations/') && req.path !== '/integrations/crm') || 
                          req.xhr || 
-                         (req.headers.accept && req.headers.accept.includes('application/json') && !req.headers.accept.includes('text/html'));
+                         (req.headers.accept && req.headers.accept.includes('application/json') && !req.headers.accept.includes('text/html'))
+    );
 
     if (isApiRequest) {
         return res.status(401).json({ success: false, error: 'Unauthorized. Please log in or provide a valid X-API-Key header.' });
