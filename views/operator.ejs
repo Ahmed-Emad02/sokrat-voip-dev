@@ -943,7 +943,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                             <% if (emp.ring_groups && emp.ring_groups.length > 0) { %>
                                                 <span class="ring-group-tag" title="<%= isRtl ? 'مجموعات الاتصال: ' : 'Ring Groups: ' %><%= emp.ring_groups.map(function(rg){ return (rg.description && rg.description !== rg.grpnum) ? (rg.grpnum + ' (' + rg.description + ')') : rg.grpnum; }).join(', ') %>">RG <%= emp.ring_groups.map(function(rg){ return rg.grpnum; }).join(', ') %></span>
                                             <% } %>
-                                            <% if (emp.isPjsip || emp.tech === 'pjsip' || emp.extension === '150') { %>
+                                            <% if (true) { %>
                                             <% 
                                                 const statusSlug = emp.agentStatus || 'available';
                                                 const startTimeMs = emp.agentStatusTime ? new Date(emp.agentStatusTime).getTime() : null;
