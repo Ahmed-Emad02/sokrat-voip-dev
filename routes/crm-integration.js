@@ -1119,7 +1119,7 @@ function createCrmRouter(pool, options = {}) {
                 ws_url: `ws://${host}:8088/ws`,
                 wss_url: `wss://${host}:8089/ws`,
                 sip_domain: host,
-                extension: ext || '150',
+                extension: ext || '',
                 password: password,
                 auto_answer: policy.auto_answer || 'user_choice',
                 dnd: policy.dnd || 'user_choice',
