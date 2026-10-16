@@ -1655,8 +1655,13 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                     }
                     const badge = document.getElementById('agentStatusBadge-' + cardId);
                     if (badge) {
+                        const isDynamic = (status !== 'available' && status !== 'offline');
                         badge.setAttribute('data-status', status);
-                        badge.setAttribute('data-start', Date.now());
+                        badge.setAttribute('data-start', isDynamic ? Date.now() : '');
+                        const timerSpan = document.getElementById('agentStatusTimer-' + cardId);
+                        if (timerSpan && !isDynamic) {
+                            timerSpan.classList.add('hidden');
+                        }
                         const labelSpan = badge.querySelector('.agent-status-label');
                         const isRtl = <%= isRtl %>;
                         let sLabel = status;
