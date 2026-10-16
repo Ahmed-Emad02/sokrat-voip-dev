@@ -178,6 +178,16 @@ CREATE TABLE IF NOT EXISTS \`sokrat_camp_on_callbacks\` (
   INDEX \`idx_camp_expires\` (\`expires_at\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS \`extension_policies\` (
+  \`extension\` VARCHAR(20) PRIMARY KEY,
+  \`auto_answer\` ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
+  \`dnd\` ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
+  \`disable_outbound_ringing_cancel\` TINYINT(1) NOT NULL DEFAULT 0,
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE \`extension_policies\` ADD COLUMN IF NOT EXISTS \`disable_outbound_ringing_cancel\` TINYINT(1) NOT NULL DEFAULT 0 AFTER \`dnd\`;
+
 CREATE TABLE IF NOT EXISTS \`laya_dongle_health\` (
   \`dongle_name\` VARCHAR(50) NOT NULL PRIMARY KEY,
   \`health_score\` TINYINT NOT NULL DEFAULT 100,

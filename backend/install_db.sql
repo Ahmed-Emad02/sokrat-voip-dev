@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS `extension_policies` (
   `extension` VARCHAR(20) PRIMARY KEY,
   `auto_answer` ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
   `dnd` ENUM('user_choice', 'force_on', 'force_off') NOT NULL DEFAULT 'user_choice',
+  `disable_outbound_ringing_cancel` TINYINT(1) NOT NULL DEFAULT 0,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

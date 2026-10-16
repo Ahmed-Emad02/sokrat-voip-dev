@@ -12538,13 +12538,17 @@ app.get('/api/config/extensions', async (req, res) => {
             SELECT u.extension, u.name, u.outboundcid, u.recording, u.voicemail,
                    s_secret.data AS secret, s_context.data AS context, s_nat.data AS nat,
                    COALESCE(d.tech, 'sip') AS tech,
-                   ee.photo, ee.title, ee.emp_group, ee.is_group_admin
+                   ee.photo, ee.title, ee.emp_group, ee.is_group_admin,
+                   COALESCE(ep.auto_answer, 'user_choice') AS auto_answer,
+                   COALESCE(ep.dnd, 'user_choice') AS dnd,
+                   COALESCE(ep.disable_outbound_ringing_cancel, 0) AS disable_outbound_ringing_cancel
             FROM ${tables.users} u
             LEFT JOIN ${tables.devices} d ON d.id = u.extension
             LEFT JOIN ${tables.sip} s_secret ON s_secret.id = u.extension AND s_secret.keyword = 'secret'
             LEFT JOIN ${tables.sip} s_context ON s_context.id = u.extension AND s_context.keyword = 'context'
             LEFT JOIN ${tables.sip} s_nat ON s_nat.id = u.extension AND s_nat.keyword = 'nat'
             LEFT JOIN ${tables.employeeExtras} ee ON ee.extension = u.extension
+            LEFT JOIN \`asterisk\`.\`extension_policies\` ep ON ep.extension = u.extension
             ORDER BY CAST(u.extension AS UNSIGNED) ASC
         `);
 
@@ -12860,6 +12864,20 @@ app.post('/api/config/extensions', async (req, res) => {
                     is_group_admin = VALUES(is_group_admin)
             `, [extNum, photo, title, empGroup, isGroupAdmin, photo, title, empGroup]);
         }
+
+        // WebRTC Extension Policy (Per-Extension)
+        const autoAnswerVal = ['user_choice', 'force_on', 'force_off'].includes(req.body.auto_answer) ? req.body.auto_answer : 'user_choice';
+        const dndVal = ['user_choice', 'force_on', 'force_off'].includes(req.body.dnd) ? req.body.dnd : 'user_choice';
+        const disableCancelVal = (req.body.disable_outbound_ringing_cancel === 1 || req.body.disable_outbound_ringing_cancel === '1' || req.body.disable_outbound_ringing_cancel === true) ? 1 : 0;
+
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`extension_policies\` (extension, auto_answer, dnd, disable_outbound_ringing_cancel)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd), disable_outbound_ringing_cancel = VALUES(disable_outbound_ringing_cancel)
+        `, [extNum, autoAnswerVal, dndVal, disableCancelVal]);
+
+        io.emit('extensionPolicyUpdate', { extension: extNum, auto_answer: autoAnswerVal, dnd: dndVal, disable_outbound_ringing_cancel: disableCancelVal });
+
         reloadPbxConfig();
         syncExtensionCallPickupGroups().catch(() => {});
 
@@ -12980,6 +12998,25 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
                     is_group_admin = VALUES(is_group_admin)
             `, [extNum, photo || null, title, empGroup, isGroupAdmin, photo !== undefined ? photo : null, title, empGroup]);
         }
+
+        // WebRTC Extension Policy (Per-Extension)
+        if (req.body.auto_answer !== undefined || req.body.dnd !== undefined || req.body.disable_outbound_ringing_cancel !== undefined) {
+            const [curPol] = await pool.query('SELECT auto_answer, dnd, disable_outbound_ringing_cancel FROM `asterisk`.`extension_policies` WHERE extension = ?', [extNum]);
+            const finalAuto = ['user_choice', 'force_on', 'force_off'].includes(req.body.auto_answer) ? req.body.auto_answer : (curPol[0]?.auto_answer || 'user_choice');
+            const finalDnd = ['user_choice', 'force_on', 'force_off'].includes(req.body.dnd) ? req.body.dnd : (curPol[0]?.dnd || 'user_choice');
+            const finalCancel = req.body.disable_outbound_ringing_cancel !== undefined
+                ? ((req.body.disable_outbound_ringing_cancel === 1 || req.body.disable_outbound_ringing_cancel === '1' || req.body.disable_outbound_ringing_cancel === true) ? 1 : 0)
+                : (curPol[0]?.disable_outbound_ringing_cancel || 0);
+
+            await pool.query(`
+                INSERT INTO \`asterisk\`.\`extension_policies\` (extension, auto_answer, dnd, disable_outbound_ringing_cancel)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE auto_answer = VALUES(auto_answer), dnd = VALUES(dnd), disable_outbound_ringing_cancel = VALUES(disable_outbound_ringing_cancel)
+            `, [extNum, finalAuto, finalDnd, finalCancel]);
+
+            io.emit('extensionPolicyUpdate', { extension: extNum, auto_answer: finalAuto, dnd: finalDnd, disable_outbound_ringing_cancel: finalCancel });
+        }
+
         reloadPbxConfig();
         syncExtensionCallPickupGroups().catch(() => {});
         res.json({ success: true, message: `Extension ${extNum} updated successfully.` });
@@ -13006,6 +13043,7 @@ app.delete('/api/config/extensions/:extension', async (req, res) => {
         await pool.query('DELETE FROM `asterisk`.`devices` WHERE id = ?', [extNum]);
         await pool.query(`DELETE FROM ${tables.sip} WHERE id = ?`, [extNum]);
         await pool.query(`DELETE FROM ${tables.employeeExtras} WHERE extension = ?`, [extNum]);
+        await pool.query('DELETE FROM `asterisk`.`extension_policies` WHERE extension = ?', [extNum]);
         if (employeeRows[0]?.photo) removeEmployeePhoto(employeeRows[0].photo);
 
         // Clean up astdb AMPUSER, DEVICE & voicemail.conf
