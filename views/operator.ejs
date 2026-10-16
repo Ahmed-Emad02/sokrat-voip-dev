@@ -964,10 +964,39 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                                 else if (statusSlug === 'available') statusBgClass = 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm';
                                                 else if (statusSlug === 'offline') statusBgClass = 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
                                             %>
-                                            <span id="agentStatusBadge-<%= emp.cardId %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono tracking-wide <%= statusBgClass %>" title="<%= isRtl ? 'حالة الموظف في CRM: ' : 'CRM Agent Status: ' %><%= statusLabel %>">
-                                                <span class="agent-status-label"><%= statusLabel %></span>
-                                                <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-1.5 text-xs font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
-                                            </span>
+                                            <div class="relative inline-block">
+                                                <button type="button" id="agentStatusBadge-<%= emp.cardId %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" onclick="toggleStatusDropdown('<%= emp.cardId %>', event)" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono tracking-wide cursor-pointer hover:opacity-90 transition <%= statusBgClass %>" title="<%= isRtl ? 'تغيير حالة الموظف: ' : 'Change Agent Status: ' %><%= statusLabel %>">
+                                                    <span class="agent-status-label"><%= statusLabel %></span>
+                                                    <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-1.5 text-xs font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
+                                                    <svg class="w-3 h-3 ms-1 text-current opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                                </button>
+                                                <div id="statusDropdown-<%= emp.cardId %>" class="hidden absolute z-50 mt-1 w-36 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl py-1 text-xs font-mono text-zinc-200">
+                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'available', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
+                                                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                        <span><%= isRtl ? 'متاح (Available)' : 'Available' %></span>
+                                                    </button>
+                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'break', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
+                                                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                                        <span><%= isRtl ? 'استراحة (Break)' : 'Break' %></span>
+                                                    </button>
+                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'lunch', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
+                                                        <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+                                                        <span><%= isRtl ? 'غداء (Lunch)' : 'Lunch' %></span>
+                                                    </button>
+                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'meeting', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
+                                                        <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                                                        <span><%= isRtl ? 'اجتماع (Meeting)' : 'Meeting' %></span>
+                                                    </button>
+                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'training', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
+                                                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                                        <span><%= isRtl ? 'تدريب (Training)' : 'Training' %></span>
+                                                    </button>
+                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'offline', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2 border-t border-zinc-800 text-zinc-400">
+                                                        <span class="w-2 h-2 rounded-full bg-zinc-500"></span>
+                                                        <span><%= isRtl ? 'غير متاح (Offline)' : 'Offline' %></span>
+                                                    </button>
+                                                </div>
+                                            </div>
                                             <% } %>
                                         </div>
                                     </div>
@@ -1596,6 +1625,62 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             }
 
             initDynamicStatusTimers();
+
+            window.toggleStatusDropdown = function(cardId, e) {
+                if (e) e.stopPropagation();
+                document.querySelectorAll('[id^="statusDropdown-"]').forEach(el => {
+                    if (el.id !== 'statusDropdown-' + cardId) el.classList.add('hidden');
+                });
+                const dd = document.getElementById('statusDropdown-' + cardId);
+                if (dd) dd.classList.toggle('hidden');
+            };
+
+            document.addEventListener('click', () => {
+                document.querySelectorAll('[id^="statusDropdown-"]').forEach(el => el.classList.add('hidden'));
+            });
+
+            window.setOperatorAgentStatus = async function(ext, name, status, cardId) {
+                const dd = document.getElementById('statusDropdown-' + cardId);
+                if (dd) dd.classList.add('hidden');
+                try {
+                    const res = await fetch('/api/employee/agent-status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ extension: ext, display_name: name, status: status })
+                    });
+                    const data = await res.json();
+                    if (!data.success) {
+                        alert(data.error || 'Failed to update status');
+                        return;
+                    }
+                    const badge = document.getElementById('agentStatusBadge-' + cardId);
+                    if (badge) {
+                        badge.setAttribute('data-status', status);
+                        badge.setAttribute('data-start', Date.now());
+                        const labelSpan = badge.querySelector('.agent-status-label');
+                        const isRtl = <%= isRtl %>;
+                        let sLabel = status;
+                        if (status === 'break') sLabel = isRtl ? 'استراحة (Break)' : 'Break';
+                        else if (status === 'lunch') sLabel = isRtl ? 'غداء (Lunch)' : 'Lunch';
+                        else if (status === 'meeting') sLabel = isRtl ? 'اجتماع (Meeting)' : 'Meeting';
+                        else if (status === 'training') sLabel = isRtl ? 'تدريب (Training)' : 'Training';
+                        else if (status === 'available') sLabel = isRtl ? 'متاح' : 'Available';
+                        else if (status === 'offline') sLabel = isRtl ? 'غير متاح' : 'Offline';
+                        if (labelSpan) labelSpan.textContent = sLabel;
+
+                        badge.className = 'inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono tracking-wide cursor-pointer hover:opacity-90 transition ';
+                        if (status === 'break') badge.className += 'bg-amber-950/80 text-amber-300 border border-amber-500/50 shadow-sm';
+                        else if (status === 'lunch') badge.className += 'bg-sky-950/80 text-sky-300 border border-sky-500/50 shadow-sm';
+                        else if (status === 'meeting') badge.className += 'bg-purple-950/80 text-purple-300 border border-purple-500/50 shadow-sm';
+                        else if (status === 'training') badge.className += 'bg-blue-950/80 text-blue-300 border border-blue-500/50 shadow-sm';
+                        else if (status === 'available') badge.className += 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm';
+                        else if (status === 'offline') badge.className += 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
+                    }
+                    initDynamicStatusTimers();
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
 
             <% if (typeof federationSettings !== 'undefined' && federationSettings.panel_role === 'central') { %>
             socket.on('operator:federation_state', (fedState) => {

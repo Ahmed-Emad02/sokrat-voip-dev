@@ -2067,7 +2067,8 @@ let sipSnapshotStartTime = 0;
 app.use('/api/integrations/crm/v1', createCrmRouter(pool, {
     getPeerStatus: () => peerStatus,
     getActiveCalls: () => activeCalls,
-    getAmiClient: () => amiClient
+    getAmiClient: () => amiClient,
+    notifyCrmLive: () => notifyCrmLiveBroadcaster()
 }));
 
 // Register /crm-live Socket.io namespace
@@ -13219,6 +13220,73 @@ app.delete('/api/employee/groups/:id', requireAuth, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     } finally {
         connection.release();
+    }
+});
+
+// --- PJSIP / AGENT STATUS MUTATION FOR OPERATOR PANEL ---
+app.post('/api/employee/agent-status', requireAuth, async (req, res) => {
+    const { extension, status, display_name } = req.body || {};
+    const ext = String(extension || '').trim();
+    if (!ext || !/^[0-9A-Za-z_-]+$/.test(ext)) {
+        return res.status(400).json({ success: false, error: 'Valid extension is required' });
+    }
+    const newStatus = String(status || 'available').toLowerCase().trim();
+    const name = String(display_name || ext).trim();
+
+    try {
+        const [currentRows] = await pool.query(
+            'SELECT status, last_update FROM asterisk.synq_agent_status WHERE extension = ? LIMIT 1',
+            [ext]
+        );
+        const current = currentRows && currentRows[0];
+
+        if (current && current.status !== newStatus) {
+            const startTime = current.last_update;
+            await pool.query(
+                'INSERT INTO asterisk.synq_agent_status_log (extension, status, start_time, end_time, duration_seconds) VALUES (?, ?, ?, NOW(), TIMESTAMPDIFF(SECOND, ?, NOW()))',
+                [ext, current.status, startTime, startTime]
+            );
+        }
+
+        await pool.query(
+            'INSERT INTO asterisk.synq_agent_status (extension, display_name, status, last_update) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE status = ?, display_name = ?, last_update = NOW()',
+            [ext, name, newStatus, newStatus, name]
+        );
+
+        // Asterisk DND and Queue Pause Control
+        if (newStatus === 'available') {
+            await execFileAsync(ASTERISK_BIN, ['-rx', 'database del DND ' + ext]).catch(() => {});
+            await execFileAsync(ASTERISK_BIN, ['-rx', 'queue unpause member PJSIP/' + ext]).catch(() => {});
+            await pool.query(
+                "INSERT INTO asterisk.extension_policies (extension, dnd) VALUES (?, 'user_choice') ON DUPLICATE KEY UPDATE dnd = 'user_choice'",
+                [ext]
+            ).catch(() => {});
+        } else {
+            await execFileAsync(ASTERISK_BIN, ['-rx', 'database put DND ' + ext + ' YES']).catch(() => {});
+            await execFileAsync(ASTERISK_BIN, ['-rx', 'queue pause member PJSIP/' + ext + ' reason ' + newStatus]).catch(() => {});
+            await pool.query(
+                "INSERT INTO asterisk.extension_policies (extension, dnd) VALUES (?, 'enabled') ON DUPLICATE KEY UPDATE dnd = 'enabled'",
+                [ext]
+            ).catch(() => {});
+        }
+
+        if (typeof notifyCrmLiveBroadcaster === 'function') {
+            try { notifyCrmLiveBroadcaster(); } catch (_) {}
+        }
+
+        const hasTimer = (newStatus !== 'available' && newStatus !== 'offline');
+
+        res.json({
+            success: true,
+            extension: ext,
+            status: newStatus,
+            display_name: name,
+            has_timer: hasTimer,
+            updated_at: new Date().toISOString()
+        });
+    } catch (err) {
+        console.error('Operator Agent status update error:', err.message);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

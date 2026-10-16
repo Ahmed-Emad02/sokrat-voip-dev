@@ -627,10 +627,11 @@ function createCrmRouter(pool, options = {}) {
     router.get('/extensions', requireCrmScope('extensions:read'), async (req, res) => {
         try {
             const [rows] = await pool.query(`
-                SELECT extension AS id, name
-                FROM asterisk.users
-                WHERE extension REGEXP '^[0-9]+$'
-                ORDER BY CAST(extension AS UNSIGNED) ASC
+                SELECT u.extension AS id, u.name, s.status AS agent_status, s.last_update AS agent_status_time
+                FROM asterisk.users u
+                LEFT JOIN asterisk.synq_agent_status s ON s.extension = u.extension
+                WHERE u.extension REGEXP '^[0-9]+$'
+                ORDER BY CAST(u.extension AS UNSIGNED) ASC
             `);
 
             const peerMap = typeof getPeerStatus === 'function' ? getPeerStatus() : {};
@@ -666,6 +667,8 @@ function createCrmRouter(pool, options = {}) {
                     extension: ext,
                     name: r.name || `Extension ${ext}`,
                     technology: 'sip',
+                    agentStatus: r.agent_status || 'available',
+                    agentStatusTime: r.agent_status_time ? new Date(r.agent_status_time).getTime() : null,
                     enabled: true,
                     online: isOnline || inCall,
                     in_call: inCall,
@@ -893,7 +896,7 @@ function createCrmRouter(pool, options = {}) {
         }
     }
 
-    router.get('/agent-statuses', requireCrmScope('stats:read'), async (req, res) => {
+    router.get('/agent-statuses', requireCrmScope(['stats:read', 'live:read', 'extensions:read']), async (req, res) => {
         try {
             const ext = String(req.query.extension || '').trim();
             let targetGroup = String(req.query.group || '').trim();
@@ -958,7 +961,7 @@ function createCrmRouter(pool, options = {}) {
         }
     });
 
-    router.post('/agent-status', requireCrmScope('stats:read'), async (req, res) => {
+    router.post('/agent-status', requireCrmScope(['stats:read', 'live:read', 'live:barge']), async (req, res) => {
         const { extension, status, display_name } = req.body || {};
         const ext = String(extension || '').trim();
         if (!ext || !/^[0-9A-Za-z_-]+$/.test(ext)) {
@@ -1010,6 +1013,10 @@ function createCrmRouter(pool, options = {}) {
             }
 
             const hasTimer = (newStatus !== 'available' && newStatus !== 'offline');
+
+            if (typeof options.notifyCrmLive === 'function') {
+                try { options.notifyCrmLive(); } catch (_) {}
+            }
 
             res.json({
                 success: true,
