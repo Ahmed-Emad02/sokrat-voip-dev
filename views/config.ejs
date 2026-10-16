@@ -2792,41 +2792,7 @@ function isTabAllowed(tabName) {
                             </div>
                         </div>
 
-                        <!-- SECTION 1B: WEBRTC POLICIES & FEATURE LOCKS (Per-Extension) -->
-                        <div id="extWebRtcPolicySection" class="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3 mt-3">
-                            <div class="flex items-center justify-between pb-2 border-b border-blue-500/15">
-                                <span class="text-xs font-black uppercase tracking-wider text-blue-400 flex items-center gap-2">
-                                    <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                    <%= isRtl ? 'سياسات وقفل هاتف WebRTC لهذه التحويلة' : 'WebRTC Policy & Feature Locks (This Extension)' %>
-                                </span>
-                                <span class="text-[10px] text-blue-400/80 font-mono"><%= isRtl ? 'خاص بالتحويلة' : 'PER EXTENSION' %></span>
-                            </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                                <div>
-                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extAutoAnswer"><%= isRtl ? 'الرد التلقائي (Auto Answer)' : 'Auto Answer' %></label>
-                                    <select id="extAutoAnswer" class="config-input w-full text-xs font-semibold">
-                                        <option value="user_choice" selected><%= isRtl ? 'حر (اختيار الموظف)' : 'User Controlled' %></option>
-                                        <option value="force_on"><%= isRtl ? '[مقفل] إجباري مفعل دائماً' : '[Locked] ON (Force)' %></option>
-                                        <option value="force_off"><%= isRtl ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)' %></option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extDnd"><%= isRtl ? 'عدم الإزعاج (DND)' : 'Do Not Disturb (DND)' %></label>
-                                    <select id="extDnd" class="config-input w-full text-xs font-semibold">
-                                        <option value="user_choice" selected><%= isRtl ? 'حر (اختيار الموظف)' : 'User Controlled' %></option>
-                                        <option value="force_on"><%= isRtl ? '[مقفل] إجباري مفعل' : '[Locked] ON (Force)' %></option>
-                                        <option value="force_off"><%= isRtl ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)' %></option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extCancel"><%= isRtl ? 'إنهاء الرنين الصادر' : 'Ring Cancellation' %></label>
-                                    <select id="extCancel" class="config-input w-full text-xs font-semibold">
-                                        <option value="0" selected><%= isRtl ? 'مسموح الإنهاء (طبيعي)' : 'Allow Cancel (Normal)' %></option>
-                                        <option value="1"><%= isRtl ? '[مقفل] ممنوع الإنهاء أثناء الرنين' : '[Locked] Block Cancel' %></option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
+
                     </div>
 
                     <!-- SECTION 2: EMPLOYEE PROFILE & PHOTO (Emerald Theme) -->
@@ -6474,15 +6440,15 @@ function isTabAllowed(tabName) {
             document.getElementById('extVoicemail').value = 'disabled';
             document.getElementById('extTech').value = 'sip';
             document.getElementById('extDenoise').value = 'both';
-            document.getElementById('extAutoAnswer').value = 'user_choice';
-            document.getElementById('extDnd').value = 'user_choice';
-            document.getElementById('extCancel').value = '0';
+            if (document.getElementById('extAutoAnswer')) document.getElementById('extAutoAnswer').value = 'user_choice';
+            if (document.getElementById('extDnd')) document.getElementById('extDnd').value = 'user_choice';
+            if (document.getElementById('extCancel')) document.getElementById('extCancel').value = '0';
             document.getElementById('extVoicemail').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extTech').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extDenoise').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('extAutoAnswer').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('extDnd').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('extCancel').dispatchEvent(new Event('change', { bubbles: true }));
+            if (document.getElementById('extAutoAnswer')) document.getElementById('extAutoAnswer').dispatchEvent(new Event('change', { bubbles: true }));
+            if (document.getElementById('extDnd')) document.getElementById('extDnd').dispatchEvent(new Event('change', { bubbles: true }));
+            if (document.getElementById('extCancel')) document.getElementById('extCancel').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extVadGate').value = '1';
             document.getElementById('extVadGate').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extVadDb').value = 'off';
@@ -6511,15 +6477,15 @@ function isTabAllowed(tabName) {
             document.getElementById('extVadGate').value = (vadGate === '0' || vadGate === 0 || vadGate === false) ? '0' : '1';
             document.getElementById('extVadDb').value = (vadDb && vadDb !== 'undefined') ? String(vadDb).trim() : 'off';
             document.getElementById('extAgc').value = (agc && agc !== 'undefined') ? String(agc).trim() : '8000';
-            document.getElementById('extAutoAnswer').value = ['user_choice', 'force_on', 'force_off'].includes(autoAnswer) ? autoAnswer : 'user_choice';
-            document.getElementById('extDnd').value = ['user_choice', 'force_on', 'force_off'].includes(dnd) ? dnd : 'user_choice';
-            document.getElementById('extCancel').value = (disableCancel === '1' || disableCancel === 1 || disableCancel === true) ? '1' : '0';
+            if (document.getElementById('extAutoAnswer')) document.getElementById('extAutoAnswer').value = ['user_choice', 'force_on', 'force_off'].includes(autoAnswer) ? autoAnswer : 'user_choice';
+            if (document.getElementById('extDnd')) document.getElementById('extDnd').value = ['user_choice', 'force_on', 'force_off'].includes(dnd) ? dnd : 'user_choice';
+            if (document.getElementById('extCancel')) document.getElementById('extCancel').value = (disableCancel === '1' || disableCancel === 1 || disableCancel === true) ? '1' : '0';
             document.getElementById('extVoicemail').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extTech').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extDenoise').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('extAutoAnswer').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('extDnd').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('extCancel').dispatchEvent(new Event('change', { bubbles: true }));
+            if (document.getElementById('extAutoAnswer')) document.getElementById('extAutoAnswer').dispatchEvent(new Event('change', { bubbles: true }));
+            if (document.getElementById('extDnd')) document.getElementById('extDnd').dispatchEvent(new Event('change', { bubbles: true }));
+            if (document.getElementById('extCancel')) document.getElementById('extCancel').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extVadGate').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extVadDb').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extAgc').dispatchEvent(new Event('change', { bubbles: true }));
