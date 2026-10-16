@@ -887,12 +887,7 @@ function createCrmRouter(pool, options = {}) {
                 has_timer: true
             }));
         } catch (_) {
-            return [
-                { key: 'break', label_ar: 'استراحة', label_en: 'Break', desc_ar: 'فترة راحة قصيرة', desc_en: 'Short break', color: '#f59e0b', type: 'dynamic', has_timer: true },
-                { key: 'lunch', label_ar: 'غداء', label_en: 'Lunch', desc_ar: 'فترة تناول الغداء', desc_en: 'Lunch break', color: '#ea580c', type: 'dynamic', has_timer: true },
-                { key: 'meeting', label_ar: 'اجتماع', label_en: 'Meeting', desc_ar: 'اجتماع داخلي أو مقابلة عميل', desc_en: 'Internal meeting', color: '#8b5cf6', type: 'dynamic', has_timer: true },
-                { key: 'training', label_ar: 'تدريب', label_en: 'Training', desc_ar: 'جلسة تدريب أو ورشة عمل', desc_en: 'Training session', color: '#3b82f6', type: 'dynamic', has_timer: true }
-            ];
+            return [];
         }
     }
 

@@ -970,27 +970,22 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                                     <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-1.5 text-xs font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
                                                     <svg class="w-3 h-3 ms-1 text-current opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                                 </button>
-                                                <div id="statusDropdown-<%= emp.cardId %>" class="hidden absolute z-[9999] mt-1 w-40 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 text-xs font-mono text-zinc-200 end-0 sm:start-0">
+                                                <div id="statusDropdown-<%= emp.cardId %>" class="hidden absolute z-[9999] mt-1 w-44 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 text-xs font-mono text-zinc-200 end-0 sm:start-0">
                                                     <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'available', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
                                                         <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                                                         <span><%= isRtl ? 'متاح (Available)' : 'Available' %></span>
                                                     </button>
-                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'break', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
-                                                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                                                        <span><%= isRtl ? 'استراحة (Break)' : 'Break' %></span>
+                                                    <% 
+                                                    const dynDefs = (typeof agentStatusDefinitions !== 'undefined' && Array.isArray(agentStatusDefinitions)) ? agentStatusDefinitions : [];
+                                                    dynDefs.forEach(def => {
+                                                        const defColor = def.color || '#f59e0b';
+                                                        const defLabel = isRtl ? (def.label_ar || def.label_en || def.status_key) : (def.label_en || def.label_ar || def.status_key);
+                                                    %>
+                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', '<%= def.status_key %>', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
+                                                        <span class="w-2 h-2 rounded-full" style="background:<%= defColor %>;"></span>
+                                                        <span><%= defLabel %></span>
                                                     </button>
-                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'lunch', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
-                                                        <span class="w-2 h-2 rounded-full bg-sky-500"></span>
-                                                        <span><%= isRtl ? 'غداء (Lunch)' : 'Lunch' %></span>
-                                                    </button>
-                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'meeting', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
-                                                        <span class="w-2 h-2 rounded-full bg-purple-500"></span>
-                                                        <span><%= isRtl ? 'اجتماع (Meeting)' : 'Meeting' %></span>
-                                                    </button>
-                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'training', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
-                                                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-                                                        <span><%= isRtl ? 'تدريب (Training)' : 'Training' %></span>
-                                                    </button>
+                                                    <% }); %>
                                                     <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'offline', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2 border-t border-zinc-800 text-zinc-400">
                                                         <span class="w-2 h-2 rounded-full bg-zinc-500"></span>
                                                         <span><%= isRtl ? 'غير متاح (Offline)' : 'Offline' %></span>
@@ -1625,6 +1620,54 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             }
 
             initDynamicStatusTimers();
+
+            // Real-time synchronization of agent status across all open panels
+            if (typeof socket !== 'undefined' && socket) {
+                socket.on('agentStatus:changed', (payload) => {
+                    if (!payload || !payload.extension) return;
+                    const ext = String(payload.extension);
+                    const status = String(payload.status || 'available').toLowerCase();
+                    const startMs = payload.startTime ? new Date(payload.startTime).getTime() : Date.now();
+                    const isDynamic = (status !== 'available' && status !== 'offline');
+
+                    // Find all cards matching this extension
+                    document.querySelectorAll(`[id^="agentStatusBadge-"]`).forEach(badge => {
+                        const badgeExt = badge.getAttribute('data-ext') || '';
+                        const cardId = badge.id.replace('agentStatusBadge-', '');
+                        if (badgeExt === ext || cardId.endsWith('_' + ext) || cardId === ext) {
+                            badge.setAttribute('data-status', status);
+                            badge.setAttribute('data-start', isDynamic ? startMs : '');
+                            const labelSpan = badge.querySelector('.agent-status-label');
+                            const timerSpan = document.getElementById('agentStatusTimer-' + cardId);
+                            const isRtl = <%= isRtl %>;
+
+                            let sLabel = status;
+                            if (status === 'break') sLabel = isRtl ? 'استراحة (Break)' : 'Break';
+                            else if (status === 'lunch') sLabel = isRtl ? 'غداء (Lunch)' : 'Lunch';
+                            else if (status === 'meeting') sLabel = isRtl ? 'اجتماع (Meeting)' : 'Meeting';
+                            else if (status === 'training') sLabel = isRtl ? 'تدريب (Training)' : 'Training';
+                            else if (status === 'available') sLabel = isRtl ? 'متاح' : 'Available';
+                            else if (status === 'offline') sLabel = isRtl ? 'غير متاح' : 'Offline';
+
+                            if (labelSpan) labelSpan.textContent = sLabel;
+
+                            badge.className = 'inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono tracking-wide cursor-pointer hover:opacity-90 transition ';
+                            if (status === 'break') badge.className += 'bg-amber-950/80 text-amber-300 border border-amber-500/50 shadow-sm';
+                            else if (status === 'lunch') badge.className += 'bg-sky-950/80 text-sky-300 border border-sky-500/50 shadow-sm';
+                            else if (status === 'meeting') badge.className += 'bg-purple-950/80 text-purple-300 border border-purple-500/50 shadow-sm';
+                            else if (status === 'training') badge.className += 'bg-blue-950/80 text-blue-300 border border-blue-500/50 shadow-sm';
+                            else if (status === 'available') badge.className += 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm';
+                            else if (status === 'offline') badge.className += 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
+
+                            if (timerSpan && !isDynamic) {
+                                timerSpan.classList.add('hidden');
+                            }
+                        }
+                    });
+
+                    initDynamicStatusTimers();
+                });
+            }
 
             window.toggleStatusDropdown = function(cardId, e) {
                 if (e) e.stopPropagation();

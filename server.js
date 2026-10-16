@@ -3803,6 +3803,16 @@ app.use(async (req, res, next) => {
             }
         } catch (_) {}
 
+        let customStatusDefinitions = [];
+        try {
+            const [defRows] = await pool.query(
+                'SELECT status_key, label_ar, label_en, desc_ar, desc_en, color, target_group FROM asterisk.synq_agent_status_definitions WHERE is_active = 1 ORDER BY sort_order ASC, id ASC'
+            );
+            if (Array.isArray(defRows)) {
+                customStatusDefinitions = defRows;
+            }
+        } catch (_) {}
+        res.locals.agentStatusDefinitions = customStatusDefinitions;
         res.locals.employeeGroups = cachedEmployeeGroupNames;
         res.locals.roster = roster.map(emp => {
             const isPjsip = Boolean(emp.isPjsip || (emp.tech === 'pjsip') || (emp.extension === '150'));
@@ -13273,6 +13283,14 @@ app.post('/api/employee/agent-status', requireAuth, async (req, res) => {
         if (typeof notifyCrmLiveBroadcaster === 'function') {
             try { notifyCrmLiveBroadcaster(); } catch (_) {}
         }
+        try {
+            io.emit('agentStatus:changed', {
+                extension: ext,
+                status: newStatus,
+                display_name: name,
+                startTime: new Date().toISOString()
+            });
+        } catch (_) {}
 
         const hasTimer = (newStatus !== 'available' && newStatus !== 'offline');
 
