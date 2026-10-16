@@ -913,7 +913,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                  data-start="<%= startTimeStamp %>"
                                  data-emp-group="<%= emp.emp_group || '' %>"
                                  data-site-code="<%= emp.siteCode %>"
-                                 class="panel-surface rounded-xl p-3 flex flex-col justify-between min-h-[188px] transition-all duration-300 relative overflow-hidden border <%= stateClass %>">
+                                 class="panel-surface rounded-xl p-3 flex flex-col justify-between min-h-[188px] transition-all duration-300 relative border <%= stateClass %>">
                             <div class="flex items-start justify-between gap-3 min-w-0">
                                 <div class="flex items-start gap-2.5 min-w-0 flex-1">
                                     <div class="employee-avatar" aria-hidden="true">
@@ -970,7 +970,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                                     <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-1.5 text-xs font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
                                                     <svg class="w-3 h-3 ms-1 text-current opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                                 </button>
-                                                <div id="statusDropdown-<%= emp.cardId %>" class="hidden absolute z-50 mt-1 w-36 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl py-1 text-xs font-mono text-zinc-200">
+                                                <div id="statusDropdown-<%= emp.cardId %>" class="hidden absolute z-[9999] mt-1 w-40 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 text-xs font-mono text-zinc-200 end-0 sm:start-0">
                                                     <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'available', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
                                                         <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                                                         <span><%= isRtl ? 'متاح (Available)' : 'Available' %></span>
@@ -1629,14 +1629,29 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             window.toggleStatusDropdown = function(cardId, e) {
                 if (e) e.stopPropagation();
                 document.querySelectorAll('[id^="statusDropdown-"]').forEach(el => {
-                    if (el.id !== 'statusDropdown-' + cardId) el.classList.add('hidden');
+                    if (el.id !== 'statusDropdown-' + cardId) {
+                        el.classList.add('hidden');
+                        const pCard = el.closest('article');
+                        if (pCard) pCard.style.zIndex = '';
+                    }
                 });
                 const dd = document.getElementById('statusDropdown-' + cardId);
-                if (dd) dd.classList.toggle('hidden');
+                if (dd) {
+                    const willShow = dd.classList.contains('hidden');
+                    dd.classList.toggle('hidden');
+                    const parentCard = dd.closest('article');
+                    if (parentCard) {
+                        parentCard.style.zIndex = willShow ? '9998' : '';
+                    }
+                }
             };
 
             document.addEventListener('click', () => {
-                document.querySelectorAll('[id^="statusDropdown-"]').forEach(el => el.classList.add('hidden'));
+                document.querySelectorAll('[id^="statusDropdown-"]').forEach(el => {
+                    el.classList.add('hidden');
+                    const pCard = el.closest('article');
+                    if (pCard) pCard.style.zIndex = '';
+                });
             });
 
             window.setOperatorAgentStatus = async function(ext, name, status, cardId) {
