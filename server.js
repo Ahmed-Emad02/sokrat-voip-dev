@@ -3685,16 +3685,6 @@ app.use(async (req, res, next) => {
                 });
             } catch (_) {}
 
-            let cdrChannels = [];
-            try {
-                const [cRows] = await pool.query(`
-                    SELECT DISTINCT channel, dstchannel
-                    FROM ${tables.cdr}
-                    WHERE calldate >= NOW() - INTERVAL 180 DAY
-                `);
-                cdrChannels = cRows;
-            } catch (_) {}
-
             const extMap = new Map();
 
             users.forEach(u => {
@@ -3734,14 +3724,6 @@ app.use(async (req, res, next) => {
                 if (p.extension && /^\d+$/.test(p.extension) && !extMap.has(p.extension)) {
                     extMap.set(p.extension, { extension: p.extension, name: 'Extension ' + p.extension, photo: null, title: null, emp_group: null });
                 }
-            });
-
-            cdrChannels.forEach(r => {
-                [getEndpointExtensionFromChannel(r.channel), getEndpointExtensionFromChannel(r.dstchannel)].forEach(ext => {
-                    if (ext && /^\d{2,5}$/.test(ext) && !extMap.has(ext)) {
-                        extMap.set(ext, { extension: ext, name: 'Extension ' + ext, photo: null, title: null, emp_group: null });
-                    }
-                });
             });
 
             let ringGroupMap = {};
