@@ -516,13 +516,13 @@ function can(tab) {
     .panel-surface:hover, .config-card:hover {
         border-color: rgba(255, 255, 255, 0.16) !important;
     }
-    .card-stat {
+    .card-stat:not(.hero-card-clean) {
         background: linear-gradient(135deg, rgba(16, 16, 20, 0.9) 0%, rgba(10, 10, 13, 0.95) 100%) !important;
         border: 1px solid rgba(255, 255, 255, 0.08) !important;
         border-radius: 0.75rem !important;
         transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
-    .card-stat:hover {
+    .card-stat:not(.hero-card-clean):hover {
         transform: translateY(-3px) !important;
         border-color: rgba(239, 68, 68, 0.3) !important;
     }
@@ -779,11 +779,11 @@ function can(tab) {
     .light-theme .config-card:hover {
         border-color: #cbd5e1 !important;
     }
-    .light-theme .card-stat {
+    .light-theme .card-stat:not(.hero-card-clean) {
         background: #ffffff !important;
         border-color: #dfe3e8 !important;
     }
-    .light-theme .card-stat:hover {
+    .light-theme .card-stat:not(.hero-card-clean):hover {
         border-color: rgba(185, 28, 28, 0.35) !important;
     }
 

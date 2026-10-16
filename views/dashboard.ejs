@@ -172,14 +172,19 @@ const isRtl = currentLang === 'ar';
             transform: translateY(-2px); 
             border-color: var(--border-accent); 
         }
-        .hero-card-clean {
+        .hero-card-clean,
+        .hero-card-clean:hover,
+        .light-theme .hero-card-clean,
+        .light-theme .hero-card-clean:hover {
             background: transparent !important;
+            background-color: transparent !important;
+            background-image: none !important;
             border: none !important;
-            box-shadow: none !important;
-        }
-        .hero-card-clean:hover {
+            border-width: 0 !important;
             border-color: transparent !important;
             box-shadow: none !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
         }
         input, select, button { 
             transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); 
@@ -461,7 +466,7 @@ const isRtl = currentLang === 'ar';
             <!-- Hero Card 1: Total Calls -->
             <a href="<%= baseUrl %>&statusFilter=ALL&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض إجمالي المكالمات في سجل الاتصالات' : 'View total calls in Call History' %>"
-               class="hero-card-clean rounded-2xl p-5 card-stat bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
+               class="hero-card-clean rounded-2xl p-5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-3">
                         <svg class="w-8 h-8 text-[var(--accent-color)] shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -487,7 +492,7 @@ const isRtl = currentLang === 'ar';
             <!-- Hero Card 2: Answer Rate -->
             <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات المجابة في سجل الاتصالات' : 'View answered calls in Call History' %>"
-               class="hero-card-clean rounded-2xl p-5 card-stat bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
+               class="hero-card-clean rounded-2xl p-5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-3">
                         <svg class="w-8 h-8 text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -514,7 +519,7 @@ const isRtl = currentLang === 'ar';
             <!-- Hero Card 3: Answered Calls -->
             <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات التي تم الرد عليها في سجل الاتصالات' : 'View answered calls in Call History' %>"
-               class="hero-card-clean rounded-2xl p-5 card-stat bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
+               class="hero-card-clean rounded-2xl p-5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-3">
                         <svg class="w-8 h-8 text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -540,7 +545,7 @@ const isRtl = currentLang === 'ar';
             <!-- Hero Card 4: External Calls -->
             <a href="<%= baseUrl %>&callScopeFilter=EXTERNAL&statusFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات الخارجية في سجل الاتصالات' : 'View external calls in Call History' %>"
-               class="hero-card-clean rounded-2xl p-5 card-stat bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
+               class="hero-card-clean rounded-2xl p-5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-3">
                         <svg class="w-8 h-8 text-indigo-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -843,7 +848,7 @@ const isRtl = currentLang === 'ar';
             if (typeof window.updateClock === 'function') window.updateClock();
             if (typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                 anime({
-                    targets: '.card-stat',
+                    targets: '.card-stat, .hero-stat-card',
                     opacity: [0, 1],
                     translateY: [15, 0],
                     delay: anime.stagger(50),
