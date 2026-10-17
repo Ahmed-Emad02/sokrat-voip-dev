@@ -588,10 +588,7 @@ const isRtl = currentLang === 'ar';
                 <div class="px-2 py-3 bg-transparent border-none flex items-center flex-wrap gap-x-4 gap-y-2 shrink-0">
                     <div class="flex items-center gap-2.5 min-w-0 mr-auto">
                         <svg class="w-5 h-5 text-sky-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        <div class="min-w-0">
-                            <h2 id="hourlyChartTitle" class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartHourly %></h2>
-                            <p id="hourlyChartSubtitle" class="text-[11px] text-[var(--text-muted)] font-mono"></p>
-                        </div>
+                        <h2 id="hourlyChartTitle" class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartHourly %></h2>
                     </div>
                     <!-- Specific Day Dropdown Selector (only visible when multiple days exist) -->
                     <select id="hourlyDaySelect" onchange="onHourlyDaySelect(this.value)" class="hidden bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer shrink-0">
@@ -1067,7 +1064,6 @@ const isRtl = currentLang === 'ar';
 
             function renderHourlyChart() {
                 const titleEl = document.getElementById('hourlyChartTitle');
-                const subEl = document.getElementById('hourlyChartSubtitle');
 
                 // Locked, unified grid margins for zero layout shifts
                 const commonGrid = { left: 45, right: 20, top: 22, bottom: 32, containLabel: true };
@@ -1075,11 +1071,6 @@ const isRtl = currentLang === 'ar';
                 if (currentDistMode === 'days') {
                     // Daily Distribution Mode
                     if (titleEl) titleEl.textContent = _isRtl ? 'توزيع المكالمات بالأيام' : 'Daily Call Distribution';
-                    if (subEl) {
-                        subEl.textContent = _effectiveDays === 1 
-                            ? (_isRtl ? 'يوم واحد (اليوم)' : 'Single Day (Today)')
-                            : (_isRtl ? `عبر ${_effectiveDays} أيام` : `Across ${_effectiveDays} days`);
-                    }
 
                     const rawDates = (trendData || []).map(d => d.date ? d.date.slice(5) : '');
                     const dayLabels = rawDates.map(d => formatDayLabel(d));
@@ -1173,15 +1164,6 @@ const isRtl = currentLang === 'ar';
                     const activeHoursList = isSingleSpecificDay ? hourlyByDayData[selectedSpecificDay] : (hourlyData || []);
 
                     if (titleEl) titleEl.textContent = _isRtl ? 'توزيع المكالمات بالساعة' : 'Hourly Call Distribution';
-                    if (subEl) {
-                        if (isSingleSpecificDay) {
-                            subEl.textContent = formatFullDayName(selectedSpecificDay);
-                        } else {
-                            subEl.textContent = _effectiveDays === 1 
-                                ? (_isRtl ? 'ساعات اليوم (24 ساعة)' : '24 Hours Timeline')
-                                : (_isRtl ? `تجميع عبر ${_effectiveDays} أيام • بالساعة` : `Aggregated across ${_effectiveDays} days`);
-                        }
-                    }
 
                     const hourVals = (activeHoursList || []).map(d => d.calls || 0);
                     const maxHourVal = Math.max(...hourVals, 0);
