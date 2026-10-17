@@ -3,7 +3,16 @@ Laya Sensors — MariaDB Database Storage Interface
 Persists real-time health metrics and maintenance audit logs.
 """
 
-import pymysql
+try:
+    import pymysql
+    import pymysql.cursors
+except ImportError:
+    try:
+        import MySQLdb as pymysql
+        import MySQLdb.cursors
+        pymysql.cursors = MySQLdb.cursors
+    except ImportError:
+        raise ImportError("Neither pymysql nor MySQLdb is installed for Python 3")
 from laya.config import DB_HOST, DB_USER, DB_PASS, DB_NAME
 
 def get_connection():
