@@ -912,10 +912,10 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                         else if (statusSlug === 'offline') statusBgClass = 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
                                     %>
                                     <div class="relative inline-block">
-                                        <button type="button" id="agentStatusBadge-<%= emp.cardId %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" onclick="toggleStatusDropdown('<%= emp.cardId %>', event)" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono tracking-wide cursor-pointer hover:opacity-90 transition <%= statusBgClass %>" title="<%= isRtl ? 'تغيير حالة الموظف: ' : 'Change Agent Status: ' %><%= statusLabel %>">
+                                        <button type="button" id="agentStatusBadge-<%= emp.cardId %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" onclick="toggleStatusDropdown('<%= emp.cardId %>', event)" class="inline-flex items-center px-1.5 py-[1px] rounded text-[9px] font-extrabold font-mono tracking-tight leading-none cursor-pointer hover:opacity-90 transition <%= statusBgClass %>" title="<%= isRtl ? 'تغيير حالة الموظف: ' : 'Change Agent Status: ' %><%= statusLabel %>">
                                             <span class="agent-status-label"><%= statusLabel %></span>
-                                            <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-1 text-[10px] font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
-                                            <svg class="w-2.5 h-2.5 ms-0.5 text-current opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                            <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-1 text-[9px] font-mono font-bold leading-none <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
+                                            <svg class="w-2 h-2 ms-0.5 text-current opacity-70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
                                         </button>
                                         <div id="statusDropdown-<%= emp.cardId %>" class="hidden absolute z-[9999] mt-1 w-44 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 text-xs font-mono text-zinc-200 end-0">
                                             <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'available', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
@@ -1589,7 +1589,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
 
                             if (labelSpan) labelSpan.textContent = sLabel;
 
-                            badge.className = 'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono tracking-wide cursor-pointer hover:opacity-90 transition ';
+                            badge.className = 'inline-flex items-center px-1.5 py-[1px] rounded text-[9px] font-extrabold font-mono tracking-tight leading-none cursor-pointer hover:opacity-90 transition ';
                             if (status === 'break') badge.className += 'bg-amber-950/80 text-amber-300 border border-amber-500/50 shadow-sm';
                             else if (status === 'lunch') badge.className += 'bg-sky-950/80 text-sky-300 border border-sky-500/50 shadow-sm';
                             else if (status === 'meeting') badge.className += 'bg-purple-950/80 text-purple-300 border border-purple-500/50 shadow-sm';
@@ -1669,7 +1669,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                         else if (status === 'offline') sLabel = isRtl ? 'غير متاح' : 'Offline';
                         if (labelSpan) labelSpan.textContent = sLabel;
 
-                        badge.className = 'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono tracking-wide cursor-pointer hover:opacity-90 transition ';
+                        badge.className = 'inline-flex items-center px-1.5 py-[1px] rounded text-[9px] font-extrabold font-mono tracking-tight leading-none cursor-pointer hover:opacity-90 transition ';
                         if (status === 'break') badge.className += 'bg-amber-950/80 text-amber-300 border border-amber-500/50 shadow-sm';
                         else if (status === 'lunch') badge.className += 'bg-sky-950/80 text-sky-300 border border-sky-500/50 shadow-sm';
                         else if (status === 'meeting') badge.className += 'bg-purple-950/80 text-purple-300 border border-purple-500/50 shadow-sm';
