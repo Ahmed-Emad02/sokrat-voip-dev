@@ -222,6 +222,20 @@ const isRtl = currentLang === 'ar';
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             text-decoration: none;
         }
+        #hourlyDaySelectContainer .custom-select-trigger {
+            padding-top: 0.25rem !important;
+            padding-bottom: 0.25rem !important;
+            padding-left: 0.625rem !important;
+            padding-right: 0.625rem !important;
+            min-height: 28px !important;
+            height: 28px !important;
+            font-size: 0.75rem !important;
+            border-radius: 0.5rem !important;
+            line-height: 1rem !important;
+        }
+        #hourlyDaySelectContainer .custom-select-wrapper {
+            width: 100% !important;
+        }
         .filter-action-btn:hover {
             background-color: var(--bg-hover);
             color: #ffffff;
@@ -379,8 +393,9 @@ const isRtl = currentLang === 'ar';
                 if (filters.searchDid && filters.searchDid.trim() !== '') activeSecondaryCount++;
                 if (filters.searchUniqueId && filters.searchUniqueId.trim() !== '') activeSecondaryCount++;
             %>
-            <div id="dashSecondaryFilters" class="<%= hasActiveSecondary ? '' : 'hidden' %> border-t border-[var(--border-primary)]/40 pt-2.5">
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            <div id="dashSecondaryFilters" class="<%= hasActiveSecondary ? '' : 'hidden' %> border-t border-[var(--border-primary)]/40 overflow-hidden">
+                <div class="pt-2.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
                     <div>
                         <label for="dashDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
                         <select id="dashDirectionFilter" name="directionFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -406,6 +421,7 @@ const isRtl = currentLang === 'ar';
                         <label for="dashSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
                         <input type="text" id="dashSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
+                </div>
                 </div>
             </div>
 
@@ -585,23 +601,28 @@ const isRtl = currentLang === 'ar';
         <!-- Section 3: Operations Row (Hourly Distribution + Top Talkers) -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 shrink-0">
             <div class="rounded-2xl flex flex-col h-full overflow-hidden bg-transparent border-0 border-none shadow-none">
-                <div class="px-2 py-3 bg-transparent border-none flex items-center flex-wrap gap-x-4 gap-y-2 shrink-0">
-                    <div class="flex items-center gap-2.5 min-w-0 mr-auto">
+                <div class="px-2 py-3 bg-transparent border-none flex items-center justify-between gap-3 shrink-0 flex-nowrap">
+                    <div class="flex items-center gap-2.5 min-w-0">
                         <svg class="w-5 h-5 text-sky-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        <h2 id="hourlyChartTitle" class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartHourly %></h2>
+                        <h2 id="hourlyChartTitle" class="text-sm font-bold text-white uppercase tracking-wider truncate"><%= t.chartHourly %></h2>
                     </div>
-                    <!-- Specific Day Dropdown Selector (only visible when multiple days exist) -->
-                    <select id="hourlyDaySelect" onchange="onHourlyDaySelect(this.value)" class="hidden bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer shrink-0">
-                        <option value="all"><%= isRtl ? 'جميع الأيام' : 'All Days' %></option>
-                    </select>
-                    <!-- Switcher (Hours vs Days) -->
-                    <div id="hourlyTimeModeWrapper" class="inline-flex items-center p-0.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] gap-0.5 shrink-0">
-                        <button type="button" id="btn-dist-hours" onclick="setDistributionMode('hours')" class="px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer btn-primary whitespace-nowrap">
-                            <span><%= isRtl ? 'بالساعات' : 'Hourly' %></span>
-                        </button>
-                        <button type="button" id="btn-dist-days" onclick="setDistributionMode('days')" class="px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] whitespace-nowrap">
-                            <span><%= isRtl ? 'بالأيام' : 'Daily' %></span>
-                        </button>
+                    <!-- Controls Container (Day Select + Switcher strictly in ONE ROW) -->
+                    <div class="flex items-center gap-2 shrink-0 flex-nowrap ms-auto">
+                        <!-- Specific Day Dropdown Selector (only visible when multiple days exist) -->
+                        <div id="hourlyDaySelectContainer" class="hidden shrink-0 w-44 sm:w-52">
+                            <select id="hourlyDaySelect" onchange="onHourlyDaySelect(this.value)" class="hidden bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2.5 py-1 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] cursor-pointer">
+                                <option value="all"><%= isRtl ? 'جميع الأيام' : 'All Days' %></option>
+                            </select>
+                        </div>
+                        <!-- Switcher (Hours vs Days) -->
+                        <div id="hourlyTimeModeWrapper" class="inline-flex items-center p-0.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] gap-0.5 shrink-0">
+                            <button type="button" id="btn-dist-hours" onclick="setDistributionMode('hours')" class="px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer btn-primary whitespace-nowrap">
+                                <span><%= isRtl ? 'بالساعات' : 'Hourly' %></span>
+                            </button>
+                            <button type="button" id="btn-dist-days" onclick="setDistributionMode('days')" class="px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] whitespace-nowrap">
+                                <span><%= isRtl ? 'بالأيام' : 'Daily' %></span>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="p-2 sm:p-4 flex-1 flex flex-col justify-center">
@@ -1015,8 +1036,10 @@ const isRtl = currentLang === 'ar';
 
             // Populate the day selector dropdown if multiple days exist
             const daySelectEl = document.getElementById('hourlyDaySelect');
+            const daySelectContainer = document.getElementById('hourlyDaySelectContainer');
             if (daySelectEl && _isMultiDay) {
                 daySelectEl.classList.remove('hidden');
+                if (daySelectContainer) daySelectContainer.classList.remove('hidden');
                 daySelectEl.innerHTML = '';
 
                 const optAll = document.createElement('option');
@@ -1750,22 +1773,105 @@ const isRtl = currentLang === 'ar';
             syncStatusChecklistUI();
         }
 
-        function toggleDashboardMoreFilters(forcedState) {
+        function toggleDashboardMoreFilters(forcedState, immediate) {
             const drawer = document.getElementById('dashSecondaryFilters');
             const label = document.getElementById('dashToggleMoreLabel');
             const icon = document.getElementById('dashToggleMoreIcon');
             if (!drawer) return;
 
-            const isCurrentlyHidden = drawer.classList.contains('hidden');
+            const isCurrentlyHidden = drawer.classList.contains('hidden') || drawer.style.display === 'none' || drawer.offsetHeight === 0;
             const expand = (typeof forcedState === 'boolean') ? forcedState : isCurrentlyHidden;
 
             if (expand) {
+                if (!drawer.classList.contains('hidden') && drawer.offsetHeight > 0 && !drawer.dataset.animating) {
+                    return;
+                }
+
+                if (immediate) {
+                    drawer.classList.remove('hidden');
+                    drawer.style.display = 'block';
+                    drawer.style.maxHeight = 'none';
+                    drawer.style.opacity = '1';
+                    drawer.style.overflow = 'visible';
+                    if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
+                    if (icon) icon.classList.add('rotate-180');
+                    try { localStorage.setItem('dash_filters_expanded', 'true'); } catch (e) {}
+                    return;
+                }
+
+                drawer.dataset.animating = 'true';
                 drawer.classList.remove('hidden');
+                drawer.style.display = 'block';
+                drawer.style.overflow = 'hidden';
+                drawer.style.maxHeight = '0px';
+                drawer.style.opacity = '0';
+                drawer.style.transition = 'max-height 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.24s ease-out';
+
+                const targetHeight = drawer.scrollHeight;
+
+                requestAnimationFrame(() => {
+                    drawer.style.maxHeight = targetHeight + 'px';
+                    drawer.style.opacity = '1';
+                });
+
+                const onEnd = (e) => {
+                    if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
+                    drawer.removeEventListener('transitionend', onEnd);
+                    delete drawer.dataset.animating;
+                    if (drawer.style.maxHeight !== '0px') {
+                        drawer.style.maxHeight = 'none';
+                        drawer.style.overflow = 'visible';
+                    }
+                };
+                drawer.addEventListener('transitionend', onEnd);
+
                 if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
                 if (icon) icon.classList.add('rotate-180');
                 try { localStorage.setItem('dash_filters_expanded', 'true'); } catch (e) {}
             } else {
-                drawer.classList.add('hidden');
+                if (drawer.classList.contains('hidden') && !drawer.dataset.animating) {
+                    return;
+                }
+
+                if (immediate) {
+                    drawer.classList.add('hidden');
+                    drawer.style.display = '';
+                    drawer.style.maxHeight = '';
+                    drawer.style.opacity = '';
+                    drawer.style.overflow = '';
+                    if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
+                    if (icon) icon.classList.remove('rotate-180');
+                    try { localStorage.setItem('dash_filters_expanded', 'false'); } catch (e) {}
+                    return;
+                }
+
+                drawer.dataset.animating = 'true';
+                drawer.style.overflow = 'hidden';
+                drawer.style.maxHeight = drawer.scrollHeight + 'px';
+                drawer.style.opacity = '1';
+                drawer.style.transition = 'max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-in';
+
+                // Force layout reflow
+                void drawer.offsetHeight;
+
+                requestAnimationFrame(() => {
+                    drawer.style.maxHeight = '0px';
+                    drawer.style.opacity = '0';
+                });
+
+                const onEnd = (e) => {
+                    if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
+                    drawer.removeEventListener('transitionend', onEnd);
+                    delete drawer.dataset.animating;
+                    drawer.classList.add('hidden');
+                    drawer.style.display = '';
+                    drawer.style.maxHeight = '';
+                    drawer.style.opacity = '';
+                    drawer.style.overflow = '';
+                    drawer.style.transition = '';
+                };
+                drawer.addEventListener('transitionend', onEnd);
+
                 if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
                 if (icon) icon.classList.remove('rotate-180');
                 try { localStorage.setItem('dash_filters_expanded', 'false'); } catch (e) {}
@@ -1781,7 +1887,7 @@ const isRtl = currentLang === 'ar';
                 try {
                     const savedExpanded = localStorage.getItem('dash_filters_expanded');
                     if (savedExpanded === 'true') {
-                        toggleDashboardMoreFilters(true);
+                        toggleDashboardMoreFilters(true, true);
                     }
                 } catch (e) {}
             }
