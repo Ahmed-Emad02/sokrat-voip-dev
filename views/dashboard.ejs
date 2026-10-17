@@ -625,18 +625,18 @@ const isRtl = currentLang === 'ar';
                         </div>
                     </div>
                 </div>
-                <div class="p-2 sm:p-4 flex-1 flex flex-col justify-center">
-                    <div id="hourlyChart" class="w-full h-64 min-h-[256px]"></div>
+                <div class="p-2 sm:px-2 sm:py-3 flex-1 flex flex-col">
+                    <div id="hourlyChart" class="w-full" style="height: 280px"></div>
                 </div>
             </div>
-            <div class="rounded-2xl bg-transparent border-0 border-none shadow-none">
+            <div class="rounded-2xl flex flex-col h-full bg-transparent border-0 border-none shadow-none">
                 <div class="px-2 py-3 bg-transparent border-none flex items-center justify-between">
                     <div class="flex items-center gap-2.5">
                         <svg class="w-5 h-5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg>
                         <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartTopTalkers %></h2>
                     </div>
                 </div>
-                <div class="p-2 sm:p-4">
+                <div class="p-2 sm:px-2 sm:py-3 flex-1 flex flex-col">
                     <div id="topTalkersChart" class="w-full" style="height: 280px"></div>
                 </div>
             </div>
@@ -997,7 +997,18 @@ const isRtl = currentLang === 'ar';
             window.addEventListener('resize', () => dispChart.resize());
 
             // -- Hourly / Daily Call Distribution --
-            const hourlyChart = echarts.init(document.getElementById('hourlyChart'), isLight ? null : 'dark');
+            // -- Synchronize Operations Row Chart Dimensions --
+            const hourlyEl = document.getElementById("hourlyChart");
+            const talkersEl = document.getElementById("topTalkersChart");
+            const talkersCount = (typeof topTalkersData !== "undefined" && topTalkersData) ? topTalkersData.length : 0;
+            const talkersVisibleMax = 8;
+            const needsScroll = talkersCount > talkersVisibleMax;
+            const opsChartsHeight = needsScroll ? "320px" : "280px";
+            if (hourlyEl) hourlyEl.style.height = opsChartsHeight;
+            if (talkersEl) talkersEl.style.height = opsChartsHeight;
+
+            // -- Hourly / Daily Call Distribution --
+            const hourlyChart = echarts.init(hourlyEl, isLight ? null : "dark");
 
             const _dashStartDate = '<%= filters.startDate %>';
             const _dashEndDate = '<%= filters.endDate %>';
@@ -1089,7 +1100,7 @@ const isRtl = currentLang === 'ar';
                 const titleEl = document.getElementById('hourlyChartTitle');
 
                 // Locked, unified grid margins for zero layout shifts
-                const commonGrid = { left: 45, right: 20, top: 22, bottom: 32, containLabel: true };
+                const commonGrid = { left: 0, right: 15, top: 18, bottom: 26, containLabel: true };
 
                 if (currentDistMode === 'days') {
                     // Daily Distribution Mode
@@ -1303,14 +1314,7 @@ const isRtl = currentLang === 'ar';
             window.addEventListener('resize', () => hourlyChart.resize());
 
             // -- Top Talkers --
-            const talkersEl = document.getElementById('topTalkersChart');
-            const talkersCount = topTalkersData.length;
-            const talkersVisibleMax = 8;
-            const needsScroll = talkersCount > talkersVisibleMax;
-            if (talkersCount > talkersVisibleMax) {
-                talkersEl.style.height = '320px';
-            }
-            const talkersChart = echarts.init(talkersEl, isLight ? null : 'dark');
+            const talkersChart = echarts.init(talkersEl, isLight ? null : "dark");
             talkersChart.setOption({
                 textStyle: {
                     fontFamily: _chartFont
@@ -1336,7 +1340,7 @@ const isRtl = currentLang === 'ar';
                             + _t.calls + ': <b>' + data.calls + '</b>';
                     }
                 },
-                grid: { left: 120, right: needsScroll ? 60 : 50, top: 10, bottom: 30 },
+                grid: { left: 10, right: needsScroll ? 60 : 45, top: 10, bottom: 25, containLabel: true },
                 dataZoom: needsScroll ? [{
                     type: 'slider',
                     yAxisIndex: 0,
