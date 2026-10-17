@@ -933,6 +933,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                             <% } %>
                                         </div>
                                         <span class="employee-title <%= emp.title ? '' : 'employee-title-empty' %>" title="<%= emp.title || t.noTitle %>"><%= emp.title || t.noTitle %></span>
+                                        <% if (emp.is_group_admin || (emp.ring_groups && emp.ring_groups.length > 0)) { %>
                                         <div class="flex items-center gap-1 flex-wrap mt-0.5">
                                             <% if (emp.is_group_admin) { %>
                                                 <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono" title="<%= isRtl ? 'مدير المجموعة (صلاحية التقاط المكالمات)' : 'Group Admin (Call Pickup Authority)' %>">
@@ -943,63 +944,62 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                             <% if (emp.ring_groups && emp.ring_groups.length > 0) { %>
                                                 <span class="ring-group-tag" title="<%= isRtl ? 'مجموعات الاتصال: ' : 'Ring Groups: ' %><%= emp.ring_groups.map(function(rg){ return (rg.description && rg.description !== rg.grpnum) ? (rg.grpnum + ' (' + rg.description + ')') : rg.grpnum; }).join(', ') %>">RG <%= emp.ring_groups.map(function(rg){ return rg.grpnum; }).join(', ') %></span>
                                             <% } %>
-                                            <% if (true) { %>
-                                            <% 
-                                                const statusSlug = emp.agentStatus || 'available';
-                                                const startTimeMs = emp.agentStatusTime ? new Date(emp.agentStatusTime).getTime() : null;
-                                                const isDynamicStatus = (statusSlug !== 'available' && statusSlug !== 'offline');
-                                                let statusLabel = statusSlug;
-                                                if (statusSlug === 'break') statusLabel = isRtl ? 'استراحة (Break)' : 'Break';
-                                                else if (statusSlug === 'lunch') statusLabel = isRtl ? 'غداء (Lunch)' : 'Lunch';
-                                                else if (statusSlug === 'meeting') statusLabel = isRtl ? 'اجتماع (Meeting)' : 'Meeting';
-                                                else if (statusSlug === 'training') statusLabel = isRtl ? 'تدريب (Training)' : 'Training';
-                                                else if (statusSlug === 'available') statusLabel = isRtl ? 'متاح' : 'Available';
-                                                else if (statusSlug === 'offline') statusLabel = isRtl ? 'غير متاح' : 'Offline';
-                                
-                                                let statusBgClass = 'bg-zinc-800 text-zinc-300 border border-zinc-700';
-                                                if (statusSlug === 'break') statusBgClass = 'bg-amber-950/80 text-amber-300 border border-amber-500/50 shadow-sm';
-                                                else if (statusSlug === 'lunch') statusBgClass = 'bg-sky-950/80 text-sky-300 border border-sky-500/50 shadow-sm';
-                                                else if (statusSlug === 'meeting') statusBgClass = 'bg-purple-950/80 text-purple-300 border border-purple-500/50 shadow-sm';
-                                                else if (statusSlug === 'training') statusBgClass = 'bg-blue-950/80 text-blue-300 border border-blue-500/50 shadow-sm';
-                                                else if (statusSlug === 'available') statusBgClass = 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm';
-                                                else if (statusSlug === 'offline') statusBgClass = 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
-                                            %>
-                                            <div class="relative inline-block">
-                                                <button type="button" id="agentStatusBadge-<%= emp.cardId %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" onclick="toggleStatusDropdown('<%= emp.cardId %>', event)" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono tracking-wide cursor-pointer hover:opacity-90 transition <%= statusBgClass %>" title="<%= isRtl ? 'تغيير حالة الموظف: ' : 'Change Agent Status: ' %><%= statusLabel %>">
-                                                    <span class="agent-status-label"><%= statusLabel %></span>
-                                                    <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-1.5 text-xs font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
-                                                    <svg class="w-3 h-3 ms-1 text-current opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                                </button>
-                                                <div id="statusDropdown-<%= emp.cardId %>" class="hidden absolute z-[9999] mt-1 w-44 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 text-xs font-mono text-zinc-200 end-0 sm:start-0">
-                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'available', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
-                                                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                                        <span><%= isRtl ? 'متاح (Available)' : 'Available' %></span>
-                                                    </button>
-                                                    <% 
-                                                    const dynDefs = (typeof agentStatusDefinitions !== 'undefined' && Array.isArray(agentStatusDefinitions)) ? agentStatusDefinitions : [];
-                                                    dynDefs.forEach(def => {
-                                                        const defColor = def.color || '#f59e0b';
-                                                        const defLabel = isRtl ? (def.label_ar || def.label_en || def.status_key) : (def.label_en || def.label_ar || def.status_key);
-                                                    %>
-                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', '<%= def.status_key %>', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
-                                                        <span class="w-2 h-2 rounded-full" style="background:<%= defColor %>;"></span>
-                                                        <span><%= defLabel %></span>
-                                                    </button>
-                                                    <% }); %>
-                                                    <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'offline', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2 border-t border-zinc-800 text-zinc-400">
-                                                        <span class="w-2 h-2 rounded-full bg-zinc-500"></span>
-                                                        <span><%= isRtl ? 'غير متاح (Offline)' : 'Offline' %></span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <% } %>
                                         </div>
+                                        <% } %>
                                     </div>
                                 </div>
                                 <div class="flex flex-col items-end gap-1 shrink-0">
                                     <div class="flex items-center gap-1.5">
                                         <span id="sipBadge-<%= emp.cardId %>" class="h-2 w-2 rounded-full bg-zinc-800 transition-all duration-300"></span>
                                         <span id="sipLabel-<%= emp.cardId %>" class="text-[11px] font-bold uppercase tracking-wide text-zinc-500 transition-all duration-300"><%= isOnline ? t.online : t.offline %></span>
+                                    </div>
+                                    <% 
+                                        const statusSlug = emp.agentStatus || 'available';
+                                        const startTimeMs = emp.agentStatusTime ? new Date(emp.agentStatusTime).getTime() : null;
+                                        const isDynamicStatus = (statusSlug !== 'available' && statusSlug !== 'offline');
+                                        let statusLabel = statusSlug;
+                                        if (statusSlug === 'break') statusLabel = isRtl ? 'استراحة (Break)' : 'Break';
+                                        else if (statusSlug === 'lunch') statusLabel = isRtl ? 'غداء (Lunch)' : 'Lunch';
+                                        else if (statusSlug === 'meeting') statusLabel = isRtl ? 'اجتماع (Meeting)' : 'Meeting';
+                                        else if (statusSlug === 'training') statusLabel = isRtl ? 'تدريب (Training)' : 'Training';
+                                        else if (statusSlug === 'available') statusLabel = isRtl ? 'متاح' : 'Available';
+                                        else if (statusSlug === 'offline') statusLabel = isRtl ? 'غير متاح' : 'Offline';
+                        
+                                        let statusBgClass = 'bg-zinc-800 text-zinc-300 border border-zinc-700';
+                                        if (statusSlug === 'break') statusBgClass = 'bg-amber-950/80 text-amber-300 border border-amber-500/50 shadow-sm';
+                                        else if (statusSlug === 'lunch') statusBgClass = 'bg-sky-950/80 text-sky-300 border border-sky-500/50 shadow-sm';
+                                        else if (statusSlug === 'meeting') statusBgClass = 'bg-purple-950/80 text-purple-300 border border-purple-500/50 shadow-sm';
+                                        else if (statusSlug === 'training') statusBgClass = 'bg-blue-950/80 text-blue-300 border border-blue-500/50 shadow-sm';
+                                        else if (statusSlug === 'available') statusBgClass = 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm';
+                                        else if (statusSlug === 'offline') statusBgClass = 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
+                                    %>
+                                    <div class="relative inline-block">
+                                        <button type="button" id="agentStatusBadge-<%= emp.cardId %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" onclick="toggleStatusDropdown('<%= emp.cardId %>', event)" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono tracking-wide cursor-pointer hover:opacity-90 transition <%= statusBgClass %>" title="<%= isRtl ? 'تغيير حالة الموظف: ' : 'Change Agent Status: ' %><%= statusLabel %>">
+                                            <span class="agent-status-label"><%= statusLabel %></span>
+                                            <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-1.5 text-xs font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
+                                            <svg class="w-3 h-3 ms-1 text-current opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        </button>
+                                        <div id="statusDropdown-<%= emp.cardId %>" class="hidden absolute z-[9999] mt-1 w-44 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 text-xs font-mono text-zinc-200 end-0">
+                                            <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'available', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
+                                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                <span><%= isRtl ? 'متاح (Available)' : 'Available' %></span>
+                                            </button>
+                                            <% 
+                                            const dynDefs = (typeof agentStatusDefinitions !== 'undefined' && Array.isArray(agentStatusDefinitions)) ? agentStatusDefinitions : [];
+                                            dynDefs.forEach(def => {
+                                                const defColor = def.color || '#f59e0b';
+                                                const defLabel = isRtl ? (def.label_ar || def.label_en || def.status_key) : (def.label_en || def.label_ar || def.status_key);
+                                            %>
+                                            <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', '<%= def.status_key %>', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
+                                                <span class="w-2 h-2 rounded-full" style="background:<%= defColor %>;"></span>
+                                                <span><%= defLabel %></span>
+                                            </button>
+                                            <% }); %>
+                                            <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'offline', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2 border-t border-zinc-800 text-zinc-400">
+                                                <span class="w-2 h-2 rounded-full bg-zinc-500"></span>
+                                                <span><%= isRtl ? 'غير متاح (Offline)' : 'Offline' %></span>
+                                            </button>
+                                        </div>
                                     </div>
                                     <span id="ipText-<%= emp.cardId %>" class="employee-ip-badge font-mono font-bold px-1.5 py-0.5 rounded border truncate max-w-[125px] select-all <%= emp.ip ? '' : 'hidden' %>" title="<%= emp.ip || '' %>"><%= emp.ip || '' %></span>
                                 </div>
