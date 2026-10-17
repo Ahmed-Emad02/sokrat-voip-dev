@@ -694,33 +694,69 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
         }
     </style>
 <style>
-    /* Light Mode Status Badges & Dropdown */
-    html.light-theme .agent-status-btn.status-available {
-        background-color: rgba(16, 185, 129, 0.15) !important;
-        color: #065f46 !important;
+    /* Agent status button: styled identical to employee-ip-badge */
+    .agent-status-badge-btn {
+        font-size: 0.625rem;
+        line-height: 0.875rem;
+        letter-spacing: 0.02em;
+        transition: all 150ms ease;
+    }
+    .agent-status-badge-btn.status-available {
+        background-color: rgba(16, 185, 129, 0.18) !important;
+        color: #10b981 !important;
         border-color: rgba(16, 185, 129, 0.4) !important;
     }
-    html.light-theme .agent-status-btn.status-break {
-        background-color: rgba(245, 158, 11, 0.15) !important;
-        color: #92400e !important;
+    .light-theme .agent-status-badge-btn.status-available {
+        background-color: rgba(16, 185, 129, 0.15) !important;
+        color: #065f46 !important;
+        border-color: rgba(16, 185, 129, 0.45) !important;
+    }
+    .agent-status-badge-btn.status-break {
+        background-color: rgba(245, 158, 11, 0.18) !important;
+        color: #f59e0b !important;
         border-color: rgba(245, 158, 11, 0.4) !important;
     }
-    html.light-theme .agent-status-btn.status-lunch {
-        background-color: rgba(14, 165, 233, 0.15) !important;
-        color: #0369a1 !important;
+    .light-theme .agent-status-badge-btn.status-break {
+        background-color: rgba(245, 158, 11, 0.15) !important;
+        color: #92400e !important;
+        border-color: rgba(245, 158, 11, 0.45) !important;
+    }
+    .agent-status-badge-btn.status-lunch {
+        background-color: rgba(14, 165, 233, 0.18) !important;
+        color: #0ea5e9 !important;
         border-color: rgba(14, 165, 233, 0.4) !important;
     }
-    html.light-theme .agent-status-btn.status-meeting {
-        background-color: rgba(168, 85, 247, 0.15) !important;
-        color: #6b21a8 !important;
+    .light-theme .agent-status-badge-btn.status-lunch {
+        background-color: rgba(14, 165, 233, 0.15) !important;
+        color: #0369a1 !important;
+        border-color: rgba(14, 165, 233, 0.45) !important;
+    }
+    .agent-status-badge-btn.status-meeting {
+        background-color: rgba(168, 85, 247, 0.18) !important;
+        color: #a855f7 !important;
         border-color: rgba(168, 85, 247, 0.4) !important;
     }
-    html.light-theme .agent-status-btn.status-training {
-        background-color: rgba(59, 130, 246, 0.15) !important;
-        color: #1d4ed8 !important;
+    .light-theme .agent-status-badge-btn.status-meeting {
+        background-color: rgba(168, 85, 247, 0.15) !important;
+        color: #6b21a8 !important;
+        border-color: rgba(168, 85, 247, 0.45) !important;
+    }
+    .agent-status-badge-btn.status-training {
+        background-color: rgba(59, 130, 246, 0.18) !important;
+        color: #3b82f6 !important;
         border-color: rgba(59, 130, 246, 0.4) !important;
     }
-    html.light-theme .agent-status-btn.status-offline {
+    .light-theme .agent-status-badge-btn.status-training {
+        background-color: rgba(59, 130, 246, 0.15) !important;
+        color: #1d4ed8 !important;
+        border-color: rgba(59, 130, 246, 0.45) !important;
+    }
+    .agent-status-badge-btn.status-offline {
+        background-color: rgba(148, 163, 184, 0.18) !important;
+        color: #94a3b8 !important;
+        border-color: rgba(148, 163, 184, 0.35) !important;
+    }
+    .light-theme .agent-status-badge-btn.status-offline {
         background-color: rgba(148, 163, 184, 0.18) !important;
         color: #475569 !important;
         border-color: rgba(148, 163, 184, 0.35) !important;
@@ -958,10 +994,10 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                         else if (statusSlug === 'offline') statusBgClass = 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
                                     %>
                                     <div class="relative inline-block">
-                                        <button type="button" id="agentStatusBadge-<%= emp.cardId %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" onclick="toggleStatusDropdown('<%= emp.cardId %>', event)" class="agent-status-btn status-<%= statusSlug %> inline-flex items-center px-1.5 py-[1px] rounded text-[7px] font-extrabold font-mono tracking-tight leading-none cursor-pointer hover:opacity-90 transition <%= statusBgClass %>" title="<%= isRtl ? 'تغيير حالة الموظف: ' : 'Change Agent Status: ' %><%= statusLabel %>">
+                                        <button type="button" id="agentStatusBadge-<%= emp.cardId %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" onclick="toggleStatusDropdown('<%= emp.cardId %>', event)" class="agent-status-badge-btn status-<%= statusSlug %> font-mono font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition select-none" title="<%= isRtl ? 'تغيير حالة الموظف: ' : 'Change Agent Status: ' %><%= statusLabel %>">
                                             <span class="agent-status-label"><%= statusLabel %></span>
-                                            <span id="agentStatusTimer-<%= emp.cardId %>" class="ms-1 text-[7px] font-mono font-bold leading-none <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
-                                            <svg class="w-2 h-2 ms-0.5 text-current opacity-70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                                            <span id="agentStatusTimer-<%= emp.cardId %>" class="font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
+                                            <svg class="w-2.5 h-2.5 opacity-70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
                                         </button>
                                         <div id="statusDropdown-<%= emp.cardId %>" class="hidden absolute z-[9999] mt-1 w-44 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 text-xs font-mono text-zinc-200 end-0">
                                             <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'available', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
@@ -1636,13 +1672,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
 
                             if (labelSpan) labelSpan.textContent = sLabel;
 
-                            badge.className = 'inline-flex items-center px-1.5 py-[1px] rounded text-[7px] font-extrabold font-mono tracking-tight leading-none cursor-pointer hover:opacity-90 transition ';
-                            if (status === 'break') badge.className += 'bg-amber-950/80 text-amber-300 border border-amber-500/50 shadow-sm';
-                            else if (status === 'lunch') badge.className += 'bg-sky-950/80 text-sky-300 border border-sky-500/50 shadow-sm';
-                            else if (status === 'meeting') badge.className += 'bg-purple-950/80 text-purple-300 border border-purple-500/50 shadow-sm';
-                            else if (status === 'training') badge.className += 'bg-blue-950/80 text-blue-300 border border-blue-500/50 shadow-sm';
-                            else if (status === 'available') badge.className += 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm';
-                            else if (status === 'offline') badge.className += 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
+                            badge.className = 'agent-status-badge-btn status-' + status + ' font-mono font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition select-none';
 
                             if (timerSpan && !isDynamic) {
                                 timerSpan.classList.add('hidden');
@@ -1716,13 +1746,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                         else if (status === 'offline') sLabel = isRtl ? 'غير متاح' : 'Offline';
                         if (labelSpan) labelSpan.textContent = sLabel;
 
-                        badge.className = 'inline-flex items-center px-1.5 py-[1px] rounded text-[7px] font-extrabold font-mono tracking-tight leading-none cursor-pointer hover:opacity-90 transition ';
-                        if (status === 'break') badge.className += 'bg-amber-950/80 text-amber-300 border border-amber-500/50 shadow-sm';
-                        else if (status === 'lunch') badge.className += 'bg-sky-950/80 text-sky-300 border border-sky-500/50 shadow-sm';
-                        else if (status === 'meeting') badge.className += 'bg-purple-950/80 text-purple-300 border border-purple-500/50 shadow-sm';
-                        else if (status === 'training') badge.className += 'bg-blue-950/80 text-blue-300 border border-blue-500/50 shadow-sm';
-                        else if (status === 'available') badge.className += 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm';
-                        else if (status === 'offline') badge.className += 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
+                        badge.className = 'agent-status-badge-btn status-' + status + ' font-mono font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition select-none';
                     }
                     initDynamicStatusTimers();
                 } catch (err) {
