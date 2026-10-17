@@ -551,10 +551,10 @@ function fmtDur(s) {
                                 <% const failoverViaMatch = call.userfield ? String(call.userfield).match(/via\s+([^\s,]+)/i) : null; %>
                                 <% const failoverVia = failoverViaMatch ? failoverViaMatch[1] : (call.dstchannel && call.dstchannel.startsWith('Dongle/') ? call.dstchannel.split('-')[0].replace('Dongle/', '') : ''); %>
                                 <tr class="hover:bg-zinc-900/60 transition <%= isFailover ? 'bg-amber-500/[0.03]' : '' %>">
-                                    <td class="px-4 py-1.5 text-slate-400 whitespace-nowrap leading-none">
+                                    <td class="px-4 py-1.5 text-black whitespace-nowrap leading-none" style="color: #000000 !important;">
                                         <div class="flex flex-col gap-0.5 justify-center leading-none">
-                                            <span class="text-xs text-slate-300 font-mono"><%= moment(call.calldate).format('YYYY-MM-DD') %></span>
-                                            <span class="text-[11px] text-slate-400 font-mono"><%= moment(call.calldate).format('HH:mm:ss') %></span>
+                                            <span class="text-xs text-black font-mono font-bold" style="color: #000000 !important;"><%= moment(call.calldate).format('YYYY-MM-DD') %></span>
+                                            <span class="text-[11px] text-black font-mono font-semibold" style="color: #000000 !important;"><%= moment(call.calldate).format('HH:mm:ss') %></span>
                                         </div>
                                     </td>
                                     <td class="p-4 text-zinc-400 text-[11px] font-mono whitespace-nowrap"><%= call.uniqueid %></td>
