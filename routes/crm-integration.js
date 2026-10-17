@@ -634,6 +634,20 @@ function createCrmRouter(pool, options = {}) {
                 ORDER BY CAST(u.extension AS UNSIGNED) ASC
             `);
 
+            const deviceTechMap = new Map();
+            try {
+                const [devRows] = await pool.query('SELECT id as extension, tech FROM asterisk.devices');
+                devRows.forEach(d => {
+                    if (d.extension) deviceTechMap.set(String(d.extension), String(d.tech || '').toLowerCase());
+                });
+            } catch (_) {}
+            try {
+                const [psRows] = await pool.query("SELECT DISTINCT id as extension FROM asterisk.ps_endpoints WHERE id REGEXP '^[0-9]{2,5}$'");
+                psRows.forEach(p => {
+                    if (p.extension) deviceTechMap.set(String(p.extension), 'pjsip');
+                });
+            } catch (_) {}
+
             const peerMap = typeof getPeerStatus === 'function' ? getPeerStatus() : {};
             const activeCallMap = getActiveCalls();
 
@@ -663,10 +677,15 @@ function createCrmRouter(pool, options = {}) {
                     ? (Number(activeCall.start || activeCall.started_at) || Date.now())
                     : null;
 
+                const tech = deviceTechMap.get(ext) || (ext === '150' ? 'pjsip' : 'sip');
+                const isPjsip = (tech === 'pjsip');
+
                 return {
                     extension: ext,
                     name: r.name || `Extension ${ext}`,
-                    technology: 'sip',
+                    technology: tech,
+                    isPjsip: isPjsip,
+                    isWebRtc: isPjsip,
                     agentStatus: r.agent_status || 'available',
                     agentStatusTime: r.agent_status_time ? new Date(r.agent_status_time).getTime() : null,
                     enabled: true,
