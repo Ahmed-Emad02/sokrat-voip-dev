@@ -3070,7 +3070,7 @@ function isTabAllowed(tabName) {
     <!-- MODAL: WEBRTC EXTENSION POLICIES (SUPER ADMIN ONLY) -->
     <% if (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) { %>
     <div id="policyManagerModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
-        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-2xl w-full p-6 text-[var(--text-primary)] animate-fade-in flex flex-col max-h-[90vh]">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] w-full max-w-5xl p-6 text-[var(--text-primary)] animate-fade-in flex flex-col max-h-[92vh]">
             <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3 mb-4">
                 <div class="flex items-center gap-2.5">
                     <span class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -3094,16 +3094,16 @@ function isTabAllowed(tabName) {
             </div>
 
             <!-- Policies Table -->
-            <div class="flex-1 overflow-y-auto mb-4 border border-[var(--border-primary)] rounded-xl">
-                <table class="w-full text-left text-xs">
+            <div class="overflow-x-auto max-h-[62vh] mb-4 border border-[var(--border-primary)] rounded-xl custom-scrollbar">
+                <table class="w-full text-start text-xs min-w-[860px]">
                     <thead>
                         <tr class="border-b border-[var(--border-primary)] bg-[var(--bg-card)] text-[10px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">
-                            <th class="py-2.5 px-3"><%= isRtl ? 'التحويلة (WebRTC)' : 'WebRTC Ext' %></th>
-                            <th class="py-2.5 px-3"><%= isRtl ? 'الاسم' : 'Name' %></th>
-                            <th class="py-2.5 px-3"><%= isRtl ? 'الرد التلقائي' : 'Auto Answer' %></th>
-                            <th class="py-2.5 px-3"><%= isRtl ? 'عدم الإزعاج (DND)' : 'DND' %></th>
-                            <th class="py-2.5 px-3"><%= isRtl ? 'منع إنهاء الرنين الصادر' : 'Block Ring Cancel' %></th>
-                            <th class="py-2.5 px-3 text-right"><%= isRtl ? 'إجراء' : 'Action' %></th>
+                            <th class="py-2.5 px-3.5 w-32"><%= isRtl ? 'التحويلة (WebRTC)' : 'WebRTC Ext' %></th>
+                            <th class="py-2.5 px-3.5 w-36"><%= isRtl ? 'الاسم' : 'Name' %></th>
+                            <th class="py-2.5 px-3.5"><%= isRtl ? 'الرد التلقائي' : 'Auto Answer' %></th>
+                            <th class="py-2.5 px-3.5"><%= isRtl ? 'عدم الإزعاج (DND)' : 'DND' %></th>
+                            <th class="py-2.5 px-3.5"><%= isRtl ? 'منع إنهاء الرنين الصادر' : 'Block Ring Cancel' %></th>
+                            <th class="py-2.5 px-3.5 text-end w-24"><%= isRtl ? 'إجراء' : 'Action' %></th>
                         </tr>
                     </thead>
                     <tbody id="policyManagerTbody" class="divide-y divide-[var(--border-primary)]">
@@ -6789,35 +6789,41 @@ function isTabAllowed(tabName) {
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-zinc-800/30 transition';
                     tr.innerHTML = `
-                        <td class="py-2.5 px-3 align-middle">
+                        <td class="py-2.5 px-3.5 align-middle whitespace-nowrap">
                             <div class="flex items-center gap-1.5 font-mono font-bold text-white text-sm">
                                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
                                 <span>${p.extension}</span>
                             </div>
                         </td>
-                        <td class="py-2.5 px-3 font-semibold text-zinc-300 align-middle">${p.name || 'Ext ' + p.extension}</td>
-                        <td class="py-2.5 px-3 align-middle">
-                            <select id="policyAuto_${p.extension}" name="policy_auto_${p.extension}" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] policy-auto-${p.extension}">
-                                <option value="user_choice" ${p.auto_answer === 'user_choice' ? 'selected' : ''}>${isAr ? 'حر (اختيار الموظف)' : 'User Controlled'}</option>
-                                <option value="force_on" ${p.auto_answer === 'force_on' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري مفعل (قفل)' : '[Locked] ON (Force)'}</option>
-                                <option value="force_off" ${p.auto_answer === 'force_off' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)'}</option>
-                            </select>
+                        <td class="py-2.5 px-3.5 font-semibold text-zinc-300 align-middle whitespace-nowrap">${p.name || 'Ext ' + p.extension}</td>
+                        <td class="py-2.5 px-3.5 align-middle">
+                            <div class="w-full min-w-[170px]">
+                                <select id="policyAuto_${p.extension}" name="policy_auto_${p.extension}" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] w-full policy-auto-${p.extension}">
+                                    <option value="user_choice" ${p.auto_answer === 'user_choice' ? 'selected' : ''}>${isAr ? 'حر (اختيار الموظف)' : 'User Controlled'}</option>
+                                    <option value="force_on" ${p.auto_answer === 'force_on' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري مفعل (قفل)' : '[Locked] ON (Force)'}</option>
+                                    <option value="force_off" ${p.auto_answer === 'force_off' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)'}</option>
+                                </select>
+                            </div>
                         </td>
-                        <td class="py-2.5 px-3 align-middle">
-                            <select id="policyDnd_${p.extension}" name="policy_dnd_${p.extension}" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] policy-dnd-${p.extension}">
-                                <option value="user_choice" ${p.dnd === 'user_choice' ? 'selected' : ''}>${isAr ? 'حر (اختيار الموظف)' : 'User Controlled'}</option>
-                                <option value="force_on" ${p.dnd === 'force_on' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري مفعل (قفل)' : '[Locked] ON (Force)'}</option>
-                                <option value="force_off" ${p.dnd === 'force_off' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)'}</option>
-                            </select>
+                        <td class="py-2.5 px-3.5 align-middle">
+                            <div class="w-full min-w-[170px]">
+                                <select id="policyDnd_${p.extension}" name="policy_dnd_${p.extension}" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] w-full policy-dnd-${p.extension}">
+                                    <option value="user_choice" ${p.dnd === 'user_choice' ? 'selected' : ''}>${isAr ? 'حر (اختيار الموظف)' : 'User Controlled'}</option>
+                                    <option value="force_on" ${p.dnd === 'force_on' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري مفعل (قفل)' : '[Locked] ON (Force)'}</option>
+                                    <option value="force_off" ${p.dnd === 'force_off' ? 'selected' : ''}>${isAr ? '[مقفل] إجباري معطل (ممنوع)' : '[Locked] OFF (Prohibit)'}</option>
+                                </select>
+                            </div>
                         </td>
-                        <td class="py-2.5 px-3 align-middle">
-                            <select id="policyCancel_${p.extension}" name="policy_cancel_${p.extension}" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] policy-cancel-${p.extension}">
-                                <option value="0" ${!p.disable_outbound_ringing_cancel ? 'selected' : ''}>${isAr ? 'مسموح الإنهاء' : 'Allow Cancel'}</option>
-                                <option value="1" ${p.disable_outbound_ringing_cancel ? 'selected' : ''}>${isAr ? '[مقفل] ممنوع الإنهاء أثناء الرنين' : '[Locked] Block Cancel'}</option>
-                            </select>
+                        <td class="py-2.5 px-3.5 align-middle">
+                            <div class="w-full min-w-[190px]">
+                                <select id="policyCancel_${p.extension}" name="policy_cancel_${p.extension}" class="bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-xs font-semibold px-2 py-1 text-[var(--text-primary)] w-full policy-cancel-${p.extension}">
+                                    <option value="0" ${!p.disable_outbound_ringing_cancel ? 'selected' : ''}>${isAr ? 'مسموح الإنهاء' : 'Allow Cancel'}</option>
+                                    <option value="1" ${p.disable_outbound_ringing_cancel ? 'selected' : ''}>${isAr ? '[مقفل] ممنوع الإنهاء أثناء الرنين' : '[Locked] Block Cancel'}</option>
+                                </select>
+                            </div>
                         </td>
-                        <td class="py-2.5 px-3 text-right align-middle">
-                            <button type="button" onclick="saveWebRtcPolicy('${p.extension}', this)" class="btn-ghost py-1 px-2.5 text-xs text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/50 cursor-pointer">
+                        <td class="py-2.5 px-3.5 text-end align-middle whitespace-nowrap">
+                            <button type="button" onclick="saveWebRtcPolicy('${p.extension}', this)" class="btn-ghost py-1 px-3 text-xs text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/50 cursor-pointer">
                                 ${isAr ? 'حفظ' : 'Save'}
                             </button>
                         </td>
