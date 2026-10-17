@@ -2600,41 +2600,62 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                         <span class="text-[10px] text-amber-400 font-normal"><%= isRtl ? '(مؤقت وقت تفاعلي عند التفعيل)' : '(Active duration timer)' %></span>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <!-- Row 1: Status Names (Arabic & English) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="text-[10px] font-bold text-[var(--text-muted)] block mb-1">اسم الحالة (عربي)</label>
-                            <input type="text" id="newStatusLabelAr" required placeholder="مثال: صلاة أو تدريب" class="config-input text-xs w-full">
+                            <label class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
+                                <%= isRtl ? 'اسم الحالة (عربي)' : 'Status Name (Arabic)' %> <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="newStatusLabelAr" required placeholder="<%= isRtl ? 'مثال: صلاة أو تدريب أو استراحة' : 'e.g. Prayer / Meeting' %>" class="config-input text-xs w-full h-[38px]">
                         </div>
                         <div>
-                            <label class="text-[10px] font-bold text-[var(--text-muted)] block mb-1">الاسم بالإنجليزي (اختياري)</label>
-                            <input type="text" id="newStatusLabelEn" placeholder="e.g. Prayer / Training" class="config-input text-xs w-full">
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-bold text-[var(--text-muted)] block mb-1">المجموعة المرتبطة</label>
-                            <select id="newStatusGroupSelect" class="config-input text-xs w-full h-[36px]">
-                                <option value="all"><%= isRtl ? 'جميع المجموعات (All Groups)' : 'All Groups' %></option>
-                            </select>
+                            <label class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
+                                <%= isRtl ? 'الاسم بالإنجليزي (اختياري)' : 'Status Name (English - Optional)' %>
+                            </label>
+                            <input type="text" id="newStatusLabelEn" placeholder="e.g. Prayer / Training / Break" class="config-input text-xs w-full h-[38px]">
                         </div>
                     </div>
 
-                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-[var(--border-primary)]">
-                        <div class="flex items-center gap-2 w-full sm:w-auto">
-                            <span class="text-[10px] font-bold text-[var(--text-muted)] shrink-0">لون المؤشر:</span>
-                            <!-- Native Color Picker Swatch Button -->
-                            <input type="color" id="newStatusColor" value="#f59e0b" class="w-9 h-8 rounded-lg cursor-pointer bg-transparent border border-[var(--border-primary)] p-0.5 shrink-0" title="اختر اللون">
-                            <!-- Quick Palette Swatches -->
-                            <div class="flex items-center gap-1.5 overflow-x-auto py-1">
-                                <button type="button" onclick="setPresetColor('#f59e0b')" style="background:#f59e0b;" class="w-5 h-5 rounded-full border border-black/20 hover:scale-110 transition cursor-pointer" title="Amber"></button>
-                                <button type="button" onclick="setPresetColor('#ea580c')" style="background:#ea580c;" class="w-5 h-5 rounded-full border border-black/20 hover:scale-110 transition cursor-pointer" title="Orange"></button>
-                                <button type="button" onclick="setPresetColor('#8b5cf6')" style="background:#8b5cf6;" class="w-5 h-5 rounded-full border border-black/20 hover:scale-110 transition cursor-pointer" title="Purple"></button>
-                                <button type="button" onclick="setPresetColor('#06b6d4')" style="background:#06b6d4;" class="w-5 h-5 rounded-full border border-black/20 hover:scale-110 transition cursor-pointer" title="Cyan"></button>
-                                <button type="button" onclick="setPresetColor('#3b82f6')" style="background:#3b82f6;" class="w-5 h-5 rounded-full border border-black/20 hover:scale-110 transition cursor-pointer" title="Blue"></button>
-                                <button type="button" onclick="setPresetColor('#10b981')" style="background:#10b981;" class="w-5 h-5 rounded-full border border-black/20 hover:scale-110 transition cursor-pointer" title="Emerald"></button>
-                                <button type="button" onclick="setPresetColor('#f43f5e')" style="background:#f43f5e;" class="w-5 h-5 rounded-full border border-black/20 hover:scale-110 transition cursor-pointer" title="Rose"></button>
+                    <!-- Row 2: Associated Group & Color Picker -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                        <div>
+                            <label class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
+                                <%= isRtl ? 'المجموعة المرتبطة' : 'Associated Group' %>
+                            </label>
+                            <select id="newStatusGroupSelect" class="config-input text-xs w-full h-[38px]">
+                                <option value="all"><%= isRtl ? 'جميع المجموعات (All Groups)' : 'All Groups' %></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
+                                <%= isRtl ? 'لون المؤشر' : 'Indicator Color' %>
+                            </label>
+                            <div class="flex items-center justify-between gap-2 h-[38px] px-2.5 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)]">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <!-- Native Color Picker Swatch Button -->
+                                    <input type="color" id="newStatusColor" value="#f59e0b" class="w-6 h-6 rounded cursor-pointer bg-transparent border-0 p-0 shrink-0" title="<%= isRtl ? 'اختر اللون' : 'Choose Color' %>">
+                                    <div class="w-px h-4 bg-[var(--border-primary)] shrink-0"></div>
+                                    <!-- Quick Palette Swatches -->
+                                    <div class="flex items-center gap-1.5 overflow-x-auto py-0.5">
+                                        <button type="button" onclick="setPresetColor('#f59e0b')" style="background:#f59e0b;" class="w-4 h-4 rounded-full border border-black/20 hover:scale-125 transition cursor-pointer shrink-0" title="Amber"></button>
+                                        <button type="button" onclick="setPresetColor('#ea580c')" style="background:#ea580c;" class="w-4 h-4 rounded-full border border-black/20 hover:scale-125 transition cursor-pointer shrink-0" title="Orange"></button>
+                                        <button type="button" onclick="setPresetColor('#8b5cf6')" style="background:#8b5cf6;" class="w-4 h-4 rounded-full border border-black/20 hover:scale-125 transition cursor-pointer shrink-0" title="Purple"></button>
+                                        <button type="button" onclick="setPresetColor('#06b6d4')" style="background:#06b6d4;" class="w-4 h-4 rounded-full border border-black/20 hover:scale-125 transition cursor-pointer shrink-0" title="Cyan"></button>
+                                        <button type="button" onclick="setPresetColor('#3b82f6')" style="background:#3b82f6;" class="w-4 h-4 rounded-full border border-black/20 hover:scale-125 transition cursor-pointer shrink-0" title="Blue"></button>
+                                        <button type="button" onclick="setPresetColor('#10b981')" style="background:#10b981;" class="w-4 h-4 rounded-full border border-black/20 hover:scale-125 transition cursor-pointer shrink-0" title="Emerald"></button>
+                                        <button type="button" onclick="setPresetColor('#f43f5e')" style="background:#f43f5e;" class="w-4 h-4 rounded-full border border-black/20 hover:scale-125 transition cursor-pointer shrink-0" title="Rose"></button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+                    </div>
 
-                        <button id="addStatusButton" type="submit" class="config-btn-primary px-5 py-2 text-xs font-bold cursor-pointer whitespace-nowrap w-full sm:w-auto">
+                    <!-- Row 3: Submit Action -->
+                    <div class="flex items-center justify-between pt-2.5 border-t border-[var(--border-primary)]">
+                        <span class="text-[10px] text-[var(--text-muted)] hidden sm:inline-block">
+                            <%= isRtl ? 'الحالات الديناميكية تظهر تلقائياً في شريط أدوات الوكيل والمشغل' : 'Statuses automatically sync across operator switchboards' %>
+                        </span>
+                        <button id="addStatusButton" type="submit" class="config-btn-primary px-5 py-2 text-xs font-bold cursor-pointer whitespace-nowrap w-full sm:w-auto ms-auto shadow-sm hover:shadow transition">
                             <%= isRtl ? 'إضافة الحالة' : 'Add Status' %>
                         </button>
                     </div>

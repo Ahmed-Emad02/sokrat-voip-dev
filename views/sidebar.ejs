@@ -5833,7 +5833,7 @@ function enhanceSelectElements() {
         trigger.className = 'custom-select-trigger config-dropdown-trigger w-full max-w-full overflow-hidden border rounded-lg px-3 py-2 flex items-center justify-between gap-2 cursor-pointer select-none transition';
 
         const labelSpan = document.createElement('span');
-        labelSpan.className = 'config-dropdown-label flex-1 min-w-0 truncate text-left';
+        labelSpan.className = 'config-dropdown-label flex-1 min-w-0 truncate text-start';
         const selectedOpt = select.options[select.selectedIndex] || select.options[0];
         labelSpan.textContent = selectedOpt ? selectedOpt.textContent : '';
 
