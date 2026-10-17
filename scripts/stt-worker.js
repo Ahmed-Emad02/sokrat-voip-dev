@@ -35,7 +35,7 @@ const LOCAL_TIMEOUT_MS = Math.max(30_000, Number(process.env.STT_LOCAL_TIMEOUT_M
 const MAX_ATTEMPTS = Math.max(1, Number(process.env.STT_MAX_ATTEMPTS || 3));
 
 const DEFAULT_PROMPTS = {
-    ar: 'محادثة هاتفية خدمة عملاء بالعامية المصرية: ألو، أيوة يا فندم، تمام، إزيك، معاك، الخط، حاضر، شكراً، مع السلامة، أوردر، كنسل، سيستم.',
+    ar: 'تسجيل مكالمة هاتفية خدمة عملاء باللغة العربية والعامية المصرية: الموظف، العميل، التحويلة، المكالمة.',
     en: 'Phone conversation: hello, yes, okay, thank you, goodbye.',
     auto: 'محادثة هاتفية بالعامية المصرية: ألو، أيوة، تمام، إزيك، شكراً. Phone call.'
 };
@@ -124,7 +124,7 @@ async function prepareAudioForLocal(inputPath, outputPath) {
     await execFileAsync('ffmpeg', [
         '-y', '-i', inputPath, '-ar', '16000', '-ac', '1',
         '-c:a', 'pcm_s16le',
-        '-af', 'highpass=f=120,lowpass=f=3800,loudnorm=I=-16:TP=-1.5:LRA=11',
+        '-af', 'highpass=f=120,lowpass=f=3800',
         outputPath
     ], { timeout: 120_000 });
 }
@@ -164,7 +164,7 @@ async function transcribeWithLocalWhisper(audioFilePath, options = {}) {
     if (language) formData.append('language', language);
     if (prompt) {
         formData.append('prompt', prompt);
-        formData.append('carry_initial_prompt', 'true');
+
     }
 
     let response;
