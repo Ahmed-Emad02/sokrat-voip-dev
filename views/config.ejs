@@ -2905,45 +2905,66 @@ function isTabAllowed(tabName) {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
-                            <div>
-                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extDenoise"><%= isRtl ? 'عزل الضوضاء (AI RNNoise)' : 'AI Noise Suppression (RNNoise)' %></label>
-                                <select id="extDenoise" class="config-input w-full text-xs font-semibold">
-                                    <option value="both" selected><%= isRtl ? 'مفعل (إرسال واستقبال - Both RX & TX)' : 'Enabled (Both RX & TX)' %></option>
-                                    <option value="rx"><%= isRtl ? 'مفعل للميكروفون فقط (RX Only)' : 'Microphone Only (RX Only)' %></option>
-                                    <option value="tx"><%= isRtl ? 'مفعل للسماعة فقط (TX Only)' : 'Speaker Only (TX Only)' %></option>
-                                    <option value="off"><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
-                                </select>
+                        <!-- Audio DSP & AI Noise Suppression Controls Sub-Card -->
+                        <div class="mt-3.5 pt-3.5 border-t border-cyan-500/20">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-extrabold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                                    <svg class="w-4 h-4 text-cyan-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z"/></svg>
+                                    <%= isRtl ? 'معالجة الصوت وعزل الضوضاء بالذكاء الاصطناعي (Audio DSP & RNNoise)' : 'AI Voice Processing & Audio DSP' %>
+                                </span>
+                                <span class="text-[10px] text-cyan-300 font-semibold bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded">
+                                    <%= isRtl ? 'فلتر حي مخصص للتحويلة' : 'Real-time Per-Extension Filter' %>
+                                </span>
                             </div>
-                            <div>
-                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extVadGate"><%= isRtl ? 'بوابة كتم الصمت (VAD Noise Gate)' : 'VAD Silence Gate (100% Silence on Pauses)' %></label>
-                                <select id="extVadGate" class="config-input w-full text-xs font-semibold">
-                                    <option value="1" selected><%= isRtl ? 'مفعل (صمت 100% عند التوقف عن الكلام)' : 'Enabled (100% Silence on Pauses)' %></option>
-                                    <option value="0"><%= isRtl ? 'معطل (عزل مستمر دون كتم)' : 'Disabled (Continuous Filter)' %></option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extVadDb"><%= isRtl ? 'عتبة كتم الديسيبل (dB Cutoff)' : 'Decibel Cutoff (dBFS Noise Gate)' %></label>
-                                <select id="extVadDb" class="config-input w-full text-xs font-semibold">
-                                    <option value="off" selected><%= isRtl ? 'تلقائي / عصبي فقط (Auto / Neural)' : 'Auto / Neural Only (Default)' %></option>
-                                    <option value="-55">-55 dBFS (<%= isRtl ? 'هادئ جداً' : 'Very Soft Noise' %>)</option>
-                                    <option value="-50">-50 dBFS (<%= isRtl ? 'خافت / متوازن' : 'Soft / Balanced' %>)</option>
-                                    <option value="-45">-45 dBFS (<%= isRtl ? 'متوسط / مكتب هادئ' : 'Moderate / Quiet Office' %>)</option>
-                                    <option value="-42">-42 dBFS (<%= isRtl ? 'عالي / مكتب نشط' : 'High / Busy Office' %>)</option>
-                                    <option value="-38">-38 dBFS (<%= isRtl ? 'صارم / ضوضاء قوية' : 'Strict / Heavy Noise' %>)</option>
-                                    <option value="-35">-35 dBFS (<%= isRtl ? 'عدواني / ضوضاء شديدة' : 'Aggressive / Loud Noise' %>)</option>
-                                    <option value="-30">-30 dBFS (<%= isRtl ? 'أقصى كتم / أصوات عالية' : 'Maximum / Extreme Noise' %>)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extAgc"><%= isRtl ? 'تطبيع الصوت التلقائي (AGC)' : 'Auto Gain Control (Speex AGC)' %></label>
-                                <select id="extAgc" class="config-input w-full text-xs font-semibold">
-                                    <option value="8000" selected><%= isRtl ? 'مفعل (8000 - متوازن / قياسي)' : 'Enabled (8000 - Balanced)' %></option>
-                                    <option value="6000"><%= isRtl ? 'مفعل (6000 - هادئ / خافت)' : 'Enabled (6000 - Gentle / Soft)' %></option>
-                                    <option value="10000"><%= isRtl ? 'مفعل (10000 - مرتفع)' : 'Enabled (10000 - Loud)' %></option>
-                                    <option value="12000"><%= isRtl ? 'مفعل (12000 - أقصى تضخيم)' : 'Enabled (12000 - Boosted)' %></option>
-                                    <option value="off"><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
-                                </select>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extDenoise">
+                                        <%= isRtl ? 'عزل الضوضاء (AI RNNoise)' : 'AI Noise Suppression (RNNoise)' %>
+                                    </label>
+                                    <select id="extDenoise" class="config-input w-full text-xs font-semibold h-[38px]">
+                                        <option value="both" selected><%= isRtl ? 'مفعل (إرسال واستقبال - Both RX & TX)' : 'Enabled (Both RX & TX)' %></option>
+                                        <option value="rx"><%= isRtl ? 'مفعل للميكروفون فقط (RX Only)' : 'Microphone Only (RX Only)' %></option>
+                                        <option value="tx"><%= isRtl ? 'مفعل للسماعة فقط (TX Only)' : 'Speaker Only (TX Only)' %></option>
+                                        <option value="off"><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extVadGate">
+                                        <%= isRtl ? 'بوابة كتم الصمت (VAD Silence Gate)' : 'VAD Silence Gate (100% Silence on Pauses)' %>
+                                    </label>
+                                    <select id="extVadGate" class="config-input w-full text-xs font-semibold h-[38px]">
+                                        <option value="1" selected><%= isRtl ? 'مفعل (صمت 100% عند التوقف عن الكلام)' : 'Enabled (100% Silence on Pauses)' %></option>
+                                        <option value="0"><%= isRtl ? 'معطل (عزل مستمر دون كتم)' : 'Disabled (Continuous Filter)' %></option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extVadDb">
+                                        <%= isRtl ? 'عتبة كتم الديسيبل (dB Cutoff Gate)' : 'Decibel Cutoff (dBFS Noise Gate)' %>
+                                    </label>
+                                    <select id="extVadDb" class="config-input w-full text-xs font-semibold h-[38px]">
+                                        <option value="off" selected><%= isRtl ? 'تلقائي / عصبي فقط (Auto / Neural Only)' : 'Auto / Neural Only (Default)' %></option>
+                                        <option value="-55">-55 dBFS (<%= isRtl ? 'هادئ جداً' : 'Very Soft Noise' %>)</option>
+                                        <option value="-50">-50 dBFS (<%= isRtl ? 'خافت / متوازن' : 'Soft / Balanced' %>)</option>
+                                        <option value="-45">-45 dBFS (<%= isRtl ? 'متوسط / مكتب هادئ' : 'Moderate / Quiet Office' %>)</option>
+                                        <option value="-42">-42 dBFS (<%= isRtl ? 'عالي / مكتب نشط' : 'High / Busy Office' %>)</option>
+                                        <option value="-38">-38 dBFS (<%= isRtl ? 'صارم / ضوضاء قوية' : 'Strict / Heavy Noise' %>)</option>
+                                        <option value="-35">-35 dBFS (<%= isRtl ? 'عدواني / ضوضاء شديدة' : 'Aggressive / Loud Noise' %>)</option>
+                                        <option value="-30">-30 dBFS (<%= isRtl ? 'أقصى كتم / أصوات عالية' : 'Maximum / Extreme Noise' %>)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extAgc">
+                                        <%= isRtl ? 'تطبيع الصوت التلقائي (Speex AGC)' : 'Auto Gain Control (Speex AGC)' %>
+                                    </label>
+                                    <select id="extAgc" class="config-input w-full text-xs font-semibold h-[38px]">
+                                        <option value="8000" selected><%= isRtl ? 'مفعل (8000 - متوازن / قياسي)' : 'Enabled (8000 - Balanced)' %></option>
+                                        <option value="6000"><%= isRtl ? 'مفعل (6000 - هادئ / خافت)' : 'Enabled (6000 - Gentle / Soft)' %></option>
+                                        <option value="10000"><%= isRtl ? 'مفعل (10000 - مرتفع)' : 'Enabled (10000 - Loud)' %></option>
+                                        <option value="12000"><%= isRtl ? 'مفعل (12000 - أقصى تضخيم)' : 'Enabled (12000 - Boosted)' %></option>
+                                        <option value="off"><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
