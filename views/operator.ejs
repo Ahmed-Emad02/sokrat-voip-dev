@@ -279,6 +279,11 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             font-size: 0.625rem;
             line-height: 0.875rem;
             letter-spacing: 0.02em;
+            height: 20px;
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             transition: all 150ms ease;
         }
         #switchboardGrid .panel-surface.state-offline .employee-ip-badge {
@@ -694,72 +699,92 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
         }
     </style>
 <style>
-    /* Agent status button: styled identical to employee-ip-badge */
+    /* Agent status button: EXACT sizing and structure of employee-ip-badge */
     .agent-status-badge-btn {
-        font-size: 0.625rem;
-        line-height: 0.875rem;
-        letter-spacing: 0.02em;
-        transition: all 150ms ease;
+        font-size: 0.625rem !important;
+        line-height: 0.875rem !important;
+        letter-spacing: 0.02em !important;
+        box-sizing: border-box !important;
+        height: 20px !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        transition: all 150ms ease !important;
     }
-    .agent-status-badge-btn.status-available {
+    #switchboardGrid .panel-surface.state-offline .agent-status-badge-btn {
+        background-color: rgba(39, 39, 42, 0.6) !important;
+        border-color: rgba(63, 63, 70, 0.4) !important;
+        color: #a1a1aa !important;
+    }
+    .light-theme #switchboardGrid .panel-surface.state-offline .agent-status-badge-btn {
+        background-color: #f4f4f5 !important;
+        border-color: #e4e4e7 !important;
+        color: #52525b !important;
+    }
+    #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-available {
         background-color: rgba(16, 185, 129, 0.18) !important;
         color: #10b981 !important;
         border-color: rgba(16, 185, 129, 0.4) !important;
     }
-    .light-theme .agent-status-badge-btn.status-available {
+    .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-available {
         background-color: rgba(16, 185, 129, 0.15) !important;
         color: #065f46 !important;
         border-color: rgba(16, 185, 129, 0.45) !important;
     }
-    .agent-status-badge-btn.status-break {
+    #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-break {
         background-color: rgba(245, 158, 11, 0.18) !important;
         color: #f59e0b !important;
         border-color: rgba(245, 158, 11, 0.4) !important;
     }
-    .light-theme .agent-status-badge-btn.status-break {
+    .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-break {
         background-color: rgba(245, 158, 11, 0.15) !important;
         color: #92400e !important;
         border-color: rgba(245, 158, 11, 0.45) !important;
     }
-    .agent-status-badge-btn.status-lunch {
+    #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-lunch {
         background-color: rgba(14, 165, 233, 0.18) !important;
         color: #0ea5e9 !important;
         border-color: rgba(14, 165, 233, 0.4) !important;
     }
-    .light-theme .agent-status-badge-btn.status-lunch {
+    .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-lunch {
         background-color: rgba(14, 165, 233, 0.15) !important;
         color: #0369a1 !important;
         border-color: rgba(14, 165, 233, 0.45) !important;
     }
-    .agent-status-badge-btn.status-meeting {
+    #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-meeting {
         background-color: rgba(168, 85, 247, 0.18) !important;
         color: #a855f7 !important;
         border-color: rgba(168, 85, 247, 0.4) !important;
     }
-    .light-theme .agent-status-badge-btn.status-meeting {
+    .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-meeting {
         background-color: rgba(168, 85, 247, 0.15) !important;
         color: #6b21a8 !important;
         border-color: rgba(168, 85, 247, 0.45) !important;
     }
-    .agent-status-badge-btn.status-training {
+    #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-training {
         background-color: rgba(59, 130, 246, 0.18) !important;
         color: #3b82f6 !important;
         border-color: rgba(59, 130, 246, 0.4) !important;
     }
-    .light-theme .agent-status-badge-btn.status-training {
+    .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-training {
         background-color: rgba(59, 130, 246, 0.15) !important;
         color: #1d4ed8 !important;
         border-color: rgba(59, 130, 246, 0.45) !important;
     }
-    .agent-status-badge-btn.status-offline {
+    #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-offline {
         background-color: rgba(148, 163, 184, 0.18) !important;
         color: #94a3b8 !important;
         border-color: rgba(148, 163, 184, 0.35) !important;
     }
-    .light-theme .agent-status-badge-btn.status-offline {
+    .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-offline {
         background-color: rgba(148, 163, 184, 0.18) !important;
         color: #475569 !important;
         border-color: rgba(148, 163, 184, 0.35) !important;
+    }
+    #switchboardGrid .panel-surface.state-idle .agent-status-badge-btn,
+    .light-theme #switchboardGrid .panel-surface.state-idle .agent-status-badge-btn {
+        background-color: rgba(0, 0, 0, 0.14) !important;
+        border-color: rgba(0, 0, 0, 0.22) !important;
+        color: #111827 !important;
     }
     html.light-theme [id^="statusDropdown-"] {
         background-color: rgba(255, 255, 255, 0.98) !important;
@@ -994,7 +1019,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                         else if (statusSlug === 'offline') statusBgClass = 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
                                     %>
                                     <div class="relative inline-block">
-                                        <button type="button" id="agentStatusBadge-<%= emp.cardId %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" onclick="toggleStatusDropdown('<%= emp.cardId %>', event)" class="agent-status-badge-btn status-<%= statusSlug %> font-mono font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition select-none" title="<%= isRtl ? 'تغيير حالة الموظف: ' : 'Change Agent Status: ' %><%= statusLabel %>">
+                                        <button type="button" id="agentStatusBadge-<%= emp.cardId %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" onclick="toggleStatusDropdown('<%= emp.cardId %>', event)" class="employee-ip-badge agent-status-badge-btn status-<%= statusSlug %> font-mono font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition select-none" title="<%= isRtl ? 'تغيير حالة الموظف: ' : 'Change Agent Status: ' %><%= statusLabel %>">
                                             <span class="agent-status-label"><%= statusLabel %></span>
                                             <span id="agentStatusTimer-<%= emp.cardId %>" class="font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
                                             <svg class="w-2.5 h-2.5 opacity-70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
