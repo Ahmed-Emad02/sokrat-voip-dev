@@ -18,8 +18,7 @@ SOFTPHONE_REPO_BRANCH=main
 PUSH_GATEWAY_DIR=/opt/sokrat-push-gateway
 PUSH_GATEWAY_REPO=https://github.com/Ahmed-Emad02/sokrat-push-gateway.git
 NODE_SETUP_URL=https://rpm.nodesource.com/setup_22.x
-MYSQL_ROOT_PWD=$(grep -i '^mysqlrootpwd=' /etc/issabel.conf 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ' | xargs 2>/dev/null || echo "admin")
-if [ -z "$MYSQL_ROOT_PWD" ]; then MYSQL_ROOT_PWD="admin"; fi
+MYSQL_ROOT_PWD=$(grep -i '^mysqlrootpwd=' /etc/issabel.conf 2>/dev/null | cut -d= -f2- | tr -d '"'\'' ' | xargs 2>/dev/null || true)
 echo "============================================"
 echo " Sokrat VOIP Installer v1.1.0"
 echo " Target: Asterisk 18"
@@ -2792,31 +2791,11 @@ else
     echo "  Notice: /opt/sokrat-softphone not provisioned; skipping sokrat-softphone service"
 fi
 
-# Provision Sokrat Cloud AI Speech-To-Text Worker Daemon
-echo "  Provisioning Sokrat Cloud AI Speech-To-Text Worker..."
-cat > /etc/systemd/system/sokrat-stt.service << 'UNIT'
-[Unit]
-Description=Sokrat VoIP Cloud AI Speech-To-Text Worker
-After=network.target mariadb.service mysqld.service asterisk.service
-Wants=asterisk.service
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/sokrat-voip
-ExecStart=/usr/bin/node /opt/sokrat-voip/scripts/stt-worker.js
-Restart=always
-RestartSec=5
-Nice=15
-CPUShares=256
-Environment=NODE_ENV=production
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-systemctl daemon-reload
-systemctl enable --now sokrat-stt 2>/dev/null || true
-echo "  Sokrat Cloud AI STT worker daemon enabled and started"
+# Provision the loopback-only offline whisper.cpp engine and queue worker.
+echo "  Provisioning Sokrat offline Speech-To-Text engine..."
+chmod +x /opt/sokrat-voip/scripts/install-local-stt.sh
+/opt/sokrat-voip/scripts/install-local-stt.sh
+echo "  Sokrat offline STT engine and worker enabled"
 
 # Provision Sokrat System Watchdog & Alert Daemon
 echo "  Provisioning Sokrat System Watchdog & Alert Daemon..."

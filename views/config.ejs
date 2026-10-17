@@ -2150,7 +2150,7 @@ function isTabAllowed(tabName) {
                     </div>
                 </div>
             </div>
-            <!-- Cloud AI Speech-to-Text Transcription Overview Card -->
+            <!-- Local / Cloud Speech-to-Text Transcription Overview Card -->
             <div class="config-card overflow-hidden">
                 <div class="p-5 sm:p-6 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                     <div class="flex items-start gap-3 min-w-0">
@@ -2159,10 +2159,10 @@ function isTabAllowed(tabName) {
                         </div>
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
-                                <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التفريغ الصوتي بالذكاء الاصطناعي (Cloud AI STT)' : 'Cloud AI Speech-to-Text (STT)' %></h2>
-                                <span id="sttOverviewStatusBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Groq Active</span>
+                                <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التفريغ الصوتي المحلي (STT)' : 'Local Speech-to-Text (STT)' %></h2>
+                                <span id="sttOverviewStatusBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Local Offline</span>
                             </div>
-                            <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تفريغ المكالمات المسجلة والبريد الصوتي باستخدام نماذج الذكاء الاصطناعي السحابية (Groq Whisper-Large-V3 / OpenAI / Deepgram).' : 'Automated call and voicemail transcription using Cloud AI models (Groq Whisper-Large-V3, OpenAI, Deepgram).' %></p>
+                            <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تفريغ المكالمات والبريد الصوتي محلياً بدون إرسال الصوت خارج السنترال، مع دعم اختياري للمزودات السحابية.' : 'Offline call and voicemail transcription without sending audio outside the PBX, with optional cloud providers.' %></p>
                         </div>
                     </div>
                     <div class="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
@@ -2172,7 +2172,7 @@ function isTabAllowed(tabName) {
                         </button>
                         <button type="button" onclick="openSttApiKeyModal()" class="config-action-btn config-action-btn--primary">
                             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-                            <span><%= isRtl ? 'إدارة مفاتيح ومزود الذكاء الاصطناعي' : 'Configure AI & API Keys' %></span>
+                            <span><%= isRtl ? 'إعداد محرك التفريغ' : 'Configure STT Engine' %></span>
                         </button>
                     </div>
                 </div>
@@ -2181,7 +2181,7 @@ function isTabAllowed(tabName) {
                         <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-xs">AI</div>
                         <div class="min-w-0">
                             <span class="text-[10px] uppercase font-bold text-[var(--text-muted)] block"><%= isRtl ? 'المزود والنموذج' : 'Active Provider & Model' %></span>
-                            <span id="sttOverviewProvider" class="text-xs font-mono font-bold text-white truncate block">Groq: whisper-large-v3</span>
+                            <span id="sttOverviewProvider" class="text-xs font-mono font-bold text-white truncate block">LOCAL: ggml-small-q5_1.bin</span>
                         </div>
                     </div>
                     <div class="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">

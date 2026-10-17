@@ -2612,31 +2612,11 @@ systemctl daemon-reload
 systemctl enable --now sokrat-softphone
 echo "  Sokrat softphone daemon enabled and started"
 
-# Provision Sokrat Cloud AI Speech-To-Text Worker Daemon
-echo "  Provisioning Sokrat Cloud AI Speech-To-Text Worker..."
-cat > /etc/systemd/system/sokrat-stt.service << 'UNIT'
-[Unit]
-Description=Sokrat VoIP Cloud AI Speech-To-Text Worker
-After=network.target mariadb.service mysqld.service asterisk.service
-Wants=asterisk.service
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/sokrat-voip
-ExecStart=/usr/bin/node /opt/sokrat-voip/scripts/stt-worker.js
-Restart=always
-RestartSec=5
-Nice=15
-CPUShares=256
-Environment=NODE_ENV=production
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-systemctl daemon-reload
-systemctl enable --now sokrat-stt 2>/dev/null || true
-echo "  Sokrat Cloud AI STT worker daemon enabled and started"
+# Provision the loopback-only offline whisper.cpp engine and queue worker.
+echo "  Provisioning Sokrat offline Speech-To-Text engine..."
+chmod +x /opt/sokrat-voip/scripts/install-local-stt.sh
+/opt/sokrat-voip/scripts/install-local-stt.sh
+echo "  Sokrat offline STT engine and worker enabled"
 
 # Provision Sokrat System Watchdog & Alert Daemon
 echo "  Provisioning Sokrat System Watchdog & Alert Daemon..."

@@ -31,15 +31,13 @@ if [ -f /etc/systemd/system/sokrat-softphone.service ]; then
     systemctl daemon-reload
 fi
 echo "  Sokrat softphone service stopped and unit file removed."
-if systemctl is-active sokrat-stt &>/dev/null || systemctl is-enabled sokrat-stt &>/dev/null; then
-    systemctl stop sokrat-stt 2>/dev/null || true
-    systemctl disable sokrat-stt 2>/dev/null || true
-fi
-if [ -f /etc/systemd/system/sokrat-stt.service ]; then
-    rm -f /etc/systemd/system/sokrat-stt.service
-    systemctl daemon-reload
-fi
-echo "  Sokrat STT service stopped and unit file removed."
+for unit in sokrat-stt-scan.timer sokrat-stt-scan.service sokrat-stt.service sokrat-whisper.service; do
+    systemctl stop "$unit" 2>/dev/null || true
+    systemctl disable "$unit" 2>/dev/null || true
+    rm -f "/etc/systemd/system/$unit"
+done
+systemctl daemon-reload
+echo "  Sokrat STT services and timer stopped and unit files removed."
 if systemctl is-active sokrat-push-gateway &>/dev/null || systemctl is-enabled sokrat-push-gateway &>/dev/null; then
     systemctl stop sokrat-push-gateway 2>/dev/null || true
     systemctl disable sokrat-push-gateway 2>/dev/null || true

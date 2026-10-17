@@ -997,24 +997,39 @@ async function initAuthDb() {
         CREATE TABLE IF NOT EXISTS \`asterisk\`.\`stt_settings\` (
             \`id\` INT PRIMARY KEY DEFAULT 1,
             \`enabled\` TINYINT(1) DEFAULT 1,
-            \`engine\` VARCHAR(32) DEFAULT 'cloud_api',
-            \`provider\` VARCHAR(32) DEFAULT 'groq',
+            \`engine\` VARCHAR(32) DEFAULT 'local_whisper',
+            \`provider\` VARCHAR(32) DEFAULT 'local',
             \`api_key\` TEXT DEFAULT NULL,
-            \`api_url\` VARCHAR(255) DEFAULT 'https://api.groq.com/openai/v1/audio/transcriptions',
-            \`model_name\` VARCHAR(64) DEFAULT 'whisper-large-v3',
-            \`language\` VARCHAR(10) DEFAULT 'auto',
+            \`api_url\` VARCHAR(255) DEFAULT 'http://127.0.0.1:8178/inference',
+            \`model_name\` VARCHAR(64) DEFAULT 'ggml-small-q5_1.bin',
+            \`language\` VARCHAR(10) DEFAULT 'ar',
             \`prompt\` TEXT DEFAULT NULL,
             \`transcribe_calls\` TINYINT(1) DEFAULT 1,
             \`transcribe_voicemails\` TINYINT(1) DEFAULT 1,
             \`min_duration_sec\` INT DEFAULT 3,
             \`max_concurrency\` INT DEFAULT 1,
+            \`pause_during_calls\` TINYINT(1) DEFAULT 1,
             \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    // Existing cloud installations predate the engine discriminator. Preserve
+    // their provider behavior; fresh installations use the local table default.
+    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `engine` VARCHAR(32) DEFAULT \'cloud_api\''); } catch (_) {}
     try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `provider` VARCHAR(32) DEFAULT \'groq\''); } catch (_) {}
     try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `api_key` TEXT DEFAULT NULL'); } catch (_) {}
     try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `api_url` VARCHAR(255) DEFAULT \'https://api.groq.com/openai/v1/audio/transcriptions\''); } catch (_) {}
     try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `prompt` TEXT DEFAULT NULL'); } catch (_) {}
+    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `pause_during_calls` TINYINT(1) DEFAULT 1'); } catch (_) {}
+    for (const table of ['cdr_transcriptions', 'voicemail_transcriptions']) {
+        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`attempt_count\` INT NOT NULL DEFAULT 0`); } catch (_) {}
+        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`processing_started_at\` DATETIME DEFAULT NULL`); } catch (_) {}
+        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`completed_at\` DATETIME DEFAULT NULL`); } catch (_) {}
+        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`processing_ms\` BIGINT DEFAULT NULL`); } catch (_) {}
+        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`engine\` VARCHAR(32) DEFAULT NULL`); } catch (_) {}
+        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`model_used\` VARCHAR(128) DEFAULT NULL`); } catch (_) {}
+        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`error_message\` VARCHAR(500) DEFAULT NULL`); } catch (_) {}
+    }
+    try { await conn.execute('ALTER TABLE `asteriskcdrdb`.`cdr_transcriptions` MODIFY COLUMN `error_message` VARCHAR(500) DEFAULT NULL'); } catch (_) {}
     await conn.execute('INSERT IGNORE INTO `asterisk`.`stt_settings` (id) VALUES (1)');
     // Default dispositions
     const defaultDispositions = [
@@ -7021,10 +7036,30 @@ app.post('/api/voicemail-storage/settings', requireAuth, async (req, res) => {
 
 // --- SPEECH-TO-TEXT (STT) TRANSCRIPTION REST APIs ---
 
+function requireTranscriptPermission(tabPermission) {
+    return (req, res, next) => {
+        if (req.isApiKeyAuthenticated && req.apiKey) {
+            const scopes = String(req.apiKey.scopes || '*').split(',').map(scope => scope.trim().toLowerCase());
+            if (scopes.includes('*') || scopes.includes(tabPermission)) return next();
+            return res.status(403).json({ success: false, error: `Forbidden. API key missing required scope: ${tabPermission}` });
+        }
+        if (isSuperAdmin(req)) return next();
+        const permissions = req.session.userPermissions || [];
+        if (permissions.includes(tabPermission)) return next();
+        return res.status(403).json({ success: false, error: `Forbidden. Missing permission: ${tabPermission}` });
+    };
+}
+
 // 1. GET /api/transcripts/call/:uniqueid - Fetch call transcript
-app.get('/api/transcripts/call/:uniqueid', async (req, res) => {
+app.get('/api/transcripts/call/:uniqueid', requireAuth, requireTranscriptPermission('cdr'), async (req, res) => {
     try {
         const { uniqueid } = req.params;
+        const [scopeRows] = await pool.query('SELECT src, dst FROM `asteriskcdrdb`.`cdr` WHERE uniqueid = ? LIMIT 1', [uniqueid]);
+        if (!scopeRows.length) return res.status(404).json({ success: false, error: 'Call not found.' });
+        const allowed = getUserScopedExtensions(req);
+        if (allowed !== null && !allowed.includes(String(scopeRows[0].src)) && !allowed.includes(String(scopeRows[0].dst))) {
+            return res.status(403).json({ success: false, error: 'Access denied for this call.' });
+        }
         const [rows] = await pool.query(
             'SELECT uniqueid, recordingfile, language, transcript, status, error_message, duration_sec, created_at, completed_at FROM `asteriskcdrdb`.`cdr_transcriptions` WHERE uniqueid = ?',
             [uniqueid]
@@ -7039,7 +7074,7 @@ app.get('/api/transcripts/call/:uniqueid', async (req, res) => {
 });
 
 // 2. POST /api/transcripts/call/:uniqueid/transcribe - Manually enqueue/re-transcribe call recording
-app.post('/api/transcripts/call/:uniqueid/transcribe', async (req, res) => {
+app.post('/api/transcripts/call/:uniqueid/transcribe', requireAuth, requireTranscriptPermission('cdr'), async (req, res) => {
     try {
         const { uniqueid } = req.params;
         const [cdr] = await pool.query(
@@ -7049,6 +7084,13 @@ app.post('/api/transcripts/call/:uniqueid/transcribe', async (req, res) => {
         if (!cdr.length || !cdr[0].recordingfile) {
             return res.status(404).json({ success: false, error: 'Call recording not found.' });
         }
+        const allowed = getUserScopedExtensions(req);
+        if (allowed !== null) {
+            const [scopeRows] = await pool.query('SELECT src, dst FROM `asteriskcdrdb`.`cdr` WHERE uniqueid = ? LIMIT 1', [uniqueid]);
+            if (!scopeRows.length || (!allowed.includes(String(scopeRows[0].src)) && !allowed.includes(String(scopeRows[0].dst)))) {
+                return res.status(403).json({ success: false, error: 'Access denied for this call.' });
+            }
+        }
         const lang = req.body.language || 'auto';
         await pool.query(`
             INSERT INTO \`asteriskcdrdb\`.\`cdr_transcriptions\` (uniqueid, recordingfile, language, status, transcript)
@@ -7056,7 +7098,9 @@ app.post('/api/transcripts/call/:uniqueid/transcribe', async (req, res) => {
             ON DUPLICATE KEY UPDATE
                 language = VALUES(language),
                 status = 'pending',
-                error_message = NULL
+                error_message = NULL,
+                attempt_count = 0,
+                processing_started_at = NULL
         `, [uniqueid, cdr[0].recordingfile, lang]);
 
         res.json({ success: true, message: 'Call queued for transcription.', uniqueid });
@@ -7066,7 +7110,7 @@ app.post('/api/transcripts/call/:uniqueid/transcribe', async (req, res) => {
 });
 
 // 3. GET /api/transcripts/voicemail/:mailbox/:file - Fetch voicemail transcript
-app.get('/api/transcripts/voicemail/:mailbox/:file', async (req, res) => {
+app.get('/api/transcripts/voicemail/:mailbox/:file', requireAuth, requireTranscriptPermission('voicemails'), async (req, res) => {
     try {
         const { mailbox, file } = req.params;
         const [rows] = await pool.query(
@@ -7083,15 +7127,18 @@ app.get('/api/transcripts/voicemail/:mailbox/:file', async (req, res) => {
 });
 
 // 4. POST /api/transcripts/voicemail/:mailbox/:file/transcribe - Enqueue voicemail for transcription
-app.post('/api/transcripts/voicemail/:mailbox/:file/transcribe', async (req, res) => {
+app.post('/api/transcripts/voicemail/:mailbox/:file/transcribe', requireAuth, requireTranscriptPermission('voicemails'), async (req, res) => {
     try {
         const { mailbox, file } = req.params;
         await pool.query(`
             INSERT INTO \`asteriskcdrdb\`.\`voicemail_transcriptions\` (mailbox, msg_file, status, transcript)
-            VALUES (?, ?, ?, 'pending')
+            VALUES (?, ?, 'pending', '')
             ON DUPLICATE KEY UPDATE
-                status = 'pending'
-        `, [mailbox, file, '']);
+                status = 'pending',
+                error_message = NULL,
+                attempt_count = 0,
+                processing_started_at = NULL
+        `, [mailbox, file]);
 
         res.json({ success: true, message: 'Voicemail queued for transcription.', mailbox, file });
     } catch (e) {
@@ -7099,20 +7146,22 @@ app.post('/api/transcripts/voicemail/:mailbox/:file/transcribe', async (req, res
     }
 });
 
-// 5. GET /api/config/stt - Get Cloud AI STT engine settings
-app.get('/api/config/stt', async (req, res) => {
+// 5. GET /api/config/stt - Get local/cloud STT engine settings
+app.get('/api/config/stt', requireAuth, requireConfigPermission('recordings'), async (req, res) => {
     try {
         let settings = {
             enabled: 1,
-            provider: 'groq',
+            engine: 'local_whisper',
+            provider: 'local',
             api_key: '',
-            api_url: 'https://api.groq.com/openai/v1/audio/transcriptions',
-            model_name: 'whisper-large-v3',
-            language: 'auto',
+            api_url: 'http://127.0.0.1:8178/inference',
+            model_name: 'ggml-small-q5_1.bin',
+            language: 'ar',
             prompt: 'محادثة هاتفية خدمة عملاء بالعامية المصرية: ألو، أيوة يا فندم، تمام، إزيك، معاك، الخط، حاضر، شكراً، مع السلامة.',
             transcribe_calls: 1,
             transcribe_voicemails: 1,
-            min_duration_sec: 3
+            min_duration_sec: 3,
+            pause_during_calls: 1
         };
         try {
             const [rows] = await pool.query('SELECT * FROM `asterisk`.`stt_settings` WHERE id = 1');
@@ -7124,8 +7173,8 @@ app.get('/api/config/stt', async (req, res) => {
     }
 });
 
-// 6. PUT /api/config/stt - Update Cloud AI STT engine settings
-app.put('/api/config/stt', async (req, res) => {
+// 6. PUT /api/config/stt - Update local/cloud STT engine settings
+app.put('/api/config/stt', requireAuth, requireConfigPermission('recordings'), async (req, res) => {
     try {
         const {
             enabled,
@@ -7137,25 +7186,37 @@ app.put('/api/config/stt', async (req, res) => {
             prompt,
             transcribe_calls,
             transcribe_voicemails,
-            min_duration_sec
+            min_duration_sec,
+            pause_during_calls
         } = req.body;
 
         const isEnabled = (enabled === 1 || enabled === true || enabled === '1') ? 1 : 0;
-        const validProvider = ['groq', 'openai', 'deepgram', 'custom'].includes(provider) ? provider : 'groq';
+        const validProvider = ['local', 'groq', 'openai', 'deepgram', 'custom'].includes(provider) ? provider : 'local';
+        const engine = validProvider === 'local' ? 'local_whisper' : 'cloud_api';
         const apiKeyVal = api_key !== undefined ? String(api_key).trim() : '';
-        const apiUrlVal = api_url !== undefined ? String(api_url).trim() : '';
-        const model = String(model_name || 'whisper-large-v3').trim();
-        const lang = String(language || 'auto').trim();
+        let apiUrlVal = api_url !== undefined ? String(api_url).trim() : '';
+        if (engine === 'local_whisper') {
+            apiUrlVal = apiUrlVal || 'http://127.0.0.1:8178/inference';
+            const localUrl = new URL(apiUrlVal);
+            const host = localUrl.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+            if (localUrl.protocol !== 'http:' || !['127.0.0.1', 'localhost', '::1'].includes(host)) {
+                return res.status(400).json({ success: false, error: 'Local whisper.cpp endpoint must use HTTP on loopback.' });
+            }
+        }
+        const model = String(model_name || (engine === 'local_whisper' ? 'ggml-small-q5_1.bin' : 'whisper-large-v3')).trim();
+        const lang = String(language || (engine === 'local_whisper' ? 'ar' : 'auto')).trim();
         const promptVal = prompt !== undefined ? String(prompt).trim() : '';
         const trCalls = (transcribe_calls === 1 || transcribe_calls === true || transcribe_calls === '1') ? 1 : 0;
         const trVm = (transcribe_voicemails === 1 || transcribe_voicemails === true || transcribe_voicemails === '1') ? 1 : 0;
         const minDur = Math.max(1, parseInt(min_duration_sec, 10) || 3);
+        const pauseDuringCalls = (pause_during_calls === 0 || pause_during_calls === false || pause_during_calls === '0') ? 0 : 1;
 
         await pool.query(`
-            INSERT INTO \`asterisk\`.\`stt_settings\` (id, enabled, engine, provider, api_key, api_url, model_name, language, prompt, transcribe_calls, transcribe_voicemails, min_duration_sec)
-            VALUES (1, ?, 'cloud_api', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO \`asterisk\`.\`stt_settings\` (id, enabled, engine, provider, api_key, api_url, model_name, language, prompt, transcribe_calls, transcribe_voicemails, min_duration_sec, pause_during_calls)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 enabled = VALUES(enabled),
+                engine = VALUES(engine),
                 provider = VALUES(provider),
                 api_key = VALUES(api_key),
                 api_url = VALUES(api_url),
@@ -7164,13 +7225,15 @@ app.put('/api/config/stt', async (req, res) => {
                 prompt = VALUES(prompt),
                 transcribe_calls = VALUES(transcribe_calls),
                 transcribe_voicemails = VALUES(transcribe_voicemails),
-                min_duration_sec = VALUES(min_duration_sec)
-        `, [isEnabled, validProvider, apiKeyVal, apiUrlVal, model, lang, promptVal, trCalls, trVm, minDur]);
+                min_duration_sec = VALUES(min_duration_sec),
+                pause_during_calls = VALUES(pause_during_calls)
+        `, [isEnabled, engine, validProvider, apiKeyVal, apiUrlVal, model, lang, promptVal, trCalls, trVm, minDur, pauseDuringCalls]);
 
         res.json({
             success: true,
             settings: {
                 enabled: isEnabled,
+                engine,
                 provider: validProvider,
                 api_key: apiKeyVal,
                 api_url: apiUrlVal,
@@ -7179,20 +7242,24 @@ app.put('/api/config/stt', async (req, res) => {
                 prompt: promptVal,
                 transcribe_calls: trCalls,
                 transcribe_voicemails: trVm,
-                min_duration_sec: minDur
+                min_duration_sec: minDur,
+                pause_during_calls: pauseDuringCalls
             },
-            message: 'Cloud AI Speech-to-Text settings updated successfully.'
+            message: 'Speech-to-Text settings updated successfully.'
         });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
 });
 
-// 6b. POST /api/config/stt/test-connection - Verify Cloud AI API connection and key validity
-app.post('/api/config/stt/test-connection', async (req, res) => {
+// 6b. POST /api/config/stt/test-connection - Verify selected STT engine
+app.post('/api/config/stt/test-connection', requireAuth, requireConfigPermission('recordings'), async (req, res) => {
     try {
-        const { testCloudSttConnection } = require('./scripts/stt-worker');
-        const result = await testCloudSttConnection(req.body);
+        const { testSttConnection } = require('./scripts/stt-worker');
+        const result = await testSttConnection({
+            ...req.body,
+            engine: req.body.provider === 'local' ? 'local_whisper' : 'cloud_api'
+        });
         res.json(result);
     } catch (e) {
         res.status(400).json({ success: false, error: e.message });
@@ -7200,7 +7267,7 @@ app.post('/api/config/stt/test-connection', async (req, res) => {
 });
 
 // 7. POST /api/transcripts/scan - Trigger bulk scan of untranscribed audio recordings
-app.post('/api/transcripts/scan', async (req, res) => {
+app.post('/api/transcripts/scan', requireAuth, requireConfigPermission('recordings'), async (req, res) => {
     try {
         const { scanAndEnqueueUntranscribed } = require('./scripts/enqueue-stt');
         await scanAndEnqueueUntranscribed();
@@ -10906,7 +10973,7 @@ function getCoreServicesStatus() {
         { id: 'sokrat-voip', name: 'Sokrat VoIP Dashboard', unit: 'sokrat-voip.service', desc: 'Real-Time Softphone & Admin Engine' },
         { id: 'database', name: 'MariaDB / MySQL', unit: 'mariadb.service', fallbackUnit: 'mysqld.service', desc: 'CDR Database & PBX Configuration' },
         { id: 'httpd', name: 'HTTP Web Server', unit: 'httpd.service', fallbackUnit: 'nginx.service', desc: 'Web Server & Reverse Proxy' },
-        { id: 'stt-worker', name: 'STT AI Worker', unit: 'stt-worker.service', desc: 'Background Audio Transcription' }
+        { id: 'stt-worker', name: 'STT AI Worker', unit: 'sokrat-stt.service', desc: 'Background Audio Transcription' }
     ];
 
     return services.map(s => {
@@ -11249,7 +11316,7 @@ app.post('/api/system/service-action', requireAuth, (req, res) => {
     }
 
     if (serviceId === 'stt-worker') {
-        execFile('systemctl', [action, 'stt-worker'], (err, stdout, stderr) => {
+        execFile('systemctl', [action, 'sokrat-stt'], (err, stdout, stderr) => {
             if (err) return res.status(500).json({ success: false, error: stderr || err.message });
             return res.json({ success: true, message: `STT Worker service ${action}ed successfully` });
         });

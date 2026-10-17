@@ -19,7 +19,7 @@ const sidebarWords = {
         vmGreetingChangeMode: "Changing mode will save a new greeting. Continue?",
         vmSelectAll: "Select All",
         dashLink: "Overview", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Auto-Dial", contactsLink: "Contacts", usersLink: "Users", apiKeysLink: "API Keys", storageLink: "SysMon", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Server SMTP", alertsSettings: "System Alerts", alertsModalTitle: "System Alerts & Monitoring", cpanelLink: "Control Panel (Webmin)", userLabel: "User", versionLabel: "Version", issabelGuiLink: "Issabel GUI (:3000)",
-        logoutLabel: "Sign Out", updateSokrat: "Update Sokrat", restoreBackup: "Restore Backup", gitHistory: "Git History", aiSttSettings: "Cloud AI Speech-to-Text", aiSttModalTitle: "Cloud AI Speech-to-Text API Keys", netInfo: "Network Interfaces", settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", coreToolsLabel: "Core Tools", systemAdminLabel: "Administration & Tools", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
+        logoutLabel: "Sign Out", updateSokrat: "Update Sokrat", restoreBackup: "Restore Backup", gitHistory: "Git History", aiSttSettings: "Speech-to-Text", aiSttModalTitle: "Speech-to-Text Engine", netInfo: "Network Interfaces", settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", coreToolsLabel: "Core Tools", systemAdminLabel: "Administration & Tools", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
         recTitle: "Add a Recording", recName: "Recording Name", recPlaceholder: "e.g. welcome_greeting", recFile: "Audio File", recNote: "Accepted: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (max 50MB)", recUploadStatus: "Uploading...", recCancel: "Cancel", recUpload: "Upload", recComplete: "Complete!", recFailed: "Failed", recSelectFileErr: "Please select a file", recNameErr: "Please enter a recording name",
         timeSettings: "Time Settings", timeModalTitle: "Time & Timezone", currentTime: "Current Time", timezone: "Timezone", searchTimezone: "Search timezone...", ntpSync: "NTP Synchronization", setManually: "Set Manually", dateLabel: "Date", timeLabel: "Time", saveSettings: "Save Settings", saving: "Saving...", savedSuccess: "Time settings saved successfully", saveFailed: "Failed to save time settings", timezoneChanged: "Timezone changed", ntpToggled: "NTP toggled", timeSetManually: "Time set manually", loadingTimezone: "Loading...",
         defaultFilters: "Default Filters", defaultFiltersDesc: "Configure default filters applied on login", dashDefaultFilters: "Overview Defaults", cdrDefaultFilters: "Call History Defaults", datePresetLabel: "Default Date Range", presetToday: "Today", presetYesterday: "Yesterday", presetThisWeek: "This Week", presetLast7Days: "Last 7 Days", presetThisMonth: "This Month", presetLast30Days: "Last 30 Days", defaultTargetExt: "Default Extension", defaultStatusLabel: "Default Status", defaultDirectionLabel: "Default Direction", defaultScopeLabel: "Default Scope", defaultPerPageLabel: "Default Rows Per Page", saveDefaultsBtn: "Save Default Filters", resetDefaultsBtn: "Reset to System Defaults", savedDefaultsSuccess: "Default filters saved successfully."
@@ -3367,7 +3367,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     <% if (isSuper) { %>
                     <button type="button" onclick="openSttApiKeyModal()" class="settings-action cursor-pointer">
                         <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg></span>
-                        <span class="settings-action-label"><%= sbT.aiSttSettings || (currentLang === 'ar' ? 'الذكاء الاصطناعي' : 'Cloud AI STT') %></span>
+                        <span class="settings-action-label"><%= sbT.aiSttSettings || (currentLang === 'ar' ? 'تحويل الصوت إلى نص' : 'Speech-to-Text') %></span>
                         <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
                     </button>
                     <button type="button" onclick="openAlertsModal()" id="alertsSettingsBtn" class="settings-action cursor-pointer">
@@ -3784,7 +3784,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
     </div>
 </div>
 
-<!-- STT / AI API Keys Settings Modal in Sidebar -->
+<!-- Local / Cloud STT Settings Modal in Sidebar -->
 <div id="sttApiKeyModal" onclick="if(event.target===this) closeSttApiKeyModal()" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-md opacity-0 invisible transition-all duration-200 p-4" style="pointer-events:none">
     <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-xl flex flex-col max-h-[90vh] overflow-hidden shadow-2xl">
         <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
@@ -3793,8 +3793,8 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
                 </div>
                 <div>
-                    <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]"><%= sbT.aiSttModalTitle || (currentLang === 'ar' ? 'مفاتيح API لتحويل الصوت لنصوص' : 'Cloud AI Speech-to-Text API Keys') %></h3>
-                    <p class="text-[10px] text-[var(--text-muted)] font-mono"><%= isRtl ? 'Groq / OpenAI / Deepgram / Custom AI' : 'Groq / OpenAI / Deepgram / Custom' %></p>
+                    <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]"><%= currentLang === 'ar' ? 'محرك تحويل الصوت إلى نص' : 'Speech-to-Text Engine' %></h3>
+                    <p class="text-[10px] text-[var(--text-muted)] font-mono"><%= isRtl ? 'محلي بدون إنترنت أو مزود سحابي' : 'Offline local or cloud provider' %></p>
                 </div>
             </div>
             <button onclick="closeSttApiKeyModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1 cursor-pointer">
@@ -3811,9 +3811,10 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     </select>
                 </div>
                 <div>
-                    <label for="sttProvider" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'مزود الخدمة (AI Provider)' : 'AI Provider' %></label>
+                    <label for="sttProvider" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'محرك التفريغ' : 'Transcription Engine' %></label>
                     <select id="sttProvider" name="sttProvider" onchange="onSttProviderChange()" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="groq" selected>Groq (Whisper-Large-V3 - <%= isRtl ? 'فائق السرعة' : 'Recommended' %>)</option>
+                        <option value="local" selected><%= isRtl ? 'Whisper محلي بدون إنترنت (موصى به)' : 'Local Offline Whisper (Recommended)' %></option>
+                        <option value="groq">Groq (Whisper-Large-V3)</option>
                         <option value="openai">OpenAI (Whisper-1)</option>
                         <option value="deepgram">Deepgram (Nova-2)</option>
                         <option value="custom"><%= isRtl ? 'مزود مخصص (OpenAI-Compatible)' : 'Custom OpenAI API' %></option>
@@ -3821,7 +3822,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 </div>
             </div>
 
-            <div>
+            <div id="sttApiKeyGroup">
                 <label for="sttApiKey" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'مفتاح الواجهة (API Key)' : 'Provider API Key' %></label>
                 <div class="relative">
                     <input type="password" id="sttApiKey" name="sttApiKey" autocomplete="off" placeholder="gsk_... or sk-..." class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] pr-8 focus:outline-none focus:border-[var(--accent-color)]">
@@ -3834,13 +3835,13 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                     <label for="sttModel" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'اسم النموذج (Model)' : 'Model Name' %></label>
-                    <input type="text" id="sttModel" name="sttModel" value="whisper-large-v3" placeholder="whisper-large-v3" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                    <input type="text" id="sttModel" name="sttModel" value="ggml-small-q5_1.bin" placeholder="ggml-small-q5_1.bin" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                 </div>
                 <div>
                     <label for="sttLanguage" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'اللغة' : 'Language' %></label>
                     <select id="sttLanguage" name="sttLanguage" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="auto" selected><%= isRtl ? 'كشف تلقائي (Auto-Detect)' : 'Auto-Detect' %></option>
-                        <option value="ar"><%= isRtl ? 'العربية / عامية مصرية' : 'Arabic (Egyptian/MSA)' %></option>
+                        <option value="auto"><%= isRtl ? 'كشف تلقائي (Auto-Detect)' : 'Auto-Detect' %></option>
+                        <option value="ar" selected><%= isRtl ? 'العربية / عامية مصرية' : 'Arabic (Egyptian/MSA)' %></option>
                         <option value="en">English</option>
                     </select>
                 </div>
@@ -3848,7 +3849,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 
             <div>
                 <label for="sttApiUrl" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'رابط الواجهة (API URL)' : 'API Endpoint URL' %></label>
-                <input type="text" id="sttApiUrl" name="sttApiUrl" value="https://api.groq.com/openai/v1/audio/transcriptions" placeholder="https://api.groq.com/openai/v1/audio/transcriptions" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                <input type="text" id="sttApiUrl" name="sttApiUrl" value="http://127.0.0.1:8178/inference" placeholder="http://127.0.0.1:8178/inference" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
             </div>
 
             <div>
@@ -3856,7 +3857,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 <input type="text" id="sttPrompt" name="sttPrompt" value="محادثة هاتفية خدمة عملاء بالعامية المصرية: ألو، أيوة يا فندم، تمام، إزيك، معاك، الخط، حاضر، شكراً، مع السلامة." class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                     <label for="sttTranscribeCalls" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'المكالمات' : 'Calls' %></label>
                     <select id="sttTranscribeCalls" name="sttTranscribeCalls" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -3880,12 +3881,19 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                         <option value="10">10s</option>
                     </select>
                 </div>
+                <div>
+                    <label for="sttPauseDuringCalls" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'أولوية المكالمات' : 'Live Call Priority' %></label>
+                    <select id="sttPauseDuringCalls" name="sttPauseDuringCalls" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="1" selected><%= isRtl ? 'إيقاف التفريغ أثناء المكالمات' : 'Pause STT During Calls' %></option>
+                        <option value="0"><%= isRtl ? 'استمرار التفريغ' : 'Keep Processing' %></option>
+                    </select>
+                </div>
             </div>
 
             <div class="flex items-center justify-between gap-2.5 pt-3 border-t border-[var(--border-primary)] flex-wrap">
                 <button type="button" onclick="testSttApiConnection()" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 flex items-center gap-1.5 transition cursor-pointer">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span id="testSttBtnText"><%= isRtl ? 'اختبار المفتاح' : 'Test Key' %></span>
+                    <span id="testSttBtnText"><%= isRtl ? 'اختبار المحرك' : 'Test Engine' %></span>
                 </button>
                 <div class="flex items-center gap-2">
                     <button type="button" onclick="closeSttApiKeyModal()" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] transition cursor-pointer"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
@@ -4553,6 +4561,10 @@ function renderTimeModal(data) {
 }
 
 const STT_PROVIDER_DEFAULTS = {
+    local: {
+        model: 'ggml-small-q5_1.bin',
+        url: 'http://127.0.0.1:8178/inference'
+    },
     groq: {
         model: 'whisper-large-v3',
         url: 'https://api.groq.com/openai/v1/audio/transcriptions'
@@ -4571,13 +4583,15 @@ const STT_PROVIDER_DEFAULTS = {
     }
 };
 
-function onSttProviderChange() {
+function onSttProviderChange(applyDefaults = true) {
     const provider = document.getElementById('sttProvider')?.value;
     const modelEl = document.getElementById('sttModel');
     const urlEl = document.getElementById('sttApiUrl');
-    const def = STT_PROVIDER_DEFAULTS[provider] || STT_PROVIDER_DEFAULTS.groq;
-    if (modelEl) modelEl.value = def.model;
-    if (urlEl) urlEl.value = def.url;
+    const def = STT_PROVIDER_DEFAULTS[provider] || STT_PROVIDER_DEFAULTS.local;
+    if (applyDefaults && modelEl) modelEl.value = def.model;
+    if (applyDefaults && urlEl) urlEl.value = def.url;
+    const keyGroup = document.getElementById('sttApiKeyGroup');
+    if (keyGroup) keyGroup.style.display = provider === 'local' ? 'none' : '';
 }
 window.onSttProviderChange = onSttProviderChange;
 
@@ -4628,6 +4642,7 @@ async function loadSttSettings() {
     const callsEl = document.getElementById('sttTranscribeCalls');
     const vmEl = document.getElementById('sttTranscribeVoicemails');
     const minDurEl = document.getElementById('sttMinDuration');
+    const pauseDuringCallsEl = document.getElementById('sttPauseDuringCalls');
     const overviewBadge = document.getElementById('sttOverviewStatusBadge');
     const overviewProvider = document.getElementById('sttOverviewProvider');
     const overviewLang = document.getElementById('sttOverviewLanguage');
@@ -4640,32 +4655,34 @@ async function loadSttSettings() {
         if (data.success && data.settings) {
             const s = data.settings;
             enabledEl.value = String(s.enabled ? 1 : 0);
-            providerEl.value = s.provider || 'groq';
+            providerEl.value = s.provider || (s.engine === 'local_whisper' ? 'local' : 'groq');
             if (keyEl) keyEl.value = s.api_key || '';
-            if (modelEl) modelEl.value = s.model_name || 'whisper-large-v3';
-            if (urlEl) urlEl.value = s.api_url || 'https://api.groq.com/openai/v1/audio/transcriptions';
+            if (modelEl) modelEl.value = s.model_name || 'ggml-small-q5_1.bin';
+            if (urlEl) urlEl.value = s.api_url || 'http://127.0.0.1:8178/inference';
             if (langEl) langEl.value = s.language || 'auto';
             if (promptEl && s.prompt !== undefined) promptEl.value = s.prompt || '';
             if (callsEl) callsEl.value = String(s.transcribe_calls ? 1 : 0);
             if (vmEl) vmEl.value = String(s.transcribe_voicemails ? 1 : 0);
             if (minDurEl) minDurEl.value = String(s.min_duration_sec || 3);
+            if (pauseDuringCallsEl) pauseDuringCallsEl.value = String(Number(s.pause_during_calls ?? 1));
 
             // Update overview card if present on page
             if (overviewBadge) {
                 if (!s.enabled) {
                     overviewBadge.textContent = isRtlLang() ? 'معطل' : 'Disabled';
                     overviewBadge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-zinc-500/10 text-zinc-400 border border-zinc-500/20';
-                } else if (!s.api_key) {
+                } else if ((s.provider || '') !== 'local' && !s.api_key) {
                     overviewBadge.textContent = isRtlLang() ? 'مطلوب مفتاح API' : 'API Key Required';
                     overviewBadge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20';
                 } else {
-                    overviewBadge.textContent = (s.provider || 'Groq').toUpperCase() + ' Active';
+                    overviewBadge.textContent = (s.provider === 'local' ? 'LOCAL OFFLINE' : (s.provider || 'Groq').toUpperCase()) + ' Active';
                     overviewBadge.className = 'px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
                 }
             }
             if (overviewProvider) {
-                overviewProvider.textContent = `${(s.provider || 'groq').toUpperCase()}: ${s.model_name || 'whisper-large-v3'}`;
+                overviewProvider.textContent = `${(s.provider || 'local').toUpperCase()}: ${s.model_name || 'ggml-small-q5_1.bin'}`;
             }
+            onSttProviderChange(false);
             if (overviewLang) {
                 overviewLang.textContent = s.language === 'ar' ? (isRtlLang() ? 'العربية' : 'Arabic') : (s.language === 'en' ? 'English' : (isRtlLang() ? 'كشف تلقائي' : 'Auto-Detect'));
             }
@@ -4693,6 +4710,7 @@ async function saveSttSettings() {
     const callsEl = document.getElementById('sttTranscribeCalls');
     const vmEl = document.getElementById('sttTranscribeVoicemails');
     const minDurEl = document.getElementById('sttMinDuration');
+    const pauseDuringCallsEl = document.getElementById('sttPauseDuringCalls');
     if (!enabledEl || !providerEl) return;
 
     try {
@@ -4701,12 +4719,13 @@ async function saveSttSettings() {
             provider: providerEl.value,
             api_key: keyEl ? keyEl.value : '',
             api_url: urlEl ? urlEl.value : '',
-            model_name: modelEl ? modelEl.value : 'whisper-large-v3',
+            model_name: modelEl ? modelEl.value : 'ggml-small-q5_1.bin',
             language: langEl ? langEl.value : 'auto',
             prompt: promptEl ? promptEl.value : '',
             transcribe_calls: callsEl.value === '1' ? 1 : 0,
             transcribe_voicemails: vmEl.value === '1' ? 1 : 0,
-            min_duration_sec: parseInt(minDurEl.value, 10) || 3
+            min_duration_sec: parseInt(minDurEl.value, 10) || 3,
+            pause_during_calls: pauseDuringCallsEl ? parseInt(pauseDuringCallsEl.value, 10) : 1
         };
         const res = await fetch('/api/config/stt', {
             method: 'PUT',
@@ -4715,7 +4734,7 @@ async function saveSttSettings() {
         });
         const data = await res.json();
         if (data.success) {
-            showToast(isRtlLang() ? 'تم حفظ إعدادات مزود الذكاء الاصطناعي بنجاح.' : 'Cloud AI Speech-to-Text settings saved successfully.', 'success');
+            showToast(isRtlLang() ? 'تم حفظ إعدادات تحويل الصوت إلى نص.' : 'Speech-to-Text settings saved successfully.', 'success');
         } else {
             showToast(data.error || 'Failed to save STT settings', 'error');
         }
@@ -4742,7 +4761,7 @@ async function testSttApiConnection() {
     const langEl = document.getElementById('sttLanguage');
     const promptEl = document.getElementById('sttPrompt');
     const btnText = document.getElementById('testSttBtnText');
-    if (!keyEl || !keyEl.value.trim()) {
+    if (providerEl.value !== 'local' && (!keyEl || !keyEl.value.trim())) {
         showToast(isRtlLang() ? 'يرجى إدخال مفتاح الواجهة (API Key) أولاً.' : 'Please enter an API key first.', 'error');
         return;
     }
@@ -4756,7 +4775,7 @@ async function testSttApiConnection() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 provider: providerEl.value,
-                api_key: keyEl.value.trim(),
+                api_key: keyEl ? keyEl.value.trim() : '',
                 api_url: urlEl ? urlEl.value.trim() : '',
                 model_name: modelEl ? modelEl.value.trim() : '',
                 language: langEl ? langEl.value : 'auto',
@@ -4765,7 +4784,7 @@ async function testSttApiConnection() {
         });
         const data = await res.json();
         if (data.success) {
-            showToast(isRtlLang() ? `تم التحقق بنجاح! الاتصال يعمل (${data.latencyMs}ms).` : `Success! API connection verified (${data.latencyMs}ms).`, 'success');
+            showToast(isRtlLang() ? `تم التحقق بنجاح! المحرك يعمل (${data.latencyMs}ms).` : `Success! STT engine verified (${data.latencyMs}ms).`, 'success');
         } else {
             showToast(data.error || 'API validation failed', 'error');
         }

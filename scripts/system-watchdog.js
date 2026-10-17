@@ -281,19 +281,19 @@ async function checkServiceHealth(serviceId) {
     }
 
     if (serviceId === 'stt-worker') {
-        const s = getServiceSystemdStatus('stt-worker.service');
+        const s = getServiceSystemdStatus('sokrat-stt.service');
         if (s.state !== 'active') {
             return {
                 id: 'stt-worker',
                 name: 'STT AI Worker',
-                unit: 'stt-worker.service',
+                unit: 'sokrat-stt.service',
                 healthy: false,
                 state: s.state,
                 error: `STT AI Worker is ${s.state} (${s.subState})`,
-                logs: getServiceRecentLogs('stt-worker.service')
+                logs: getServiceRecentLogs('sokrat-stt.service')
             };
         }
-        return { id: 'stt-worker', name: 'STT AI Worker', unit: 'stt-worker.service', healthy: true, state: 'active' };
+        return { id: 'stt-worker', name: 'STT AI Worker', unit: 'sokrat-stt.service', healthy: true, state: 'active' };
     }
 
     return { id: serviceId, name: serviceId, unit: `${serviceId}.service`, healthy: true, state: 'active' };
