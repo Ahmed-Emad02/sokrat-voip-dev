@@ -1307,20 +1307,62 @@ else
     echo "  chan_sip WebSocket already disabled"
 fi
 
-# Ensure WSS transport exists for PJSIP (needed by WebRTC)
-WSS_TRANSPORT=/etc/asterisk/pjsip_transport_custom.conf
-if [ ! -f "$WSS_TRANSPORT" ] || ! grep -q 'transport-wss' "$WSS_TRANSPORT" 2>/dev/null; then
-    cat >> "$WSS_TRANSPORT" << 'TRPEOF'
+# Ensure Dedicated WebRTC and SIP Transports exist for PJSIP
+PJSIP_TRP_CUSTOM=/etc/asterisk/pjsip_transport_custom.conf
+PJSIP_TRP_ADDITIONAL=/etc/asterisk/pjsip_transport_additional.conf
+
+cat > "$PJSIP_TRP_CUSTOM" << 'TRPEOF'
+; Dedicated PJSIP Transports for WebRTC and Standard SIP (Managed by Sokrat VOIP)
+[transport-ws]
+type=transport
+protocol=ws
+bind=0.0.0.0:8088
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
 
 [transport-wss]
 type=transport
 protocol=wss
+bind=0.0.0.0:8089
 allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-udp]
+type=transport
+protocol=udp
 bind=0.0.0.0:5066
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-tcp]
+type=transport
+protocol=tcp
+bind=0.0.0.0:5066
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
 TRPEOF
-    echo "  WSS transport added to pjsip_transport_custom.conf"
-else
-    echo "  WSS transport already configured"
+echo "  Dedicated WebRTC (WS 8088 / WSS 8089) and SIP transports configured in $PJSIP_TRP_CUSTOM"
+
+# Neutralize colliding FreePBX generated transport file to prevent duplicate 5066 bind errors
+if [ -f "$PJSIP_TRP_ADDITIONAL" ]; then
+    echo '; Managed via pjsip_transport_custom.conf' > "$PJSIP_TRP_ADDITIONAL"
+    echo "  Neutralized colliding transports in $PJSIP_TRP_ADDITIONAL"
 fi
 
 # Patch IssabelPBX PJSIP generator to fix maxcontacts, inband_progress, and remove_unavailable

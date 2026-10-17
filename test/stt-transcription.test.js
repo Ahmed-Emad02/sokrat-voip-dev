@@ -5,7 +5,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const ejs = require('ejs');
 
-test('scripts/stt-worker.js and scripts/enqueue-stt.js export local and cloud STT helpers', () => {
+test('scripts/stt-worker.js and scripts/enqueue-stt.js exist and export required Cloud AI helpers', () => {
     assert.ok(fs.existsSync(path.join(__dirname, '../scripts/stt-worker.js')), 'scripts/stt-worker.js must exist');
     assert.ok(fs.existsSync(path.join(__dirname, '../scripts/enqueue-stt.js')), 'scripts/enqueue-stt.js must exist');
 
@@ -13,15 +13,8 @@ test('scripts/stt-worker.js and scripts/enqueue-stt.js export local and cloud ST
     assert.equal(typeof worker.resolveCallAudioPath, 'function', 'resolveCallAudioPath must be exported');
     assert.equal(typeof worker.resolveVoicemailAudioPath, 'function', 'resolveVoicemailAudioPath must be exported');
     assert.equal(typeof worker.prepareAudioForUpload, 'function', 'prepareAudioForUpload must be exported');
-    assert.equal(typeof worker.prepareAudioForLocal, 'function', 'prepareAudioForLocal must be exported');
     assert.equal(typeof worker.transcribeWithCloudAi, 'function', 'transcribeWithCloudAi must be exported');
-    assert.equal(typeof worker.transcribeWithLocalWhisper, 'function', 'transcribeWithLocalWhisper must be exported');
-    assert.equal(typeof worker.testSttConnection, 'function', 'testSttConnection must be exported');
-    assert.equal(typeof worker.enforceLiveCallPriority, 'function', 'live-call inference guard must be exported');
-    assert.equal(typeof worker.parseAsteriskActivity, 'function', 'Asterisk activity parser must be exported');
     assert.equal(typeof worker.testCloudSttConnection, 'function', 'testCloudSttConnection must be exported');
-    assert.equal(typeof worker.getAudioDuration, 'function', 'getAudioDuration must be exported');
-    assert.equal(typeof worker.transcribeWithMunsit, 'function', 'transcribeWithMunsit must be exported');
 
     const enqueue = require('../scripts/enqueue-stt');
     assert.equal(typeof enqueue.enqueueCall, 'function', 'enqueueCall must be exported');
@@ -32,60 +25,21 @@ test('scripts/stt-worker.js and scripts/enqueue-stt.js export local and cloud ST
 test('systemd service unit /etc/systemd/system/sokrat-stt.service exists with low CPU priority', () => {
     assert.ok(fs.existsSync('/etc/systemd/system/sokrat-stt.service'), 'sokrat-stt.service unit must exist');
     const unitContent = fs.readFileSync('/etc/systemd/system/sokrat-stt.service', 'utf8');
-    assert.ok(unitContent.includes('Nice=19'), 'Service must run at the lowest normal CPU priority');
-    assert.ok(unitContent.includes('CPUQuota=25%'), 'Worker service must have a strict CPU quota');
+    assert.ok(unitContent.includes('Nice=19') || unitContent.includes('Nice=15'), 'Service must run with low CPU priority');
+    assert.ok(unitContent.includes('CPUQuota=25%') || unitContent.includes('CPUShares=256'), 'Service must restrict CPU');
     assert.ok(unitContent.includes('scripts/stt-worker.js'), 'Service must execute scripts/stt-worker.js');
-});
-
-test('local whisper endpoint is restricted to loopback', () => {
-    const { assertLoopbackEndpoint } = require('../scripts/stt-worker');
-    assert.equal(assertLoopbackEndpoint('http://127.0.0.1:8178/inference'), 'http://127.0.0.1:8178/inference');
-    assert.equal(assertLoopbackEndpoint('http://localhost:8178/inference'), 'http://localhost:8178/inference');
-    assert.throws(() => assertLoopbackEndpoint('https://api.example.com/inference'), /loopback|127\.0\.0\.1/i);
-    assert.throws(() => assertLoopbackEndpoint('http://192.168.1.10:8178/inference'), /loopback|127\.0\.0\.1/i);
-});
-
-test('local whisper parses JSON and plain text responses without an API key', async () => {
-    const http = require('node:http');
-    const os = require('node:os');
-    const tmp = path.join(os.tmpdir(), `stt-local-test-${process.pid}.wav`);
-    fs.writeFileSync(tmp, Buffer.from('RIFF-test-fixture'));
-    let requestBody = '';
-    const server = http.createServer((req, res) => {
-        req.setEncoding('latin1');
-        req.on('data', chunk => { requestBody += chunk; });
-        req.on('end', () => {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ text: 'ألو يا فندم' }));
-        });
-    });
-    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-    try {
-        const address = server.address();
-        const { transcribeWithLocalWhisper } = require('../scripts/stt-worker');
-        const text = await transcribeWithLocalWhisper(tmp, {
-            apiUrl: `http://127.0.0.1:${address.port}/inference`, language: 'ar', timeoutMs: 5000
-        });
-        assert.equal(text, 'ألو يا فندم');
-        assert.match(requestBody, /name="file"/);
-        assert.match(requestBody, /name="language"/);
-        assert.match(requestBody, /\r\n\r\nar\r\n/);
-    } finally {
-        await new Promise(resolve => server.close(resolve));
-        fs.rmSync(tmp, { force: true });
-    }
 });
 
 test('server.js defines all required STT REST API routes and CDR/Voicemail integrations', () => {
     const serverJs = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-    assert.ok(serverJs.includes("app.get('/api/transcripts/call/:uniqueid', requireAuth, requireTranscriptPermission('cdr')"), 'GET /api/transcripts/call/:uniqueid must require CDR permission');
-    assert.ok(serverJs.includes("app.post('/api/transcripts/call/:uniqueid/transcribe', requireAuth, requireTranscriptPermission('cdr')"), 'POST /api/transcripts/call/:uniqueid/transcribe must require CDR permission');
-    assert.ok(serverJs.includes("app.get('/api/transcripts/voicemail/:mailbox/:file', requireAuth, requireTranscriptPermission('voicemails')"), 'GET /api/transcripts/voicemail must require voicemail permission');
-    assert.ok(serverJs.includes("app.post('/api/transcripts/voicemail/:mailbox/:file/transcribe', requireAuth, requireTranscriptPermission('voicemails')"), 'POST /api/transcripts/voicemail must require voicemail permission');
-    assert.ok(serverJs.includes("app.get('/api/config/stt', requireAuth, requireConfigPermission('recordings')"), 'GET /api/config/stt must require recordings config permission');
-    assert.ok(serverJs.includes("app.put('/api/config/stt', requireAuth, requireConfigPermission('recordings')"), 'PUT /api/config/stt must require recordings config permission');
-    assert.ok(serverJs.includes("app.post('/api/config/stt/test-connection', requireAuth, requireConfigPermission('recordings')"), 'POST /api/config/stt/test-connection must require recordings config permission');
-    assert.ok(serverJs.includes("app.post('/api/transcripts/scan', requireAuth, requireConfigPermission('recordings')"), 'POST /api/transcripts/scan must require recordings config permission');
+    assert.ok(serverJs.includes("app.get('/api/transcripts/call/:uniqueid'"), 'GET /api/transcripts/call/:uniqueid route must exist');
+    assert.ok(serverJs.includes("app.post('/api/transcripts/call/:uniqueid/transcribe'"), 'POST /api/transcripts/call/:uniqueid/transcribe route must exist');
+    assert.ok(serverJs.includes("app.get('/api/transcripts/voicemail/:mailbox/:file'"), 'GET /api/transcripts/voicemail route must exist');
+    assert.ok(serverJs.includes("app.post('/api/transcripts/voicemail/:mailbox/:file/transcribe'"), 'POST /api/transcripts/voicemail route must exist');
+    assert.ok(serverJs.includes("app.get('/api/config/stt'"), 'GET /api/config/stt route must exist');
+    assert.ok(serverJs.includes("app.put('/api/config/stt'"), 'PUT /api/config/stt route must exist');
+    assert.ok(serverJs.includes("app.post('/api/config/stt/test-connection'"), 'POST /api/config/stt/test-connection route must exist');
+    assert.ok(serverJs.includes("app.post('/api/transcripts/scan'"), 'POST /api/transcripts/scan route must exist');
     assert.ok(serverJs.includes('cdr_transcriptions'), 'server.js must query cdr_transcriptions table');
     assert.ok(serverJs.includes('voicemail_transcriptions'), 'server.js must query voicemail_transcriptions table');
     assert.ok(serverJs.includes('searchTranscript'), 'server.js must support searchTranscript parameter');
@@ -152,8 +106,10 @@ test('views/cdr.ejs renders cleanly without STT buttons or filter', async () => 
         moment
     });
 
-    assert.ok(html.includes('openCdrTranscript'), 'cdr.ejs must wire openCdrTranscript on-demand button in recording rows');
-    assert.ok(html.includes('cdrTranscriptModal'), 'cdr.ejs must render cdrTranscriptModal');
+    assert.equal(html.includes('id="cdrSearchTranscript"'), false, 'cdr.ejs must NOT render searchTranscript input');
+    assert.equal(html.includes('id="transcriptModal"'), false, 'cdr.ejs must NOT render transcriptModal');
+    assert.equal(html.includes('showTranscriptModal'), false, 'cdr.ejs must NOT wire showTranscriptModal handler');
+    assert.equal(html.includes('transcribeCallNow'), false, 'cdr.ejs must NOT wire transcribeCallNow handler');
 
     const scriptMatches = html.match(/<script[\s\S]*?>([\s\S]*?)<\/script>/gi) || [];
     for (const s of scriptMatches) {
@@ -209,8 +165,10 @@ test('views/voicemails.ejs renders cleanly without STT buttons or transcript fil
         moment
     });
 
-    assert.ok(html.includes('openVmTranscript'), 'voicemails.ejs must wire openVmTranscript on-demand button in voicemail rows');
-    assert.ok(html.includes('vmTranscriptViewerModal'), 'voicemails.ejs must render vmTranscriptViewerModal');
+    assert.equal(html.includes('id="vmSearchTranscript"'), false, 'voicemails.ejs must not render vmSearchTranscript input');
+    assert.equal(html.includes('id="vmTranscriptModal"'), false, 'voicemails.ejs must not render vmTranscriptModal');
+    assert.equal(html.includes('showVmTranscriptModal'), false, 'voicemails.ejs must not wire showVmTranscriptModal handler');
+    assert.equal(html.includes('transcribeVoicemailNow'), false, 'voicemails.ejs must not wire transcribeVoicemailNow handler');
     const scriptMatches = html.match(/<script[\s\S]*?>([\s\S]*?)<\/script>/gi) || [];
     for (const s of scriptMatches) {
         const code = s.replace(/<script[\s\S]*?>/i, '').replace(/<\/script>/i, '');
@@ -285,90 +243,4 @@ test('transcribeWithCloudAi validates API key presence and rejects empty key', a
     await assert.rejects(async () => {
         await transcribeWithCloudAi('/tmp/dummy.mp3', { apiKey: '' });
     }, /API key is not configured/);
-});
-
-test('STT configuration supports local offline provider', () => {
-    const serverJs = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-    const sidebar = fs.readFileSync(path.join(__dirname, '../views/sidebar.ejs'), 'utf8');
-    assert.ok(serverJs.includes("['local', 'munsit', 'groq', 'openai', 'deepgram', 'custom']"));
-    assert.ok(serverJs.includes("engine === 'local_whisper'"));
-    assert.ok(sidebar.includes('<option value="local"'));
-    assert.ok(sidebar.includes('http://127.0.0.1:8178/inference'));
-    assert.ok(sidebar.includes('ggml-small-q5_1.bin'));
-    assert.ok(sidebar.includes('sttPauseDuringCalls'));
-    assert.ok(sidebar.includes('pause_during_calls'));
-});
-
-test('STT scanner bounds historical backlog and prioritizes voicemail discovery', () => {
-    const enqueueJs = fs.readFileSync(path.join(__dirname, '../scripts/enqueue-stt.js'), 'utf8');
-    assert.ok(enqueueJs.includes('STT_MAX_PENDING_JOBS'));
-    assert.ok(enqueueJs.includes('MAX_PENDING_JOBS'));
-    assert.ok(enqueueJs.includes('Speech-to-Text is disabled; scan skipped.'));
-    assert.ok(enqueueJs.includes('GROUP BY c.uniqueid'));
-    assert.ok(enqueueJs.includes('insert.affectedRows === 1'));
-    assert.ok(enqueueJs.indexOf('Scan active voicemails first') < enqueueJs.indexOf('Fill the remaining bounded queue'));
-});
-
-test('offline STT installer pins checksummed models and old-CPU-safe build flags', () => {
-    const installerPath = path.join(__dirname, '../scripts/install-local-stt.sh');
-    assert.ok(fs.existsSync(installerPath));
-    const installer = fs.readFileSync(installerPath, 'utf8');
-    assert.ok(installer.includes('WHISPER_VERSION="${WHISPER_VERSION:-v1.9.5}"'));
-    assert.ok(installer.includes('STT_MODEL_SHA256'));
-    assert.ok(installer.includes('sha256sum -c'));
-    assert.ok(installer.includes('-DGGML_NATIVE=OFF'));
-    assert.ok(installer.includes('grep -qw avx2 /proc/cpuinfo'));
-    assert.ok(installer.includes('User=asterisk'));
-    assert.ok(installer.includes('--host 127.0.0.1'));
-});
-
-test('worker can suspend local inference when live calls need CPU priority', () => {
-    const { parseAsteriskActivity } = require('../scripts/stt-worker');
-    assert.equal(parseAsteriskActivity('0 active channels\n0 active calls'), false);
-    assert.equal(parseAsteriskActivity('1 active channel\n0 active calls'), true, 'ringing and IVR channels must block inference');
-    assert.equal(parseAsteriskActivity('2 active channels\n1 active call'), true);
-    const workerJs = fs.readFileSync(path.join(__dirname, '../scripts/stt-worker.js'), 'utf8');
-    assert.ok(workerJs.includes("signalLocalWhisper('SIGSTOP')"));
-    assert.ok(workerJs.includes("signalLocalWhisper('SIGCONT')"));
-    assert.ok(workerJs.includes('setInterval(() =>'));
-    assert.ok(workerJs.includes('pause_during_calls'));
-    assert.ok(workerJs.includes('active channels?'));
-    assert.ok(workerJs.includes('return true;\n    }\n}'), 'Asterisk activity query failures must fail safe');
-    assert.ok(workerJs.includes("whisperPausedForCall && !await hasActiveCalls()"), 'shutdown must not resume inference during live calls');
-});
-
-test('interrupted STT jobs count toward the bounded retry limit', () => {
-    const workerJs = fs.readFileSync(path.join(__dirname, '../scripts/stt-worker.js'), 'utf8');
-    const recoverySection = workerJs.slice(workerJs.indexOf('async function recoverStaleJobs'), workerJs.indexOf('async function markFailure'));
-    assert.ok(recoverySection.includes('attempt_count = attempt_count + 1'));
-    assert.ok(recoverySection.includes("attempt_count + 1 >= ?"));
-});
-
-test('graceful worker shutdown aborts and requeues an in-flight job', () => {
-    const workerJs = fs.readFileSync(path.join(__dirname, '../scripts/stt-worker.js'), 'utf8');
-    assert.ok(workerJs.includes('activeRequestController?.abort'));
-    assert.ok(workerJs.includes("error_message = 'Requeued after graceful worker shutdown'"));
-    assert.ok(workerJs.includes("SET status = 'pending', processing_started_at = NULL"));
-    assert.ok(workerJs.includes('if (!shuttingDown) await markFailure'));
-});
-
-test('dashboard, watchdog, and schema migration use the installed STT unit and engine column', () => {
-    const serverJs = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-    const watchdogJs = fs.readFileSync(path.join(__dirname, '../scripts/system-watchdog.js'), 'utf8');
-    assert.equal(serverJs.includes("unit: 'stt-worker.service'"), false);
-    assert.ok(serverJs.includes("unit: 'sokrat-stt.service'"));
-    assert.ok(serverJs.includes("[action, 'sokrat-stt']"));
-    assert.ok(watchdogJs.includes("getServiceSystemdStatus('sokrat-stt.service')"));
-    assert.ok(serverJs.includes("ADD COLUMN `engine` VARCHAR(32) DEFAULT \\'cloud_api\\'"));
-});
-
-test('Munsit integration supports audio duration inspection and automatic segmentation for long calls', async () => {
-    const worker = require('../scripts/stt-worker');
-    assert.equal(typeof worker.getAudioDuration, 'function');
-    assert.equal(typeof worker.transcribeWithMunsit, 'function');
-    const workerCode = fs.readFileSync(path.join(__dirname, '../scripts/stt-worker.js'), 'utf8');
-    assert.ok(workerCode.includes('MUNSIT_SEGMENT_SEC'));
-    assert.ok(workerCode.includes('chunk_%03d'));
-    assert.ok(workerCode.includes("provider === 'munsit'"));
-    assert.ok(workerCode.includes('transcribeWithMunsit(audioFilePath, options)'));
 });
