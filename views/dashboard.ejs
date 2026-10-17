@@ -625,8 +625,8 @@ const isRtl = currentLang === 'ar';
                         </div>
                     </div>
                 </div>
-                <div class="p-2 sm:px-2 sm:py-3 flex-1 flex flex-col">
-                    <div id="hourlyChart" class="w-full" style="height: 280px"></div>
+                <div class="p-2 sm:px-2 sm:py-2 flex-1 flex flex-col w-full h-full">
+                    <div id="hourlyChart" class="w-full flex-1 min-h-[280px] h-full" style="height: 100%; min-height: 280px;"></div>
                 </div>
             </div>
             <div class="rounded-2xl flex flex-col h-full bg-transparent border-0 border-none shadow-none">
@@ -636,8 +636,8 @@ const isRtl = currentLang === 'ar';
                         <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartTopTalkers %></h2>
                     </div>
                 </div>
-                <div class="p-2 sm:px-2 sm:py-3 flex-1 flex flex-col">
-                    <div id="topTalkersChart" class="w-full" style="height: 280px"></div>
+                <div class="p-2 sm:px-2 sm:py-2 flex-1 flex flex-col w-full h-full">
+                    <div id="topTalkersChart" class="w-full flex-1 min-h-[280px] h-full" style="height: 100%; min-height: 280px;"></div>
                 </div>
             </div>
         </div>
@@ -779,8 +779,8 @@ const isRtl = currentLang === 'ar';
                         <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartDisposition %></h2>
                     </div>
                 </div>
-                <div class="p-2 sm:p-4 flex-1 flex flex-col justify-center">
-                    <div id="dispositionChart" class="w-full h-64 min-h-[256px]"></div>
+                <div class="p-2 sm:px-2 sm:py-2 flex-1 flex flex-col w-full h-full">
+                    <div id="dispositionChart" class="w-full flex-1 min-h-[280px] h-full" style="height: 100%; min-height: 280px;"></div>
                 </div>
             </div>
 
@@ -792,8 +792,8 @@ const isRtl = currentLang === 'ar';
                         <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartDuration %></h2>
                     </div>
                 </div>
-                <div class="p-2 sm:p-4 flex-1 flex flex-col justify-center">
-                    <div id="durationChart" class="w-full h-64 min-h-[256px]"></div>
+                <div class="p-2 sm:px-2 sm:py-2 flex-1 flex flex-col w-full h-full">
+                    <div id="durationChart" class="w-full flex-1 min-h-[280px] h-full" style="height: 100%; min-height: 280px;"></div>
                 </div>
             </div>
 
@@ -805,8 +805,8 @@ const isRtl = currentLang === 'ar';
                         <h2 class="text-sm font-bold text-white uppercase tracking-wider"><%= t.chartScope %></h2>
                     </div>
                 </div>
-                <div class="p-2 sm:p-4 flex-1 flex flex-col justify-center">
-                    <div id="scopeChart" class="w-full h-64 min-h-[256px]"></div>
+                <div class="p-2 sm:px-2 sm:py-2 flex-1 flex flex-col w-full h-full">
+                    <div id="scopeChart" class="w-full flex-1 min-h-[280px] h-full" style="height: 100%; min-height: 280px;"></div>
                 </div>
             </div>
         </div>
@@ -969,8 +969,8 @@ const isRtl = currentLang === 'ar';
                 },
                 series: [{
                     type: 'pie',
-                    radius: ['35%', '65%'],
-                    center: ['50%', '45%'],
+                    radius: ['38%', '75%'],
+                    center: ['50%', '50%'],
                     roseType: 'area',
                     itemStyle: {
                         borderRadius: 6,
@@ -1100,7 +1100,7 @@ const isRtl = currentLang === 'ar';
                 const titleEl = document.getElementById('hourlyChartTitle');
 
                 // Locked, unified grid margins for zero layout shifts
-                const commonGrid = { left: 0, right: 15, top: 18, bottom: 26, containLabel: true };
+                const commonGrid = { left: 0, right: 0, top: 10, bottom: 6, containLabel: true };
 
                 if (currentDistMode === 'days') {
                     // Daily Distribution Mode
@@ -1169,8 +1169,8 @@ const isRtl = currentLang === 'ar';
                         series: [{
                             name: _t.calls,
                             type: 'bar',
-                            barMaxWidth: 36,
-                            barWidth: (dayLabels.length > 14) ? '60%' : '45%',
+                            barMaxWidth: (dayLabels.length <= 4) ? 80 : 44,
+                            barWidth: (dayLabels.length > 14) ? '70%' : '55%',
                             itemStyle: {
                                 borderRadius: [6, 6, 0, 0],
                                 color: function(params) {
@@ -1269,8 +1269,8 @@ const isRtl = currentLang === 'ar';
                         series: [{
                             name: _t.calls,
                             type: 'bar',
-                            barMaxWidth: 36,
-                            barWidth: '60%',
+                            barMaxWidth: 48,
+                            barWidth: '75%',
                             itemStyle: {
                                 borderRadius: [6, 6, 0, 0],
                                 color: function(params) {
@@ -1602,7 +1602,7 @@ const isRtl = currentLang === 'ar';
                         return p.name + ': ' + p.value + ' ' + _t.calls + ' (' + pct + '%)';
                     }
                 },
-                grid: { left: 90, right: 60, top: 25, bottom: 25, containLabel: true },
+                grid: { left: 10, right: 25, top: 10, bottom: 15, containLabel: true },
                 xAxis: {
                     type: 'value',
                     splitLine: { lineStyle: { color: isLight ? '#e4e4e7' : '#27272a', type: 'dashed' } },
@@ -1645,13 +1645,32 @@ const isRtl = currentLang === 'ar';
             window.addEventListener('resize', () => scopeChart.resize());
 
             // Force ECharts to repaint once web fonts (Cairo) are fully loaded in the browser
+            const allDashboardCharts = [trendChart, dispChart, hourlyChart, talkersChart, durationChart, scopeChart];
+            const resizeAllDashboardCharts = () => {
+                allDashboardCharts.forEach(c => {
+                    if (c && typeof c.resize === 'function') {
+                        c.resize();
+                    }
+                });
+            };
+
             if (document.fonts && document.fonts.ready) {
                 document.fonts.ready.then(() => {
-                    [trendChart, dispChart, hourlyChart, talkersChart, durationChart, scopeChart].forEach(c => {
-                        if (c && typeof c.resize === 'function') {
-                            c.resize();
-                        }
-                    });
+                    resizeAllDashboardCharts();
+                });
+            }
+
+            // Continuous ResizeObserver on chart parent containers so charts always fill empty flex space
+            if (typeof window !== 'undefined' && window.ResizeObserver) {
+                const chartResizeObserver = new ResizeObserver(() => {
+                    resizeAllDashboardCharts();
+                });
+                ['trendChart', 'hourlyChart', 'topTalkersChart', 'dispositionChart', 'durationChart', 'scopeChart'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        chartResizeObserver.observe(el);
+                        if (el.parentElement) chartResizeObserver.observe(el.parentElement);
+                    }
                 });
             }
 
