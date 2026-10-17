@@ -22,6 +22,7 @@ const {
 } = require('../lib/integration-auth');
 const { getCustomerCallHistory, getExtensionStats } = require('../lib/cdr-aggregation');
 const { createMediaId, resolveRecordingPath, streamRecordingFile } = require('../lib/recordings');
+const { getPhoneVariants, cleanPhoneString } = require('../lib/phone-normalization');
 
 // Rate limiting map for pairing attempts (IP -> timestamps array)
 const pairingRateLimitMap = new Map();
@@ -240,7 +241,7 @@ async function getGeneralCdr(pool, queryParams) {
 async function getVoicemailMessages(pool, queryParams, vmRoot = '/var/spool/asterisk/voicemail/default') {
     const messages = [];
     const targetMailbox = queryParams.mailbox || queryParams.extension || '';
-    const searchCaller = queryParams.search || queryParams.searchCallerid || queryParams.q || '';
+    const searchCaller = String(queryParams.phone || queryParams.search || queryParams.searchCallerid || queryParams.q || '').trim();
     const page = Math.max(1, parseInt(queryParams.page, 10) || 1);
     const perPage = Math.min(200, Math.max(1, parseInt(queryParams.per_page || queryParams.perPage, 10) || 25));
 
@@ -272,9 +273,11 @@ async function getVoicemailMessages(pool, queryParams, vmRoot = '/var/spool/aste
                 const origtime = meta.origtime ? parseInt(meta.origtime, 10) * 1000 : 0;
                 const callerid = (meta.callerid || '').replace(/"/g, '');
 
+                const cleanPhone = cleanPhoneString ? cleanPhoneString(callerid) : callerid.replace(/[^\d+]/g, '');
                 messages.push({
                     mailbox: ext.name,
                     callerid,
+                    clean_phone: cleanPhone,
                     origdate: meta.origdate || '',
                     origtime,
                     duration,
@@ -308,7 +311,15 @@ async function getVoicemailMessages(pool, queryParams, vmRoot = '/var/spool/aste
 
     let filtered = messages;
     if (searchCaller) {
-        filtered = filtered.filter(m => m.callerid.toLowerCase().includes(searchCaller.toLowerCase()));
+        const cleanSearch = cleanPhoneString ? cleanPhoneString(searchCaller) : searchCaller.replace(/[^\d+]/g, '');
+        const searchVariants = cleanSearch.length >= 7 ? getPhoneVariants(cleanSearch) : [searchCaller.toLowerCase()];
+        filtered = filtered.filter(m => {
+            const rawCaller = (m.callerid || '').toLowerCase();
+            const cleanCaller = m.clean_phone || (cleanPhoneString ? cleanPhoneString(rawCaller) : rawCaller.replace(/[^\d+]/g, ''));
+            if (rawCaller.includes(searchCaller.toLowerCase())) return true;
+            if (cleanSearch && cleanCaller && searchVariants.some(v => cleanCaller.includes(v) || v.includes(cleanCaller))) return true;
+            return false;
+        });
     }
     if (queryParams.startDate) {
         const startMs = moment(queryParams.startDate).valueOf();
