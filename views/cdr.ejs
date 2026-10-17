@@ -623,7 +623,7 @@ function fmtDur(s) {
                                         <% } %>
                                     </td>
                                     <td class="p-4 text-end min-w-[340px]">
-                                        <% if (call.recordingfile) { %>
+                                        <% if (call.disposition === 'ANSWERED' && call.recordingfile) { %>
                                             <div class="audio-player flex items-center gap-1.5 min-w-[320px] max-w-[360px] <%= isRtl ? 'flex-row-reverse ml-auto' : 'ml-auto' %>">
                                                 <audio preload="none" data-player-audio>
                                                     <source src="/audio/<%= call.uniqueid %>">
