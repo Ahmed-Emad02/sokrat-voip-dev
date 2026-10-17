@@ -1777,17 +1777,17 @@ async function requireAuth(req, res, next) {
             }
         } catch (_) {}
     }
-    const isProxyBrowserRequest = req.path.startsWith('/api/config/ipscan/proxy') && 
-                                  req.headers.accept && 
-                                  req.headers.accept.includes('text/html') && 
+    const isProxyBrowserRequest = req.path.startsWith('/api/config/ipscan/proxy') &&
+                                  req.headers.accept &&
+                                  req.headers.accept.includes('text/html') &&
                                   !req.xhr;
 
     const isApiRequest = !isProxyBrowserRequest && (
-                         req.path.startsWith('/api/') || 
-                         req.path.startsWith('/audio/') || 
-                         req.path.startsWith('/recordings/') || 
-                         (req.path.startsWith('/integrations/') && req.path !== '/integrations/crm') || 
-                         req.xhr || 
+                         req.path.startsWith('/api/') ||
+                         req.path.startsWith('/audio/') ||
+                         req.path.startsWith('/recordings/') ||
+                         (req.path.startsWith('/integrations/') && req.path !== '/integrations/crm') ||
+                         req.xhr ||
                          (req.headers.accept && req.headers.accept.includes('application/json') && !req.headers.accept.includes('text/html'))
     );
 
@@ -1979,7 +1979,7 @@ return next();
 // --- CONFIG SUB-TAB API PERMISSIONS MIDDLEWARE ---
 app.use('/api/config', (req, res, next) => {
     if (isSuperAdmin(req)) return next();
-    
+
     let subTab = null;
     if (req.path.startsWith('/extensions')) {
         subTab = 'extensions';
@@ -2019,14 +2019,14 @@ app.use('/api/config', (req, res, next) => {
         if (hasAnyConfig) return next();
         return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
-    
+
     if (!subTab) return next();
 
     const perms = req.session.userPermissions || [];
     if (perms.includes('config') || perms.includes('config-' + subTab)) {
         return next();
     }
-    
+
     return res.status(403).json({ success: false, error: 'Unauthorized: Permission denied for ' + subTab });
 });
 
@@ -2337,7 +2337,7 @@ async function executeCampOnOriginate(item) {
     console.log(`[CampOn] Triggering automatic callback: ${callerExt} <-> ${targetExt}`);
     try {
         await pool.query("UPDATE `asterisk`.`sokrat_camp_on_callbacks` SET status = 'originating', attempt_count = attempt_count + 1 WHERE id = ?", [id]);
-        
+
         io.emit('campOn:triggered', { callerExt, targetExt });
 
         if (amiClient && !amiClient.destroyed) {
@@ -3255,7 +3255,7 @@ function connectAMI() {
                         start = age < 14400000 && age >= 0 ? existing.start : Date.now();
                     }
                     activeCalls[exten] = { state: calculatedState, partner, start, channel: event.Channel || existing?.channel };
-                    
+
                     if (isUp && partner && partner !== 'Connecting...' && activeCalls[partner]) {
                         activeCalls[partner].state = 'In Call';
                     }
@@ -3831,8 +3831,8 @@ app.use(async (req, res, next) => {
         res.locals.employeeGroups = cachedEmployeeGroupNames;
         res.locals.roster = roster.map(emp => {
             const isPjsip = Boolean(emp.isPjsip || (emp.tech === 'pjsip') || (emp.extension === '150'));
-            return { 
-                ...emp, 
+            return {
+                ...emp,
                 online: onlineMap[emp.extension] || false,
                 ip: peerIPs[emp.extension] || null,
                 tech: emp.tech || (isPjsip ? 'pjsip' : 'sip'),
@@ -4118,7 +4118,7 @@ app.get('/no-access', (req, res) => {
     const perms = req.session.userPermissions || [];
     const first = getFirstAllowedRoute(perms);
     if (first) return res.redirect(first);
-    
+
     const activeLang = res.locals.currentLang || req.query.lang || 'en';
     res.status(403).render('no-access', {
         currentLang: activeLang,
@@ -4320,7 +4320,7 @@ app.post('/users/add', async (req, res) => {
             return res.redirect('/users?error=' + encodeURIComponent('A group must be selected'));
         }
         const cleanEmail = (email && email.trim()) ? email.trim() : null;
-        
+
         let allowedExtensionsList = [];
         if (Array.isArray(extensions)) {
             allowedExtensionsList = extensions.map(e => String(e).trim()).filter(e => e && e !== 'ALL' && e !== 'none');
@@ -4393,7 +4393,7 @@ app.post('/users/edit', async (req, res) => {
         if (!id) return res.redirect('/users?error=' + encodeURIComponent('User ID required'));
         if (!group_id) return res.redirect('/users?error=' + encodeURIComponent('A group must be selected'));
         const cleanEmail = (email && email.trim()) ? email.trim() : null;
-        
+
         let allowedExtensionsList = [];
         if (Array.isArray(extensions)) {
             allowedExtensionsList = extensions.map(e => String(e).trim()).filter(e => e && e !== 'ALL' && e !== 'none');
@@ -5194,20 +5194,20 @@ const forgotPasswordHandler = async (req, res) => {
     try {
         const { username, email } = req.body;
         if (!username || !email) return res.status(400).json({ success: false, error: 'Username and email are required' });
-        
+
         const conn = await mysql.createConnection({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'admin',
             password: process.env.DB_PASS || 'admin',
             database: ASTERISK_DB
         });
-        
+
         const [rows] = await conn.execute('SELECT * FROM dashboard_users WHERE username = ? AND email = ?', [username, email]);
         if (rows.length === 0) {
             await conn.end();
             return res.status(400).json({ success: false, error: 'Invalid username or email combination' });
         }
-        
+
         // Get SMTP settings
         const [settingsRows] = await conn.execute('SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key IN (?, ?)', ['smtp_email', 'smtp_password']);
         let smtpEmail = '';
@@ -5216,21 +5216,21 @@ const forgotPasswordHandler = async (req, res) => {
             if (r.setting_key === 'smtp_email') smtpEmail = r.setting_value;
             if (r.setting_key === 'smtp_password') smtpEncryptedPassword = r.setting_value;
         });
-        
+
         if (!smtpEmail || !smtpEncryptedPassword) {
             await conn.end();
             return res.status(500).json({ success: false, error: 'Password reset email system is not configured. Please contact Super Admin.' });
         }
-        
+
         const smtpPassword = decrypt(smtpEncryptedPassword);
         if (!smtpPassword) {
             await conn.end();
             return res.status(500).json({ success: false, error: 'Failed to decrypt SMTP credentials' });
         }
-        
+
         const token = crypto.randomBytes(32).toString('hex');
         const expires = new Date(Date.now() + 3600000); // 1 hour
-        
+
         await conn.execute(
             'UPDATE dashboard_users SET reset_token = ?, reset_token_expires = ?, reset_expires = ? WHERE username = ? AND email = ?',
             [token, expires, expires, username, email]
@@ -5259,10 +5259,10 @@ const forgotPasswordHandler = async (req, res) => {
                 tls: { rejectUnauthorized: false }
             };
         }
-        
+
         const transporter = nodemailer.createTransport(transporterConfig);
         const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${token}`;
-        
+
         await transporter.sendMail({
             from: smtpEmail,
             to: email,
@@ -5281,7 +5281,7 @@ const forgotPasswordHandler = async (req, res) => {
                 'SPT Analytics'
             ].join('\n')
         });
-        
+
         res.json({ success: true, message: 'If that email is registered, a reset link has been sent.' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -5810,7 +5810,7 @@ function formatDestination(row, ringGroupSet = new Set(), forExport = false) {
         return via ? `${dst} (Failover via ${via})` : `${dst} (Failover to Mobile)`;
     }
 
-    const isHuntOrGroup = (ringGroupSet && ringGroupSet.has(dst)) 
+    const isHuntOrGroup = (ringGroupSet && ringGroupSet.has(dst))
                        || (row.dcontext && (row.dcontext.startsWith('ext-group') || row.dcontext.startsWith('ext-queues')))
                        || (row.lastdata && (row.lastdata.includes('auto-blkvm') || row.lastdata.includes('from-queue')));
 
@@ -6811,7 +6811,7 @@ app.get('/vm-export', async (req, res) => {
 function syncVoicemailLimits(maxmsg = 1000, maxsecs = 300) {
     const maxMsgNum = Math.min(9999, Math.max(10, parseInt(maxmsg, 10) || 1000));
     const maxSecsNum = Math.min(1800, Math.max(10, parseInt(maxsecs, 10) || 300));
-    
+
     // 1. Update /etc/asterisk/vm_general.inc
     const vmInc = '/etc/asterisk/vm_general.inc';
     try {
@@ -7049,6 +7049,29 @@ function requireTranscriptPermission(tabPermission) {
         return res.status(403).json({ success: false, error: `Forbidden. Missing permission: ${tabPermission}` });
     };
 }
+
+// 0. GET /api/transcripts/recent - Fetch recently transcribed recordings
+app.get('/api/transcripts/recent', requireAuth, requireTranscriptPermission('cdr'), async (req, res) => {
+    try {
+        const allowed = getUserScopedExtensions(req);
+        let query = `
+            SELECT t.id, t.uniqueid, t.status, t.transcript, t.duration_sec, t.processing_ms, t.engine, t.model_used, t.created_at, t.completed_at,
+                   c.calldate, c.src, c.dst, c.recordingfile
+            FROM \`asteriskcdrdb\`.\`cdr_transcriptions\` t
+            LEFT JOIN \`asteriskcdrdb\`.\`cdr\` c ON c.uniqueid = t.uniqueid
+        `;
+        const params = [];
+        if (allowed !== null && allowed.length > 0) {
+            query += ' WHERE (c.src IN (?) OR c.dst IN (?))';
+            params.push(allowed, allowed);
+        }
+        query += ' ORDER BY t.id DESC LIMIT 50';
+        const [rows] = await pool.query(query, params);
+        res.json({ success: true, transcripts: rows });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
 
 // 1. GET /api/transcripts/call/:uniqueid - Fetch call transcript
 app.get('/api/transcripts/call/:uniqueid', requireAuth, requireTranscriptPermission('cdr'), async (req, res) => {
@@ -7381,18 +7404,18 @@ app.get('/api/ext-overview', async (req, res) => {
 
         const employeeMetrics = {};
         res.locals.roster.forEach(emp => {
-            employeeMetrics[emp.extension] = { 
-                extension: emp.extension, 
-                name: emp.name, 
+            employeeMetrics[emp.extension] = {
+                extension: emp.extension,
+                name: emp.name,
                 online: emp.online,
-                totalCalls: 0, 
+                totalCalls: 0,
                 inboundCalls: 0,
                 outboundCalls: 0,
-                inboundTalkSec: 0, 
-                outboundTalkSec: 0, 
+                inboundTalkSec: 0,
+                outboundTalkSec: 0,
                 totalTalkSec: 0,
                 uniqueContactCount: 0,
-                uniqueNumbers: new Set() 
+                uniqueNumbers: new Set()
             };
         });
 
@@ -7742,7 +7765,7 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
 
         try {
             const [telemetryRows] = await pool.query(
-                `SELECT 
+                `SELECT
                     COUNT(*) AS telemetry_count,
                     COALESCE(AVG(hold_seconds), 0) AS avg_hold_sec,
                     COALESCE(SUM(hold_seconds), 0) AS total_hold_sec,
@@ -8899,22 +8922,22 @@ function getConfiguredDongleNumbers() {
     const filePath = '/etc/asterisk/dongle.conf';
     const numbers = {};
     if (!fs.existsSync(filePath)) return numbers;
-    
+
     try {
         const content = fs.readFileSync(filePath, 'utf8');
         const lines = content.split(/\r?\n/);
         let currentDongle = null;
-        
+
         for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed || trimmed.startsWith(';')) continue;
-            
+
             const sectionMatch = trimmed.match(/^\[(dongle\d+)\]$/i);
             if (sectionMatch) {
                 currentDongle = sectionMatch[1].toLowerCase();
                 continue;
             }
-            
+
             if (currentDongle && (trimmed.toLowerCase().startsWith('number=') || trimmed.toLowerCase().startsWith('exten='))) {
                 const parts = trimmed.split('=');
                 if (parts.length >= 2) {
@@ -9122,7 +9145,7 @@ function parseDevicesOutput(output, keepRaw = false, astDbMappings = {}) {
     const colNames = ["ID", "Group", "State", "RSSI", "Mode", "Submode", "Provider Name", "Model", "Firmware", "IMEI", "IMSI", "Number"];
     const indices = colNames.map(name => header.indexOf(name));
     indices.push(header.length + 100);
-    
+
     const devices = [];
     for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
@@ -9236,10 +9259,10 @@ function getAstDbNumbers(callback) {
 function startUssdLogMonitor() {
     console.log("GSM MONITOR: Starting tail process on /var/log/asterisk/full...");
     const tail = spawn('tail', ['-n', '0', '-F', '/var/log/asterisk/full']);
-    
+
     let logBuffer = "";
     let flushTimeout = null;
-    
+
     const responsePattern = /\[([^\]]+)\] VERBOSE\[\d+\] at_response\.c:\s+\[([^\]]+)\] Got USSD type \d+ '[^']*':\s*'(.*)/s; // Added /s flag to capture multi-line USSD response!
     const dongleLogPattern = /chan_dongle|at_response|app_ussd|dongle[0-9]+/i;
     const imsiErrorPattern = /\[([^\]]+)\]\s+ERROR\[\d+\](?:\s*:\s*)?\s+at_response\.c(?::\d+)?(?::|\s+)?(?:\s*log_cmd_response_error:\s*)?\s*\[([^\]]+)\]\s+Getting IMSI number failed/i;
@@ -9247,12 +9270,12 @@ function startUssdLogMonitor() {
 
     function processLogStatement(statement) {
         if (!statement.trim()) return;
-        
+
         // Log streaming
         if (dongleLogPattern.test(statement)) {
             io.emit('dongleLog', statement.trim());
         }
-        
+
         // Parse SMS received log directly from chan_dongle at_response.c core to support multi-line and multi-part SMS reassembly
         if (statement.includes('Got full SMS from')) {
             const smsPattern = /\[([^\]]+)\] VERBOSE\[\d+\] at_response\.c:\s+\[([^\]]+)\] Got full SMS from ([^:]+):\s*'(.*)/s;
@@ -9263,7 +9286,7 @@ function startUssdLogMonitor() {
                 let content = smsMatch[4].trim();
                 // Trim trailing quote
                 content = content.replace(/'\s*$/, '').trim();
-                
+
                 const cleanSender = String(sender || '').trim();
                 const newSms = {
                     id: 'in-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
@@ -9283,7 +9306,7 @@ function startUssdLogMonitor() {
                 console.log(`GSM MONITOR: Saved incoming SMS on ${dongleId} from ${cleanSender} -> ${content}`);
             }
         }
-        
+
         // Parse Getting IMSI number failed error from chan_dongle at_response.c
         const imsiMatch = imsiErrorPattern.exec(statement);
         if (imsiMatch) {
@@ -9361,10 +9384,10 @@ function startUssdLogMonitor() {
 
     function flushLogBuffer() {
         if (!logBuffer.trim()) return;
-        
+
         const lines = logBuffer.split('\n');
         logBuffer = "";
-        
+
         let currentStatement = null;
         for (const line of lines) {
             const isNewStatement = /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]/.test(line);
@@ -9385,17 +9408,17 @@ function startUssdLogMonitor() {
             processLogStatement(currentStatement);
         }
     }
-    
+
     tail.stdout.on('data', (data) => {
         logBuffer += data.toString();
         if (flushTimeout) clearTimeout(flushTimeout);
         flushTimeout = setTimeout(flushLogBuffer, 50);
     });
-    
+
     tail.stderr.on('data', (data) => {
         console.error(`GSM MONITOR: tail stderr: ${data}`);
     });
-    
+
     tail.on('close', (code) => {
         console.log(`GSM MONITOR: tail process closed with code ${code}. Reconnecting in 5s...`);
         setTimeout(startUssdLogMonitor, 5000);
@@ -10651,7 +10674,7 @@ app.get('/storage', requireAuth, async (req, res) => {
 app.get('/api/storage/info', requireAuth, requireTabPermission('storage'), async (req, res) => {
     try {
         const { execSync } = require('child_process');
-        
+
         let disk = { totalGb: 0, usedGb: 0, freeGb: 0, usedPct: 0 };
         try {
             const dfOut = execSync('df -k / | tail -n 1', { encoding: 'utf8' }).trim();
@@ -10672,7 +10695,7 @@ app.get('/api/storage/info', requireAuth, requireTabPermission('storage'), async
             const duOut = execSync('du -sb /var/spool/asterisk/monitor/ 2>/dev/null | cut -f1', { encoding: 'utf8' }).trim();
             const bytes = parseInt(duOut, 10) || 0;
             recordings.sizeMb = (bytes / 1024 / 1024).toFixed(1);
-            
+
             const countOut = execSync('find /var/spool/asterisk/monitor/ -type f \\( -name "*.wav" -o -name "*.gsm" -o -name "*.mp3" \\) 2>/dev/null | wc -l', { encoding: 'utf8' }).trim();
             recordings.count = parseInt(countOut, 10) || 0;
         } catch (_) {}
@@ -11438,7 +11461,7 @@ app.get('/api/storage/export/pc', requireAuth, requireTabPermission('storage'), 
                         possiblePaths.push(path.join('/var/spool/asterisk/monitor', String(yyyy), mm, dd, baseName));
                     }
                     possiblePaths.push(path.join('/var/spool/asterisk/monitor', baseName));
-                    
+
                     for (const p of possiblePaths) {
                         if (fs.existsSync(p)) {
                             try {
@@ -11606,20 +11629,20 @@ app.post('/api/gsm-dongles/ussd', requireAuth, requireActionPermission('gsm-ussd
         });
         return;
     }
-    
+
     // Clear previous response for this dongle
     delete latestUssdResponses[dongle];
-    
+
     execFile(ASTERISK_BIN, ['-rx', `dongle ussd ${dongle} ${code}`], (error, stdout, stderr) => {
         if (error) {
             return res.status(500).json({ success: false, error: stderr || error.message });
         }
-        
+
         // Poll for response (up to 15 seconds)
         const timeout = 15000;
         const pollInterval = 250;
         const startTime = Date.now();
-        
+
         const checkResponse = () => {
             if (latestUssdResponses[dongle]) {
                 const resp = latestUssdResponses[dongle];
@@ -11630,17 +11653,17 @@ app.post('/api/gsm-dongles/ussd', requireAuth, requireActionPermission('gsm-ussd
                     logTime: resp.logTime
                 });
             }
-            
+
             if (Date.now() - startTime >= timeout) {
                 return res.status(504).json({
                     success: false,
                     error: "Timeout waiting for USSD response from the cellular network."
                 });
             }
-            
+
             setTimeout(checkResponse, pollInterval);
         };
-        
+
         setTimeout(checkResponse, pollInterval);
     });
 });
@@ -11872,7 +11895,7 @@ app.post('/api/gsm-dongles/clear-sms', requireAuth, requireActionPermission('gsm
 app.post('/api/gsm-dongles/send-sms', requireAuth, requireActionPermission('gsm-sms-send'), async (req, res) => {
     try {
         const { dongleId, simNumber, to, message } = req.body;
-        
+
         const cleanTo = String(to || '').replace(/[\s\-\(\)]/g, '').trim();
         if (!cleanTo || !/^\+?[0-9]{3,25}$/.test(cleanTo)) {
             return res.status(400).json({ success: false, error: 'Recipient number is invalid (e.g. +201012345678 or 01012345678)' });
@@ -11888,7 +11911,7 @@ app.post('/api/gsm-dongles/send-sms', requireAuth, requireActionPermission('gsm-
         // 1. If explicit dongleId is passed (e.g. "dongle0")
         if (dongleId && /^dongle[0-9]+$/i.test(String(dongleId).trim())) {
             targetDongle = String(dongleId).toLowerCase().trim();
-        } 
+        }
         // 2. Otherwise resolve by simNumber if provided
         else if (simNumber) {
             const rawSim = String(simNumber).replace(/[\s\-\(\)\+]/g, '').trim();
@@ -11911,11 +11934,11 @@ app.post('/api/gsm-dongles/send-sms', requireAuth, requireActionPermission('gsm-
         }
 
         if (!targetDongle) {
-            return res.status(400).json({ 
-                success: false, 
-                error: simNumber 
-                    ? `Could not find an active dongle with SIM number: ${simNumber}` 
-                    : 'Valid dongle ID (e.g. dongle0) or SIM number is required' 
+            return res.status(400).json({
+                success: false,
+                error: simNumber
+                    ? `Could not find an active dongle with SIM number: ${simNumber}`
+                    : 'Valid dongle ID (e.g. dongle0) or SIM number is required'
             });
         }
 
@@ -12120,7 +12143,7 @@ app.post('/api/contacts/add', requireAuth, async (req, res) => {
         if (!firstName || !phone) {
             return res.status(400).json({ success: false, error: 'First name and Phone number are required' });
         }
-        
+
         const fEsc = escapeSql(firstName);
         const lEsc = escapeSql(lastName);
         const cleanedPhone = phone.replace(/[\s\-\(\)\.]/g, '');
@@ -12129,7 +12152,7 @@ app.post('/api/contacts/add', requireAuth, async (req, res) => {
             finalPhone = '0' + cleanedPhone;
         }
         const pEsc = escapeSql(finalPhone);
-        
+
         const sql = `INSERT INTO contact (name, last_name, telefono, iduser, status, directory) VALUES ('${fEsc}', '${lEsc}', '${pEsc}', 1, 'isPublic', 'external');`;
         await runSqlite(sql);
         res.json({ success: true, message: 'Contact saved successfully.' });
@@ -12157,7 +12180,7 @@ app.post('/api/contacts/edit', requireAuth, async (req, res) => {
             finalPhone = '0' + cleanedPhone;
         }
         const pEsc = escapeSql(finalPhone);
-        
+
         const sql = `UPDATE contact SET name = '${fEsc}', last_name = '${lEsc}', telefono = '${pEsc}' WHERE id = ${idEsc};`;
         await runSqlite(sql);
         res.json({ success: true, message: 'Contact updated successfully.' });
@@ -12410,15 +12433,15 @@ function updateVoicemailConf(extNum, displayName, vmVal) {
         if (!fs.existsSync(vmFile)) return;
         let content = fs.readFileSync(vmFile, 'utf8');
         let lines = content.split('\n');
-        
+
         // Remove existing entry for this extension
         lines = lines.filter(line => !line.trim().startsWith(`${extNum} =>`));
-        
+
         if (vmVal === 'default' || vmVal === 'enabled') {
             const entry = `${extNum} => ,${displayName || extNum},,,attach=no|saycid=no|envelope=no|delete=no`;
             lines.push(entry);
         }
-        
+
         fs.writeFileSync(vmFile, lines.join('\n'), 'utf8');
         exec(`${ASTERISK_BIN} -rx 'voicemail reload'`, (err) => {
             if (err) console.error('Voicemail reload error:', err.message);
@@ -12664,7 +12687,7 @@ app.get('/api/extension-policies', requireAuth, async (req, res) => {
             return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
         }
         const [rows] = await pool.query(`
-            SELECT u.extension, u.name, 
+            SELECT u.extension, u.name,
                    COALESCE(ep.auto_answer, 'user_choice') AS auto_answer,
                    COALESCE(ep.dnd, 'user_choice') AS dnd,
                    COALESCE(ep.disable_outbound_ringing_cancel, 0) AS disable_outbound_ringing_cancel,
@@ -13095,7 +13118,7 @@ app.delete('/api/config/extensions/:extension', async (req, res) => {
             `SELECT photo FROM ${tables.employeeExtras} WHERE extension = ?`,
             [extNum]
         );
-        
+
         updatePjsipCustomConfig(extNum, '', '', 'delete');
         reloadPjsip();
 
@@ -13631,7 +13654,7 @@ app.post('/api/config/ringgroups', async (req, res) => {
 
         // Defaults: skip busy agent -> cwignore='CHECKED', record calls -> recording='always'
         await pool.query(`
-            INSERT INTO \`asterisk\`.\`ringgroups\` 
+            INSERT INTO \`asterisk\`.\`ringgroups\`
             (grpnum, strategy, grptime, grppre, grplist, annmsg_id, postdest, description, alertinfo, remotealert_id, needsconf, toolate_id, ringing, cwignore, cfignore, cpickup, recording)
             VALUES (?, ?, ?, '', ?, ?, ?, ?, '', 0, '', 0, ?, 'CHECKED', '', '', 'always')
         `, [num, ringStrategy, ringTime, extListFormatted, annMsgId, postDest, desc, mohRinging]);
@@ -13716,12 +13739,12 @@ async function detectExtensionConflicts() {
     const conflicts = [];
     try {
         const q = `
-            SELECT u.extension, u.name as entity1, q.descr as entity2, 'Extension vs Queue' as conflict_type 
-            FROM \`asterisk\`.\`users\` u 
+            SELECT u.extension, u.name as entity1, q.descr as entity2, 'Extension vs Queue' as conflict_type
+            FROM \`asterisk\`.\`users\` u
             INNER JOIN \`asterisk\`.\`queues_config\` q ON u.extension = q.extension
             UNION
             SELECT u.extension, u.name as entity1, r.description as entity2, 'Extension vs Ring Group' as conflict_type
-            FROM \`asterisk\`.\`users\` u 
+            FROM \`asterisk\`.\`users\` u
             INNER JOIN \`asterisk\`.\`ringgroups\` r ON u.extension = r.grpnum
             UNION
             SELECT q.extension, q.descr as entity1, r.description as entity2, 'Queue vs Ring Group' as conflict_type
@@ -15493,7 +15516,7 @@ app.get('/api/config/ivrs', async (req, res) => {
     try {
         const [ivrs] = await pool.query('SELECT * FROM `asterisk`.`ivr_details` ORDER BY id ASC');
         const [entries] = await pool.query('SELECT * FROM `asterisk`.`ivr_entries` ORDER BY ivr_id ASC, selection ASC');
-        
+
         const entriesByIvr = {};
         for (const entry of entries) {
             if (!entriesByIvr[entry.ivr_id]) entriesByIvr[entry.ivr_id] = [];
@@ -15879,7 +15902,7 @@ app.get('/api/config/voicemail/extensions', async (req, res) => {
             WHERE voicemail = 'default' OR voicemail = 'enabled'
             ORDER BY CAST(extension AS UNSIGNED) ASC
         `);
-        
+
         let recordings = [];
         try {
             const [recRows] = await pool.query('SELECT id, displayname, filename FROM `asterisk`.`recordings` WHERE displayname != "__invalid"');
@@ -15934,7 +15957,7 @@ app.get('/api/config/voicemail/extensions', async (req, res) => {
                 greetingName: greetingName
             };
         });
-        
+
         res.json({ success: true, extensions: list });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -15948,20 +15971,20 @@ app.post('/api/config/voicemail/greeting', async (req, res) => {
         if (!recordingId) {
             return res.status(400).json({ success: false, error: 'Recording is required.' });
         }
-        
+
         // Get recording path and display name
         const [recRow] = await pool.query('SELECT id, displayname, CAST(filename AS CHAR) AS filename FROM `asterisk`.`recordings` WHERE id = ?', [recordingId]);
         if (!recRow.length || !recRow[0].filename) {
             return res.status(404).json({ success: false, error: 'Recording not found.' });
         }
         const recDisplayName = recRow[0].displayname || recRow[0].filename;
-        
+
         const relFile = String(recRow[0].filename);
         const wavSrcPath = path.join('/var/lib/asterisk/sounds', relFile + '.wav');
         if (!fs.existsSync(wavSrcPath)) {
             return res.status(404).json({ success: false, error: 'Recording WAV file missing on disk.' });
         }
-        
+
         // Get list of extensions
         let targetExtensions = [];
         if (allEnabled) {
@@ -15973,31 +15996,31 @@ app.post('/api/config/voicemail/greeting', async (req, res) => {
         } else {
             targetExtensions = Array.isArray(extensions) ? extensions : [];
         }
-        
+
         if (targetExtensions.length === 0) {
             return res.status(400).json({ success: false, error: 'No extensions selected.' });
         }
-        
+
         // Convert and copy greetings to target directories using sox for 100% reliable format output
         for (const ext of targetExtensions) {
             const mailboxDir = `/var/spool/asterisk/voicemail/default/${ext}`;
             if (!fs.existsSync(mailboxDir)) {
                 fs.mkdirSync(mailboxDir, { recursive: true });
             }
-            
+
             removeVmFile(mailboxDir, 'busy');
             removeVmFile(mailboxDir, 'unavail');
-            
+
             const gsmDestUnavail = path.join(mailboxDir, 'unavail.gsm');
             const wavDestUnavail = path.join(mailboxDir, 'unavail.wav');
             const gsmDestBusy = path.join(mailboxDir, 'busy.gsm');
             const wavDestBusy = path.join(mailboxDir, 'busy.wav');
-            
+
             await new Promise(resolve => exec(`sox "${wavSrcPath}" -r 8000 -c 1 -b 16 "${gsmDestUnavail}"`, resolve));
             await new Promise(resolve => exec(`sox "${wavSrcPath}" -r 8000 -c 1 -b 16 "${wavDestUnavail}"`, resolve));
             await new Promise(resolve => exec(`sox "${wavSrcPath}" -r 8000 -c 1 -b 16 "${gsmDestBusy}"`, resolve));
             await new Promise(resolve => exec(`sox "${wavSrcPath}" -r 8000 -c 1 -b 16 "${wavDestBusy}"`, resolve));
-            
+
             exec(`chown -R asterisk:asterisk "${mailboxDir}"`);
             const infoPath = path.join(mailboxDir, '.greeting_info');
             try {
@@ -16010,7 +16033,7 @@ app.post('/api/config/voicemail/greeting', async (req, res) => {
                 exec(`chown asterisk:asterisk "${infoPath}"`);
             } catch (_) {}
         }
-        
+
         // Ensure Asterisk default intro prompts are muted with silent GSM files
         const silentTmp = path.join(UPLOAD_TMP, `silent-${Date.now()}.wav`);
         await new Promise(resolve => exec(`sox -n -r 8000 -c 1 -b 16 "${silentTmp}" trim 0.0 0.1`, resolve));
@@ -16018,10 +16041,10 @@ app.post('/api/config/voicemail/greeting', async (req, res) => {
         await new Promise(resolve => exec(`sox "${silentTmp}" -r 8000 -c 1 -b 16 /var/lib/asterisk/sounds/en/vm-leavemsg.gsm`, resolve));
         exec(`rm -f /var/lib/asterisk/sounds/en/vm-intro.wav /var/lib/asterisk/sounds/en/vm-leavemsg.wav "${silentTmp}"`);
         exec(`chown asterisk:asterisk /var/lib/asterisk/sounds/en/vm-intro.gsm /var/lib/asterisk/sounds/en/vm-leavemsg.gsm`);
-        
+
         // 4. Reload Asterisk voicemail module
         exec(`${ASTERISK_BIN} -rx "voicemail reload"`, () => {});
-        
+
         res.json({ success: true, message: `Voicemail greeting applied to ${targetExtensions.length} extension(s) successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -16033,7 +16056,7 @@ app.post('/api/config/voicemail/reset', async (req, res) => {
     try {
         const { extensions } = req.body;
         const targetExtensions = Array.isArray(extensions) ? extensions : [];
-        
+
         for (const ext of targetExtensions) {
             const mailboxDir = `/var/spool/asterisk/voicemail/default/${ext}`;
             removeVmFile(mailboxDir, 'busy');
@@ -16043,7 +16066,7 @@ app.post('/api/config/voicemail/reset', async (req, res) => {
                 if (fs.existsSync(infoPath)) fs.unlinkSync(infoPath);
             } catch (_) {}
         }
-        
+
         ensureVmBackups();
         const origUnavail = path.join(VM_BACKUP_DIR, 'unavailable.gsm.orig');
         const origLeaveMsg = path.join(VM_BACKUP_DIR, 'vm-leavemsg.gsm.orig');
@@ -16058,7 +16081,7 @@ app.post('/api/config/voicemail/reset', async (req, res) => {
         // Reload Asterisk voicemail and sound modules
         exec(`${ASTERISK_BIN} -rx "voicemail reload"`, () => {});
         exec(`${ASTERISK_BIN} -rx "module reload sounds"`, () => {});
-        
+
         res.json({ success: true, message: `Voicemail greetings reset to default for ${targetExtensions.length} extension(s).` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -16340,7 +16363,7 @@ app.get('/api/config/timegroups', async (req, res) => {
         const [groups] = await pool.query('SELECT id, description FROM `asterisk`.`timegroups_groups` ORDER BY id ASC');
         const [details] = await pool.query('SELECT id, timegroupid, time, name FROM `asterisk`.`timegroups_details` ORDER BY id ASC');
         const [conditions] = await pool.query('SELECT `time` AS timegroup_id, COUNT(*) AS count FROM `asterisk`.`timeconditions` GROUP BY `time`');
-        
+
         const condCountMap = {};
         for (const c of conditions) {
             condCountMap[c.timegroup_id] = c.count;
@@ -16379,12 +16402,12 @@ app.post('/api/config/timegroups', async (req, res) => {
         if (!description || !description.trim()) {
             return res.status(400).json({ success: false, error: 'Description is required' });
         }
-        
+
         const [r] = await pool.query('INSERT INTO `asterisk`.`timegroups_groups` (description) VALUES (?)', [description.trim()]);
         const groupid = r.insertId;
-        
+
         await insertTimeGroupRules(groupid, rules);
-        
+
         reloadPbxConfig();
         res.json({ success: true, message: 'Time Group created successfully', id: groupid });
     } catch (error) {
@@ -16400,10 +16423,10 @@ app.put('/api/config/timegroups/:id', async (req, res) => {
         if (!description || !description.trim()) {
             return res.status(400).json({ success: false, error: 'Description is required' });
         }
-        
+
         await pool.query('UPDATE `asterisk`.`timegroups_groups` SET description = ? WHERE id = ?', [description.trim(), id]);
         await pool.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [id]);
-        
+
         await insertTimeGroupRules(id, rules);
 
         reloadPbxConfig();
@@ -16421,7 +16444,7 @@ app.delete('/api/config/timegroups/:id', async (req, res) => {
         if (check[0].count > 0) {
             return res.status(400).json({ success: false, error: 'Cannot delete. This Time Group is currently used in one or more Time Conditions.' });
         }
-        
+
         await pool.query('DELETE FROM `asterisk`.`timegroups_groups` WHERE id = ?', [id]);
         await pool.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [id]);
 
@@ -16463,7 +16486,7 @@ app.post('/api/config/timeconditions', async (req, res) => {
         if (!truegoto || !falsegoto) {
             return res.status(400).json({ success: false, error: 'True and False destinations are required' });
         }
-        
+
         const normTrue = normalizeIssabelDestination(truegoto);
         const normFalse = normalizeIssabelDestination(falsegoto);
 
@@ -16471,7 +16494,7 @@ app.post('/api/config/timeconditions', async (req, res) => {
             INSERT INTO \`asterisk\`.\`timeconditions\` (displayname, \`time\`, truegoto, falsegoto, deptname, generate_hint, priority)
             VALUES (?, ?, ?, ?, '', 0, NULL)
         `, [displayname.trim(), timegroup_id, normTrue, normFalse]);
-        
+
         reloadPbxConfig();
         res.json({ success: true, message: 'Time Condition created successfully', id: r.insertId });
     } catch (error) {
@@ -16493,7 +16516,7 @@ app.put('/api/config/timeconditions/:id', async (req, res) => {
         if (!truegoto || !falsegoto) {
             return res.status(400).json({ success: false, error: 'True and False destinations are required' });
         }
-        
+
         const normTrue = normalizeIssabelDestination(truegoto);
         const normFalse = normalizeIssabelDestination(falsegoto);
 
@@ -16502,7 +16525,7 @@ app.put('/api/config/timeconditions/:id', async (req, res) => {
             SET displayname = ?, \`time\` = ?, truegoto = ?, falsegoto = ?
             WHERE timeconditions_id = ?
         `, [displayname.trim(), timegroup_id, normTrue, normFalse, id]);
-        
+
         reloadPbxConfig();
         res.json({ success: true, message: 'Time Condition updated successfully' });
     } catch (error) {
@@ -16515,7 +16538,7 @@ app.delete('/api/config/timeconditions/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         await pool.query('DELETE FROM `asterisk`.`timeconditions` WHERE timeconditions_id = ?', [id]);
-        
+
         reloadPbxConfig();
         res.json({ success: true, message: 'Time Condition deleted successfully' });
     } catch (error) {
@@ -17031,7 +17054,7 @@ app.get('/api/config/modem/rtcp', async (req, res) => {
 
             try {
                 const chanDetail = await execFileAsync(ASTERISK_BIN, ['-rx', `core show channel ${chanName}`]);
-                
+
                 const fmtMatch = chanDetail.match(/NativeFormats?:\s*\(([^)]+)\)/i) || chanDetail.match(/ReadFormat:\s*([^\r\n]+)/i);
                 if (fmtMatch) format = fmtMatch[1].trim();
 
@@ -19080,7 +19103,7 @@ app.get('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req, 
         const [campaigns] = await pool.query('SELECT * FROM `asterisk`.`dialer_campaigns` ORDER BY id DESC');
         for (const c of campaigns) {
             const [stats] = await pool.query(`
-                SELECT 
+                SELECT
                     COUNT(*) AS total_leads,
                     SUM(status = 'pending') AS pending_leads,
                     SUM(status = 'connected') AS connected_leads,
@@ -19761,7 +19784,7 @@ app.post('/api/contacts/csv-import', requireAuth, csvUpload.single('file'), asyn
     }
     try {
         if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
-        
+
         const lines = fs.readFileSync(req.file.path, 'utf8').split(/\r?\n/);
         const values = [];
         for (let line of lines) {
@@ -19775,29 +19798,29 @@ app.post('/api/contacts/csv-import', requireAuth, csvUpload.single('file'), asyn
                 return cleaned.trim();
             });
             if (cells.length < 3) continue;
-            
+
             const first = cells[0];
             const last = cells[1];
             let phone = cells[2];
-            
+
             // Skip headers
             if (first.toLowerCase() === 'name' || first.toLowerCase() === 'first name' || (phone && phone.toLowerCase() === 'phone')) {
                 continue;
             }
-            
+
             if (first && phone) {
                 // Clean spaces, dashes, and parentheses
                 phone = phone.replace(/[\s\-\(\)]/g, '');
-                
+
                 // Auto-recover leading zero if stripped by Excel (starts with 1-9, is purely numeric, and is at least 7 digits long)
                 if (/^\d+$/.test(phone) && !phone.startsWith('0') && phone.length >= 7) {
                     phone = '0' + phone;
                 }
-                
+
                 values.push(`('${escapeSql(first)}', '${escapeSql(last)}', '${escapeSql(phone)}', 1, 'isPublic', 'external')`);
             }
         }
-        
+
         if (values.length > 0) {
             const sql = `INSERT INTO contact (name, last_name, telefono, iduser, status, directory) VALUES ${values.join(',')};`;
             await runSqlite(sql);
@@ -20153,7 +20176,7 @@ app.get('/api/settings/time', async (req, res) => {
             return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
         }
         const { execFile } = require('child_process');
-        
+
         const [tdOut, tzList] = await Promise.all([
             new Promise((resolve, reject) => {
                 execFile('timedatectl', [], { timeout: 10000 }, (err, stdout) => {

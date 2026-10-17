@@ -1521,6 +1521,43 @@ function isTabAllowed(tabName) {
                     </div>
                 </div>
             </div>
+
+            <!-- Recent Transcriptions Table Card -->
+            <div class="config-card overflow-hidden">
+                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'أحدث التسجيلات المفرغة' : 'Recent Transcriptions' %></h3>
+                            <span id="sttRecentCountBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Live Queue</span>
+                        </div>
+                        <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'عرض أحدث المكالمات المفرغة محلياً بنموذج Whisper بالعامية المصرية.' : 'Live list of calls and audio transcribed locally on the PBX in Egyptian Arabic.' %></p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="sttTranscriptSearchInput" name="sttTranscriptSearchInput" oninput="filterRecentTranscripts()" placeholder="<%= isRtl ? 'بحث في النص...' : 'Search transcripts...' %>" class="config-input text-xs py-1.5 px-3 w-48 font-normal" aria-label="Search transcripts">
+                        <button type="button" onclick="loadRecentTranscripts()" class="config-action-btn config-action-btn--secondary">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span><%= isRtl ? 'تحديث' : 'Refresh' %></span>
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-[var(--bg-card)] border-b border-[var(--border-primary)] text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                                <th class="py-3 px-4 w-40"><%= isRtl ? 'الوقت / التاريخ' : 'Date / Time' %></th>
+                                <th class="py-3 px-4 w-32"><%= isRtl ? 'المتصل -> المستقبل' : 'Src -> Dst' %></th>
+                                <th class="py-3 px-4 w-24 text-center"><%= isRtl ? 'المدة' : 'Duration' %></th>
+                                <th class="py-3 px-4 w-28 text-center"><%= isRtl ? 'حالة التفريغ' : 'Status' %></th>
+                                <th class="py-3 px-4"><%= isRtl ? 'نص المكالمة (المفرغ محلياً)' : 'Local Transcript' %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="sttRecentTableBody" class="divide-y divide-[var(--border-primary)] text-xs font-medium text-[var(--text-primary)]">
+                            <tr><td colspan="5" class="py-8 text-center text-[var(--text-muted)]"><%= isRtl ? 'جارٍ تحميل السجلات...' : 'Loading recent transcripts...' %></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
 
         <div id="section-trunks" class="tab-section hidden">
@@ -6174,7 +6211,7 @@ function isTabAllowed(tabName) {
             else if (tabId === 'queues') { fetchQueues(); ensureAllConfigListsLoaded(); }
             else if (tabId === 'ivr') { fetchIvrs(); ensureAllConfigListsLoaded(); }
             else if (tabId === 'recordings') fetchRecordings();
-            else if (tabId === 'stt') { loadSttSettings(); }
+            else if (tabId === 'stt') { loadSttSettings(); loadRecentTranscripts(); }
             else if (tabId === 'trunks') fetchTrunks();
             else if (tabId === 'outbound') { fetchOutboundRoutes(); fetchTrunks(); }
             else if (tabId === 'timegroups') fetchTimeGroups();
@@ -15951,6 +15988,75 @@ function isTabAllowed(tabName) {
         window.filterIpscanResults = filterIpscanResults;
         window.setIpscanChipFilter = setIpscanChipFilter;
         window.exportIpscanCsv = exportIpscanCsv;
-    </script>
+
+        let allRecentTranscripts = [];
+        async function loadRecentTranscripts() {
+            const tbody = document.getElementById('sttRecentTableBody');
+            if (!tbody) return;
+            try {
+                const res = await fetch('/api/transcripts/recent');
+                const data = await res.json();
+                if (data.success && Array.isArray(data.transcripts)) {
+                    allRecentTranscripts = data.transcripts;
+                    const badge = document.getElementById('sttRecentCountBadge');
+                    if (badge) badge.textContent = allRecentTranscripts.length + ' <%= isRtl ? "مكالمة" : "calls" %>';
+                    renderRecentTranscripts(allRecentTranscripts);
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]">${data.error || 'Failed to load'}</td></tr>`;
+                }
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-red-400">Error: ${e.message}</td></tr>`;
+            }
+        }
+        function filterRecentTranscripts() {
+            const q = (document.getElementById('sttTranscriptSearchInput')?.value || '').toLowerCase().trim();
+            if (!q) return renderRecentTranscripts(allRecentTranscripts);
+            const filtered = allRecentTranscripts.filter(t =>
+                (t.transcript || '').toLowerCase().includes(q) ||
+                String(t.src || '').includes(q) ||
+                String(t.dst || '').includes(q)
+            );
+            renderRecentTranscripts(filtered);
+        }
+        function renderRecentTranscripts(list) {
+            const tbody = document.getElementById('sttRecentTableBody');
+            if (!tbody) return;
+            if (!list || list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-[var(--text-muted)]"><%= isRtl ? "لا توجد تفريغات حديثة مسجلة بعد." : "No recent transcriptions found." %></td></tr>';
+                return;
+            }
+            tbody.innerHTML = list.map(item => {
+                const dt = item.calldate ? new Date(item.calldate).toLocaleString() : (item.created_at ? new Date(item.created_at).toLocaleString() : '-');
+                const srcDst = (item.src || '-') + ' &rarr; ' + (item.dst || '-');
+                const dur = (item.duration_sec != null ? item.duration_sec : '-') + 's';
+                let statusBadge = '<span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Pending</span>';
+                if (item.status === 'completed') {
+                    const time = item.processing_ms ? ` (${(item.processing_ms/1000).toFixed(1)}s)` : '';
+                    statusBadge = `<span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Done${time}</span>`;
+                } else if (item.status === 'processing') {
+                    statusBadge = '<span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">Running</span>';
+                } else if (item.status === 'failed') {
+                    statusBadge = '<span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-red-500/10 text-red-400 border border-red-500/20">Failed</span>';
+                }
+                const text = item.transcript || (item.status === 'completed' ? '[No speech detected]' : '-');
+                return `
+                    <tr class="hover:bg-[var(--bg-card)]/60 transition">
+                        <td class="py-3 px-4 font-mono text-[11px] text-[var(--text-muted)] whitespace-nowrap">${dt}</td>
+                        <td class="py-3 px-4 font-mono font-bold text-xs text-[var(--text-primary)] whitespace-nowrap">${srcDst}</td>
+                        <td class="py-3 px-4 text-center font-mono text-[11px] text-[var(--text-muted)]">${dur}</td>
+                        <td class="py-3 px-4 text-center whitespace-nowrap">${statusBadge}</td>
+                        <td class="py-3 px-4 text-xs font-medium text-[var(--text-primary)] leading-relaxed dir-rtl text-right">${escapeSttHtml(text)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        function escapeSttHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        window.loadRecentTranscripts = loadRecentTranscripts;
+        window.filterRecentTranscripts = filterRecentTranscripts;
+
+</script>
 </body>
 </html>
