@@ -270,8 +270,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
         .light-theme #switchboardGrid .panel-surface.state-offline .employee-title {
             color: #71717a !important;
         }
-        .light-theme #switchboardGrid .panel-surface.state-offline .employee-group-chip,
-        .light-theme #switchboardGrid .panel-surface.state-offline .employee-avatar {
+        .light-theme #switchboardGrid .panel-surface.state-offline .employee-group-chip {
             background-color: #f4f4f5 !important;
             border-color: #e4e4e7 !important;
             color: #27272a !important;
@@ -339,11 +338,6 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             background: rgba(17, 24, 39, 0.10) !important;
             color: #111827 !important;
         }
-        #switchboardGrid .panel-surface.state-idle .employee-avatar {
-            border-color: rgba(17, 24, 39, 0.2) !important;
-            background: rgba(255, 255, 255, 0.28) !important;
-            color: #111827 !important;
-        }
         #switchboardGrid .panel-surface.state-idle [id^="sipBadge-"],
         #switchboardGrid .panel-surface.state-idle [id^="badge-"] {
             background-color: #22c55e !important;
@@ -393,11 +387,6 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             background: rgba(255, 255, 255, 0.2) !important;
             color: #ffffff !important;
         }
-        #switchboardGrid .panel-surface.state-ringing .employee-avatar {
-            border-color: rgba(255, 255, 255, 0.4) !important;
-            background: rgba(255, 255, 255, 0.25) !important;
-            color: #ffffff !important;
-        }
         #switchboardGrid .panel-surface.state-ringing [id^="sipBadge-"],
         #switchboardGrid .panel-surface.state-ringing [id^="badge-"] {
             background-color: #3b82f6 !important;
@@ -443,11 +432,6 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             background: rgba(255, 255, 255, 0.2) !important;
             color: #ffffff !important;
         }
-        #switchboardGrid .panel-surface.state-incall .employee-avatar {
-            border-color: rgba(255, 255, 255, 0.4) !important;
-            background: rgba(255, 255, 255, 0.25) !important;
-            color: #ffffff !important;
-        }
         #switchboardGrid .panel-surface.state-incall [id^="sipBadge-"],
         #switchboardGrid .panel-surface.state-incall [id^="badge-"] {
             background-color: #a855f7 !important;
@@ -491,29 +475,6 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             color: var(--text-secondary);
             font-size: 0.6875rem;
             font-weight: 800;
-        }
-        .employee-avatar {
-            position: relative;
-            width: 2.75rem;
-            height: 2.75rem;
-            flex: 0 0 2.75rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            border: 1px solid var(--border-primary);
-            border-radius: 0.75rem;
-            background: var(--bg-hover);
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-            font-weight: 900;
-        }
-        .employee-avatar img {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
         }
         .employee-title {
             display: block;
@@ -615,12 +576,6 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             min-height: 124px !important;
             padding: 0.5rem !important;
         }
-        #switchboardGrid.view-mode-compact article[id^="card-"] .employee-avatar {
-            width: 2.25rem !important;
-            height: 2.25rem !important;
-            flex-basis: 2.25rem !important;
-            font-size: 0.75rem !important;
-        }
         #switchboardGrid.view-mode-compact article[id^="card-"] .employee-title,
         #switchboardGrid.view-mode-compact article[id^="card-"] .employee-group-chip,
         #switchboardGrid.view-mode-compact article[id^="card-"] .ring-group-tag {
@@ -658,14 +613,6 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             gap: 0.625rem !important;
             min-width: 0 !important;
             flex: 1 1 auto !important;
-        }
-        #switchboardGrid.view-mode-minimal article[id^="card-"] .employee-avatar {
-            width: 2.125rem !important;
-            height: 2.125rem !important;
-            flex-basis: 2.125rem !important;
-            border-radius: 0.5rem !important;
-            font-size: 0.8rem !important;
-            flex-shrink: 0 !important;
         }
         #switchboardGrid.view-mode-minimal article[id^="card-"] .employee-title,
         #switchboardGrid.view-mode-minimal article[id^="card-"] .employee-group-chip,
@@ -901,7 +848,6 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                             }
                             const isOnline = emp.online;
                             const groupLabel = emp.emp_group ? formatGroupName(emp.emp_group, isRtl) : t.ungrouped;
-                            const profileInitial = String(emp.name || emp.extension || '?').trim().charAt(0).toUpperCase();
                             let stateClass = 'state-offline';
                             if (isOnline) {
                                 if (callState === 'incall') stateClass = 'state-incall';
@@ -915,38 +861,30 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                  data-site-code="<%= emp.siteCode %>"
                                  class="panel-surface rounded-xl p-3 flex flex-col justify-between min-h-[188px] transition-all duration-300 relative border <%= stateClass %>">
                             <div class="flex items-start justify-between gap-3 min-w-0">
-                                <div class="flex items-start gap-2.5 min-w-0 flex-1">
-                                    <div class="employee-avatar" aria-hidden="true">
-                                        <span><%= profileInitial %></span>
-                                        <% if (emp.photo) { %>
-                                        <img src="<%= emp.photo %>" alt="" onerror="this.remove()">
+                                <div class="min-w-0 flex-1 <%= isRtl ? 'text-right' : 'text-left' %>">
+                                    <div class="flex items-center gap-2 min-w-0 flex-wrap">
+                                        <span class="text-base font-bold text-white truncate" title="<%= emp.name %>"><%= emp.name %></span>
+                                        <span class="extension-number text-xs font-mono font-black text-[var(--accent-color)] shrink-0"><%= emp.isRemote ? emp.dialAlias : emp.extension %></span>
+                                        <% if (hasConnectedPbxs) { %>
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold <%= emp.isRemote ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30' %>">
+                                            #<%= emp.siteCode %>
+                                        </span>
                                         <% } %>
                                     </div>
-                                    <div class="min-w-0 flex-1 <%= isRtl ? 'text-right' : 'text-left' %>">
-                                        <div class="flex items-center gap-2 min-w-0 flex-wrap">
-                                            <span class="text-base font-bold text-white truncate" title="<%= emp.name %>"><%= emp.name %></span>
-                                            <span class="extension-number text-xs font-mono font-black text-[var(--accent-color)] shrink-0"><%= emp.isRemote ? emp.dialAlias : emp.extension %></span>
-                                            <% if (hasConnectedPbxs) { %>
-                                            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold <%= emp.isRemote ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30' %>">
-                                                #<%= emp.siteCode %>
+                                    <span class="employee-title <%= emp.title ? '' : 'employee-title-empty' %>" title="<%= emp.title || t.noTitle %>"><%= emp.title || t.noTitle %></span>
+                                    <% if (emp.is_group_admin || (emp.ring_groups && emp.ring_groups.length > 0)) { %>
+                                    <div class="flex items-center gap-1 flex-wrap mt-0.5">
+                                        <% if (emp.is_group_admin) { %>
+                                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono" title="<%= isRtl ? 'مدير المجموعة (صلاحية التقاط المكالمات)' : 'Group Admin (Call Pickup Authority)' %>">
+                                                <svg class="w-2.5 h-2.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+                                                <span>Admin</span>
                                             </span>
-                                            <% } %>
-                                        </div>
-                                        <span class="employee-title <%= emp.title ? '' : 'employee-title-empty' %>" title="<%= emp.title || t.noTitle %>"><%= emp.title || t.noTitle %></span>
-                                        <% if (emp.is_group_admin || (emp.ring_groups && emp.ring_groups.length > 0)) { %>
-                                        <div class="flex items-center gap-1 flex-wrap mt-0.5">
-                                            <% if (emp.is_group_admin) { %>
-                                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono" title="<%= isRtl ? 'مدير المجموعة (صلاحية التقاط المكالمات)' : 'Group Admin (Call Pickup Authority)' %>">
-                                                    <svg class="w-2.5 h-2.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
-                                                    <span>Admin</span>
-                                                </span>
-                                            <% } %>
-                                            <% if (emp.ring_groups && emp.ring_groups.length > 0) { %>
-                                                <span class="ring-group-tag" title="<%= isRtl ? 'مجموعات الاتصال: ' : 'Ring Groups: ' %><%= emp.ring_groups.map(function(rg){ return (rg.description && rg.description !== rg.grpnum) ? (rg.grpnum + ' (' + rg.description + ')') : rg.grpnum; }).join(', ') %>">RG <%= emp.ring_groups.map(function(rg){ return rg.grpnum; }).join(', ') %></span>
-                                            <% } %>
-                                        </div>
+                                        <% } %>
+                                        <% if (emp.ring_groups && emp.ring_groups.length > 0) { %>
+                                            <span class="ring-group-tag" title="<%= isRtl ? 'مجموعات الاتصال: ' : 'Ring Groups: ' %><%= emp.ring_groups.map(function(rg){ return (rg.description && rg.description !== rg.grpnum) ? (rg.grpnum + ' (' + rg.description + ')') : rg.grpnum; }).join(', ') %>">RG <%= emp.ring_groups.map(function(rg){ return rg.grpnum; }).join(', ') %></span>
                                         <% } %>
                                     </div>
+                                    <% } %>
                                 </div>
                                 <div class="flex flex-col items-end gap-1 shrink-0">
                                     <div class="flex items-center gap-1.5">

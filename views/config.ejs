@@ -2795,38 +2795,17 @@ function isTabAllowed(tabName) {
 
                     </div>
 
-                    <!-- SECTION 2: EMPLOYEE PROFILE & PHOTO (Emerald Theme) -->
+                    <!-- SECTION 2: EMPLOYEE PROFILE (Emerald Theme) -->
                     <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-emerald-500/15">
                             <span class="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
                                 <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                <%= isRtl ? 'ملف الموظف والصورة' : 'Employee Profile & Media' %>
+                                <%= isRtl ? 'ملف الموظف' : 'Employee Profile' %>
                             </span>
                             <span class="text-[10px] text-emerald-400/70 font-mono"><%= isRtl ? 'اختياري' : 'OPTIONAL' %></span>
                         </div>
 
-                        <div class="flex flex-col md:flex-row gap-4 items-start">
-                            <div class="md:w-[18rem] shrink-0">
-                                <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'صورة الموظف' : 'Employee photo' %></span>
-                                <div class="flex items-center gap-3">
-                                    <div class="relative w-16 h-16 rounded-xl overflow-hidden border border-emerald-500/20 bg-black/40 shrink-0 flex items-center justify-center">
-                                        <svg id="extPhotoFallback" class="w-7 h-7 text-emerald-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232a4 4 0 11-5.657 5.657 4 4 0 015.657-5.657zM4 20a8 8 0 0116 0"/></svg>
-                                        <img id="extPhotoPreview" class="hidden absolute inset-0 w-full h-full object-cover" src="" alt="<%= isRtl ? 'معاينة صورة الموظف' : 'Employee photo preview' %>">
-                                    </div>
-                                    <div class="min-w-0 flex-1">
-                                        <input type="file" id="extPhoto" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,image/jpeg,image/png,image/gif,image/webp,image/bmp" class="sr-only" onchange="previewEmployeePhoto(this)">
-                                        <div class="flex flex-wrap gap-1.5">
-                                            <label for="extPhoto" class="config-btn-secondary px-2.5 py-1.5 text-[11px] cursor-pointer"><%= isRtl ? 'اختيار صورة' : 'Choose photo' %></label>
-                                            <button id="extPhotoRemove" type="button" onclick="clearEmployeePhoto()" class="hidden px-2.5 py-1.5 text-[11px] font-bold text-rose-400 hover:text-rose-300 cursor-pointer"><%= isRtl ? 'إزالة' : 'Remove' %></button>
-                                        </div>
-                                        <p id="extPhotoStatus" class="mt-1.5 text-[11px] text-[var(--text-muted)] truncate"><%= isRtl ? 'لم يتم اختيار صورة' : 'No photo selected' %></p>
-                                        <p class="mt-0.5 text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'الحد الأقصى 50 ميجابايت' : 'Maximum 50 MB' %></p>
-                                        <input type="hidden" id="extPhotoUrl" value="">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 flex-1 min-w-0 w-full">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full">
                                 <div>
                                     <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extTitle"><%= isRtl ? 'المسمى الوظيفي' : 'Job title' %></label>
                                     <input type="text" id="extTitle" maxlength="255" placeholder="<%= isRtl ? 'مثال: مدير المبيعات' : 'e.g. Sales Manager' %>" class="config-input w-full text-xs">
@@ -2861,7 +2840,6 @@ function isTabAllowed(tabName) {
                                 </div>
                             </div>
                         </div>
-                    </div>
 
                     <!-- System Defaults Information Banner -->
                     <div class="p-3.5 bg-cyan-500/5 border border-cyan-500/20 rounded-xl text-xs space-y-1.5">
@@ -4977,8 +4955,6 @@ function isTabAllowed(tabName) {
             }
         }
         window.setButtonLoading = setButtonLoading;
-        const MAX_EMPLOYEE_PHOTO_BYTES = 50 * 1024 * 1024;
-        let employeePhotoObjectUrl = null;
         let loadedTrunksList = [];
         let loadedRecordingsList = [];
         let loadedExtensionsList = [];
@@ -6252,10 +6228,6 @@ function isTabAllowed(tabName) {
                         const vmBadge = isVmOn
                             ? `<span class="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">Enabled</span>`
                             : `<span class="px-2 py-0.5 text-[11px] font-bold rounded bg-slate-500/15 text-slate-400 border border-slate-500/20">Disabled</span>`;
-                        const profileInitial = escapeHtml(String(ext.name || ext.extension || '?').trim().charAt(0).toUpperCase());
-                        const profilePhoto = ext.photo
-                            ? `<img src="${escapeHtml(ext.photo)}" alt="" class="w-9 h-9 rounded-lg object-cover border border-[var(--border-primary)] shrink-0" onerror="this.remove()">`
-                            : `<span class="w-9 h-9 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] flex items-center justify-center text-xs font-black text-[var(--text-secondary)] shrink-0">${profileInitial}</span>`;
                         const titleText = ext.title
                             ? `<span class="text-xs font-bold text-[var(--text-primary)] truncate">${escapeHtml(ext.title)}</span>`
                             : `<span class="text-[11px] text-[var(--text-muted)]">${isRtl ? 'بدون مسمى وظيفي' : 'No job title'}</span>`;
@@ -6280,10 +6252,7 @@ function isTabAllowed(tabName) {
                             <td class="py-3 px-4 font-mono font-bold text-[var(--text-primary)]">${escapeHtml(ext.extension)}</td>
                             <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${escapeHtml(ext.name || '-')}</td>
                             <td class="py-3 px-4">
-                                <div class="flex items-center gap-2 min-w-[12rem]">
-                                    ${profilePhoto}
-                                    <div class="min-w-0 flex flex-col">${titleText}${groupText}</div>
-                                </div>
+                                <div class="min-w-[12rem] flex flex-col">${titleText}${groupText}</div>
                             </td>
                             <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">${escapeHtml(ext.secret || '-')}</td>
                             <td class="py-3 px-4">${techBadge}</td>
@@ -6312,60 +6281,13 @@ function isTabAllowed(tabName) {
                 });
         }
 
-        function showEmployeePhotoPreview(url, label) {
-            const preview = document.getElementById('extPhotoPreview');
-            const fallback = document.getElementById('extPhotoFallback');
-            const removeButton = document.getElementById('extPhotoRemove');
-            const status = document.getElementById('extPhotoStatus');
-            preview.src = url || '';
-            preview.classList.toggle('hidden', !url);
-            fallback.classList.toggle('hidden', Boolean(url));
-            removeButton.classList.toggle('hidden', !url);
-            status.textContent = label || (isRtl ? 'لم يتم اختيار صورة' : 'No photo selected');
-        }
-
         function resetEmployeeProfileFields() {
-            if (employeePhotoObjectUrl) {
-                URL.revokeObjectURL(employeePhotoObjectUrl);
-                employeePhotoObjectUrl = null;
-            }
-            document.getElementById('extPhoto').value = '';
-            document.getElementById('extPhotoUrl').value = '';
             document.getElementById('extTitle').value = '';
             const isGroupAdminEl = document.getElementById('extIsGroupAdmin');
             if (isGroupAdminEl) isGroupAdminEl.checked = false;
-            showEmployeePhotoPreview('', '');
             const groupSelect = document.getElementById('extGroup');
             groupSelect.disabled = true;
             groupSelect.innerHTML = '<option value="">' + (isRtl ? 'جاري تحميل المجموعات...' : 'Loading groups...') + '</option>';
-        }
-
-        function previewEmployeePhoto(input) {
-            const file = input.files[0];
-            if (!file) return;
-            if (file.size > MAX_EMPLOYEE_PHOTO_BYTES) {
-                input.value = '';
-                showToast(isRtl ? 'يجب ألا يتجاوز حجم الصورة 50 ميجابايت' : 'Employee photo must be 50 MB or smaller', 'error');
-                return;
-            }
-            if (!file.type.startsWith('image/')) {
-                input.value = '';
-                showToast(isRtl ? 'يرجى اختيار ملف صورة صالح' : 'Please choose a valid image file', 'error');
-                return;
-            }
-            if (employeePhotoObjectUrl) URL.revokeObjectURL(employeePhotoObjectUrl);
-            employeePhotoObjectUrl = URL.createObjectURL(file);
-            showEmployeePhotoPreview(employeePhotoObjectUrl, file.name);
-        }
-
-        function clearEmployeePhoto() {
-            if (employeePhotoObjectUrl) {
-                URL.revokeObjectURL(employeePhotoObjectUrl);
-                employeePhotoObjectUrl = null;
-            }
-            document.getElementById('extPhoto').value = '';
-            document.getElementById('extPhotoUrl').value = '';
-            showEmployeePhotoPreview('', '');
         }
 
         function formatGroupName(groupOrName, isRtl) {
@@ -6511,12 +6433,8 @@ function isTabAllowed(tabName) {
                 const extras = extrasData.extras || {};
                 setEmployeeGroupOptions(groupsData.groups || [], extras.emp_group || '');
                 document.getElementById('extTitle').value = extras.title || '';
-                document.getElementById('extPhotoUrl').value = extras.photo || '';
                 const isGroupAdminEl = document.getElementById('extIsGroupAdmin');
                 if (isGroupAdminEl) isGroupAdminEl.checked = Boolean(extras.is_group_admin);
-                if (extras.photo) {
-                    showEmployeePhotoPreview(extras.photo, extras.photo.split('/').pop());
-                }
             } catch (error) {
                 setEmployeeGroupOptions([], '');
                 showToast(error.message, 'error');
@@ -6629,31 +6547,13 @@ function isTabAllowed(tabName) {
         }
 
         async function saveEmployeeExtras(extNum) {
-            const photoFile = document.getElementById('extPhoto').files[0];
             const title = document.getElementById('extTitle').value.trim();
             const empGroup = document.getElementById('extGroup').value;
-            let photoUrl = document.getElementById('extPhotoUrl').value || null;
-
-            if (photoFile) {
-                if (photoFile.size > MAX_EMPLOYEE_PHOTO_BYTES) {
-                    throw new Error(isRtl ? 'يجب ألا يتجاوز حجم الصورة 50 ميجابايت' : 'Employee photo must be 50 MB or smaller');
-                }
-                const formData = new FormData();
-                formData.append('photo', photoFile);
-                const uploadResponse = await fetch('/api/employee/photo', { method: 'POST', body: formData });
-                const uploadData = await uploadResponse.json();
-                if (!uploadResponse.ok || !uploadData.success) {
-                    throw new Error(uploadData.error || 'Failed to upload employee photo');
-                }
-                photoUrl = uploadData.url;
-                document.getElementById('extPhotoUrl').value = photoUrl;
-            }
 
             const response = await fetch('/api/employee/extras/' + encodeURIComponent(extNum), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    photo: photoUrl,
                     title: title || null,
                     emp_group: empGroup || null,
                     is_group_admin: document.getElementById('extIsGroupAdmin')?.checked ? 1 : 0
