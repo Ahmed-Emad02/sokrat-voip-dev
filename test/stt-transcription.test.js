@@ -20,6 +20,8 @@ test('scripts/stt-worker.js and scripts/enqueue-stt.js export local and cloud ST
     assert.equal(typeof worker.enforceLiveCallPriority, 'function', 'live-call inference guard must be exported');
     assert.equal(typeof worker.parseAsteriskActivity, 'function', 'Asterisk activity parser must be exported');
     assert.equal(typeof worker.testCloudSttConnection, 'function', 'testCloudSttConnection must be exported');
+    assert.equal(typeof worker.getAudioDuration, 'function', 'getAudioDuration must be exported');
+    assert.equal(typeof worker.transcribeWithMunsit, 'function', 'transcribeWithMunsit must be exported');
 
     const enqueue = require('../scripts/enqueue-stt');
     assert.equal(typeof enqueue.enqueueCall, 'function', 'enqueueCall must be exported');
@@ -292,7 +294,7 @@ test('transcribeWithCloudAi validates API key presence and rejects empty key', a
 test('STT configuration supports local offline provider', () => {
     const serverJs = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
     const sidebar = fs.readFileSync(path.join(__dirname, '../views/sidebar.ejs'), 'utf8');
-    assert.ok(serverJs.includes("['local', 'groq', 'openai', 'deepgram', 'custom']"));
+    assert.ok(serverJs.includes("['local', 'munsit', 'groq', 'openai', 'deepgram', 'custom']"));
     assert.ok(serverJs.includes("engine === 'local_whisper'"));
     assert.ok(sidebar.includes('<option value="local"'));
     assert.ok(sidebar.includes('http://127.0.0.1:8178/inference'));
@@ -362,4 +364,15 @@ test('dashboard, watchdog, and schema migration use the installed STT unit and e
     assert.ok(serverJs.includes("[action, 'sokrat-stt']"));
     assert.ok(watchdogJs.includes("getServiceSystemdStatus('sokrat-stt.service')"));
     assert.ok(serverJs.includes("ADD COLUMN `engine` VARCHAR(32) DEFAULT \\'cloud_api\\'"));
+});
+
+test('Munsit integration supports audio duration inspection and automatic segmentation for long calls', async () => {
+    const worker = require('../scripts/stt-worker');
+    assert.equal(typeof worker.getAudioDuration, 'function');
+    assert.equal(typeof worker.transcribeWithMunsit, 'function');
+    const workerCode = fs.readFileSync(path.join(__dirname, '../scripts/stt-worker.js'), 'utf8');
+    assert.ok(workerCode.includes('MUNSIT_SEGMENT_SEC'));
+    assert.ok(workerCode.includes('chunk_%03d'));
+    assert.ok(workerCode.includes("provider === 'munsit'"));
+    assert.ok(workerCode.includes('transcribeWithMunsit(audioFilePath, options)'));
 });

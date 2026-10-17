@@ -3814,6 +3814,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 <div>
                     <label for="sttProvider" class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1"><%= isRtl ? 'محرك التفريغ' : 'Transcription Engine' %></label>
                     <select id="sttProvider" name="sttProvider" onchange="onSttProviderChange()" class="w-full bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="munsit">Munsit منصت (Egyptian Arabic AI)</option>
                         <option value="local" selected><%= isRtl ? 'Whisper محلي بدون إنترنت (موصى به)' : 'Local Offline Whisper (Recommended)' %></option>
                         <option value="groq">Groq (Whisper-Large-V3)</option>
                         <option value="openai">OpenAI (Whisper-1)</option>
@@ -4562,6 +4563,10 @@ function renderTimeModal(data) {
 }
 
 const STT_PROVIDER_DEFAULTS = {
+    munsit: {
+        model: 'munsit',
+        url: 'https://api.munsit.com/api/v1/audio/transcribe'
+    },
     local: {
         model: 'ggml-small-q5_1.bin',
         url: 'http://127.0.0.1:8178/inference'

@@ -7214,7 +7214,7 @@ app.put('/api/config/stt', requireAuth, requireConfigPermission('recordings'), a
         } = req.body;
 
         const isEnabled = (enabled === 1 || enabled === true || enabled === '1') ? 1 : 0;
-        const validProvider = ['local', 'groq', 'openai', 'deepgram', 'custom'].includes(provider) ? provider : 'local';
+        const validProvider = ['local', 'munsit', 'groq', 'openai', 'deepgram', 'custom'].includes(provider) ? provider : 'local';
         const engine = validProvider === 'local' ? 'local_whisper' : 'cloud_api';
         const apiKeyVal = api_key !== undefined ? String(api_key).trim() : '';
         let apiUrlVal = api_url !== undefined ? String(api_url).trim() : '';

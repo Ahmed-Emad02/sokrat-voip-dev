@@ -184,6 +184,89 @@ async function transcribeWithLocalWhisper(audioFilePath, options = {}) {
     return extractTranscript(parsed).replace(/\s+/g, ' ').trim();
 }
 
+const MUNSIT_SEGMENT_SEC = Math.max(60, Number(process.env.MUNSIT_SEGMENT_SEC || 600));
+
+async function getAudioDuration(filePath) {
+    return new Promise(resolve => {
+        execFile('ffmpeg', ['-i', filePath], (err, stdout, stderr) => {
+            const out = (stderr || '') + (err ? err.message : '');
+            const match = out.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+            if (match) {
+                const sec = parseInt(match[1], 10) * 3600 + parseInt(match[2], 10) * 60 + parseFloat(match[3]);
+                return resolve(sec);
+            }
+            resolve(0);
+        });
+    });
+}
+
+async function transcribeMunsitSingleFile(filePath, options = {}) {
+    const { apiKey = '', apiUrl = '', modelName = 'munsit', language = 'ar' } = options;
+    const endpoint = apiUrl || 'https://api.munsit.com/api/v1/audio/transcribe';
+    const fileBuffer = fs.readFileSync(filePath);
+    const fileName = path.basename(filePath);
+    const formData = new FormData();
+    formData.append('file', new Blob([fileBuffer], { type: filePath.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav' }), fileName);
+    formData.append('model', modelName || 'munsit');
+    if (language && language !== 'auto') formData.append('language', language);
+    const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey },
+        body: formData,
+        signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(LOCAL_TIMEOUT_MS)]) : AbortSignal.timeout(LOCAL_TIMEOUT_MS)
+    });
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Munsit API error (${res.status}): ${errText.slice(0, 500)}`);
+    }
+    const json = await res.json();
+    return (json?.data?.transcription || json?.data?.text || '').trim();
+}
+
+async function transcribeWithMunsit(audioFilePath, options = {}) {
+    const durationSec = await getAudioDuration(audioFilePath);
+    if (!durationSec || durationSec <= MUNSIT_SEGMENT_SEC) {
+        return transcribeMunsitSingleFile(audioFilePath, options);
+    }
+
+    const chunkDir = path.join(os.tmpdir(), `munsit_chunks_${Date.now()}_${process.pid}`);
+    fs.mkdirSync(chunkDir, { recursive: true });
+    const ext = path.extname(audioFilePath) || '.wav';
+    try {
+        await execFileAsync('ffmpeg', [
+            '-y', '-i', audioFilePath,
+            '-f', 'segment',
+            '-segment_time', String(MUNSIT_SEGMENT_SEC),
+            '-reset_timestamps', '1',
+            '-c', 'copy',
+            path.join(chunkDir, `chunk_%03d${ext}`)
+        ], { timeout: 120_000 });
+
+        const chunks = fs.readdirSync(chunkDir)
+            .filter(f => f.startsWith('chunk_') && f.endsWith(ext))
+            .sort()
+            .map(f => path.join(chunkDir, f));
+
+        if (!chunks.length) {
+            return transcribeMunsitSingleFile(audioFilePath, options);
+        }
+
+        const chunkTranscripts = [];
+        for (let i = 0; i < chunks.length; i++) {
+            const chunkPath = chunks[i];
+            console.log(`[STT-WORKER] Transcribing Munsit segment ${i + 1}/${chunks.length} (${path.basename(chunkPath)})...`);
+            const text = await transcribeMunsitSingleFile(chunkPath, options);
+            if (text) chunkTranscripts.push(text);
+        }
+        return chunkTranscripts.join(' ').trim();
+    } finally {
+        try {
+            fs.rmSync(chunkDir, { recursive: true, force: true });
+        } catch (_) {}
+    }
+}
+
+
 async function transcribeWithCloudAi(audioFilePath, options = {}) {
     const {
         provider = 'groq', apiKey = '', apiUrl = '', modelName = 'whisper-large-v3',
@@ -194,6 +277,10 @@ async function transcribeWithCloudAi(audioFilePath, options = {}) {
     const fileBuffer = fs.readFileSync(audioFilePath);
     const fileName = path.basename(audioFilePath);
     const resolvedPrompt = prompt || DEFAULT_PROMPTS[language] || DEFAULT_PROMPTS.ar;
+
+    if (provider === 'munsit') {
+        return transcribeWithMunsit(audioFilePath, options);
+    }
 
     if (provider === 'deepgram') {
         const targetUrl = new URL(apiUrl || 'https://api.deepgram.com/v1/listen');
@@ -598,6 +685,8 @@ module.exports = {
     transcribeWithLocalWhisper,
     transcribeAudio,
     testCloudSttConnection,
+    getAudioDuration,
+    transcribeWithMunsit,
     testSttConnection,
     getSttSettings,
     recoverStaleJobs,
