@@ -506,7 +506,7 @@ async function normalizeAndTranscribe(audioPath, jobKey, settings) {
 }
 
 async function processVoicemail(pool, settings) {
-    if (!settings.transcribe_voicemails) return false;
+    // In on-demand mode, any explicitly queued voicemail is processed
     const [jobs] = await pool.query(`
         SELECT id, mailbox, msg_file, callerid, attempt_count
         FROM \`asteriskcdrdb\`.\`voicemail_transcriptions\`
@@ -523,6 +523,15 @@ async function processVoicemail(pool, settings) {
     const audioPath = resolveVoicemailAudioPath(job.mailbox, job.msg_file);
     if (!audioPath) {
         await markFailure(pool, 'voicemail_transcriptions', job.id, new Error('Voicemail audio file not found on disk'), true);
+        return true;
+    }
+    const vmStat = fs.statSync(audioPath);
+    if (!vmStat.size || vmStat.size <= 44) {
+        await pool.query(`
+            UPDATE \`asteriskcdrdb\`.\`voicemail_transcriptions\`
+            SET status = 'completed', transcript = '[No speech in voicemail]', completed_at = NOW()
+            WHERE id = ?
+        `, [job.id]);
         return true;
     }
     activeJob = { table: 'voicemail_transcriptions', id: job.id };
@@ -546,7 +555,7 @@ async function processVoicemail(pool, settings) {
 }
 
 async function processCall(pool, settings) {
-    if (!settings.transcribe_calls) return false;
+    // In on-demand mode, any explicitly queued call is processed
     const [jobs] = await pool.query(`
         SELECT t.id, t.uniqueid, t.recordingfile, t.language, t.attempt_count,
                c.calldate, c.duration, c.billsec
@@ -574,6 +583,15 @@ async function processCall(pool, settings) {
     const audioPath = resolveCallAudioPath(job.recordingfile, job.calldate);
     if (!audioPath) {
         await markFailure(pool, 'cdr_transcriptions', job.id, new Error('Recording audio file not found on disk'), true);
+        return true;
+    }
+    const callStat = fs.statSync(audioPath);
+    if (!callStat.size || callStat.size <= 44) {
+        await pool.query(`
+            UPDATE \`asteriskcdrdb\`.\`cdr_transcriptions\`
+            SET status = 'completed', transcript = '[No audio recorded]', completed_at = NOW()
+            WHERE id = ?
+        `, [job.id]);
         return true;
     }
     activeJob = { table: 'cdr_transcriptions', id: job.id };
