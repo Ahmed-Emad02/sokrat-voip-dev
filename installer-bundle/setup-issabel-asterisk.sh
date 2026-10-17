@@ -38,7 +38,7 @@ fi
 
 # Ensure git and tar are installed for repo management
 if ! command -v git &>/dev/null; then
-    rpm -Uvh --replacepkgs --nodeps "${RPM_DIR}"/git*.rpm "${RPM_DIR}"/perl*.rpm 2>/dev/null || true
+    rpm -Uvh --replacepkgs --nodeps --oldpackage "${RPM_DIR}"/git*.rpm "${RPM_DIR}"/perl*.rpm 2>/dev/null || true
 fi
 rm -f /etc/yum.repos.d/sokrat-local-bundle.repo 2>/dev/null || true
 
@@ -51,7 +51,7 @@ fi
 
 # 4. Install EVERYTHING strictly offline from the local bundle
 echo "--> Installing all database, web, Asterisk 18 & Issabel 5 packages offline..."
-rpm -Uvh --replacepkgs --nodeps --nosignature --nodigest --excludepath=/usr/share/doc --excludepath=/usr/share/man "${RPM_DIR}"/*.rpm 2>/dev/null || true
+rpm -Uvh --replacepkgs --nodeps --nosignature --nodigest --oldpackage --excludepath=/usr/share/doc --excludepath=/usr/share/man "${RPM_DIR}"/*.rpm 2>/dev/null || true
 
 # Open firewall ports for web, PBX, and softphone
 if command -v firewall-cmd &>/dev/null && systemctl is-active firewalld &>/dev/null; then
@@ -142,8 +142,15 @@ fi
 
 # 6. Start MariaDB and Asterisk
 echo "--> Starting MariaDB & Asterisk..."
-systemctl enable --now mariadb
-systemctl enable --now asterisk
+systemctl daemon-reload 2>/dev/null || true
+DB_UNIT="mariadb"
+if ! systemctl list-unit-files | grep -q "^mariadb\.service"; then
+    if systemctl list-unit-files | grep -q "^mysqld\.service"; then
+        DB_UNIT="mysqld"
+    fi
+fi
+systemctl enable --now "$DB_UNIT" 2>/dev/null || systemctl start "$DB_UNIT" 2>/dev/null || true
+systemctl enable --now asterisk 2>/dev/null || systemctl start asterisk 2>/dev/null || true
 sleep 2
 
 # Ensure MariaDB root password is set cleanly without prompts

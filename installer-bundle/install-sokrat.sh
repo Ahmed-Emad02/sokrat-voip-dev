@@ -252,9 +252,9 @@ fi
 if ! command -v git &>/dev/null; then
     echo "  Installing git..."
     if [ -d "$SCRIPT_DIR/all-rpms" ] && ls "$SCRIPT_DIR/all-rpms"/git*.rpm 1>/dev/null 2>&1; then
-        rpm -Uvh --replacepkgs --nodeps "$SCRIPT_DIR/all-rpms"/git*.rpm "$SCRIPT_DIR/all-rpms"/perl*.rpm 2>/dev/null || true
+        rpm -Uvh --replacepkgs --nodeps --oldpackage "$SCRIPT_DIR/all-rpms"/git*.rpm "$SCRIPT_DIR/all-rpms"/perl*.rpm 2>/dev/null || true
     elif [ -d "$INSTALL_DIR/installer-bundle/all-rpms" ] && ls "$INSTALL_DIR/installer-bundle/all-rpms"/git*.rpm 1>/dev/null 2>&1; then
-        rpm -Uvh --replacepkgs --nodeps "$INSTALL_DIR/installer-bundle/all-rpms"/git*.rpm "$INSTALL_DIR/installer-bundle/all-rpms"/perl*.rpm 2>/dev/null || true
+        rpm -Uvh --replacepkgs --nodeps --oldpackage "$INSTALL_DIR/installer-bundle/all-rpms"/git*.rpm "$INSTALL_DIR/installer-bundle/all-rpms"/perl*.rpm 2>/dev/null || true
     else
         yum install -y git 2>/dev/null || dnf install -y git 2>/dev/null || true
     fi
