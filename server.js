@@ -1122,6 +1122,7 @@ async function initAuthDb() {
     }
     await conn.end();
     await syncAllExtensionsAstdb();
+    ensurePjsipWebRtcTransports();
     try {
         await initCampOnCallbacks();
     } catch (campErr) {
@@ -12521,6 +12522,87 @@ ${endMarker}
 function reloadPjsip() {
     exec(`${ASTERISK_BIN} -rx "module reload res_pjsip.so"`, () => {});
     exec(`${ASTERISK_BIN} -rx "pjsip reload"`, () => {});
+}
+
+function ensurePjsipWebRtcTransports() {
+    const customPath = '/etc/asterisk/pjsip_transport_custom.conf';
+    const additionalPath = '/etc/asterisk/pjsip_transport_additional.conf';
+
+    let needsUpdate = false;
+    try {
+        if (!fs.existsSync(customPath)) {
+            needsUpdate = true;
+        } else {
+            const trContent = fs.readFileSync(customPath, 'utf8');
+            if (!trContent.includes('[transport-ws]') || !trContent.includes('8088') || !trContent.includes('[transport-wss]')) {
+                needsUpdate = true;
+            }
+        }
+    } catch (_) {
+        needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+        const trpConfig = `; Dedicated PJSIP Transports for WebRTC and Standard SIP (Managed by Sokrat VOIP)
+[transport-ws]
+type=transport
+protocol=ws
+bind=0.0.0.0:8088
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-wss]
+type=transport
+protocol=wss
+bind=0.0.0.0:8089
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-udp]
+type=transport
+protocol=udp
+bind=0.0.0.0:5066
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-tcp]
+type=transport
+protocol=tcp
+bind=0.0.0.0:5066
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+`;
+        try {
+            fs.writeFileSync(customPath, trpConfig, 'utf8');
+            console.log('[PJSIP] Synchronized dedicated WebRTC transports (WS :8088, WSS :8089) in pjsip_transport_custom.conf');
+        } catch (e) {
+            console.error('[PJSIP] Error writing pjsip_transport_custom.conf:', e.message);
+        }
+
+        try {
+            if (fs.existsSync(additionalPath)) {
+                fs.writeFileSync(additionalPath, '; Managed via pjsip_transport_custom.conf\n', 'utf8');
+            }
+        } catch (_) {}
+
+        reloadPjsip();
+    }
 }
 
 

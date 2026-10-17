@@ -630,6 +630,71 @@ PYEOF
     asterisk -rx "dialplan reload" >/dev/null 2>&1 || true
 fi
 
+# 5.1 Enforce Dedicated WebRTC and SIP Transports for PJSIP
+PJSIP_TRP_CUSTOM=/etc/asterisk/pjsip_transport_custom.conf
+PJSIP_TRP_ADDITIONAL=/etc/asterisk/pjsip_transport_additional.conf
+NEED_TRP_UPDATE=0
+if [ ! -f "$PJSIP_TRP_CUSTOM" ]; then
+    NEED_TRP_UPDATE=1
+elif ! grep -q '\[transport-ws\]' "$PJSIP_TRP_CUSTOM" || ! grep -q '8088' "$PJSIP_TRP_CUSTOM"; then
+    NEED_TRP_UPDATE=1
+fi
+
+if [ "$NEED_TRP_UPDATE" -eq 1 ]; then
+    cat > "$PJSIP_TRP_CUSTOM" << 'TRPEOF'
+; Dedicated PJSIP Transports for WebRTC and Standard SIP (Managed by Sokrat VOIP)
+[transport-ws]
+type=transport
+protocol=ws
+bind=0.0.0.0:8088
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-wss]
+type=transport
+protocol=wss
+bind=0.0.0.0:8089
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-udp]
+type=transport
+protocol=udp
+bind=0.0.0.0:5066
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-tcp]
+type=transport
+protocol=tcp
+bind=0.0.0.0:5066
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+TRPEOF
+    echo "  Synchronized dedicated WebRTC transports (WS 8088 / WSS 8089) in $PJSIP_TRP_CUSTOM"
+
+    if [ -f "$PJSIP_TRP_ADDITIONAL" ]; then
+        echo '; Managed via pjsip_transport_custom.conf' > "$PJSIP_TRP_ADDITIONAL"
+        echo "  Neutralized colliding transports in $PJSIP_TRP_ADDITIONAL"
+    fi
+fi
+
 # 6. Reload Asterisk Modules & Sokrat Daemons
 echo "[6/7] Refreshing Asterisk modules and restarting Sokrat services..."
 if command -v systemctl &>/dev/null && systemctl is-active asterisk >/dev/null 2>&1; then
