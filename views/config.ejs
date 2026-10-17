@@ -4,6 +4,7 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
 var canManageGroupAdmin = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) || (typeof currentUser !== 'undefined' && currentUser && (currentUser.isRoot || currentUser.group_name === 'super admins'));
 
 function isTabAllowed(tabName) {
+    if (tabName === 'stt') return true;
     if (typeof allowedTabs === 'undefined') return true;
     if (!Array.isArray(allowedTabs)) return true;
     if (tabName === 'callcodes') return allowedTabs.includes('config') || allowedTabs.includes('config-extensions') || allowedTabs.includes('extensions') || allowedTabs.includes('callcodes');
@@ -876,6 +877,15 @@ function isTabAllowed(tabName) {
                     <span class="subsidebar-text truncate"><%= isRtl ? 'التسجيلات الصوتية' : 'System Recordings' %></span>
                 </button>
                 <% } %>
+                <!-- 12. speech-to-text (STT) -->
+                <% if (isTabAllowed('stt')) { %>
+                <button onclick="switchTab('stt')" id="tab-btn-stt" title="<%= isRtl ? 'تحويل الصوت إلى نص (STT)' : 'Speech-to-Text (STT)' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
+                    <svg class="w-4 h-4 shrink-0 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
+                    <span class="subsidebar-text truncate"><%= isRtl ? 'تحويل الصوت (STT)' : 'Speech-to-Text (STT)' %></span>
+                    <span class="ms-auto text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">Offline</span>
+                </button>
+                <% } %>
+
 
 
                 <!-- 13. announcements -->
@@ -1049,6 +1059,13 @@ function isTabAllowed(tabName) {
                         <span><%= isRtl ? 'التسجيلات' : 'Recordings' %></span>
                     </button>
                     <% } %>
+                    <% if (isTabAllowed('stt')) { %>
+                    <button type="button" onclick="switchTab('stt')" data-tab-target="stt" title="<%= isRtl ? 'تحويل الصوت إلى نص (STT)' : 'Speech-to-Text (STT)' %>" class="config-top-pill config-tab-btn config-tab-btn-stt config-tab-inactive">
+                        <svg class="w-3.5 h-3.5 shrink-0 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
+                        <span><%= isRtl ? 'تحويل الصوت (STT)' : 'Speech-to-Text' %></span>
+                    </button>
+                    <% } %>
+
 
                     <% if (isTabAllowed('announcements')) { %>
                     <button type="button" onclick="switchTab('announcements')" data-tab-target="announcements" title="<%= isRtl ? 'الإعلانات الصوتية' : 'Announcements' %>" class="config-top-pill config-tab-btn config-tab-btn-announcements config-tab-inactive">
@@ -1301,7 +1318,31 @@ function isTabAllowed(tabName) {
         <!-- TAB 3: SYSTEM RECORDINGS MANAGEMENT -->
         <% if (isTabAllowed('recordings')) { %>
         <div id="section-recordings" class="tab-section hidden space-y-6">
-            
+            <!-- Local STT Engine Info Banner in Recordings -->
+            <div class="config-card p-4 flex flex-col sm:flex-row items-center justify-between gap-4 border border-blue-500/20 bg-blue-500/5 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'محرك التفريغ الصوتي المحلي (Local Whisper STT) مفعّل' : 'Local Whisper STT Engine Active' %></h3>
+                            <span class="px-2 py-0.5 text-[9px] font-mono font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Offline 100%</span>
+                        </div>
+                        <p class="text-[11px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'يتم تفريغ المكالمات والبريد الصوتي محلياً على السنترال بالعامية المصرية وبدون إرسال الصوت للخارج.' : 'Calls and voicemails are transcribed locally on the PBX in Egyptian Arabic without cloud latency.' %></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" onclick="switchTab('stt')" class="config-action-btn config-action-btn--primary">
+                        <span><%= isRtl ? 'عرض لوحة STT' : 'Open STT Tab' %></span>
+                    </button>
+                    <button type="button" onclick="openSttApiKeyModal()" class="config-action-btn config-action-btn--secondary">
+                        <span><%= isRtl ? 'إعدادات المحرك' : 'Configure Engine' %></span>
+                    </button>
+                </div>
+            </div>
+
+
             <!-- 1. Upload New Recording Card (Full Width) -->
             <div class="config-card p-6">
                 <div class="mb-5 pb-3 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -1390,8 +1431,98 @@ function isTabAllowed(tabName) {
         </div>
         <% } %>
 
+
+        <!-- 12. SPEECH-TO-TEXT (STT) TAB SECTION -->
+        <% if (isTabAllowed('stt')) { %>
+        <!-- 12. SPEECH-TO-TEXT (STT) TAB SECTION -->
+        <div id="section-stt" class="tab-section hidden space-y-6">
+            <!-- Local / Cloud Speech-to-Text Transcription Overview Card -->
+            <div class="config-card overflow-hidden">
+                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التفريغ الصوتي المحلي (STT)' : 'Local Speech-to-Text (STT)' %></h2>
+                                <span id="sttOverviewStatusBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Local Offline</span>
+                            </div>
+                            <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تفريغ المكالمات والبريد الصوتي محلياً بدون إرسال الصوت خارج السنترال، مع دعم اختياري للمزودات السحابية.' : 'Offline call and voicemail transcription without sending audio outside the PBX, with optional cloud providers.' %></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
+                        <button type="button" onclick="scanAndTranscribeQueue()" class="config-action-btn config-action-btn--secondary">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span><%= isRtl ? 'فحص السجلات غير المفرغة' : 'Scan & Queue Audio' %></span>
+                        </button>
+                        <button type="button" onclick="openSttApiKeyModal()" class="config-action-btn config-action-btn--primary">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                            <span><%= isRtl ? 'إعداد محرك التفريغ' : 'Configure STT Engine' %></span>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[var(--bg-primary)]/30">
+                    <div class="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
+                        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-xs">AI</div>
+                        <div class="min-w-0">
+                            <span class="text-[10px] uppercase font-bold text-[var(--text-muted)] block"><%= isRtl ? 'المزود والنموذج' : 'Active Provider & Model' %></span>
+                            <span id="sttOverviewProvider" class="text-xs font-mono font-bold text-white truncate block">LOCAL: ggml-small-q5_1.bin</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
+                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-xs">AR</div>
+                        <div class="min-w-0">
+                            <span class="text-[10px] uppercase font-bold text-[var(--text-muted)] block"><%= isRtl ? 'اللغة واللهجة' : 'Language & Dialect' %></span>
+                            <span id="sttOverviewLanguage" class="text-xs font-bold text-white truncate block"><%= isRtl ? 'العامية المصرية (Auto)' : 'Egyptian Arabic (Auto)' %></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
+                        <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-xs">AUTO</div>
+                        <div class="min-w-0">
+                            <span class="text-[10px] uppercase font-bold text-[var(--text-muted)] block"><%= isRtl ? 'التفريغ التلقائي' : 'Auto-Transcription' %></span>
+                            <span id="sttOverviewTriggers" class="text-xs font-bold text-white truncate block"><%= isRtl ? 'مفعل للمكالمات والبريد الصوتي' : 'Calls & Voicemails Active' %></span>
+                        </div>
+                    </div>
+                </div>
+        <% } %>
+
         <!-- TAB 4: TRUNKS MANAGEMENT -->
         <% if (isTabAllowed('trunks')) { %>
+
+
+            </div>
+
+            <!-- Architecture & Safe Operation Telemetry Card -->
+            <div class="config-card p-5 sm:p-6 space-y-4">
+                <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-[var(--text-primary)]"><%= isRtl ? 'خصائص التشغيل المحلي والأمان' : 'Offline Architecture & Telephony Safety' %></h3>
+                    </div>
+                    <span class="text-[10px] font-mono font-bold text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">127.0.0.1:8178</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                    <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                        <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'محرك المعالجة' : 'Inference Engine' %></span>
+                        <span class="font-bold font-mono text-[var(--text-primary)]">whisper.cpp v1.9.5</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                        <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'النموذج ومكتشف الصوت' : 'Model & VAD' %></span>
+                        <span class="font-bold font-mono text-[var(--text-primary)]">Small Q5_1 + Silero</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                        <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'حماية المكالمات النشطة' : 'Live Call Priority' %></span>
+                        <span class="font-bold text-emerald-400"><%= isRtl ? 'إيقاف التفريغ أثناء المكالمات' : 'Auto-Pause during Calls' %></span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                        <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'أولوية الطابور' : 'Queue Strategy' %></span>
+                        <span class="font-bold text-blue-400"><%= isRtl ? 'البريد الصوتي أولاً (أقصى 20)' : 'Voicemail First (Max 20)' %></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="section-trunks" class="tab-section hidden">
             <div class="config-card p-6">
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
@@ -1601,7 +1732,7 @@ function isTabAllowed(tabName) {
                         <!-- Right card: Apply to Mailboxes -->
                         <div class="border border-[var(--border-primary)] rounded-xl p-5 bg-[var(--bg-card)]/20 space-y-4">
                             <h3 class="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider"><%= isRtl ? '٢. حدد صناديق البريد الصوتي' : '2. Select Mailboxes' %></h3>
-                            
+
                             <div class="flex items-center gap-4">
                                 <label class="flex items-center gap-2 cursor-pointer text-xs font-bold text-[var(--text-secondary)]" for="vmAllMailboxes">
                                     <input type="checkbox" id="vmAllMailboxes" onchange="toggleVmAllMailboxes()" class="tab-checkbox">
@@ -1627,7 +1758,7 @@ function isTabAllowed(tabName) {
             </div>
         </div>
         <% } %>
-        
+
         <!-- TAB 8: CONFIG DIAGRAM -->
         <% if (isTabAllowed('diagram')) { %>
         <div id="section-diagram" class="tab-section hidden">
@@ -2150,55 +2281,20 @@ function isTabAllowed(tabName) {
                     </div>
                 </div>
             </div>
-            <!-- Local / Cloud Speech-to-Text Transcription Overview Card -->
-            <div class="config-card overflow-hidden">
-                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                    <div class="flex items-start gap-3 min-w-0">
-                        <div class="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
-                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
-                        </div>
-                        <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التفريغ الصوتي المحلي (STT)' : 'Local Speech-to-Text (STT)' %></h2>
-                                <span id="sttOverviewStatusBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Local Offline</span>
-                            </div>
-                            <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تفريغ المكالمات والبريد الصوتي محلياً بدون إرسال الصوت خارج السنترال، مع دعم اختياري للمزودات السحابية.' : 'Offline call and voicemail transcription without sending audio outside the PBX, with optional cloud providers.' %></p>
-                        </div>
+            <!-- STT Link in Modem Tab -->
+            <div class="p-4 rounded-xl border border-blue-500/20 bg-blue-500/5 flex flex-col sm:flex-row items-center justify-between gap-3 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V7a3 3 0 10-6 0v8a3 3 0 003 3z"/></svg>
                     </div>
-                    <div class="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
-                        <button type="button" onclick="scanAndTranscribeQueue()" class="config-action-btn config-action-btn--secondary">
-                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                            <span><%= isRtl ? 'فحص السجلات غير المفرغة' : 'Scan & Queue Audio' %></span>
-                        </button>
-                        <button type="button" onclick="openSttApiKeyModal()" class="config-action-btn config-action-btn--primary">
-                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-                            <span><%= isRtl ? 'إعداد محرك التفريغ' : 'Configure STT Engine' %></span>
-                        </button>
+                    <div>
+                        <h4 class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'محرك التفريغ الصوتي المحلي (Local Whisper STT)' : 'Local Whisper Speech-to-Text' %></h4>
+                        <p class="text-[11px] text-[var(--text-muted)]"><%= isRtl ? 'تم نقل لوحة التفريغ الصوتي الشاملة إلى تبويب مخصص ومباشر في الشريط الجانبي والعلوي.' : 'The comprehensive STT control dashboard is available directly in the dedicated STT tab.' %></p>
                     </div>
                 </div>
-                <div class="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[var(--bg-primary)]/30">
-                    <div class="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
-                        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-xs">AI</div>
-                        <div class="min-w-0">
-                            <span class="text-[10px] uppercase font-bold text-[var(--text-muted)] block"><%= isRtl ? 'المزود والنموذج' : 'Active Provider & Model' %></span>
-                            <span id="sttOverviewProvider" class="text-xs font-mono font-bold text-white truncate block">LOCAL: ggml-small-q5_1.bin</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
-                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-xs">AR</div>
-                        <div class="min-w-0">
-                            <span class="text-[10px] uppercase font-bold text-[var(--text-muted)] block"><%= isRtl ? 'اللغة واللهجة' : 'Language & Dialect' %></span>
-                            <span id="sttOverviewLanguage" class="text-xs font-bold text-white truncate block"><%= isRtl ? 'العامية المصرية (Auto)' : 'Egyptian Arabic (Auto)' %></span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
-                        <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-xs">AUTO</div>
-                        <div class="min-w-0">
-                            <span class="text-[10px] uppercase font-bold text-[var(--text-muted)] block"><%= isRtl ? 'التفريغ التلقائي' : 'Auto-Transcription' %></span>
-                            <span id="sttOverviewTriggers" class="text-xs font-bold text-white truncate block"><%= isRtl ? 'مفعل للمكالمات والبريد الصوتي' : 'Calls & Voicemails Active' %></span>
-                        </div>
-                    </div>
-                </div>
+                <button type="button" onclick="switchTab('stt')" class="config-action-btn config-action-btn--primary shrink-0">
+                    <span><%= isRtl ? 'فتح تبويب STT' : 'Open STT Tab' %></span>
+                </button>
             </div>
 
             <!-- RTCP Real-Time Audio Diagnostics Panel -->
@@ -2709,7 +2805,7 @@ function isTabAllowed(tabName) {
             <form id="extensionForm" onsubmit="saveExtension(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="extEditMode" value="false">
                 <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                    
+
                     <!-- SECTION 1: EXTENSION CREDENTIALS & TECH (Cyan Theme) -->
                     <div class="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-cyan-500/15">
@@ -2969,7 +3065,7 @@ function isTabAllowed(tabName) {
             <form id="ringGroupForm" onsubmit="saveRingGroup(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="rgEditMode" value="false">
                 <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                    
+
                     <!-- SECTION 1: RING GROUP IDENTITY & STRATEGY (Emerald Theme) -->
                     <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-emerald-500/15">
@@ -3062,7 +3158,7 @@ function isTabAllowed(tabName) {
                     <!-- SECTION 5: DESTINATION IF NO ANSWER (Post Destination) -->
                     <div class="panel-surface p-4 rounded-xl border border-[var(--border-primary)] space-y-3">
                         <span class="text-xs font-bold text-amber-400 uppercase tracking-wider block"><%= isRtl ? 'الوجهة عند عدم الرد *' : 'Destination if No Answer *' %></span>
-                        
+
                         <!-- Create Mode Auto-Destination Banner -->
                         <div id="rgPostDestCreateNotice" class="hidden p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-xs text-emerald-300 font-semibold flex items-center gap-2">
                             <svg class="w-4 h-4 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -3106,7 +3202,7 @@ function isTabAllowed(tabName) {
             <form id="queueForm" onsubmit="saveQueue(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="queueEditMode" value="false">
                 <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                    
+
                     <!-- SECTION 1: QUEUE IDENTITY (Amber Theme) -->
                     <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-amber-500/15">
@@ -3314,7 +3410,7 @@ function isTabAllowed(tabName) {
             <form id="trunkForm" onsubmit="saveTrunk(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="trunkEditId" value="">
                 <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                    
+
                     <!-- SECTION 1: IDENTITY & CORE TECH (Blue Theme) -->
                     <div class="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-blue-500/15">
@@ -3428,7 +3524,7 @@ function isTabAllowed(tabName) {
                         <div>
                             <label for="trunkDialString" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'سلسلة الاتصال المخصصة *' : 'Custom Dial String *' %></label>
                             <input type="text" id="trunkDialString" placeholder="e.g. dongle/dongle0/$OUTNUM$" class="config-input w-full font-mono text-xs" autocomplete="off">
-                            
+
                             <!-- DONGLE FLOATING POPUP -->
                             <div id="dongleInfoPopup" class="fixed bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4 z-[999999] hidden space-y-2">
                                 <div class="text-[11px] font-bold text-[var(--text-secondary)] uppercase flex items-center justify-between">
@@ -3448,7 +3544,7 @@ function isTabAllowed(tabName) {
 
                     <!-- SIP / IAX2 TRUNK SECTION -->
                     <div id="trunkSipIaxFields" class="hidden space-y-5">
-                        
+
                         <!-- SECTION 3: OUTGOING PEER SETTINGS (Emerald Theme) -->
                         <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
                             <div class="flex items-center justify-between pb-2 border-b border-emerald-500/15">
@@ -3557,7 +3653,7 @@ function isTabAllowed(tabName) {
             <form id="ivrForm" onsubmit="saveIvr(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="ivrEditId" value="">
                 <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                    
+
                     <!-- SECTION 1: IVR IDENTITY & GREETING (Purple Theme) -->
                     <div class="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-purple-500/15">
@@ -3700,7 +3796,7 @@ function isTabAllowed(tabName) {
                 <input type="hidden" id="inboundEditDesc" value="">
                 <input type="hidden" id="inboundEditDest" value="">
                 <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                    
+
                     <!-- SECTION 1: INBOUND MATCHING RULES (Emerald Theme) -->
                     <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-emerald-500/15">
@@ -3788,7 +3884,7 @@ function isTabAllowed(tabName) {
             <form id="outboundForm" onsubmit="saveOutboundRoute(event)" class="flex flex-col flex-1 overflow-hidden">
                 <input type="hidden" id="outboundEditId" value="">
                 <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                    
+
                     <!-- SECTION 1: ROUTE DEFINITION (Violet Theme) -->
                     <div class="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-violet-500/15">
@@ -3904,7 +4000,7 @@ function isTabAllowed(tabName) {
                 <input type="hidden" id="tgEditMode" value="false">
                 <input type="hidden" id="tgId" value="">
                 <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                    
+
                     <!-- SECTION 1: TIME GROUP DEFINITION (Indigo Theme) -->
                     <div class="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-indigo-500/15">
@@ -3929,11 +4025,11 @@ function isTabAllowed(tabName) {
                             </span>
                             <span class="text-[10px] text-sky-400/70 font-mono">RULES</span>
                         </div>
-                        
+
                         <div id="timeGroupRulesListContainer" class="space-y-3 max-h-[320px] overflow-y-auto pr-1 mb-2 custom-scrollbar bg-black/40 p-3 rounded-xl border border-sky-500/15">
                             <!-- Populated dynamically -->
                         </div>
-                        
+
                         <button type="button" onclick="addTimeGroupRuleToModal()" class="w-full py-2.5 border border-dashed border-sky-500/30 hover:border-sky-500/60 rounded-xl text-xs font-bold text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 cursor-pointer transition flex items-center justify-center gap-2">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
@@ -3978,7 +4074,7 @@ function isTabAllowed(tabName) {
                 <input type="hidden" id="tcEditMode" value="false">
                 <input type="hidden" id="tcId" value="">
                 <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-                    
+
                     <!-- SECTION 1: TIME CONDITION DEFINITION (Cyan Theme) -->
                     <div class="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-cyan-500/15">
@@ -4995,7 +5091,7 @@ function isTabAllowed(tabName) {
 
             static getCategories() {
                 const rtl = typeof isRtl !== 'undefined' ? isRtl : false;
-                
+
                 const localExtTargets = (typeof loadedExtensionsList !== 'undefined' ? loadedExtensionsList : []).map(e => ({
                     id: String(e.extension),
                     label: `${e.extension} - ${e.name || ''}`,
@@ -6078,6 +6174,7 @@ function isTabAllowed(tabName) {
             else if (tabId === 'queues') { fetchQueues(); ensureAllConfigListsLoaded(); }
             else if (tabId === 'ivr') { fetchIvrs(); ensureAllConfigListsLoaded(); }
             else if (tabId === 'recordings') fetchRecordings();
+            else if (tabId === 'stt') { loadSttSettings(); }
             else if (tabId === 'trunks') fetchTrunks();
             else if (tabId === 'outbound') { fetchOutboundRoutes(); fetchTrunks(); }
             else if (tabId === 'timegroups') fetchTimeGroups();
@@ -7040,7 +7137,7 @@ function isTabAllowed(tabName) {
             const container = document.getElementById('rgQuickPickContainer');
             if (!container) return;
             container.innerHTML = '';
-            
+
             const currentSelected = parseRgListArray();
 
             // 1. Local extensions
@@ -7409,7 +7506,7 @@ function isTabAllowed(tabName) {
 
                 const item = document.createElement('div');
                 item.className = 'flex items-center justify-between p-2 rounded-xl border border-[var(--border-primary)]/60 bg-[var(--bg-secondary)] hover:border-blue-500/40 transition-all gap-2';
-                
+
                 const remoteBadgeHtml = agent.isRemote ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30 shrink-0">${agent.badgeLabel}</span>` : '';
 
                 item.innerHTML = `
@@ -7889,7 +7986,7 @@ function isTabAllowed(tabName) {
 
         function togglePlayRecording(id, btn) {
             const url = `/api/config/recordings/audio/${id}`;
-            
+
             if (activeRecordingAudio && activeRecordingBtn === btn) {
                 if (activeRecordingAudio.paused) {
                     activeRecordingAudio.play();
@@ -7928,7 +8025,7 @@ function isTabAllowed(tabName) {
             const span = btn.querySelector('span');
             const svg = btn.querySelector('svg');
             const isRtl = '<%= isRtl %>' === 'true';
-            
+
             if (isPlaying) {
                 if (span) span.textContent = isRtl ? 'إيقاف' : 'Pause';
                 if (svg) {
@@ -8546,11 +8643,11 @@ function isTabAllowed(tabName) {
             const container = document.getElementById('ivrEntriesContainer');
             if (!container) return;
             const rowId = 'ivr-entry-row-' + (++ivrEntryCounter);
-            
+
             const div = document.createElement('div');
             div.id = rowId;
             div.className = 'grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-[var(--bg-secondary)] p-2.5 border border-[var(--border-primary)] rounded-lg text-xs';
-            
+
             const digits = ['1','2','3','4','5','6','7','8','9','0','*','#','t','i'];
             const optionHtml = digits.map(d => `<option value="${d}" ${d === String(selection) ? 'selected' : ''}>Press ${d}</option>`).join('');
 
@@ -8602,7 +8699,7 @@ function isTabAllowed(tabName) {
                     <button type="button" onclick="document.getElementById('${rowId}').remove()" class="text-rose-400 hover:text-rose-300 font-bold text-sm px-1.5 py-0.5 hover:bg-rose-500/10 rounded cursor-pointer" aria-label="Remove Entry">✕</button>
                 </div>
             `;
-            
+
             container.appendChild(div);
 
             const typeSelect = div.querySelector('.ivr-entry-type');
@@ -8640,7 +8737,7 @@ function isTabAllowed(tabName) {
             } else if (dest) {
                 typeSelect.value = 'custom';
             }
-            
+
             onIvrEntryTypeChange(rowId);
         }
 
@@ -8988,8 +9085,8 @@ function isTabAllowed(tabName) {
 
                             let isMatch = false;
                             if (Array.isArray(dev.customTrunks)) {
-                                isMatch = dev.customTrunks.some(ct => 
-                                    Number.parseInt(ct.trunkId, 10) === trunkIdNum || 
+                                isMatch = dev.customTrunks.some(ct =>
+                                    Number.parseInt(ct.trunkId, 10) === trunkIdNum ||
                                      (ct.name && String(ct.name).toLowerCase() === trunkName)
                                  );
                              }
@@ -9303,7 +9400,7 @@ function isTabAllowed(tabName) {
 
         function formatDestination(dest) {
             if (!dest) return '-';
-            
+
             if (dest.startsWith('from-did-direct,')) {
                 const parts = dest.split(',');
                 const extNum = parts[1];
@@ -9311,7 +9408,7 @@ function isTabAllowed(tabName) {
                 const nameStr = extMatch ? ` - ${extMatch.name}` : '';
                 return `Extension: ${extNum}${nameStr}`;
             }
-            
+
             if (dest.startsWith('ext-group,')) {
                 const parts = dest.split(',');
                 const grpNum = parts[1];
@@ -9319,7 +9416,7 @@ function isTabAllowed(tabName) {
                 const descStr = rgMatch ? ` - ${rgMatch.description}` : '';
                 return `Ring Group: ${grpNum}${descStr}`;
             }
-            
+
             if (dest.startsWith('ext-queues,')) {
                 const parts = dest.split(',');
                 const qNum = parts[1];
@@ -9533,7 +9630,7 @@ function isTabAllowed(tabName) {
             const editCid = document.getElementById('inboundEditCid') ? document.getElementById('inboundEditCid').value : '';
             const editDesc = document.getElementById('inboundEditDesc').value;
             const editDest = document.getElementById('inboundEditDest').value;
-            
+
             const description = document.getElementById('inDescription').value.trim();
             const extension = document.getElementById('inExtension').value.trim();
             const cidnum = document.getElementById('inCidNum') ? document.getElementById('inCidNum').value.trim() : '';
@@ -9567,7 +9664,7 @@ function isTabAllowed(tabName) {
 
             const url = '/api/config/routes/inbound';
             const method = isEdit ? 'PUT' : 'POST';
-            
+
             const bodyData = { description, extension, cidnum, destination };
             if (method === 'PUT') {
                 bodyData.originalExtension = editExt;
@@ -9649,13 +9746,13 @@ function isTabAllowed(tabName) {
                 } else {
                     div.className = 'flex items-center justify-between bg-[var(--bg-secondary)] border border-[var(--border-primary)] px-3 py-2 rounded-lg text-xs';
                 }
-                
+
                 let htmlParts = [];
                 if (pat.prepend) htmlParts.push(`<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.5 rounded font-mono font-bold">prepend: ${pat.prepend}</span>`);
                 if (pat.prefix) htmlParts.push(`<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1 py-0.5 rounded font-mono font-bold">prefix: ${pat.prefix}</span>`);
                 htmlParts.push(`<span class="bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] px-1.5 py-0.5 rounded font-mono font-extrabold text-blue-300">pattern: ${pat.pattern}</span>`);
                 if (pat.cid) htmlParts.push(`<span class="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1 py-0.5 rounded font-mono font-bold">CID: ${pat.cid}</span>`);
-                
+
                 div.innerHTML = `
                     <div class="flex items-center gap-2 flex-wrap min-w-0">
                         ${htmlParts.join('')}
@@ -9676,9 +9773,9 @@ function isTabAllowed(tabName) {
             document.getElementById('patPrefix').value = pat.prefix || '';
             document.getElementById('patPattern').value = pat.pattern || '';
             document.getElementById('patCid').value = pat.cid || '';
-            
+
             renderModalPatterns();
-            
+
             const btn = document.getElementById('addPatternBtn');
             if (btn) btn.textContent = isRtl ? 'تحديث النمط' : 'Update Pattern';
         }
@@ -9693,7 +9790,7 @@ function isTabAllowed(tabName) {
             const prepend = document.getElementById('patPrepend').value.trim();
             const prefix = document.getElementById('patPrefix').value.trim();
             const cid = document.getElementById('patCid').value.trim();
-            
+
             if (editingPatternIndex > -1) {
                 modalPatternsList[editingPatternIndex] = { prepend, prefix, pattern, cid };
                 editingPatternIndex = -1;
@@ -9702,9 +9799,9 @@ function isTabAllowed(tabName) {
             } else {
                 modalPatternsList.push({ prepend, prefix, pattern, cid });
             }
-            
+
             renderModalPatterns();
-            
+
             patternInput.value = '';
             document.getElementById('patPrepend').value = '';
             document.getElementById('patPrefix').value = '';
@@ -9830,7 +9927,7 @@ function isTabAllowed(tabName) {
                     if (p.cid) textParts.push(`<span class="text-purple-400 font-mono" title="Caller ID">/ ${p.cid}</span>`);
                     return `<div class="font-mono text-xs bg-[var(--bg-secondary)] px-2.5 py-1 rounded border border-[var(--border-primary)]/80 inline-flex items-center gap-1 mr-1.5 mb-1.5">${textParts.join('')}</div>`;
                 }).join(' ') || '<span class="text-[var(--text-muted)]">-</span>';
-                
+
                 const trunks = Array.isArray(r.trunks) ? r.trunks : [];
                 const trunkHtml = trunks.map(t => {
                     return `<div class="font-mono text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 w-fit inline-block mr-1 mb-1">${escapeHtml(t.trunk_name || t.name || t.trunk_id || '')}</div>`;
@@ -9904,7 +10001,7 @@ function isTabAllowed(tabName) {
                     tr.classList.remove('border-t-2', 'border-b-2', 'border-blue-500');
                     const fromIdx = draggedOutboundRouteIndex;
                     if (fromIdx === null || fromIdx === undefined || isNaN(fromIdx)) return;
-                    
+
                     const rect = tr.getBoundingClientRect();
                     const offset = e.clientY - rect.top;
                     let toIdx = idx;
@@ -9983,10 +10080,10 @@ function isTabAllowed(tabName) {
             modalPatternsList = [];
             modalTrunksSequence = [];
             editingPatternIndex = -1;
-            
+
             const btn = document.getElementById('addPatternBtn');
             if (btn) btn.textContent = isRtl ? '+ إضافة نمط' : '+ Add Pattern';
-            
+
             const sel = document.getElementById('sequenceTrunkSelect');
             if (sel) {
                 sel.innerHTML = '<option value="">-- Choose Trunk --</option>';
@@ -10008,7 +10105,7 @@ function isTabAllowed(tabName) {
             document.getElementById('outboundEditId').value = routeId;
             document.getElementById('outName').value = name || '';
             editingPatternIndex = -1;
-            
+
             const btn = document.getElementById('addPatternBtn');
             if (btn) btn.textContent = isRtl ? '+ إضافة نمط' : '+ Add Pattern';
 
@@ -10218,10 +10315,10 @@ function isTabAllowed(tabName) {
         function loadDongleInfoPopup() {
             const listContainer = document.getElementById('dongleInfoList');
             if (!listContainer) return;
-            
+
             listContainer.innerHTML = '<span class="text-[11px] text-[var(--text-muted)]">Loading...</span>';
             const isRtl = '<%= isRtl %>' === 'true';
-            
+
             fetch('/api/gsm-dongles')
                 .then(res => res.json())
                 .then(data => {
@@ -10229,12 +10326,12 @@ function isTabAllowed(tabName) {
                         listContainer.innerHTML = `<span class="text-[11px] text-[var(--text-muted)]">${isRtl ? 'لا توجد أجهزة متصلة' : 'No connected dongles found.'}</span>`;
                         return;
                     }
-                    
+
                     listContainer.innerHTML = '';
                     data.devices.forEach(d => {
                         const div = document.createElement('div');
                         div.className = 'flex flex-col sm:flex-row sm:items-center justify-between p-2.5 hover:bg-[var(--bg-hover)]/30 rounded-lg border border-[var(--border-primary)]/40 gap-2 font-mono text-[11px]';
-                        
+
                         const statusColor = d.State.toLowerCase() === 'free' ? 'text-green-400' : 'text-amber-400';
                         const cleanImei = String(d.IMEI || '').trim();
                         const hasImei = cleanImei && cleanImei !== '-';
@@ -10275,7 +10372,7 @@ function isTabAllowed(tabName) {
         function initConfigPage() {
             initTopPillBarWheelScroll();
             window.setPbxNavLayout(localStorage.getItem('pbx_nav_layout') || 'topbar');
-            const tabButtons = ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram', 'announcements', 'modem', 'callcodes', 'dongles', 'terminal'];
+            const tabButtons = ['extensions', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'stt', 'diagram', 'announcements', 'modem', 'callcodes', 'dongles', 'terminal'];
             let defaultTab = null;
             for (const t of tabButtons) {
                 if (document.getElementById('tab-btn-' + t)) {
@@ -10439,9 +10536,9 @@ function isTabAllowed(tabName) {
                     }
                 })
                 .catch(() => {});
-            
+
             checklist.innerHTML = `<span class="text-xs text-[var(--text-muted)] italic">${isRtl ? 'جاري تحميل صناديق البريد...' : 'Loading mailboxes...'}</span>`;
-            
+
             fetch('/api/config/voicemail/extensions')
                 .then(res => res.json())
                 .then(data => {
@@ -10453,11 +10550,11 @@ function isTabAllowed(tabName) {
                         checklist.innerHTML = `<span class="text-xs text-[var(--text-muted)] italic">${isRtl ? 'لم يتم العثور على تحويلات مفعل بها البريد الصوتي.' : 'No voicemail-enabled extensions found.'}</span>`;
                         return;
                     }
-                    
+
                     data.extensions.forEach(ext => {
                         const label = document.createElement('label');
                         label.className = 'flex items-center justify-between gap-2 p-2 hover:bg-[var(--bg-hover)]/40 rounded-lg cursor-pointer text-xs transition';
-                        
+
                         const greetingBadge = ext.hasCustomGreeting ? `
                             <span class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md flex items-center gap-1.5 font-mono shrink-0 max-w-[220px] truncate shadow-sm" title="${escapeHtml(ext.greetingName || (isRtl ? 'ترحيب مخصص' : 'Custom Greeting'))}">
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="shrink-0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -10513,9 +10610,9 @@ function isTabAllowed(tabName) {
             const recordingId = document.getElementById('vmGreetingSelect').value;
             const checkboxes = document.querySelectorAll('.vm-ext-chk:checked');
             const allEnabled = document.getElementById('vmAllMailboxes').checked;
-            
+
             const extensions = Array.from(checkboxes).map(chk => chk.value);
-            
+
             if (!allEnabled && extensions.length === 0) {
                 showToast(isRtl ? 'يرجى اختيار تحويلة واحدة على الأقل.' : 'Please select at least one extension mailbox.', 'error');
                 return;
@@ -10539,12 +10636,12 @@ function isTabAllowed(tabName) {
             const checkboxes = document.querySelectorAll('.vm-ext-chk:checked');
             const allEnabled = document.getElementById('vmAllMailboxes').checked;
             const extensions = Array.from(checkboxes).map(chk => chk.value);
-            
+
             if (!allEnabled && extensions.length === 0) {
                 showToast(isRtl ? 'يرجى اختيار تحويلة واحدة على الأقل للإرجاع للوضع الافتراضي.' : 'Please select at least one mailbox to reset.', 'error');
                 return;
             }
-            
+
             fetch('/api/config/voicemail/reset', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -12184,10 +12281,10 @@ function isTabAllowed(tabName) {
         function highlightNode(nodeId) {
             const connections = document.querySelectorAll('.diagram-wire');
             const cards = document.querySelectorAll('.diagram-card');
-            
+
             const connectedNodeIds = new Set([nodeId]);
             const activeWireIds = new Set();
-            
+
             // 1. Forward Traversal (Downstream)
             let fwdQueue = [nodeId];
             let fwdVisited = new Set([nodeId]);
@@ -12242,7 +12339,7 @@ function isTabAllowed(tabName) {
                     wire.style.filter = 'none';
                 }
             });
-            
+
             // 5. Update Cards HTML styling
             cards.forEach(card => {
                 const id = card.getAttribute('data-node-id');
@@ -12287,8 +12384,8 @@ function isTabAllowed(tabName) {
 
             const matchedNodeIds = new Set();
             diagramNodesList.forEach(node => {
-                if (node.title.toLowerCase().includes(query) || 
-                    node.subtitle.toLowerCase().includes(query) || 
+                if (node.title.toLowerCase().includes(query) ||
+                    node.subtitle.toLowerCase().includes(query) ||
                     (node.desc && node.desc.toLowerCase().includes(query))) {
                     matchedNodeIds.add(node.id);
                 }
@@ -12362,13 +12459,13 @@ function isTabAllowed(tabName) {
                     zoomScale /= zoomFactor;
                 }
                 zoomScale = Math.min(Math.max(zoomScale, 0.15), 3.0);
-                
+
                 const rect = svg.getBoundingClientRect();
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
                 panX = mouseX - (mouseX - panX) * (zoomScale / oldScale);
                 panY = mouseY - (mouseY - panY) * (zoomScale / oldScale);
-                
+
                 updateTransform();
             });
             svg.style.cursor = 'grab';
@@ -12388,10 +12485,10 @@ function isTabAllowed(tabName) {
             const centerX = rect.width / 2;
             const centerY = rect.height / 2;
             const oldScale = zoomScale;
-            
+
             zoomScale *= factor;
             zoomScale = Math.min(Math.max(zoomScale, 0.15), 3.0);
-            
+
             panX = centerX - (centerX - panX) * (zoomScale / oldScale);
             panY = centerY - (centerY - panY) * (zoomScale / oldScale);
             updateTransform();
@@ -12510,7 +12607,7 @@ function isTabAllowed(tabName) {
             const tbody = document.getElementById('timegroups-table-body');
             if (!tbody) return;
             tbody.innerHTML = '';
-            
+
             if (!groups || groups.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-xs text-[var(--text-muted)]">${isRtl ? 'لا توجد مجموعات وقت محددة.' : 'No time groups found.'}</td></tr>`;
                 return;
@@ -12520,7 +12617,7 @@ function isTabAllowed(tabName) {
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-[var(--bg-hover)] transition-colors border-b border-[var(--border-primary)]/40 text-xs timegroup-row';
                 tr.setAttribute('data-search', `${tg.id} ${tg.description}`.toLowerCase());
-                
+
                 let rulesHTML = '';
                 if (tg.rules && tg.rules.length > 0) {
                     tg.rules.forEach(rule => {
@@ -12528,7 +12625,7 @@ function isTabAllowed(tabName) {
                         const weekdayStr = formatWeekdayText(rule.weekday);
                         const monthdayStr = formatMonthdayText(rule.monthday);
                         const monthStr = formatMonthText(rule.month);
-                        
+
                         rulesHTML += `
                             <div class="timegroup-rule-pill">
                                 <span class="time-segment inline-flex items-center gap-1"><svg class="w-3.5 h-3.5 shrink-0 pill-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${escapeHtml(timeStr)}</span>
@@ -12604,7 +12701,7 @@ function isTabAllowed(tabName) {
             const ruleIndex = (container.children ? container.children.length : 0) + 1;
             const card = document.createElement('div');
             card.className = 'rule-card p-4 border border-sky-500/20 rounded-xl bg-sky-950/20 relative flex flex-col gap-3.5 transition-all hover:border-sky-500/40';
-            
+
             const daysList = [
                 { id: 'sat', labelEn: 'Sat', labelAr: 'السبت' },
                 { id: 'sun', labelEn: 'Sun', labelAr: 'الأحد' },
@@ -12765,9 +12862,9 @@ function isTabAllowed(tabName) {
                     </div>
                 </div>
             `;
-            
+
             container.appendChild(card);
-            
+
             // Set initial select values
             card.querySelector('.rule-start-monthday').value = startMthday;
             card.querySelector('.rule-finish-monthday').value = finishMthday;
@@ -12795,7 +12892,7 @@ function isTabAllowed(tabName) {
 
             const startTime = card.querySelector('.rule-start-time').value;
             const finishTime = card.querySelector('.rule-finish-time').value;
-            
+
             const activeButtons = Array.from(card.querySelectorAll('.day-toggle-btn.bg-blue-600'));
             const activeDays = activeButtons.map(b => b.getAttribute('data-day'));
 
@@ -12834,7 +12931,7 @@ function isTabAllowed(tabName) {
             if (!card) return;
 
             const dayBtns = card.querySelectorAll('.day-toggle-btn');
-            
+
             function setDaysActive(targetDays) {
                 dayBtns.forEach(b => {
                     const day = b.getAttribute('data-day');
@@ -12891,10 +12988,10 @@ function isTabAllowed(tabName) {
             document.getElementById('tgEditMode').value = 'true';
             document.getElementById('tgId').value = tg.id;
             document.getElementById('tgDescription').value = tg.description;
-            
+
             const container = document.getElementById('timeGroupRulesListContainer');
             container.innerHTML = '';
-            
+
             if (tg.rules && tg.rules.length > 0) {
                 tg.rules.forEach(rule => {
                     addTimeGroupRuleToModal(rule);
@@ -12902,7 +12999,7 @@ function isTabAllowed(tabName) {
             } else {
                 addTimeGroupRuleToModal();
             }
-            
+
             document.getElementById('timeGroupModalTitle').textContent = (isRtl ? 'تعديل مجموعة الوقت: ' : 'Edit Time Group: ') + tg.description;
         }
 
@@ -12911,10 +13008,10 @@ function isTabAllowed(tabName) {
             const editMode = document.getElementById('tgEditMode').value === 'true';
             const id = document.getElementById('tgId').value;
             const description = document.getElementById('tgDescription').value.trim();
-            
+
             const rules = [];
             const ruleCards = document.querySelectorAll('#timeGroupRulesListContainer .rule-card');
-            
+
             ruleCards.forEach(card => {
                 const startTime = card.querySelector('.rule-start-time').value;
                 const finishTime = card.querySelector('.rule-finish-time').value;
@@ -12926,7 +13023,7 @@ function isTabAllowed(tabName) {
                 const finishMthday = card.querySelector('.rule-finish-monthday').value;
                 const startMth = card.querySelector('.rule-start-month').value;
                 const finishMth = card.querySelector('.rule-finish-month').value;
-                
+
                 rules.push({
                     start_time: startTime,
                     finish_time: finishTime,
@@ -12937,12 +13034,12 @@ function isTabAllowed(tabName) {
                     finish_month: finishMth
                 });
             });
-            
+
             const method = editMode ? 'PUT' : 'POST';
             const url = editMode ? `/api/config/timegroups/${id}` : '/api/config/timegroups';
             const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
             if (submitBtn) setButtonLoading(submitBtn, true);
-            
+
             fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
@@ -13035,7 +13132,7 @@ function isTabAllowed(tabName) {
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-[var(--bg-hover)] transition-colors border-b border-[var(--border-primary)]/40 text-xs timecondition-row';
                 tr.setAttribute('data-search', `${tc.timeconditions_id} ${tc.displayname} ${tc.timegroup_name || ''} ${tc.truegoto || ''} ${tc.falsegoto || ''}`.toLowerCase());
-                
+
                 tr.innerHTML = `
                     <td class="py-3.5 px-4 font-mono font-bold text-[var(--text-primary)]"><span class="px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-primary)] text-cyan-400">#${tc.timeconditions_id}</span></td>
                     <td class="py-3.5 px-4 font-bold text-[var(--text-primary)]">${tc.displayname}</td>
@@ -13144,7 +13241,7 @@ function isTabAllowed(tabName) {
             document.getElementById('tcDisplayName').value = tc.displayname || '';
             populateTcTimeGroupsSelect();
             document.getElementById('tcTimeGroup').value = tc.timegroup_id;
-            
+
             document.getElementById('tcTrueGoto').value = tc.truegoto || 'app-blackhole,hangup,1';
             document.getElementById('tcFalseGoto').value = tc.falsegoto || 'app-blackhole,hangup,1';
 
@@ -13468,8 +13565,8 @@ function isTabAllowed(tabName) {
                 });
 
                 audio.addEventListener('timeupdate', () => {
-                    const dur = (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) 
-                        ? audio.duration 
+                    const dur = (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0)
+                        ? audio.duration
                         : knownDuration;
                     if (dur > 0 && !isScrubbing) {
                         const pct = (audio.currentTime / dur) * 100;
@@ -15635,7 +15732,7 @@ function isTabAllowed(tabName) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="9" class="py-8 text-center text-xs text-[var(--text-muted)]">
-                            ${allHosts.length === 0 
+                            ${allHosts.length === 0
                                 ? (isRtl ? 'لا توجد أجهزة متصلة مكتشفة بعد. اختر المدى واضغط "بدء فحص الشبكة".' : 'No devices detected yet. Select your local LAN subnet and click "Start Network Scan".')
                                 : (isRtl ? 'لا توجد أجهزة تطابق معايير البحث والفلترة.' : 'No devices match your search and filter criteria.')}
                         </td>
@@ -15647,7 +15744,7 @@ function isTabAllowed(tabName) {
             let html = '';
             filtered.forEach(h => {
                 const isVoip = h.isVoipDevice;
-                const vendorBadge = isVoip 
+                const vendorBadge = isVoip
                     ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/35"><svg class="w-3 h-3 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg><span>${escapeHtml(h.vendor)}</span></span>`
                     : `<span class="text-xs font-semibold text-[var(--text-secondary)]">${escapeHtml(h.vendor || 'Unknown')}</span>`;
 
@@ -15656,7 +15753,7 @@ function isTabAllowed(tabName) {
                 if (h.httpServerName) {
                     const webPort = h.httpPort || (h.ports.find(p => [80, 443, 8080, 8443].includes(p.port))?.port) || 80;
                     const proxyUrl = `/api/config/ipscan/proxy/${encodeURIComponent(h.ip)}/${encodeURIComponent(webPort)}/`;
-                    
+
                     webServerHtml = `
                         <div class="flex flex-col gap-1 max-w-[260px]">
                             <button type="button" onclick="openDeviceWebConsole('${h.ip}', ${webPort}, '${escapeHtml(h.httpTitle || h.httpServerName || h.ip)}')" class="inline-flex items-center gap-1.5 font-bold text-xs text-cyan-400 hover:text-cyan-300 transition text-left cursor-pointer truncate group" title="<%= isRtl ? 'فتح في المتصفح المدمج (بروكسي مباشر)' : 'Open in Built-in Browser Console (Direct Proxy)' %>">
