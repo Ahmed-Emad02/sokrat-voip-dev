@@ -152,10 +152,8 @@ test('views/cdr.ejs renders cleanly without STT buttons or filter', async () => 
         moment
     });
 
-    assert.equal(html.includes('id="cdrSearchTranscript"'), false, 'cdr.ejs must NOT render searchTranscript input');
-    assert.equal(html.includes('id="transcriptModal"'), false, 'cdr.ejs must NOT render transcriptModal');
-    assert.equal(html.includes('showTranscriptModal'), false, 'cdr.ejs must NOT wire showTranscriptModal handler');
-    assert.equal(html.includes('transcribeCallNow'), false, 'cdr.ejs must NOT wire transcribeCallNow handler');
+    assert.ok(html.includes('openCdrTranscript'), 'cdr.ejs must wire openCdrTranscript on-demand button in recording rows');
+    assert.ok(html.includes('cdrTranscriptModal'), 'cdr.ejs must render cdrTranscriptModal');
 
     const scriptMatches = html.match(/<script[\s\S]*?>([\s\S]*?)<\/script>/gi) || [];
     for (const s of scriptMatches) {
@@ -211,10 +209,8 @@ test('views/voicemails.ejs renders cleanly without STT buttons or transcript fil
         moment
     });
 
-    assert.equal(html.includes('id="vmSearchTranscript"'), false, 'voicemails.ejs must not render vmSearchTranscript input');
-    assert.equal(html.includes('id="vmTranscriptModal"'), false, 'voicemails.ejs must not render vmTranscriptModal');
-    assert.equal(html.includes('showVmTranscriptModal'), false, 'voicemails.ejs must not wire showVmTranscriptModal handler');
-    assert.equal(html.includes('transcribeVoicemailNow'), false, 'voicemails.ejs must not wire transcribeVoicemailNow handler');
+    assert.ok(html.includes('openVmTranscript'), 'voicemails.ejs must wire openVmTranscript on-demand button in voicemail rows');
+    assert.ok(html.includes('vmTranscriptViewerModal'), 'voicemails.ejs must render vmTranscriptViewerModal');
     const scriptMatches = html.match(/<script[\s\S]*?>([\s\S]*?)<\/script>/gi) || [];
     for (const s of scriptMatches) {
         const code = s.replace(/<script[\s\S]*?>/i, '').replace(/<\/script>/i, '');
