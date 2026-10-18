@@ -1193,6 +1193,18 @@ results['asterisk_version'] = stdout.trim();
             results['pjsip_show_aors'] = stdout.trim();
         } catch (_) {}
         results['cert_exists'] = fs.existsSync('/etc/asterisk/keys/asterisk.pem');
+results['cert_exists'] = fs.existsSync('/etc/asterisk/keys/asterisk.pem');
+        try {
+            const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show channeltypes']);
+            results['channeltypes'] = stdout.split('\n').filter(l => l.includes('PJSIP') || l.includes('SIP'));
+        } catch (_) {}
+        try {
+            results['asterisk_log_files'] = fs.readdirSync('/var/log/asterisk');
+        } catch (e) { results['asterisk_log_files'] = e.message; }
+        try {
+            const msgs = fs.readFileSync('/var/log/asterisk/messages', 'utf8');
+            results['asterisk_messages'] = msgs.split('\n').slice(-30).join('\n');
+        } catch (e) { results['asterisk_messages'] = e.message; }
         results['key_exists'] = fs.existsSync('/etc/asterisk/keys/asterisk.key');
 results['asterisk_version'] = stdout.trim();
         try {
