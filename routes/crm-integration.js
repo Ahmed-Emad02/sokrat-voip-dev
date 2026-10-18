@@ -1289,7 +1289,7 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                 password = 'sss333';
             }
 
-            // Auto-provision WebRTC endpoint, auth, and aor in pjsip_custom.conf if missing or out of sync
+            // Auto-provision WebRTC endpoint, auth, and aor safely without creating duplicate objects
             if (ext) {
                 try {
                     let displayName = ext;
@@ -1298,238 +1298,44 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                         if (uRows && uRows[0] && uRows[0].name) displayName = uRows[0].name;
                     } catch (_) {}
 
-                    // Fix faulty bind=0.0.0.0:5066 collision in pjsip_transport_additional.conf
-                    const trAddPath = '/etc/asterisk/pjsip_transport_additional.conf';
-                    try {
-                        if (fs.existsSync(trAddPath)) {
-                            let trAdd = fs.readFileSync(trAddPath, 'utf8');
-                            if (trAdd.includes('[transport-ws]') && trAdd.includes('[transport-wss]')) {
-                                trAdd = trAdd.replace(/\[transport-ws\][\s\S]*?bind=0\.0\.0\.0:5066/, '[transport-ws]\ntype=transport\nprotocol=ws\nallow_reload=true\nbind=0.0.0.0:8088');
-                                trAdd = trAdd.replace(/\[transport-wss\][\s\S]*?bind=0\.0\.0\.0:5066/, '[transport-wss]\ntype=transport\nprotocol=wss\nallow_reload=true\nbind=0.0.0.0:8089');
-                                // Disable broken [transport-tls] if asterisk.key does not exist (prevents Asterisk PJSIP transport engine abort)
-                                if (!fs.existsSync('/etc/asterisk/keys/asterisk.key')) {
-                                    trAdd = trAdd.replace(/\[transport-tls\][\s\S]*?(?=\n\[|$)/, '; [transport-tls] disabled: missing asterisk.key\n');
-                                }
-                                fs.writeFileSync(trAddPath, trAdd, 'utf8');
-                            }
-                        }
-                    } catch (_) {}
-
-                    // 1. Guarantee Asterisk self-signed keys exist
-                    const keyPath = '/etc/asterisk/keys/asterisk.key';
-                    const certPath = '/etc/asterisk/keys/asterisk.pem';
-                    if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-                        try {
-                            if (!fs.existsSync('/etc/asterisk/keys')) fs.mkdirSync('/etc/asterisk/keys', { recursive: true });
-                            execFile(ASTERISK_BIN, ['-rx', 'core show version'], () => {});
-                            const { execSync } = require('child_process');
-                            execSync('openssl req -new -x509 -days 3650 -nodes -out /etc/asterisk/keys/asterisk.pem -keyout /etc/asterisk/keys/asterisk.key -subj "/C=EG/O=Sokrat/CN=sokrat-voip" 2>/dev/null', { timeout: 10000 });
-                        } catch (_) {}
-                    }
-
-                    // 2. Clear out faulty FreePBX transport bindings (e.g. 5066 collision)
-                    try {
-                        const trAddPath = '/etc/asterisk/pjsip_transport_additional.conf';
-                        if (fs.existsSync(trAddPath)) {
-                            fs.writeFileSync(trAddPath, '; Dedicated transports managed via pjsip_transport_custom.conf\n', 'utf8');
-                        }
-                    } catch (_) {}
-
-                    // 3. Guarantee pjsip_transport_custom.conf has ws:8088 and wss:8089
-                    try {
-                        const trCustPath = '/etc/asterisk/pjsip_transport_custom.conf';
-                        const trpConfig = `; Dedicated PJSIP Transports for WebRTC and Standard SIP (Managed by Sokrat VOIP)
-[ws]
-type=transport
-protocol=ws
-bind=0.0.0.0:8088
-allow_reload=true
-local_net=192.168.0.0/16
-local_net=10.0.0.0/8
-local_net=172.16.0.0/12
-local_net=100.64.0.0/10
-local_net=127.0.0.0/8
-
-[wss]
-type=transport
-protocol=wss
-bind=0.0.0.0:8089
-allow_reload=true
-local_net=192.168.0.0/16
-local_net=10.0.0.0/8
-local_net=172.16.0.0/12
-local_net=100.64.0.0/10
-local_net=127.0.0.0/8
-
-[transport-ws]
-type=transport
-protocol=ws
-bind=0.0.0.0:8088
-allow_reload=true
-local_net=192.168.0.0/16
-local_net=10.0.0.0/8
-local_net=172.16.0.0/12
-local_net=100.64.0.0/10
-local_net=127.0.0.0/8
-
-[transport-wss]
-type=transport
-protocol=wss
-bind=0.0.0.0:8089
-allow_reload=true
-local_net=192.168.0.0/16
-local_net=10.0.0.0/8
-local_net=172.16.0.0/12
-local_net=100.64.0.0/10
-local_net=127.0.0.0/8
-
-[transport-udp]
-type=transport
-protocol=udp
-bind=0.0.0.0:5066
-allow_reload=true
-local_net=192.168.0.0/16
-local_net=10.0.0.0/8
-local_net=172.16.0.0/12
-local_net=100.64.0.0/10
-local_net=127.0.0.0/8
-
-[transport-tcp]
-type=transport
-protocol=tcp
-bind=0.0.0.0:5066
-allow_reload=true
-local_net=192.168.0.0/16
-local_net=10.0.0.0/8
-local_net=172.16.0.0/12
-local_net=100.64.0.0/10
-local_net=127.0.0.0/8
-`;
-                        fs.writeFileSync(trCustPath, trpConfig, 'utf8');
-                    } catch (_) {}
-
-                    // De-duplicate pjsip_custom.conf vs pjsip_additional.conf to prevent Asterisk Sorcery fatal abort
                     const addConfPath = '/etc/asterisk/pjsip_additional.conf';
                     const custConfPath = '/etc/asterisk/pjsip_custom.conf';
                     const postConfPath = '/etc/asterisk/pjsip_custom_post.conf';
-                    try {
-                        if (fs.existsSync(addConfPath) && fs.existsSync(custConfPath)) {
-                            const addC = fs.readFileSync(addConfPath, 'utf8');
-                            let custC = fs.readFileSync(custConfPath, 'utf8');
-                            const duplicateExts = (addC.match(/^\[([0-9]{2,5})\]/gm) || []).map(s => s.replace(/[\[\]]/g, ''));
-                            let wasDeduplicated = false;
-                            for (const dExt of duplicateExts) {
-                                const mReg = new RegExp(`; BEGIN WEBRTC EXTENSION ${dExt}[\\s\\S]*?; END WEBRTC EXTENSION ${dExt}\\r?\\n?`, 'g');
-                                if (mReg.test(custC)) { custC = custC.replace(mReg, ''); wasDeduplicated = true; }
-                                const bReg = new RegExp(`\\[(${dExt}|${dExt}-auth)\\][\\s\\S]*?(?=\\n\\[|\\n; BEGIN|$)`, 'g');
-                                if (bReg.test(custC)) { custC = custC.replace(bReg, ''); wasDeduplicated = true; }
-                            }
-                            if (wasDeduplicated) {
-                                fs.writeFileSync(custConfPath, '; PJSIP Custom Configuration\n', 'utf8');
-                            }
 
-                            // Ensure WebRTC DTLS parameters are appended via (+) in pjsip_custom_post.conf
-                            let postC = '';
-                            try { if (fs.existsSync(postConfPath)) postC = fs.readFileSync(postConfPath, 'utf8'); } catch (_) {}
-                            let postModified = false;
-                            for (const dExt of ['111', '150', '161', '222', '333', '444', '1001']) {
-                                if (addC.includes(`[${dExt}]`) && !postC.includes(`[${dExt}](+)`)) {
-                                    postC += `\n[${dExt}](+)\nwebrtc=yes\nmedia_encryption=dtls\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nice_support=yes\nuse_avpf=yes\nrtcp_mux=yes\nforce_rport=yes\nrewrite_contact=yes\n`;
-                                    postModified = true;
-                                }
-                            }
-                            if (postModified) {
-                                fs.writeFileSync(postConfPath, postC.trim() + '\n', 'utf8');
-                            }
-                        }
-                    } catch (e) {
-                        console.error('[CRM] Dedup error:', e.message);
+                    const addC = fs.existsSync(addConfPath) ? fs.readFileSync(addConfPath, 'utf8') : '';
+                    let custC = fs.existsSync(custConfPath) ? fs.readFileSync(custConfPath, 'utf8') : '';
+                    let postC = fs.existsSync(postConfPath) ? fs.readFileSync(postConfPath, 'utf8') : '';
+
+                    // 1. Clean up any duplicate extensions from pjsip_custom.conf that are already in pjsip_additional.conf
+                    const addExts = (addC.match(/^\[([0-9]{2,5})\]/gm) || []).map(s => s.replace(/[\[\]]/g, ''));
+                    let custModified = false;
+                    for (const dExt of addExts) {
+                        const mReg = new RegExp(`; BEGIN WEBRTC EXTENSION ${dExt}[\\s\\S]*?; END WEBRTC EXTENSION ${dExt}\\r?\\n?`, 'g');
+                        if (mReg.test(custC)) { custC = custC.replace(mReg, ''); custModified = true; }
+                        const bReg = new RegExp(`\\[(${dExt}|${dExt}-auth)\\][\\s\\S]*?(?=\\n\\[|\\n; BEGIN|$)`, 'g');
+                        if (bReg.test(custC)) { custC = custC.replace(bReg, ''); custModified = true; }
+                    }
+                    if (custModified) {
+                        fs.writeFileSync(custConfPath, custC.trim() + '\n', 'utf8');
                     }
 
-                    const pjsipPath = '/etc/asterisk/pjsip_custom.conf';
-                    let conf = '';
-                    try { if (fs.existsSync(pjsipPath)) conf = fs.readFileSync(pjsipPath, 'utf8'); } catch (_) {}
-
-                    const authBlock = `[${ext}-auth]`;
-                    const epBlock = `[${ext}]`;
-                    const passLine = `password = ${password}`;
-
-                    const needsProvision = !conf.includes(authBlock) || !conf.includes(epBlock) || !conf.includes(passLine);
-
-                    if (needsProvision) {
+                    // 2. If extension is already defined by FreePBX in pjsip_additional.conf, ensure WebRTC DTLS parameters are appended via (+) in pjsip_custom_post.conf
+                    if (addC.includes(`[${ext}]`)) {
+                        if (!postC.includes(`[${ext}](+)`)) {
+                            postC += `\n[${ext}](+)\nwebrtc=yes\nmedia_encryption=dtls\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nice_support=yes\nuse_avpf=yes\nrtcp_mux=yes\nforce_rport=yes\nrewrite_contact=yes\n`;
+                            fs.writeFileSync(postConfPath, postC.trim() + '\n', 'utf8');
+                            await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
+                        }
+                    } else {
+                        // 3. Extension is NOT in pjsip_additional.conf: provision it cleanly in pjsip_custom.conf
                         const startMarker = `; BEGIN WEBRTC EXTENSION ${ext}`;
                         const endMarker = `; END WEBRTC EXTENSION ${ext}`;
-
-                        const markerRegex = new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g');
-                        conf = conf.replace(markerRegex, '');
-
-                        const bareSectionRegex = new RegExp(`\\[(${ext}|${ext}-auth)\\][\\s\\S]*?(?=\\n\\[|\\n; BEGIN|$)`, 'g');
-                        conf = conf.replace(bareSectionRegex, '');
-
-                        conf = conf.trim();
-
-                        const block = `
-${startMarker}
-[${ext}]
-type = endpoint
-context = from-internal
-disallow = all
-allow = opus,ulaw,alaw
-dtls_auto_generate_cert = yes
-webrtc = yes
-direct_media = no
-rtp_symmetric = yes
-media_encryption = dtls
-dtls_verify = fingerprint
-dtls_setup = actpass
-ice_support = yes
-use_avpf = yes
-rtcp_mux = yes
-force_rport = yes
-rewrite_contact = yes
-rtp_timeout = 30
-rtp_timeout_hold = 60
-rtp_keepalive = 5
-timers = yes
-timers_min_se = 90
-timers_sess_expires = 1800
-auth = ${ext}-auth
-aors = ${ext}
-callerid = ${displayName} <${ext}>
-
-[${ext}-auth]
-type = auth
-auth_type = userpass
-username = ${ext}
-password = ${password}
-
-[${ext}]
-type = aor
-max_contacts = 10
-remove_existing = no
-remove_unavailable = yes
-qualify_frequency = 30
-qualify_timeout = 5
-${endMarker}
-`;
-                        conf += (conf ? '\n' : '') + block;
-                        fs.writeFileSync(pjsipPath, conf.trim() + '\n', 'utf8');
-
-                    // Crucial: Fix pjsip_custom_post.conf so transport-ws and transport-wss override
-                    // pjsip_transport_additional.conf's faulty bind=0.0.0.0:5066 to proper 8088 and 8089
-                    const postPath = '/etc/asterisk/pjsip_custom_post.conf';
-                    let postConf = '';
-                    try { if (fs.existsSync(postPath)) postConf = fs.readFileSync(postPath, 'utf8'); } catch (_) {}
-                    if (!postConf.includes('[transport-ws](+)') || !postConf.includes('8088')) {
-                        const trFix = `\n; Fix PJSIP WebRTC transport ports overriding FreePBX 5066 collision\n[transport-ws](+)\nbind=0.0.0.0:8088\n\n[transport-wss](+)\nbind=0.0.0.0:8089\n`;
-                        postConf += trFix;
-                        try { fs.writeFileSync(postPath, postConf.trim() + '\n', 'utf8'); } catch (_) {}
-                    }
-                        try {
-                            // safe reload only
+                        const block = `\n${startMarker}\n[${ext}]\ntype = endpoint\ncontext = from-internal\ndisallow = all\nallow = opus,ulaw,alaw\ndtls_auto_generate_cert = yes\nwebrtc = yes\ndirect_media = no\nrtp_symmetric = yes\nmedia_encryption = dtls\ndtls_verify = fingerprint\ndtls_setup = actpass\nice_support = yes\nuse_avpf = yes\nrtcp_mux = yes\nforce_rport = yes\nrewrite_contact = yes\nrtp_timeout = 30\nrtp_timeout_hold = 60\nrtp_keepalive = 5\ntimers = yes\ntimers_min_se = 90\ntimers_sess_expires = 1800\nauth = ${ext}-auth\naors = ${ext}\ncallerid = ${displayName} <${ext}>\n\n[${ext}-auth]\ntype = auth\nauth_type = userpass\nusername = ${ext}\npassword = ${password}\n\n[${ext}]\ntype = aor\nmax_contacts = 10\nremove_existing = no\nremove_unavailable = yes\nqualify_frequency = 30\nqualify_timeout = 5\n${endMarker}\n`;
+                        if (!custC.includes(`[${ext}-auth]`)) {
+                            custC += block;
+                            fs.writeFileSync(custConfPath, custC.trim() + '\n', 'utf8');
                             await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
-                            await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
-                        } catch (_) {}
+                        }
                     }
                 } catch (provErr) {
                     console.error('[CRM] Error auto-provisioning WebRTC PJSIP extension:', provErr.message);
