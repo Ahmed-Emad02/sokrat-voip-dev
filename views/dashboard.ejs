@@ -379,19 +379,29 @@ const isRtl = currentLang === 'ar';
                         <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
                     </select>
                 </div>
+                <div>
+                    <label for="dashTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.trunk %></label>
+                    <select id="dashTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
+                        <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.trunkInternal %></option>
+                        <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
+                            <% availableTrunks.forEach(trk => { %>
+                                <option value="<%= trk.id %>" <%= filters.trunkFilter === trk.id ? 'selected' : '' %>><%= trk.label %></option>
+                            <% }) %>
+                        <% } %>
+                    </select>
+                </div>
             </div>
 
             <!-- Row 2: Secondary / Advanced Filters (Collapsible Drawer) -->
             <% 
                 let hasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
-                                         (filters.trunkFilter && filters.trunkFilter !== 'ALL') ||
                                          (filters.searchSrc && filters.searchSrc.trim() !== '') ||
                                          (filters.searchDst && filters.searchDst.trim() !== '') ||
                                          (filters.searchDid && filters.searchDid.trim() !== '') ||
                                          (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
                 let activeSecondaryCount = 0;
                 if (filters.directionFilter && filters.directionFilter !== 'ALL') activeSecondaryCount++;
-                if (filters.trunkFilter && filters.trunkFilter !== 'ALL') activeSecondaryCount++;
                 if (filters.searchSrc && filters.searchSrc.trim() !== '') activeSecondaryCount++;
                 if (filters.searchDst && filters.searchDst.trim() !== '') activeSecondaryCount++;
                 if (filters.searchDid && filters.searchDid.trim() !== '') activeSecondaryCount++;
@@ -425,18 +435,7 @@ const isRtl = currentLang === 'ar';
                         <label for="dashSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
                         <input type="text" id="dashSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
                     </div>
-                    <div>
-                        <label for="dashTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.trunk %></label>
-                        <select id="dashTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                            <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
-                            <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.trunkInternal %></option>
-                            <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
-                                <% availableTrunks.forEach(trk => { %>
-                                    <option value="<%= trk.id %>" <%= filters.trunkFilter === trk.id ? 'selected' : '' %>><%= trk.label %></option>
-                                <% }) %>
-                            <% } %>
-                        </select>
-                    </div>
+
                 </div>
                 </div>
             </div>

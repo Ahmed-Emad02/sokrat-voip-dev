@@ -6,6 +6,8 @@ const words = {
         status: "Call Status", allDisp: "All Dispositions", direction: "Direction", allDir: "All Directions", dirIn: "Inbound", dirOut: "Outbound", dirInternal: "Internal",
         scope: "Call Scope", allScope: "All Scopes", scopeInternal: "Internal Only", scopeExternal: "External Only", scopeFailover: "Failover Only",
         src: "Source", dst: "Destination", did: "DID Number", uid: "Unique ID",
+        trunk: "Trunk / Line", allTrunks: "All Trunks", trunkInternal: "Internal Only (No Trunk)",
+        moreFilters: "More Filters", lessFilters: "Fewer Filters", reset: "Reset Filters",
         btn: "Apply Filters", thTime: "Timestamp", thId: "UniqueID", thSrc: "Source", thDst: "Destination", thDid: "DID",
         thName: "Name", thAir: "Airtime", thState: "State", thDir: "Dir", thScope: "Scope", thRec: "Recording", thActions: "Actions", noData: "No matching call records.",
         play: "Play", download: "Download", noAudio: "No Audio", footerLeft: "Call records", footerRight: "Total records:",
@@ -18,6 +20,8 @@ const words = {
         status: "حالة المكالمة", allDisp: "جميع الحالات", direction: "الاتجاه", allDir: "كل الاتجاهات", dirIn: "وارد", dirOut: "صادر", dirInternal: "داخلي",
         scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط", scopeFailover: "تحويل خارجي فقط",
         src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
+        trunk: "خط الربط / الشريحة", allTrunks: "جميع خطوط الربط", trunkInternal: "داخلي فقط (بدون خط)",
+        moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر", reset: "إعادة ضبط",
         btn: "تطبيق فلاتر البحث", thTime: "التوقيت", thId: "المعرف", thSrc: "المصدر", thDst: "الوجهة", thDid: "DID",
         thName: "الاسم", thAir: "مدة المكالمة", thState: "الحالة", thDir: "اتجاه", thScope: "النطاق", thRec: "التسجيل", thActions: "الإجراءات", noData: "لم يتم العثور على سجلات مكالمات مطابقة.",
         play: "تشغيل", download: "تحميل", noAudio: "لا يوجد صوت", footerLeft: "نشاط تدفق البيانات", footerRight: "إجمالي السجلات المحسوبة:",
@@ -353,12 +357,13 @@ function fmtDur(s) {
         </div>
 
         <!-- Compact Balanced Filter Form -->
+        <!-- Compact Balanced Filter Form -->
         <form id="cdrFilterForm" action="/cdr" method="GET" class="panel-surface p-3 px-3.5 rounded-xl mb-4 flex flex-col gap-2.5 relative z-30">
             <input type="hidden" name="lang" value="<%= currentLang %>">
-            <input type="hidden" name="page" value="<%= filters.page %>">
-            <input type="hidden" name="perPage" value="<%= filters.perPage %>">
+            <input type="hidden" name="page" value="1">
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            <!-- Row 1: Primary Filters (6-column responsive grid) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
                 <div>
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="cdrStartDate"><%= t.startTime %></label>
                     <input type="datetime-local" id="cdrStartDate" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -469,15 +474,6 @@ function fmtDur(s) {
                     </div>
                 </div>
                 <div>
-                    <label for="cdrDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
-                    <select id="cdrDirectionFilter" name="directionFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL" <%= filters.directionFilter === 'ALL' ? 'selected' : '' %>><%= t.allDir %></option>
-                        <option value="OUTBOUND" <%= filters.directionFilter === 'OUTBOUND' ? 'selected' : '' %>><%= t.dirOut %></option>
-                        <option value="INBOUND" <%= filters.directionFilter === 'INBOUND' ? 'selected' : '' %>><%= t.dirIn %></option>
-                        <option value="INTERNAL" <%= filters.directionFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.dirInternal %></option>
-                    </select>
-                </div>
-                <div>
                     <label for="cdrScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
                     <select id="cdrScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                         <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
@@ -487,26 +483,10 @@ function fmtDur(s) {
                     </select>
                 </div>
                 <div>
-                    <label for="cdrSearchSrc" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.src %></label>
-                    <input type="text" id="cdrSearchSrc" name="searchSrc" value="<%= filters.searchSrc %>" placeholder="e.g., 101" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                </div>
-                <div>
-                    <label for="cdrSearchDst" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.dst %></label>
-                    <input type="text" id="cdrSearchDst" name="searchDst" value="<%= filters.searchDst %>" placeholder="e.g., 010..." class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                </div>
-                <div>
-                    <label for="cdrSearchDid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.did %></label>
-                    <input type="text" id="cdrSearchDid" name="searchDid" value="<%= filters.searchDid || '' %>" placeholder="e.g., 01234567" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                </div>
-                <div>
-                    <label for="cdrSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
-                    <input type="text" id="cdrSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                </div>
-                <div>
-                    <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= isRtl ? 'خط الربط / الشريحة' : 'Trunk / Line' %></label>
+                    <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.trunk %></label>
                     <select id="cdrTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= isRtl ? 'جميع خطوط الربط' : 'All Trunks' %></option>
-                        <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= isRtl ? 'داخلي فقط (بدون خط)' : 'Internal Only' %></option>
+                        <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
+                        <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.trunkInternal %></option>
                         <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
                             <% availableTrunks.forEach(trk => { %>
                                 <option value="<%= trk.id %>" <%= filters.trunkFilter === trk.id ? 'selected' : '' %>><%= trk.label %></option>
@@ -514,17 +494,77 @@ function fmtDur(s) {
                         <% } %>
                     </select>
                 </div>
-
             </div>
 
-            <div class="flex items-center justify-between gap-3 pt-2 border-t border-[var(--border-primary)]/50">
-                <a href="/cdr?lang=<%= currentLang %>" class="filter-action-btn" title="<%= isRtl ? 'إعادة ضبط' : 'Reset Filters' %>">
-                    <svg class="w-3.5 h-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    <span><%= isRtl ? 'إعادة ضبط' : 'Reset Filters' %></span>
-                </a>
-                <button type="submit" class="btn-primary px-5 py-1.5 text-xs font-bold uppercase tracking-wider cursor-pointer"><%= t.btn %></button>
+            <!-- Row 2: Secondary / Advanced Filters (Collapsible Drawer) -->
+            <% 
+                let cdrHasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
+                                           (filters.searchSrc && filters.searchSrc.trim() !== '') ||
+                                           (filters.searchDst && filters.searchDst.trim() !== '') ||
+                                           (filters.searchDid && filters.searchDid.trim() !== '') ||
+                                           (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
+                let cdrActiveSecondaryCount = 0;
+                if (filters.directionFilter && filters.directionFilter !== 'ALL') cdrActiveSecondaryCount++;
+                if (filters.searchSrc && filters.searchSrc.trim() !== '') cdrActiveSecondaryCount++;
+                if (filters.searchDst && filters.searchDst.trim() !== '') cdrActiveSecondaryCount++;
+                if (filters.searchDid && filters.searchDid.trim() !== '') cdrActiveSecondaryCount++;
+                if (filters.searchUniqueId && filters.searchUniqueId.trim() !== '') cdrActiveSecondaryCount++;
+            %>
+            <div id="cdrSecondaryFilters" class="<%= cdrHasActiveSecondary ? '' : 'hidden' %> border-t border-[var(--border-primary)]/40 overflow-hidden">
+                <div class="pt-2.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                        <div>
+                            <label for="cdrDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
+                            <select id="cdrDirectionFilter" name="directionFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                                <option value="ALL" <%= filters.directionFilter === 'ALL' ? 'selected' : '' %>><%= t.allDir %></option>
+                                <option value="OUTBOUND" <%= filters.directionFilter === 'OUTBOUND' ? 'selected' : '' %>><%= t.dirOut %></option>
+                                <option value="INBOUND" <%= filters.directionFilter === 'INBOUND' ? 'selected' : '' %>><%= t.dirIn %></option>
+                                <option value="INTERNAL" <%= filters.directionFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.dirInternal %></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="cdrSearchSrc" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.src %></label>
+                            <input type="text" id="cdrSearchSrc" name="searchSrc" value="<%= filters.searchSrc || '' %>" placeholder="e.g., 101" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                        </div>
+                        <div>
+                            <label for="cdrSearchDst" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.dst %></label>
+                            <input type="text" id="cdrSearchDst" name="searchDst" value="<%= filters.searchDst || '' %>" placeholder="e.g., 010..." class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                        </div>
+                        <div>
+                            <label for="cdrSearchDid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.did %></label>
+                            <input type="text" id="cdrSearchDid" name="searchDid" value="<%= filters.searchDid || '' %>" placeholder="e.g., 01234567" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                        </div>
+                        <div>
+                            <label for="cdrSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
+                            <input type="text" id="cdrSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Action Bar -->
+            <div class="flex items-center justify-between gap-3 pt-1.5 border-t border-[var(--border-primary)]/50">
+                <div class="flex items-center gap-2">
+                    <a href="/cdr?lang=<%= currentLang %>" class="filter-action-btn" title="<%= t.reset %>">
+                        <svg class="w-3.5 h-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span><%= t.reset %></span>
+                    </a>
+                    <button type="button" id="cdrToggleMoreBtn" onclick="toggleCdrMoreFilters()" class="filter-action-btn" title="<%= cdrHasActiveSecondary ? t.lessFilters : t.moreFilters %>">
+                        <svg id="cdrToggleMoreFilterIcon" class="w-3.5 h-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                        <span id="cdrToggleMoreLabel"><%= cdrHasActiveSecondary ? t.lessFilters : t.moreFilters %></span>
+                        <svg id="cdrToggleMoreIcon" class="w-3.5 h-3.5 transition-transform duration-200 <%= cdrHasActiveSecondary ? 'rotate-180' : '' %>" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        <% if (cdrActiveSecondaryCount > 0) { %>
+                            <span class="inline-flex items-center px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-[var(--accent-color)]/20 text-[var(--accent-color)] border border-[var(--accent-color)]/30 ms-0.5">
+                                <%= cdrActiveSecondaryCount %> <%= isRtl ? 'نشط' : 'Active' %>
+                            </span>
+                        <% } %>
+                    </button>
+                </div>
+                <button type="submit" class="btn-primary px-5 py-1 text-xs font-bold uppercase tracking-wider cursor-pointer"><%= t.btn %></button>
             </div>
         </form>
 
@@ -550,17 +590,17 @@ function fmtDur(s) {
                     <thead>
                         <tr class="bg-black/40 text-zinc-400 text-xs font-bold uppercase border-b border-[#27272a]">
                             <th data-col="time" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thTime %></th>
-                            <th data-col="uniqueid" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thId %></th>
                             <th data-col="src" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thSrc %></th>
                             <th data-col="dst" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDst %></th>
-                            <th data-col="did" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDid %></th>
-                            <th data-col="trunk" class="p-4 tracking-wider text-start whitespace-nowrap"><%= isRtl ? 'خط الربط' : 'Trunk' %></th>
                             <th data-col="name" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thName %></th>
+                            <th data-col="trunk" class="p-4 tracking-wider text-start whitespace-nowrap"><%= isRtl ? 'خط الربط' : 'Trunk' %></th>
                             <th data-col="airtime" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thAir %></th>
                             <th data-col="state" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thState %></th>
                             <th data-col="dir" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDir %></th>
                             <th data-col="scope" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thScope %></th>
                             <th data-col="rec" class="p-4 tracking-wider text-end min-w-[340px] whitespace-nowrap"><%= t.thRec %></th>
+                            <th data-col="did" class="p-4 tracking-wider text-start whitespace-nowrap hidden"><%= t.thDid %></th>
+                            <th data-col="uniqueid" class="p-4 tracking-wider text-start whitespace-nowrap hidden"><%= t.thId %></th>
                             <% if (canDeleteCdr) { %>
                                 <th data-col="actions" class="p-4 tracking-wider text-center whitespace-nowrap"><%= t.thActions %></th>
                             <% } %>
@@ -568,7 +608,7 @@ function fmtDur(s) {
                     </thead>
                     <tbody class="divide-y divide-zinc-800/30 text-sm font-mono">
                         <% if(calls.length === 0) { %>
-                            <tr><td colspan="<%= isSuper ? 12 : 11 %>" class="p-8 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>
+                            <tr><td colspan="<%= canDeleteCdr ? 11 : 10 %>" class="p-8 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>
                         <% } else { %>
                             <% calls.forEach(call => { %>
                                 <% const isFailover = (call.dcontext === 'ext-external-failover') || (call.userfield && String(call.userfield).startsWith('Failover:')); %>
@@ -581,8 +621,7 @@ function fmtDur(s) {
                                             <span class="text-[11px] text-black font-mono font-semibold" style="color: #000000 !important;"><%= moment(call.calldate).format('HH:mm:ss') %></span>
                                         </div>
                                     </td>
-                                    <td data-col="uniqueid" class="p-4 text-zinc-400 text-[11px] font-mono whitespace-nowrap"><%= call.uniqueid %></td>
-                                    <td data-col="src" class="p-4 font-bold text-white font-mono whitespace-nowrap">
+                                                                        <td data-col="src" class="p-4 font-bold text-white font-mono whitespace-nowrap">
                                         <%= call.src %>
                                         <% if (isFailover && call.channel && call.channel.startsWith('Dongle/')) { %>
                                             <span class="block text-[10px] font-mono text-zinc-400 font-normal"><%= call.channel.split('-')[0].replace('Dongle/', '') %></span>
@@ -608,7 +647,13 @@ function fmtDur(s) {
                                             <span class="text-white font-mono"><%= call.dst %></span>
                                         <% } %>
                                     </td>
-                                    <td data-col="did" class="p-4 font-mono text-xs text-zinc-300 whitespace-nowrap"><%= call.did && call.did.trim() ? call.did.trim() : '-' %></td>
+                                    <td data-col="name" class="p-4 text-zinc-300">
+                                        <% if (isFailover && (!call.src_name || call.src_name === 'No Name' || call.src_name.startsWith('dongle'))) { %>
+                                            <span class="cdr-failover-name text-xs font-semibold"><%= isRtl ? 'مكالمة واردة محولة لموبايل' : 'Inbound Forwarded Call' %></span>
+                                        <% } else { %>
+                                            <%= call.src_name %>
+                                        <% } %>
+                                    </td>
                                     <td data-col="trunk" class="p-4 whitespace-nowrap font-mono text-xs">
                                         <% if (call.trunk && call.trunk.name && call.trunk.name !== '-') { %>
                                             <% if (call.trunk.type === 'dongle') { %>
@@ -618,19 +663,12 @@ function fmtDur(s) {
                                                 </span>
                                             <% } else { %>
                                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 whitespace-nowrap">
-                                                    <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" stroke-linejoin="round" d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 014-10z"/></svg>
+                                                    <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" stroke-linejoin="round" d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
                                                     <%= call.trunk.name %>
                                                 </span>
                                             <% } %>
                                         <% } else { %>
                                             <span class="text-zinc-600 font-mono text-xs">-</span>
-                                        <% } %>
-                                    </td>
-                                    <td data-col="name" class="p-4 text-zinc-300">
-                                        <% if (isFailover && (!call.src_name || call.src_name === 'No Name' || call.src_name.startsWith('dongle'))) { %>
-                                            <span class="cdr-failover-name text-xs font-semibold"><%= isRtl ? 'مكالمة واردة محولة لموبايل' : 'Inbound Forwarded Call' %></span>
-                                        <% } else { %>
-                                            <%= call.src_name %>
                                         <% } %>
                                     </td>
                                     <td data-col="airtime" class="p-4 text-zinc-400 whitespace-nowrap"><%= fmtDur(call.billsec) %></td>
@@ -711,6 +749,8 @@ function fmtDur(s) {
                                             <span class="text-xs font-mono text-zinc-500/30 font-bold italic select-none <%= isRtl ? 'pl-3' : 'pr-3' %>"><%= t.noAudio %></span>
                                         <% } %>
                                     </td>
+                                    <td data-col="did" class="p-4 font-mono text-xs text-zinc-300 whitespace-nowrap hidden"><%= call.did && call.did.trim() ? call.did.trim() : '-' %></td>
+                                    <td data-col="uniqueid" class="p-4 text-zinc-400 text-[11px] font-mono whitespace-nowrap hidden"><%= call.uniqueid %></td>
                                     <% if (canDeleteCdr) { %>
                                         <td data-col="actions" class="p-4 text-center">
                                             <button type="button" data-action="delete-cdr" data-uniqueid="<%= call.uniqueid %>" data-calldate="<%= moment(call.calldate).format('YYYY-MM-DD HH:mm:ss') %>" class="p-1.5 rounded-lg text-xs font-bold text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-600 border border-rose-500/20 transition cursor-pointer" title="<%= t.deleteBtn %>">
@@ -1218,6 +1258,16 @@ function fmtDur(s) {
         document.addEventListener('DOMContentLoaded', () => {
             syncExtChecklistUI();
             syncStatusChecklistUI();
+
+            const cdrHasServerActiveSecondary = <%= cdrHasActiveSecondary ? 'true' : 'false' %>;
+            if (!cdrHasServerActiveSecondary) {
+                try {
+                    const savedCdrExpanded = localStorage.getItem('cdr_filters_expanded');
+                    if (savedCdrExpanded === 'true') {
+                        toggleCdrMoreFilters(true, true);
+                    }
+                } catch (e) {}
+            }
         });
     </script>
 
@@ -1390,6 +1440,9 @@ function fmtDur(s) {
         const _canDeleteCdr = <%= (typeof canDeleteCdr !== 'undefined' && canDeleteCdr) ? 'true' : 'false' %>;
         const _isRtl = <%= (typeof isRtl !== 'undefined' && isRtl) ? 'true' : 'false' %>;
 
+        const CDR_STORAGE_KEY_V2 = 'sokrat_cdr_columns_v2';
+        const CDR_STORAGE_KEY_V1 = 'sokrat_cdr_columns_v1';
+
         const CDR_COLUMNS_CATALOG = [
             { id: 'time', labelEn: 'Timestamp', labelAr: 'التوقيت', defaultVisible: true },
             { id: 'src', labelEn: 'Source', labelAr: 'المصدر', defaultVisible: true },
@@ -1401,8 +1454,8 @@ function fmtDur(s) {
             { id: 'dir', labelEn: 'Direction', labelAr: 'الاتجاه', defaultVisible: true },
             { id: 'scope', labelEn: 'Scope', labelAr: 'النطاق', defaultVisible: true },
             { id: 'rec', labelEn: 'Recording', labelAr: 'التسجيل', defaultVisible: true },
-            { id: 'uniqueid', labelEn: 'UniqueID', labelAr: 'المعرف الفريد', defaultVisible: false },
             { id: 'did', labelEn: 'DID Number', labelAr: 'رقم DID', defaultVisible: false },
+            { id: 'uniqueid', labelEn: 'UniqueID', labelAr: 'المعرف الفريد', defaultVisible: false },
             { id: 'actions', labelEn: 'Actions', labelAr: 'الإجراءات', defaultVisible: true, superOnly: true }
         ];
 
@@ -1417,7 +1470,8 @@ function fmtDur(s) {
 
         function loadCdrColumnsPreference() {
             try {
-                const stored = localStorage.getItem('sokrat_cdr_columns_v1');
+                localStorage.removeItem(CDR_STORAGE_KEY_V1);
+                const stored = localStorage.getItem(CDR_STORAGE_KEY_V2);
                 if (stored) {
                     const parsed = JSON.parse(stored);
                     if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1589,12 +1643,22 @@ function fmtDur(s) {
         }
 
         function resetCdrColumnsToDefault() {
+            try {
+                localStorage.removeItem(CDR_STORAGE_KEY_V2);
+                localStorage.removeItem(CDR_STORAGE_KEY_V1);
+                fetch('/api/user/column-preferences', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ table: 'cdr', reset: true })
+                }).catch(() => {});
+            } catch (_) {}
             cdrWorkingColumns = getDefaultCdrColumns();
+            applyCdrColumnsToTable(cdrWorkingColumns);
             renderCdrModalColumnsList();
         }
 
         function saveCdrColumnsPreference() {
-            localStorage.setItem('sokrat_cdr_columns_v1', JSON.stringify(cdrWorkingColumns));
+            localStorage.setItem(CDR_STORAGE_KEY_V2, JSON.stringify(cdrWorkingColumns));
             applyCdrColumnsToTable(cdrWorkingColumns);
             closeCdrColumnsModal();
 
@@ -1618,12 +1682,118 @@ function fmtDur(s) {
                 .then(r => r.json())
                 .then(data => {
                     if (data && data.success && Array.isArray(data.columns) && data.columns.length > 0) {
-                        localStorage.setItem('sokrat_cdr_columns_v1', JSON.stringify(data.columns));
+                        localStorage.setItem(CDR_STORAGE_KEY_V2, JSON.stringify(data.columns));
                         applyCdrColumnsToTable(data.columns);
                     }
                 })
                 .catch(() => {});
         })();
+
+                // Expandable Filters Mechanism for Call History
+        function toggleCdrMoreFilters(forcedState, immediate) {
+            const drawer = document.getElementById('cdrSecondaryFilters');
+            const label = document.getElementById('cdrToggleMoreLabel');
+            const icon = document.getElementById('cdrToggleMoreIcon');
+            if (!drawer) return;
+
+            const isCurrentlyHidden = drawer.classList.contains('hidden') || drawer.style.display === 'none' || drawer.offsetHeight === 0;
+            const expand = (typeof forcedState === 'boolean') ? forcedState : isCurrentlyHidden;
+
+            if (expand) {
+                if (!drawer.classList.contains('hidden') && drawer.offsetHeight > 0 && !drawer.dataset.animating) {
+                    return;
+                }
+
+                if (immediate) {
+                    drawer.classList.remove('hidden');
+                    drawer.style.display = 'block';
+                    drawer.style.maxHeight = 'none';
+                    drawer.style.opacity = '1';
+                    drawer.style.overflow = 'visible';
+                    if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
+                    if (icon) icon.classList.add('rotate-180');
+                    try { localStorage.setItem('cdr_filters_expanded', 'true'); } catch (e) {}
+                    return;
+                }
+
+                drawer.dataset.animating = 'true';
+                drawer.classList.remove('hidden');
+                drawer.style.display = 'block';
+                drawer.style.overflow = 'hidden';
+                drawer.style.maxHeight = '0px';
+                drawer.style.opacity = '0';
+                drawer.style.transition = 'max-height 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.24s ease-out';
+
+                const targetHeight = drawer.scrollHeight;
+
+                requestAnimationFrame(() => {
+                    drawer.style.maxHeight = targetHeight + 'px';
+                    drawer.style.opacity = '1';
+                });
+
+                const onEnd = (e) => {
+                    if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
+                    drawer.removeEventListener('transitionend', onEnd);
+                    delete drawer.dataset.animating;
+                    if (drawer.style.maxHeight !== '0px') {
+                        drawer.style.maxHeight = 'none';
+                        drawer.style.overflow = 'visible';
+                    }
+                };
+                drawer.addEventListener('transitionend', onEnd);
+
+                if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
+                if (icon) icon.classList.add('rotate-180');
+                try { localStorage.setItem('cdr_filters_expanded', 'true'); } catch (e) {}
+            } else {
+                if (drawer.classList.contains('hidden') && !drawer.dataset.animating) {
+                    return;
+                }
+
+                if (immediate) {
+                    drawer.classList.add('hidden');
+                    drawer.style.display = '';
+                    drawer.style.maxHeight = '';
+                    drawer.style.opacity = '';
+                    drawer.style.overflow = '';
+                    if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
+                    if (icon) icon.classList.remove('rotate-180');
+                    try { localStorage.setItem('cdr_filters_expanded', 'false'); } catch (e) {}
+                    return;
+                }
+
+                drawer.dataset.animating = 'true';
+                drawer.style.overflow = 'hidden';
+                drawer.style.maxHeight = drawer.scrollHeight + 'px';
+                drawer.style.opacity = '1';
+                drawer.style.transition = 'max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-in';
+
+                void drawer.offsetHeight;
+
+                requestAnimationFrame(() => {
+                    drawer.style.maxHeight = '0px';
+                    drawer.style.opacity = '0';
+                });
+
+                const onEnd = (e) => {
+                    if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
+                    drawer.removeEventListener('transitionend', onEnd);
+                    delete drawer.dataset.animating;
+                    drawer.classList.add('hidden');
+                    drawer.style.display = '';
+                    drawer.style.maxHeight = '';
+                    drawer.style.opacity = '';
+                    drawer.style.overflow = '';
+                    drawer.style.transition = '';
+                };
+                drawer.addEventListener('transitionend', onEnd);
+
+                if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
+                if (icon) icon.classList.remove('rotate-180');
+                try { localStorage.setItem('cdr_filters_expanded', 'false'); } catch (e) {}
+            }
+        }
+        window.toggleCdrMoreFilters = toggleCdrMoreFilters;
 
         window.openCdrColumnsModal = openCdrColumnsModal;
         window.closeCdrColumnsModal = closeCdrColumnsModal;
