@@ -338,7 +338,7 @@ function fmtDur(s) {
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                     </svg>
                     <span><%= isRtl ? 'تخصيص الأعمدة' : 'Customize Columns' %></span>
-                    <span id="cdrColCountBadge" class="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">10/12</span>
+                    <span id="cdrColCountBadge" class="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">11/13</span>
                 </button>
 
                 <% if (canExportCdr) { %>
@@ -502,6 +502,18 @@ function fmtDur(s) {
                     <label for="cdrSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
                     <input type="text" id="cdrSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
                 </div>
+                <div>
+                    <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= isRtl ? 'خط الربط / الشريحة' : 'Trunk / Line' %></label>
+                    <select id="cdrTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= isRtl ? 'جميع خطوط الربط' : 'All Trunks' %></option>
+                        <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= isRtl ? 'داخلي فقط (بدون خط)' : 'Internal Only' %></option>
+                        <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
+                            <% availableTrunks.forEach(trk => { %>
+                                <option value="<%= trk.id %>" <%= filters.trunkFilter === trk.id ? 'selected' : '' %>><%= trk.label %></option>
+                            <% }) %>
+                        <% } %>
+                    </select>
+                </div>
 
             </div>
 
@@ -542,6 +554,7 @@ function fmtDur(s) {
                             <th data-col="src" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thSrc %></th>
                             <th data-col="dst" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDst %></th>
                             <th data-col="did" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDid %></th>
+                            <th data-col="trunk" class="p-4 tracking-wider text-start whitespace-nowrap"><%= isRtl ? 'خط الربط' : 'Trunk' %></th>
                             <th data-col="name" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thName %></th>
                             <th data-col="airtime" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thAir %></th>
                             <th data-col="state" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thState %></th>
@@ -596,6 +609,23 @@ function fmtDur(s) {
                                         <% } %>
                                     </td>
                                     <td data-col="did" class="p-4 font-mono text-xs text-zinc-300 whitespace-nowrap"><%= call.did && call.did.trim() ? call.did.trim() : '-' %></td>
+                                    <td data-col="trunk" class="p-4 whitespace-nowrap font-mono text-xs">
+                                        <% if (call.trunk && call.trunk.name && call.trunk.name !== '-') { %>
+                                            <% if (call.trunk.type === 'dongle') { %>
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap">
+                                                    <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                                    <%= call.trunk.name %>
+                                                </span>
+                                            <% } else { %>
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 whitespace-nowrap">
+                                                    <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" stroke-linejoin="round" d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 014-10z"/></svg>
+                                                    <%= call.trunk.name %>
+                                                </span>
+                                            <% } %>
+                                        <% } else { %>
+                                            <span class="text-zinc-600 font-mono text-xs">-</span>
+                                        <% } %>
+                                    </td>
                                     <td data-col="name" class="p-4 text-zinc-300">
                                         <% if (isFailover && (!call.src_name || call.src_name === 'No Name' || call.src_name.startsWith('dongle'))) { %>
                                             <span class="cdr-failover-name text-xs font-semibold"><%= isRtl ? 'مكالمة واردة محولة لموبايل' : 'Inbound Forwarded Call' %></span>
@@ -1365,6 +1395,7 @@ function fmtDur(s) {
             { id: 'src', labelEn: 'Source', labelAr: 'المصدر', defaultVisible: true },
             { id: 'dst', labelEn: 'Destination', labelAr: 'الوجهة', defaultVisible: true },
             { id: 'name', labelEn: 'Name / Lead', labelAr: 'الاسم', defaultVisible: true },
+            { id: 'trunk', labelEn: 'Trunk / Line', labelAr: 'خط الربط / الشريحة', defaultVisible: true },
             { id: 'airtime', labelEn: 'Airtime', labelAr: 'مدة المكالمة', defaultVisible: true },
             { id: 'state', labelEn: 'State', labelAr: 'الحالة', defaultVisible: true },
             { id: 'dir', labelEn: 'Direction', labelAr: 'الاتجاه', defaultVisible: true },

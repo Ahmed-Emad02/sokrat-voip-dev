@@ -5598,6 +5598,8 @@ app.get('/', async (req, res) => {
 
         const directionFilter = hasExplicitFilters ? (req.query.directionFilter || 'ALL') : (dashDefaults?.directionFilter || 'ALL');
         const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (dashDefaults?.callScopeFilter || 'ALL');
+        const trunkFilter = String(req.query.trunkFilter || 'ALL').trim();
+        const { trunks: dashTrunksList, dongles: dashDonglesList, availableTrunks } = await getAvailableTrunksAndDongles();
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
         const searchDid = req.query.searchDid || '';
@@ -5652,6 +5654,13 @@ app.get('/', async (req, res) => {
         if (callScopeFilter !== 'ALL') {
             query += ` AND ${callScopeCase} = ?`;
             queryParams.push(callScopeFilter);
+        }
+        if (trunkFilter !== 'ALL') {
+            const tf = buildTrunkFilterSql(trunkFilter, dashDonglesList, dashTrunksList);
+            if (tf.clause) {
+                query += tf.clause;
+                queryParams.push(...tf.params);
+            }
         }
 
         const [rows] = await pool.query(query, queryParams);
@@ -5793,6 +5802,7 @@ app.get('/', async (req, res) => {
 
         res.render('dashboard', {
             stats,
+            availableTrunks,
             filters: {
                 startDate,
                 endDate,
@@ -5803,7 +5813,8 @@ app.get('/', async (req, res) => {
                 searchDid,
                 searchUniqueId,
                 directionFilter,
-                callScopeFilter
+                callScopeFilter,
+                trunkFilter
             },
             moment,
             trendData: JSON.stringify(trendData),
@@ -5818,6 +5829,122 @@ app.get('/', async (req, res) => {
 });
 
 // Helper to format Destination field for inbound/USSD/Ring Groups calls
+async function getAvailableTrunksAndDongles() {
+    let trunks = [];
+    try {
+        const [rows] = await pool.query('SELECT trunkid, name, tech, channelid FROM `asterisk`.`trunks` ORDER BY trunkid ASC');
+        trunks = rows || [];
+    } catch (_) {}
+
+    let dongles = [];
+    try {
+        const [dRows] = await pool.query('SELECT dongle_name, imsi, imei, phone_number FROM `asterisk`.`gsm_dongles` ORDER BY dongle_name ASC');
+        dongles = dRows || [];
+    } catch (_) {}
+
+    const availableTrunks = [
+        ...dongles.map(d => ({
+            id: `dongle:${d.dongle_name}`,
+            name: d.dongle_name,
+            label: `📱 ${d.dongle_name}${d.phone_number ? ' (' + d.phone_number + ')' : ''}`,
+            type: 'dongle'
+        })),
+        ...trunks.map(t => ({
+            id: `trunk:${t.trunkid}`,
+            name: t.name,
+            label: `🌐 ${t.name} (${t.tech})`,
+            type: 'sip'
+        }))
+    ];
+
+    return { trunks, dongles, availableTrunks };
+}
+
+function resolveTrunkForCdr(row, trunksList = [], donglesList = []) {
+    const failoverViaMatch = row.userfield ? String(row.userfield).match(/via\s+([^\s,]+)/i) : null;
+    if (failoverViaMatch && failoverViaMatch[1]) {
+        return { name: failoverViaMatch[1], type: 'dongle' };
+    }
+
+    const dstchan = String(row.dstchannel || '');
+    if (dstchan.startsWith('Dongle/')) {
+        const dName = dstchan.split('-')[0].replace('Dongle/', '');
+        return { name: dName, type: 'dongle' };
+    }
+
+    const srcchan = String(row.channel || '');
+    if (srcchan.startsWith('Dongle/')) {
+        const dName = srcchan.split('-')[0].replace('Dongle/', '');
+        return { name: dName, type: 'dongle' };
+    }
+
+    const lastdata = String(row.lastdata || '');
+    if (lastdata.includes('dongle/')) {
+        const m = lastdata.match(/dongle\/(?:i:)?([0-9a-zA-Z_]+)/i);
+        if (m && m[1]) {
+            const dMatch = donglesList.find(d => d.imei === m[1] || d.dongle_name === m[1]);
+            if (dMatch) return { name: dMatch.dongle_name, type: 'dongle' };
+            return { name: m[1], type: 'dongle' };
+        }
+    }
+    const dtMatch = lastdata.match(/dialout-trunk,(\d+)/i);
+    if (dtMatch && dtMatch[1]) {
+        const tId = parseInt(dtMatch[1], 10);
+        const tMatch = trunksList.find(t => t.trunkid === tId);
+        if (tMatch) return { name: tMatch.name, type: tMatch.tech === 'custom' ? 'dongle' : 'sip' };
+    }
+
+    for (const t of trunksList) {
+        if (t.name && (srcchan.includes(t.name) || dstchan.includes(t.name))) {
+            return { name: t.name, type: 'sip' };
+        }
+    }
+
+    if (row.call_scope === 'INTERNAL' || (srcchan.match(/(?:SIP|PJSIP)\/\d+/) && dstchan.match(/(?:SIP|PJSIP)\/\d+/))) {
+        return { name: '-', type: 'internal' };
+    }
+
+    return { name: '-', type: 'none' };
+}
+
+function buildTrunkFilterSql(trunkFilter, donglesList = [], trunksList = []) {
+    if (!trunkFilter || trunkFilter === 'ALL') return { clause: '', params: [] };
+
+    if (trunkFilter === 'INTERNAL') {
+        return {
+            clause: " AND (c.call_scope = 'INTERNAL' OR (c.channel NOT LIKE 'Dongle/%' AND c.dstchannel NOT LIKE 'Dongle/%' AND c.dcontext NOT LIKE 'ext-trunk%' AND c.lastdata NOT LIKE '%dialout-trunk%'))",
+            params: []
+        };
+    }
+
+    if (trunkFilter.startsWith('dongle:')) {
+        const dName = trunkFilter.split(':')[1].trim();
+        const dObj = donglesList.find(d => d.dongle_name === dName);
+        const imei = dObj ? dObj.imei : '';
+        return {
+            clause: " AND (c.channel LIKE CONCAT('Dongle/', ?, '-%') OR c.dstchannel LIKE CONCAT('Dongle/', ?, '-%') OR c.lastdata LIKE CONCAT('%dongle/', ?, '/%') OR (? != '' AND c.lastdata LIKE CONCAT('%dongle/i:', ?, '/%')) OR c.userfield LIKE CONCAT('%via ', ?, '%'))",
+            params: [dName, dName, dName, imei, imei, dName]
+        };
+    }
+
+    if (trunkFilter.startsWith('trunk:')) {
+        const tId = parseInt(trunkFilter.split(':')[1], 10);
+        const tObj = trunksList.find(t => t.trunkid === tId);
+        const tName = tObj ? tObj.name : '';
+        let imei = '';
+        if (tObj && tObj.channelid && tObj.channelid.includes('dongle/i:')) {
+            const m = tObj.channelid.match(/dongle\/i:([0-9]+)/);
+            if (m) imei = m[1];
+        }
+        return {
+            clause: " AND (c.lastdata LIKE CONCAT('%dialout-trunk,', ?, ',%') OR (? != '' AND c.lastdata LIKE CONCAT('%dongle/i:', ?, '/%')) OR (? != '' AND (c.channel LIKE CONCAT('%', ?, '%') OR c.dstchannel LIKE CONCAT('%', ?, '%'))))",
+            params: [tId, imei, imei, tName, tName, tName]
+        };
+    }
+
+    return { clause: '', params: [] };
+}
+
 function formatDestination(row, ringGroupSet = new Set(), forExport = false) {
     let dst = String(row.dst || '').trim();
     if (dst === 's' || dst.toLowerCase() === 'ussd') {
@@ -5925,6 +6052,8 @@ app.get('/cdr', async (req, res) => {
 
         const directionFilter = hasExplicitFilters ? (req.query.directionFilter || 'ALL') : (cdrDefaults?.directionFilter || 'ALL');
         const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (cdrDefaults?.callScopeFilter || 'ALL');
+        const trunkFilter = String(req.query.trunkFilter || 'ALL').trim();
+        const { trunks: cdrTrunksList, dongles: cdrDonglesList, availableTrunks } = await getAvailableTrunksAndDongles();
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
         const searchDid = req.query.searchDid || '';
@@ -6022,6 +6151,14 @@ app.get('/cdr', async (req, res) => {
             queryParams.push(`%${searchTranscript}%`);
             countParams.push(`%${searchTranscript}%`);
         }
+        if (trunkFilter !== 'ALL') {
+            const tf = buildTrunkFilterSql(trunkFilter, cdrDonglesList, cdrTrunksList);
+            if (tf.clause) {
+                query += tf.clause; countQuery += tf.clause;
+                queryParams.push(...tf.params);
+                countParams.push(...tf.params);
+            }
+        }
 
         query += " ORDER BY c.calldate DESC LIMIT ? OFFSET ?";
         queryParams.push(perPage, offset);
@@ -6039,12 +6176,14 @@ app.get('/cdr', async (req, res) => {
         const formattedRows = rows.map(row => {
             return {
                 ...row,
-                dst: formatDestination(row, ringGroupSet)
+                dst: formatDestination(row, ringGroupSet),
+                trunk: resolveTrunkForCdr(row, cdrTrunksList, cdrDonglesList)
             };
         });
         res.render('cdr', {
             calls: formattedRows,
-            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, page, perPage },
+            availableTrunks,
+            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, trunkFilter, page, perPage },
             pagination: { total, totalPages, page, perPage },
             moment
         });
@@ -6091,6 +6230,8 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
         const directionFilter = req.query.directionFilter || 'ALL';
         const callScopeFilter = req.query.callScopeFilter || 'ALL';
+        const trunkFilter = String(req.query.trunkFilter || 'ALL').trim();
+        const { trunks: expTrunksList, dongles: expDonglesList } = await getAvailableTrunksAndDongles();
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
         let query = `
@@ -6150,6 +6291,13 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
             query += clause;
             queryParams.push(callScopeFilter);
         }
+        if (trunkFilter !== 'ALL') {
+            const tf = buildTrunkFilterSql(trunkFilter, expDonglesList, expTrunksList);
+            if (tf.clause) {
+                query += tf.clause;
+                queryParams.push(...tf.params);
+            }
+        }
 
         query += " ORDER BY c.calldate DESC";
 
@@ -6162,16 +6310,18 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         } catch (_) {}
 
         if (XLSX) {
-            const headers = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
+            const headers = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
             const dataRows = [headers];
             for (const row of rows) {
                 const formattedDst = formatDestination(row, ringGroupSet, true);
+                const trk = resolveTrunkForCdr(row, expTrunksList, expDonglesList);
                 dataRows.push([
                     moment(row.calldate).format('YYYY-MM-DD HH:mm:ss'),
                     String(row.src || '').trim(),
                     String(row.src_name || '').trim(),
                     formattedDst,
                     String(row.did || '').trim(),
+                    String(trk.name || '-'),
                     Number(row.duration) || 0,
                     Number(row.billsec) || 0,
                     String(row.disposition || ''),
@@ -6193,11 +6343,12 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         }
 
         // Fallback to CSV if XLSX is unavailable
-        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
+        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
         let csvContent = "\ufeff";
         csvContent += csvHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n";
         for (const row of rows) {
             const formattedDst = formatDestination(row, ringGroupSet);
+            const trk = resolveTrunkForCdr(row, expTrunksList, expDonglesList);
             const rowData = [
                 `"${moment(row.calldate).format('YYYY-MM-DD HH:mm:ss')}"`,
                 /^\+?\d+$/.test(String(row.src || '')) ? `="` + String(row.src || '').trim() + `"` : `"${String(row.src || '').replace(/"/g, '""')}"`,

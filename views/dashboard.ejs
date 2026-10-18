@@ -19,6 +19,7 @@ const words = {
         noAnswer: "No Answer / Missed", busy: "Busy Calls",
         failed: "Failed / Congestion", totalAirtime: "Total Talk Time",
         avgDuration: "Avg Call Duration",
+        trunk: "Trunk / Line", allTrunks: "All Trunks", trunkInternal: "Internal Only (No Trunk)",
         chartTrend: "Call Volume Trend",
         chartDisposition: "Call Disposition",
         chartDuration: "Call Duration",
@@ -46,6 +47,7 @@ const words = {
         direction: "الاتجاه", allDir: "كل الاتجاهات", dirIn: "وارد", dirOut: "صادر", dirInternal: "داخلي",
         scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط", scopeFailover: "تحويل خارجي فقط",
         src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
+        trunk: "خط الربط / الشريحة", allTrunks: "جميع خطوط الربط", trunkInternal: "داخلي فقط (بدون خط)",
         moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر",
         reset: "إعادة ضبط",
         btn: "تحديث مؤشرات الأداء",
@@ -258,7 +260,7 @@ const isRtl = currentLang === 'ar';
             <input type="hidden" name="lang" value="<%= currentLang %>">
             
             <!-- Row 1: Primary Filters (5-column responsive grid) -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
                 <div>
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="dashStartDate"><%= t.startTime %></label>
                     <input type="datetime-local" id="dashStartDate" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -382,12 +384,14 @@ const isRtl = currentLang === 'ar';
             <!-- Row 2: Secondary / Advanced Filters (Collapsible Drawer) -->
             <% 
                 let hasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
+                                         (filters.trunkFilter && filters.trunkFilter !== 'ALL') ||
                                          (filters.searchSrc && filters.searchSrc.trim() !== '') ||
                                          (filters.searchDst && filters.searchDst.trim() !== '') ||
                                          (filters.searchDid && filters.searchDid.trim() !== '') ||
                                          (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
                 let activeSecondaryCount = 0;
                 if (filters.directionFilter && filters.directionFilter !== 'ALL') activeSecondaryCount++;
+                if (filters.trunkFilter && filters.trunkFilter !== 'ALL') activeSecondaryCount++;
                 if (filters.searchSrc && filters.searchSrc.trim() !== '') activeSecondaryCount++;
                 if (filters.searchDst && filters.searchDst.trim() !== '') activeSecondaryCount++;
                 if (filters.searchDid && filters.searchDid.trim() !== '') activeSecondaryCount++;
@@ -420,6 +424,18 @@ const isRtl = currentLang === 'ar';
                     <div>
                         <label for="dashSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
                         <input type="text" id="dashSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                    </div>
+                    <div>
+                        <label for="dashTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.trunk %></label>
+                        <select id="dashTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                            <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
+                            <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.trunkInternal %></option>
+                            <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
+                                <% availableTrunks.forEach(trk => { %>
+                                    <option value="<%= trk.id %>" <%= filters.trunkFilter === trk.id ? 'selected' : '' %>><%= trk.label %></option>
+                                <% }) %>
+                            <% } %>
+                        </select>
                     </div>
                 </div>
                 </div>
@@ -459,6 +475,7 @@ const isRtl = currentLang === 'ar';
             if (filters.searchDst) baseUrl += '&searchDst=' + encodeURIComponent(filters.searchDst);
             if (filters.searchDid) baseUrl += '&searchDid=' + encodeURIComponent(filters.searchDid);
             if (filters.searchUniqueId) baseUrl += '&searchUniqueId=' + encodeURIComponent(filters.searchUniqueId);
+            if (filters.trunkFilter && filters.trunkFilter !== 'ALL') baseUrl += '&trunkFilter=' + encodeURIComponent(filters.trunkFilter);
             if (filters.targetExtension && filters.targetExtension !== 'ALL') {
                 if (Array.isArray(filters.targetExtension)) {
                     filters.targetExtension.forEach(ext => {

@@ -7,11 +7,11 @@ const ejs = require('ejs');
 const cdrEjsPath = path.join(__dirname, '../views/cdr.ejs');
 const serverPath = path.join(__dirname, '../server.js');
 
-test('CDR Column Customizer: views/cdr.ejs tags all 12 columns in thead and tbody with data-col', () => {
+test('CDR Column Customizer: views/cdr.ejs tags all 13 columns in thead and tbody with data-col', () => {
     const content = fs.readFileSync(cdrEjsPath, 'utf8');
 
     const expectedCols = [
-        'time', 'uniqueid', 'src', 'dst', 'did',
+        'time', 'uniqueid', 'src', 'dst', 'did', 'trunk',
         'name', 'airtime', 'state', 'dir', 'scope',
         'rec', 'actions'
     ];
