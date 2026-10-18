@@ -1178,6 +1178,15 @@ function createCrmRouter(pool, options = {}) {
                 try {
             const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show version']);
             results['asterisk_version'] = stdout.trim();
+results['asterisk_version'] = stdout.trim();
+        try {
+            const { stdout, stderr } = await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_pjsip.so']);
+            results['chan_pjsip_reload'] = (stdout || '') + (stderr || '');
+        } catch (e) { results['chan_pjsip_reload'] = e.message; }
+        try {
+            const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip show aors']);
+            results['pjsip_show_aors'] = stdout.trim();
+        } catch (_) {}
         results['cert_exists'] = fs.existsSync('/etc/asterisk/keys/asterisk.pem');
         results['key_exists'] = fs.existsSync('/etc/asterisk/keys/asterisk.key');
 results['asterisk_version'] = stdout.trim();
