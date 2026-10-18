@@ -1178,6 +1178,8 @@ function createCrmRouter(pool, options = {}) {
                 try {
             const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show version']);
             results['asterisk_version'] = stdout.trim();
+        results['cert_exists'] = fs.existsSync('/etc/asterisk/keys/asterisk.pem');
+        results['key_exists'] = fs.existsSync('/etc/asterisk/keys/asterisk.key');
 results['asterisk_version'] = stdout.trim();
         try {
             const { stdout, stderr } = await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload res_pjsip.so']);
