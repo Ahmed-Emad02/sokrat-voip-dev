@@ -193,3 +193,22 @@ test('Inline script blocks in views/dashboard.ejs have valid JavaScript syntax',
         }, `Inline script threw syntax error:\n${jsCode.substring(0, 200)}...`);
     }
 });
+
+test('Dashboard trunk filter dropdown renders SVG icons and zero emojis', async () => {
+    const html = await ejs.renderFile(dashboardPath, {
+        ...defaultData,
+        availableTrunks: [
+            { id: 'dongle:Dongle-0', label: 'Dongle-0 (01012345678)', type: 'dongle' },
+            { id: 'trunk:1', label: 'Trunk-1 (sip)', type: 'sip' }
+        ]
+    });
+
+    // Check absence of emojis
+    assert.ok(!html.includes('📱'), 'Must not contain mobile phone emoji');
+    assert.ok(!html.includes('🌐'), 'Must not contain globe emoji');
+
+    // Check presence of custom trunk button and checklist menu with SVG icons
+    assert.ok(html.includes('id="dashTrunkChecklistBtn"'), 'Must contain dashTrunkChecklistBtn');
+    assert.ok(html.includes('id="dashTrunkChecklistMenu"'), 'Must contain dashTrunkChecklistMenu');
+    assert.ok(html.includes('selectDashTrunk'), 'Must contain selectDashTrunk function call');
+});

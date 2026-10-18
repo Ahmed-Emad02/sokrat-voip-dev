@@ -5846,13 +5846,13 @@ async function getAvailableTrunksAndDongles() {
         ...dongles.map(d => ({
             id: `dongle:${d.dongle_name}`,
             name: d.dongle_name,
-            label: `📱 ${d.dongle_name}${d.phone_number ? ' (' + d.phone_number + ')' : ''}`,
+            label: `${d.dongle_name}${d.phone_number ? ' (' + d.phone_number + ')' : ''}`,
             type: 'dongle'
         })),
         ...trunks.map(t => ({
             id: `trunk:${t.trunkid}`,
             name: t.name,
-            label: `🌐 ${t.name} (${t.tech})`,
+            label: `${t.name} (${t.tech})`,
             type: 'sip'
         }))
     ];

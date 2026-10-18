@@ -115,3 +115,22 @@ test('Call History table columns render strictly in canonical order', async () =
     assert.deepEqual(theadCols, expectedOrder, 'Thead columns must match canonical order');
     assert.deepEqual(tbodyCols, expectedOrder, 'Tbody columns must match canonical order');
 });
+
+test('Trunk filter dropdown renders SVG icons and zero emojis', async () => {
+    const html = await ejs.renderFile(cdrEjsPath, {
+        ...defaultData,
+        availableTrunks: [
+            { id: 'dongle:Dongle-0', label: 'Dongle-0 (01012345678)', type: 'dongle' },
+            { id: 'trunk:1', label: 'Trunk-1 (sip)', type: 'sip' }
+        ]
+    });
+
+    // Check absence of emojis
+    assert.ok(!html.includes('📱'), 'Must not contain mobile phone emoji');
+    assert.ok(!html.includes('🌐'), 'Must not contain globe emoji');
+
+    // Check presence of custom trunk button and checklist menu with SVG icons
+    assert.ok(html.includes('id="cdrTrunkChecklistBtn"'), 'Must contain cdrTrunkChecklistBtn');
+    assert.ok(html.includes('id="cdrTrunkChecklistMenu"'), 'Must contain cdrTrunkChecklistMenu');
+    assert.ok(html.includes('selectCdrTrunk'), 'Must contain selectCdrTrunk function call');
+});
