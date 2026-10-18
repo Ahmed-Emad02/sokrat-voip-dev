@@ -1120,15 +1120,61 @@ function createCrmRouter(pool, options = {}) {
     router.get('/desktop-session', requireCrmScope(['live:read', 'softphone:use', 'extensions:read']), async (req, res) => {
         const ext = String(req.query.extension || '').trim();
         try {
-            let password = 'sss333';
+            let password = '';
             if (ext) {
+                // 1. Try PJSIP auth object (${ext}-auth)
                 try {
                     const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', `pjsip show auth ${ext}-auth`]);
                     const match = stdout.match(/password\s*:\s*(\S+)/i);
                     if (match && match[1]) {
-                        password = match[1];
+                        password = String(match[1]).trim();
                     }
                 } catch (_) {}
+
+                // 2. Try PJSIP auth object (${ext})
+                if (!password) {
+                    try {
+                        const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', `pjsip show auth ${ext}`]);
+                        const match = stdout.match(/password\s*:\s*(\S+)/i);
+                        if (match && match[1]) {
+                            password = String(match[1]).trim();
+                        }
+                    } catch (_) {}
+                }
+
+                // 3. Try database secret from asterisk.sip (where Sokrat VoIP stores extension passwords)
+                if (!password) {
+                    try {
+                        const [sRows] = await pool.query('SELECT data FROM `asterisk`.`sip` WHERE id = ? AND keyword = "secret" LIMIT 1', [ext]);
+                        if (sRows && sRows[0] && sRows[0].data) {
+                            password = String(sRows[0].data).trim();
+                        }
+                    } catch (_) {}
+                }
+
+                // 4. Try asterisk.ps_auths
+                if (!password) {
+                    try {
+                        const [pRows] = await pool.query('SELECT password FROM `asterisk`.`ps_auths` WHERE id = ? OR id = ? LIMIT 1', [ext, `${ext}-auth`]);
+                        if (pRows && pRows[0] && pRows[0].password) {
+                            password = String(pRows[0].password).trim();
+                        }
+                    } catch (_) {}
+                }
+
+                // 5. Try asterisk.users
+                if (!password) {
+                    try {
+                        const [uRows] = await pool.query('SELECT password FROM `asterisk`.`users` WHERE extension = ? LIMIT 1', [ext]);
+                        if (uRows && uRows[0] && uRows[0].password) {
+                            password = String(uRows[0].password).trim();
+                        }
+                    } catch (_) {}
+                }
+            }
+
+            if (!password) {
+                password = 'sss333';
             }
             let policy = { auto_answer: 'user_choice', dnd: 'user_choice', disable_outbound_ringing_cancel: 0 };
             if (ext) {
