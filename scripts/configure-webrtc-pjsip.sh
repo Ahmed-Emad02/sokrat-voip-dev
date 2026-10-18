@@ -196,6 +196,20 @@ upsert_extension_settings() {
     while IFS='|' read -r keyword data flags; do
         sql+="INSERT INTO sip (id,keyword,data,flags) VALUES ('${ext}','${keyword}','${data}',${flags}) ON DUPLICATE KEY UPDATE data=VALUES(data),flags=VALUES(flags);"
     done <<'EOF'
+transport|transport-wss|14
+webrtc|yes|18
+media_encryption|dtls|18
+dtls_cert_file|/etc/asterisk/keys/asterisk.pem|18
+dtls_private_key|/etc/asterisk/keys/asterisk.key|18
+dtls_verify|fingerprint|18
+dtls_setup|actpass|18
+ice_support|yes|18
+use_avpf|yes|18
+rtcp_mux|yes|18
+force_rport|yes|18
+rewrite_contact|yes|18
+disallow|all|25
+allow|opus,ulaw,alaw|26
 max_contacts|10|16
 remove_existing|no|18
 remove_unavailable|yes|18
@@ -206,6 +220,82 @@ rtp_timeout_hold|60|18
 rtp_keepalive|5|18
 EOF
     mysql "${MYSQL_AUTH[@]}" asterisk -e "$sql" >/dev/null
+}
+
+patch_pjsip_custom_post() {
+    [ -f "$ASTERISK_DIR/pjsip_custom_post.conf" ] || touch "$ASTERISK_DIR/pjsip_custom_post.conf"
+    EXTENSION_LIST="$1" PJSIP_POST="$ASTERISK_DIR/pjsip_custom_post.conf" PJSIP_CUSTOM="$ASTERISK_DIR/pjsip_custom.conf" python3 - <<'PY'
+import os
+import re
+from pathlib import Path
+
+post_path = Path(os.environ['PJSIP_POST'])
+custom_path = Path(os.environ['PJSIP_CUSTOM'])
+extensions = set(os.environ.get('EXTENSION_LIST', '').split())
+if not extensions:
+    raise SystemExit(0)
+
+if custom_path.exists():
+    c_text = custom_path.read_text(encoding='utf-8')
+    c_orig = c_text
+    for ext in extensions:
+        c_text = re.sub(rf'; BEGIN WEBRTC EXTENSION {ext}[\s\S]*?; END WEBRTC EXTENSION {ext}?
+?', '', c_text)
+        c_text = re.sub(rf'\[({ext}|{ext}-auth)\][\s\S]*?(?=
+\[|
+; BEGIN|$)', '', c_text)
+    if c_text != c_orig:
+        custom_path.write_text(c_text.strip() + '
+', encoding='utf-8')
+
+post_text = post_path.read_text(encoding='utf-8') if post_path.exists() else ''
+required_params = [
+    'transport=transport-wss',
+    'webrtc=yes',
+    'media_encryption=dtls',
+    'dtls_cert_file=/etc/asterisk/keys/asterisk.pem',
+    'dtls_private_key=/etc/asterisk/keys/asterisk.key',
+    'dtls_verify=fingerprint',
+    'dtls_setup=actpass',
+    'ice_support=yes',
+    'use_avpf=yes',
+    'rtcp_mux=yes',
+    'force_rport=yes',
+    'rewrite_contact=yes',
+    'direct_media=no',
+    'rtp_symmetric=yes',
+    'disallow=all',
+    'allow=opus,ulaw,alaw',
+    'rtp_timeout=30',
+    'rtp_timeout_hold=60',
+    'rtp_keepalive=5'
+]
+
+for ext in extensions:
+    sec_pattern = re.compile(rf'(\[{ext}\]\(\+\)[\s\S]*?)(?=
+\[|$)')
+    m = sec_pattern.search(post_text)
+    if m:
+        sec = m.group(1)
+        for p in required_params:
+            k = p.split('=')[0]
+            if re.search(rf'(?m)^{k}=', sec):
+                sec = re.sub(rf'(?m)^{k}=.*$', p, sec)
+            else:
+                sec += f'
+{p}'
+        post_text = post_text[:m.start()] + sec + post_text[m.end():]
+    else:
+        post_text = post_text.strip() + f'
+
+[{ext}](+)
+' + '
+'.join(required_params) + '
+'
+
+post_path.write_text(post_text.strip() + '
+', encoding='utf-8')
+PY
 }
 
 patch_generated_aors() {
@@ -274,6 +364,7 @@ if [ "$SKIP_RETRIEVE_CONF" != "1" ] && [ -x "$RETRIEVE_CONF" ]; then
     "$RETRIEVE_CONF" >/dev/null 2>&1 || log "Warning: retrieve_conf reported an error; applying direct AOR repair."
 fi
 patch_generated_aors "$EXTENSION_LIST"
+patch_pjsip_custom_post "$EXTENSION_LIST"
 
 if [ "$SKIP_ASTERISK_RELOAD" != "1" ] && [ -x "$ASTERISK_BIN" ] && pgrep -x asterisk >/dev/null 2>&1; then
     "$ASTERISK_BIN" -rx 'pjsip reload' >/dev/null 2>&1 || true
