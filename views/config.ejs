@@ -3978,6 +3978,20 @@ function isTabAllowed(tabName) {
                             <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="outName"><%= isRtl ? 'اسم المسار *' : 'Route Name *' %></label>
                             <input type="text" id="outName" required placeholder="e.g. Outbound-All" class="config-input w-full text-xs font-mono">
                         </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                            <div class="sm:col-span-2">
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="outCid"><%= isRtl ? 'رقم هوية المتصل للمسار (Route CID - اختياري)' : 'Route CID (Optional)' %></label>
+                                <input type="text" id="outCid" placeholder='<%= isRtl ? "اختياري - اتركه فارغاً لاستخدام هوية كل تحويلة" : "e.g. \"Company\" <01012345678> (blank = use extension CID)" %>' class="config-input w-full text-xs font-mono">
+                                <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'اتركه فارغاً للسماح لجميع التحويلات بالاتصال باستخدام هويتها الخاصة.' : 'Optional. Leave blank to allow all extensions to send their own Caller ID.' %></p>
+                            </div>
+                            <div class="flex flex-col justify-center pt-2 sm:pt-4">
+                                <label class="flex items-center gap-2 cursor-pointer text-xs font-bold text-[var(--text-secondary)]">
+                                    <input type="checkbox" id="outCidOverride" value="override_extension" class="rounded border-[var(--border-primary)] text-violet-600 focus:ring-violet-500">
+                                    <span><%= isRtl ? 'فرض هوية المسار (Override)' : 'Override Extension' %></span>
+                                </label>
+                                <p class="text-[9px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'تجاهل هوية التحويلة وفرض هوية المسار أعلاه' : 'Ignore extension CID in favor of this Route CID' %></p>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- SECTION 2: DIAL PATTERNS (Amber Theme) -->
@@ -4008,10 +4022,11 @@ function isTabAllowed(tabName) {
                                 <input type="text" id="patPattern" placeholder="e.g. X." class="config-input w-full text-xs font-mono py-1 px-2.5">
                             </div>
                             <div>
-                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="patCid">CallerID</label>
-                                <input type="text" id="patCid" placeholder="CID" class="config-input w-full text-xs font-mono py-1 px-2.5">
+                                <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="patCid" title="<%= isRtl ? 'اتركه فارغاً لجميع التحويلات' : 'Leave blank for all extensions' %>"><%= isRtl ? 'معرف المتصل (اختياري)' : 'CallerID (Optional)' %></label>
+                                <input type="text" id="patCid" placeholder="<%= isRtl ? 'فارغ = كل التحويلات' : 'blank = ALL extensions' %>" class="config-input w-full text-xs font-mono py-1 px-2.5">
                             </div>
                         </div>
+                        <p class="text-[10px] text-[var(--text-muted)] px-1"><%= isRtl ? 'ملاحظة: اترك حقل CallerID فارغاً دائماً لتمكين جميع التحويلات من استخدام هذا المسار. تحديده يقصر المسار على رقم محدد فقط.' : 'Note: Leave CallerID blank so all extensions can use this route. Specifying a CID restricts this pattern exclusively to that caller.' %></p>
 
                         <div class="flex justify-end pt-1">
                             <button type="button" onclick="addDialPatternToModalList()" class="text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer font-bold transition">
@@ -10029,7 +10044,10 @@ function isTabAllowed(tabName) {
                         </div>
                     </td>
                     <td class="py-3 px-4 font-mono font-bold text-[var(--text-muted)]">${r.route_id}</td>
-                    <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${escapeHtml(r.name)}</td>
+                    <td class="py-3 px-4 font-bold text-[var(--text-primary)]">
+                        <div>${escapeHtml(r.name)}</div>
+                        ${r.outcid ? `<span class="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/30 text-[10px] font-mono font-normal">CID: ${escapeHtml(r.outcid)}</span>` : '<span class="text-[10px] text-[var(--text-muted)] font-normal italic">All Extensions (Ext CID)</span>'}
+                    </td>
                     <td class="py-3 px-4">${patHtml}</td>
                     <td class="py-3 px-4">${trunkHtml}</td>
                     <td class="py-3 px-4 text-center">
@@ -10152,7 +10170,7 @@ function isTabAllowed(tabName) {
         function editOutboundRouteByIndex(idx) {
             const r = (loadedOutboundRoutesList || [])[idx] || (loadedOutboundRoutesList || []).find(x => String(x.route_id) === String(idx));
             if (r) {
-                editOutboundRoute(r.route_id, r.name, r.patterns, r.trunks);
+                editOutboundRoute(r.route_id, r.name, r.patterns, r.trunks, r.outcid, r.outcid_mode);
             } else {
                 openOutboundModal();
             }
@@ -10163,6 +10181,8 @@ function isTabAllowed(tabName) {
             document.getElementById('outboundModalTitle').textContent = isRtl ? 'إضافة مسار صادر' : 'Add Outbound Route';
             document.getElementById('outboundEditId').value = "";
             document.getElementById('outboundForm').reset();
+            if (document.getElementById('outCid')) document.getElementById('outCid').value = '';
+            if (document.getElementById('outCidOverride')) document.getElementById('outCidOverride').checked = false;
             modalPatternsList = [];
             modalTrunksSequence = [];
             editingPatternIndex = -1;
@@ -10185,11 +10205,13 @@ function isTabAllowed(tabName) {
             renderModalTrunksSequence();
         }
 
-        function editOutboundRoute(routeId, name, patterns, trunks) {
+        function editOutboundRoute(routeId, name, patterns, trunks, outcid = '', outcid_mode = '') {
             openModal('outboundModal');
             document.getElementById('outboundModalTitle').textContent = (isRtl ? 'تعديل المسار الصادر ' : 'Edit Outbound Route ') + (name || '');
             document.getElementById('outboundEditId').value = routeId;
             document.getElementById('outName').value = name || '';
+            if (document.getElementById('outCid')) document.getElementById('outCid').value = outcid || '';
+            if (document.getElementById('outCidOverride')) document.getElementById('outCidOverride').checked = (outcid_mode === 'override_extension');
             editingPatternIndex = -1;
 
             const btn = document.getElementById('addPatternBtn');
@@ -10251,11 +10273,16 @@ function isTabAllowed(tabName) {
             const submitBtn = e.target ? (e.target.matches('button') ? e.target : e.target.querySelector('button[type="submit"]')) : null;
             if (submitBtn) setButtonLoading(submitBtn, true);
 
+            const outcid = document.getElementById('outCid') ? document.getElementById('outCid').value.trim() : '';
+            const outcid_mode = (document.getElementById('outCidOverride') && document.getElementById('outCidOverride').checked) ? 'override_extension' : '';
+
             fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name,
+                    outcid,
+                    outcid_mode,
                     patterns: modalPatternsList,
                     trunks: modalTrunksSequence
                 })
@@ -12633,33 +12660,40 @@ function isTabAllowed(tabName) {
 
         // Helper string formatters for Issabel Time Rules
         const WEEKDAY_NAMES = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+        const WEEKDAY_NAMES_AR = { mon: 'الإثنين', tue: 'الثلاثاء', wed: 'الأربعاء', thu: 'الخميس', fri: 'الجمعة', sat: 'السبت', sun: 'الأحد' };
         const MONTH_NAMES = { jan: 'Jan', feb: 'Feb', mar: 'Mar', apr: 'Apr', may: 'May', jun: 'Jun', jul: 'Jul', aug: 'Aug', sep: 'Sep', oct: 'Oct', nov: 'Nov', dec: 'Dec' };
+        const MONTH_NAMES_AR = { jan: 'يناير', feb: 'فبراير', mar: 'مارس', apr: 'أبريل', may: 'مايو', jun: 'يونيو', jul: 'يوليو', aug: 'أغسطس', sep: 'سبتمبر', oct: 'أكتوبر', nov: 'نوفمبر', dec: 'ديسمبر' };
 
         function formatWeekdayText(val) {
             if (!val || val === '*' || val === '*-*') return isRtl ? 'كل أيام الأسبوع' : 'All Weekdays';
+            const map = isRtl ? WEEKDAY_NAMES_AR : WEEKDAY_NAMES;
+            if (val.includes('&')) {
+                return val.split('&').map(d => map[d] || d).join(', ');
+            }
             if (val.includes('-')) {
                 const [s, e] = val.split('-');
-                return `${WEEKDAY_NAMES[s] || s} - ${WEEKDAY_NAMES[e] || e}`;
+                return `${map[s] || s} - ${map[e] || e}`;
             }
-            return val.split(',').map(d => WEEKDAY_NAMES[d] || d).join(', ');
+            return val.split(',').map(d => map[d] || d).join(', ');
         }
 
         function formatMonthdayText(val) {
             if (!val || val === '*' || val === '*-*') return isRtl ? 'كل أيام الشهر' : 'All Monthdays';
             if (val.includes('-')) {
                 const [s, e] = val.split('-');
-                return `Day ${s} - ${e}`;
+                return isRtl ? `الأيام ${s} - ${e}` : `Days ${s} - ${e}`;
             }
-            return `Day ${val}`;
+            return isRtl ? `يوم ${val}` : `Day ${val}`;
         }
 
         function formatMonthText(val) {
             if (!val || val === '*' || val === '*-*') return isRtl ? 'كل الشهور' : 'All Months';
+            const map = isRtl ? MONTH_NAMES_AR : MONTH_NAMES;
             if (val.includes('-')) {
                 const [s, e] = val.split('-');
-                return `${MONTH_NAMES[s] || s} - ${MONTH_NAMES[e] || e}`;
+                return `${map[s] || s} - ${map[e] || e}`;
             }
-            return val.split(',').map(m => MONTH_NAMES[m] || m).join(', ');
+            return val.split(',').map(m => map[m] || m).join(', ');
         }
 
         function formatTimeText(val) {
@@ -12712,8 +12746,10 @@ function isTabAllowed(tabName) {
                         const monthdayStr = formatMonthdayText(rule.monthday);
                         const monthStr = formatMonthText(rule.month);
 
+                        const nameBadge = rule.name ? `<span class="px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-black mr-1">${escapeHtml(rule.name)}</span>` : '';
                         rulesHTML += `
-                            <div class="timegroup-rule-pill">
+                            <div class="timegroup-rule-pill flex items-center flex-wrap gap-1">
+                                ${nameBadge}
                                 <span class="time-segment inline-flex items-center gap-1"><svg class="w-3.5 h-3.5 shrink-0 pill-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${escapeHtml(timeStr)}</span>
                                 <span class="pill-dot">•</span>
                                 <span class="date-segment inline-flex items-center gap-1"><svg class="w-3.5 h-3.5 shrink-0 pill-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${escapeHtml(weekdayStr)}</span>
@@ -12798,23 +12834,33 @@ function isTabAllowed(tabName) {
                 { id: 'fri', labelEn: 'Fri', labelAr: 'الجمعة' }
             ];
 
-            // Determine active days from data.weekday
+            // Determine active days from data.weekday with wrap-around support (sat-thu, sun-thu, etc.)
             let activeDaysSet = new Set(['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri']);
-            if (data && data.weekday && data.weekday !== '*') {
+            const ruleName = data ? (data.name || '') : '';
+            if (data && data.weekday && data.weekday !== '*' && data.weekday !== '*-*') {
                 activeDaysSet = new Set();
-                const wkStr = data.weekday.toLowerCase();
+                const str = data.weekday.toLowerCase().trim();
                 const allDaysOrder = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-                if (wkStr.includes('-')) {
-                    const [s, e] = wkStr.split('-');
+                if (str.includes('&') || str.includes(',')) {
+                    str.split(/[,&]/).forEach(d => {
+                        const cleanD = d.trim();
+                        if (allDaysOrder.includes(cleanD)) activeDaysSet.add(cleanD);
+                    });
+                } else if (str.includes('-')) {
+                    const [s, e] = str.split('-').map(x => x.trim());
                     const sIdx = allDaysOrder.indexOf(s);
                     const eIdx = allDaysOrder.indexOf(e);
                     if (sIdx !== -1 && eIdx !== -1) {
-                        for (let i = sIdx; i <= eIdx; i++) {
-                            activeDaysSet.add(allDaysOrder[i]);
+                        if (sIdx <= eIdx) {
+                            for (let i = sIdx; i <= eIdx; i++) activeDaysSet.add(allDaysOrder[i]);
+                        } else {
+                            // Wrap-around (e.g. sat-thu, sun-thu, fri-mon)
+                            for (let i = sIdx; i < allDaysOrder.length; i++) activeDaysSet.add(allDaysOrder[i]);
+                            for (let i = 0; i <= eIdx; i++) activeDaysSet.add(allDaysOrder[i]);
                         }
                     }
-                } else {
-                    wkStr.split(',').forEach(d => activeDaysSet.add(d.trim()));
+                } else if (allDaysOrder.includes(str)) {
+                    activeDaysSet.add(str);
                 }
             }
 
@@ -12885,15 +12931,25 @@ function isTabAllowed(tabName) {
 
             card.innerHTML = `
                 <div class="flex items-center justify-between border-b border-sky-500/15 pb-2.5">
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
                         <span class="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30 text-[10px] font-black flex items-center justify-center">${ruleIndex}</span>
                         <span class="text-xs font-extrabold text-sky-300">${isRtl ? 'قاعدة الجدول الزمني' : 'Schedule Interval Rule'}</span>
                         <span class="rule-chip-preview text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-sky-950 text-sky-400 border border-sky-500/30"></span>
                     </div>
-                    <button type="button" onclick="removeTimeGroupRuleFromModal(this)" class="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        <span>${isRtl ? 'حذف' : 'Remove'}</span>
-                    </button>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="applyRulePreset(this, 'satthu_work')" class="text-[10px] bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded cursor-pointer font-bold transition">Sat-Thu</button>
+                        <button type="button" onclick="applyRulePreset(this, 'monfri_work')" class="text-[10px] bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded cursor-pointer font-bold transition">Mon-Fri</button>
+                        <button type="button" onclick="removeTimeGroupRuleFromModal(this)" class="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            <span>${isRtl ? 'حذف' : 'Remove'}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Interval Name / Description (Optional) -->
+                <div>
+                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">${isRtl ? 'اسم الفترة / وصف القاعدة (اختياري)' : 'Interval Name / Description (Optional)'}</label>
+                    <input type="text" name="rule_name[]" value="${escapeHtml(ruleName)}" placeholder="${isRtl ? 'مثال: ساعات العمل الرسمية / فترة صباحية' : 'e.g. Regular Business Hours / Morning Shift'}" oninput="updateRulePreviewChip(this)" class="rule-name config-input w-full py-1.5 text-xs font-semibold">
                 </div>
 
                 <!-- Time Range -->
@@ -12976,6 +13032,7 @@ function isTabAllowed(tabName) {
             const card = elem.closest ? elem.closest('.rule-card') : elem;
             if (!card) return;
 
+            const ruleName = card.querySelector('.rule-name') ? card.querySelector('.rule-name').value.trim() : '';
             const startTime = card.querySelector('.rule-start-time').value;
             const finishTime = card.querySelector('.rule-finish-time').value;
 
@@ -12989,7 +13046,8 @@ function isTabAllowed(tabName) {
 
             let timeText = isRtl ? 'طوال اليوم' : 'All Day';
             if (startTime && finishTime) timeText = `${startTime}-${finishTime}`;
-            else if (startTime) timeText = startTime;
+            else if (startTime) timeText = `${startTime}-${startTime}`;
+            else if (finishTime) timeText = `${finishTime}-${finishTime}`;
 
             let wkText = isRtl ? 'كل الأيام' : 'All Weekdays';
             if (activeDays.length > 0 && activeDays.length < 7) {
@@ -13000,15 +13058,18 @@ function isTabAllowed(tabName) {
             if (startMthday !== '*' && finishMthday !== '*') {
                 mthdayText = startMthday === finishMthday ? startMthday : `${startMthday}-${finishMthday}`;
             } else if (startMthday !== '*') mthdayText = startMthday;
+            else if (finishMthday !== '*') mthdayText = finishMthday;
 
             let mthText = '*';
             if (startMth !== '*' && finishMth !== '*') {
                 mthText = startMth === finishMth ? startMth : `${startMth}-${finishMth}`;
             } else if (startMth !== '*') mthText = startMth;
+            else if (finishMth !== '*') mthText = finishMth;
 
             const chip = card.querySelector('.rule-chip-preview');
             if (chip) {
-                chip.textContent = `${timeText} | ${wkText} | ${mthdayText} | ${mthText}`;
+                const prefix = ruleName ? `[${ruleName}] ` : '';
+                chip.textContent = `${prefix}${timeText} | ${wkText} | ${mthdayText} | ${mthText}`;
             }
         }
 
@@ -13031,6 +13092,7 @@ function isTabAllowed(tabName) {
             }
 
             if (preset === 'satthu_work') {
+                if (card.querySelector('.rule-name')) card.querySelector('.rule-name').value = isRtl ? 'دوام السبت - الخميس' : 'Work Sat-Thu';
                 card.querySelector('.rule-start-time').value = '09:00';
                 card.querySelector('.rule-finish-time').value = '17:00';
                 setDaysActive(['sat', 'sun', 'mon', 'tue', 'wed', 'thu']);
@@ -13039,6 +13101,7 @@ function isTabAllowed(tabName) {
                 card.querySelector('.rule-start-month').value = '*';
                 card.querySelector('.rule-finish-month').value = '*';
             } else if (preset === 'monfri_work') {
+                if (card.querySelector('.rule-name')) card.querySelector('.rule-name').value = isRtl ? 'دوام الإثنين - الجمعة' : 'Work Mon-Fri';
                 card.querySelector('.rule-start-time').value = '09:00';
                 card.querySelector('.rule-finish-time').value = '17:00';
                 setDaysActive(['mon', 'tue', 'wed', 'thu', 'fri']);
@@ -13047,6 +13110,7 @@ function isTabAllowed(tabName) {
                 card.querySelector('.rule-start-month').value = '*';
                 card.querySelector('.rule-finish-month').value = '*';
             } else if (preset === 'allday') {
+                if (card.querySelector('.rule-name')) card.querySelector('.rule-name').value = isRtl ? 'طوال الأسبوع' : 'All Week 24/7';
                 card.querySelector('.rule-start-time').value = '';
                 card.querySelector('.rule-finish-time').value = '';
                 setDaysActive(['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri']);
@@ -13099,8 +13163,13 @@ function isTabAllowed(tabName) {
             const ruleCards = document.querySelectorAll('#timeGroupRulesListContainer .rule-card');
 
             ruleCards.forEach(card => {
-                const startTime = card.querySelector('.rule-start-time').value;
-                const finishTime = card.querySelector('.rule-finish-time').value;
+                const ruleName = card.querySelector('.rule-name') ? card.querySelector('.rule-name').value.trim() : '';
+                let startTime = card.querySelector('.rule-start-time').value;
+                let finishTime = card.querySelector('.rule-finish-time').value;
+
+                // If only one time boundary is provided, default the other so Asterisk gets a valid range
+                if (startTime && !finishTime) finishTime = startTime;
+                if (!startTime && finishTime) startTime = finishTime;
 
                 const activeButtons = Array.from(card.querySelectorAll('.day-toggle-btn.bg-blue-600'));
                 const activeDays = activeButtons.map(b => b.getAttribute('data-day'));
@@ -13111,6 +13180,7 @@ function isTabAllowed(tabName) {
                 const finishMth = card.querySelector('.rule-finish-month').value;
 
                 rules.push({
+                    name: ruleName,
                     start_time: startTime,
                     finish_time: finishTime,
                     active_days: activeDays,

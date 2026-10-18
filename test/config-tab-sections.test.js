@@ -41,7 +41,7 @@ test('views/config.ejs renders all 17 PBX tab sections as direct siblings at equ
         }
     }
 
-    assert.equal(sectionReport.length, 17, 'Must render exactly 17 tab sections');
+    assert.equal(sectionReport.length, 18, 'Must render all tab sections');
     const depths = new Set(sectionReport.map(s => s.depthAtOpen));
     assert.equal(depths.size, 1, `All tab sections must open at the exact same DOM depth (got ${[...depths].join(', ')})`);
 });

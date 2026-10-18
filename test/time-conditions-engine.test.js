@@ -107,3 +107,39 @@ test('Time Conditions Engine: Destination routing handles true/false branch targ
         assert.ok(!isNaN(parseInt(parts[2], 10)), 'priority must be integer');
     }
 });
+
+test('Time Groups: Evaluates Asterisk wrap-around weekdays and clean timespec syntax', () => {
+    const serverCode = fs.readFileSync(path.join(rootDir, 'server.js'), 'utf8');
+
+    // Extract formatWeekdaysFromActiveDays from server.js
+    const match = serverCode.match(/function formatWeekdaysFromActiveDays\([\s\S]*?^}/m);
+    assert.ok(match, 'formatWeekdaysFromActiveDays must be defined in server.js');
+    const fn = new Function(`${match[0]}; return formatWeekdaysFromActiveDays;`)();
+
+    // Sat-Thu (Arab/Egypt standard workweek) must produce 'sat-thu'
+    assert.strictEqual(fn(['sat', 'sun', 'mon', 'tue', 'wed', 'thu']), 'sat-thu');
+    // Sun-Thu
+    assert.strictEqual(fn(['sun', 'mon', 'tue', 'wed', 'thu']), 'sun-thu');
+    // Mon-Fri
+    assert.strictEqual(fn(['mon', 'tue', 'wed', 'thu', 'fri']), 'mon-fri');
+    // Fri-Sat (Weekend)
+    assert.strictEqual(fn(['fri', 'sat']), 'fri-sat');
+    // Single day
+    assert.strictEqual(fn(['fri']), 'fri');
+    // All 7 days -> '*'
+    assert.strictEqual(fn(['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri']), '*');
+});
+
+test('Time Groups & Outbound Routes: views/config.ejs supports optional CallerID and Route CID', () => {
+    const configView = fs.readFileSync(path.join(rootDir, 'views/config.ejs'), 'utf8');
+
+    // Outbound Route CID input and Override Extension checkbox
+    assert.match(configView, /id="outCid"/, 'Must contain Route CID input in Outbound Routes modal');
+    assert.match(configView, /id="outCidOverride"/, 'Must contain Override Extension checkbox in Outbound Routes modal');
+
+    // Dial Pattern CallerID field marked optional
+    assert.match(configView, /CallerID \(Optional\)/, 'CallerID in pattern grid must be marked Optional');
+
+    // Time Group Rule Name input in modal
+    assert.match(configView, /name="rule_name\[\]"/, 'Rule cards must have an Interval Name / Description input');
+});

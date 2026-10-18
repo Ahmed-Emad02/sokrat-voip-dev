@@ -15855,7 +15855,7 @@ app.post('/api/config/routes/outbound/reorder', async (req, res) => {
 // POST /api/config/routes/outbound - Create Outbound Route
 app.post('/api/config/routes/outbound', async (req, res) => {
     try {
-        const { name, patterns, trunks } = req.body;
+        const { name, outcid, outcid_mode, patterns, trunks } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, error: 'Route Name is required.' });
         }
@@ -15868,12 +15868,14 @@ app.post('/api/config/routes/outbound', async (req, res) => {
 
         const routeName = String(name).trim();
 
+        const routeCid = String(outcid || '').trim();
+        const routeCidMode = routeCid ? String(outcid_mode || '').trim() : '';
+
         // 1. Insert into outbound_routes
         const [rResult] = await pool.query(`
             INSERT INTO \`asterisk\`.\`outbound_routes\` (name, outcid, outcid_mode, password, emergency_route, intracompany_route, mohclass)
-            VALUES (?, '', '', '', '', '', 'default')
-        `, [routeName]);
-
+            VALUES (?, ?, ?, '', '', '', 'default')
+        `, [routeName, routeCid, routeCidMode]);
         const routeId = rResult.insertId;
 
         // 2. Insert patterns
@@ -15913,7 +15915,7 @@ app.post('/api/config/routes/outbound', async (req, res) => {
 app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
     try {
         const routeId = parseInt(req.params.route_id, 10);
-        const { name, patterns, trunks } = req.body;
+        const { name, outcid, outcid_mode, patterns, trunks } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, error: 'Route Name is required.' });
         }
@@ -15926,13 +15928,15 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
 
         const routeName = String(name).trim();
 
-        // 1. Update outbound_routes name
+        const routeCid = String(outcid || '').trim();
+        const routeCidMode = routeCid ? String(outcid_mode || '').trim() : '';
+
+        // 1. Update outbound_routes name, outcid, outcid_mode
         await pool.query(`
             UPDATE \`asterisk\`.\`outbound_routes\`
-            SET name = ?
+            SET name = ?, outcid = ?, outcid_mode = ?
             WHERE route_id = ?
-        `, [routeName, routeId]);
-
+        `, [routeName, routeCid, routeCidMode, routeId]);
         // 2. Refresh patterns
         await pool.query('DELETE FROM `asterisk`.`outbound_route_patterns` WHERE route_id = ?', [routeId]);
         for (const p of patterns) {
@@ -16314,41 +16318,34 @@ app.get('/api/config/diagram', async (req, res) => {
 
 // --- TIME GROUPS API ---
 
-function decomposeWeekdaysToAsterisk(days) {
+function formatWeekdaysFromActiveDays(days) {
     if (!days || !Array.isArray(days) || days.length === 0 || days.includes('*')) {
-        return ['*'];
+        return '*';
     }
-    const validDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-    const active = days.map(d => String(d).toLowerCase().trim()).filter(d => validDays.includes(d));
-    if (active.length === 0 || active.length === 7) return ['*'];
+    const circle = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    const active = days.map(d => String(d).toLowerCase().trim()).filter(d => circle.includes(d));
+    if (active.length === 0 || active.length === 7) return '*';
+    if (active.length === 1) return active[0];
 
-    const ranges = [];
-    let currentRange = [];
-
-    for (let i = 0; i < validDays.length; i++) {
-        const day = validDays[i];
-        if (active.includes(day)) {
-            currentRange.push(day);
-        } else {
-            if (currentRange.length > 0) {
-                if (currentRange.length === 1) {
-                    ranges.push(currentRange[0]);
-                } else {
-                    ranges.push(`${currentRange[0]}-${currentRange[currentRange.length - 1]}`);
-                }
-                currentRange = [];
+    const activeSet = new Set(active);
+    for (let s = 0; s < 7; s++) {
+        let matches = true;
+        for (let step = 0; step < active.length; step++) {
+            const day = circle[(s + step) % 7];
+            if (!activeSet.has(day)) {
+                matches = false;
+                break;
             }
         }
-    }
-    if (currentRange.length > 0) {
-        if (currentRange.length === 1) {
-            ranges.push(currentRange[0]);
-        } else {
-            ranges.push(`${currentRange[0]}-${currentRange[currentRange.length - 1]}`);
+        if (matches) {
+            const startDay = circle[s];
+            const finishDay = circle[(s + active.length - 1) % 7];
+            return `${startDay}-${finishDay}`;
         }
     }
-    return ranges;
+    return active.join('&');
 }
+
 function normalizeIssabelDestination(dest) {
     if (!dest) return '';
     const trimmed = String(dest).trim();
@@ -16372,6 +16369,35 @@ function normalizeTimeRange(str) {
     return trimmed;
 }
 
+function formatTimeRange(start, finish) {
+    const s = String(start || '').trim();
+    const f = String(finish || '').trim();
+    if (!s && !f) return '*';
+    if (s && !f) return `${s}-${s}`;
+    if (!s && f) return `${f}-${f}`;
+    return `${s}-${f}`;
+}
+
+function formatMonthDayRange(start, finish) {
+    const s = String(start || '').trim();
+    const f = String(finish || '').trim();
+    if ((!s || s === '*' || s === '*-*') && (!f || f === '*' || f === '*-*')) return '*';
+    if (!s || s === '*' || s === '*-*') return f;
+    if (!f || f === '*' || f === '*-*') return s;
+    if (s === f) return s;
+    return `${s}-${f}`;
+}
+
+function formatMonthRange(start, finish) {
+    const s = String(start || '').toLowerCase().trim();
+    const f = String(finish || '').toLowerCase().trim();
+    if ((!s || s === '*' || s === '*-*') && (!f || f === '*' || f === '*-*')) return '*';
+    if (!s || s === '*' || s === '*-*') return f;
+    if (!f || f === '*' || f === '*-*') return s;
+    if (s === f) return s;
+    return `${s}-${f}`;
+}
+
 function formatIssabelTimeRule(rule, overrideWkday = null) {
     if (!rule) return '*|*|*|*';
     if (typeof rule === 'string') {
@@ -16384,31 +16410,39 @@ function formatIssabelTimeRule(rule, overrideWkday = null) {
     }
 
     let timeStr = rule.time || '';
-    if (!timeStr && rule.start_time && rule.finish_time) {
-        timeStr = `${rule.start_time}-${rule.finish_time}`;
-    } else if (!timeStr && rule.start_time) {
-        timeStr = rule.start_time;
+    if (!timeStr && (rule.start_time || rule.finish_time)) {
+        timeStr = formatTimeRange(rule.start_time, rule.finish_time);
     }
 
     let weekdayStr = overrideWkday !== null ? overrideWkday : (rule.weekday || '');
-    if (!weekdayStr && rule.start_weekday && rule.finish_weekday) {
-        weekdayStr = rule.start_weekday === rule.finish_weekday ? rule.start_weekday : `${rule.start_weekday}-${rule.finish_weekday}`;
-    } else if (!weekdayStr && rule.start_weekday) {
-        weekdayStr = rule.start_weekday;
+    if (!weekdayStr) {
+        if (rule.active_days && Array.isArray(rule.active_days)) {
+            weekdayStr = formatWeekdaysFromActiveDays(rule.active_days);
+        } else if (rule.start_weekday || rule.finish_weekday) {
+            const sw = String(rule.start_weekday || '').trim().toLowerCase();
+            const fw = String(rule.finish_weekday || '').trim().toLowerCase();
+            if ((!sw || sw === '*' || sw === '*-*') && (!fw || fw === '*' || fw === '*-*')) {
+                weekdayStr = '*';
+            } else if (!sw || sw === '*' || sw === '*-*') {
+                weekdayStr = fw;
+            } else if (!fw || fw === '*' || fw === '*-*') {
+                weekdayStr = sw;
+            } else if (sw === fw) {
+                weekdayStr = sw;
+            } else {
+                weekdayStr = `${sw}-${fw}`;
+            }
+        }
     }
 
     let monthdayStr = rule.monthday || '';
-    if (!monthdayStr && rule.start_monthday && rule.finish_monthday) {
-        monthdayStr = rule.start_monthday === rule.finish_monthday ? rule.start_monthday : `${rule.start_monthday}-${rule.finish_monthday}`;
-    } else if (!monthdayStr && rule.start_monthday) {
-        monthdayStr = rule.start_monthday;
+    if (!monthdayStr && (rule.start_monthday || rule.finish_monthday)) {
+        monthdayStr = formatMonthDayRange(rule.start_monthday, rule.finish_monthday);
     }
 
     let monthStr = rule.month || '';
-    if (!monthStr && rule.start_month && rule.finish_month) {
-        monthStr = rule.start_month === rule.finish_month ? rule.start_month : `${rule.start_month}-${rule.finish_month}`;
-    } else if (!monthStr && rule.start_month) {
-        monthStr = rule.start_month;
+    if (!monthStr && (rule.start_month || rule.finish_month)) {
+        monthStr = formatMonthRange(rule.start_month, rule.finish_month);
     }
 
     const cleanTime = normalizeTimeRange(timeStr);
@@ -16423,16 +16457,8 @@ async function insertTimeGroupRules(groupid, rules) {
     if (rules && Array.isArray(rules) && rules.length > 0) {
         for (const rule of rules) {
             const ruleName = String(rule.name || rule.display_name || '').trim();
-            if (rule.active_days && Array.isArray(rule.active_days)) {
-                const wkRanges = decomposeWeekdaysToAsterisk(rule.active_days);
-                for (const wkRange of wkRanges) {
-                    const timeStr = formatIssabelTimeRule(rule, wkRange);
-                    await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, ruleName]);
-                }
-            } else {
-                const timeStr = formatIssabelTimeRule(rule);
-                await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, ruleName]);
-            }
+            const timeStr = formatIssabelTimeRule(rule);
+            await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, ruleName]);
         }
     } else {
         await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, '*|*|*|*', '']);
@@ -16490,7 +16516,10 @@ app.post('/api/config/timegroups', async (req, res) => {
 
         await insertTimeGroupRules(groupid, rules);
 
-        reloadPbxConfig();
+        const reloadRes = await reloadPbxConfigPromise();
+        if (reloadRes && reloadRes.success === false) {
+            console.warn('PBX reload warning on timegroup create:', reloadRes.error);
+        }
         res.json({ success: true, message: 'Time Group created successfully', id: groupid });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -16511,7 +16540,10 @@ app.put('/api/config/timegroups/:id', async (req, res) => {
 
         await insertTimeGroupRules(id, rules);
 
-        reloadPbxConfig();
+        const reloadRes = await reloadPbxConfigPromise();
+        if (reloadRes && reloadRes.success === false) {
+            console.warn('PBX reload warning on timegroup update:', reloadRes.error);
+        }
         res.json({ success: true, message: 'Time Group updated successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -16530,7 +16562,10 @@ app.delete('/api/config/timegroups/:id', async (req, res) => {
         await pool.query('DELETE FROM `asterisk`.`timegroups_groups` WHERE id = ?', [id]);
         await pool.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [id]);
 
-        reloadPbxConfig();
+        const reloadRes = await reloadPbxConfigPromise();
+        if (reloadRes && reloadRes.success === false) {
+            console.warn('PBX reload warning on timegroup delete:', reloadRes.error);
+        }
         res.json({ success: true, message: 'Time Group deleted successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

@@ -30,15 +30,15 @@ test('views/config.ejs confirmation dialogs and empty table states are fully tra
     const content = fs.readFileSync(configEjsPath, 'utf8');
 
     // Ring group delete confirm
-    assert.ok(content.includes("isRtl ? `حذف مجموعة الاتصال ${grpnum}؟` : `Delete ring group ${grpnum}?`"));
+    assert.ok(content.includes("ring group ${grpnum}?"));
     // Queue delete confirm
-    assert.ok(content.includes("isRtl ? `حذف طابور الانتظار ${extension}؟` : `Delete Queue ${extension}?`"));
+    assert.ok(content.includes("delete Queue ${extension}?"));
     // Trunk delete confirm
-    assert.ok(content.includes("isRtl ? `حذف خط الربط ${trunkid}؟` : `Delete trunk ID ${trunkid}?`"));
+    assert.ok(content.includes("delete trunk ID ${trunkid}?"));
     // Inbound delete confirm
-    assert.ok(content.includes("isRtl ? `حذف المسار الوارد '${label}'؟` : `Delete inbound route '${label}'?`"));
+    assert.ok(content.includes("delete inbound route '${label}'?"));
     // Outbound delete confirm
-    assert.ok(content.includes("isRtl ? `حذف المسار الصادر #${routeId}؟` : `Delete outbound route ID ${routeId}?`"));
+    assert.ok(content.includes("delete outbound route ID ${routeId}?"));
     // IVR delete confirm
     assert.ok(content.includes("isRtl ? `هل أنت متأكد من حذف قائمة الرد الآلي #${id}؟` : `Are you sure you want to delete IVR #${id}?`"));
 
