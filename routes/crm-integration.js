@@ -472,6 +472,63 @@ async function getTelephonyReportsSummary(pool, queryParams) {
     };
 }
 
+function ensurePjsipSectionOptions(content, sectionName, sectionType, options) {
+    const normalized = String(content || '').replace(/\r\n/g, '\n');
+    const lines = normalized.split('\n');
+    const header = `[${sectionName}]`;
+    const sectionHeaderPattern = /^\s*\[[^\]]+\]\s*(?:\(\+\))?\s*$/;
+
+    for (let start = 0; start < lines.length; start += 1) {
+        if (lines[start].trim() !== header) continue;
+
+        let end = start + 1;
+        while (end < lines.length && !sectionHeaderPattern.test(lines[end])) end += 1;
+
+        let typeIndex = -1;
+        let detectedType = '';
+        for (let lineIndex = start + 1; lineIndex < end; lineIndex += 1) {
+            const typeMatch = lines[lineIndex].match(/^\s*type\s*=\s*([^;#\s]+)\s*$/i);
+            if (typeMatch) {
+                typeIndex = lineIndex;
+                detectedType = typeMatch[1].toLowerCase();
+                break;
+            }
+        }
+
+        if (detectedType !== String(sectionType).toLowerCase()) continue;
+
+        let changed = false;
+        let insertAt = typeIndex >= 0 ? typeIndex + 1 : start + 1;
+        for (const [key, value] of Object.entries(options)) {
+            const keyPattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\s*=`, 'i');
+            let optionIndex = -1;
+            for (let lineIndex = start + 1; lineIndex < end; lineIndex += 1) {
+                if (keyPattern.test(lines[lineIndex])) {
+                    optionIndex = lineIndex;
+                    break;
+                }
+            }
+
+            const desiredLine = `${key}=${value}`;
+            if (optionIndex >= 0) {
+                if (lines[optionIndex].trim() !== desiredLine) {
+                    lines[optionIndex] = desiredLine;
+                    changed = true;
+                }
+            } else {
+                lines.splice(insertAt, 0, desiredLine);
+                insertAt += 1;
+                end += 1;
+                changed = true;
+            }
+        }
+
+        return { content: lines.join('\n'), found: true, changed };
+    }
+
+    return { content: normalized, found: false, changed: false };
+}
+
 function createCrmRouter(pool, options = {}) {
     const getPeerStatus = typeof options === 'function' ? options : (options.getPeerStatus || (() => options.peerStatus || {}));
     const getActiveCalls = typeof options === 'object' && typeof options.getActiveCalls === 'function'
@@ -1302,23 +1359,29 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                     const custConfPath = '/etc/asterisk/pjsip_custom.conf';
                     const postConfPath = '/etc/asterisk/pjsip_custom_post.conf';
 
-                    // Ensure max_contacts=10 in asterisk.sip table so FreePBX retrieve_conf writes max_contacts to [type=aor]
+                    // Persist multi-registration settings for future FreePBX regenerations and patch this extension's AOR immediately.
                     try {
-                        await pool.query(`
-                            INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags)
-                            VALUES (?, 'max_contacts', '10', 16)
-                            ON DUPLICATE KEY UPDATE data = '10'
-                        `, [ext]);
-                        // If pjsip_additional.conf has max_contacts missing, rewrite it or retrieve_conf
+                        for (const [keyword, data] of [['max_contacts', '10'], ['remove_existing', 'no']]) {
+                            await pool.query(`
+                                INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags)
+                                VALUES (?, ?, ?, 16)
+                                ON DUPLICATE KEY UPDATE data = ?, flags = 16
+                            `, [ext, keyword, data, data]);
+                        }
+
                         if (fs.existsSync(addConfPath)) {
-                            let ac = fs.readFileSync(addConfPath, 'utf8');
-                            const aorMatch = new RegExp(`(\\[${ext}\\][\\s\\S]*?type=aor)([\\s\\S]*?)(?=\\n\\[|$)`);
-                            if (aorMatch.test(ac) && !ac.includes(`max_contacts`)) {
-                                ac = ac.replace(aorMatch, `$1\nmax_contacts=10$2`);
-                                fs.writeFileSync(addConfPath, ac, 'utf8');
+                            const currentAdditional = fs.readFileSync(addConfPath, 'utf8');
+                            const aorResult = ensurePjsipSectionOptions(currentAdditional, ext, 'aor', {
+                                max_contacts: '10',
+                                remove_existing: 'no'
+                            });
+                            if (aorResult.found && aorResult.changed) {
+                                fs.writeFileSync(addConfPath, aorResult.content, 'utf8');
                             }
                         }
-                    } catch (_) {}
+                    } catch (aorErr) {
+                        console.error(`[CRM] Failed to ensure AOR settings for ${ext}:`, aorErr.message);
+                    }
 
                     const addC = fs.existsSync(addConfPath) ? fs.readFileSync(addConfPath, 'utf8') : '';
                     let custC = fs.existsSync(custConfPath) ? fs.readFileSync(custConfPath, 'utf8') : '';
@@ -1340,7 +1403,7 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                     // 2. If extension is already defined by FreePBX in pjsip_additional.conf, ensure WebRTC DTLS parameters are appended via (+) in pjsip_custom_post.conf
                     if (addC.includes(`[${ext}]`)) {
                         if (!postC.includes(`[${ext}](+)`)) {
-                            postC += `\n[${ext}](+)\nwebrtc=yes\nmedia_encryption=dtls\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nice_support=yes\nuse_avpf=yes\nrtcp_mux=yes\nforce_rport=yes\nrewrite_contact=yes\nmax_contacts=10\nremove_existing=no\n`;
+                            postC += `\n[${ext}](+)\nwebrtc=yes\nmedia_encryption=dtls\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nice_support=yes\nuse_avpf=yes\nrtcp_mux=yes\nforce_rport=yes\nrewrite_contact=yes\n`;
                             fs.writeFileSync(postConfPath, postC.trim() + '\n', 'utf8');
                             await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
                         }
