@@ -1321,6 +1321,28 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                     try {
                         const trCustPath = '/etc/asterisk/pjsip_transport_custom.conf';
                         const trpConfig = `; Dedicated PJSIP Transports for WebRTC and Standard SIP (Managed by Sokrat VOIP)
+[ws]
+type=transport
+protocol=ws
+bind=0.0.0.0:8088
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[wss]
+type=transport
+protocol=wss
+bind=0.0.0.0:8089
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
 [transport-ws]
 type=transport
 protocol=ws
