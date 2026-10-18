@@ -1180,6 +1180,11 @@ function createCrmRouter(pool, options = {}) {
             results['asterisk_version'] = stdout.trim();
 results['asterisk_version'] = stdout.trim();
         try {
+            const { stdout } = await execFileAsync('/bin/journalctl', ['-u', 'asterisk', '-n', '50', '--no-pager']);
+            results['asterisk_journal'] = stdout.trim();
+        } catch (e) { results['asterisk_journal'] = e.message; }
+results['asterisk_version'] = stdout.trim();
+        try {
             const { stdout, stderr } = await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload chan_pjsip.so']);
             results['chan_pjsip_reload'] = (stdout || '') + (stderr || '');
         } catch (e) { results['chan_pjsip_reload'] = e.message; }
