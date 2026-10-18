@@ -324,7 +324,13 @@ function fmtDur(s) {
         select[name="cdr_speed"]::-ms-expand {
             display: none !important;
         }
-    </style>
+            @media (min-width: 1024px) {
+            .filter-grid-row2 {
+                display: grid !important;
+                grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+            }
+        }
+</style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
@@ -362,8 +368,9 @@ function fmtDur(s) {
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <input type="hidden" name="page" value="1">
             
-            <!-- Row 1: Primary Filters (6-column responsive grid) -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            
+            <!-- Row 1: Primary Filters (4-column responsive grid) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                 <div>
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="cdrStartDate"><%= t.startTime %></label>
                     <input type="datetime-local" id="cdrStartDate" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -473,19 +480,21 @@ function fmtDur(s) {
                         </label>
                     </div>
                 </div>
-                
-                
             </div>
 
-            <!-- Row 2: Secondary / Advanced Filters (Collapsible Drawer) -->
+            <!-- Row 2: Secondary / Advanced Filters (7-column responsive grid) -->
             <% 
                 let cdrHasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
+                                           (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') ||
+                                           (filters.trunkFilter && filters.trunkFilter !== 'ALL') ||
                                            (filters.searchSrc && filters.searchSrc.trim() !== '') ||
                                            (filters.searchDst && filters.searchDst.trim() !== '') ||
                                            (filters.searchDid && filters.searchDid.trim() !== '') ||
                                            (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
                 let cdrActiveSecondaryCount = 0;
                 if (filters.directionFilter && filters.directionFilter !== 'ALL') cdrActiveSecondaryCount++;
+                if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') cdrActiveSecondaryCount++;
+                if (filters.trunkFilter && filters.trunkFilter !== 'ALL') cdrActiveSecondaryCount++;
                 if (filters.searchSrc && filters.searchSrc.trim() !== '') cdrActiveSecondaryCount++;
                 if (filters.searchDst && filters.searchDst.trim() !== '') cdrActiveSecondaryCount++;
                 if (filters.searchDid && filters.searchDid.trim() !== '') cdrActiveSecondaryCount++;
@@ -493,7 +502,7 @@ function fmtDur(s) {
             %>
             <div id="cdrSecondaryFilters" class="<%= cdrHasActiveSecondary ? '' : 'hidden' %> border-t border-[var(--border-primary)]/40 overflow-hidden">
                 <div class="pt-2.5">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5 filter-grid-row2">
                         <div>
                             <label for="cdrDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
                             <select id="cdrDirectionFilter" name="directionFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -503,6 +512,27 @@ function fmtDur(s) {
                                 <option value="INTERNAL" <%= filters.directionFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.dirInternal %></option>
                             </select>
                         </div>
+                        <div>
+                    <label for="cdrScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
+                    <select id="cdrScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
+                        <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
+                        <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
+                        <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
+                    </select>
+                </div>
+                        <div>
+                    <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider">LINE</label>
+                    <select id="cdrTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
+                        <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.trunkInternal %></option>
+                        <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
+                            <% availableTrunks.forEach(trk => { %>
+                                <option value="<%= trk.id %>" <%= filters.trunkFilter === trk.id ? 'selected' : '' %>><%= trk.label %></option>
+                            <% }) %>
+                        <% } %>
+                    </select>
+                </div>
                         <div>
                             <label for="cdrSearchSrc" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.src %></label>
                             <input type="text" id="cdrSearchSrc" name="searchSrc" value="<%= filters.searchSrc || '' %>" placeholder="e.g., 101" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -519,28 +549,7 @@ function fmtDur(s) {
                             <label for="cdrSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
                             <input type="text" id="cdrSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
                         </div>
-    <div>
-                    <label for="cdrScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
-                    <select id="cdrScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
-                        <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
-                        <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
-                        <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
-                    </select>
-                </div>
-<div>
-                    <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider">LINE</label>
-                    <select id="cdrTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
-                        <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.trunkInternal %></option>
-                        <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
-                            <% availableTrunks.forEach(trk => { %>
-                                <option value="<%= trk.id %>" <%= filters.trunkFilter === trk.id ? 'selected' : '' %>><%= trk.label %></option>
-                            <% }) %>
-                        <% } %>
-                    </select>
-                </div>
-                </div>
+                    </div>
                 </div>
             </div>
 

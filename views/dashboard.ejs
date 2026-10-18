@@ -243,7 +243,13 @@ const isRtl = currentLang === 'ar';
             color: #ffffff;
             border-color: var(--border-accent);
         }
-    </style>
+            @media (min-width: 1024px) {
+            .filter-grid-row2 {
+                display: grid !important;
+                grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+            }
+        }
+</style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
@@ -259,8 +265,9 @@ const isRtl = currentLang === 'ar';
         <form id="dashFilterForm" action="/" method="GET" class="panel-surface p-3 px-3.5 rounded-xl mb-4 flex flex-col gap-2.5 relative z-30">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             
-            <!-- Row 1: Primary Filters (5-column responsive grid) -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            
+            <!-- Row 1: Primary Filters (4-column responsive grid) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                 <div>
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="dashStartDate"><%= t.startTime %></label>
                     <input type="datetime-local" id="dashStartDate" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -370,19 +377,21 @@ const isRtl = currentLang === 'ar';
                         </label>
                     </div>
                 </div>
-                
-                
             </div>
 
-            <!-- Row 2: Secondary / Advanced Filters (Collapsible Drawer) -->
+            <!-- Row 2: Secondary / Advanced Filters (7-column responsive grid) -->
             <% 
                 let hasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
+                                         (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') ||
+                                         (filters.trunkFilter && filters.trunkFilter !== 'ALL') ||
                                          (filters.searchSrc && filters.searchSrc.trim() !== '') ||
                                          (filters.searchDst && filters.searchDst.trim() !== '') ||
                                          (filters.searchDid && filters.searchDid.trim() !== '') ||
                                          (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
                 let activeSecondaryCount = 0;
                 if (filters.directionFilter && filters.directionFilter !== 'ALL') activeSecondaryCount++;
+                if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') activeSecondaryCount++;
+                if (filters.trunkFilter && filters.trunkFilter !== 'ALL') activeSecondaryCount++;
                 if (filters.searchSrc && filters.searchSrc.trim() !== '') activeSecondaryCount++;
                 if (filters.searchDst && filters.searchDst.trim() !== '') activeSecondaryCount++;
                 if (filters.searchDid && filters.searchDid.trim() !== '') activeSecondaryCount++;
@@ -390,8 +399,8 @@ const isRtl = currentLang === 'ar';
             %>
             <div id="dashSecondaryFilters" class="<%= hasActiveSecondary ? '' : 'hidden' %> border-t border-[var(--border-primary)]/40 overflow-hidden">
                 <div class="pt-2.5">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
-                    <div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5 filter-grid-row2">
+                        <div>
                         <label for="dashDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
                         <select id="dashDirectionFilter" name="directionFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                             <option value="ALL" <%= filters.directionFilter === 'ALL' ? 'selected' : '' %>><%= t.allDir %></option>
@@ -400,24 +409,7 @@ const isRtl = currentLang === 'ar';
                             <option value="INTERNAL" <%= filters.directionFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.dirInternal %></option>
                         </select>
                     </div>
-                    <div>
-                        <label for="dashSearchSrc" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.src %></label>
-                        <input type="text" id="dashSearchSrc" name="searchSrc" value="<%= filters.searchSrc || '' %>" placeholder="e.g., 101" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                    </div>
-                    <div>
-                        <label for="dashSearchDst" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.dst %></label>
-                        <input type="text" id="dashSearchDst" name="searchDst" value="<%= filters.searchDst || '' %>" placeholder="e.g., 010..." class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                    </div>
-                    <div>
-                        <label for="dashSearchDid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.did %></label>
-                        <input type="text" id="dashSearchDid" name="searchDid" value="<%= filters.searchDid || '' %>" placeholder="e.g., 01234567" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                    </div>
-                    <div>
-                        <label for="dashSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
-                        <input type="text" id="dashSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                    </div>
-
-<div>
+                        <div>
                     <label for="dashScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
                     <select id="dashScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                         <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
@@ -426,7 +418,7 @@ const isRtl = currentLang === 'ar';
                         <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
                     </select>
                 </div>
-<div>
+                        <div>
                     <label for="dashTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.trunk %></label>
                     <select id="dashTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                         <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
@@ -438,7 +430,23 @@ const isRtl = currentLang === 'ar';
                         <% } %>
                     </select>
                 </div>
-                </div>
+                        <div>
+                        <label for="dashSearchSrc" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.src %></label>
+                        <input type="text" id="dashSearchSrc" name="searchSrc" value="<%= filters.searchSrc || '' %>" placeholder="e.g., 101" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                    </div>
+                        <div>
+                        <label for="dashSearchDst" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.dst %></label>
+                        <input type="text" id="dashSearchDst" name="searchDst" value="<%= filters.searchDst || '' %>" placeholder="e.g., 010..." class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                    </div>
+                        <div>
+                        <label for="dashSearchDid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.did %></label>
+                        <input type="text" id="dashSearchDid" name="searchDid" value="<%= filters.searchDid || '' %>" placeholder="e.g., 01234567" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                    </div>
+                        <div>
+                        <label for="dashSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
+                        <input type="text" id="dashSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                    </div>
+                    </div>
                 </div>
             </div>
 
@@ -477,6 +485,7 @@ const isRtl = currentLang === 'ar';
             if (filters.searchDid) baseUrl += '&searchDid=' + encodeURIComponent(filters.searchDid);
             if (filters.searchUniqueId) baseUrl += '&searchUniqueId=' + encodeURIComponent(filters.searchUniqueId);
             if (filters.trunkFilter && filters.trunkFilter !== 'ALL') baseUrl += '&trunkFilter=' + encodeURIComponent(filters.trunkFilter);
+            if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') baseUrl += '&callScopeFilter=' + encodeURIComponent(filters.callScopeFilter);
             if (filters.targetExtension && filters.targetExtension !== 'ALL') {
                 if (Array.isArray(filters.targetExtension)) {
                     filters.targetExtension.forEach(ext => {
