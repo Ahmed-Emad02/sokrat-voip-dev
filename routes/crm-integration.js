@@ -1220,6 +1220,93 @@ function createCrmRouter(pool, options = {}) {
             if (!password) {
                 password = 'sss333';
             }
+
+            // Auto-provision WebRTC endpoint, auth, and aor in pjsip_custom.conf if missing or out of sync
+            if (ext) {
+                try {
+                    let displayName = ext;
+                    try {
+                        const [uRows] = await pool.query('SELECT name FROM `asterisk`.`users` WHERE extension = ? LIMIT 1', [ext]);
+                        if (uRows && uRows[0] && uRows[0].name) displayName = uRows[0].name;
+                    } catch (_) {}
+
+                    const pjsipPath = '/etc/asterisk/pjsip_custom.conf';
+                    let conf = '';
+                    try { if (fs.existsSync(pjsipPath)) conf = fs.readFileSync(pjsipPath, 'utf8'); } catch (_) {}
+
+                    const authBlock = `[${ext}-auth]`;
+                    const epBlock = `[${ext}]`;
+                    const passLine = `password = ${password}`;
+
+                    const needsProvision = !conf.includes(authBlock) || !conf.includes(epBlock) || !conf.includes(passLine);
+
+                    if (needsProvision) {
+                        const startMarker = `; BEGIN WEBRTC EXTENSION ${ext}`;
+                        const endMarker = `; END WEBRTC EXTENSION ${ext}`;
+
+                        const markerRegex = new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g');
+                        conf = conf.replace(markerRegex, '');
+
+                        const bareSectionRegex = new RegExp(`\\[(${ext}|${ext}-auth)\\][\\s\\S]*?(?=\\n\\[|\\n; BEGIN|$)`, 'g');
+                        conf = conf.replace(bareSectionRegex, '');
+
+                        conf = conf.trim();
+
+                        const block = `
+${startMarker}
+[${ext}]
+type = endpoint
+context = from-internal
+disallow = all
+allow = opus,ulaw,alaw
+dtls_auto_generate_cert = yes
+webrtc = yes
+direct_media = no
+rtp_symmetric = yes
+media_encryption = dtls
+dtls_verify = fingerprint
+dtls_setup = actpass
+ice_support = yes
+use_avpf = yes
+rtcp_mux = yes
+force_rport = yes
+rewrite_contact = yes
+rtp_timeout = 30
+rtp_timeout_hold = 60
+rtp_keepalive = 5
+timers = yes
+timers_min_se = 90
+timers_sess_expires = 1800
+auth = ${ext}-auth
+aors = ${ext}
+callerid = ${displayName} <${ext}>
+
+[${ext}-auth]
+type = auth
+auth_type = userpass
+username = ${ext}
+password = ${password}
+
+[${ext}]
+type = aor
+max_contacts = 10
+remove_existing = no
+remove_unavailable = yes
+qualify_frequency = 30
+qualify_timeout = 5
+${endMarker}
+`;
+                        conf += (conf ? '\n' : '') + block;
+                        fs.writeFileSync(pjsipPath, conf.trim() + '\n', 'utf8');
+                        try {
+                            await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload res_pjsip.so']);
+                            await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
+                        } catch (_) {}
+                    }
+                } catch (provErr) {
+                    console.error('[CRM] Error auto-provisioning WebRTC PJSIP extension:', provErr.message);
+                }
+            }
             let policy = { auto_answer: 'user_choice', dnd: 'user_choice', disable_outbound_ringing_cancel: 0 };
             if (ext) {
                 try {
