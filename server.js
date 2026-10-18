@@ -4212,6 +4212,42 @@ app.post('/api/user/default-filters', requireAuth, async (req, res) => {
     }
 });
 
+// GET /api/user/column-preferences - Retrieve custom column preferences
+app.get('/api/user/column-preferences', requireAuth, async (req, res) => {
+    try {
+        const username = req.session.username;
+        const userId = req.session.userId;
+        const table = String(req.query.table || 'cdr').trim();
+        const prefs = await getUserPreferences(username, userId);
+        const columns = (prefs.columnPreferences && prefs.columnPreferences[table]) ? prefs.columnPreferences[table] : null;
+        res.json({ success: true, columns });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/user/column-preferences - Save custom column preferences
+app.post('/api/user/column-preferences', requireAuth, async (req, res) => {
+    try {
+        const username = req.session.username;
+        const userId = req.session.userId;
+        const { table, columns } = req.body || {};
+        if (!table || !Array.isArray(columns) || columns.length === 0) {
+            return res.status(400).json({ success: false, error: 'Valid table name and columns array required' });
+        }
+        const existingPrefs = await getUserPreferences(username, userId);
+        existingPrefs.columnPreferences = existingPrefs.columnPreferences || {};
+        existingPrefs.columnPreferences[String(table).trim()] = columns;
+
+        await saveUserPreferences(username, userId, existingPrefs);
+        req.session.userPreferences = existingPrefs;
+
+        res.json({ success: true, message: 'Column preferences saved successfully.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // POST /api/user/theme-lang - Update theme and/or language preference for authenticated user
 app.post('/api/user/theme-lang', requireAuth, async (req, res) => {
     try {

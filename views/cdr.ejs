@@ -505,12 +505,24 @@ function fmtDur(s) {
             </div>
         </form>
 
-        <!-- Top Pagination -->
-        <% if (pagination.totalPages > 1) { %>
-        <div class="flex items-center justify-between px-4 py-3 mb-2">
-            <span class="text-xs text-zinc-500 font-bold">
-                <%= t.pagShowing %> <%= (pagination.page - 1) * pagination.perPage + 1 %>-<%= Math.min(pagination.page * pagination.perPage, pagination.total) %> <%= t.pagOf %> <%= pagination.total %> <%= t.pagResults %>
-            </span>
+        <!-- Table Toolbar: Showing counts, Columns customizer, and Pagination -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 mb-2">
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="text-xs text-zinc-500 font-bold">
+                    <%= t.pagShowing %> <%= (pagination.page - 1) * pagination.perPage + 1 %>-<%= Math.min(pagination.page * pagination.perPage, pagination.total) %> <%= t.pagOf %> <%= pagination.total %> <%= t.pagResults %>
+                </span>
+
+                <!-- Columns Customize Button -->
+                <button type="button" onclick="openCdrColumnsModal()" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] text-xs font-bold text-[var(--text-secondary)] hover:text-white transition cursor-pointer shadow-sm group">
+                    <svg class="w-3.5 h-3.5 text-zinc-400 group-hover:text-blue-400 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                    </svg>
+                    <span><%= isRtl ? 'تخصيص الأعمدة' : 'Customize Columns' %></span>
+                    <span id="cdrColCountBadge" class="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">10/12</span>
+                </button>
+            </div>
+
+            <% if (pagination.totalPages > 1) { %>
             <div class="flex items-center gap-1">
                 <button onclick="goToPage(<%= pagination.page - 1 %>)" <%= pagination.page <= 1 ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page <= 1 ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagPrev %></button>
                 <% for (let p = Math.max(1, pagination.page - 2); p <= Math.min(pagination.totalPages, pagination.page + 2); p++) { %>
@@ -518,27 +530,27 @@ function fmtDur(s) {
                 <% } %>
                 <button onclick="goToPage(<%= pagination.page + 1 %>)" <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page >= pagination.totalPages ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagNext %></button>
             </div>
+            <% } %>
         </div>
-        <% } %>
 
         <div class="panel-surface rounded-2xl overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-start border-collapse">
                     <thead>
                         <tr class="bg-black/40 text-zinc-400 text-xs font-bold uppercase border-b border-[#27272a]">
-                            <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thTime %></th>
-                            <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thId %></th>
-                            <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thSrc %></th>
-                            <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDst %></th>
-                            <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDid %></th>
-                            <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thName %></th>
-                            <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thAir %></th>
-                            <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thState %></th>
-                            <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDir %></th>
-                            <th class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thScope %></th>
-                            <th class="p-4 tracking-wider text-end min-w-[340px] whitespace-nowrap"><%= t.thRec %></th>
-                            <% if (isSuper) { %>
-                                <th class="p-4 tracking-wider text-center whitespace-nowrap"><%= t.thActions %></th>
+                            <th data-col="time" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thTime %></th>
+                            <th data-col="uniqueid" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thId %></th>
+                            <th data-col="src" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thSrc %></th>
+                            <th data-col="dst" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDst %></th>
+                            <th data-col="did" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDid %></th>
+                            <th data-col="name" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thName %></th>
+                            <th data-col="airtime" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thAir %></th>
+                            <th data-col="state" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thState %></th>
+                            <th data-col="dir" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thDir %></th>
+                            <th data-col="scope" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thScope %></th>
+                            <th data-col="rec" class="p-4 tracking-wider text-end min-w-[340px] whitespace-nowrap"><%= t.thRec %></th>
+                            <% if (canDeleteCdr) { %>
+                                <th data-col="actions" class="p-4 tracking-wider text-center whitespace-nowrap"><%= t.thActions %></th>
                             <% } %>
                         </tr>
                     </thead>
@@ -551,20 +563,20 @@ function fmtDur(s) {
                                 <% const failoverViaMatch = call.userfield ? String(call.userfield).match(/via\s+([^\s,]+)/i) : null; %>
                                 <% const failoverVia = failoverViaMatch ? failoverViaMatch[1] : (call.dstchannel && call.dstchannel.startsWith('Dongle/') ? call.dstchannel.split('-')[0].replace('Dongle/', '') : ''); %>
                                 <tr class="hover:bg-zinc-900/60 transition <%= isFailover ? 'bg-amber-500/[0.03]' : '' %>">
-                                    <td class="px-4 py-1.5 text-black whitespace-nowrap leading-none" style="color: #000000 !important;">
+                                    <td data-col="time" class="px-4 py-1.5 text-black whitespace-nowrap leading-none" style="color: #000000 !important;">
                                         <div class="flex flex-col gap-0.5 justify-center leading-none">
                                             <span class="text-xs text-black font-mono font-bold" style="color: #000000 !important;"><%= moment(call.calldate).format('YYYY-MM-DD') %></span>
                                             <span class="text-[11px] text-black font-mono font-semibold" style="color: #000000 !important;"><%= moment(call.calldate).format('HH:mm:ss') %></span>
                                         </div>
                                     </td>
-                                    <td class="p-4 text-zinc-400 text-[11px] font-mono whitespace-nowrap"><%= call.uniqueid %></td>
-                                    <td class="p-4 font-bold text-white font-mono whitespace-nowrap">
+                                    <td data-col="uniqueid" class="p-4 text-zinc-400 text-[11px] font-mono whitespace-nowrap"><%= call.uniqueid %></td>
+                                    <td data-col="src" class="p-4 font-bold text-white font-mono whitespace-nowrap">
                                         <%= call.src %>
                                         <% if (isFailover && call.channel && call.channel.startsWith('Dongle/')) { %>
                                             <span class="block text-[10px] font-mono text-zinc-400 font-normal"><%= call.channel.split('-')[0].replace('Dongle/', '') %></span>
                                         <% } %>
                                     </td>
-                                    <td class="p-4 whitespace-nowrap">
+                                    <td data-col="dst" class="p-4 whitespace-nowrap">
                                         <% if (isFailover) { %>
                                             <div class="flex flex-col gap-1">
                                                 <span class="font-bold cdr-failover-dst font-mono flex items-center gap-1.5 text-xs">
@@ -584,21 +596,21 @@ function fmtDur(s) {
                                             <span class="text-white font-mono"><%= call.dst %></span>
                                         <% } %>
                                     </td>
-                                    <td class="p-4 font-mono text-xs text-zinc-300 whitespace-nowrap"><%= call.did && call.did.trim() ? call.did.trim() : '-' %></td>
-                                    <td class="p-4 text-zinc-300">
+                                    <td data-col="did" class="p-4 font-mono text-xs text-zinc-300 whitespace-nowrap"><%= call.did && call.did.trim() ? call.did.trim() : '-' %></td>
+                                    <td data-col="name" class="p-4 text-zinc-300">
                                         <% if (isFailover && (!call.src_name || call.src_name === 'No Name' || call.src_name.startsWith('dongle'))) { %>
                                             <span class="cdr-failover-name text-xs font-semibold"><%= isRtl ? 'مكالمة واردة محولة لموبايل' : 'Inbound Forwarded Call' %></span>
                                         <% } else { %>
                                             <%= call.src_name %>
                                         <% } %>
                                     </td>
-                                    <td class="p-4 text-zinc-400 whitespace-nowrap"><%= fmtDur(call.billsec) %></td>
-                                    <td class="p-4 whitespace-nowrap">
+                                    <td data-col="airtime" class="p-4 text-zinc-400 whitespace-nowrap"><%= fmtDur(call.billsec) %></td>
+                                    <td data-col="state" class="p-4 whitespace-nowrap">
                                         <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded text-[10px] font-mono font-black tracking-wider whitespace-nowrap <%= dispColors[call.disposition] || 'bg-zinc-800 text-zinc-400 border border-zinc-700/50' %>">
                                             <%= call.disposition %>
                                         </span>
                                     </td>
-                                    <td class="p-4 whitespace-nowrap">
+                                    <td data-col="dir" class="p-4 whitespace-nowrap">
                                         <% if (isFailover) { %>
                                             <span class="inline-flex items-center justify-center text-[10px] font-black tracking-wider px-2 py-0.5 rounded cdr-failover-dir whitespace-nowrap">
                                                 <%= isRtl ? 'تحويل خارجي' : 'FAILOVER' %>
@@ -611,7 +623,7 @@ function fmtDur(s) {
                                             <span class="inline-flex items-center justify-center text-[10px] font-black tracking-wider text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded border border-purple-400/20 whitespace-nowrap"><%= t.dirInternal %></span>
                                         <% } %>
                                     </td>
-                                    <td class="p-4 whitespace-nowrap">
+                                    <td data-col="scope" class="p-4 whitespace-nowrap">
                                         <% if (isFailover) { %>
                                             <span class="inline-flex items-center justify-center text-[10px] font-black tracking-wider px-2 py-0.5 rounded cdr-failover-scope whitespace-nowrap">
                                                 <%= isRtl ? 'ربط شريحة مباشر' : 'Direct SIM Bridge' %>
@@ -622,7 +634,7 @@ function fmtDur(s) {
                                             <span class="inline-flex items-center justify-center text-[10px] font-black tracking-wider text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded border border-indigo-400/20 whitespace-nowrap"><%= isRtl ? 'خارجي' : 'External' %></span>
                                         <% } %>
                                     </td>
-                                    <td class="p-4 text-end min-w-[340px]">
+                                    <td data-col="rec" class="p-4 text-end min-w-[340px]">
                                         <% if (call.disposition === 'ANSWERED' && call.recordingfile) { %>
                                             <div class="audio-player flex items-center gap-1.5 min-w-[320px] max-w-[360px] <%= isRtl ? 'flex-row-reverse ml-auto' : 'ml-auto' %>">
                                                 <audio preload="none" data-player-audio>
@@ -671,7 +683,7 @@ function fmtDur(s) {
                                         <% } %>
                                     </td>
                                     <% if (canDeleteCdr) { %>
-                                        <td class="p-4 text-center">
+                                        <td data-col="actions" class="p-4 text-center">
                                             <button type="button" data-action="delete-cdr" data-uniqueid="<%= call.uniqueid %>" data-calldate="<%= moment(call.calldate).format('YYYY-MM-DD HH:mm:ss') %>" class="p-1.5 rounded-lg text-xs font-bold text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-600 border border-rose-500/20 transition cursor-pointer" title="<%= t.deleteBtn %>">
                                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                             </button>
@@ -1181,7 +1193,54 @@ function fmtDur(s) {
     </script>
 
     <!-- Call Transcript Modal -->
-    <div id="cdrTranscriptModal" onclick="if(event.target===this) closeCdrTranscriptModal()" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-md opacity-0 invisible transition-all duration-200 p-4" style="pointer-events:none">
+        <!-- CDR Columns Customization Modal -->
+    <div id="cdrColumnsModal" onclick="if(event.target===this) closeCdrColumnsModal()" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-md opacity-0 invisible transition-all duration-200 p-4" style="pointer-events:none">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/50 shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'تخصيص أعمدة الجدول' : 'Customize Table Columns' %></h3>
+                        <p class="text-[11px] text-[var(--text-muted)]"><%= isRtl ? 'تحكم في ظهور الأعمدة وترتيبها' : 'Toggle visibility & reorder columns' %></p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeCdrColumnsModal()" class="w-7 h-7 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-white flex items-center justify-center cursor-pointer transition">✕</button>
+            </div>
+
+            <!-- Body: Columns List -->
+            <div class="p-4 overflow-y-auto space-y-2 custom-scrollbar flex-1">
+                <div class="flex items-center justify-between text-[11px] text-[var(--text-muted)] font-bold pb-1 px-1">
+                    <span><%= isRtl ? 'اسحب أو استخدم الأسهم للترتيب' : 'Drag or use arrows to reorder' %></span>
+                    <span id="modalVisibleColSummary" class="text-blue-400 font-mono">10 / 12</span>
+                </div>
+                <div id="cdrColumnsOrderList" class="space-y-1.5">
+                    <!-- Populated dynamically by JS -->
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="flex items-center justify-between px-5 py-3 border-t border-[var(--border-primary)] bg-[var(--bg-primary)]/50 shrink-0">
+                <button type="button" onclick="resetCdrColumnsToDefault()" class="text-xs text-[var(--text-muted)] hover:text-rose-400 font-bold transition cursor-pointer">
+                    <%= isRtl ? 'استعادة الافتراضي' : 'Reset to Default' %>
+                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="closeCdrColumnsModal()" class="px-3.5 py-1.5 rounded-lg border border-[var(--border-primary)] text-xs text-[var(--text-secondary)] hover:text-white font-bold transition cursor-pointer">
+                        <%= isRtl ? 'إلغاء' : 'Cancel' %>
+                    </button>
+                    <button type="button" onclick="saveCdrColumnsPreference()" class="px-4 py-1.5 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-xs font-extrabold transition cursor-pointer shadow-md">
+                        <%= isRtl ? 'تطبيق وحفظ' : 'Apply & Save' %>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<div id="cdrTranscriptModal" onclick="if(event.target===this) closeCdrTranscriptModal()" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-md opacity-0 invisible transition-all duration-200 p-4" style="pointer-events:none">
         <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden shadow-2xl">
             <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-card)] shrink-0">
                 <div class="flex items-center gap-2.5">
@@ -1295,6 +1354,251 @@ function fmtDur(s) {
         window.openCdrTranscript = openCdrTranscript;
         window.closeCdrTranscriptModal = closeCdrTranscriptModal;
         window.copyCdrTranscript = copyCdrTranscript;
+
+        // =========================================================================
+        // --- DYNAMIC CDR COLUMN MANAGER (Visibility & Reordering) ---
+        // =========================================================================
+        const CDR_COLUMNS_CATALOG = [
+            { id: 'time', labelEn: 'Timestamp', labelAr: 'التوقيت', defaultVisible: true },
+            { id: 'src', labelEn: 'Source', labelAr: 'المصدر', defaultVisible: true },
+            { id: 'dst', labelEn: 'Destination', labelAr: 'الوجهة', defaultVisible: true },
+            { id: 'name', labelEn: 'Name / Lead', labelAr: 'الاسم', defaultVisible: true },
+            { id: 'airtime', labelEn: 'Airtime', labelAr: 'مدة المكالمة', defaultVisible: true },
+            { id: 'state', labelEn: 'State', labelAr: 'الحالة', defaultVisible: true },
+            { id: 'dir', labelEn: 'Direction', labelAr: 'الاتجاه', defaultVisible: true },
+            { id: 'scope', labelEn: 'Scope', labelAr: 'النطاق', defaultVisible: true },
+            { id: 'rec', labelEn: 'Recording', labelAr: 'التسجيل', defaultVisible: true },
+            { id: 'uniqueid', labelEn: 'UniqueID', labelAr: 'المعرف الفريد', defaultVisible: false },
+            { id: 'did', labelEn: 'DID Number', labelAr: 'رقم DID', defaultVisible: false },
+            { id: 'actions', labelEn: 'Actions', labelAr: 'الإجراءات', defaultVisible: true, superOnly: true }
+        ];
+
+        let cdrWorkingColumns = [];
+        let cdrDraggedColIndex = null;
+
+        function getDefaultCdrColumns() {
+            return CDR_COLUMNS_CATALOG
+                .filter(c => !c.superOnly || canDeleteCdr)
+                .map(c => ({ id: c.id, visible: c.defaultVisible }));
+        }
+
+        function loadCdrColumnsPreference() {
+            try {
+                const stored = localStorage.getItem('sokrat_cdr_columns_v1');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        const existingIds = new Set(parsed.map(p => p.id));
+                        const missing = getDefaultCdrColumns().filter(c => !existingIds.has(c.id));
+                        const filtered = parsed.filter(p => CDR_COLUMNS_CATALOG.some(c => c.id === p.id && (!c.superOnly || canDeleteCdr)));
+                        return [...filtered, ...missing];
+                    }
+                }
+            } catch (_) {}
+            return getDefaultCdrColumns();
+        }
+
+        function applyCdrColumnsToTable(cols) {
+            const table = document.querySelector('.panel-surface table');
+            if (!table) return;
+
+            const theadRow = table.querySelector('thead tr');
+            const tbodyRows = table.querySelectorAll('tbody tr');
+
+            // 1. Reorder & toggle <th>
+            if (theadRow) {
+                cols.forEach(col => {
+                    const th = theadRow.querySelector(`:scope > [data-col="${col.id}"]`);
+                    if (th) {
+                        if (col.visible) th.classList.remove('hidden');
+                        else th.classList.add('hidden');
+                        theadRow.appendChild(th);
+                    }
+                });
+            }
+
+            // 2. Reorder & toggle <td> in all rows
+            tbodyRows.forEach(row => {
+                const emptyCell = row.querySelector('td[colspan]');
+                if (emptyCell) {
+                    const visibleCount = cols.filter(c => c.visible).length;
+                    emptyCell.colSpan = visibleCount || 1;
+                    return;
+                }
+
+                cols.forEach(col => {
+                    const td = row.querySelector(`:scope > [data-col="${col.id}"]`);
+                    if (td) {
+                        if (col.visible) td.classList.remove('hidden');
+                        else td.classList.add('hidden');
+                        row.appendChild(td);
+                    }
+                });
+            });
+
+            // 3. Update counter badges
+            const badge = document.getElementById('cdrColCountBadge');
+            if (badge) {
+                const activeCount = cols.filter(c => c.visible).length;
+                badge.textContent = `${activeCount}/${cols.length}`;
+            }
+        }
+
+        function openCdrColumnsModal() {
+            const modal = document.getElementById('cdrColumnsModal');
+            if (!modal) return;
+            cdrWorkingColumns = loadCdrColumnsPreference().map(c => ({ ...c }));
+            renderCdrModalColumnsList();
+            modal.classList.remove('invisible', 'opacity-0');
+            modal.classList.add('opacity-100');
+            modal.style.pointerEvents = 'auto';
+        }
+
+        function closeCdrColumnsModal() {
+            const modal = document.getElementById('cdrColumnsModal');
+            if (!modal) return;
+            modal.classList.add('invisible', 'opacity-0');
+            modal.classList.remove('opacity-100');
+            modal.style.pointerEvents = 'none';
+        }
+
+        function renderCdrModalColumnsList() {
+            const container = document.getElementById('cdrColumnsOrderList');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const visibleCount = cdrWorkingColumns.filter(c => c.visible).length;
+            const summaryEl = document.getElementById('modalVisibleColSummary');
+            if (summaryEl) {
+                summaryEl.textContent = `${visibleCount} / ${cdrWorkingColumns.length}`;
+            }
+
+            cdrWorkingColumns.forEach((col, idx) => {
+                const def = CDR_COLUMNS_CATALOG.find(c => c.id === col.id) || { labelEn: col.id, labelAr: col.id };
+                const label = _isRtl ? def.labelAr : def.labelEn;
+
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] hover:border-blue-500/40 transition select-none';
+                item.setAttribute('draggable', 'true');
+                item.dataset.index = idx;
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="cursor-grab active:cursor-grabbing text-zinc-500 hover:text-zinc-300 p-0.5" title="${_isRtl ? 'اسحب للترتيب' : 'Drag to reorder'}">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 8h16M4 16h16" />
+                            </svg>
+                        </div>
+                        <label class="flex items-center gap-2 cursor-pointer text-xs font-bold text-[var(--text-primary)] truncate">
+                            <input type="checkbox" ${col.visible ? 'checked' : ''} onchange="toggleCdrModalColumn('${col.id}', this.checked)" class="rounded border-zinc-700 text-blue-600 focus:ring-blue-500 cursor-pointer">
+                            <span class="${col.visible ? 'text-white' : 'text-zinc-500 line-through'}">${label}</span>
+                        </label>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button type="button" onclick="moveCdrModalColumn(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} class="w-6 h-6 rounded flex items-center justify-center text-xs font-bold border border-[var(--border-primary)] ${idx === 0 ? 'opacity-20 cursor-not-allowed text-zinc-600' : 'text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer'} transition" title="${_isRtl ? 'للأعلى' : 'Move Up'}">▲</button>
+                        <button type="button" onclick="moveCdrModalColumn(${idx}, 1)" ${idx === cdrWorkingColumns.length - 1 ? 'disabled' : ''} class="w-6 h-6 rounded flex items-center justify-center text-xs font-bold border border-[var(--border-primary)] ${idx === cdrWorkingColumns.length - 1 ? 'opacity-20 cursor-not-allowed text-zinc-600' : 'text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer'} transition" title="${_isRtl ? 'للأسفل' : 'Move Down'}">▼</button>
+                    </div>
+                `;
+
+                // Drag and drop event listeners
+                item.addEventListener('dragstart', (e) => {
+                    cdrDraggedColIndex = idx;
+                    e.dataTransfer.effectAllowed = 'move';
+                    item.classList.add('opacity-40', 'bg-blue-500/10');
+                });
+                item.addEventListener('dragend', () => {
+                    item.classList.remove('opacity-40', 'bg-blue-500/10');
+                    document.querySelectorAll('#cdrColumnsOrderList > div').forEach(el => el.classList.remove('border-blue-500'));
+                });
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    item.classList.add('border-blue-500');
+                });
+                item.addEventListener('dragleave', () => {
+                    item.classList.remove('border-blue-500');
+                });
+                item.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    item.classList.remove('border-blue-500');
+                    const fromIdx = cdrDraggedColIndex;
+                    const toIdx = idx;
+                    if (fromIdx === null || fromIdx === undefined || fromIdx === toIdx) return;
+                    const moved = cdrWorkingColumns.splice(fromIdx, 1)[0];
+                    cdrWorkingColumns.splice(toIdx, 0, moved);
+                    renderCdrModalColumnsList();
+                });
+
+                container.appendChild(item);
+            });
+        }
+
+        function toggleCdrModalColumn(id, isChecked) {
+            const col = cdrWorkingColumns.find(c => c.id === id);
+            if (!col) return;
+            const currentlyVisible = cdrWorkingColumns.filter(c => c.visible).length;
+            if (!isChecked && currentlyVisible <= 1) {
+                showToast(_isRtl ? 'يجب إبقاء عمود واحد على الأقل معروضاً' : 'At least one column must remain visible', 'error');
+                renderCdrModalColumnsList();
+                return;
+            }
+            col.visible = isChecked;
+            renderCdrModalColumnsList();
+        }
+
+        function moveCdrModalColumn(idx, direction) {
+            const targetIdx = idx + direction;
+            if (targetIdx < 0 || targetIdx >= cdrWorkingColumns.length) return;
+            const temp = cdrWorkingColumns[idx];
+            cdrWorkingColumns[idx] = cdrWorkingColumns[targetIdx];
+            cdrWorkingColumns[targetIdx] = temp;
+            renderCdrModalColumnsList();
+        }
+
+        function resetCdrColumnsToDefault() {
+            cdrWorkingColumns = getDefaultCdrColumns();
+            renderCdrModalColumnsList();
+        }
+
+        function saveCdrColumnsPreference() {
+            localStorage.setItem('sokrat_cdr_columns_v1', JSON.stringify(cdrWorkingColumns));
+            applyCdrColumnsToTable(cdrWorkingColumns);
+            closeCdrColumnsModal();
+
+            // Background sync to server
+            fetch('/api/user/column-preferences', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table: 'cdr', columns: cdrWorkingColumns })
+            }).catch(() => {});
+
+            showToast(_isRtl ? 'تم حفظ وتطبيق ترتيب الأعمدة بنجاح' : 'Columns layout saved successfully', 'success');
+        }
+
+        // Initialize column preferences on page load
+        (function initCdrColumns() {
+            const cols = loadCdrColumnsPreference();
+            applyCdrColumnsToTable(cols);
+
+            // Background fetch from server to sync preferences across sessions
+            fetch('/api/user/column-preferences?table=cdr')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.success && Array.isArray(data.columns) && data.columns.length > 0) {
+                        localStorage.setItem('sokrat_cdr_columns_v1', JSON.stringify(data.columns));
+                        applyCdrColumnsToTable(data.columns);
+                    }
+                })
+                .catch(() => {});
+        })();
+
+        window.openCdrColumnsModal = openCdrColumnsModal;
+        window.closeCdrColumnsModal = closeCdrColumnsModal;
+        window.toggleCdrModalColumn = toggleCdrModalColumn;
+        window.moveCdrModalColumn = moveCdrModalColumn;
+        window.resetCdrColumnsToDefault = resetCdrColumnsToDefault;
+        window.saveCdrColumnsPreference = saveCdrColumnsPreference;
+
     </script>
 
 </body>
