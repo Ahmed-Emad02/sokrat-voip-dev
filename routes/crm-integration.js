@@ -1302,6 +1302,24 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                     const custConfPath = '/etc/asterisk/pjsip_custom.conf';
                     const postConfPath = '/etc/asterisk/pjsip_custom_post.conf';
 
+                    // Ensure max_contacts=10 in asterisk.sip table so FreePBX retrieve_conf writes max_contacts to [type=aor]
+                    try {
+                        await pool.query(`
+                            INSERT INTO \`asterisk\`.\`sip\` (id, keyword, data, flags)
+                            VALUES (?, 'max_contacts', '10', 16)
+                            ON DUPLICATE KEY UPDATE data = '10'
+                        `, [ext]);
+                        // If pjsip_additional.conf has max_contacts missing, rewrite it or retrieve_conf
+                        if (fs.existsSync(addConfPath)) {
+                            let ac = fs.readFileSync(addConfPath, 'utf8');
+                            const aorMatch = new RegExp(`(\\[${ext}\\][\\s\\S]*?type=aor)([\\s\\S]*?)(?=\\n\\[|$)`);
+                            if (aorMatch.test(ac) && !ac.includes(`max_contacts`)) {
+                                ac = ac.replace(aorMatch, `$1\nmax_contacts=10$2`);
+                                fs.writeFileSync(addConfPath, ac, 'utf8');
+                            }
+                        }
+                    } catch (_) {}
+
                     const addC = fs.existsSync(addConfPath) ? fs.readFileSync(addConfPath, 'utf8') : '';
                     let custC = fs.existsSync(custConfPath) ? fs.readFileSync(custConfPath, 'utf8') : '';
                     let postC = fs.existsSync(postConfPath) ? fs.readFileSync(postConfPath, 'utf8') : '';
