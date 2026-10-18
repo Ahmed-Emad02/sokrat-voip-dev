@@ -1196,7 +1196,8 @@ results['asterisk_version'] = stdout.trim();
         results['key_exists'] = fs.existsSync('/etc/asterisk/keys/asterisk.key');
 results['asterisk_version'] = stdout.trim();
         try {
-            const { stdout, stderr } = await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload res_pjsip.so']);
+            const { stdout, stderr } = // safe reload only
+                            await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
             results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
 results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
         try {
@@ -1475,7 +1476,8 @@ ${endMarker}
                         try { fs.writeFileSync(postPath, postConf.trim() + '\n', 'utf8'); } catch (_) {}
                     }
                         try {
-                            await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload res_pjsip.so']);
+                            // safe reload only
+                            await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
                             await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
                         } catch (_) {}
                     }

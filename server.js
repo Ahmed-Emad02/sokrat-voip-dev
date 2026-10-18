@@ -12797,7 +12797,7 @@ ${endMarker}
 }
 
 function reloadPjsip() {
-    exec(`${ASTERISK_BIN} -rx "module reload res_pjsip.so"`, () => {});
+    // module reload res_pjsip removed to avoid SEGV
     exec(`${ASTERISK_BIN} -rx "pjsip reload"`, () => {});
 }
 
