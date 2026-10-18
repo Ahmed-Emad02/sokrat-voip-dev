@@ -1425,7 +1425,7 @@ local_net=127.0.0.0/8
                                 if (bReg.test(custC)) { custC = custC.replace(bReg, ''); wasDeduplicated = true; }
                             }
                             if (wasDeduplicated) {
-                                fs.writeFileSync(custConfPath, custC.trim() + '\n', 'utf8');
+                                fs.writeFileSync(custConfPath, '; PJSIP Custom Configuration\n', 'utf8');
                             }
 
                             // Ensure WebRTC DTLS parameters are appended via (+) in pjsip_custom_post.conf
