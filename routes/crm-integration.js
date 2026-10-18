@@ -1172,6 +1172,14 @@ function createCrmRouter(pool, options = {}) {
             results['db_error'] = err.message;
         }
 
+                try {
+            const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show version']);
+            results['asterisk_version'] = stdout.trim();
+        } catch (_) {}
+        try {
+            const { stdout } = await execFileAsync('/bin/bash', ['-c', 'grep -i "error\|pjsip" /var/log/asterisk/full | tail -40']);
+            results['asterisk_log_tail'] = stdout.trim();
+        } catch (e) { results['asterisk_log_tail'] = e.message; }
         res.json({ success: true, ext, results });
     });
 
