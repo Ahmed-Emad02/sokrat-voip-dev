@@ -1117,6 +1117,50 @@ function createCrmRouter(pool, options = {}) {
     });
 
     // 10. DESKTOP TELEPHONY SESSION PROVISIONING
+        // 10.0 DESKTOP TELEPHONY DEBUG DIAGNOSTIC
+    router.get('/desktop-session/debug', requireCrmScope(['live:read', 'softphone:use', 'extensions:read']), async (req, res) => {
+        const ext = String(req.query.extension || '222').trim();
+        const results = {};
+        const commands = [
+            'pjsip show endpoints',
+            'pjsip show auths',
+            `pjsip show endpoint ${ext}`,
+            `pjsip show aor ${ext}`,
+            `pjsip show auth ${ext}`,
+            `pjsip show auth auth${ext}`,
+            `pjsip show auth ${ext}-auth`,
+            'pjsip show endpoint 161',
+            'pjsip show auth 161-auth',
+            'pjsip show auth auth161',
+        ];
+
+        for (const cmd of commands) {
+            try {
+                const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', cmd]);
+                results[cmd] = stdout.trim();
+            } catch (err) {
+                results[cmd] = 'ERROR: ' + err.message;
+            }
+        }
+
+        try {
+            results['pjsip_custom.conf'] = fs.readFileSync('/etc/asterisk/pjsip_custom.conf', 'utf8');
+        } catch (err) {
+            results['pjsip_custom.conf'] = 'ERROR: ' + err.message;
+        }
+
+        try {
+            const [sipRows] = await pool.query('SELECT id, keyword, data FROM `asterisk`.`sip` WHERE id = ? OR id = "161"', [ext]);
+            results['db_sip'] = sipRows;
+            const [devRows] = await pool.query('SELECT * FROM `asterisk`.`devices` WHERE id = ? OR id = "161"', [ext]);
+            results['db_devices'] = devRows;
+        } catch (err) {
+            results['db_error'] = err.message;
+        }
+
+        res.json({ success: true, ext, results });
+    });
+
     router.get('/desktop-session', requireCrmScope(['live:read', 'softphone:use', 'extensions:read']), async (req, res) => {
         const ext = String(req.query.extension || '').trim();
         try {
