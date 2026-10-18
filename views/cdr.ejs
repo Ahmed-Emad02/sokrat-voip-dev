@@ -483,7 +483,7 @@ function fmtDur(s) {
                     </select>
                 </div>
                 <div>
-                    <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.trunk %></label>
+                    <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider">LINE</label>
                     <select id="cdrTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
                         <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
                         <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.trunkInternal %></option>
