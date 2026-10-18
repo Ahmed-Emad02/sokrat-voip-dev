@@ -1408,6 +1408,44 @@ local_net=127.0.0.0/8
                         fs.writeFileSync(trCustPath, trpConfig, 'utf8');
                     } catch (_) {}
 
+                    // De-duplicate pjsip_custom.conf vs pjsip_additional.conf to prevent Asterisk Sorcery fatal abort
+                    const addConfPath = '/etc/asterisk/pjsip_additional.conf';
+                    const custConfPath = '/etc/asterisk/pjsip_custom.conf';
+                    const postConfPath = '/etc/asterisk/pjsip_custom_post.conf';
+                    try {
+                        if (fs.existsSync(addConfPath) && fs.existsSync(custConfPath)) {
+                            const addC = fs.readFileSync(addConfPath, 'utf8');
+                            let custC = fs.readFileSync(custConfPath, 'utf8');
+                            const duplicateExts = (addC.match(/^\[([0-9]{2,5})\]/gm) || []).map(s => s.replace(/[\[\]]/g, ''));
+                            let wasDeduplicated = false;
+                            for (const dExt of duplicateExts) {
+                                const mReg = new RegExp(`; BEGIN WEBRTC EXTENSION ${dExt}[\\s\\S]*?; END WEBRTC EXTENSION ${dExt}\\r?\\n?`, 'g');
+                                if (mReg.test(custC)) { custC = custC.replace(mReg, ''); wasDeduplicated = true; }
+                                const bReg = new RegExp(`\\[(${dExt}|${dExt}-auth)\\][\\s\\S]*?(?=\\n\\[|\\n; BEGIN|$)`, 'g');
+                                if (bReg.test(custC)) { custC = custC.replace(bReg, ''); wasDeduplicated = true; }
+                            }
+                            if (wasDeduplicated) {
+                                fs.writeFileSync(custConfPath, custC.trim() + '\n', 'utf8');
+                            }
+
+                            // Ensure WebRTC DTLS parameters are appended via (+) in pjsip_custom_post.conf
+                            let postC = '';
+                            try { if (fs.existsSync(postConfPath)) postC = fs.readFileSync(postConfPath, 'utf8'); } catch (_) {}
+                            let postModified = false;
+                            for (const dExt of ['111', '150', '161', '222', '333', '444', '1001']) {
+                                if (addC.includes(`[${dExt}]`) && !postC.includes(`[${dExt}](+)`)) {
+                                    postC += `\n[${dExt}](+)\nwebrtc=yes\nmedia_encryption=dtls\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nice_support=yes\nuse_avpf=yes\nrtcp_mux=yes\nforce_rport=yes\nrewrite_contact=yes\n`;
+                                    postModified = true;
+                                }
+                            }
+                            if (postModified) {
+                                fs.writeFileSync(postConfPath, postC.trim() + '\n', 'utf8');
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[CRM] Dedup error:', e.message);
+                    }
+
                     const pjsipPath = '/etc/asterisk/pjsip_custom.conf';
                     let conf = '';
                     try { if (fs.existsSync(pjsipPath)) conf = fs.readFileSync(pjsipPath, 'utf8'); } catch (_) {}
