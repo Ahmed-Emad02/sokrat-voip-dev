@@ -1150,6 +1150,7 @@ function createCrmRouter(pool, options = {}) {
         try {
             results['pjsip_custom.conf'] = fs.readFileSync('/etc/asterisk/pjsip_custom.conf', 'utf8');
         try { results['pjsip.conf'] = fs.readFileSync('/etc/asterisk/pjsip.conf', 'utf8'); } catch (e) { results['pjsip.conf'] = e.message; }
+        try { results['sorcery.conf'] = fs.readFileSync('/etc/asterisk/sorcery.conf', 'utf8'); } catch (e) { results['sorcery.conf'] = e.message; }
         try { results['pjsip_transport_custom.conf'] = fs.readFileSync('/etc/asterisk/pjsip_transport_custom.conf', 'utf8'); } catch (e) { results['pjsip_transport_custom.conf'] = e.message; }
         try {
             const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', 'module show like pjsip']);
