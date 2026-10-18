@@ -43,7 +43,7 @@ const defaultData = {
     pagination: { page: 1, perPage: 25, total: 1, totalPages: 1 },
     moment,
     roster: [{ extension: '101', name: 'Ahmed', online: true }],
-    availableTrunks: [{ id: 'dongle-Dongle-0', label: 'Dongle-0 (010...)' }]
+    availableTrunks: [{ id: 'dongle:Dongle-0', label: 'Dongle-0 (01012345678)', type: 'dongle' }]
 };
 
 test('Call History renders 2-row filter panel with expandable drawer in English', async () => {
@@ -116,7 +116,7 @@ test('Call History table columns render strictly in canonical order', async () =
     assert.deepEqual(tbodyCols, expectedOrder, 'Tbody columns must match canonical order');
 });
 
-test('Trunk filter dropdown renders SVG icons and zero emojis', async () => {
+test('Trunk filter dropdown renders clean select with zero emojis', async () => {
     const html = await ejs.renderFile(cdrEjsPath, {
         ...defaultData,
         availableTrunks: [
@@ -125,12 +125,7 @@ test('Trunk filter dropdown renders SVG icons and zero emojis', async () => {
         ]
     });
 
-    // Check absence of emojis
     assert.ok(!html.includes('📱'), 'Must not contain mobile phone emoji');
     assert.ok(!html.includes('🌐'), 'Must not contain globe emoji');
-
-    // Check presence of custom trunk button and checklist menu with SVG icons
-    assert.ok(html.includes('id="cdrTrunkChecklistBtn"'), 'Must contain cdrTrunkChecklistBtn');
-    assert.ok(html.includes('id="cdrTrunkChecklistMenu"'), 'Must contain cdrTrunkChecklistMenu');
-    assert.ok(html.includes('selectCdrTrunk'), 'Must contain selectCdrTrunk function call');
+    assert.ok(html.includes('id="cdrTrunkFilter"'), 'Must contain clean cdrTrunkFilter select');
 });

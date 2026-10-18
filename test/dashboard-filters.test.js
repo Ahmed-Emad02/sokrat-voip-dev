@@ -132,7 +132,6 @@ test('Dashboard secondary filters drawer auto-expands and shows active badge whe
 
     // Should NOT have hidden class on dashSecondaryFilters
     assert.ok(!html.includes('id="dashSecondaryFilters" class="hidden'), 'dashSecondaryFilters is visible when active');
-    // Active badge count should be 3 (searchSrc, searchDst, callScopeFilter)
     assert.ok(html.includes('3 Active'), 'Active secondary count badge displays 3 Active');
     assert.ok(html.includes('Fewer Filters'), 'Toggle button shows Fewer Filters when expanded');
 });
@@ -187,14 +186,13 @@ test('Inline script blocks in views/dashboard.ejs have valid JavaScript syntax',
     assert.ok(scriptMatches.length > 0, 'Found inline script blocks');
     for (const match of scriptMatches) {
         const jsCode = match[1];
-        // Test parsing via Function constructor
         assert.doesNotThrow(() => {
             new Function(jsCode);
-        }, `Inline script threw syntax error:\n${jsCode.substring(0, 200)}...`);
+        }, `Inline script threw syntax error`);
     }
 });
 
-test('Dashboard trunk filter dropdown renders SVG icons and zero emojis', async () => {
+test('Dashboard trunk filter dropdown renders clean select with zero emojis', async () => {
     const html = await ejs.renderFile(dashboardPath, {
         ...defaultData,
         availableTrunks: [
@@ -203,12 +201,7 @@ test('Dashboard trunk filter dropdown renders SVG icons and zero emojis', async 
         ]
     });
 
-    // Check absence of emojis
     assert.ok(!html.includes('📱'), 'Must not contain mobile phone emoji');
     assert.ok(!html.includes('🌐'), 'Must not contain globe emoji');
-
-    // Check presence of custom trunk button and checklist menu with SVG icons
-    assert.ok(html.includes('id="dashTrunkChecklistBtn"'), 'Must contain dashTrunkChecklistBtn');
-    assert.ok(html.includes('id="dashTrunkChecklistMenu"'), 'Must contain dashTrunkChecklistMenu');
-    assert.ok(html.includes('selectDashTrunk'), 'Must contain selectDashTrunk function call');
+    assert.ok(html.includes('id="dashTrunkFilter"'), 'Must contain clean dashTrunkFilter select');
 });
