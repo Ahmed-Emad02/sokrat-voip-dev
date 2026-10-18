@@ -473,27 +473,8 @@ function fmtDur(s) {
                         </label>
                     </div>
                 </div>
-                <div>
-                    <label for="cdrScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
-                    <select id="cdrScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
-                        <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
-                        <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
-                        <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
-                    </select>
-                </div>
-                <div>
-                    <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider">LINE</label>
-                    <select id="cdrTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
-                        <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.trunkInternal %></option>
-                        <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
-                            <% availableTrunks.forEach(trk => { %>
-                                <option value="<%= trk.id %>" <%= filters.trunkFilter === trk.id ? 'selected' : '' %>><%= trk.label %></option>
-                            <% }) %>
-                        <% } %>
-                    </select>
-                </div>
+                
+                
             </div>
 
             <!-- Row 2: Secondary / Advanced Filters (Collapsible Drawer) -->
@@ -538,7 +519,28 @@ function fmtDur(s) {
                             <label for="cdrSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
                             <input type="text" id="cdrSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
                         </div>
-                    </div>
+    <div>
+                    <label for="cdrScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
+                    <select id="cdrScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
+                        <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
+                        <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
+                        <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
+                    </select>
+                </div>
+<div>
+                    <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider">LINE</label>
+                    <select id="cdrTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
+                        <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.trunkInternal %></option>
+                        <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
+                            <% availableTrunks.forEach(trk => { %>
+                                <option value="<%= trk.id %>" <%= filters.trunkFilter === trk.id ? 'selected' : '' %>><%= trk.label %></option>
+                            <% }) %>
+                        <% } %>
+                    </select>
+                </div>
+                </div>
                 </div>
             </div>
 
