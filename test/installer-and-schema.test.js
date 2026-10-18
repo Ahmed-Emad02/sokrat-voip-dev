@@ -110,6 +110,31 @@ test('installer-bundle/install-sokrat.sh prevents duplicate cloning and passes b
     assert.match(script, /same => n,Set\(CHANNEL\(hangup_handler_push\)=cdr-cause-capture,s,1\)/, 'install-sokrat.sh must set cdr-cause-capture under process');
 });
 
+test('all installers and the safe upgrader use the shared WebRTC PJSIP repair', () => {
+    const rootDir = path.join(__dirname, '..');
+    const repairPath = path.join(rootDir, 'scripts', 'configure-webrtc-pjsip.sh');
+    assert.ok(fs.existsSync(repairPath), 'shared WebRTC repair script must exist');
+    assert.doesNotThrow(() => {
+        execSync(`bash -n "${repairPath}"`, { cwd: rootDir, stdio: 'pipe' });
+    }, 'shared WebRTC repair script must pass bash syntax validation');
+
+    const repair = fs.readFileSync(repairPath, 'utf8');
+    assert.match(repair, /bind=0\.0\.0\.0:8088/, 'repair must bind WS to port 8088');
+    assert.match(repair, /bind=0\.0\.0\.0:8089/, 'repair must bind WSS to port 8089');
+    assert.match(repair, /max_contacts\|10\|16/, 'repair must persist max_contacts=10');
+    assert.match(repair, /remove_existing\|no\|18/, 'repair must allow simultaneous registrations');
+    assert.match(repair, /keyword='transport'.*transport-wss/s, 'repair must discover WSS extensions');
+    assert.doesNotMatch(repair, /Admin@123|sss333/, 'repair must not contain hardcoded credentials');
+
+    for (const relativePath of ['install.sh', path.join('installer-bundle', 'install-sokrat.sh'), path.join('scripts', 'safe-upgrade.sh')]) {
+        const script = fs.readFileSync(path.join(rootDir, relativePath), 'utf8');
+        assert.match(script, /configure-webrtc-pjsip\.sh/, `${relativePath} must invoke the shared WebRTC repair`);
+    }
+
+    const offlineInstaller = fs.readFileSync(path.join(rootDir, 'installer-bundle', 'install-sokrat.sh'), 'utf8');
+    assert.doesNotMatch(offlineInstaller, /protocol=wss[\s\S]{0,100}bind=0\.0\.0\.0:5066/, 'offline installer must not bind WSS to port 5066');
+});
+
 test('installer-bundle/setup-issabel-asterisk.sh passes syntax validation and does not repeat package or binary installation', () => {
     const rootDir = path.join(__dirname, '..');
     const setupScriptPath = path.join(rootDir, 'installer-bundle', 'setup-issabel-asterisk.sh');

@@ -1418,120 +1418,17 @@ echo "  address_book.db initialized with schema and permissions set"
 # ──────────────────────────────────────────────
 echo "[8/14] Configuring WebRTC / PJSIP infrastructure..."
 
-# Generate DTLS certificate for WebRTC if missing or empty
-if [ ! -s /etc/asterisk/keys/asterisk.pem ]; then
-    rm -f /etc/asterisk/keys/asterisk.pem
-    mkdir -p /etc/asterisk/keys
-    openssl req -x509 -newkey rsa:4096 -keyout /etc/asterisk/keys/asterisk.pem \
-        -out /etc/asterisk/keys/asterisk.pem -days 3650 -nodes \
-        -subj "/C=EG/ST=Cairo/L=Cairo/O=sokrat-voip/CN=$(hostname -f 2>/dev/null || echo 'localhost')"
-    chown -R asterisk:asterisk /etc/asterisk/keys
-    chmod 640 /etc/asterisk/keys/asterisk.pem
-    echo "  DTLS certificate generated at /etc/asterisk/keys/asterisk.pem"
-else
-    echo "  DTLS certificate already exists"
+# Apply the same idempotent WebRTC/PJSIP repair used by in-place upgrades.
+# This creates the DTLS key pair, configures dedicated transports, repairs every
+# existing WSS/WebRTC AOR for multi-registration, and preserves desktop SIP.
+WEBRTC_REPAIR_SCRIPT="$INSTALL_DIR/scripts/configure-webrtc-pjsip.sh"
+if [ ! -x "$WEBRTC_REPAIR_SCRIPT" ]; then
+    echo "ERROR: Missing WebRTC repair script: $WEBRTC_REPAIR_SCRIPT" >&2
+    exit 1
 fi
-
-# Ensure modules_custom.conf loads chan_sip
-MODULES_CUSTOM=/etc/asterisk/modules_custom.conf
-touch "$MODULES_CUSTOM"
-if ! grep -q 'load => chan_sip.so' "$MODULES_CUSTOM"; then
-    echo 'load => chan_sip.so' >> "$MODULES_CUSTOM"
-    echo "  Added load => chan_sip.so to modules_custom.conf"
-else
-    echo "  chan_sip already configured in modules_custom.conf"
-fi
-
-# Disable chan_sip WebSocket to avoid conflict with PJSIP WebSocket
-SIP_GENERAL_CUSTOM=/etc/asterisk/sip_general_custom.conf
-touch "$SIP_GENERAL_CUSTOM"
-if ! grep -q 'websocket_enabled=no' "$SIP_GENERAL_CUSTOM"; then
-    echo '' >> "$SIP_GENERAL_CUSTOM"
-    echo '; Disable chan_sip WebSocket — PJSIP handles WebRTC' >> "$SIP_GENERAL_CUSTOM"
-    echo 'websocket_enabled=no' >> "$SIP_GENERAL_CUSTOM"
-    echo "  Disabled chan_sip WebSocket in sip_general_custom.conf"
-else
-    echo "  chan_sip WebSocket already disabled"
-fi
-
-# Ensure WSS transport exists for PJSIP (needed by WebRTC)
-WSS_TRANSPORT=/etc/asterisk/pjsip_transport_custom.conf
-if [ ! -f "$WSS_TRANSPORT" ] || ! grep -q 'transport-wss' "$WSS_TRANSPORT" 2>/dev/null; then
-    cat >> "$WSS_TRANSPORT" << 'TRPEOF'
-
-[transport-wss]
-type=transport
-protocol=wss
-allow_reload=true
-bind=0.0.0.0:5066
-TRPEOF
-    echo "  WSS transport added to pjsip_transport_custom.conf"
-else
-    echo "  WSS transport already configured"
-fi
-
-# Patch IssabelPBX PJSIP generator to fix maxcontacts, inband_progress, and remove_unavailable
-FUNCTIONS_FILE=/var/www/html/admin/modules/core/functions.inc.php
-if [ -f "$FUNCTIONS_FILE" ]; then
-    if ! grep -q "case 'maxcontacts':" "$FUNCTIONS_FILE"; then
-        sed -i "s/case 'max_contacts':/case 'maxcontacts':\n                        case 'max_contacts':/" "$FUNCTIONS_FILE"
-    fi
-    if ! grep -q "case 'remove_unavailable':" "$FUNCTIONS_FILE"; then
-        sed -i "s/case 'remove_existing':/case 'remove_existing':\n                        case 'remove_unavailable':/" "$FUNCTIONS_FILE"
-    fi
-    if ! grep -q "case 'inband_progress':" "$FUNCTIONS_FILE"; then
-        sed -i "/case 'use_avpf':/i \                        case 'inband_progress':\n                        case 'inbandprogress':\n                            \$output1[]='inband_progress='.\$result2['data'];\n                            break;" "$FUNCTIONS_FILE"
-    fi
-    if ! grep -q "\$devopts\['inband_progress'\]" "$FUNCTIONS_FILE"; then
-        sed -i "/\$devopts\['use_avpf'\]\['value'\]='yes';/a \                \$devopts\['inband_progress'\]\['value'\]='yes';" "$FUNCTIONS_FILE"
-    fi
-    echo "  IssabelPBX PJSIP generator patched for maxcontacts, inband_progress, and remove_unavailable"
-fi
-
-# Multi-device & zero-drop registration support for WebRTC extensions
-mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
-UPDATE sip SET data='10' WHERE keyword IN ('maxcontacts','max_contacts') AND id IN (SELECT id FROM (SELECT id FROM sip WHERE keyword='webrtc' AND data='yes') AS w);
-INSERT INTO sip (id, keyword, data, flags)
-SELECT id, 'inband_progress', 'yes', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
-ON DUPLICATE KEY UPDATE data='yes';
-INSERT INTO sip (id, keyword, data, flags)
-SELECT id, 'remove_existing', 'no', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
-ON DUPLICATE KEY UPDATE data='no';
-INSERT INTO sip (id, keyword, data, flags)
-SELECT id, 'remove_unavailable', 'yes', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
-ON DUPLICATE KEY UPDATE data='yes';
-INSERT INTO sip (id, keyword, data, flags)
-SELECT id, 'direct_media', 'no', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
-ON DUPLICATE KEY UPDATE data='no';
-INSERT INTO sip (id, keyword, data, flags)
-SELECT id, 'rtp_timeout', '30', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
-ON DUPLICATE KEY UPDATE data='30';
-INSERT INTO sip (id, keyword, data, flags)
-SELECT id, 'rtp_timeout_hold', '60', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
-ON DUPLICATE KEY UPDATE data='60';
-INSERT INTO sip (id, keyword, data, flags)
-SELECT id, 'rtp_keepalive', '5', 18 FROM sip WHERE keyword='webrtc' AND data='yes'
-ON DUPLICATE KEY UPDATE data='5';
-" 2>/dev/null || true
-/var/lib/asterisk/bin/retrieve_conf 2>/dev/null || true
-
-# Ensure Asterisk socket permissions allow sokrat-softphone service access
-if [ -f /etc/asterisk/asterisk.conf ]; then
-    if ! grep -q '^astctlpermissions' /etc/asterisk/asterisk.conf; then
-        echo "astctlpermissions = 0775" >> /etc/asterisk/asterisk.conf
-    else
-        sed -i 's/^astctlpermissions.*/astctlpermissions = 0775/' /etc/asterisk/asterisk.conf
-    fi
-    if ! grep -q '^astctlgroup' /etc/asterisk/asterisk.conf; then
-        echo "astctlgroup = asterisk" >> /etc/asterisk/asterisk.conf
-    else
-        sed -i 's/^astctlgroup.*/astctlgroup = asterisk/' /etc/asterisk/asterisk.conf
-    fi
-fi
-
-asterisk -rx "pjsip reload" 2>/dev/null || true
+MYSQL_ROOT_PWD="$MYSQL_ROOT_PWD" "$WEBRTC_REPAIR_SCRIPT"
 asterisk -rx "module load chan_sip.so" 2>/dev/null || true
-echo "  PJSIP reloaded, chan_sip loaded"
+echo "  WebRTC/PJSIP infrastructure configured"
 # ──────────────────────────────────────────────
 # Step 9 — Add Required Dialplan Contexts
 # ──────────────────────────────────────────────
