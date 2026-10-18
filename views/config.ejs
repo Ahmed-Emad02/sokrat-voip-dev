@@ -4023,7 +4023,7 @@ function isTabAllowed(tabName) {
                             </div>
                             <div>
                                 <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="patCid" title="<%= isRtl ? 'اتركه فارغاً لجميع التحويلات' : 'Leave blank for all extensions' %>"><%= isRtl ? 'معرف المتصل (اختياري)' : 'CallerID (Optional)' %></label>
-                                <input type="text" id="patCid" placeholder="<%= isRtl ? 'فارغ = كل التحويلات' : 'blank = ALL extensions' %>" class="config-input w-full text-xs font-mono py-1 px-2.5">
+                                <input type="text" id="patCid" class="config-input w-full text-xs font-mono py-1 px-2.5">
                             </div>
                         </div>
                         <p class="text-[10px] text-[var(--text-muted)] px-1"><%= isRtl ? 'ملاحظة: اترك حقل CallerID فارغاً دائماً لتمكين جميع التحويلات من استخدام هذا المسار. تحديده يقصر المسار على رقم محدد فقط.' : 'Note: Leave CallerID blank so all extensions can use this route. Specifying a CID restricts this pattern exclusively to that caller.' %></p>
