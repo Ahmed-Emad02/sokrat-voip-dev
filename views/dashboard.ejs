@@ -262,12 +262,12 @@ const isRtl = currentLang === 'ar';
         </div>
 
         <!-- Compact Balanced Filter Form -->
-        <form id="dashFilterForm" action="/" method="GET" class="panel-surface p-3 px-3.5 rounded-xl mb-4 flex flex-col gap-2.5 relative z-30">
+        <form id="dashFilterForm" action="/" method="GET" class="panel-surface p-3 px-3.5 rounded-xl mb-4 flex flex-col relative z-30">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             
             
             <!-- Row 1: Primary Filters (4-column responsive grid) -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5">
                 <div>
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="dashStartDate"><%= t.startTime %></label>
                     <input type="datetime-local" id="dashStartDate" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -398,7 +398,7 @@ const isRtl = currentLang === 'ar';
                 if (filters.searchUniqueId && filters.searchUniqueId.trim() !== '') activeSecondaryCount++;
             %>
             <div id="dashSecondaryFilters" class="<%= hasActiveSecondary ? '' : 'hidden' %> overflow-hidden">
-                <div class="pt-2.5 border-t border-[var(--border-primary)]/40">
+                <div class="pb-2.5">
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5 filter-grid-row2">
                         <div>
                         <label for="dashDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
@@ -451,7 +451,7 @@ const isRtl = currentLang === 'ar';
             </div>
 
             <!-- Bottom Action Bar -->
-            <div class="flex items-center justify-between gap-3 pt-1.5 border-t border-[var(--border-primary)]/50">
+            <div class="flex items-center justify-between gap-3 pt-2 border-t border-[var(--border-primary)]/50">
                 <div class="flex items-center gap-2">
                     <a href="/?lang=<%= currentLang %>" class="filter-action-btn" title="<%= t.reset %>">
                         <svg class="w-3.5 h-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
