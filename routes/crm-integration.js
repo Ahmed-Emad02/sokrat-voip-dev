@@ -1269,6 +1269,19 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                         if (uRows && uRows[0] && uRows[0].name) displayName = uRows[0].name;
                     } catch (_) {}
 
+                    // Fix faulty bind=0.0.0.0:5066 collision in pjsip_transport_additional.conf
+                    const trAddPath = '/etc/asterisk/pjsip_transport_additional.conf';
+                    try {
+                        if (fs.existsSync(trAddPath)) {
+                            let trAdd = fs.readFileSync(trAddPath, 'utf8');
+                            if (trAdd.includes('[transport-ws]') && trAdd.includes('[transport-wss]')) {
+                                trAdd = trAdd.replace(/\[transport-ws\][\s\S]*?bind=0\.0\.0\.0:5066/, '[transport-ws]\ntype=transport\nprotocol=ws\nallow_reload=true\nbind=0.0.0.0:8088');
+                                trAdd = trAdd.replace(/\[transport-wss\][\s\S]*?bind=0\.0\.0\.0:5066/, '[transport-wss]\ntype=transport\nprotocol=wss\nallow_reload=true\nbind=0.0.0.0:8089');
+                                fs.writeFileSync(trAddPath, trAdd, 'utf8');
+                            }
+                        }
+                    } catch (_) {}
+
                     const pjsipPath = '/etc/asterisk/pjsip_custom.conf';
                     let conf = '';
                     try { if (fs.existsSync(pjsipPath)) conf = fs.readFileSync(pjsipPath, 'utf8'); } catch (_) {}
