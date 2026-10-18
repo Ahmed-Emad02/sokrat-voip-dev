@@ -1123,6 +1123,10 @@ function createCrmRouter(pool, options = {}) {
         const results = {};
         const commands = [
             'pjsip show endpoints',
+            'core show module res_pjsip.so',
+            'core show module res_pjsip_endpoint_identifier_user.so',
+            'core show module res_pjsip_authenticator_digest.so',
+            'pjsip show transports',
             'pjsip show auths',
             `pjsip show endpoint ${ext}`,
             `pjsip show aor ${ext}`,
