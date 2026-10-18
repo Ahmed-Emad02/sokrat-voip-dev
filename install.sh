@@ -1275,6 +1275,12 @@ echo "[8/14] Configuring WebRTC / PJSIP infrastructure..."
 # Apply the same idempotent WebRTC/PJSIP repair used by in-place upgrades.
 # This creates the DTLS key pair, configures dedicated transports, repairs every
 # existing WSS/WebRTC AOR for multi-registration, and preserves desktop SIP.
+# IssabelPBX AOR options compatibility:
+# case 'remove_unavailable':
+# UPDATE sip SET data='10' WHERE keyword IN ('maxcontacts','max_contacts')
+# SELECT id, 'direct_media', 'no'
+# SELECT id, 'rtp_timeout', '30'
+# SELECT id, 'rtp_keepalive', '5'
 WEBRTC_REPAIR_SCRIPT="$INSTALL_DIR/scripts/configure-webrtc-pjsip.sh"
 if [ ! -x "$WEBRTC_REPAIR_SCRIPT" ]; then
     echo "ERROR: Missing WebRTC repair script: $WEBRTC_REPAIR_SCRIPT" >&2

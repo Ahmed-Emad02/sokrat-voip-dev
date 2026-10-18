@@ -12756,10 +12756,13 @@ async function getCurrentPjsipSecret(extNum) {
 
 function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create') {
     const pjsipPath = '/etc/asterisk/pjsip_custom.conf';
-    let content = '';
+    const postPath = '/etc/asterisk/pjsip_custom_post.conf';
+
+    // 1. Clean up duplicate sections from pjsip_custom.conf
+    let customContent = '';
     try {
         if (fs.existsSync(pjsipPath)) {
-            content = fs.readFileSync(pjsipPath, 'utf8');
+            customContent = fs.readFileSync(pjsipPath, 'utf8');
         }
     } catch (e) {
         console.error('Error reading pjsip_custom.conf:', e.message);
@@ -12767,69 +12770,101 @@ function updatePjsipCustomConfig(extNum, secret, displayName, action = 'create')
 
     const startMarker = `; BEGIN WEBRTC EXTENSION ${extNum}`;
     const endMarker = `; END WEBRTC EXTENSION ${extNum}`;
+    customContent = customContent.replace(new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g'), '');
+    customContent = customContent.replace(new RegExp(`\\[(${extNum}|${extNum}-auth)\\][\\s\\S]*?(?=\\n\\[|\\n; BEGIN|$)`, 'g'), '');
+    try {
+        fs.writeFileSync(pjsipPath, (customContent ? customContent.trim() + '\n' : ''), 'utf8');
+    } catch (e) {
+        console.error('Error writing pjsip_custom.conf:', e.message);
+    }
 
-    const markerRegex = new RegExp(`${startMarker}[\\s\\S]*?${endMarker}\\r?\\n?`, 'g');
-    content = content.replace(markerRegex, '');
+    // 2. Manage WebRTC parameters in pjsip_custom_post.conf via [extNum](+)
+    let postContent = '';
+    try {
+        if (fs.existsSync(postPath)) {
+            postContent = fs.readFileSync(postPath, 'utf8');
+        }
+    } catch (e) {
+        console.error('Error reading pjsip_custom_post.conf:', e.message);
+    }
 
-    const bareSectionRegex = new RegExp(`\\[(${extNum}|${extNum}-auth)\\][\\s\\S]*?(?=\\n\\[|\\n; BEGIN|$)`, 'g');
-    content = content.replace(bareSectionRegex, '');
+    const requiredWebrtcParams = [
+        'transport=transport-wss',
+        'webrtc=yes',
+        'media_encryption=dtls',
+        'dtls_cert_file=/etc/asterisk/keys/asterisk.pem',
+        'dtls_private_key=/etc/asterisk/keys/asterisk.key',
+        'dtls_verify=fingerprint',
+        'dtls_setup=actpass',
+        'ice_support=yes',
+        'use_avpf=yes',
+        'rtcp_mux=yes',
+        'force_rport=yes',
+        'rewrite_contact=yes',
+        'direct_media=no',
+        'rtp_symmetric=yes',
+        'disallow=all',
+        'allow=opus,ulaw,alaw',
+        'rtp_timeout=30',
+        'rtp_timeout_hold=60',
+        'rtp_keepalive=5'
+    ];
 
-    content = content.trim();
-
+    const secRegex = new RegExp(`(\\[${extNum}\\]\\(\\+\\)[\\s\\S]*?)(?=\\n\\[|$)`);
     if (action !== 'delete') {
-        const safeSecret = String(secret || '').trim();
-        const safeName = String(displayName || `Extension ${extNum}`).trim();
-        const newBlock = `
-${startMarker}
-[${extNum}]
-type=endpoint
-context=from-internal
-disallow=all
-allow=opus,ulaw,alaw
-dtls_auto_generate_cert=yes
-webrtc=yes
-direct_media=no
-rtp_symmetric=yes
-media_encryption=dtls
-dtls_verify=fingerprint
-dtls_setup=actpass
-ice_support=yes
-use_avpf=yes
-rtcp_mux=yes
-force_rport=yes
-rewrite_contact=yes
-rtp_timeout=30
-rtp_timeout_hold=60
-rtp_keepalive=5
-timers=yes
-timers_min_se=90
-timers_sess_expires=1800
-auth=${extNum}-auth
-aors=${extNum}
-callerid=${safeName} <${extNum}>
-
-[${extNum}-auth]
-type=auth
-auth_type=userpass
-username=${extNum}
-password=${safeSecret}
-
-[${extNum}]
-type=aor
-max_contacts=10
-remove_existing=no
-remove_unavailable=yes
-qualify_frequency=30
-qualify_timeout=5
-${endMarker}
-`;
-        content += (content ? '\n' : '') + newBlock;
+        if (secRegex.test(postContent)) {
+            postContent = postContent.replace(secRegex, (match) => {
+                let section = match;
+                for (const param of requiredWebrtcParams) {
+                    const key = param.split('=')[0];
+                    if (new RegExp(`^${key}=`, 'm').test(section)) {
+                        section = section.replace(new RegExp(`^${key}=.*$`, 'm'), param);
+                    } else {
+                        section += `\n${param}`;
+                    }
+                }
+                return section;
+            });
+        } else {
+            postContent += `\n[${extNum}](+)\n` + requiredWebrtcParams.join('\n') + '\n';
+        }
+    } else {
+        if (secRegex.test(postContent)) {
+            postContent = postContent.replace(secRegex, (match) => {
+                let lines = match.split('\n').filter(line => {
+                    const key = line.split('=')[0].trim();
+                    return !requiredWebrtcParams.some(p => p.split('=')[0] === key);
+                });
+                return lines.length > 1 ? lines.join('\n') : '';
+            });
+        }
     }
 
     try {
-        fs.writeFileSync(pjsipPath, (content ? content.trim() + '\n' : ''), 'utf8');
+        fs.writeFileSync(postPath, postContent.trim() + '\n', 'utf8');
     } catch (e) {
-        console.error('Error writing pjsip_custom.conf:', e.message);
+        console.error('Error writing pjsip_custom_post.conf:', e.message);
+    }
+
+    // 3. Ensure AOR multi-registration settings in pjsip_additional.conf
+    /*
+max_contacts=10
+remove_existing=no
+remove_unavailable=yes
+    */
+    const addPath = '/etc/asterisk/pjsip_additional.conf';
+    if (fs.existsSync(addPath)) {
+        try {
+            const addContent = fs.readFileSync(addPath, 'utf8');
+            const aorResult = ensurePjsipSectionOptions(addContent, extNum, 'aor', {
+                max_contacts: '10',
+                remove_existing: 'no',
+                remove_unavailable: 'yes'
+            });
+            if (aorResult.found && aorResult.changed) {
+                fs.writeFileSync(addPath, aorResult.content, 'utf8');
+            }
+        } catch (_) {}
     }
 
     reloadPjsip();
@@ -13266,14 +13301,14 @@ app.post('/api/config/extensions', async (req, res) => {
         const sipPairs = [
             [extNum, 'account', extNum, 32],
             [extNum, 'accountcode', '', 28],
-            [extNum, 'allow', '', 26],
+            [extNum, 'allow', isWebRTC ? 'opus,ulaw,alaw' : '', 26],
             [extNum, 'avpf', isWebRTC ? 'yes' : 'no', 15],
             [extNum, 'callerid', `${displayName} <${extNum}>`, 33],
             [extNum, 'canreinvite', 'no', 4],
             [extNum, 'context', extContext, 5],
             [extNum, 'deny', '0.0.0.0/0.0.0.0', 30],
             [extNum, 'dial', devDial, 27],
-            [extNum, 'disallow', '', 25],
+            [extNum, 'disallow', isWebRTC ? 'all' : '', 25],
             [extNum, 'dtmfmode', 'rfc2833', 3],
             [extNum, 'encryption', isWebRTC ? 'yes' : 'no', 22],
             [extNum, 'host', 'dynamic', 6],
@@ -13285,10 +13320,34 @@ app.post('/api/config/extensions', async (req, res) => {
             [extNum, 'qualifyfreq', '15', 13],
             [extNum, 'secret', extSecret, 2],
             [extNum, 'sendrpid', 'no', 8],
-            [extNum, 'transport', isWebRTC ? 'wss' : 'udp', 14],
+            [extNum, 'transport', isWebRTC ? 'transport-wss' : 'udp', 14],
             [extNum, 'trustrpid', 'yes', 7],
             [extNum, 'type', 'friend', 9]
         ];
+
+        if (isWebRTC) {
+            sipPairs.push(
+                [extNum, 'webrtc', 'yes', 18],
+                [extNum, 'media_encryption', 'dtls', 18],
+                [extNum, 'max_contacts', '10', 16],
+                [extNum, 'remove_existing', 'no', 18],
+                [extNum, 'remove_unavailable', 'yes', 18],
+                [extNum, 'direct_media', 'no', 18],
+                [extNum, 'rtp_symmetric', 'yes', 18],
+                [extNum, 'force_rport', 'yes', 18],
+                [extNum, 'rewrite_contact', 'yes', 18],
+                [extNum, 'rtcp_mux', 'yes', 18],
+                [extNum, 'use_avpf', 'yes', 18],
+                [extNum, 'ice_support', 'yes', 18],
+                [extNum, 'dtls_cert_file', '/etc/asterisk/keys/asterisk.pem', 18],
+                [extNum, 'dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
+                [extNum, 'dtls_setup', 'actpass', 18],
+                [extNum, 'dtls_verify', 'fingerprint', 18],
+                [extNum, 'rtp_timeout', '30', 18],
+                [extNum, 'rtp_timeout_hold', '60', 18],
+                [extNum, 'rtp_keepalive', '5', 18]
+            );
+        }
 
         for (const [id, kw, data, flags] of sipPairs) {
             await pool.query(`
@@ -13388,11 +13447,36 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
 
         const sipUpdates = [
             ['dial', devDial, 27],
-            ['transport', isWebRTC ? 'wss' : 'udp', 14],
+            ['transport', isWebRTC ? 'transport-wss' : 'udp', 14],
             ['avpf', isWebRTC ? 'yes' : 'no', 15],
             ['encryption', isWebRTC ? 'yes' : 'no', 22],
-            ['nat', 'yes', 10]
+            ['nat', 'yes', 10],
+            ['allow', isWebRTC ? 'opus,ulaw,alaw' : '', 26],
+            ['disallow', isWebRTC ? 'all' : '', 25]
         ];
+        if (isWebRTC) {
+            sipUpdates.push(
+                ['webrtc', 'yes', 18],
+                ['media_encryption', 'dtls', 18],
+                ['max_contacts', '10', 16],
+                ['remove_existing', 'no', 18],
+                ['remove_unavailable', 'yes', 18],
+                ['direct_media', 'no', 18],
+                ['rtp_symmetric', 'yes', 18],
+                ['force_rport', 'yes', 18],
+                ['rewrite_contact', 'yes', 18],
+                ['rtcp_mux', 'yes', 18],
+                ['use_avpf', 'yes', 18],
+                ['ice_support', 'yes', 18],
+                ['dtls_cert_file', '/etc/asterisk/keys/asterisk.pem', 18],
+                ['dtls_private_key', '/etc/asterisk/keys/asterisk.key', 18],
+                ['dtls_setup', 'actpass', 18],
+                ['dtls_verify', 'fingerprint', 18],
+                ['rtp_timeout', '30', 18],
+                ['rtp_timeout_hold', '60', 18],
+                ['rtp_keepalive', '5', 18]
+            );
+        }
         if (displayName) {
             sipUpdates.push(['callerid', `${displayName} <${extNum}>`, 33]);
         }
