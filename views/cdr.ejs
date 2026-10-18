@@ -499,8 +499,8 @@ function fmtDur(s) {
                 if (filters.searchDid && filters.searchDid.trim() !== '') cdrActiveSecondaryCount++;
                 if (filters.searchUniqueId && filters.searchUniqueId.trim() !== '') cdrActiveSecondaryCount++;
             %>
-            <div id="cdrSecondaryFilters" class="<%= cdrHasActiveSecondary ? '' : 'hidden' %> border-t border-[var(--border-primary)]/40 overflow-hidden">
-                <div class="pt-2.5">
+            <div id="cdrSecondaryFilters" class="<%= cdrHasActiveSecondary ? '' : 'hidden' %> overflow-hidden">
+                <div class="pt-2.5 border-t border-[var(--border-primary)]/40">
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5 filter-grid-row2">
                         <div>
                             <label for="cdrDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
@@ -1720,6 +1720,7 @@ function syncStatusChecklistUI() {
                     drawer.style.maxHeight = 'none';
                     drawer.style.opacity = '1';
                     drawer.style.overflow = 'visible';
+                    drawer.style.transition = 'none';
                     if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
                     if (icon) icon.classList.add('rotate-180');
                     try { localStorage.setItem('cdr_filters_expanded', 'true'); } catch (e) {}
@@ -1730,27 +1731,40 @@ function syncStatusChecklistUI() {
                 drawer.classList.remove('hidden');
                 drawer.style.display = 'block';
                 drawer.style.overflow = 'hidden';
+                drawer.style.transition = 'none';
                 drawer.style.maxHeight = '0px';
                 drawer.style.opacity = '0';
-                drawer.style.transition = 'max-height 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.24s ease-out';
 
+                // Measure real target height with contents rendered
                 const targetHeight = drawer.scrollHeight;
+
+                // Force layout reflow before starting transition
+                void drawer.offsetHeight;
+
+                drawer.style.transition = 'max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out';
 
                 requestAnimationFrame(() => {
                     drawer.style.maxHeight = targetHeight + 'px';
                     drawer.style.opacity = '1';
                 });
 
+                let finished = false;
+                const finishExpand = () => {
+                    if (finished) return;
+                    finished = true;
+                    delete drawer.dataset.animating;
+                    drawer.style.transition = 'none';
+                    drawer.style.maxHeight = 'none';
+                    drawer.style.overflow = 'visible';
+                };
+
                 const onEnd = (e) => {
                     if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
                     drawer.removeEventListener('transitionend', onEnd);
-                    delete drawer.dataset.animating;
-                    if (drawer.style.maxHeight !== '0px') {
-                        drawer.style.maxHeight = 'none';
-                        drawer.style.overflow = 'visible';
-                    }
+                    finishExpand();
                 };
                 drawer.addEventListener('transitionend', onEnd);
+                setTimeout(finishExpand, 350);
 
                 if (label) label.textContent = <%- JSON.stringify(t.lessFilters) %>;
                 if (icon) icon.classList.add('rotate-180');
@@ -1766,6 +1780,7 @@ function syncStatusChecklistUI() {
                     drawer.style.maxHeight = '';
                     drawer.style.opacity = '';
                     drawer.style.overflow = '';
+                    drawer.style.transition = '';
                     if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
                     if (icon) icon.classList.remove('rotate-180');
                     try { localStorage.setItem('cdr_filters_expanded', 'false'); } catch (e) {}
@@ -1774,20 +1789,28 @@ function syncStatusChecklistUI() {
 
                 drawer.dataset.animating = 'true';
                 drawer.style.overflow = 'hidden';
-                drawer.style.maxHeight = drawer.scrollHeight + 'px';
-                drawer.style.opacity = '1';
-                drawer.style.transition = 'max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-in';
 
+                // 1. Lock current computed pixel height without transition to eliminate jumps from 'none'
+                const startHeight = drawer.offsetHeight || drawer.scrollHeight;
+                drawer.style.transition = 'none';
+                drawer.style.maxHeight = startHeight + 'px';
+                drawer.style.opacity = '1';
+
+                // 2. Force layout reflow so the browser commits the start height
                 void drawer.offsetHeight;
+
+                // 3. Apply smooth collapse transition and animate to 0
+                drawer.style.transition = 'max-height 0.26s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease-in';
 
                 requestAnimationFrame(() => {
                     drawer.style.maxHeight = '0px';
                     drawer.style.opacity = '0';
                 });
 
-                const onEnd = (e) => {
-                    if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
-                    drawer.removeEventListener('transitionend', onEnd);
+                let finished = false;
+                const finishCollapse = () => {
+                    if (finished) return;
+                    finished = true;
                     delete drawer.dataset.animating;
                     drawer.classList.add('hidden');
                     drawer.style.display = '';
@@ -1796,7 +1819,14 @@ function syncStatusChecklistUI() {
                     drawer.style.overflow = '';
                     drawer.style.transition = '';
                 };
+
+                const onEnd = (e) => {
+                    if (e && (e.target !== drawer || e.propertyName !== 'max-height')) return;
+                    drawer.removeEventListener('transitionend', onEnd);
+                    finishCollapse();
+                };
                 drawer.addEventListener('transitionend', onEnd);
+                setTimeout(finishCollapse, 320);
 
                 if (label) label.textContent = <%- JSON.stringify(t.moreFilters) %>;
                 if (icon) icon.classList.remove('rotate-180');
