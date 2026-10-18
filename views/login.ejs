@@ -356,55 +356,84 @@
         </div>
     </div>
 
-    <!-- Live Motion Script for SIM Tray Glide & LED State -->
+    <!-- Live Motion Script for Dongle Assembly / Disassembly & SIM Tray Glide & LED State -->
     <script>
         (function() {
             function initDongleMotion() {
                 const simTray = document.getElementById("simTrayGroup");
+                const topShell = document.getElementById("dongleTopGroup");
                 const dongleLed = document.getElementById("dongleStatusLed");
-                if (!simTray && !dongleLed) return;
+                if (!simTray && !topShell && !dongleLed) return;
 
                 let clock = 0;
                 let last = 0;
+
+                // World -> screen scale factors (empirical, matching iso projection)
+                const SIM_SCREEN = 0.98;   // world Y -> screen X
+                const SIM_SCREEN_Y = 0.58; // world Y -> screen Y
+                const Z_SCREEN = 1.4;      // world Z -> screen Y (vertical)
 
                 function tick(now) {
                     const dt = last ? Math.min((now - last) / 1000, 1 / 30) : 1 / 60;
                     last = now;
                     clock += dt;
 
-                    const t = clock % 6.0;
+                    // Full cycle: 9.0 seconds
+                    // 0.0-1.0 : assembled (hold)
+                    // 1.0-3.0 : disassembling (top shell rises, SIM tray extends)
+                    // 3.0-5.0 : disassembled (hold)
+                    // 5.0-7.0 : assembling (top shell lowers, SIM tray retracts)
+                    // 7.0-9.0 : assembled (hold)
+                    const t = clock % 9.0;
 
-                    // 1. SIM Tray glides in (0.4s to 2.2s)
-                    let simOffset = 0;
-                    if (t < 0.4) {
-                        simOffset = 0; // extended
-                        if (dongleLed) {
-                            dongleLed.style.fill = "#f59e0b";
-                            dongleLed.style.filter = "drop-shadow(0 0 3px #f59e0b)";
-                        }
-                    } else if (t < 2.2) {
-                        const p = Math.min(1, (t - 0.4) / 1.6);
+                    let assemble = 0; // 0 = assembled, 1 = fully disassembled
+                    if (t < 1.0) {
+                        assemble = 0;
+                    } else if (t < 3.0) {
+                        const p = (t - 1.0) / 2.0;
                         const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-                        simOffset = -18.0 * ease;
+                        assemble = ease;
+                    } else if (t < 5.0) {
+                        assemble = 1;
+                    } else if (t < 7.0) {
+                        const p = (t - 5.0) / 2.0;
+                        const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+                        assemble = 1 - ease;
+                    } else {
+                        assemble = 0;
+                    }
 
-                        // Blinking search LED
-                        const blink = Math.sin((t - 0.4) * 16) > 0;
-                        if (dongleLed) {
+                    // Top shell lifts up when disassembled (world Z offset up)
+                    const topLift = assemble * 26; // world units up
+                    if (topShell) {
+                        const dy = -topLift * Z_SCREEN;
+                        topShell.setAttribute("transform", "translate(0 " + dy.toFixed(2) + ")");
+                    }
+
+                    // SIM tray extends when disassembled
+                    const simOffset = -assemble * 18.0; // world Y
+                    if (simTray) {
+                        const dx = simOffset * SIM_SCREEN;
+                        const dy = simOffset * SIM_SCREEN_Y;
+                        simTray.setAttribute("transform", "translate(" + dx.toFixed(2) + " " + dy.toFixed(2) + ")");
+                    }
+
+                    // LED state transitions
+                    if (dongleLed) {
+                        if (assemble < 0.15) {
+                            // Assembled & registered
+                            dongleLed.style.fill = "#34d399";
+                            dongleLed.style.filter = "drop-shadow(0 0 6px #10b981)";
+                        } else if (assemble > 0.85) {
+                            // Disassembled - amber idle
+                            dongleLed.style.fill = "#f59e0b";
+                            dongleLed.style.filter = "drop-shadow(0 0 4px #f59e0b)";
+                        } else {
+                            // Transitioning - blinking cyan
+                            const blink = Math.sin(clock * 16) > 0;
                             dongleLed.style.fill = blink ? "#38bdf8" : "#0284c7";
                             dongleLed.style.filter = blink ? "drop-shadow(0 0 5px #38bdf8)" : "none";
                         }
-                    } else {
-                        simOffset = -18.0; // seated
-                        if (dongleLed) {
-                            dongleLed.style.fill = "#34d399";
-                            dongleLed.style.filter = "drop-shadow(0 0 6px #10b981)";
-                        }
-                    }
-
-                    if (simTray) {
-                        const dx = simOffset * 0.98;
-                        const dy = simOffset * 0.58;
-                        simTray.setAttribute("transform", "translate(" + dx.toFixed(2) + " " + dy.toFixed(2) + ")");
                     }
 
                     requestAnimationFrame(tick);
@@ -420,6 +449,7 @@
             }
         })();
     </script>
+
         <div class="flex flex-col items-center gap-2 sm:gap-3">
             <!-- Theme-Aware Brand Logos -->
             <img src="/logo_light_text.png" alt="Sokrat VOIP" class="w-48 h-48 sm:w-64 sm:h-64 max-h-[28vh] max-w-[80vw] object-contain logo-dark-theme">
