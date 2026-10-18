@@ -1337,6 +1337,17 @@ ${endMarker}
 `;
                         conf += (conf ? '\n' : '') + block;
                         fs.writeFileSync(pjsipPath, conf.trim() + '\n', 'utf8');
+
+                    // Crucial: Fix pjsip_custom_post.conf so transport-ws and transport-wss override
+                    // pjsip_transport_additional.conf's faulty bind=0.0.0.0:5066 to proper 8088 and 8089
+                    const postPath = '/etc/asterisk/pjsip_custom_post.conf';
+                    let postConf = '';
+                    try { if (fs.existsSync(postPath)) postConf = fs.readFileSync(postPath, 'utf8'); } catch (_) {}
+                    if (!postConf.includes('[transport-ws](+)') || !postConf.includes('8088')) {
+                        const trFix = `\n; Fix PJSIP WebRTC transport ports overriding FreePBX 5066 collision\n[transport-ws](+)\nbind=0.0.0.0:8088\n\n[transport-wss](+)\nbind=0.0.0.0:8089\n`;
+                        postConf += trFix;
+                        try { fs.writeFileSync(postPath, postConf.trim() + '\n', 'utf8'); } catch (_) {}
+                    }
                         try {
                             await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload res_pjsip.so']);
                             await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
