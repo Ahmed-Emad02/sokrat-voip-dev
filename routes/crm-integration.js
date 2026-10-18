@@ -1279,6 +1279,10 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                             if (trAdd.includes('[transport-ws]') && trAdd.includes('[transport-wss]')) {
                                 trAdd = trAdd.replace(/\[transport-ws\][\s\S]*?bind=0\.0\.0\.0:5066/, '[transport-ws]\ntype=transport\nprotocol=ws\nallow_reload=true\nbind=0.0.0.0:8088');
                                 trAdd = trAdd.replace(/\[transport-wss\][\s\S]*?bind=0\.0\.0\.0:5066/, '[transport-wss]\ntype=transport\nprotocol=wss\nallow_reload=true\nbind=0.0.0.0:8089');
+                                // Disable broken [transport-tls] if asterisk.key does not exist (prevents Asterisk PJSIP transport engine abort)
+                                if (!fs.existsSync('/etc/asterisk/keys/asterisk.key')) {
+                                    trAdd = trAdd.replace(/\[transport-tls\][\s\S]*?(?=\n\[|$)/, '; [transport-tls] disabled: missing asterisk.key\n');
+                                }
                                 fs.writeFileSync(trAddPath, trAdd, 'utf8');
                             }
                         }
