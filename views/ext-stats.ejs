@@ -246,6 +246,34 @@ const isRtl = currentLang === 'ar';
             border-color: #e4e4e7 !important;
         }
 
+                /* --- PAGINATION BUTTONS (THEME AWARE) --- */
+        .overview-pag-btn {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            color: var(--text-secondary);
+        }
+        .overview-pag-btn:hover:not(:disabled) {
+            background-color: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .light-theme .overview-pag-btn:not(.bg-\[var\(--accent-color\)\]) {
+            background-color: #f4f4f5 !important;
+            border: 1px solid #e4e4e7 !important;
+            color: #3f3f46 !important;
+        }
+        .light-theme .overview-pag-btn:not(.bg-\[var\(--accent-color\)\]):hover:not(:disabled) {
+            background-color: #e4e4e7 !important;
+            color: #09090b !important;
+        }
+        .light-theme .overview-pag-btn:disabled,
+        .light-theme .overview-pag-btn[disabled] {
+            background-color: #f4f4f5 !important;
+            border: 1px solid #e4e4e7 !important;
+            color: #a1a1aa !important;
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+        }
+
         .light-theme .status-log-btn:not(.bg-\[var\(--accent-color\)\]) {
             background-color: #f4f4f5 !important;
             border: 1px solid #e4e4e7 !important;
@@ -908,11 +936,11 @@ const isRtl = currentLang === 'ar';
                 html += '<div class="flex items-center justify-between mt-3 shrink-0">';
                 html += '<span class="text-xs text-zinc-500">' + (startIdx + 1) + '-' + Math.min(startIdx + overviewPerPage, totalItems) + ' of ' + totalItems + '</span>';
                 html += '<div class="flex gap-1">';
-                html += '<button onclick="overviewPage=' + Math.max(1, overviewPage - 1) + ';renderOverview()" class="px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider transition cursor-pointer ' + (overviewPage <= 1 ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-zinc-900 hover:bg-zinc-800 hover:text-white') + '" ' + (overviewPage <= 1 ? 'disabled' : '') + '>Prev</button>';
+                html += '<button onclick="overviewPage=' + Math.max(1, overviewPage - 1) + ';renderOverview()" class="overview-pag-btn px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider transition ' + (overviewPage <= 1 ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer') + '" ' + (overviewPage <= 1 ? 'disabled' : '') + '>Prev</button>';
                 for (let p = Math.max(1, overviewPage - 2); p <= Math.min(totalPages, overviewPage + 2); p++) {
-                    html += '<button onclick="overviewPage=' + p + ';renderOverview()" class="px-2.5 py-1 rounded text-xs font-bold tracking-wider transition cursor-pointer ' + (p === overviewPage ? 'bg-[var(--accent-color)] text-white' : 'text-zinc-400 bg-zinc-900 hover:bg-zinc-800 hover:text-white') + '">' + p + '</button>';
+                    html += '<button onclick="overviewPage=' + p + ';renderOverview()" class="overview-pag-btn px-2.5 py-1 rounded text-xs font-bold tracking-wider transition cursor-pointer ' + (p === overviewPage ? 'bg-[var(--accent-color)] text-white border-transparent' : '') + '">' + p + '</button>';
                 }
-                html += '<button onclick="overviewPage=' + Math.min(totalPages, overviewPage + 1) + ';renderOverview()" class="px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider transition cursor-pointer ' + (overviewPage >= totalPages ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-zinc-900 hover:bg-zinc-800 hover:text-white') + '" ' + (overviewPage >= totalPages ? 'disabled' : '') + '>Next</button>';
+                html += '<button onclick="overviewPage=' + Math.min(totalPages, overviewPage + 1) + ';renderOverview()" class="overview-pag-btn px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider transition ' + (overviewPage >= totalPages ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer') + '" ' + (overviewPage >= totalPages ? 'disabled' : '') + '>Next</button>';
                 html += '</div></div>';
             }
 

@@ -924,6 +924,30 @@ function can(tab) {
         stroke: currentColor !important;
     }
 
+        /* Light theme: Pagination & secondary dark button background overrides */
+    html.light-theme .overview-pag-btn:not(.bg-\[var\(--accent-color\)\]),
+    html.light-theme button.bg-zinc-900:not(.btn-primary):not(.bg-\[var\(--accent-color\)\]),
+    html.light-theme button[class*="bg-zinc-900"]:not(.btn-primary):not(.bg-\[var\(--accent-color\)\]) {
+        background-color: #f4f4f5 !important;
+        border: 1px solid #e4e4e7 !important;
+        color: #3f3f46 !important;
+    }
+    html.light-theme .overview-pag-btn:not(.bg-\[var\(--accent-color\)\]):hover:not(:disabled),
+    html.light-theme button.bg-zinc-900:hover:not(:disabled):not(.bg-\[var\(--accent-color\)\]),
+    html.light-theme button[class*="bg-zinc-900"]:hover:not(:disabled):not(.bg-\[var\(--accent-color\)\]) {
+        background-color: #e4e4e7 !important;
+        color: #09090b !important;
+    }
+    html.light-theme .overview-pag-btn:disabled,
+    html.light-theme button:disabled[class*="bg-zinc-900"],
+    html.light-theme button:disabled[class*="cursor-not-allowed"] {
+        background-color: #f4f4f5 !important;
+        border: 1px solid #e4e4e7 !important;
+        color: #a1a1aa !important;
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+    }
+
     /* 2. WHITE MODE (html.light-theme): Button labels, text, spans, and icons must be BLACK */
     html.light-theme button:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]):not(.bg-\[var\(--accent-hover\)\]):not(.config-tab-active):not(.nav-item.bg-\[var\(--accent-color\)\]):not(.bg-emerald-600):not(.bg-blue-600):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-sky-600):not(.bg-amber-600):not([class*="bg-red-"]):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]),
     html.light-theme button:not(.btn-primary):not(.config-btn-primary):not(.bg-red-600):not(.bg-red-700):not(.bg-rose-600):not(.bg-rose-700):not(.bg-\[var\(--accent-color\)\]):not(.bg-\[var\(--accent-hover\)\]):not(.config-tab-active):not(.nav-item.bg-\[var\(--accent-color\)\]):not(.bg-emerald-600):not(.bg-blue-600):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-sky-600):not(.bg-amber-600):not([class*="bg-red-"]):not([class*="bg-rose-600"]):not([class*="bg-rose-700"]) *,
