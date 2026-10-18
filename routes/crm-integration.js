@@ -1322,7 +1322,7 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                     // 2. If extension is already defined by FreePBX in pjsip_additional.conf, ensure WebRTC DTLS parameters are appended via (+) in pjsip_custom_post.conf
                     if (addC.includes(`[${ext}]`)) {
                         if (!postC.includes(`[${ext}](+)`)) {
-                            postC += `\n[${ext}](+)\nwebrtc=yes\nmedia_encryption=dtls\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nice_support=yes\nuse_avpf=yes\nrtcp_mux=yes\nforce_rport=yes\nrewrite_contact=yes\n`;
+                            postC += `\n[${ext}](+)\nwebrtc=yes\nmedia_encryption=dtls\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nice_support=yes\nuse_avpf=yes\nrtcp_mux=yes\nforce_rport=yes\nrewrite_contact=yes\nmax_contacts=10\nremove_existing=no\n`;
                             fs.writeFileSync(postConfPath, postC.trim() + '\n', 'utf8');
                             await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
                         }
