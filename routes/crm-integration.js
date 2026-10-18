@@ -1179,6 +1179,11 @@ results['asterisk_version'] = stdout.trim();
         try {
             const { stdout, stderr } = await execFileAsync(ASTERISK_BIN, ['-rx', 'module reload res_pjsip.so']);
             results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
+results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
+        try {
+            const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', 'module show']);
+            results['all_modules'] = stdout.split('\n').map(l => l.split(/\s+/)[0]).filter(Boolean).filter(m => m.includes('.so'));
+        } catch (_) {}
         } catch (e) { results['pjsip_reload_out'] = e.message; }
         try {
             const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show logs']);
