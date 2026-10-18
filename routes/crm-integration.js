@@ -1288,6 +1288,77 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                         }
                     } catch (_) {}
 
+                    // 1. Guarantee Asterisk self-signed keys exist
+                    const keyPath = '/etc/asterisk/keys/asterisk.key';
+                    const certPath = '/etc/asterisk/keys/asterisk.pem';
+                    if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+                        try {
+                            if (!fs.existsSync('/etc/asterisk/keys')) fs.mkdirSync('/etc/asterisk/keys', { recursive: true });
+                            execFile(ASTERISK_BIN, ['-rx', 'core show version'], () => {});
+                            const { execSync } = require('child_process');
+                            execSync('openssl req -new -x509 -days 3650 -nodes -out /etc/asterisk/keys/asterisk.pem -keyout /etc/asterisk/keys/asterisk.key -subj "/C=EG/O=Sokrat/CN=sokrat-voip" 2>/dev/null', { timeout: 10000 });
+                        } catch (_) {}
+                    }
+
+                    // 2. Clear out faulty FreePBX transport bindings (e.g. 5066 collision)
+                    try {
+                        const trAddPath = '/etc/asterisk/pjsip_transport_additional.conf';
+                        if (fs.existsSync(trAddPath)) {
+                            fs.writeFileSync(trAddPath, '; Dedicated transports managed via pjsip_transport_custom.conf\n', 'utf8');
+                        }
+                    } catch (_) {}
+
+                    // 3. Guarantee pjsip_transport_custom.conf has ws:8088 and wss:8089
+                    try {
+                        const trCustPath = '/etc/asterisk/pjsip_transport_custom.conf';
+                        const trpConfig = `; Dedicated PJSIP Transports for WebRTC and Standard SIP (Managed by Sokrat VOIP)
+[transport-ws]
+type=transport
+protocol=ws
+bind=0.0.0.0:8088
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-wss]
+type=transport
+protocol=wss
+bind=0.0.0.0:8089
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-udp]
+type=transport
+protocol=udp
+bind=0.0.0.0:5066
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-tcp]
+type=transport
+protocol=tcp
+bind=0.0.0.0:5066
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+`;
+                        fs.writeFileSync(trCustPath, trpConfig, 'utf8');
+                    } catch (_) {}
+
                     const pjsipPath = '/etc/asterisk/pjsip_custom.conf';
                     let conf = '';
                     try { if (fs.existsSync(pjsipPath)) conf = fs.readFileSync(pjsipPath, 'utf8'); } catch (_) {}

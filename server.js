@@ -12805,6 +12805,85 @@ function ensurePjsipWebRtcTransports() {
     const customPath = '/etc/asterisk/pjsip_transport_custom.conf';
     const additionalPath = '/etc/asterisk/pjsip_transport_additional.conf';
 
+    // 1. Ensure /etc/asterisk/keys/asterisk.key and asterisk.pem exist (prevents transport-tls crash)
+    const keyPath = '/etc/asterisk/keys/asterisk.key';
+    const certPath = '/etc/asterisk/keys/asterisk.pem';
+    if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+        try {
+            if (!fs.existsSync('/etc/asterisk/keys')) fs.mkdirSync('/etc/asterisk/keys', { recursive: true });
+            execSync('openssl req -new -x509 -days 3650 -nodes -out /etc/asterisk/keys/asterisk.pem -keyout /etc/asterisk/keys/asterisk.key -subj "/C=EG/O=Sokrat/CN=sokrat-voip" 2>/dev/null', { timeout: 10000 });
+            console.log('[PJSIP] Generated missing Asterisk self-signed key & cert');
+        } catch (e) {
+            console.error('[PJSIP] Error generating self-signed certificate:', e.message);
+        }
+    }
+
+    // 2. Clear out faulty FreePBX transport bindings (e.g. binding ws to 5066)
+    try {
+        if (fs.existsSync(additionalPath)) {
+            fs.writeFileSync(additionalPath, '; Dedicated transports managed via pjsip_transport_custom.conf\n', 'utf8');
+        }
+    } catch (_) {}
+
+    // 3. Write clean, dedicated PJSIP transports
+    const trpConfig = `; Dedicated PJSIP Transports for WebRTC and Standard SIP (Managed by Sokrat VOIP)
+[transport-ws]
+type=transport
+protocol=ws
+bind=0.0.0.0:8088
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-wss]
+type=transport
+protocol=wss
+bind=0.0.0.0:8089
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-udp]
+type=transport
+protocol=udp
+bind=0.0.0.0:5066
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+
+[transport-tcp]
+type=transport
+protocol=tcp
+bind=0.0.0.0:5066
+allow_reload=true
+local_net=192.168.0.0/16
+local_net=10.0.0.0/8
+local_net=172.16.0.0/12
+local_net=100.64.0.0/10
+local_net=127.0.0.0/8
+`;
+
+    try {
+        fs.writeFileSync(customPath, trpConfig, 'utf8');
+        console.log('[PJSIP] Dedicated WebRTC transports written to pjsip_transport_custom.conf');
+    } catch (e) {
+        console.error('[PJSIP] Error writing pjsip_transport_custom.conf:', e.message);
+    }
+}
+
+function _old_ensurePjsipWebRtcTransports() {
+    const customPath = '/etc/asterisk/pjsip_transport_custom.conf';
+    const additionalPath = '/etc/asterisk/pjsip_transport_additional.conf';
+
     let needsUpdate = false;
     try {
         if (!fs.existsSync(customPath)) {
