@@ -369,9 +369,10 @@
                 let last = 0;
 
                 // World -> screen scale factors (empirical, matching iso projection)
-                const SIM_SCREEN = 0.98;   // world Y -> screen X
-                const SIM_SCREEN_Y = 0.58; // world Y -> screen Y
-                const Z_SCREEN = 1.4;      // world Z -> screen Y (vertical)
+                const SIM_SCREEN_X = -0.98; // world Y -> screen X (side-entry axis)
+                const SIM_SCREEN_Y = 0.58;  // world Y -> screen Y
+                const Z_SCREEN = 1.4;       // world Z -> screen Y (vertical)
+                const CLOSED_TOP_DROP = 28.7; // original exploded shell -> seated shell
 
                 function tick(now) {
                     const dt = last ? Math.min((now - last) / 1000, 1 / 30) : 1 / 60;
@@ -403,17 +404,20 @@
                         assemble = 0;
                     }
 
-                    // Top shell lifts up when disassembled (world Z offset up)
-                    const topLift = assemble * 26; // world units up
+                    // The SVG artwork starts in an exploded pose. In the assembled state,
+                    // drop the upper shell onto the lower housing; lift it back to its
+                    // authored exploded height as disassembly progresses.
                     if (topShell) {
-                        const dy = -topLift * Z_SCREEN;
+                        const dy = CLOSED_TOP_DROP * (1 - assemble);
                         topShell.setAttribute("transform", "translate(0 " + dy.toFixed(2) + ")");
                     }
 
-                    // SIM tray extends when disassembled
-                    const simOffset = -assemble * 18.0; // world Y
+                    // The SIM socket opens on the long side of the dongle. The card
+                    // therefore follows the projected world-Y axis—not the dongle's
+                    // longitudinal USB axis. Negative Y is the seated position.
+                    const simOffset = -18.0 * (1 - assemble);
                     if (simTray) {
-                        const dx = simOffset * SIM_SCREEN;
+                        const dx = simOffset * SIM_SCREEN_X;
                         const dy = simOffset * SIM_SCREEN_Y;
                         simTray.setAttribute("transform", "translate(" + dx.toFixed(2) + " " + dy.toFixed(2) + ")");
                     }
