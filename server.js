@@ -1500,7 +1500,46 @@ async function syncExtensionCallPickupGroups() {
         const pjsipConfPath = '/etc/asterisk/pjsip_custom_post.conf';
 
         try { fs.writeFileSync(sipConfPath, sipCustomPostContent, 'utf8'); } catch (_) {}
-        try { fs.writeFileSync(pjsipConfPath, pjsipCustomPostContent, 'utf8'); } catch (_) {}
+                let existingPjsipPost = '';
+        try {
+            if (fs.existsSync(pjsipConfPath)) existingPjsipPost = fs.readFileSync(pjsipConfPath, 'utf8');
+        } catch (_) {}
+
+        for (const row of extRows) {
+            if (row.tech !== "pjsip") continue;
+            const ext = String(row.extension || '').trim();
+            if (!/^\d+$/.test(ext)) continue;
+
+            const groupKey = row.emp_group ? String(row.emp_group).trim().toLowerCase() : '__ungrouped__';
+            const groupInfo = row.emp_group && groupMap.has(groupKey) ? groupMap.get(groupKey) : null;
+            const namedGroup = groupInfo ? groupInfo.name.replace(/[^a-zA-Z0-9_]/g, '_') : 'default';
+            const isGroupAdmin = Boolean(row.is_group_admin === 1 || row.is_group_admin === true || row.is_group_admin === '1');
+            let namedPickupGroup = namedGroup;
+            if (groupsWithAdmins.has(groupKey) && !isGroupAdmin) {
+                namedPickupGroup = '';
+            }
+
+            const secRegex = new RegExp(`(\\[${ext}\\]\\(\\+\\)[\\s\\S]*?)(?=\\n\\[|$)`);
+            if (secRegex.test(existingPjsipPost)) {
+                existingPjsipPost = existingPjsipPost.replace(secRegex, (m) => {
+                    let s = m;
+                    if (/^named_call_group=/m.test(s)) {
+                        s = s.replace(/^named_call_group=.*$/m, `named_call_group=${namedGroup}`);
+                    } else {
+                        s += `\nnamed_call_group=${namedGroup}`;
+                    }
+                    if (/^named_pickup_group=/m.test(s)) {
+                        s = s.replace(/^named_pickup_group=.*$/m, `named_pickup_group=${namedPickupGroup}`);
+                    } else {
+                        s += `\nnamed_pickup_group=${namedPickupGroup}`;
+                    }
+                    return s;
+                });
+            } else {
+                existingPjsipPost += `\n[${ext}](+)\nnamed_call_group=${namedGroup}\nnamed_pickup_group=${namedPickupGroup}\n`;
+            }
+        }
+        try { fs.writeFileSync(pjsipConfPath, existingPjsipPost.trim() + '\n', 'utf8'); } catch (_) {}
 
         const { execFile: execFileCb } = require('child_process');
         execFileCb(ASTERISK_BIN, ['-rx', 'sip reload'], () => {});
