@@ -1358,6 +1358,9 @@ function fmtDur(s) {
         // =========================================================================
         // --- DYNAMIC CDR COLUMN MANAGER (Visibility & Reordering) ---
         // =========================================================================
+        const _canDeleteCdr = <%= (typeof canDeleteCdr !== 'undefined' && canDeleteCdr) ? 'true' : 'false' %>;
+        const _isRtl = <%= (typeof isRtl !== 'undefined' && isRtl) ? 'true' : 'false' %>;
+
         const CDR_COLUMNS_CATALOG = [
             { id: 'time', labelEn: 'Timestamp', labelAr: 'التوقيت', defaultVisible: true },
             { id: 'src', labelEn: 'Source', labelAr: 'المصدر', defaultVisible: true },
@@ -1378,7 +1381,7 @@ function fmtDur(s) {
 
         function getDefaultCdrColumns() {
             return CDR_COLUMNS_CATALOG
-                .filter(c => !c.superOnly || canDeleteCdr)
+                .filter(c => !c.superOnly || _canDeleteCdr)
                 .map(c => ({ id: c.id, visible: c.defaultVisible }));
         }
 
@@ -1390,7 +1393,7 @@ function fmtDur(s) {
                     if (Array.isArray(parsed) && parsed.length > 0) {
                         const existingIds = new Set(parsed.map(p => p.id));
                         const missing = getDefaultCdrColumns().filter(c => !existingIds.has(c.id));
-                        const filtered = parsed.filter(p => CDR_COLUMNS_CATALOG.some(c => c.id === p.id && (!c.superOnly || canDeleteCdr)));
+                        const filtered = parsed.filter(p => CDR_COLUMNS_CATALOG.some(c => c.id === p.id && (!c.superOnly || _canDeleteCdr)));
                         return [...filtered, ...missing];
                     }
                 }
