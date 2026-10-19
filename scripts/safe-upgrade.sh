@@ -635,6 +635,18 @@ PYEOF
 fi
 
 # 5.1 Repair WebRTC transports and all existing CRM/WebRTC AORs
+# 5.1 Ensure Asterisk WebRTC combined certificate contains private key
+CERT_PATH="/etc/asterisk/keys/asterisk.pem"
+KEY_PATH="/etc/asterisk/keys/asterisk.key"
+if [ -f "$CERT_PATH" ] && [ -f "$KEY_PATH" ]; then
+    if ! grep -q "PRIVATE KEY" "$CERT_PATH" 2>/dev/null; then
+        echo "  Merging private key into $CERT_PATH for WebRTC DTLS compatibility..."
+        cat "$KEY_PATH" >> "$CERT_PATH"
+        chown asterisk:asterisk "$CERT_PATH" "$KEY_PATH" 2>/dev/null || true
+        chmod 640 "$CERT_PATH" "$KEY_PATH" 2>/dev/null || true
+    fi
+fi
+
 echo "[5.1/7] Repairing WebRTC/PJSIP transports and extension registration settings..."
 WEBRTC_REPAIR_SCRIPT="$INSTALL_DIR/scripts/configure-webrtc-pjsip.sh"
 if [ -x "$WEBRTC_REPAIR_SCRIPT" ]; then
