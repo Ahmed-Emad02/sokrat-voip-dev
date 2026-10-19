@@ -2594,6 +2594,76 @@ function isTabAllowed(tabName) {
                     </div>
                 </div>
             </div>
+            <!-- Per-Dongle DSP Profiles Panel -->
+            <div class="config-card overflow-hidden">
+                <div class="p-4 sm:p-5 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-card)]/50">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-xs">SIM</div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white"><%= isRtl ? 'ملفات معالجة الصوت المخصصة لكل شريحة (Per-Dongle DSP Profiles)' : 'Per-Dongle Cellular DSP Profiles' %></h3>
+                            <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'تخصيص مستويات الكسب والعزل العصبي لكل مودم بشكل مستقل (الافتراضي يرث إعدادات النظام العامة).' : 'Individual DSP overrides for each physical modem (defaults inherit system globals).' %></p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="loadPerDongleAudioProfiles()" class="config-action-btn config-action-btn--neutral text-xs">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span><%= isRtl ? 'تحديث القائمة' : 'Refresh Dongles' %></span>
+                    </button>
+                </div>
+                <div class="p-4 overflow-x-auto">
+                    <table class="w-full text-start text-xs border-collapse">
+                        <thead>
+                            <tr class="border-b border-[var(--border-primary)] text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider text-start">
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'المودم' : 'Dongle' %></th>
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'فلتر Speex' : 'Hardware Denoise' %></th>
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'العزل العصبي' : 'RNNoise Gate' %></th>
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'الكسب التلقائي (AGC)' : 'AGC Target' %></th>
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'حساسية VAD' : 'VAD Threshold' %></th>
+                                <th class="pb-2.5 px-3 text-end"><%= isRtl ? 'إجراءات' : 'Action' %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="donglesDspTableBody">
+                            <tr><td colspan="6" class="py-4 text-center text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل الشرائح والمودم...' : 'Loading cellular dongles...' %></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Per-Extension DSP Profiles Panel -->
+            <div class="config-card overflow-hidden">
+                <div class="p-4 sm:p-5 border-b border-[var(--border-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-card)]/50">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-xs">EXT</div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white"><%= isRtl ? 'ملفات معالجة الصوت لكل تحويلة (Per-Extension Audio Profiles)' : 'Per-Extension Voice & Noise Profiles' %></h3>
+                            <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'تخصيص قوة العزل لكل موظف وفق بيئة عمله (غرفة هادئة أو كول سنتر مزدحم).' : 'Individual voice gate & leveling overrides per extension number.' %></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="dspExtSearchInput" oninput="filterExtensionDspTable()" placeholder="<%= isRtl ? 'بحث بالرقم أو الاسم...' : 'Search extension...' %>" class="config-input py-1 px-2 text-xs w-44">
+                        <button type="button" onclick="loadPerExtensionAudioProfiles()" class="config-action-btn config-action-btn--neutral text-xs">
+                            <span><%= isRtl ? 'تحديث' : 'Refresh' %></span>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-4 overflow-x-auto max-h-[420px] overflow-y-auto">
+                    <table class="w-full text-start text-xs border-collapse">
+                        <thead class="sticky top-0 bg-[var(--bg-secondary)] z-10">
+                            <tr class="border-b border-[var(--border-primary)] text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider text-start">
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'التحويلة والموظف' : 'Extension' %></th>
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'العزل العصبي (RNNoise)' : 'RNNoise Filter' %></th>
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'بوابة VAD' : 'VAD Gate' %></th>
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'كتم الديسيبل' : 'dBFS Cutoff' %></th>
+                                <th class="pb-2.5 px-3"><%= isRtl ? 'التحكم بالكسب (AGC)' : 'AGC Gain' %></th>
+                                <th class="pb-2.5 px-3 text-end"><%= isRtl ? 'إجراءات' : 'Action' %></th>
+                            </tr>
+                        </thead>
+                        <tbody id="extensionsDspTableBody">
+                            <tr><td colspan="6" class="py-4 text-center text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل التحويلات...' : 'Loading extensions...' %></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
 
             <!-- Quick Links -->
             <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
@@ -6465,7 +6535,7 @@ function isTabAllowed(tabName) {
             }
 
             stopRtcpTimer();
-            if (tabId === 'audioprocessing') { loadAudioGlobals(); }
+            if (tabId === 'audioprocessing') { loadAudioGlobals(); loadPerDongleAudioProfiles(); loadPerExtensionAudioProfiles(); }
             else if (tabId === 'extensions') fetchExtensions();
             else if (tabId === 'callcodes') fetchConfigCallCodes();
             else if (tabId === 'ringgroups') { fetchRingGroups(); ensureAllConfigListsLoaded(); }
@@ -14807,6 +14877,214 @@ function isTabAllowed(tabName) {
             }
         }
         window.saveAudioGlobals = saveAudioGlobals;
+
+        let cachedDspDongles = [];
+        let cachedDspExtensions = [];
+
+        async function loadPerDongleAudioProfiles() {
+            const tbody = document.getElementById('donglesDspTableBody');
+            if (!tbody) return;
+            try {
+                const res = await fetch('/api/config/audio/dongles');
+                const data = await res.json();
+                if (data.success && Array.isArray(data.dongles)) {
+                    cachedDspDongles = data.dongles;
+                    renderDonglesDspTable();
+                }
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-rose-400 text-xs">Error: ${escapeHtml(e.message)}</td></tr>`;
+            }
+        }
+
+        function renderDonglesDspTable() {
+            const tbody = document.getElementById('donglesDspTableBody');
+            if (!tbody) return;
+            if (cachedDspDongles.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-xs text-[var(--text-muted)] italic">No GSM dongles detected.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = cachedDspDongles.map(d => `
+                <tr class="border-b border-[var(--border-primary)]/40 hover:bg-zinc-900/30 text-xs">
+                    <td class="py-2.5 px-3 font-mono font-bold text-white">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full ${d.id ? 'bg-emerald-400' : 'bg-zinc-500'}"></span>
+                            <span>${escapeHtml(d.id)}</span>
+                            <span class="text-[10px] text-[var(--text-muted)] font-normal">(${escapeHtml(d.provider)})</span>
+                        </div>
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <select id="d_denoise_${d.id}" class="config-input py-1 px-2 text-xs font-semibold">
+                            <option value="default" ${d.denoise === 'default' ? 'selected' : ''}>Global Default</option>
+                            <option value="on" ${d.denoise === 'on' ? 'selected' : ''}>Enabled</option>
+                            <option value="off" ${d.denoise === 'off' ? 'selected' : ''}>Disabled</option>
+                        </select>
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <select id="d_rnnoise_${d.id}" class="config-input py-1 px-2 text-xs font-semibold">
+                            <option value="default" ${d.rnnoise === 'default' ? 'selected' : ''}>Global Default</option>
+                            <option value="on" ${d.rnnoise === 'on' ? 'selected' : ''}>Enabled</option>
+                            <option value="off" ${d.rnnoise === 'off' ? 'selected' : ''}>Disabled</option>
+                        </select>
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <select id="d_agc_${d.id}" class="config-input py-1 px-2 text-xs font-semibold">
+                            <option value="default" ${d.agc === 'default' ? 'selected' : ''}>Global Default</option>
+                            <option value="6000" ${d.agc === '6000' ? 'selected' : ''}>6000 (Soft)</option>
+                            <option value="8000" ${d.agc === '8000' ? 'selected' : ''}>8000 (Balanced)</option>
+                            <option value="12000" ${d.agc === '12000' ? 'selected' : ''}>12000 (High)</option>
+                            <option value="off" ${d.agc === 'off' ? 'selected' : ''}>Disabled</option>
+                        </select>
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <select id="d_thresh_${d.id}" class="config-input py-1 px-2 text-xs font-semibold">
+                            <option value="default" ${d.vad_threshold === 'default' ? 'selected' : ''}>Global Default</option>
+                            <option value="0.10" ${d.vad_threshold === '0.10' ? 'selected' : ''}>0.10 (High Sens)</option>
+                            <option value="0.20" ${d.vad_threshold === '0.20' ? 'selected' : ''}>0.20 (Balanced)</option>
+                            <option value="0.30" ${d.vad_threshold === '0.30' ? 'selected' : ''}>0.30 (Strict)</option>
+                        </select>
+                    </td>
+                    <td class="py-2.5 px-3 text-end">
+                        <button onclick="saveSingleDongleDsp('${d.id}')" class="config-action-btn config-action-btn--primary py-1 px-2 text-[11px]">
+                            <span>Save</span>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function saveSingleDongleDsp(id) {
+            const payload = {
+                denoise: document.getElementById(`d_denoise_${id}`)?.value,
+                rnnoise: document.getElementById(`d_rnnoise_${id}`)?.value,
+                agc: document.getElementById(`d_agc_${id}`)?.value,
+                vad_threshold: document.getElementById(`d_thresh_${id}`)?.value
+            };
+            try {
+                const res = await fetch(`/api/config/audio/dongles/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(isRtl ? `تم حفظ ملف معالجة الصوت للشريحة ${id}` : `Audio DSP profile for ${id} saved.`, 'success');
+                    loadPerDongleAudioProfiles();
+                } else {
+                    showToast(data.error || 'Failed to save dongle DSP', 'error');
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function loadPerExtensionAudioProfiles() {
+            const tbody = document.getElementById('extensionsDspTableBody');
+            if (!tbody) return;
+            try {
+                const res = await fetch('/api/config/audio/extensions');
+                const data = await res.json();
+                if (data.success && Array.isArray(data.extensions)) {
+                    cachedDspExtensions = data.extensions;
+                    renderExtensionsDspTable(cachedDspExtensions);
+                }
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-rose-400 text-xs">Error: ${escapeHtml(e.message)}</td></tr>`;
+            }
+        }
+
+        function filterExtensionDspTable() {
+            const q = (document.getElementById('dspExtSearchInput')?.value || '').toLowerCase().trim();
+            if (!q) {
+                renderExtensionsDspTable(cachedDspExtensions);
+                return;
+            }
+            const filtered = cachedDspExtensions.filter(ext => 
+                ext.extension.toLowerCase().includes(q) || (ext.name && ext.name.toLowerCase().includes(q))
+            );
+            renderExtensionsDspTable(filtered);
+        }
+
+        function renderExtensionsDspTable(list) {
+            const tbody = document.getElementById('extensionsDspTableBody');
+            if (!tbody) return;
+            if (!list || list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-xs text-[var(--text-muted)] italic">No matching extensions found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = list.map(ext => `
+                <tr class="border-b border-[var(--border-primary)]/40 hover:bg-zinc-900/30 text-xs">
+                    <td class="py-2.5 px-3 font-mono font-bold text-white">
+                        <span>${escapeHtml(ext.extension)}</span>
+                        <span class="text-[10px] text-[var(--text-muted)] font-normal ms-1">(${escapeHtml(ext.name || ext.extension)})</span>
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <select id="ext_denoise_${ext.extension}" class="config-input py-1 px-2 text-xs font-semibold">
+                            <option value="default" ${ext.denoise === 'default' ? 'selected' : ''}>Global Default</option>
+                            <option value="both" ${ext.denoise === 'both' ? 'selected' : ''}>Both (TX + RX)</option>
+                            <option value="rx" ${ext.denoise === 'rx' ? 'selected' : ''}>RX Only</option>
+                            <option value="tx" ${ext.denoise === 'tx' ? 'selected' : ''}>TX Only</option>
+                            <option value="off" ${ext.denoise === 'off' ? 'selected' : ''}>Disabled</option>
+                        </select>
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <select id="ext_gate_${ext.extension}" class="config-input py-1 px-2 text-xs font-semibold">
+                            <option value="default" ${ext.vad_gate === 'default' ? 'selected' : ''}>Global Default</option>
+                            <option value="1" ${ext.vad_gate === '1' ? 'selected' : ''}>Gate On</option>
+                            <option value="0" ${ext.vad_gate === '0' ? 'selected' : ''}>Gate Off</option>
+                        </select>
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <select id="ext_vdb_${ext.extension}" class="config-input py-1 px-2 text-xs font-semibold">
+                            <option value="default" ${ext.vad_db === 'default' ? 'selected' : ''}>Global Default</option>
+                            <option value="-50" ${ext.vad_db === '-50' ? 'selected' : ''}>-50 dBFS (Soft)</option>
+                            <option value="-42" ${ext.vad_db === '-42' ? 'selected' : ''}>-42 dBFS (Standard)</option>
+                            <option value="-35" ${ext.vad_db === '-35' ? 'selected' : ''}>-35 dBFS (Aggressive)</option>
+                            <option value="off" ${ext.vad_db === 'off' ? 'selected' : ''}>Off</option>
+                        </select>
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <select id="ext_agc_${ext.extension}" class="config-input py-1 px-2 text-xs font-semibold">
+                            <option value="default" ${ext.agc === 'default' ? 'selected' : ''}>Global Default</option>
+                            <option value="6000" ${ext.agc === '6000' ? 'selected' : ''}>6000 (Soft)</option>
+                            <option value="8000" ${ext.agc === '8000' ? 'selected' : ''}>8000 (Balanced)</option>
+                            <option value="12000" ${ext.agc === '12000' ? 'selected' : ''}>12000 (High)</option>
+                            <option value="off" ${ext.agc === 'off' ? 'selected' : ''}>Disabled</option>
+                        </select>
+                    </td>
+                    <td class="py-2.5 px-3 text-end">
+                        <button onclick="saveSingleExtensionDsp('${ext.extension}')" class="config-action-btn config-action-btn--primary py-1 px-2 text-[11px]">
+                            <span>Save</span>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function saveSingleExtensionDsp(ext) {
+            const payload = {
+                denoise: document.getElementById(`ext_denoise_${ext}`)?.value,
+                vad_gate: document.getElementById(`ext_gate_${ext}`)?.value,
+                vad_db: document.getElementById(`ext_vdb_${ext}`)?.value,
+                agc: document.getElementById(`ext_agc_${ext}`)?.value
+            };
+            try {
+                const res = await fetch(`/api/config/audio/extensions/${ext}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(isRtl ? `تم حفظ ملف معالجة الصوت للتحويلة ${ext}` : `Audio DSP profile for ${ext} saved.`, 'success');
+                    loadPerExtensionAudioProfiles();
+                } else {
+                    showToast(data.error || 'Failed to save extension DSP', 'error');
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
 
 
         async function scanAndTranscribeQueue() {
