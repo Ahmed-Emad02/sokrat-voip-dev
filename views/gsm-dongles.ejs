@@ -557,9 +557,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             background-color: inherit;
             animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
-        @media (min-width: 1400px) {
+        #dongles-grid {
+            display: grid;
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+            gap: 1rem;
+        }
+        @media (min-width: 1024px) {
             #dongles-grid {
-                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             }
         }
         .dongle-device-card {
@@ -1481,7 +1486,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         <div class="flex flex-col gap-6 mb-6">
             <!-- Responsive GSM Dongle Fleet -->
             <section class="rounded-2xl overflow-hidden shrink-0 bg-transparent border-0 border-none shadow-none">
-                <div id="dongles-grid" class="grid grid-cols-1 md:grid-cols-2 items-start gap-3 p-0">
+                <div id="dongles-grid" class="grid grid-cols-1 lg:grid-cols-2 items-start gap-4 p-0">
                     <div class="col-span-full py-8 text-center text-xs text-[var(--text-muted)]"><%= isRtl ? 'جاري تحميل أجهزة GSM...' : 'Loading GSM dongles...' %></div>
                 </div>
             </section>
@@ -3116,9 +3121,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 donglesGrid.innerHTML = '';
 
                 if (currentViewMode === 'minimal') {
-                    donglesGrid.className = 'flex flex-col gap-2 p-3 sm:p-4';
+                    donglesGrid.className = 'flex flex-col gap-2.5 p-0';
                 } else {
-                    donglesGrid.className = 'grid grid-cols-1 md:grid-cols-2 items-start gap-3 p-3 sm:p-4';
+                    donglesGrid.className = 'grid grid-cols-1 lg:grid-cols-2 items-start gap-4 p-0';
                 }
 
                 if (loadedDevices.length === 0) {
@@ -3208,7 +3213,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         if (id === selectedDongleId) card.classList.add('selected-row');
 
                         card.innerHTML = `
-                            <div class="p-3 sm:p-4 flex-1">
+                            <div class="p-4 sm:p-5 flex-1">
                                 <div class="flex items-start justify-between gap-2.5 mb-3">
                                     <div class="flex items-center gap-3 min-w-0">
                                         <div class="w-9 h-9 rounded-xl dongle-icon-box flex items-center justify-center shrink-0">
@@ -3294,7 +3299,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     </div>
                                 </div>` : ''}
                             </div>
-                            <div class="dongle-card-footer px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                            <div class="dongle-card-footer px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2">
                                 <span class="text-[10px] font-extrabold text-[var(--text-muted)] flex items-center gap-1.5 shrink-0">
                                     <span style="color:${signal.activeColor}">●</span> ${escapeHtml(signal.level)} · ${signal.rssi}/31
                                 </span>
