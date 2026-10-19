@@ -2511,8 +2511,8 @@ function isTabAllowed(tabName) {
                     </div>
                     <div class="p-5 space-y-4 text-xs">
                         <div>
-                            <label for="globalVadThreshold" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'حساسية كشف الكلام (Speech Threshold)' : 'Speech Detection Threshold' %></label>
-                            <select id="globalVadThreshold" class="config-input w-full text-xs font-semibold">
+                            <label for="dspVadThreshold" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'حساسية كشف الكلام (Speech Threshold)' : 'Speech Detection Threshold' %></label>
+                            <select id="dspVadThreshold" class="config-input w-full text-xs font-semibold">
                                 <option value="0.05">0.05 (<%= isRtl ? 'أقصى حساسية - يلتقط الهمس الخافت' : 'Maximum sensitivity - catches faint whispers' %>)</option>
                                 <option value="0.10">0.10 (<%= isRtl ? 'حساسية عالية / صوت ناعم' : 'High Sensitivity / Soft Voice' %>)</option>
                                 <option value="0.15">0.15 (<%= isRtl ? 'حساسية مرتفعة' : 'Elevated Sensitivity' %>)</option>
@@ -2522,8 +2522,8 @@ function isTabAllowed(tabName) {
                             </select>
                         </div>
                         <div>
-                            <label for="globalVadHangover" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'مهلة الاحتفاظ بالصوت (Hangover Hold Time)' : 'Hangover Hold Time' %></label>
-                            <select id="globalVadHangover" class="config-input w-full text-xs font-semibold">
+                            <label for="dspVadHangover" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'مهلة الاحتفاظ بالصوت (Hangover Hold Time)' : 'Hangover Hold Time' %></label>
+                            <select id="dspVadHangover" class="config-input w-full text-xs font-semibold">
                                 <option value="100">100 ms (<%= isRtl ? 'سريع جداً - كتم فوري بين الكلمات' : 'Very short - instant gating between words' %>)</option>
                                 <option value="150">150 ms (<%= isRtl ? 'سريع' : 'Quick' %>)</option>
                                 <option value="250"><%= isRtl ? '250 ms (طبيعي - افتراضي)' : '250 ms (Natural - Default)' %></option>
@@ -2533,8 +2533,8 @@ function isTabAllowed(tabName) {
                             </select>
                         </div>
                         <div>
-                            <label for="globalVadDbThreshold" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'عتبة الطاقة لكتم الصوت (Universal dBFS Gate Cutoff)' : 'Universal dBFS Gate Cutoff' %></label>
-                            <select id="globalVadDbThreshold" class="config-input w-full text-xs font-semibold">
+                            <label for="dspVadDbThreshold" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'عتبة الطاقة لكتم الصوت (Universal dBFS Gate Cutoff)' : 'Universal dBFS Gate Cutoff' %></label>
+                            <select id="dspVadDbThreshold" class="config-input w-full text-xs font-semibold">
                                 <option value="-90" selected><%= isRtl ? 'تلقائي / عصبي فقط (Auto / Neural Only -90 dBFS)' : 'Auto / Neural Only (Default -90 dBFS)' %></option>
                                 <option value="-55">-55 dBFS (<%= isRtl ? 'هادئ جداً' : 'Very Soft Noise' %>)</option>
                                 <option value="-50">-50 dBFS (<%= isRtl ? 'خافت / متوازن' : 'Soft / Balanced' %>)</option>
@@ -14737,22 +14737,27 @@ function isTabAllowed(tabName) {
         window.saveModemConfig = saveAllDongleGains;
 
         async function loadAudioGlobals() {
-            const threshEl = document.getElementById('globalVadThreshold');
-            const hangEl = document.getElementById('globalVadHangover');
-            const dbThreshEl = document.getElementById('globalVadDbThreshold');
+            const threshEl = document.getElementById('dspVadThreshold') || document.getElementById('globalVadThreshold');
+            const hangEl = document.getElementById('dspVadHangover') || document.getElementById('globalVadHangover');
+            const dbThreshEl = document.getElementById('dspVadDbThreshold') || document.getElementById('globalVadDbThreshold');
             const cDenoiseEl = document.getElementById('cellularDenoiseSelect');
             const cRnnoiseEl = document.getElementById('cellularRnnoiseSelect');
             const cAgcEl = document.getElementById('cellularAgcSelect');
             const cJbEl = document.getElementById('cellularJbSelect');
-            if (!threshEl || !hangEl) return;
             try {
                 const res = await fetch('/api/config/audio-globals');
                 const data = await res.json();
                 if (data.success && data.globals) {
                     const g = data.globals;
-                    threshEl.value = String(parseFloat(g.vad_threshold).toFixed(2));
-                    hangEl.value = String(parseInt(g.vad_hangover, 10));
-                    if (dbThreshEl && g.vad_db_threshold) dbThreshEl.value = String(g.vad_db_threshold);
+                    const vThresh = String(parseFloat(g.vad_threshold || '0.20').toFixed(2));
+                    const vHang = String(parseInt(g.vad_hangover || '250', 10));
+                    const vDb = String(g.vad_db_threshold || '-90');
+                    
+                    // Sync both tabs if both exist
+                    ['dspVadThreshold', 'globalVadThreshold'].forEach(id => { const el = document.getElementById(id); if (el) el.value = vThresh; });
+                    ['dspVadHangover', 'globalVadHangover'].forEach(id => { const el = document.getElementById(id); if (el) el.value = vHang; });
+                    ['dspVadDbThreshold', 'globalVadDbThreshold'].forEach(id => { const el = document.getElementById(id); if (el) el.value = vDb; });
+                    
                     if (cDenoiseEl && g.cellular_denoise) cDenoiseEl.value = String(g.cellular_denoise);
                     if (cRnnoiseEl && g.cellular_rnnoise) cRnnoiseEl.value = String(g.cellular_rnnoise);
                     if (cAgcEl && g.cellular_agc) cAgcEl.value = String(g.cellular_agc);
@@ -14763,20 +14768,24 @@ function isTabAllowed(tabName) {
         window.loadAudioGlobals = loadAudioGlobals;
 
         async function saveAudioGlobals() {
-            const threshEl = document.getElementById('globalVadThreshold');
-            const hangEl = document.getElementById('globalVadHangover');
-            const dbThreshEl = document.getElementById('globalVadDbThreshold');
+            const threshEl = document.getElementById('dspVadThreshold') || document.getElementById('globalVadThreshold');
+            const hangEl = document.getElementById('dspVadHangover') || document.getElementById('globalVadHangover');
+            const dbThreshEl = document.getElementById('dspVadDbThreshold') || document.getElementById('globalVadDbThreshold');
             const cDenoiseEl = document.getElementById('cellularDenoiseSelect');
             const cRnnoiseEl = document.getElementById('cellularRnnoiseSelect');
             const cAgcEl = document.getElementById('cellularAgcSelect');
             const cJbEl = document.getElementById('cellularJbSelect');
-            if (!threshEl || !hangEl) return;
+            
+            const vThresh = (threshEl && threshEl.value) ? threshEl.value : '0.20';
+            const vHang = (hangEl && hangEl.value) ? hangEl.value : '250';
+            const vDb = (dbThreshEl && dbThreshEl.value) ? dbThreshEl.value : '-90';
+            
             try {
                 const payload = {
-                    vad_threshold: threshEl.value,
-                    vad_hangover: hangEl.value
+                    vad_threshold: vThresh,
+                    vad_hangover: vHang,
+                    vad_db_threshold: vDb
                 };
-                if (dbThreshEl) payload.vad_db_threshold = dbThreshEl.value;
                 if (cDenoiseEl) payload.cellular_denoise = cDenoiseEl.value;
                 if (cRnnoiseEl) payload.cellular_rnnoise = cRnnoiseEl.value;
                 if (cAgcEl) payload.cellular_agc = cAgcEl.value;
