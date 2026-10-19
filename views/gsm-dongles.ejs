@@ -652,8 +652,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .dongle-device-card.selected-row.dongle-state-purple {
             border-color: #e9d5ff !important;
-            outline: 3px solid #c084fc !important;
-            outline-offset: 1px;
+            outline: none !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+                inset 0 0 0 2px #a855f7,
+                inset 0 0 24px -4px rgba(168, 85, 247, 0.45) !important;
         }
 
         /* 2. ACTIVE / IN CALL (Green / Emerald) */
@@ -705,9 +708,12 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             background-color: #064e3b !important;
         }
         .dongle-device-card.selected-row.dongle-state-green {
-            border-color: #6ee7b7 !important;
-            outline: 3px solid #059669 !important;
-            outline-offset: 1px;
+            border-color: #a7f3d0 !important;
+            outline: none !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+                inset 0 0 0 2px #059669,
+                inset 0 0 24px -4px rgba(16, 185, 129, 0.45) !important;
         }
 
         /* 2b. SMS PROCESSING (Vibrant Pink) */
@@ -759,8 +765,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .dongle-device-card.selected-row.dongle-state-pink {
             border-color: #fbcfe8 !important;
-            outline: 3px solid #f472b6 !important;
-            outline-offset: 1px;
+            outline: none !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+                inset 0 0 0 2px #ec4899,
+                inset 0 0 24px -4px rgba(236, 72, 153, 0.45) !important;
         }
         /* 3. DIALING / RINGING (Blue) */
         .dongle-device-card.dongle-state-blue {
@@ -811,8 +820,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .dongle-device-card.selected-row.dongle-state-blue {
             border-color: #bfdbfe !important;
-            outline: 3px solid #60a5fa !important;
-            outline-offset: 1px;
+            outline: none !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+                inset 0 0 0 2px #3b82f6,
+                inset 0 0 24px -4px rgba(59, 130, 246, 0.45) !important;
         }
 
         /* 4. NOT INITIALIZED / SEARCHING (Yellow / Amber) */
@@ -864,8 +876,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .dongle-device-card.selected-row.dongle-state-yellow {
             border-color: #fde68a !important;
-            outline: 3px solid #fbbf24 !important;
-            outline-offset: 1px;
+            outline: none !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+                inset 0 0 0 2px #f59e0b,
+                inset 0 0 24px -4px rgba(245, 158, 11, 0.45) !important;
         }
 
         /* 5. DISCONNECTED / NOT RESPONDING (Dark Crimson Red) */
@@ -917,8 +932,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         .dongle-device-card.selected-row.dongle-state-red {
             border-color: #fecdd3 !important;
-            outline: 3px solid #be123c !important;
-            outline-offset: 1px;
+            outline: none !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+                inset 0 0 0 2px #be123c,
+                inset 0 0 24px -4px rgba(244, 63, 94, 0.45) !important;
         }
 
         /* Common Card High-Contrast Typography & Accents */
@@ -1128,8 +1146,52 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
 
         .selected-row {
-            outline: 3px solid var(--accent-color) !important;
-            outline-offset: 1px;
+            outline: none !important;
+            box-shadow: 
+                inset 0 0 0 2px var(--accent-color),
+                inset 0 0 20px -3px var(--accent-color) !important;
+        }
+        .light-theme .dongle-device-card.selected-row.dongle-state-purple {
+            border-color: #7e22ce !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+                inset 0 0 0 2px #9333ea,
+                inset 0 0 20px -4px rgba(147, 51, 234, 0.35) !important;
+        }
+        .light-theme .dongle-device-card.selected-row.dongle-state-green {
+            border-color: #047857 !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+                inset 0 0 0 2px #059669,
+                inset 0 0 20px -4px rgba(5, 150, 105, 0.35) !important;
+        }
+        .light-theme .dongle-device-card.selected-row.dongle-state-pink {
+            border-color: #be185d !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+                inset 0 0 0 2px #db2777,
+                inset 0 0 20px -4px rgba(219, 39, 119, 0.35) !important;
+        }
+        .light-theme .dongle-device-card.selected-row.dongle-state-blue {
+            border-color: #1d4ed8 !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+                inset 0 0 0 2px #2563eb,
+                inset 0 0 20px -4px rgba(37, 99, 235, 0.35) !important;
+        }
+        .light-theme .dongle-device-card.selected-row.dongle-state-yellow {
+            border-color: #b45309 !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+                inset 0 0 0 2px #d97706,
+                inset 0 0 20px -4px rgba(217, 119, 6, 0.35) !important;
+        }
+        .light-theme .dongle-device-card.selected-row.dongle-state-red {
+            border-color: #9f1239 !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+                inset 0 0 0 2px #e11d48,
+                inset 0 0 20px -4px rgba(225, 29, 72, 0.35) !important;
         }
         .dongle-status-pill {
             white-space: nowrap;
