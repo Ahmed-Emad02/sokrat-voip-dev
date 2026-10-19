@@ -256,14 +256,27 @@ const isRtl = currentLang === 'ar';
             background-color: var(--bg-hover);
             color: var(--text-primary);
         }
-        .light-theme .overview-pag-btn:not(.bg-\[var\(--accent-color\)\]) {
+        .overview-pag-btn-active,
+        .overview-pag-btn.active {
+            background-color: #dc2626 !important;
+            border-color: #dc2626 !important;
+            color: #ffffff !important;
+        }
+        .light-theme .overview-pag-btn:not(.overview-pag-btn-active):not(.active) {
             background-color: #f4f4f5 !important;
             border: 1px solid #e4e4e7 !important;
             color: #3f3f46 !important;
         }
-        .light-theme .overview-pag-btn:not(.bg-\[var\(--accent-color\)\]):hover:not(:disabled) {
+        .light-theme .overview-pag-btn:not(.overview-pag-btn-active):not(.active):hover:not(:disabled) {
             background-color: #e4e4e7 !important;
             color: #09090b !important;
+        }
+        .light-theme .overview-pag-btn.overview-pag-btn-active,
+        .light-theme .overview-pag-btn-active,
+        .light-theme .overview-pag-btn.active {
+            background-color: #dc2626 !important;
+            border-color: #dc2626 !important;
+            color: #ffffff !important;
         }
         .light-theme .overview-pag-btn:disabled,
         .light-theme .overview-pag-btn[disabled] {
@@ -938,7 +951,7 @@ const isRtl = currentLang === 'ar';
                 html += '<div class="flex gap-1">';
                 html += '<button onclick="overviewPage=' + Math.max(1, overviewPage - 1) + ';renderOverview()" class="overview-pag-btn px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider transition ' + (overviewPage <= 1 ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer') + '" ' + (overviewPage <= 1 ? 'disabled' : '') + '>Prev</button>';
                 for (let p = Math.max(1, overviewPage - 2); p <= Math.min(totalPages, overviewPage + 2); p++) {
-                    html += '<button onclick="overviewPage=' + p + ';renderOverview()" class="overview-pag-btn px-2.5 py-1 rounded text-xs font-bold tracking-wider transition cursor-pointer ' + (p === overviewPage ? 'bg-[var(--accent-color)] text-white border-transparent' : '') + '">' + p + '</button>';
+                    html += '<button onclick="overviewPage=' + p + ';renderOverview()" class="overview-pag-btn px-2.5 py-1 rounded text-xs font-bold tracking-wider transition cursor-pointer ' + (p === overviewPage ? 'overview-pag-btn-active bg-red-600 text-white border-transparent font-black shadow-sm' : '') + '">' + p + '</button>';
                 }
                 html += '<button onclick="overviewPage=' + Math.min(totalPages, overviewPage + 1) + ';renderOverview()" class="overview-pag-btn px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider transition ' + (overviewPage >= totalPages ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer') + '" ' + (overviewPage >= totalPages ? 'disabled' : '') + '>Next</button>';
                 html += '</div></div>';

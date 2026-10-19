@@ -925,7 +925,19 @@ function can(tab) {
     }
 
         /* Light theme: Pagination & secondary dark button background overrides */
-    html.light-theme .overview-pag-btn:not(.bg-\[var\(--accent-color\)\]),
+    html.light-theme .overview-pag-btn.overview-pag-btn-active,
+    html.light-theme .overview-pag-btn-active,
+    html.light-theme .overview-pag-btn.bg-red-600 {
+        background-color: #dc2626 !important;
+        border-color: #dc2626 !important;
+        color: #ffffff !important;
+    }
+    html.light-theme .overview-pag-btn.overview-pag-btn-active *,
+    html.light-theme .overview-pag-btn-active *,
+    html.light-theme .overview-pag-btn.bg-red-600 * {
+        color: #ffffff !important;
+    }
+    html.light-theme .overview-pag-btn:not(.overview-pag-btn-active):not(.active):not(.bg-red-600):not(.bg-\[var\(--accent-color\)\]),
     html.light-theme button.bg-zinc-900:not(.btn-primary):not(.bg-\[var\(--accent-color\)\]),
     html.light-theme button[class*="bg-zinc-900"]:not(.btn-primary):not(.bg-\[var\(--accent-color\)\]) {
         background-color: #f4f4f5 !important;
