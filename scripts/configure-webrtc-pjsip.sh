@@ -202,7 +202,8 @@ collect_extensions() {
         " 2>/dev/null || true)
     fi
 
-    printf '%s\n' "$candidates" | tr ', ' '\n\n' | grep -E '^[0-9]+$' | sort -nu | tr '\n' ' '
+    [ -n "$candidates" ] || return 0
+    printf '%s\n' "$candidates" | tr ', ' '\n\n' | awk '/^[0-9]+$/' | sort -nu | tr '\n' ' '
 }
 
 upsert_extension_settings() {
@@ -239,7 +240,7 @@ EOF
 
 patch_pjsip_custom_post() {
     [ -f "$ASTERISK_DIR/pjsip_custom_post.conf" ] || touch "$ASTERISK_DIR/pjsip_custom_post.conf"
-    EXTENSION_LIST="$1" PJSIP_POST="$ASTERISK_DIR/pjsip_custom_post.conf" PJSIP_CUSTOM="$ASTERISK_DIR/pjsip_custom.conf" python3 - <<'PY'
+    EXTENSION_LIST="${1:-}" PJSIP_POST="$ASTERISK_DIR/pjsip_custom_post.conf" PJSIP_CUSTOM="$ASTERISK_DIR/pjsip_custom.conf" python3 - <<'PY'
 import os
 import re
 from pathlib import Path
@@ -302,7 +303,7 @@ PY
 }
 patch_generated_aors() {
     [ -f "$PJSIP_ADDITIONAL" ] || return 0
-    EXTENSION_LIST="$1" PJSIP_ADDITIONAL="$PJSIP_ADDITIONAL" python3 - <<'PY'
+    EXTENSION_LIST="${1:-}" PJSIP_ADDITIONAL="$PJSIP_ADDITIONAL" python3 - <<'PY'
 import os
 import re
 from pathlib import Path
