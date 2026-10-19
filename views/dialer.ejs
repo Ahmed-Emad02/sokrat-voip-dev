@@ -446,6 +446,8 @@ const isRtl = activeLang === 'ar';
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        const t = <%- JSON.stringify(t) %>;
+        const isRtl = Boolean(<%- JSON.stringify(isRtl) %>);
         let cachedDongles = [];
         let cachedExtensions = [];
         let currentLoadedLeads = [];
@@ -786,7 +788,7 @@ const isRtl = activeLang === 'ar';
                     `;
                     container.appendChild(card);
                 });
-            } catch (_) {}
+            } catch (renderErr) { console.error("Error rendering campaign cards:", renderErr); }
         }
 
         async function loadOutboundRoutes() {
