@@ -577,11 +577,28 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             border: 2px solid var(--border-primary);
             min-width: 0;
             overflow: hidden;
-            transition: border-color 180ms ease, transform 180ms ease, background-color 180ms ease;
+            transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
         }
         .dongle-device-card:hover {
             border-color: var(--border-accent);
-            transform: translateY(-2px);
+            transform: none !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+                inset 0 -1px 0 0 rgba(0, 0, 0, 0.4),
+                0 12px 28px -6px rgba(0, 0, 0, 0.65) !important;
+        }
+        .dongle-device-card .dongle-icon-box {
+            transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), background-color 180ms ease;
+        }
+        .dongle-device-card:hover .dongle-icon-box {
+            transform: scale(1.06);
+        }
+        .light-theme .dongle-device-card:hover {
+            transform: none !important;
+            box-shadow: 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+                inset 0 -1px 0 0 rgba(0, 0, 0, 0.08),
+                0 10px 25px -5px rgba(0, 0, 0, 0.15) !important;
         }
         
         /* State-driven card color themes — Matte background surfaces and bolder state accents */
