@@ -1402,11 +1402,46 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
 
                     // 2. If extension is already defined by FreePBX in pjsip_additional.conf, ensure WebRTC DTLS parameters are appended via (+) in pjsip_custom_post.conf
                     if (addC.includes(`[${ext}]`)) {
-                        if (!postC.includes(`[${ext}](+)`)) {
-                            postC += `\n[${ext}](+)\nwebrtc=yes\nmedia_encryption=dtls\ndtls_auto_generate_cert=yes\ndtls_verify=fingerprint\ndtls_setup=actpass\nice_support=yes\nuse_avpf=yes\nrtcp_mux=yes\nforce_rport=yes\nrewrite_contact=yes\n`;
-                            fs.writeFileSync(postConfPath, postC.trim() + '\n', 'utf8');
-                            await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
+                        const requiredWebrtcParams = [
+                            'transport=transport-wss',
+                            'webrtc=yes',
+                            'media_encryption=dtls',
+                            'dtls_cert_file=/etc/asterisk/keys/asterisk.pem',
+                            'dtls_private_key=/etc/asterisk/keys/asterisk.key',
+                            'dtls_verify=fingerprint',
+                            'dtls_setup=actpass',
+                            'ice_support=yes',
+                            'use_avpf=yes',
+                            'rtcp_mux=yes',
+                            'force_rport=yes',
+                            'rewrite_contact=yes',
+                            'direct_media=no',
+                            'rtp_symmetric=yes',
+                            'disallow=all',
+                            'allow=opus,ulaw,alaw',
+                            'rtp_timeout=30',
+                            'rtp_timeout_hold=60',
+                            'rtp_keepalive=5'
+                        ];
+                        const secRegex = new RegExp(`(\\[${ext}\\]\\(\\+\\)[\\s\\S]*?)(?=\\n\\[|$)`);
+                        if (secRegex.test(postC)) {
+                            postC = postC.replace(secRegex, (match) => {
+                                let section = match;
+                                for (const param of requiredWebrtcParams) {
+                                    const key = param.split('=')[0];
+                                    if (new RegExp(`^${key}=.*$`, 'm').test(section)) {
+                                        section = section.replace(new RegExp(`^${key}=.*$`, 'm'), param);
+                                    } else {
+                                        section += `\n${param}`;
+                                    }
+                                }
+                                return section;
+                            });
+                        } else {
+                            postC = postC.trim() + `\n\n[${ext}](+)\n` + requiredWebrtcParams.join('\n') + '\n';
                         }
+                        fs.writeFileSync(postConfPath, postC.trim() + '\n', 'utf8');
+                        await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
                     } else {
                         // 3. Extension is NOT in pjsip_additional.conf: provision it cleanly in pjsip_custom.conf
                         const startMarker = `; BEGIN WEBRTC EXTENSION ${ext}`;

@@ -1441,7 +1441,15 @@ async function syncExtensionCallPickupGroups() {
         });
 
         let sipCustomPostContent = '; Auto-generated Callgroup and Pickupgroup definitions for Sokrat VoIP Live Panel\n';
-        let pjsipCustomPostContent = '; Auto-generated Callgroup and Pickupgroup definitions for Sokrat VoIP Live Panel\n';
+        let pjsipCustomPostContent = '';
+        try {
+            if (fs.existsSync(pjsipConfPath)) {
+                pjsipCustomPostContent = fs.readFileSync(pjsipConfPath, 'utf8');
+            }
+        } catch (_) {}
+        if (!pjsipCustomPostContent.trim()) {
+            pjsipCustomPostContent = '; Auto-generated Callgroup and Pickupgroup definitions for Sokrat VoIP Live Panel\n';
+        }
 
         for (const row of extRows) {
             const ext = String(row.extension || '').trim();
@@ -1476,7 +1484,46 @@ async function syncExtensionCallPickupGroups() {
             const pjsipNamedPickupgroupLine = `named_pickup_group=${namedPickupGroup}\n`;
             sipCustomPostContent += `\n[${ext}](+)\n${callgroupLine}${pickupgroupLine}${namedCallgroupLine}${namedPickupgroupLine}`;
             if (row.tech === "pjsip") {
-                pjsipCustomPostContent += `\n[${ext}](+)\n${pjsipNamedCallgroupLine}${pjsipNamedPickupgroupLine}`;
+                const targetParams = [
+                    'transport=transport-wss',
+                    'webrtc=yes',
+                    'media_encryption=dtls',
+                    'dtls_cert_file=/etc/asterisk/keys/asterisk.pem',
+                    'dtls_private_key=/etc/asterisk/keys/asterisk.key',
+                    'dtls_verify=fingerprint',
+                    'dtls_setup=actpass',
+                    'ice_support=yes',
+                    'use_avpf=yes',
+                    'rtcp_mux=yes',
+                    'force_rport=yes',
+                    'rewrite_contact=yes',
+                    'direct_media=no',
+                    'rtp_symmetric=yes',
+                    'disallow=all',
+                    'allow=opus,ulaw,alaw',
+                    'rtp_timeout=30',
+                    'rtp_timeout_hold=60',
+                    'rtp_keepalive=5',
+                    `named_call_group=${namedGroup}`,
+                    `named_pickup_group=${namedPickupGroup}`
+                ];
+                const secRegex = new RegExp(`(\\[${ext}\\]\\(\\+\\)[\\s\\S]*?)(?=\\n\\[|$)`);
+                if (secRegex.test(pjsipCustomPostContent)) {
+                    pjsipCustomPostContent = pjsipCustomPostContent.replace(secRegex, (match) => {
+                        let section = match;
+                        for (const param of targetParams) {
+                            const key = param.split('=')[0];
+                            if (new RegExp(`^${key}=.*$`, 'm').test(section)) {
+                                section = section.replace(new RegExp(`^${key}=.*$`, 'm'), param);
+                            } else {
+                                section += `\n${param}`;
+                            }
+                        }
+                        return section;
+                    });
+                } else {
+                    pjsipCustomPostContent = pjsipCustomPostContent.trim() + `\n\n[${ext}](+)\n` + targetParams.join('\n') + '\n';
+                }
             }
 
             try {
