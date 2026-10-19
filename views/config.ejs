@@ -6465,7 +6465,7 @@ function isTabAllowed(tabName) {
             }
 
             stopRtcpTimer();
-            if (tabId === 'audioprocessing') { loadAudioGlobals(); loadDonglesAudioState(); }
+            if (tabId === 'audioprocessing') { loadAudioGlobals(); }
             else if (tabId === 'extensions') fetchExtensions();
             else if (tabId === 'callcodes') fetchConfigCallCodes();
             else if (tabId === 'ringgroups') { fetchRingGroups(); ensureAllConfigListsLoaded(); }
