@@ -239,14 +239,10 @@ if custom_path.exists():
     c_text = custom_path.read_text(encoding='utf-8')
     c_orig = c_text
     for ext in extensions:
-        c_text = re.sub(rf'; BEGIN WEBRTC EXTENSION {ext}[\s\S]*?; END WEBRTC EXTENSION {ext}?
-?', '', c_text)
-        c_text = re.sub(rf'\[({ext}|{ext}-auth)\][\s\S]*?(?=
-\[|
-; BEGIN|$)', '', c_text)
+        c_text = re.sub(rf'; BEGIN WEBRTC EXTENSION {ext}[\s\S]*?; END WEBRTC EXTENSION {ext}\r?\n?', '', c_text)
+        c_text = re.sub(rf'\[({ext}|{ext}-auth)\][\s\S]*?(?=\n\[|\n; BEGIN|$)', '', c_text)
     if c_text != c_orig:
-        custom_path.write_text(c_text.strip() + '
-', encoding='utf-8')
+        custom_path.write_text(c_text.strip() + '\n', encoding='utf-8')
 
 post_text = post_path.read_text(encoding='utf-8') if post_path.exists() else ''
 required_params = [
@@ -272,8 +268,7 @@ required_params = [
 ]
 
 for ext in extensions:
-    sec_pattern = re.compile(rf'(\[{ext}\]\(\+\)[\s\S]*?)(?=
-\[|$)')
+    sec_pattern = re.compile(rf'(\[{ext}\]\(\+\)[\s\S]*?)(?=\n\[|$)')
     m = sec_pattern.search(post_text)
     if m:
         sec = m.group(1)
@@ -282,22 +277,14 @@ for ext in extensions:
             if re.search(rf'(?m)^{k}=', sec):
                 sec = re.sub(rf'(?m)^{k}=.*$', p, sec)
             else:
-                sec += f'
-{p}'
+                sec += f'\n{p}'
         post_text = post_text[:m.start()] + sec + post_text[m.end():]
     else:
-        post_text = post_text.strip() + f'
+        post_text = post_text.strip() + f'\n\n[{ext}](+)\n' + '\n'.join(required_params) + '\n'
 
-[{ext}](+)
-' + '
-'.join(required_params) + '
-'
-
-post_path.write_text(post_text.strip() + '
-', encoding='utf-8')
+post_path.write_text(post_text.strip() + '\n', encoding='utf-8')
 PY
 }
-
 patch_generated_aors() {
     [ -f "$PJSIP_ADDITIONAL" ] || return 0
     EXTENSION_LIST="$1" PJSIP_ADDITIONAL="$PJSIP_ADDITIONAL" python3 - <<'PY'
