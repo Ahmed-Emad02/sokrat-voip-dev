@@ -17668,24 +17668,198 @@ app.get('/api/config/modem/rtcp', async (req, res) => {
     }
 });
 
-// GET /api/config/audio-globals - Universal VAD/RNNoise tuning (threshold & hangover) used by the dialplan for every extension
+// GET /api/config/audio-globals - Universal VAD/RNNoise tuning and cellular DSP controls
 app.get('/api/config/audio-globals', async (req, res) => {
     try {
         let vad_threshold = '0.20';
         let vad_hangover = '250';
         let vad_db_threshold = '-90';
+        let cellular_denoise = 'on';
+        let cellular_rnnoise = 'on';
+        let cellular_agc = '8000';
+        let cellular_jitterbuffer = 'off';
         try {
             const { stdout } = await execPromise(`${ASTERISK_BIN} -rx "database show AUDIO_GLOBALS"`);
             const thresh = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_threshold\s*:\s*([\d\.]+)/);
             const hang = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_hangover\s*:\s*(\d+)/);
             const dbThresh = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_db_threshold\s*:\s*([\w\-]+)/);
+            const denoiseMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_denoise\s*:\s*([\w\-]+)/);
+            const rnnoiseMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_rnnoise\s*:\s*([\w\-]+)/);
+            const agcMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_agc\s*:\s*([\w\-]+)/);
+            const jbMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_jb\s*:\s*([\w\-]+)/);
             if (thresh) vad_threshold = thresh[1];
             if (hang) vad_hangover = hang[1];
             if (dbThresh) vad_db_threshold = dbThresh[1];
+            if (denoiseMatch) cellular_denoise = denoiseMatch[1];
+            if (rnnoiseMatch) cellular_rnnoise = rnnoiseMatch[1];
+            if (agcMatch) cellular_agc = agcMatch[1];
+            if (jbMatch) cellular_jitterbuffer = jbMatch[1];
         } catch (_) {}
-        res.json({ success: true, globals: { vad_threshold, vad_hangover, vad_db_threshold } });
+        res.json({
+            success: true,
+            globals: {
+                vad_threshold,
+                vad_hangover,
+                vad_db_threshold,
+                cellular_denoise,
+                cellular_rnnoise,
+                cellular_agc,
+                cellular_jitterbuffer
+            }
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+// GET /api/config/audio/dongles - Retrieve live DSP profiles for all dongles
+app.get('/api/config/audio/dongles', async (req, res) => {
+    try {
+        const { stdout: devicesOut } = await execPromise(`${ASTERISK_BIN} -rx "dongle show devices"`);
+        const lines = (devicesOut || '').split('\n');
+        const dongles = [];
+        for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].trim().split(/\s+/);
+            if (parts.length >= 10 && parts[0].startsWith('dongle')) {
+                const id = parts[0];
+                let denoise = 'default';
+                let rnnoise = 'default';
+                let agc = 'default';
+                let vad_threshold = 'default';
+                let vad_db = 'default';
+                let jb = 'default';
+                try {
+                    const { stdout: dbOut } = await execPromise(`${ASTERISK_BIN} -rx "database show DONGLE_AUDIO ${id}"`);
+                    const dMatch = dbOut.match(new RegExp(`\\/DONGLE_AUDIO\\/${id}\\/denoise\\s*:\\s*([\\w\\-]+)`));
+                    const rMatch = dbOut.match(new RegExp(`\\/DONGLE_AUDIO\\/${id}\\/rnnoise\\s*:\\s*([\\w\\-]+)`));
+                    const aMatch = dbOut.match(new RegExp(`\\/DONGLE_AUDIO\\/${id}\\/agc\\s*:\\s*([\\w\\-]+)`));
+                    const tMatch = dbOut.match(new RegExp(`\\/DONGLE_AUDIO\\/${id}\\/vad_threshold\\s*:\\s*([\\d\\.]+)`));
+                    const vdbMatch = dbOut.match(new RegExp(`\\/DONGLE_AUDIO\\/${id}\\/vad_db\\s*:\\s*([\\w\\-]+)`));
+                    const jbMatch = dbOut.match(new RegExp(`\\/DONGLE_AUDIO\\/${id}\\/jb\\s*:\\s*([\\w\\-]+)`));
+                    if (dMatch) denoise = dMatch[1];
+                    if (rMatch) rnnoise = rMatch[1];
+                    if (aMatch) agc = aMatch[1];
+                    if (tMatch) vad_threshold = tMatch[1];
+                    if (vdbMatch) vad_db = vdbMatch[1];
+                    if (jbMatch) jb = jbMatch[1];
+                } catch (_) {}
+                dongles.push({
+                    id,
+                    provider: parts[5] || 'Unknown',
+                    model: parts[6] || 'E173',
+                    number: parts[9] || 'Unknown',
+                    denoise,
+                    rnnoise,
+                    agc,
+                    vad_threshold,
+                    vad_db,
+                    jb
+                });
+            }
+        }
+        res.json({ success: true, dongles });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// PUT /api/config/audio/dongles/:id - Update DSP profile for a specific dongle
+app.put('/api/config/audio/dongles/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { denoise, rnnoise, agc, vad_threshold, vad_db, jb } = req.body;
+        
+        const updates = [
+            { key: 'denoise', val: denoise },
+            { key: 'rnnoise', val: rnnoise },
+            { key: 'agc', val: agc },
+            { key: 'vad_threshold', val: vad_threshold },
+            { key: 'vad_db', val: vad_db },
+            { key: 'jb', val: jb }
+        ];
+        
+        for (const u of updates) {
+            if (u.val === undefined) continue;
+            if (u.val === 'default' || u.val === '') {
+                await execPromise(`${ASTERISK_BIN} -rx "database del DONGLE_AUDIO/${id} ${u.key}"`).catch(() => {});
+            } else {
+                await execPromise(`${ASTERISK_BIN} -rx "database put DONGLE_AUDIO/${id} ${u.key} ${String(u.val).trim()}"`);
+            }
+        }
+        res.json({ success: true, message: `Audio DSP settings for ${id} updated.` });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// GET /api/config/audio/extensions - Retrieve DSP settings for all extensions
+app.get('/api/config/audio/extensions', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY CAST(extension AS UNSIGNED) ASC');
+        const { stdout: ampOut } = await execPromise(`${ASTERISK_BIN} -rx "database show AMPUSER"`);
+        const extensions = rows.map(r => {
+            const ext = String(r.extension);
+            let denoise = 'default';
+            let vad_gate = 'default';
+            let vad_db = 'default';
+            let agc = 'default';
+            
+            const dMatch = ampOut.match(new RegExp(`\\/AMPUSER\\/${ext}\\/ai_denoise\\s*:\\s*([\\w\\-]+)`));
+            const vMatch = ampOut.match(new RegExp(`\\/AMPUSER\\/${ext}\\/vad_gate\\s*:\\s*([\\w\\-]+)`));
+            const dbMatch = ampOut.match(new RegExp(`\\/AMPUSER\\/${ext}\\/vad_db\\s*:\\s*([\\w\\-]+)`));
+            const aMatch = ampOut.match(new RegExp(`\\/AMPUSER\\/${ext}\\/agc\\s*:\\s*([\\w\\-]+)`));
+            
+            if (dMatch) denoise = dMatch[1];
+            if (vMatch) vad_gate = vMatch[1];
+            if (dbMatch) vad_db = dbMatch[1];
+            if (aMatch) agc = aMatch[1];
+            
+            return { extension: ext, name: r.name, denoise, vad_gate, vad_db, agc };
+        });
+        res.json({ success: true, extensions });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// PUT /api/config/audio/extensions/:ext - Update DSP profile for a specific extension
+app.put('/api/config/audio/extensions/:ext', async (req, res) => {
+    try {
+        const ext = req.params.ext;
+        const { denoise, vad_gate, vad_db, agc } = req.body;
+        
+        if (denoise !== undefined) {
+            if (denoise === 'default' || denoise === '') {
+                await execPromise(`${ASTERISK_BIN} -rx "database del AMPUSER ${ext} ai_denoise"`).catch(() => {});
+            } else {
+                await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${ext} ai_denoise ${denoise}"`);
+            }
+        }
+        if (vad_gate !== undefined) {
+            if (vad_gate === 'default' || vad_gate === '') {
+                await execPromise(`${ASTERISK_BIN} -rx "database del AMPUSER ${ext} vad_gate"`).catch(() => {});
+            } else {
+                await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${ext} vad_gate ${vad_gate}"`);
+            }
+        }
+        if (vad_db !== undefined) {
+            if (vad_db === 'default' || vad_db === '') {
+                await execPromise(`${ASTERISK_BIN} -rx "database del AMPUSER ${ext} vad_db"`).catch(() => {});
+            } else {
+                await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${ext} vad_db ${vad_db}"`);
+            }
+        }
+        if (agc !== undefined) {
+            if (agc === 'default' || agc === '') {
+                await execPromise(`${ASTERISK_BIN} -rx "database del AMPUSER ${ext} agc"`).catch(() => {});
+            } else {
+                await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${ext} agc ${agc}"`);
+            }
+        }
+        res.json({ success: true, message: `Extension ${ext} audio profile updated.` });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
@@ -17706,14 +17880,34 @@ app.put('/api/config/audio-globals', async (req, res) => {
         if (dbThreshold) {
             await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS vad_db_threshold ${dbThreshold}"`);
         }
+        if (req.body.cellular_denoise) {
+            const cDenoise = ['on', 'off'].includes(req.body.cellular_denoise) ? req.body.cellular_denoise : 'on';
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS cellular_denoise ${cDenoise}"`);
+        }
+        if (req.body.cellular_rnnoise) {
+            const cRnnoise = ['on', 'off'].includes(req.body.cellular_rnnoise) ? req.body.cellular_rnnoise : 'on';
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS cellular_rnnoise ${cRnnoise}"`);
+        }
+        if (req.body.cellular_agc) {
+            const cAgc = String(req.body.cellular_agc).trim();
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS cellular_agc ${cAgc}"`);
+        }
+        if (req.body.cellular_jitterbuffer) {
+            const cJb = ['adaptive', 'fixed', 'off'].includes(req.body.cellular_jitterbuffer) ? req.body.cellular_jitterbuffer : 'adaptive';
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS cellular_jb ${cJb}"`);
+        }
         res.json({
             success: true,
             globals: {
                 vad_threshold: threshold.toFixed(2),
                 vad_hangover: String(hangover),
-                vad_db_threshold: dbThreshold || '-90'
+                vad_db_threshold: dbThreshold || '-90',
+                cellular_denoise: req.body.cellular_denoise || 'on',
+                cellular_rnnoise: req.body.cellular_rnnoise || 'on',
+                cellular_agc: req.body.cellular_agc || '8000',
+                cellular_jitterbuffer: req.body.cellular_jitterbuffer || 'adaptive'
             },
-            message: 'Universal voice processing settings saved. Applied to all extensions immediately.'
+            message: 'Universal audio processing suite settings saved. Applied immediately to all cellular channels and extensions.'
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
