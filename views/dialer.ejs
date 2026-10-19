@@ -661,30 +661,27 @@ const isRtl = activeLang === 'ar';
                         : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allAgents) %>}</span>`;
 
                                         const card = document.createElement('div');
-                    card.className = 'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-5 flex flex-col justify-between shadow-lg hover:border-[var(--border-hover,rgba(255,255,255,0.15))] transition-all relative';
+                    card.className = 'bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-xl p-4 flex flex-col justify-between shadow hover:border-[var(--border-hover,rgba(255,255,255,0.18))] transition-all relative';
                     card.innerHTML = `
                         <div>
-                            <!-- Header: Title, Mode Pill, Status & 3-Dot Menu -->
-                            <div class="flex items-start justify-between gap-2 mb-3">
-                                <div class="min-w-0 flex-1">
-                                    <div class="flex items-center gap-2 flex-wrap">
-                                        <h4 class="text-base font-extrabold text-[var(--text-primary)] truncate max-w-[200px]" title="${escapeHtml(c.name || '')}">${escapeHtml(c.name || 'Untitled')}</h4>
-                                        <span class="px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-muted)] shrink-0">${escapeHtml(c.mode || 'progressive')}</span>
-                                    </div>
+                            <!-- Header: Title, Status Pill, Mask Badge & Action Dropdown -->
+                            <div class="flex items-center justify-between gap-2 mb-2.5">
+                                <div class="min-w-0 flex items-center gap-2 flex-1">
+                                    <h4 class="text-sm font-bold text-[var(--text-primary)] truncate" title="${escapeHtml(c.name || '')}">${escapeHtml(c.name || 'Untitled')}</h4>
+                                    ${c.mask_phone_numbers ? `<span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/15 text-amber-400 border border-amber-500/25 shrink-0" title="${escapeHtml(t.mask || 'Mask')}">🔒</span>` : ''}
                                 </div>
-                                <div class="flex items-center gap-1.5 shrink-0 relative">
-                                    ${c.mask_phone_numbers ? `<span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">🔒 <span class="hidden sm:inline">${escapeHtml(t.mask || 'Mask')}</span></span>` : ''}
-                                    <span class="px-2.5 py-0.5 text-[10px] font-extrabold rounded-full uppercase tracking-wider ${
-                                        c.status === 'running' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]' :
-                                        c.status === 'paused' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                                        c.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                                        'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <span class="px-2 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                                        c.status === 'running' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
+                                        c.status === 'paused' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' :
+                                        c.status === 'completed' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' :
+                                        'bg-slate-500/15 text-slate-400 border border-slate-500/30'
                                     }">${c.status}</span>
-                                    
+
                                     <!-- 3-Dot Dropdown -->
                                     <div class="relative">
-                                        <button type="button" onclick="toggleCampaignMenu(event, ${c.id})" class="p-1.5 rounded-lg hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-white transition cursor-pointer" title="More Options">
-                                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                                        <button type="button" onclick="toggleCampaignMenu(event, ${c.id})" class="p-1 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-white transition cursor-pointer" title="Options">
+                                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
                                         </button>
                                         <div id="campaignMenu-${c.id}" class="hidden campaign-dropdown-menu absolute right-0 top-full mt-1 w-44 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] shadow-2xl z-30 py-1.5 text-xs font-semibold backdrop-blur-md">
                                             <button onclick="openEditCampaignModal(${JSON.stringify(c).replace(/"/g, '&quot;')})" class="w-full text-start px-3 py-2 hover:bg-[var(--bg-card)] text-[var(--text-primary)] flex items-center gap-2 cursor-pointer">
@@ -699,6 +696,10 @@ const isRtl = activeLang === 'ar';
                                                 <svg class="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                                                 <span>${escapeHtml(t.downloadCampaignTemplate || 'Template')}</span>
                                             </a>
+                                            <a href="/api/dialer/campaigns/${c.id}/export" class="w-full text-start px-3 py-2 hover:bg-[var(--bg-card)] text-[var(--text-primary)] flex items-center gap-2 cursor-pointer">
+                                                <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                                <span>${escapeHtml(t.export || 'Export CSV')}</span>
+                                            </a>
                                             <div class="my-1 border-t border-[var(--border-primary)]"></div>
                                             <button onclick="controlCampaign(${c.id}, 'delete')" class="w-full text-start px-3 py-2 hover:bg-rose-950/40 text-rose-400 flex items-center gap-2 cursor-pointer">
                                                 <svg class="w-3.5 h-3.5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
@@ -709,80 +710,72 @@ const isRtl = activeLang === 'ar';
                                 </div>
                             </div>
 
-                            <!-- Meta Strip: Dongles & Agents -->
-                            <div class="flex items-center gap-2 mb-3.5 text-[11px] flex-wrap">
-                                <div class="flex items-center gap-1.5 bg-[var(--bg-card)] px-2.5 py-1 rounded-lg border border-[var(--border-primary)]">
-                                    <span class="text-[var(--text-muted)] text-[10px] font-bold uppercase">${escapeHtml(t.dongles || 'Dongles')}:</span>
-                                    ${dongleBadges}
+                            <!-- Minimal Meta Row: Dongles, Agents -->
+                            <div class="flex items-center gap-2 text-[10px] text-[var(--text-muted)] mb-2.5 overflow-hidden">
+                                <span class="truncate"><strong>${escapeHtml(t.dongles || 'Dongles')}:</strong> ${dongleBadges}</span>
+                                <span>•</span>
+                                <span class="truncate"><strong>${escapeHtml(t.agents || 'Agents')}:</strong> ${agentBadges}</span>
+                            </div>
+
+                            <!-- Progress Mini Bar -->
+                            <div class="mb-3">
+                                <div class="flex items-center justify-between text-[11px] font-mono mb-1 text-[var(--text-muted)]">
+                                    <span>${isRtl ? 'التقدم:' : 'Progress:'} <strong class="text-white">${progressPct}%</strong></span>
+                                    <span>${isRtl ? 'الردود:' : 'Connect:'} <strong class="text-emerald-400">${connectRate}%</strong></span>
                                 </div>
-                                <div class="flex items-center gap-1.5 bg-[var(--bg-card)] px-2.5 py-1 rounded-lg border border-[var(--border-primary)]">
-                                    <span class="text-[var(--text-muted)] text-[10px] font-bold uppercase">${escapeHtml(t.agents || 'Agents')}:</span>
-                                    ${agentBadges}
+                                <div class="w-full bg-[var(--bg-primary)] rounded-full h-1.5 overflow-hidden border border-[var(--border-primary)]/40">
+                                    <div class="h-1.5 rounded-full transition-all duration-300 ${c.status === 'running' ? 'bg-emerald-500' : 'bg-emerald-600'}" style="width: ${progressPct}%"></div>
                                 </div>
                             </div>
 
-                            <!-- Progress Bar & Connect Rate -->
-                            <div class="mb-4 bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border-primary)]">
-                                <div class="flex items-center justify-between text-xs font-mono mb-1.5">
-                                    <span class="text-[var(--text-muted)]">${isRtl ? 'التقدم:' : 'Progress:'} <strong class="text-white font-bold text-xs">${progressPct}%</strong></span>
-                                    <span class="text-[var(--text-muted)]">${isRtl ? 'نسبة الرد:' : 'Connect Rate:'} <strong class="text-emerald-400 font-bold text-xs">${connectRate}%</strong></span>
+                            <!-- Streamlined Metric Counters (Row) -->
+                            <div class="grid grid-cols-4 gap-1.5 py-1.5 px-2 mb-3 bg-[var(--bg-card)] rounded-lg border border-[var(--border-primary)]/40 text-center text-[10px]">
+                                <div>
+                                    <span class="text-[var(--text-muted)] block text-[9px] uppercase font-semibold">${escapeHtml(t.total || 'Total')}</span>
+                                    <span class="font-bold text-white font-mono text-xs">${total}</span>
                                 </div>
-                                <div class="w-full bg-[var(--bg-primary)] rounded-full h-2 overflow-hidden border border-[var(--border-primary)]/40">
-                                    <div class="h-2 rounded-full transition-all duration-500 ${c.status === 'running' ? 'bg-emerald-500' : 'bg-emerald-600'}" style="width: ${progressPct}%"></div>
+                                <div>
+                                    <span class="text-amber-400/80 block text-[9px] uppercase font-semibold">${escapeHtml(t.pending || 'Pending')}</span>
+                                    <span class="font-bold text-amber-400 font-mono text-xs">${pending}</span>
                                 </div>
-                            </div>
-
-                            <!-- Metric Stat Cards -->
-                            <div class="grid grid-cols-4 gap-2 mb-4 text-center">
-                                <div class="bg-[var(--bg-card)] py-2 px-1 rounded-xl border border-[var(--border-primary)]/50">
-                                    <span class="text-[9px] text-[var(--text-muted)] uppercase font-bold tracking-wider block mb-0.5">${escapeHtml(t.total || 'Total')}</span>
-                                    <span class="text-base font-black text-white font-mono">${total}</span>
+                                <div>
+                                    <span class="text-emerald-400/80 block text-[9px] uppercase font-semibold">${escapeHtml(t.connected || 'Connected')}</span>
+                                    <span class="font-bold text-emerald-400 font-mono text-xs">${connected}</span>
                                 </div>
-                                <div class="bg-[var(--bg-card)] py-2 px-1 rounded-xl border border-[var(--border-primary)]/50">
-                                    <span class="text-[9px] text-amber-400/90 uppercase font-bold tracking-wider block mb-0.5">${escapeHtml(t.pending || 'Pending')}</span>
-                                    <span class="text-base font-black text-amber-400 font-mono">${pending}</span>
-                                </div>
-                                <div class="bg-[var(--bg-card)] py-2 px-1 rounded-xl border border-[var(--border-primary)]/50">
-                                    <span class="text-[9px] text-emerald-400/90 uppercase font-bold tracking-wider block mb-0.5">${escapeHtml(t.connected || 'Connected')}</span>
-                                    <span class="text-base font-black text-emerald-400 font-mono">${connected}</span>
-                                </div>
-                                <div class="bg-[var(--bg-card)] py-2 px-1 rounded-xl border border-[var(--border-primary)]/50">
-                                    <span class="text-[9px] text-rose-400/90 uppercase font-bold tracking-wider block mb-0.5">${escapeHtml(t.failed || 'Failed')}</span>
-                                    <span class="text-base font-black text-rose-400 font-mono">${failed}</span>
+                                <div>
+                                    <span class="text-rose-400/80 block text-[9px] uppercase font-semibold">${escapeHtml(t.failed || 'Failed')}</span>
+                                    <span class="font-bold text-rose-400 font-mono text-xs">${failed}</span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Action Footer: Main Controls -->
-                        <div class="flex items-center justify-between gap-1.5 pt-3 border-t border-[var(--border-primary)] flex-wrap">
-                            <div class="flex items-center gap-1.5">
+                        <!-- Compact Action Toolbar -->
+                        <div class="flex items-center justify-between gap-1 pt-2 border-t border-[var(--border-primary)]/60">
+                            <div class="flex items-center gap-1">
                                 ${c.status === 'running'
-                                    ? `<button onclick="controlCampaign(${c.id}, 'pause')" class="dialer-control dialer-control-warning shadow-md" title="Pause Campaign">
-                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    ? `<button onclick="controlCampaign(${c.id}, 'pause')" class="dialer-control dialer-control-warning py-1 px-2 text-[11px]" title="Pause">
+                                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                         <span>${escapeHtml(t.pause || 'Pause')}</span>
                                        </button>`
-                                    : `<button onclick="controlCampaign(${c.id}, 'start')" class="dialer-control dialer-control-primary shadow-md" title="Start Campaign">
-                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    : `<button onclick="controlCampaign(${c.id}, 'start')" class="dialer-control dialer-control-primary py-1 px-2 text-[11px]" title="Start">
+                                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                         <span>${escapeHtml(t.start || 'Start')}</span>
                                        </button>`
                                 }
-                                <button onclick="openViewLeadsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))})" class="dialer-control dialer-control-purple" title="View & Filter Leads">
-                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                    <span>${escapeHtml(t.viewLeads || 'View Leads')}</span>
+                                <button onclick="openViewLeadsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))})" class="dialer-control dialer-control-neutral py-1 px-2 text-[11px]" title="View Leads">
+                                    <svg class="w-3 h-3 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                    <span>${escapeHtml(t.viewLeads || 'Leads')}</span>
                                 </button>
                             </div>
-                            <div class="flex items-center gap-1.5">
-                                <button onclick="openImportModal(${c.id})" class="dialer-control dialer-control-info" title="Import Leads from CSV / Excel">
-                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                                    <span>${escapeHtml(t.importLeads || 'Import')}</span>
+                            <div class="flex items-center gap-1">
+                                <button onclick="openImportModal(${c.id})" class="dialer-control dialer-control-neutral py-1 px-2 text-[11px]" title="Import Leads">
+                                    <svg class="w-3 h-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                    <span>${escapeHtml(t.import || 'Import')}</span>
                                 </button>
-                                <button onclick="openManualLeadModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))})" class="dialer-control dialer-control-neutral" title="Add Single Lead">
-                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                                    <span>${escapeHtml(isRtl ? 'إضافة' : 'Add')}</span>
+                                <button onclick="openManualLeadModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))})" class="dialer-control dialer-control-neutral py-1 px-2 text-[11px]" title="Add Single Lead">
+                                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                    <span>${escapeHtml(t.add || (isRtl ? 'إضافة' : 'Add'))}</span>
                                 </button>
-                                <a href="/api/dialer/campaigns/${c.id}/export" class="dialer-control dialer-control-neutral px-2" title="Export Leads to CSV">
-                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                                </a>
                             </div>
                         </div>
                     `;
