@@ -65,6 +65,21 @@ ensure_certificates() {
     chmod 640 "$CERT_PATH" "$KEY_PATH"
 }
 
+ensure_http_tls() {
+    local http_custom="$ASTERISK_DIR/http_custom.conf"
+    touch "$http_custom"
+    if ! grep -q "tlsprivatekey=" "$http_custom"; then
+        cat >> "$http_custom" <<'HTTPEOF'
+
+[general](+)
+tlsprivatekey=/etc/asterisk/keys/asterisk.key
+HTTPEOF
+        chown asterisk:asterisk "$http_custom" 2>/dev/null || true
+        chmod 640 "$http_custom" 2>/dev/null || true
+        log "Configured Asterisk HTTP WSS :8089 TLS private key in http_custom.conf."
+    fi
+}
+
 ensure_channel_driver_settings() {
     touch "$MODULES_CUSTOM" "$SIP_GENERAL_CUSTOM"
     if ! grep -qE '^[[:space:]]*load[[:space:]]*=>[[:space:]]*chan_sip\.so' "$MODULES_CUSTOM"; then
@@ -332,6 +347,7 @@ PY
 
 build_mysql_auth
 ensure_certificates
+ensure_http_tls
 ensure_channel_driver_settings
 ensure_asterisk_socket_permissions
 write_transports
