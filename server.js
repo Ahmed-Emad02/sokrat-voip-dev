@@ -17677,7 +17677,7 @@ app.get('/api/config/audio-globals', async (req, res) => {
         let cellular_denoise = 'on';
         let cellular_rnnoise = 'on';
         let cellular_agc = '8000';
-        let cellular_jitterbuffer = 'adaptive';
+        let cellular_jitterbuffer = 'off';
         try {
             const { stdout } = await execPromise(`${ASTERISK_BIN} -rx "database show AUDIO_GLOBALS"`);
             const thresh = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_threshold\s*:\s*([\d\.]+)/);

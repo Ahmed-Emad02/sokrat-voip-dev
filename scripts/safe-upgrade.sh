@@ -248,6 +248,10 @@ elif [ -d "$SRC_CHAN_DONGLE" ] && [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch"
 fi
 
 # 5. Sanitize Dialplans & Protect Call Transfers
+# 5.0 Ensure Jitter Buffer is disabled by default unless explicitly activated
+    # Disable legacy hardcoded JITTERBUFFER calls in extensions_custom.conf
+    sed -i 's/^\s*same\s*=>\s*n,Set(JITTERBUFFER(adaptive)=default)/; same => n,Set(JITTERBUFFER(adaptive)=default)/g' /etc/asterisk/extensions_custom.conf 2>/dev/null || true
+
 echo "[5/7] Sanitizing dialplan contexts and hangup handlers..."
 if [ -f /etc/asterisk/extensions_custom.conf ]; then
     # Remove any rogue automated restart triggers
