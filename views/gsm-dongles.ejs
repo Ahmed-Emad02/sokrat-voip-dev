@@ -1480,12 +1480,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         <!-- Main Content Stack -->
         <div class="flex flex-col gap-6 mb-6">
             <!-- Responsive GSM Dongle Fleet -->
-            <section class="panel-surface rounded-2xl overflow-hidden shrink-0">
-
-                <div id="dongles-grid" class="grid grid-cols-1 md:grid-cols-2 items-start gap-3 p-3 sm:p-4">
-<div class="col-span-full py-8 text-center text-xs text-[var(--text-muted)]"><%= isRtl ? 'جاري تحميل أجهزة GSM...' : 'Loading GSM dongles...' %></div>
+            <section class="rounded-2xl overflow-hidden shrink-0 bg-transparent border-0 border-none shadow-none">
+                <div id="dongles-grid" class="grid grid-cols-1 md:grid-cols-2 items-start gap-3 p-0">
+                    <div class="col-span-full py-8 text-center text-xs text-[var(--text-muted)]"><%= isRtl ? 'جاري تحميل أجهزة GSM...' : 'Loading GSM dongles...' %></div>
                 </div>
-        </section>
+            </section>
 
 
             <!-- Middle Row: SMS Inbox & USSD Console Side-by-Side (Expanded SMS Messenger & Reduced USSD Console) -->
