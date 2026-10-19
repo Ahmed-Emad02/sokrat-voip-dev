@@ -1445,7 +1445,15 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <span id="gsm-device-ready" class="text-sm font-black text-emerald-400 font-mono">0</span>
                 </div>
                 <!-- Laya Autonomous Watcher Agent Status Pill -->
-                <button type="button" id="btn-open-laya-modal" onclick="openLayaModal()" class="h-9 px-3 rounded-xl bg-purple-500/15 border border-purple-500/30 hover:bg-purple-500/25 flex items-center gap-2 shrink-0 transition cursor-pointer shadow-sm" title="<%= isRtl ? 'المساعد الذكي لَيا للرقابة الذاتية على المودمات' : 'Laya Autonomous GSM Watcher & Healing Agent' %>">
+                <button type="button" id="btn-open-laya-modal" onclick="openLayaModal()" class="h-9 px-3 rounded-xl bg-purple-500/15 border border-purple-500/30 hover:bg-purple-500/25 flex items-center gap-2 shrink-0 transition cursor-pointer shadow-sm group" title="<%= isRtl ? 'المساعد الذكي لَيا للرقابة الذاتية على المودمات' : 'Laya Autonomous GSM Watcher & Healing Agent' %>">
+                    <!-- Laya Guardian Drone SVG -->
+                    <svg class="w-4 h-4 text-purple-400 shrink-0 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="8" fill="currentColor" fill-opacity="0.15" />
+                        <path d="M2 12a10 10 0 0 1 2-6m16 0a10 10 0 0 1 2 6m-2 6a10 10 0 0 1-2 4m-12-4a10 10 0 0 1-2-4" />
+                        <circle cx="12" cy="12" r="3.5" stroke-width="1.8" />
+                        <circle cx="13" cy="11" r="1.2" fill="currentColor" />
+                        <path d="M12 1.5v2.5M10.5 2.5h3" stroke-width="2" />
+                    </svg>
                     <span class="relative flex h-2 w-2">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-600 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-purple-600"></span>
@@ -2650,8 +2658,12 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             <div class="flex items-center justify-between border-b border-[var(--border-primary)] px-5 py-4 shrink-0 bg-[var(--bg-card)]">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="8" fill="currentColor" fill-opacity="0.15" />
+                            <path d="M2 12a10 10 0 0 1 2-6m16 0a10 10 0 0 1 2 6m-2 6a10 10 0 0 1-2 4m-12-4a10 10 0 0 1-2-4" />
+                            <circle cx="12" cy="12" r="3.5" stroke-width="1.8" />
+                            <circle cx="13" cy="11" r="1.2" fill="currentColor" />
+                            <path d="M12 1.5v2.5M10.5 2.5h3" stroke-width="2" />
                         </svg>
                     </div>
                     <div>
