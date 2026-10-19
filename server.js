@@ -17668,22 +17668,45 @@ app.get('/api/config/modem/rtcp', async (req, res) => {
     }
 });
 
-// GET /api/config/audio-globals - Universal VAD/RNNoise tuning (threshold & hangover) used by the dialplan for every extension
+// GET /api/config/audio-globals - Universal VAD/RNNoise tuning and cellular DSP controls
 app.get('/api/config/audio-globals', async (req, res) => {
     try {
         let vad_threshold = '0.20';
         let vad_hangover = '250';
         let vad_db_threshold = '-90';
+        let cellular_denoise = 'on';
+        let cellular_rnnoise = 'on';
+        let cellular_agc = '8000';
+        let cellular_jitterbuffer = 'adaptive';
         try {
             const { stdout } = await execPromise(`${ASTERISK_BIN} -rx "database show AUDIO_GLOBALS"`);
             const thresh = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_threshold\s*:\s*([\d\.]+)/);
             const hang = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_hangover\s*:\s*(\d+)/);
             const dbThresh = (stdout || '').match(/\/AUDIO_GLOBALS\/vad_db_threshold\s*:\s*([\w\-]+)/);
+            const denoiseMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_denoise\s*:\s*([\w\-]+)/);
+            const rnnoiseMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_rnnoise\s*:\s*([\w\-]+)/);
+            const agcMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_agc\s*:\s*([\w\-]+)/);
+            const jbMatch = (stdout || '').match(/\/AUDIO_GLOBALS\/cellular_jb\s*:\s*([\w\-]+)/);
             if (thresh) vad_threshold = thresh[1];
             if (hang) vad_hangover = hang[1];
             if (dbThresh) vad_db_threshold = dbThresh[1];
+            if (denoiseMatch) cellular_denoise = denoiseMatch[1];
+            if (rnnoiseMatch) cellular_rnnoise = rnnoiseMatch[1];
+            if (agcMatch) cellular_agc = agcMatch[1];
+            if (jbMatch) cellular_jitterbuffer = jbMatch[1];
         } catch (_) {}
-        res.json({ success: true, globals: { vad_threshold, vad_hangover, vad_db_threshold } });
+        res.json({
+            success: true,
+            globals: {
+                vad_threshold,
+                vad_hangover,
+                vad_db_threshold,
+                cellular_denoise,
+                cellular_rnnoise,
+                cellular_agc,
+                cellular_jitterbuffer
+            }
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -17706,14 +17729,34 @@ app.put('/api/config/audio-globals', async (req, res) => {
         if (dbThreshold) {
             await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS vad_db_threshold ${dbThreshold}"`);
         }
+        if (req.body.cellular_denoise) {
+            const cDenoise = ['on', 'off'].includes(req.body.cellular_denoise) ? req.body.cellular_denoise : 'on';
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS cellular_denoise ${cDenoise}"`);
+        }
+        if (req.body.cellular_rnnoise) {
+            const cRnnoise = ['on', 'off'].includes(req.body.cellular_rnnoise) ? req.body.cellular_rnnoise : 'on';
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS cellular_rnnoise ${cRnnoise}"`);
+        }
+        if (req.body.cellular_agc) {
+            const cAgc = String(req.body.cellular_agc).trim();
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS cellular_agc ${cAgc}"`);
+        }
+        if (req.body.cellular_jitterbuffer) {
+            const cJb = ['adaptive', 'fixed', 'off'].includes(req.body.cellular_jitterbuffer) ? req.body.cellular_jitterbuffer : 'adaptive';
+            await execPromise(`${ASTERISK_BIN} -rx "database put AUDIO_GLOBALS cellular_jb ${cJb}"`);
+        }
         res.json({
             success: true,
             globals: {
                 vad_threshold: threshold.toFixed(2),
                 vad_hangover: String(hangover),
-                vad_db_threshold: dbThreshold || '-90'
+                vad_db_threshold: dbThreshold || '-90',
+                cellular_denoise: req.body.cellular_denoise || 'on',
+                cellular_rnnoise: req.body.cellular_rnnoise || 'on',
+                cellular_agc: req.body.cellular_agc || '8000',
+                cellular_jitterbuffer: req.body.cellular_jitterbuffer || 'adaptive'
             },
-            message: 'Universal voice processing settings saved. Applied to all extensions immediately.'
+            message: 'Universal audio processing suite settings saved. Applied immediately to all cellular channels and extensions.'
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

@@ -4,7 +4,7 @@ var isRtl = (typeof isRtl !== 'undefined') ? isRtl : (activeLang === 'ar');
 var canManageGroupAdmin = (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) || (typeof currentUser !== 'undefined' && currentUser && (currentUser.isRoot || currentUser.group_name === 'super admins'));
 
 function isTabAllowed(tabName) {
-    if (tabName === 'stt') return true;
+    if (tabName === 'stt' || tabName === 'audioprocessing') return true;
     if (typeof allowedTabs === 'undefined') return true;
     if (!Array.isArray(allowedTabs)) return true;
     if (tabName === 'callcodes') return allowedTabs.includes('config') || allowedTabs.includes('config-extensions') || allowedTabs.includes('extensions') || allowedTabs.includes('callcodes');
@@ -908,6 +908,16 @@ function isTabAllowed(tabName) {
                 </button>
                 <% } %>
 
+                <!-- 14c. Audio Processing Suite (DSP) -->
+                <% if (isTabAllowed('audioprocessing')) { %>
+                <button onclick="switchTab('audioprocessing')" id="tab-btn-audioprocessing" title="<%= isRtl ? 'معالجة الصوت (DSP)' : 'Audio Processing (DSP)' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
+                    <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                    </svg>
+                    <span class="subsidebar-text truncate"><%= isRtl ? 'معالجة الصوت (DSP)' : 'Audio Processing' %></span>
+                </button>
+                <% } %>
+
                 <!-- 14b. callcodes (Feature Codes) -->
                 <% if (isTabAllowed('callcodes')) { %>
                 <button onclick="switchTab('callcodes')" id="tab-btn-callcodes" title="<%= isRtl ? 'أكواد وميزات أستيركس' : 'Feature Codes' %>" class="config-tab-btn config-tab-inactive flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all">
@@ -1078,6 +1088,13 @@ function isTabAllowed(tabName) {
                     <button type="button" onclick="switchTab('modem')" data-tab-target="modem" title="<%= isRtl ? 'إعدادات المودم والصوت' : 'Modem Conf' %>" class="config-top-pill config-tab-btn config-tab-btn-modem config-tab-inactive">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
                         <span><%= isRtl ? 'إعدادات المودم' : 'Modem Conf' %></span>
+                    </button>
+                    <% } %>
+
+                    <% if (isTabAllowed('audioprocessing')) { %>
+                    <button type="button" onclick="switchTab('audioprocessing')" data-tab-target="audioprocessing" title="<%= isRtl ? 'معالجة الصوت وفلاتر المقسم (DSP)' : 'Audio Processing & DSP' %>" class="config-top-pill config-tab-btn config-tab-btn-audioprocessing config-tab-inactive">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
+                        <span><%= isRtl ? 'معالجة الصوت (DSP)' : 'Audio Processing' %></span>
                     </button>
                     <% } %>
 
@@ -2263,6 +2280,191 @@ function isTabAllowed(tabName) {
                                     <span><%= isRtl ? 'إزالة فتحة' : 'Remove Slot' %></span>
                                 </button>
                             <% } %>
+        <!-- 14c. AUDIO PROCESSING SUITE (DSP) TAB SECTION -->
+        <% if (isTabAllowed('audioprocessing')) { %>
+        <div id="section-audioprocessing" class="tab-section hidden space-y-6">
+            <!-- Header Banner Card -->
+            <div class="config-card overflow-hidden">
+                <div class="p-5 sm:p-6 border-b border-[var(--border-primary)] bg-gradient-to-r from-blue-500/10 via-purple-500/5 to-transparent">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/10">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h2 class="text-xl font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'لوحة معالجة الصوت الرقمية (DSP Studio)' : 'Audio Processing & DSP Studio' %></h2>
+                                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-md uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Active</span>
+                                </div>
+                                <p class="text-xs text-[var(--text-muted)] mt-1 max-w-2xl"><%= isRtl ? 'تحكم مركزي بكافة فلاتر الصوت في المقسم: العزل العصبي العميق (RNNoise)، بوابات كشف الصوت (VAD Expander)، التسوية التلقائية لمستويات الصوت (AGC)، ومزامنة ارتعاش الحزم الصوتية (Jitter Buffer).' : 'Centralized control suite for telephony DSP: Neural RNNoise noise suppression, VAD downward expander gate, Automatic Gain Control (AGC), and adaptive jitter buffering.' %></p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="saveAudioGlobals()" class="config-action-btn config-action-btn--primary self-start sm:self-auto shrink-0 shadow-md">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            <span><%= isRtl ? 'حفظ كافة إعدادات DSP' : 'Save All DSP Settings' %></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DSP Architecture Diagram / Chain Flow -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div class="p-3.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-blue-400">Stage 1</span>
+                        <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-white mb-0.5"><%= isRtl ? 'فلتر الترددات الخافتة (High-Pass)' : 'High-Pass Filter' %></h4>
+                        <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'قطع الترددات تحت 120Hz لإزالة اهتزازات السيارات والضوضاء الكهربائية.' : 'Cuts rumble below 120Hz, hum, and desk thumps.' %></p>
+                    </div>
+                </div>
+                <div class="p-3.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-purple-400">Stage 2</span>
+                        <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-white mb-0.5"><%= isRtl ? 'العزل العصبي وبوابة VAD' : 'Neural RNNoise & VAD Gate' %></h4>
+                        <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'شبكة عصبية تعزل صوت المتحدث وتكتم الصمت بين الكلمات تلقائياً.' : 'Deep-learning model suppresses background ambient noise.' %></p>
+                    </div>
+                </div>
+                <div class="p-3.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">Stage 3</span>
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-white mb-0.5"><%= isRtl ? 'التحكم التلقائي بالكسب (AGC)' : 'Automatic Gain Control' %></h4>
+                        <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'موازنة فورية لمستوى الصوت لمنع الأصوات الصارخة ورفع الهمسات.' : 'Smooths volume disparities and levels speech output.' %></p>
+                    </div>
+                </div>
+                <div class="p-3.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)] flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-amber-400">Stage 4</span>
+                        <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-white mb-0.5"><%= isRtl ? 'مخزن تقليل الارتعاش (Jitter)' : 'Adaptive Jitter Buffer' %></h4>
+                        <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'إعادة ترتيب الحزم الصوتية لضمان سلاسة المكالمة دون تقطيع.' : 'Prevents packet jitter and micro-burst packet loss.' %></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Settings Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Card A: Universal Extension Voice Processing -->
+                <div class="config-card">
+                    <div class="p-4 sm:p-5 border-b border-[var(--border-primary)] flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-xs">EXT</div>
+                            <div>
+                                <h3 class="text-sm font-bold text-white"><%= isRtl ? 'إعدادات عزل التحويلات (Extension VAD & AI)' : 'Extension Voice & VAD Controls' %></h3>
+                                <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'تُطبق على مسارات التحويلات والمكالمات الداخلية.' : 'Applied to internal extensions & softphone endpoints.' %></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-5 space-y-4 text-xs">
+                        <div>
+                            <label for="globalVadThreshold" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'حساسية كشف الكلام (Speech Threshold)' : 'Speech Detection Threshold' %></label>
+                            <select id="globalVadThreshold" class="config-input w-full text-xs font-semibold">
+                                <option value="0.05">0.05 (<%= isRtl ? 'أقصى حساسية - يلتقط الهمس الخافت' : 'Maximum sensitivity - catches faint whispers' %>)</option>
+                                <option value="0.10">0.10 (<%= isRtl ? 'حساسية عالية / صوت ناعم' : 'High Sensitivity / Soft Voice' %>)</option>
+                                <option value="0.15">0.15 (<%= isRtl ? 'حساسية مرتفعة' : 'Elevated Sensitivity' %>)</option>
+                                <option value="0.20"><%= isRtl ? '0.20 (متوازن - القيمة الافتراضية الموصى بها)' : '0.20 (Balanced - Recommended Default)' %></option>
+                                <option value="0.30">0.30 (<%= isRtl ? 'متوسط / بيئة هادئة نسبياً' : 'Moderate / Fairly Quiet Environment' %>)</option>
+                                <option value="0.45">0.45 (<%= isRtl ? 'صارم - للمكاتب النشطة ذات الضوضاء' : 'Strict - Only Strong Speech' %>)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="globalVadHangover" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'مهلة الاحتفاظ بالصوت (Hangover Hold Time)' : 'Hangover Hold Time' %></label>
+                            <select id="globalVadHangover" class="config-input w-full text-xs font-semibold">
+                                <option value="100">100 ms (<%= isRtl ? 'سريع جداً - كتم فوري بين الكلمات' : 'Very short - instant gating between words' %>)</option>
+                                <option value="150">150 ms (<%= isRtl ? 'سريع' : 'Quick' %>)</option>
+                                <option value="250"><%= isRtl ? '250 ms (طبيعي - افتراضي)' : '250 ms (Natural - Default)' %></option>
+                                <option value="350">350 ms (<%= isRtl ? 'ناعم' : 'Soft Hold' %>)</option>
+                                <option value="500">500 ms (<%= isRtl ? 'طويل - تدفق كلام سلس للغاية' : 'Long - smooth speech flow' %>)</option>
+                                <option value="750">750 ms (<%= isRtl ? 'الأطول - أقل كتم ممكن' : 'Longest - minimal muting' %>)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="globalVadDbThreshold" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'عتبة الطاقة لكتم الصوت (Universal dBFS Gate Cutoff)' : 'Universal dBFS Gate Cutoff' %></label>
+                            <select id="globalVadDbThreshold" class="config-input w-full text-xs font-semibold">
+                                <option value="-90" selected><%= isRtl ? 'تلقائي / عصبي فقط (Auto / Neural Only -90 dBFS)' : 'Auto / Neural Only (Default -90 dBFS)' %></option>
+                                <option value="-55">-55 dBFS (<%= isRtl ? 'هادئ جداً' : 'Very Soft Noise' %>)</option>
+                                <option value="-50">-50 dBFS (<%= isRtl ? 'خافت / متوازن' : 'Soft / Balanced' %>)</option>
+                                <option value="-45">-45 dBFS (<%= isRtl ? 'متوسط / مكتب هادئ' : 'Moderate / Quiet Office' %>)</option>
+                                <option value="-42">-42 dBFS (<%= isRtl ? 'عالي / مكتب نشط' : 'High / Busy Office' %>)</option>
+                                <option value="-38">-38 dBFS (<%= isRtl ? 'صارم / ضوضاء قوية' : 'Strict / Heavy Noise' %>)</option>
+                                <option value="-35">-35 dBFS (<%= isRtl ? 'عدواني / ضوضاء شديدة' : 'Aggressive / Loud Noise' %>)</option>
+                                <option value="-30">-30 dBFS (<%= isRtl ? 'أقصى كتم / أصوات مرتفعة' : 'Maximum / Extreme Noise' %>)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card B: Cellular Trunk & Dongle Real-Time DSP Pipeline -->
+                <div class="config-card">
+                    <div class="p-4 sm:p-5 border-b border-[var(--border-primary)] flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-xs">GSM</div>
+                            <div>
+                                <h3 class="text-sm font-bold text-white"><%= isRtl ? 'معالجة خطوط وشرائح GSM (Cellular DSP Engine)' : 'Cellular Dongles & Trunks DSP Engine' %></h3>
+                                <p class="text-[10px] text-[var(--text-muted)]"><%= isRtl ? 'فلاتر مباشرة على خطوط الاتصال الخارجي والمودم.' : 'Applied to inbound and outbound GSM modem calls.' %></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-5 space-y-4 text-xs">
+                        <div>
+                            <label for="cellularDenoiseSelect" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'فلتر Speex و Denoise العتادي (Hardware Line Filter)' : 'Hardware Denoise & High-Pass Filter' %></label>
+                            <select id="cellularDenoiseSelect" class="config-input w-full text-xs font-semibold">
+                                <option value="on"><%= isRtl ? 'مفعل (يعزل التيارات وطنين 217Hz الترددي)' : 'Enabled (Removes electrical hum & 217Hz TDMA noise)' %></option>
+                                <option value="off"><%= isRtl ? 'معطل (تمرير الصوت خام)' : 'Disabled (Raw unconditioned audio)' %></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="cellularRnnoiseSelect" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'العزل العصبي للشرائح (Cellular Deep Learning RNNoise)' : 'Cellular Deep Learning RNNoise Filter' %></label>
+                            <select id="cellularRnnoiseSelect" class="config-input w-full text-xs font-semibold">
+                                <option value="on"><%= isRtl ? 'مفعل ثنائي الاتجاه (TX + RX عزل فائق)' : 'Enabled Bi-Directional (TX + RX Speech Isolation)' %></option>
+                                <option value="off"><%= isRtl ? 'معطل' : 'Disabled' %></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="cellularAgcSelect" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'التحكم بالكسب الآلي للشرائح (Cellular AGC Target)' : 'Cellular AGC Target Level' %></label>
+                            <select id="cellularAgcSelect" class="config-input w-full text-xs font-semibold">
+                                <option value="8000"><%= isRtl ? '8000 (موصى به - كسب قياسي متوازن لمودم Huawei)' : '8000 (Recommended standard for Huawei modems)' %></option>
+                                <option value="6000"><%= isRtl ? '6000 (ناعم / تجنب التشويش في الأبراج القريبة)' : '6000 (Soft / Avoids tower saturation)' %></option>
+                                <option value="12000"><%= isRtl ? '12000 (مرتفع / للمكالمات البعيدة الخافتة)' : '12000 (High / Faint signal boost)' %></option>
+                                <option value="off"><%= isRtl ? 'معطل (اعتماد الكسب الثابت فقط)' : 'Disabled (Use static txgain/rxgain only)' %></option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="cellularJbSelect" class="text-[11px] font-bold text-[var(--text-secondary)] uppercase block mb-1.5 tracking-wider"><%= isRtl ? 'مخزن تقليل تقطيع الحزم (Jitter Buffer Mode)' : 'Jitter Buffer Policy' %></label>
+                            <select id="cellularJbSelect" class="config-input w-full text-xs font-semibold">
+                                <option value="adaptive"><%= isRtl ? 'Adaptive (تلقائي ذكي - يضبط التأخير حسب الشبكة)' : 'Adaptive (Auto-tunes delay based on network jitter)' %></option>
+                                <option value="fixed"><%= isRtl ? 'Fixed (ثابت 200ms)' : 'Fixed (200ms fixed delay)' %></option>
+                                <option value="off"><%= isRtl ? 'معطل' : 'Disabled' %></option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Links -->
+            <div class="p-4 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div class="text-[var(--text-muted)]">
+                    <strong><%= isRtl ? 'ملاحظة للمهندسين:' : 'Engineering Note:' %></strong>
+                    <%= isRtl ? 'يتم تطبيق هذه الفلاتر مباشرة على مستوى بطاقة القنوات الصوتية في Asterisk 18 دون الحاجة لأي برامج وسيطة أو تعديلات على الكلاينت.' : 'All processing is executed at the Asterisk 18 media layer via optimized C channel functions, preserving clean backward compatibility with desktop IP phones and WebRTC.' %>
+                </div>
+                <button type="button" onclick="saveAudioGlobals()" class="config-action-btn config-action-btn--primary shrink-0">
+                    <span><%= isRtl ? 'تطبيق وحفظ الإعدادات' : 'Apply Settings' %></span>
+                </button>
+            </div>
+        </div>
+        <% } %>
+
                             <button type="button" onclick="resetAllDongleGains()" class="config-action-btn config-action-btn--danger">
                                 <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                 <span><%= isRtl ? 'إعادة ضبط الكسب' : 'Reset Gains' %></span>
@@ -6263,7 +6465,8 @@ function isTabAllowed(tabName) {
             }
 
             stopRtcpTimer();
-            if (tabId === 'extensions') fetchExtensions();
+            if (tabId === 'audioprocessing') { loadAudioGlobals(); loadDonglesAudioState(); }
+            else if (tabId === 'extensions') fetchExtensions();
             else if (tabId === 'callcodes') fetchConfigCallCodes();
             else if (tabId === 'ringgroups') { fetchRingGroups(); ensureAllConfigListsLoaded(); }
             else if (tabId === 'queues') { fetchQueues(); ensureAllConfigListsLoaded(); }
@@ -14537,19 +14740,23 @@ function isTabAllowed(tabName) {
             const threshEl = document.getElementById('globalVadThreshold');
             const hangEl = document.getElementById('globalVadHangover');
             const dbThreshEl = document.getElementById('globalVadDbThreshold');
+            const cDenoiseEl = document.getElementById('cellularDenoiseSelect');
+            const cRnnoiseEl = document.getElementById('cellularRnnoiseSelect');
+            const cAgcEl = document.getElementById('cellularAgcSelect');
+            const cJbEl = document.getElementById('cellularJbSelect');
             if (!threshEl || !hangEl) return;
             try {
                 const res = await fetch('/api/config/audio-globals');
                 const data = await res.json();
-                if (data.success) {
-                    threshEl.value = String(parseFloat(data.globals.vad_threshold).toFixed(2));
-                    hangEl.value = String(parseInt(data.globals.vad_hangover, 10));
-                    if (dbThreshEl && data.globals.vad_db_threshold) {
-                        dbThreshEl.value = String(data.globals.vad_db_threshold);
-                    }
-                    if (!threshEl.value || threshEl.selectedIndex === -1) threshEl.value = '0.20';
-                    if (!hangEl.value || hangEl.selectedIndex === -1) hangEl.value = '250';
-                    if (dbThreshEl && (!dbThreshEl.value || dbThreshEl.selectedIndex === -1)) dbThreshEl.value = '-90';
+                if (data.success && data.globals) {
+                    const g = data.globals;
+                    threshEl.value = String(parseFloat(g.vad_threshold).toFixed(2));
+                    hangEl.value = String(parseInt(g.vad_hangover, 10));
+                    if (dbThreshEl && g.vad_db_threshold) dbThreshEl.value = String(g.vad_db_threshold);
+                    if (cDenoiseEl && g.cellular_denoise) cDenoiseEl.value = String(g.cellular_denoise);
+                    if (cRnnoiseEl && g.cellular_rnnoise) cRnnoiseEl.value = String(g.cellular_rnnoise);
+                    if (cAgcEl && g.cellular_agc) cAgcEl.value = String(g.cellular_agc);
+                    if (cJbEl && g.cellular_jitterbuffer) cJbEl.value = String(g.cellular_jitterbuffer);
                 }
             } catch (_) {}
         }
@@ -14559,15 +14766,22 @@ function isTabAllowed(tabName) {
             const threshEl = document.getElementById('globalVadThreshold');
             const hangEl = document.getElementById('globalVadHangover');
             const dbThreshEl = document.getElementById('globalVadDbThreshold');
+            const cDenoiseEl = document.getElementById('cellularDenoiseSelect');
+            const cRnnoiseEl = document.getElementById('cellularRnnoiseSelect');
+            const cAgcEl = document.getElementById('cellularAgcSelect');
+            const cJbEl = document.getElementById('cellularJbSelect');
             if (!threshEl || !hangEl) return;
             try {
                 const payload = {
                     vad_threshold: threshEl.value,
                     vad_hangover: hangEl.value
                 };
-                if (dbThreshEl) {
-                    payload.vad_db_threshold = dbThreshEl.value;
-                }
+                if (dbThreshEl) payload.vad_db_threshold = dbThreshEl.value;
+                if (cDenoiseEl) payload.cellular_denoise = cDenoiseEl.value;
+                if (cRnnoiseEl) payload.cellular_rnnoise = cRnnoiseEl.value;
+                if (cAgcEl) payload.cellular_agc = cAgcEl.value;
+                if (cJbEl) payload.cellular_jitterbuffer = cJbEl.value;
+                
                 const res = await fetch('/api/config/audio-globals', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -14575,12 +14789,12 @@ function isTabAllowed(tabName) {
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast(isRtl ? 'تم حفظ إعدادات معالجة الصوت الشاملة.' : 'Universal voice processing settings saved.', 'success');
+                    showToast(isRtl ? 'تم حفظ وتفعيل إعدادات معالجة الصوت الرقمية (DSP) بنجاح.' : 'Audio processing suite (DSP) settings saved and applied.', 'success');
                 } else {
-                    showToast(data.error || 'Failed to save universal voice processing settings.', 'error');
+                    showToast(data.error || 'Failed to save audio processing settings.', 'error');
                 }
             } catch (e) {
-                showToast('Error saving universal settings: ' + e.message, 'error');
+                showToast('Error saving audio processing settings: ' + e.message, 'error');
             }
         }
         window.saveAudioGlobals = saveAudioGlobals;
