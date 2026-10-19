@@ -12933,6 +12933,12 @@ function ensurePjsipWebRtcTransports() {
         try {
             if (!fs.existsSync('/etc/asterisk/keys')) fs.mkdirSync('/etc/asterisk/keys', { recursive: true });
             execSync('openssl req -new -x509 -days 3650 -nodes -out /etc/asterisk/keys/asterisk.pem -keyout /etc/asterisk/keys/asterisk.key -subj "/C=EG/O=Sokrat/CN=sokrat-voip" 2>/dev/null', { timeout: 10000 });
+            if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+                const certContent = fs.readFileSync(certPath, 'utf8');
+                if (!certContent.includes('PRIVATE KEY')) {
+                    fs.appendFileSync(certPath, '\n' + fs.readFileSync(keyPath, 'utf8'));
+                }
+            }
             console.log('[PJSIP] Generated missing Asterisk self-signed key & cert');
         } catch (e) {
             console.error('[PJSIP] Error generating self-signed certificate:', e.message);

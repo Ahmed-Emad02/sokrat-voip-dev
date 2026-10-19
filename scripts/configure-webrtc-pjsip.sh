@@ -61,6 +61,9 @@ ensure_certificates() {
             >/dev/null 2>&1
         log "Generated Asterisk WebRTC certificate and private key."
     fi
+    if ! grep -q "PRIVATE KEY" "$CERT_PATH" 2>/dev/null; then
+        cat "$KEY_PATH" >> "$CERT_PATH"
+    fi
     chown asterisk:asterisk "$CERT_PATH" "$KEY_PATH" 2>/dev/null || true
     chmod 640 "$CERT_PATH" "$KEY_PATH"
 }
