@@ -598,9 +598,9 @@ function fmtDur(s) {
         </div>
         <% } %>
 
-        <div class="panel-surface rounded-2xl overflow-hidden">
+        <div id="cdrTableContainer" class="rounded-2xl overflow-hidden bg-transparent border-0 border-none shadow-none">
             <div class="overflow-x-auto">
-                <table class="w-full text-start border-collapse">
+                <table id="cdrTable" class="w-full text-start border-collapse">
                     <thead>
                         <tr class="bg-black/40 text-zinc-400 text-xs font-bold uppercase border-b border-[#27272a]">
                             <th data-col="time" class="p-4 tracking-wider text-start whitespace-nowrap"><%= t.thTime %></th>
@@ -778,7 +778,7 @@ function fmtDur(s) {
                     </tbody>
                 </table>
             </div>
-            <div class="px-6 py-4 border-t border-[#27272a] bg-black/40">
+            <div class="px-6 py-4 border-t border-[#27272a]/60 bg-transparent">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold uppercase tracking-widest text-zinc-500"><%= t.footerLeft %></span>
                     <span class="text-sm font-black text-white"><%= t.footerRight %> <span class="text-[var(--accent-color)]"><%= pagination.total %></span></span>
@@ -1500,7 +1500,7 @@ function syncStatusChecklistUI() {
         }
 
         function applyCdrColumnsToTable(cols) {
-            const table = document.querySelector('.panel-surface table');
+            const table = document.querySelector('#cdrTable, .panel-surface table, table');
             if (!table) return;
 
             const theadRow = table.querySelector('thead tr');
