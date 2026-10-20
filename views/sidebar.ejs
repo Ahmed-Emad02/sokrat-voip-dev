@@ -589,7 +589,7 @@ function can(tab) {
     /* --- Default cover for buttons without unified styling: red-tinted
            overlay so the shutter is VISIBLE on any background; sliding it
            open reveals the button's own (semantic) color. --- */
-    button:not(.btn-primary):not(.config-btn-primary):not(.config-btn-secondary):not(.btn-ghost):not(.config-action-btn):not(.config-tab-btn):not(.nav-item)::before,
+    button:not(.btn-primary):not(.config-btn-primary):not(.config-btn-secondary):not(.btn-ghost):not(.config-action-btn):not(.config-tab-btn):not(.nav-item):not(.btn-transparent):not([data-player-playpause]):not([data-player-mute]):not([data-action='delete-cdr'])::before,
     a.btn-link::before {
         background: rgba(185, 28, 28, 0.30) !important;
     }
@@ -862,7 +862,7 @@ function can(tab) {
     }
 
     /* Light theme: default cover — red tint over any bg */
-    .light-theme button:not(.btn-primary):not(.config-btn-primary):not(.config-btn-secondary):not(.btn-ghost):not(.config-action-btn):not(.config-tab-btn):not(.nav-item)::before,
+    .light-theme button:not(.btn-primary):not(.config-btn-primary):not(.config-btn-secondary):not(.btn-ghost):not(.config-action-btn):not(.config-tab-btn):not(.nav-item):not(.btn-transparent):not([data-player-playpause]):not([data-player-mute]):not([data-action='delete-cdr'])::before,
     .light-theme a.btn-link::before {
         background: rgba(185, 28, 28, 0.20) !important;
     }
@@ -2724,6 +2724,83 @@ function can(tab) {
     .light-theme .config-dropdown-options,
     .light-theme .sms-inbox-scroll {
         scrollbar-color: #991b1b transparent !important;
+    }
+
+    /* ==========================================================================
+       UNIVERSAL BORDERLESS & TRANSPARENT ACTION BUTTONS (NO SHUTTER / NO BACKGROUND)
+       ========================================================================== */
+    button.btn-transparent,
+    button[data-player-playpause],
+    button[data-player-mute],
+    button[data-action="delete-cdr"],
+    button[id^="cdr_stt_"],
+    button[id^="vm_stt_"],
+    button[onclick*="triggerAudioDownload"],
+    .light-theme button.btn-transparent,
+    .light-theme button[data-player-playpause],
+    .light-theme button[data-player-mute],
+    .light-theme button[data-action="delete-cdr"],
+    .light-theme button[id^="cdr_stt_"],
+    .light-theme button[id^="vm_stt_"],
+    .light-theme button[onclick*="triggerAudioDownload"] {
+        background: transparent !important;
+        background-color: transparent !important;
+        background-image: none !important;
+        border: 0 !important;
+        border-width: 0 !important;
+        border-style: none !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
+        outline: none !important;
+        overflow: visible !important;
+    }
+    button.btn-transparent::before,
+    button[data-player-playpause]::before,
+    button[data-player-mute]::before,
+    button[data-action="delete-cdr"]::before,
+    button[id^="cdr_stt_"]::before,
+    button[id^="vm_stt_"]::before,
+    button[onclick*="triggerAudioDownload"]::before,
+    button.btn-transparent::after,
+    button[data-player-playpause]::after,
+    button[data-player-mute]::after,
+    button[data-action="delete-cdr"]::after,
+    button[id^="cdr_stt_"]::after,
+    button[id^="vm_stt_"]::after,
+    button[onclick*="triggerAudioDownload"]::after,
+    .light-theme button.btn-transparent::before,
+    .light-theme button[data-player-playpause]::before,
+    .light-theme button[data-player-mute]::before,
+    .light-theme button[data-action="delete-cdr"]::before,
+    .light-theme button[id^="cdr_stt_"]::before,
+    .light-theme button[id^="vm_stt_"]::before,
+    .light-theme button[onclick*="triggerAudioDownload"]::before {
+        display: none !important;
+        content: none !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        opacity: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+    }
+    button.btn-transparent:hover,
+    button[data-player-playpause]:hover,
+    button[data-player-mute]:hover,
+    button[data-action="delete-cdr"]:hover,
+    button[id^="cdr_stt_"]:hover,
+    button[id^="vm_stt_"]:hover,
+    button[onclick*="triggerAudioDownload"]:hover,
+    .light-theme button.btn-transparent:hover,
+    .light-theme button[data-player-playpause]:hover,
+    .light-theme button[data-player-mute]:hover,
+    .light-theme button[data-action="delete-cdr"]:hover,
+    .light-theme button[id^="cdr_stt_"]:hover,
+    .light-theme button[id^="vm_stt_"]:hover,
+    .light-theme button[onclick*="triggerAudioDownload"]:hover {
+        background: transparent !important;
+        background-color: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
     }
 </style>
 
