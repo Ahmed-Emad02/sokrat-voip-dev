@@ -1963,42 +1963,88 @@ function can(tab) {
         position: relative !important;
         display: inline-flex !important;
         align-items: center !important;
+        justify-content: space-between !important;
         flex-shrink: 0 !important;
-        width: 44px !important;
-        height: 24px !important;
-        padding: 2px !important;
-        background-color: var(--accent-color, #dc2626) !important;
-        border: 1px solid var(--accent-color, #dc2626) !important;
+        width: 52px !important;
+        height: 28px !important;
+        padding: 3px !important;
+        background: rgba(18, 18, 24, 0.9) !important;
+        border: 1px solid var(--border-primary) !important;
         border-radius: 9999px !important;
         cursor: pointer !important;
-        transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease !important;
-        box-shadow: 0 0 10px var(--accent-transparent, rgba(239, 68, 68, 0.3));
+        transition: all 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255, 255, 255, 0.05) !important;
         outline: none !important;
         direction: ltr !important;
+        user-select: none !important;
+    }
+    .settings-theme-switch:hover {
+        border-color: var(--border-hover, rgba(255, 255, 255, 0.22)) !important;
     }
     .settings-theme-switch:focus-visible {
         box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-color) !important;
     }
-    .settings-switch-thumb {
-        display: inline-block !important;
-        width: 18px !important;
-        height: 18px !important;
-        border-radius: 9999px !important;
-        background-color: #ffffff !important;
-        background: #ffffff !important;
-        border: 1px solid rgba(0, 0, 0, 0.12) !important;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35) !important;
+    .settings-switch-icon {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 14px !important;
+        height: 14px !important;
         pointer-events: none !important;
-        transform: translateX(20px);
-        transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+        transition: opacity 180ms ease, color 180ms ease !important;
+    }
+    .settings-switch-icon-sun {
+        color: #f59e0b !important;
+        margin-left: 3px !important;
+        opacity: 0.3 !important;
+    }
+    .settings-switch-icon-moon {
+        color: #38bdf8 !important;
+        margin-right: 3px !important;
+        opacity: 1 !important;
+    }
+    .settings-switch-thumb {
+        position: absolute !important;
+        top: 3px !important;
+        left: 3px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 20px !important;
+        height: 20px !important;
+        border-radius: 9999px !important;
+        background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 100%) !important;
+        border: 1px solid rgba(0, 0, 0, 0.12) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+        pointer-events: none !important;
+        transform: translateX(24px) !important;
+        transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), background-color 200ms ease, box-shadow 200ms ease !important;
+    }
+    .settings-switch-thumb-glyph {
+        width: 11px !important;
+        height: 11px !important;
+        color: #0284c7 !important;
+        transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
     .light-theme .settings-theme-switch {
-        background-color: #cbd5e1 !important;
+        background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%) !important;
         border-color: #94a3b8 !important;
-        box-shadow: none !important;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.08), 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+    }
+    .light-theme .settings-switch-icon-sun {
+        opacity: 1 !important;
+    }
+    .light-theme .settings-switch-icon-moon {
+        opacity: 0.25 !important;
+        color: #64748b !important;
     }
     .light-theme .settings-switch-thumb {
         transform: translateX(0px) !important;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+    }
+    .light-theme .settings-switch-thumb-glyph {
+        color: #d97706 !important;
     }
     .settings-segmented {
         background: var(--bg-secondary);
@@ -2705,12 +2751,18 @@ function can(tab) {
         const tracks = document.querySelectorAll('.settings-theme-switch');
         const thumbs = document.querySelectorAll('.settings-switch-thumb');
 
+        tracks.forEach(track => {
+            track.setAttribute('aria-checked', isLight ? 'false' : 'true');
+        });
+
         thumbs.forEach(thumb => {
-            thumb.classList.toggle('translate-x-0', isLight);
-            thumb.classList.toggle('translate-x-5', !isLight);
-            thumb.style.transform = isLight ? 'translateX(0px)' : 'translateX(20px)';
-            thumb.style.setProperty('background-color', '#ffffff', 'important');
-            thumb.style.setProperty('box-shadow', '0 2px 4px rgba(0,0,0,0.35)', 'important');
+            thumb.style.transform = isLight ? 'translateX(0px)' : 'translateX(24px)';
+            const glyph = thumb.querySelector('.settings-switch-thumb-glyph');
+            if (glyph) {
+                glyph.innerHTML = isLight 
+                    ? '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>'
+                    : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+            }
         });
 
         tracks.forEach(track => {
@@ -2736,38 +2788,77 @@ function can(tab) {
     }
 
     function toggleTheme(e) {
-        // Smooth View Transition API if supported by modern browser, otherwise clean fast toggle
-        const performSwitch = () => {
-            const isLight = document.body.classList.toggle('light-theme');
-            document.documentElement.classList.toggle('light-theme', isLight);
-            const newTheme = isLight ? 'light' : 'dark';
-            try {
-                localStorage.setItem('theme', newTheme);
-                document.cookie = 'theme=' + newTheme + ';path=/;max-age=31536000;SameSite=Lax';
-                fetch('/api/user/theme-lang', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ theme: newTheme })
-                }).catch(() => {});
-            } catch (_) {}
-            updateThemeUI(isLight);
+        const isLight = document.body.classList.toggle('light-theme');
+        document.documentElement.classList.toggle('light-theme', isLight);
+        const newTheme = isLight ? 'light' : 'dark';
+        try {
+            localStorage.setItem('theme', newTheme);
+            document.cookie = 'theme=' + newTheme + ';path=/;max-age=31536000;SameSite=Lax';
+            fetch('/api/user/theme-lang', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ theme: newTheme })
+            }).catch(() => {});
+        } catch (_) {}
+        updateThemeUI(isLight);
 
-            if (window.pieChart) {
-                location.reload();
+        // Anime.js ripple & spring animation on theme toggle
+        if (typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            const thumbs = document.querySelectorAll('.settings-switch-thumb');
+            if (thumbs.length > 0) {
+                anime({
+                    targets: thumbs,
+                    translateX: isLight ? 0 : 20,
+                    scale: [0.85, 1.1, 1],
+                    rotate: isLight ? [0, 180] : [180, 0],
+                    duration: 320,
+                    easing: 'easeOutElastic(1, .7)',
+                    complete: () => {
+                        thumbs.forEach(thumb => {
+                            thumb.style.transform = isLight ? 'translateX(0px)' : 'translateX(20px)';
+                            thumb.style.setProperty('background-color', '#ffffff', 'important');
+                            thumb.style.setProperty('box-shadow', '0 2px 4px rgba(0,0,0,0.35)', 'important');
+                        });
+                    }
+                });
             }
-            if (window.location.pathname === '/ext-stats') {
-                if (window.currentExtension) {
-                    window.loadStats(window.currentExtension);
-                } else {
-                    window.loadOverview();
+
+            const ripple = document.createElement('div');
+            ripple.className = 'fixed rounded-full pointer-events-none z-[999998]';
+            const btn = document.getElementById('themeToggleBtn') || document.body;
+            const rect = btn.getBoundingClientRect();
+            const radius = Math.hypot(Math.max(rect.left, window.innerWidth - rect.left), Math.max(rect.top, window.innerHeight - rect.top));
+
+            ripple.style.left = (rect.left + rect.width / 2 - radius) + 'px';
+            ripple.style.top = (rect.top + rect.height / 2 - radius) + 'px';
+            ripple.style.width = (radius * 2) + 'px';
+            ripple.style.height = (radius * 2) + 'px';
+            ripple.style.backgroundColor = isLight ? 'rgba(249, 250, 251, 0.85)' : 'rgba(5, 5, 7, 0.85)';
+            ripple.style.backdropFilter = 'blur(12px)';
+            ripple.style.transform = 'scale(0)';
+            document.body.appendChild(ripple);
+
+            anime({
+                targets: ripple,
+                scale: [0, 1],
+                opacity: [0.8, 0],
+                duration: 450,
+                easing: 'easeOutQuint',
+                complete: function() {
+                    if (ripple && ripple.parentNode) ripple.parentNode.removeChild(ripple);
                 }
-            }
-        };
+            });
+        }
 
-        if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            document.startViewTransition(() => performSwitch());
-        } else {
-            performSwitch();
+        if (window.pieChart) {
+            location.reload();
+        }
+        if (window.location.pathname === '/ext-stats') {
+            if (window.currentExtension) {
+                window.loadStats(window.currentExtension);
+            } else {
+                window.loadOverview();
+            }
         }
     }
 
@@ -3234,7 +3325,15 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     </span>
                 </div>
                 <button id="themeToggleBtn" type="button" onclick="toggleTheme(event)" class="settings-theme-switch cursor-pointer" role="switch" aria-checked="true" aria-label="<%= sbT.themeLabel %>">
-                    <span id="themeThumb" class="settings-switch-thumb translate-x-5" style="background-color: #ffffff !important; box-shadow: 0 2px 4px rgba(0,0,0,0.35) !important;"></span>
+                    <span class="settings-switch-icon settings-switch-icon-sun">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg>
+                    </span>
+                    <span class="settings-switch-icon settings-switch-icon-moon">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    </span>
+                    <span id="themeThumb" class="settings-switch-thumb">
+                        <svg class="settings-switch-thumb-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    </span>
                 </button>
             </div>
 
@@ -3422,7 +3521,15 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </span>
         </div>
         <button type="button" onclick="toggleTheme(event)" class="settings-theme-switch cursor-pointer" role="switch" aria-checked="true" aria-label="<%= sbT.themeLabel %>">
-            <span class="settings-switch-thumb translate-x-5" style="background-color: #ffffff !important; box-shadow: 0 2px 4px rgba(0,0,0,0.35) !important;"></span>
+            <span class="settings-switch-icon settings-switch-icon-sun">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg>
+            </span>
+            <span class="settings-switch-icon settings-switch-icon-moon">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            </span>
+            <span class="settings-switch-thumb">
+                <svg class="settings-switch-thumb-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            </span>
         </button>
     </div>
 
