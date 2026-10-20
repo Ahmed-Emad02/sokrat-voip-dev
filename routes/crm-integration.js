@@ -541,6 +541,39 @@ function createCrmRouter(pool, options = {}) {
     const router = express.Router();
 
     // 1. PUBLIC HEALTH ENDPOINT
+function getDetectedNetworkInterfaces() {
+    const interfaces = [];
+    try {
+        const ifaces = os.networkInterfaces();
+        for (const [ifaceName, addrs] of Object.entries(ifaces)) {
+            if (/^(docker0|br-[a-f0-9]+|veth)/i.test(ifaceName)) continue;
+            for (const a of addrs || []) {
+                if (a && (a.family === 'IPv4' || a.family === 4) && !a.internal && a.address) {
+                    const addr = a.address;
+                    let type = 'lan';
+                    let label = 'شبكة المكتب المحلية (Local LAN)';
+                    if (/^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(addr) || /^tailscale/i.test(ifaceName)) {
+                        type = 'vpn';
+                        label = 'نفق Tailscale VPN';
+                    } else if (/^zt/i.test(ifaceName)) {
+                        type = 'vpn';
+                        label = 'نفق ZeroTier VPN';
+                    }
+                    interfaces.push({
+                        interface: ifaceName,
+                        ip: addr,
+                        type: type,
+                        label: label,
+                        ws_url: `ws://${addr}:8088/ws`,
+                        wss_url: `wss://${addr}:8089/ws`
+                    });
+                }
+            }
+        }
+    } catch (_) {}
+    return interfaces;
+}
+
     router.get('/health', (req, res) => {
         res.json({
             service: 'sokrat-voip',
@@ -548,7 +581,8 @@ function createCrmRouter(pool, options = {}) {
             api_version: '1.0',
             application_version: pkg.version || '1.0.0',
             server_time: moment().format(),
-            timezone: 'Africa/Cairo'
+            timezone: 'Africa/Cairo',
+            network_interfaces: getDetectedNetworkInterfaces()
         });
     });
 
