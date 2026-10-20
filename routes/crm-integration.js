@@ -1467,6 +1467,26 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                 } catch (_) {}
             }
 
+            // Automatically scan all host network interfaces (LAN + VPN + Overlays) for zero-configuration multi-path WebRTC
+            const detectedLanHosts = [];
+            const detectedVpnHosts = [];
+            try {
+                const ifaces = os.networkInterfaces();
+                for (const [ifaceName, addrs] of Object.entries(ifaces)) {
+                    if (/^(docker0|br-[a-f0-9]+|veth)/i.test(ifaceName)) continue;
+                    for (const a of addrs || []) {
+                        if (a && a.family === 'IPv4' && !a.internal && a.address) {
+                            const addr = a.address;
+                            if (/^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(addr) || /^zt/i.test(ifaceName) || /^tailscale/i.test(ifaceName)) {
+                                if (!detectedVpnHosts.includes(addr)) detectedVpnHosts.push(addr);
+                            } else {
+                                if (!detectedLanHosts.includes(addr)) detectedLanHosts.push(addr);
+                            }
+                        }
+                    }
+                }
+            } catch (_) {}
+
             const requestHost = req.hostname || (req.headers.host ? req.headers.host.split(':')[0] : '192.168.100.50');
             const host = (requestHost === 'localhost' || requestHost === '127.0.0.1' || requestHost === 'host.docker.internal')
                 ? '192.168.100.50'
@@ -1476,6 +1496,8 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
                 ws_url: `ws://${host}:8088/ws`,
                 wss_url: `wss://${host}:8089/ws`,
                 sip_domain: host,
+                candidate_hosts: Array.from(new Set([...detectedLanHosts, host, ...detectedVpnHosts].filter(Boolean))),
+                socket_urls: Array.from(new Set([...detectedLanHosts, host, ...detectedVpnHosts].filter(Boolean))).flatMap(h => [`ws://${h}:8088/ws`, `wss://${h}:8089/ws`]),
                 extension: ext || '',
                 password: password,
                 auto_answer: policy.auto_answer || 'user_choice',
