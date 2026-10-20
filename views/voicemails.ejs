@@ -121,6 +121,33 @@ function fmtDur(s) {
         .flatpickr-input {
             font-family: 'JetBrains Mono', 'Cairo', monospace !important;
         }
+        /* Audio Player Minimal Button Overrides (Zero Background / Zero Border / No Shutter) */
+        .audio-player button[data-player-mute],
+        .audio-player button[onclick*="triggerAudioDownload"],
+        .audio-player button[id^="vm_stt_"] {
+            background: transparent !important;
+            background-color: transparent !important;
+            border: none !important;
+            border-width: 0 !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        .audio-player button[data-player-mute]::before,
+        .audio-player button[onclick*="triggerAudioDownload"]::before,
+        .audio-player button[id^="vm_stt_"]::before {
+            display: none !important;
+            content: none !important;
+            background: transparent !important;
+        }
+        .audio-player button[data-player-mute]:hover,
+        .audio-player button[onclick*="triggerAudioDownload"]:hover,
+        .audio-player button[id^="vm_stt_"]:hover {
+            background: transparent !important;
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+
         /* Media Slider range input styling */
         .media-slider {
             -webkit-appearance: none;
