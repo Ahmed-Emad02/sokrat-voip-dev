@@ -557,19 +557,41 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             background-color: inherit;
             animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
-        #dongles-grid {
-            display: grid;
-            grid-template-columns: repeat(1, minmax(0, 1fr));
-            gap: 0.875rem;
+        #dongles-grid.dongles-view-grid {
+            display: grid !important;
+            grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+            gap: 0.875rem !important;
         }
         @media (min-width: 768px) {
-            #dongles-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+            #dongles-grid.dongles-view-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             }
         }
         @media (min-width: 1280px) {
-            #dongles-grid {
+            #dongles-grid.dongles-view-grid {
                 grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            }
+        }
+        #dongles-grid.dongles-view-minimal {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            gap: 0.5rem !important;
+        }
+        .dongle-device-card.dongle-minimal-row {
+            display: grid !important;
+            grid-template-columns: minmax(130px, 1.2fr) minmax(140px, 1.3fr) minmax(140px, 1.3fr) minmax(110px, 1fr) minmax(100px, 0.9fr) auto !important;
+            align-items: center !important;
+            width: 100% !important;
+            gap: 0.875rem !important;
+            padding: 0.65rem 1rem !important;
+        }
+        @media (max-width: 900px) {
+            .dongle-device-card.dongle-minimal-row {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                justify-content: space-between !important;
+                gap: 0.625rem !important;
             }
         }
         .dongle-device-card {
@@ -3205,9 +3227,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 donglesGrid.innerHTML = '';
 
                 if (currentViewMode === 'minimal') {
-                    donglesGrid.className = 'flex flex-col gap-2.5 p-0';
+                    donglesGrid.className = 'dongles-view-minimal flex flex-col gap-2 p-0 w-full';
                 } else {
-                    donglesGrid.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start gap-3.5 p-0';
+                    donglesGrid.className = 'dongles-view-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start gap-3.5 p-0';
                 }
 
                 if (loadedDevices.length === 0) {
@@ -3244,51 +3266,58 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     card.dataset.data = String(dev.data || '');
 
                     if (currentViewMode === 'minimal') {
-                        card.className = `dongle-device-card dongle-state-${state.color} rounded-xl cursor-pointer p-3 sm:px-4 py-2.5 flex items-center justify-between gap-3 text-xs flex-wrap md:flex-nowrap transition-all`;
+                        card.className = `dongle-device-card dongle-minimal-row dongle-state-${state.color} rounded-xl cursor-pointer w-full transition-all`;
                         if (id === selectedDongleId) card.classList.add('selected-row');
 
                         card.innerHTML = `
-                            <div class="flex items-center justify-center gap-2.5 min-w-0 md:flex-1 text-center">
-                                <div class="w-7 h-7 rounded-lg dongle-icon-box flex items-center justify-center shrink-0">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 18h6M9 6h.01M12 6h.01M15 6h.01"/></svg>
+                            <!-- Col 1: Dongle ID & Provider Badge -->
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="w-8 h-8 rounded-lg dongle-icon-box flex items-center justify-center shrink-0">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 18h6M9 6h.01M12 6h.01M15 6h.01"/></svg>
                                 </div>
                                 <div class="min-w-0">
                                     <h4 class="text-sm font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(id)}</h4>
+                                    <span class="text-[10px] text-[var(--text-muted)] font-bold truncate block">${escapeHtml(provider)}</span>
                                 </div>
                             </div>
 
-                            <div class="flex items-center justify-center gap-1.5 min-w-0 md:flex-1 text-center">
-                                <span class="text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-wider">IMEI:</span>
-                                <span class="font-mono text-xs text-[var(--text-primary)] font-semibold truncate max-w-[140px]" title="${escapeHtml(imei)}">${escapeHtml(imei)}</span>
-                                ${imei !== '-' && imei !== 'Unknown' ? `<button type="button" data-dongle-action="copy-imei" class="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ IMEI' : 'Copy IMEI'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
-                            </div>
-
-                            <div class="flex items-center justify-center gap-1.5 min-w-0 md:flex-1 text-center">
-                                <span class="text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-wider">${isRtl ? 'الشريحة:' : 'SIM:'}</span>
-                                <span id="display-num-${escapeHtml(id)}" class="font-mono text-xs text-[var(--text-primary)] font-bold truncate max-w-[130px]">${escapeHtml(phoneNumber)}</span>
+                            <!-- Col 2: Phone Number (SIM) -->
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-wider">${isRtl ? 'الرقم:' : 'SIM:'}</span>
+                                <span id="display-num-${escapeHtml(id)}" class="font-mono text-xs text-[var(--text-primary)] font-bold truncate">${escapeHtml(phoneNumber)}</span>
                                 ${phoneNumber !== 'Unknown' ? `<button type="button" data-dongle-action="copy-number" class="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ الرقم' : 'Copy number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
                             </div>
 
-                            <div class="flex items-center justify-center md:flex-1 text-center">
-                                <span class="dongle-status-pill inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider">
+                            <!-- Col 3: Hardware IMEI -->
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-wider">IMEI:</span>
+                                <span class="font-mono text-xs text-[var(--text-primary)] font-semibold truncate" title="${escapeHtml(imei)}">${escapeHtml(imei)}</span>
+                                ${imei !== '-' && imei !== 'Unknown' ? `<button type="button" data-dongle-action="copy-imei" class="p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ IMEI' : 'Copy IMEI'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
+                            </div>
+
+                            <!-- Col 4: State Status Pill -->
+                            <div class="flex items-center">
+                                <span class="dongle-status-pill inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider">
                                     <span class="dongle-status-dot h-1.5 w-1.5 rounded-full ${state.badge.dot}${state.animate ? ' animate-pulse' : ''} shrink-0"></span>
                                     ${escapeHtml(state.label)}
                                 </span>
                             </div>
 
-                            <div class="flex items-center justify-center gap-2 md:flex-1 text-center">
+                            <!-- Col 5: Signal Level Bars -->
+                            <div class="flex items-center gap-2">
                                 <span class="font-mono text-xs font-bold" style="color:${signal.activeColor}">${signal.percent}%</span>
                                 <div class="flex items-end gap-0.5 h-[16px]">${signal.barsHtml}</div>
                             </div>
 
-                            <div class="flex items-center justify-center gap-1.5 md:flex-1 text-center">
+                            <!-- Col 6: Actions Toolbar -->
+                            <div class="flex items-center justify-end gap-1.5 shrink-0">
                                 ${isRootUser ? `
-                                <button type="button" onclick="openAtDiagConsole('${escapeHtml(id)}')" class="dongle-action-button dongle-action-secondary cursor-pointer px-2 py-1.5 h-8 rounded-lg text-xs font-bold flex items-center gap-1 text-purple-400 hover:text-purple-300" title="${escapeHtml(words.atDiagTitle || 'AT Diagnostics')}">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                                <button type="button" onclick="openAtDiagConsole('${escapeHtml(id)}')" class="dongle-action-button dongle-action-secondary cursor-pointer px-2 py-1 h-7 rounded-lg text-xs font-bold flex items-center gap-1 text-purple-400 hover:text-purple-300" title="${escapeHtml(words.atDiagTitle || 'AT Diagnostics')}">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
                                     <span>AT >_</span>
                                 </button>` : ''}
-                                <button type="button" id="reloadBtn-${escapeHtml(id)}" data-dongle-action="reload" class="dongle-action-button dongle-action-primary cursor-pointer px-2.5 py-1.5 h-8 rounded-lg text-xs font-bold flex items-center gap-1.5" title="${escapeHtml(words.refreshBtn)}">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
+                                <button type="button" id="reloadBtn-${escapeHtml(id)}" data-dongle-action="reload" class="dongle-action-button dongle-action-primary cursor-pointer px-2.5 py-1 h-7 rounded-lg text-xs font-bold flex items-center gap-1.5" title="${escapeHtml(words.refreshBtn)}">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 11-2.64-6.36L21 8M21 3v5h-5"/></svg>
                                     <span>${escapeHtml(words.refreshBtn)}</span>
                                 </button>
                             </div>`;
