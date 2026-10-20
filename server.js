@@ -5998,7 +5998,7 @@ function buildTrunkFilterSql(trunkFilter, donglesList = [], trunksList = []) {
 
     if (trunkFilter === 'INTERNAL') {
         return {
-            clause: " AND (c.call_scope = 'INTERNAL' OR (c.channel NOT LIKE 'Dongle/%' AND c.dstchannel NOT LIKE 'Dongle/%' AND c.dcontext NOT LIKE 'ext-trunk%' AND c.lastdata NOT LIKE '%dialout-trunk%'))",
+            clause: " AND (" + CDR_CALL_SCOPE_CASE + " = 'INTERNAL' OR (c.channel NOT LIKE 'Dongle/%' AND c.dstchannel NOT LIKE 'Dongle/%' AND c.dcontext NOT LIKE 'ext-trunk%' AND c.lastdata NOT LIKE '%dialout-trunk%'))",
             params: []
         };
     }
