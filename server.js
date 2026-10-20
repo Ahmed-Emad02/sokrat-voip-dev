@@ -12302,61 +12302,14 @@ app.post('/api/gsm-dongles/delete-thread', requireAuth, requireActionPermission(
 
 
 // --- CONTACTS MANAGEMENT (SQLite address_book.db) ---
-const sqliteDbPath = '/var/www/db/address_book.db';
-
-function runSqlite(sql) {
-    return new Promise((resolve, reject) => {
-        const proc = spawn('sqlite3', [sqliteDbPath]);
-        let stdout = '';
-        let stderr = '';
-        proc.stdout.on('data', data => stdout += data);
-        proc.stderr.on('data', data => stderr += data);
-        proc.on('close', code => {
-            if (code === 0) resolve(stdout);
-            else reject(new Error(stderr || `sqlite3 exited with code ${code}`));
-        });
-        proc.stdin.write(sql);
-        proc.stdin.end();
-    });
-}
-
-function runSqliteQuery(sql) {
-    return new Promise((resolve, reject) => {
-        const proc = spawn('sqlite3', ['-separator', '~~~', sqliteDbPath]);
-        let stdout = '';
-        let stderr = '';
-        proc.stdout.on('data', data => stdout += data);
-        proc.stderr.on('data', data => stderr += data);
-        proc.on('close', code => {
-            if (code === 0) resolve(stdout);
-            else reject(new Error(stderr || `sqlite3 exited with code ${code}`));
-        });
-        proc.stdin.write(sql);
-        proc.stdin.end();
-    });
-}
-
-function parseSqliteRows(stdout) {
-    const lines = stdout.split('\n');
-    const rows = [];
-    for (let line of lines) {
-        if (!line.trim()) continue;
-        const parts = line.split('~~~');
-        if (parts.length >= 4) {
-            rows.push({
-                id: parts[0],
-                name: parts[1],
-                last_name: parts[2],
-                telefono: parts[3]
-            });
-        }
-    }
-    return rows;
-}
-
-function escapeSql(str) {
-    return String(str || '').replace(/'/g, "''").trim();
-}
+// All SQLite helpers are shared with the CRM integration API (lib/contacts.js)
+// so dashboard edits and extension edits operate on exactly the same store.
+const {
+    runSqlite,
+    runSqliteQuery,
+    parseSqliteRows,
+    escapeSql
+} = require('./lib/contacts');
 
 async function syncAllCampaignLeadsToAddressBook(dbConn) {
     try {
