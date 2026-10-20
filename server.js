@@ -32,6 +32,7 @@ try {
 } catch (_) {}
 
 const createCrmRouter = require('./routes/crm-integration');
+const createExtensionContactsRouter = require('./routes/extension-contacts');
 const registerCrmLiveSocket = require('./socket/crm-live');
 const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
 const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
@@ -1980,7 +1981,7 @@ app.use((req, res, next) => {
         '/favicon.ico', '/favicon.png', '/robots.txt', '/embed/crm/live',
         '/401', '/403', '/404', '/api/telephony/camp-on/dialplan-trigger'
     ];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/federation/v1/')) {
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/extension/v1/') || req.path.startsWith('/api/federation/v1/')) {
         return next();
     }
     requireAuth(req, res, next);
@@ -2172,6 +2173,9 @@ app.use('/api/integrations/crm/v1', createCrmRouter(pool, {
     getAmiClient: () => amiClient,
     notifyCrmLive: () => notifyCrmLiveBroadcaster()
 }));
+
+// Mount the Chrome extension's direct address-book API (no CRM required)
+app.use('/api/extension/v1', createExtensionContactsRouter(pool));
 
 // Register /crm-live Socket.io namespace
 
@@ -12302,61 +12306,14 @@ app.post('/api/gsm-dongles/delete-thread', requireAuth, requireActionPermission(
 
 
 // --- CONTACTS MANAGEMENT (SQLite address_book.db) ---
-const sqliteDbPath = '/var/www/db/address_book.db';
-
-function runSqlite(sql) {
-    return new Promise((resolve, reject) => {
-        const proc = spawn('sqlite3', [sqliteDbPath]);
-        let stdout = '';
-        let stderr = '';
-        proc.stdout.on('data', data => stdout += data);
-        proc.stderr.on('data', data => stderr += data);
-        proc.on('close', code => {
-            if (code === 0) resolve(stdout);
-            else reject(new Error(stderr || `sqlite3 exited with code ${code}`));
-        });
-        proc.stdin.write(sql);
-        proc.stdin.end();
-    });
-}
-
-function runSqliteQuery(sql) {
-    return new Promise((resolve, reject) => {
-        const proc = spawn('sqlite3', ['-separator', '~~~', sqliteDbPath]);
-        let stdout = '';
-        let stderr = '';
-        proc.stdout.on('data', data => stdout += data);
-        proc.stderr.on('data', data => stderr += data);
-        proc.on('close', code => {
-            if (code === 0) resolve(stdout);
-            else reject(new Error(stderr || `sqlite3 exited with code ${code}`));
-        });
-        proc.stdin.write(sql);
-        proc.stdin.end();
-    });
-}
-
-function parseSqliteRows(stdout) {
-    const lines = stdout.split('\n');
-    const rows = [];
-    for (let line of lines) {
-        if (!line.trim()) continue;
-        const parts = line.split('~~~');
-        if (parts.length >= 4) {
-            rows.push({
-                id: parts[0],
-                name: parts[1],
-                last_name: parts[2],
-                telefono: parts[3]
-            });
-        }
-    }
-    return rows;
-}
-
-function escapeSql(str) {
-    return String(str || '').replace(/'/g, "''").trim();
-}
+// All SQLite helpers are shared with the CRM integration API (lib/contacts.js)
+// so dashboard edits and extension edits operate on exactly the same store.
+const {
+    runSqlite,
+    runSqliteQuery,
+    parseSqliteRows,
+    escapeSql
+} = require('./lib/contacts');
 
 async function syncAllCampaignLeadsToAddressBook(dbConn) {
     try {

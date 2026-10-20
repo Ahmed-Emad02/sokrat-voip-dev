@@ -23,6 +23,7 @@ const {
 } = require('../lib/integration-auth');
 const { getCustomerCallHistory, getExtensionStats } = require('../lib/cdr-aggregation');
 const { createMediaId, resolveRecordingPath, streamRecordingFile } = require('../lib/recordings');
+const contactsStore = require('../lib/contacts');
 const { getPhoneVariants, cleanPhoneString } = require('../lib/phone-normalization');
 
 // Rate limiting map for pairing attempts (IP -> timestamps array)
@@ -811,6 +812,76 @@ function getDetectedNetworkInterfaces() {
         } catch (err) {
             console.error('CRM Extensions fetch error:', err.message);
             res.status(500).json({ success: false, error: 'Failed to retrieve extensions' });
+        }
+    });
+
+    // 5. ADDRESS BOOK / CONTACTS API
+    //
+    // Contacts live in the shared SQLite address book (the same table used by
+    // the dashboard and the inbound caller-ID dialplan). Reads and writes reuse
+    // the `extensions:read` scope on purpose: installations paired before the
+    // address book existed must not be forced to re-pair to use contacts.
+    router.get('/contacts', requireCrmScope('extensions:read'), async (req, res) => {
+        try {
+            const contacts = await contactsStore.listContacts({
+                search: req.query.search || req.query.q || '',
+                limit: req.query.limit || req.query.per_page || 1000
+            });
+
+            res.json({
+                success: true,
+                contacts,
+                generated_at: new Date().toISOString()
+            });
+        } catch (err) {
+            console.error('CRM Contacts fetch error:', err.message);
+            res.status(500).json({ success: false, error: 'Failed to retrieve contacts' });
+        }
+    });
+
+    router.post('/contacts', requireCrmScope('extensions:read'), async (req, res) => {
+        try {
+            const contact = await contactsStore.createContact(req.body || {});
+            res.status(201).json({ success: true, contact });
+        } catch (err) {
+            const status = Number(err.statusCode) || 500;
+            if (status >= 500) console.error('CRM Contact create error:', err.message);
+            res.status(status).json({
+                success: false,
+                error: err.message,
+                code: err.code || 'contact_error',
+                contact: err.contact || undefined
+            });
+        }
+    });
+
+    router.put('/contacts/:id', requireCrmScope('extensions:read'), async (req, res) => {
+        try {
+            const contact = await contactsStore.updateContact(req.params.id, req.body || {});
+            res.json({ success: true, contact });
+        } catch (err) {
+            const status = Number(err.statusCode) || 500;
+            if (status >= 500) console.error('CRM Contact update error:', err.message);
+            res.status(status).json({
+                success: false,
+                error: err.message,
+                code: err.code || 'contact_error'
+            });
+        }
+    });
+
+    router.delete('/contacts/:id', requireCrmScope('extensions:read'), async (req, res) => {
+        try {
+            const contact = await contactsStore.deleteContact(req.params.id);
+            res.json({ success: true, deleted_id: contact.id, contact });
+        } catch (err) {
+            const status = Number(err.statusCode) || 500;
+            if (status >= 500) console.error('CRM Contact delete error:', err.message);
+            res.status(status).json({
+                success: false,
+                error: err.message,
+                code: err.code || 'contact_error'
+            });
         }
     });
 
