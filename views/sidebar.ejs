@@ -2736,77 +2736,38 @@ function can(tab) {
     }
 
     function toggleTheme(e) {
-        const isLight = document.body.classList.toggle('light-theme');
-        document.documentElement.classList.toggle('light-theme', isLight);
-        const newTheme = isLight ? 'light' : 'dark';
-        try {
-            localStorage.setItem('theme', newTheme);
-            document.cookie = 'theme=' + newTheme + ';path=/;max-age=31536000;SameSite=Lax';
-            fetch('/api/user/theme-lang', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ theme: newTheme })
-            }).catch(() => {});
-        } catch (_) {}
-        updateThemeUI(isLight);
+        // Smooth View Transition API if supported by modern browser, otherwise clean fast toggle
+        const performSwitch = () => {
+            const isLight = document.body.classList.toggle('light-theme');
+            document.documentElement.classList.toggle('light-theme', isLight);
+            const newTheme = isLight ? 'light' : 'dark';
+            try {
+                localStorage.setItem('theme', newTheme);
+                document.cookie = 'theme=' + newTheme + ';path=/;max-age=31536000;SameSite=Lax';
+                fetch('/api/user/theme-lang', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme: newTheme })
+                }).catch(() => {});
+            } catch (_) {}
+            updateThemeUI(isLight);
 
-        // Anime.js ripple & spring animation on theme toggle
-        if (typeof anime !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            const thumbs = document.querySelectorAll('.settings-switch-thumb');
-            if (thumbs.length > 0) {
-                anime({
-                    targets: thumbs,
-                    translateX: isLight ? 0 : 20,
-                    scale: [0.85, 1.1, 1],
-                    rotate: isLight ? [0, 180] : [180, 0],
-                    duration: 320,
-                    easing: 'easeOutElastic(1, .7)',
-                    complete: () => {
-                        thumbs.forEach(thumb => {
-                            thumb.style.transform = isLight ? 'translateX(0px)' : 'translateX(20px)';
-                            thumb.style.setProperty('background-color', '#ffffff', 'important');
-                            thumb.style.setProperty('box-shadow', '0 2px 4px rgba(0,0,0,0.35)', 'important');
-                        });
-                    }
-                });
+            if (window.pieChart) {
+                location.reload();
             }
-
-            const ripple = document.createElement('div');
-            ripple.className = 'fixed rounded-full pointer-events-none z-[999998]';
-            const btn = document.getElementById('themeToggleBtn') || document.body;
-            const rect = btn.getBoundingClientRect();
-            const radius = Math.hypot(Math.max(rect.left, window.innerWidth - rect.left), Math.max(rect.top, window.innerHeight - rect.top));
-
-            ripple.style.left = (rect.left + rect.width / 2 - radius) + 'px';
-            ripple.style.top = (rect.top + rect.height / 2 - radius) + 'px';
-            ripple.style.width = (radius * 2) + 'px';
-            ripple.style.height = (radius * 2) + 'px';
-            ripple.style.backgroundColor = isLight ? 'rgba(249, 250, 251, 0.85)' : 'rgba(5, 5, 7, 0.85)';
-            ripple.style.backdropFilter = 'blur(12px)';
-            ripple.style.transform = 'scale(0)';
-            document.body.appendChild(ripple);
-
-            anime({
-                targets: ripple,
-                scale: [0, 1],
-                opacity: [0.8, 0],
-                duration: 450,
-                easing: 'easeOutQuint',
-                complete: function() {
-                    if (ripple && ripple.parentNode) ripple.parentNode.removeChild(ripple);
+            if (window.location.pathname === '/ext-stats') {
+                if (window.currentExtension) {
+                    window.loadStats(window.currentExtension);
+                } else {
+                    window.loadOverview();
                 }
-            });
-        }
-
-        if (window.pieChart) {
-            location.reload();
-        }
-        if (window.location.pathname === '/ext-stats') {
-            if (window.currentExtension) {
-                window.loadStats(window.currentExtension);
-            } else {
-                window.loadOverview();
             }
+        };
+
+        if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            document.startViewTransition(() => performSwitch());
+        } else {
+            performSwitch();
         }
     }
 
