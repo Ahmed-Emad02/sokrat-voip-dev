@@ -724,6 +724,19 @@ PYEOF
         sed -i '/\[from-internal-custom\]/a include => sokrat-call-codes-custom' /etc/asterisk/extensions_custom.conf
     fi
 
+    # Hand Issabel's own feature codes back to Issabel. The Sokrat directed-pickup
+    # patterns (_*X., _*1X., _*8X.) match every *<code>, and Asterisk drops a
+    # literal extension that arrives through an include once the context already
+    # holds a matching pattern - so Issabel's codes (*97 my voicemail, *72 call
+    # forward, *78 DND, ...) were swallowed by the pickup rule. Each code is
+    # declared as a LITERAL inside [from-internal-custom] instead, and a literal
+    # always wins over a pattern in the same context.
+    if [ -f "$INSTALL_DIR/lib/feature-code-hand-off.js" ]; then
+        (cd "$INSTALL_DIR" && node lib/feature-code-hand-off.js) || echo "  Warning: feature-code hand-off sync failed"
+    else
+        echo "  Warning: missing $INSTALL_DIR/lib/feature-code-hand-off.js; feature codes may be shadowed"
+    fi
+
     asterisk -rx "dialplan reload" >/dev/null 2>&1 || true
 fi
 

@@ -68,6 +68,7 @@ const {
 } = require('./lib/federation-bootstrap');
 const FederationHub = require('./lib/federation-hub');
 let federationHub = null;
+const { syncFeatureCodeHandOff } = require('./lib/feature-code-hand-off');
 const {
     DEFAULT_CALL_CODES,
     initSokratCallCodes,
@@ -1159,6 +1160,17 @@ async function initAuthDb() {
         await syncExtensionCallPickupGroups();
     } catch (cgErr) {
         console.error('Callgroup boot sync error:', cgErr.message);
+    }
+    // Hand Issabel's own feature codes (*97 voicemail, *72 call forward, ...)
+    // back to Issabel: the Sokrat directed-pickup patterns would otherwise
+    // swallow them because Asterisk drops literals that arrive via an include
+    // once the context already holds a matching pattern.
+    try {
+        const fcSync = await syncFeatureCodeHandOff(pool);
+        console.log(`Feature-code hand-off sync: ${fcSync.codes.length} Issabel codes, ` +
+            `${fcSync.changed ? 'dialplan updated' : 'dialplan already up to date'}`);
+    } catch (fcErr) {
+        console.error('Feature-code hand-off boot sync error:', fcErr.message);
     }
     try {
         await loadClientNameFromDb();

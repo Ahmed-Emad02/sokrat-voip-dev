@@ -2068,6 +2068,20 @@ if ! grep -qF '#include sokrat_federation_iax.conf' /etc/asterisk/iax_custom.con
     echo '#include sokrat_federation_iax.conf' >> /etc/asterisk/iax_custom.conf
 fi
 
+# 9a-codes-2 — Hand Issabel's own feature codes back to Issabel.
+# The Sokrat directed-pickup feature codes (_*X., _*1X., _*8X.) match every
+# *<code>; Asterisk drops a literal extension that arrives through an include
+# once the context already holds a matching pattern, so Issabel's codes (*97
+# my voicemail, *72 call forward, *78 DND, ...) were swallowed by the pickup
+# rule. Each code is declared as a LITERAL inside [from-internal-custom] - a
+# literal always wins over a pattern in the same context.
+echo "  Handing Issabel feature codes back to Issabel..."
+if [ -f "$INSTALL_DIR/lib/feature-code-hand-off.js" ]; then
+    (cd "$INSTALL_DIR" && node lib/feature-code-hand-off.js) || echo "  WARNING: feature-code hand-off sync failed"
+else
+    echo "  WARNING: $INSTALL_DIR/lib/feature-code-hand-off.js not found; feature codes may be shadowed"
+fi
+
 asterisk -rx "iax2 reload" 2>/dev/null || true
 
 asterisk -rx "dialplan reload" 2>/dev/null || true
