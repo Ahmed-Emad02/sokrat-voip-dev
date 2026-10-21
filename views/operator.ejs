@@ -309,9 +309,9 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
         }
         #switchboardGrid .panel-surface.state-idle .employee-ip-badge,
         .light-theme #switchboardGrid .panel-surface.state-idle .employee-ip-badge {
-            background-color: rgba(0, 0, 0, 0.14) !important;
-            border-color: rgba(0, 0, 0, 0.22) !important;
-            color: #111827 !important;
+            background-color: rgba(0, 0, 0, 0.28) !important;
+            border-color: rgba(255, 255, 255, 0.22) !important;
+            color: #ffffff !important;
         }
         #switchboardGrid .panel-surface.state-ringing .employee-ip-badge,
         .light-theme #switchboardGrid .panel-surface.state-ringing .employee-ip-badge {
@@ -347,11 +347,16 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
         }
 
         /* === STATE 2: ONLINE / IDLE (ORANGE) === */
-        #switchboardGrid .panel-surface.state-idle,
+        #switchboardGrid .panel-surface.state-idle {
+            /* the same deep Sokrat crimson the panel's primary buttons render */
+            background-color: #991b1b !important;
+            border-color: rgba(239, 68, 68, 0.4) !important;
+            color: #ffffff !important;
+        }
         .light-theme #switchboardGrid .panel-surface.state-idle {
-            background-color: #f59e0b !important;
-            border-color: rgba(255, 255, 255, 0.25) !important;
-            color: #111827 !important;
+            background-color: #7f1d1d !important;
+            border-color: rgba(239, 68, 68, 0.45) !important;
+            color: #ffffff !important;
         }
         #switchboardGrid .panel-surface.state-idle:hover,
         .light-theme #switchboardGrid .panel-surface.state-idle:hover {
@@ -361,18 +366,18 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
         #switchboardGrid .panel-surface.state-idle .text-base.font-bold,
         .light-theme #switchboardGrid .panel-surface.state-idle .text-white,
         .light-theme #switchboardGrid .panel-surface.state-idle .text-base.font-bold {
-            color: #111827 !important;
+            color: #ffffff !important;
         }
         #switchboardGrid .panel-surface.state-idle .extension-number {
-            color: #7f1d1d !important;
+            color: #fee2e2 !important;
         }
         #switchboardGrid .panel-surface.state-idle .employee-title {
-            color: #3f2d00 !important;
+            color: rgba(255, 255, 255, 0.75) !important;
         }
         #switchboardGrid .panel-surface.state-idle .employee-group-chip {
-            border-color: rgba(17, 24, 39, 0.18) !important;
-            background: rgba(17, 24, 39, 0.10) !important;
-            color: #111827 !important;
+            border-color: rgba(255, 255, 255, 0.30) !important;
+            background: rgba(255, 255, 255, 0.16) !important;
+            color: #ffffff !important;
         }
         #switchboardGrid .panel-surface.state-idle [id^="sipBadge-"],
         #switchboardGrid .panel-surface.state-idle [id^="badge-"] {
@@ -380,17 +385,17 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
         }
         #switchboardGrid .panel-surface.state-idle [id^="sipLabel-"],
         #switchboardGrid .panel-surface.state-idle [id^="status-"] {
-            color: #052e16 !important;
+            color: #ffffff !important;
             font-weight: 800 !important;
         }
         #switchboardGrid .panel-surface.state-idle .border-t {
-            border-color: rgba(17, 24, 39, 0.15) !important;
+            border-color: rgba(255, 255, 255, 0.25) !important;
         }
         #switchboardGrid .panel-surface.state-idle .action-select,
         .light-theme #switchboardGrid .panel-surface.state-idle .action-select {
-            background-color: rgba(0, 0, 0, 0.12) !important;
-            border-color: rgba(0, 0, 0, 0.18) !important;
-            color: #111827 !important;
+            background-color: rgba(0, 0, 0, 0.28) !important;
+            border-color: rgba(255, 255, 255, 0.28) !important;
+            color: #ffffff !important;
         }
 
         /* === STATE 3: RINGING (PURPLE) === */
@@ -783,6 +788,24 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
 </style>
 <style>
     /* Agent status button: EXACT sizing and structure of employee-ip-badge */
+    /* The label must take the badge's own colour (white on the tinted
+       status chips) - a global rule was forcing it back to black. */
+    .agent-status-badge-btn .agent-status-label,
+    .agent-status-badge-btn [id^="agentStatusTimer-"] {
+        color: inherit !important;
+    }
+    /* The IP is plain text now: keep it flush left so a long address
+       ellipsises at the end instead of being clipped on both sides. */
+    #switchboardGrid [id^="ipText-"] {
+        justify-content: flex-start !important;
+    }
+    /* The light theme forces black text on every button; the status chips
+       sit on a coloured card, so they keep the white label. */
+    html.light-theme #switchboardGrid .agent-status-badge-btn,
+    html.light-theme #switchboardGrid .agent-status-badge-btn .agent-status-label,
+    html.light-theme #switchboardGrid .agent-status-badge-btn [id^="agentStatusTimer-"] {
+        color: #ffffff !important;
+    }
     .agent-status-badge-btn {
         font-size: 0.625rem !important;
         line-height: 0.875rem !important;
@@ -796,78 +819,78 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
     #switchboardGrid .panel-surface.state-offline .agent-status-badge-btn {
         background-color: rgba(39, 39, 42, 0.6) !important;
         border-color: rgba(63, 63, 70, 0.4) !important;
-        color: #94a3b8 !important;
+        color: #ffffff !important;
     }
     .light-theme #switchboardGrid .panel-surface.state-offline .agent-status-badge-btn {
         background-color: #f4f4f5 !important;
         border-color: #e4e4e7 !important;
-        color: #64748b !important;
+        color: #ffffff !important;
     }
     #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-available {
         background-color: rgba(16, 185, 129, 0.18) !important;
-        color: #10b981 !important;
+        color: #ffffff !important;
         border-color: rgba(16, 185, 129, 0.4) !important;
     }
     .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-available {
         background-color: rgba(16, 185, 129, 0.15) !important;
-        color: #065f46 !important;
+        color: #ffffff !important;
         border-color: rgba(16, 185, 129, 0.45) !important;
     }
     #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-break {
         background-color: rgba(245, 158, 11, 0.18) !important;
-        color: #f59e0b !important;
+        color: #ffffff !important;
         border-color: rgba(245, 158, 11, 0.4) !important;
     }
     .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-break {
         background-color: rgba(245, 158, 11, 0.15) !important;
-        color: #92400e !important;
+        color: #ffffff !important;
         border-color: rgba(245, 158, 11, 0.45) !important;
     }
     #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-lunch {
         background-color: rgba(14, 165, 233, 0.18) !important;
-        color: #0ea5e9 !important;
+        color: #ffffff !important;
         border-color: rgba(14, 165, 233, 0.4) !important;
     }
     .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-lunch {
         background-color: rgba(14, 165, 233, 0.15) !important;
-        color: #0369a1 !important;
+        color: #ffffff !important;
         border-color: rgba(14, 165, 233, 0.45) !important;
     }
     #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-meeting {
         background-color: rgba(168, 85, 247, 0.18) !important;
-        color: #a855f7 !important;
+        color: #ffffff !important;
         border-color: rgba(168, 85, 247, 0.4) !important;
     }
     .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-meeting {
         background-color: rgba(168, 85, 247, 0.15) !important;
-        color: #6b21a8 !important;
+        color: #ffffff !important;
         border-color: rgba(168, 85, 247, 0.45) !important;
     }
     #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-training {
         background-color: rgba(59, 130, 246, 0.18) !important;
-        color: #3b82f6 !important;
+        color: #ffffff !important;
         border-color: rgba(59, 130, 246, 0.4) !important;
     }
     .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-training {
         background-color: rgba(59, 130, 246, 0.15) !important;
-        color: #1d4ed8 !important;
+        color: #ffffff !important;
         border-color: rgba(59, 130, 246, 0.45) !important;
     }
     #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-offline {
         background-color: rgba(148, 163, 184, 0.18) !important;
-        color: #94a3b8 !important;
+        color: #ffffff !important;
         border-color: rgba(148, 163, 184, 0.35) !important;
     }
     .light-theme #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-offline {
         background-color: rgba(148, 163, 184, 0.18) !important;
-        color: #475569 !important;
+        color: #ffffff !important;
         border-color: rgba(148, 163, 184, 0.35) !important;
     }
     #switchboardGrid .panel-surface.state-idle .agent-status-badge-btn,
     .light-theme #switchboardGrid .panel-surface.state-idle .agent-status-badge-btn {
-        background-color: rgba(0, 0, 0, 0.14) !important;
-        border-color: rgba(0, 0, 0, 0.22) !important;
-        color: #111827 !important;
+        background-color: rgba(0, 0, 0, 0.32) !important;
+        border-color: rgba(255, 255, 255, 0.22) !important;
+        color: #ffffff !important;
     }
     html.light-theme [id^="statusDropdown-"] {
         background-color: rgba(255, 255, 255, 0.98) !important;
@@ -1139,21 +1162,24 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                         </div>
                                     </div>
                                     <% } %>
-                                    <span id="ipText-<%= emp.cardId %>" class="employee-ip-badge font-mono font-bold px-1.5 py-0.5 rounded truncate max-w-[125px] select-all <%= emp.ip ? '' : 'hidden' %>" title="<%= emp.ip || '' %>"><%= emp.ip || '' %></span>
                                 </div>
+                            </div>
+
+                            <div class="mt-2 flex items-center gap-3 min-w-0">
+                                <span id="ipText-<%= emp.cardId %>" class="employee-ip-badge font-mono font-bold text-[11px] px-1.5 py-0.5 rounded truncate max-w-[150px] select-all <%= emp.ip ? '' : 'hidden' %>" title="<%= emp.ip || '' %>"><%= emp.ip || '' %></span>
+                                <span id="partner-<%= emp.cardId %>" title="<%= partnerNum %>" class="text-xs font-mono font-bold truncate max-w-[9rem] <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
+                                    <%= partnerNum %>
+                                </span>
                             </div>
 
                             <div class="border-t border-zinc-900/50 pt-2 mt-3">
                                 <div class="flex items-center justify-end gap-2 min-w-0">
-                                    <span id="partner-<%= emp.cardId %>" title="<%= partnerNum %>" class="text-xs font-mono font-bold truncate max-w-[9rem] mr-auto <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
-                                        <%= partnerNum %>
-                                    </span>
-                                    <div class="flex items-center gap-1.5 min-w-0 shrink-0">
-                                        <span id="badge-<%= emp.cardId %>" class="h-2 w-2 rounded-full shrink-0 bg-transparent transition-all duration-300"></span>
-                                        <span id="status-<%= emp.cardId %>" class="text-xs font-bold uppercase tracking-wide text-zinc-400 truncate transition-all duration-300">
+                                    <div class="flex items-center gap-2 min-w-0 shrink-0 justify-end">
+                                        <span id="badge-<%= emp.cardId %>" class="h-2.5 w-2.5 rounded-full shrink-0 bg-transparent transition-all duration-300"></span>
+                                        <span id="status-<%= emp.cardId %>" class="text-sm font-extrabold uppercase tracking-wide text-zinc-400 truncate transition-all duration-300">
                                             <%= callState === 'incall' ? t.incall : callState === 'ringing' ? t.ringing : t.noCall %>
                                         </span>
-                                        <span id="timer-<%= emp.cardId %>" class="text-xs font-mono font-bold text-[var(--accent-color)] tracking-wider <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
+                                        <span id="timer-<%= emp.cardId %>" class="text-sm font-mono font-extrabold text-[var(--accent-color)] tracking-wider <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
                                     </div>
                                 </div>
                                 <% if (hasAnyCallAction) { %>
@@ -1320,18 +1346,25 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
 
             function formatDuration(startMs) {
                 if (!startMs) return "00:00";
-                const s = Math.floor((Date.now() - startMs) / 1000);
-                if (s < 0) return "00:00";
-                return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+                const total = Math.floor((Date.now() - startMs) / 1000);
+                if (total < 0) return "00:00";
+                const h = Math.floor(total / 3600);
+                const m = Math.floor((total % 3600) / 60);
+                const s = total % 60;
+                const mm = String(m).padStart(2, '0');
+                const ss = String(s).padStart(2, '0');
+                // a call can easily run past an hour - show H:MM:SS then
+                return h > 0 ? h + ':' + mm + ':' + ss : mm + ':' + ss;
             }
 
             setInterval(() => {
-                document.querySelectorAll('[data-start]').forEach(card => {
+                // only the extension cards carry a call start time
+                document.querySelectorAll('#switchboardGrid article[data-start]').forEach(card => {
                     const start = card.getAttribute('data-start');
                     if (start) {
                         const ext = card.id.replace('card-', '');
                         const el = document.getElementById('timer-' + ext);
-                        if (el) el.textContent = formatDuration(parseInt(start));
+                        if (el) el.textContent = formatDuration(parseInt(start, 10));
                     }
                 });
             }, 1000);
@@ -1611,6 +1644,15 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                     partner.classList.remove('hidden');
 
                     if (callData.state === 'In Call') {
+                        // The server owns the call start time - it derives it
+                        // from the live Asterisk channel duration, so it stays
+                        // correct across reconnects, device-status flaps and
+                        // new legs on the same call. Using the browser clock
+                        // here restarted the timer mid-call.
+                        const serverStart = parseInt(callData.start, 10);
+                        if (serverStart) {
+                            card.setAttribute('data-start', String(serverStart));
+                        }
                         if (!card.getAttribute('data-start')) {
                             card.setAttribute('data-start', Date.now());
                         }
