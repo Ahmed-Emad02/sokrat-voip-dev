@@ -5,6 +5,26 @@ const path = require('node:path');
 const { execSync } = require('node:child_process');
 
 const rootDir = path.join(__dirname, '..');
+const ASTERISK_LOG = '/var/log/asterisk/full';
+
+// Byte offset of the current end of the Asterisk log. Reading only what was
+// written after this point makes the live check deterministic: a fixed
+// `tail -n 35` window loses the modem's answer as soon as the server is busy.
+function logOffset() {
+    try {
+        return parseInt(execSync(`wc -c < ${ASTERISK_LOG}`, { encoding: 'utf8' }).trim(), 10) || 0;
+    } catch {
+        return 0;
+    }
+}
+
+function readLogSince(offset) {
+    try {
+        return execSync(`tail -c +${offset + 1} ${ASTERISK_LOG}`, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+    } catch {
+        return '';
+    }
+}
 
 test('Inbound Call Ring Detection: chan_dongle patch resets AT+CRC=0 and recognizes +CRING: as RES_RING', () => {
     const patchPath = path.join(rootDir, 'asterisk', 'chan_dongle.patch');
@@ -58,18 +78,20 @@ test('Live Hardware Verification: Connected modems have AT+CRC=0 enforced and re
 
     // Verify dongle0 CRC setting if online
     if (hasDongle0) {
+        const before = logOffset();
         execSync('asterisk -rx "dongle cmd dongle0 AT+CRC?"', { stdio: ['pipe', 'pipe', 'ignore'] });
         // Give modem 1 second to respond to AT query
         execSync('sleep 1');
-        const logTail = execSync('tail -n 35 /var/log/asterisk/full', { encoding: 'utf8' });
+        const logTail = readLogSince(before);
         assert.ok(logTail.includes('+CRC: 0'), 'dongle0 must report +CRC: 0 (Cellular Result Codes disabled, standard RING enabled)');
     }
 
     // Verify dongle1 CRC setting if online
     if (hasDongle1) {
+        const before = logOffset();
         execSync('asterisk -rx "dongle cmd dongle1 AT+CRC?"', { stdio: ['pipe', 'pipe', 'ignore'] });
         execSync('sleep 1');
-        const logTail = execSync('tail -n 35 /var/log/asterisk/full', { encoding: 'utf8' });
+        const logTail = readLogSince(before);
         assert.ok(logTail.includes('+CRC: 0'), 'dongle1 must report +CRC: 0 (Cellular Result Codes disabled, standard RING enabled)');
     }
 });

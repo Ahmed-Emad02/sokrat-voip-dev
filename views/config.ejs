@@ -168,6 +168,45 @@ function isTabAllowed(tabName) {
             --text-secondary: #334155;
             --text-muted: #64748b;
         }
+        /* --- Config top pills: smooth horizontal scrolling -----------------
+           The pill bar scrolls horizontally; keep the last pill reachable and
+           the scrolling smooth. */
+        #configTopPillsScroll > *:last-child {
+            margin-inline-end: 0.75rem;
+        }
+        /* --- Audio player controls -----------------------------------------
+           The Tailwind arbitrary-value utilities (bg-[var(--accent-color)])
+           are not generated on this page, and the global sidebar stylesheet
+           forces every button[data-player-playpause] / [data-player-mute] to
+           be borderless and transparent - a white icon then sits on an
+           invisible button. These rules are attribute-qualified so they win
+           over that global rule. */
+        body button[data-player-playpause].audio-play-btn {
+            background-color: var(--accent-color) !important;
+            color: #ffffff !important;
+            border: 0 !important;
+        }
+        body button[data-player-playpause].audio-play-btn:hover {
+            background-color: var(--accent-hover) !important;
+        }
+        body button[data-player-playpause].audio-play-btn * {
+            color: #ffffff !important;
+            fill: #ffffff !important;
+            stroke: #ffffff !important;
+        }
+        body button[data-player-mute].audio-icon-btn {
+            background-color: var(--bg-card) !important;
+            color: var(--text-secondary) !important;
+            border: 1px solid var(--border-primary) !important;
+        }
+        body button[data-player-mute].audio-icon-btn:hover {
+            background-color: var(--bg-hover) !important;
+            color: #ffffff !important;
+        }
+        body button[data-player-mute].audio-icon-btn * {
+            color: inherit !important;
+            stroke: currentColor !important;
+        }
         body {
             background-color: var(--bg-primary);
             color: var(--text-primary);
@@ -462,13 +501,25 @@ function isTabAllowed(tabName) {
         #configTopPillsScroll {
             scrollbar-width: none !important;
             -ms-overflow-style: none !important;
-            scroll-behavior: auto !important;   /* JS drives the smooth scroll */
+            scroll-behavior: smooth !important;   /* smooth wheel / drag / programmatic scrolling */
+            -webkit-overflow-scrolling: touch;
             scroll-padding-inline: 1rem;
+            cursor: grab;
             overscroll-behavior-x: contain;
             touch-action: pan-x;
         }
         #configTopPillsScroll::-webkit-scrollbar {
             display: none !important;
+        }
+        #configTopPillsScroll.is-dragging {
+            cursor: grabbing;
+            user-select: none;
+        }
+        /* While we drive the scroll ourselves the CSS smooth scrolling must be
+           switched off - an !important declaration beats an inline style, so it
+           cannot be done from JavaScript. */
+        #configTopPillsScroll.is-gliding {
+            scroll-behavior: auto !important;
         }
         /* Edge fades that appear only when there is content to scroll to,
            giving the hidden scrollbar a visual affordance. */
@@ -1026,7 +1077,7 @@ function isTabAllowed(tabName) {
         <div id="configTopPillBar" class="w-full mb-6 shrink-0 <%= isRtl ? 'rtl' : 'ltr' %>">
             <div class="panel-surface rounded-2xl p-2.5 border border-[var(--border-primary)] flex items-center justify-between gap-3 bg-[var(--bg-secondary)] shadow-sm">
                 <!-- Left: Scrollable Pill Navigation Strip -->
-                <div id="configTopPillsScroll" class="flex-1 min-w-0 overflow-x-auto no-scrollbar flex items-center gap-1.5 py-0.5 px-1" role="tablist" aria-label="Configuration sections" tabindex="0">
+                <div id="configTopPillsScroll" class="flex-1 min-w-0 overflow-x-auto no-scrollbar scroll-smooth flex items-center gap-1.5 py-0.5 px-1" role="tablist" aria-label="Configuration sections" tabindex="0">
                     <% if (isTabAllowed('extensions')) { %>
                     <button type="button" onclick="switchTab('extensions')" data-tab-target="extensions" title="<%= isRtl ? 'التحويلات' : 'Extensions' %>" class="config-top-pill config-tab-btn config-tab-btn-extensions config-tab-active">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -4572,12 +4623,27 @@ function isTabAllowed(tabName) {
                     <input type="text" id="annDescription" required placeholder="e.g. Welcome Announcement" class="config-input w-full text-xs">
                 </div>
 
-                <!-- 2. System Recording -->
+                <!-- 2. System Recording (with the audio studio) -->
                 <div>
                     <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="annRecording"><%= isRtl ? 'التسجيل الصوتي' : 'System Recording' %></label>
                     <select id="annRecording" onchange="onAnnRecordingChange()" class="config-input w-full text-xs font-semibold">
                         <option value="0">== <%= isRtl ? 'بدون تسجيل (استخدام تحويل النص إلى كلام)' : 'None (Use Text-To-Speech TTS)' %> ==</option>
                     </select>
+                    <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+                        <button type="button" id="annStudioBtn" onclick="openAnnouncementStudio()" class="px-2 py-1 text-[10px] font-bold rounded-lg border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" title="<%= isRtl ? 'فتح الاستوديو لمعالجة صوت هذا التسجيل' : 'Open the audio studio to process this recording' %>">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l10-3v13M9 19a3 3 0 11-6 0 3 3 0 016 0zm10-3a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            <span><%= isRtl ? 'الاستوديو' : 'Studio' %></span>
+                        </button>
+                        <button type="button" id="annPreviewBtn" onclick="previewAnnouncementRecording()" class="px-2 py-1 text-[10px] font-bold rounded-lg border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" title="<%= isRtl ? 'استماع للتسجيل' : 'Preview the recording' %>">
+                            <svg class="w-3.5 h-3.5" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            <span><%= isRtl ? 'استماع' : 'Preview' %></span>
+                        </button>
+                        <button type="button" id="annUploadBtn" onclick="openRecordingUploadModal()" class="px-2 py-1 text-[10px] font-bold rounded-lg border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent-color)] transition cursor-pointer flex items-center gap-1" title="<%= isRtl ? 'رفع تسجيل صوتي جديد واستخدامه' : 'Upload a new recording and use it' %>">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2"/></svg>
+                            <span><%= isRtl ? 'رفع تسجيل' : 'Upload' %></span>
+                        </button>
+                    </div>
+                    <p id="annRecordingState" class="text-[10px] text-[var(--text-muted)] mt-1.5"></p>
                 </div>
 
                 <!-- 3. Repeat Message Key -->
@@ -4647,6 +4713,54 @@ function isTabAllowed(tabName) {
                 <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-primary)] shrink-0">
                     <button type="button" onclick="closeModal('announcementModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
                     <button type="submit" class="config-btn-primary px-5 py-2 text-xs"><%= isRtl ? 'حفظ الإعلان' : 'Save Announcement' %></button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- SHARED SYSTEM RECORDING UPLOAD MODAL (used by Announcements) -->
+    <div id="recordingUploadModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[99999] flex items-center justify-center hidden p-4 sm:p-6">
+        <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-primary)] max-w-lg w-full flex flex-col text-[var(--text-primary)] shadow-2xl">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 shrink-0">
+                <div class="min-w-0">
+                    <h3 class="text-base font-extrabold text-[var(--text-primary)] truncate"><%= isRtl ? 'رفع تسجيل صوتي جديد' : 'Upload New System Recording' %></h3>
+                    <p class="text-[11px] text-[var(--text-muted)] truncate"><%= isRtl ? 'سيُضاف التسجيل إلى مكتبة التسجيلات الصوتية ويُختار تلقائياً' : 'The recording is added to the System Recordings library and selected automatically' %></p>
+                </div>
+                <button type="button" onclick="closeModal('recordingUploadModal')" class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-red-500/40 flex items-center justify-center cursor-pointer transition-colors shrink-0">✕</button>
+            </div>
+            <form id="recordingUploadModalForm" onsubmit="submitRecordingUploadModal(event)" class="flex-1 overflow-y-auto p-6 space-y-4">
+                <div>
+                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="ruName"><%= isRtl ? 'اسم التسجيل' : 'Recording Name' %> *</label>
+                    <input type="text" id="ruName" required placeholder="e.g. Welcome Announcement" class="config-input w-full text-xs">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="ruFile"><%= isRtl ? 'ملف الصوت' : 'Audio File' %> *</label>
+                    <input type="file" id="ruFile" accept="audio/*,.mpeg,.mpg,.wav" required class="w-full text-xs text-[var(--text-secondary)] file:mr-3 rtl:file:mr-0 file:file:ml-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-[var(--border-primary)] file:bg-[var(--bg-card)] file:text-xs file:font-bold file:text-[var(--text-primary)] hover:file:bg-[var(--bg-hover)] file:cursor-pointer transition cursor-pointer">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="ruGain"><%= isRtl ? 'الهامش الأولي' : 'Initial Headroom' %></label>
+                    <select id="ruGain" class="config-input w-full text-xs font-semibold">
+                        <option value="0">0 dB</option>
+                        <option value="-3">-3 dB</option>
+                        <option value="-6">-6 dB</option>
+                        <option value="-9">-9 dB</option>
+                        <option value="-12">-12 dB</option>
+                    </select>
+                </div>
+                <div id="ruProgressWrap" class="hidden space-y-1">
+                    <div class="h-1.5 w-full rounded-full bg-[var(--bg-primary)] overflow-hidden">
+                        <div id="ruProgressBar" class="h-full bg-emerald-500 transition-all duration-200" style="width:0%"></div>
+                    </div>
+                    <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)] font-mono">
+                        <span id="ruStatus"><%= isRtl ? 'جارٍ الرفع والتحويل...' : 'Uploading & converting...' %></span>
+                        <span id="ruPercent">0%</span>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-1">
+                    <button type="button" onclick="closeModal('recordingUploadModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
+                    <button type="submit" id="ruSubmitBtn" class="config-btn-primary px-4 py-2 text-xs flex items-center gap-2">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2"/></svg>
+                        <span><%= isRtl ? 'رفع' : 'Upload' %></span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -6564,7 +6678,7 @@ function isTabAllowed(tabName) {
             // ancestor including the document, which yanked the whole page
             // sideways whenever a tab was switched. We scroll the pill strip
             // only, and centre the pill inside it.
-            scrollTopPillIntoView(tabId, false);
+            scrollTopPillIntoView(tabId, true);
 
             stopRtcpTimer();
             if (tabId === 'audioprocessing') { loadAudioGlobals(); loadPerDongleAudioProfiles(); loadPerExtensionAudioProfiles(); }
@@ -6693,17 +6807,195 @@ function isTabAllowed(tabName) {
                animated and lagged behind the pointer.
            Now: native 1:1 delta, no smooth behaviour on wheel, and
            preventDefault only when the strip can actually scroll. */
+        /* Drag to scroll: press and drag the strip left / right and it follows
+           the pointer 1:1 - the most direct scrolling there is. A drag must
+           not switch tabs, so the click that follows it is swallowed. */
+        function enablePillDragScroll() {
+            const sc = document.getElementById('configTopPillsScroll');
+            if (!sc || sc.__dragBound) return;
+            sc.__dragBound = true;
+
+            let dragging = false;
+            let moved = false;
+            let startX = 0;
+            let startScroll = 0;
+            let pointerId = null;
+            let velocity = 0;          // px per millisecond (signed)
+            let lastX = 0;
+            let lastMoveAt = 0;
+            let momentumFrame = null;
+            let momentumRunning = false;
+
+            // Flick momentum: after the pointer is released the strip keeps
+            // gliding and decays to a stop, like a native scroll fling.
+            const stopMomentum = () => {
+                if (momentumFrame !== null) {
+                    cancelAnimationFrame(momentumFrame);
+                    momentumFrame = null;
+                }
+                momentumRunning = false;
+            };
+
+            const startMomentum = () => {
+                stopMomentum();
+                momentumRunning = false;
+                if (Math.abs(velocity) < 0.12) { sc.classList.remove('is-gliding'); return; }   // too slow to fling
+                momentumRunning = true;
+                // The drag moves the strip with -dx, so the momentum has to
+                // continue in the very same direction: negate the pointer
+                // velocity so a flick to the left keeps gliding to the left.
+                let v = -velocity * 16;                       // px per frame
+                if (v > 45) v = 45;                           // cap the fling
+                if (v < -45) v = -45;
+                const max = __pillStripMax;
+                const rtl = __pillStripRtl;
+                const min = rtl ? -max : 0;
+                const maxPos = rtl ? 0 : max;
+                sc.classList.add('is-gliding');
+                const glide = () => {
+                    v *= 0.94;                               // decay
+                    let next = sc.scrollLeft + v;
+                    if (next <= min) { next = min; v = 0; }
+                    if (next >= maxPos) { next = maxPos; v = 0; }
+                    sc.scrollLeft = next;
+                    if (Math.abs(v) > 0.4) {
+                        momentumFrame = requestAnimationFrame(glide);
+                    } else {
+                        momentumFrame = null;
+                        sc.classList.remove('is-gliding');
+                        scheduleTopPillScrollAffordance();
+                        refreshPillStripMetrics();
+                    }
+                };
+                momentumFrame = requestAnimationFrame(glide);
+            };
+
+            sc.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0 || !e.isPrimary) return;
+                stopMomentum();
+                dragging = true;
+                moved = false;
+                startX = e.clientX;
+                lastX = e.clientX;
+                lastMoveAt = performance.now();
+                velocity = 0;
+                startScroll = sc.scrollLeft;
+                pointerId = e.pointerId;
+            });
+
+            sc.addEventListener('pointermove', (e) => {
+                if (!dragging || e.pointerId !== pointerId) return;
+                const dx = e.clientX - startX;
+                if (!moved && Math.abs(dx) < 4) return;    // still a plain click
+                const now = performance.now();
+                const dt = Math.max(1, now - lastMoveAt);
+                // velocity of the pointer, used for the flick momentum
+                velocity = (e.clientX - lastX) / dt;
+                lastX = e.clientX;
+                lastMoveAt = now;
+                if (!moved) {
+                    moved = true;
+                    sc.classList.add('is-dragging');
+                    sc.classList.add('is-gliding');
+                    try { sc.setPointerCapture(pointerId); } catch (_) {}
+                }
+                // The strip follows the pointer in both directions (in RTL the
+                // scroll offset is negative, the same formula still holds).
+                sc.scrollLeft = startScroll - dx;
+                e.preventDefault();
+            });
+
+            const endDrag = () => {
+                if (!dragging) return;
+                dragging = false;
+                sc.classList.remove('is-dragging');
+                if (!momentumRunning) sc.classList.remove('is-gliding');
+                try { if (pointerId !== null) sc.releasePointerCapture(pointerId); } catch (_) {}
+                pointerId = null;
+                if (moved) {
+                    startMomentum();
+                    // Swallow the click the drag produced - but only that one:
+                    // the suppressor is removed again after a moment so it can
+                    // never swallow a later, legitimate click.
+                    const swallow = (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    };
+                    sc.addEventListener('click', swallow, { capture: true, once: true });
+                    setTimeout(() => sc.removeEventListener('click', swallow, { capture: true }), 400);
+                    scheduleTopPillScrollAffordance();
+                    refreshPillStripMetrics();
+                }
+            };
+            sc.addEventListener('pointerup', endDrag);
+            sc.addEventListener('pointercancel', endDrag);
+            sc.addEventListener('dragstart', (e) => e.preventDefault());
+        }
+
+        /* Eased rAF animation for the pill strip: the wheel handler feeds it a
+           target position and it eases there, so the strip glides instead of
+           jumping one wheel tick at a time. */
+        const __pillScrollAnims = new WeakMap();
+        function animatePillScrollTo(sc, next) {
+            const max = __pillStripMax;
+            // In RTL the strip scrolls into negative scrollLeft values, so the
+            // clamp has to follow the direction or the strip never moves.
+            const rtl = __pillStripRtl;
+            const min = rtl ? -max : 0;
+            const maxPos = rtl ? 0 : max;
+            const target = Math.max(min, Math.min(maxPos, next));
+            let anim = __pillScrollAnims.get(sc);
+            if (!anim) {
+                anim = { target: sc.scrollLeft, current: sc.scrollLeft, from: sc.scrollLeft, start: 0, duration: 200, frame: null };
+                __pillScrollAnims.set(sc, anim);
+            }
+            anim.target = target;
+            anim.ownScrolls = 0;
+            if (anim.frame !== null) return;
+            // Time based easing: the glide always takes ~200 ms no matter how
+            // far it has to travel, so the strip feels quick and consistent.
+            anim.from = anim.current;
+            anim.start = performance.now();
+            // The CSS smooth scrolling would animate every single frame write,
+            // so it is switched off for the duration of the glide.
+            sc.classList.add('is-gliding');
+            const step = (now) => {
+                const t = Math.min(1, (now - anim.start) / anim.duration);
+                const eased = 1 - Math.pow(1 - t, 3);   // easeOutCubic
+                anim.current = anim.from + (anim.target - anim.from) * eased;
+                sc.scrollLeft = anim.current;
+                anim.ownScrolls = (anim.ownScrolls || 0) + 1;
+                if (t < 1) {
+                    anim.frame = requestAnimationFrame(step);
+                } else {
+                    anim.current = anim.target;
+                    sc.scrollLeft = anim.target;
+                    anim.ownScrolls = (anim.ownScrolls || 0) + 1;
+                    anim.frame = null;
+                    sc.classList.remove('is-gliding');
+                    refreshPillStripMetrics();
+                    // The affordance is refreshed once at the end - doing it on
+                    // every frame forced a layout each time and made the
+                    // scrolling visibly choppy.
+                    updateTopPillScrollAffordance();
+                }
+            };
+            anim.frame = requestAnimationFrame(step);
+        }
+
         function initTopPillBarWheelScroll() {
             const scrollContainer = document.getElementById('configTopPillsScroll');
             if (!scrollContainer || scrollContainer._wheelAttached) return;
             scrollContainer._wheelAttached = true;
 
+            refreshPillStripMetrics();
+            enablePillDragScroll();
             scrollContainer.addEventListener('wheel', function(e) {
                 if (e.ctrlKey) return;                       // let pinch-zoom through
-                const maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth;
+                const maxScroll = __pillStripMax;            // cached - no layout in the hot path
                 if (maxScroll <= 1) return;                  // nothing to scroll: do not block the page
 
-                const rtl = getComputedStyle(scrollContainer).direction === 'rtl';
+                const rtl = __pillStripRtl;
 
                 // Trackpads report deltaX for horizontal swipes; mice only
                 // report deltaY. Prefer the axis the user is actually using.
@@ -6711,30 +7003,49 @@ function isTabAllowed(tabName) {
                 const absY = Math.abs(e.deltaY);
                 let delta;
                 if (absX > absY) {
-                    delta = e.deltaX;                         // trackpad: 1:1
+                    delta = e.deltaX * 1.6;                  // trackpad swipe
                 } else {
-                    delta = e.deltaY * 1.5;                  // mouse wheel: 1.5x for a usable pace
-                }
+                    delta = e.deltaY * 3.5;                  // mouse wheel notch: a big
+                }                                        // chunk of the strip
+
                 if (!delta) return;
 
-                // Horizontal position, expressed 0 = start edge, maxScroll = end edge.
-                const pos = rtl ? -scrollContainer.scrollLeft : scrollContainer.scrollLeft;
-                const goingForward = delta > 0;
-                const nextPos = pos + (rtl ? -delta : delta);
+                // Work in scrollLeft terms: in RTL the strip scrolls into
+                // negative values, so the edges are [-maxScroll, 0] instead of
+                // [0, maxScroll]. A wheel down always reveals the LATER pills.
+                const slDelta = rtl ? -delta : delta;
+                const min = rtl ? -maxScroll : 0;
+                const maxPos = rtl ? 0 : maxScroll;
 
                 // Only hand the gesture back to the page when the strip is
                 // ALREADY at the edge and the user keeps pushing past it.
-                // Scrolling DOWN must always reveal the LATER pills.
-                const pastEnd = goingForward && nextPos > maxScroll + 1;
-                const beforeStart = !goingForward && nextPos < -1;
-                if (pastEnd || beforeStart) return;           // let the page scroll instead
+                if ((slDelta < 0 && scrollContainer.scrollLeft <= min + 1) ||
+                    (slDelta > 0 && scrollContainer.scrollLeft >= maxPos - 1)) return;
 
                 e.preventDefault();
-                scrollContainer.scrollLeft += (rtl ? -delta : delta);
-                updateTopPillScrollAffordance();
+                // The wheel takes over from a running flick.
+                const anim = __pillScrollAnims.get(scrollContainer);
+                if (anim && anim.frame !== null) { cancelAnimationFrame(anim.frame); anim.frame = null; }
+                // Animate towards the new position instead of jumping: a single
+                // wheel tick used to move the strip in one instant step, which
+                // read as a jump rather than a scroll.
+                animatePillScrollTo(scrollContainer, scrollContainer.scrollLeft + (rtl ? -delta : delta));
+                scheduleTopPillScrollAffordance();
             }, { passive: false });
 
-            scrollContainer.addEventListener('scroll', updateTopPillScrollAffordance, { passive: true });
+            window.addEventListener('resize', refreshPillStripMetrics);
+            scrollContainer.addEventListener('scroll', function() {
+                // While the glide is running it drives the position itself and
+                // refreshes the affordance once at the end - reading the
+                // scroll metrics on every frame made the scrolling choppy.
+                const anim = __pillScrollAnims.get(scrollContainer);
+                // Ignore the scroll events our own glide produced (the browser
+                // queues one per frame write) - reacting to them would read the
+                // scroll metrics on every frame and make the scroll choppy.
+                if (anim && anim.ownScrolls > 0) { anim.ownScrolls--; return; }
+                if (anim && anim.frame !== null) return;
+                scheduleTopPillScrollAffordance();
+            }, { passive: true });
             window.addEventListener('resize', updateTopPillScrollAffordance);
             // Web fonts and late layout can change the strip width, so re-measure
             // the overflow once the browser has settled.
@@ -6764,6 +7075,38 @@ function isTabAllowed(tabName) {
         }
 
         /* Shows the left/right edge fades only when there is content to reach. */
+        /* Smooth wheel / trackpad scrolling for the horizontal pill strip.
+           CSS `scroll-behavior: smooth` only covers programmatic scrolling -
+           Chrome's mouse wheel is always instant - so the wheel delta is
+           captured and the strip is animated towards the new position with an
+           eased rAF loop. At the ends the wheel is released so the page can
+           still be scrolled normally. */
+
+        /* The affordance helper reads the strip's scroll metrics, so it must
+           not run on every scroll event - that forces a layout per frame and
+           makes the scrolling choppy. One refresh per animation frame is
+           enough. */
+        let __pillAffordanceRaf = null;
+        function scheduleTopPillScrollAffordance() {
+            if (__pillAffordanceRaf !== null) return;
+            __pillAffordanceRaf = requestAnimationFrame(() => {
+                __pillAffordanceRaf = null;
+                updateTopPillScrollAffordance();
+            });
+        }
+
+        /* Cached scroll metrics. Reading scrollWidth / clientWidth forces a
+           synchronous layout, so the wheel handler must never do it - it is
+           refreshed here (resize / after a glide) and read from the cache. */
+        let __pillStripMax = 0;
+        let __pillStripRtl = false;
+        function refreshPillStripMetrics() {
+            const sc = document.getElementById('configTopPillsScroll');
+            if (!sc) return;
+            __pillStripMax = Math.max(0, sc.scrollWidth - sc.clientWidth);
+            __pillStripRtl = getComputedStyle(sc).direction === 'rtl';
+        }
+
         function updateTopPillScrollAffordance() {
             const sc = document.getElementById('configTopPillsScroll');
             const bar = document.getElementById('configTopPillBar');
@@ -8434,6 +8777,36 @@ function isTabAllowed(tabName) {
                 .catch(err => console.error(err));
         }
 
+        // Shared upload helper: uploads a system recording (file + display name +
+        // initial headroom) and returns the API result. Used by the System
+        // Recordings tab and by the Announcements modal.
+        function uploadRecordingFile(file, name, gainDb, onProgress) {
+            return new Promise((resolve, reject) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('name', String(name || '').trim());
+                formData.append('gainDb', (gainDb === undefined || gainDb === null || gainDb === '') ? '0' : String(gainDb));
+                const xhr = new XMLHttpRequest();
+                xhr.upload.addEventListener('progress', (ev) => {
+                    if (ev.lengthComputable && typeof onProgress === 'function') {
+                        onProgress(Math.round((ev.loaded / ev.total) * 100));
+                    }
+                });
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try { resolve(JSON.parse(xhr.responseText)); }
+                        catch (err) { reject({ error: 'Invalid server response' }); }
+                    } else {
+                        try { reject(JSON.parse(xhr.responseText)); }
+                        catch (err) { reject({ error: 'HTTP ' + xhr.status }); }
+                    }
+                });
+                xhr.addEventListener('error', () => reject({ error: 'Network error' }));
+                xhr.open('POST', '/api/settings/recordings/upload');
+                xhr.send(formData);
+            });
+        }
+
         async function uploadSystemRecording(e) {
             e.preventDefault();
             const nameInput = document.getElementById('sysRecName');
@@ -8449,13 +8822,6 @@ function isTabAllowed(tabName) {
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-            formData.append('name', nameInput.value.trim());
-            const gainSelect = document.getElementById('sysRecGain');
-            if (gainSelect) {
-                formData.append('gainDb', gainSelect.value || '0');
-            }
             submitBtn.disabled = true;
             progressWrap.classList.remove('hidden');
             progressBar.style.width = '0%';
@@ -8463,27 +8829,16 @@ function isTabAllowed(tabName) {
             statusText.textContent = 'Uploading & converting...';
 
             try {
-                const xhr = new XMLHttpRequest();
-                const result = await new Promise((resolve, reject) => {
-                    xhr.upload.addEventListener('progress', (ev) => {
-                        if (ev.lengthComputable) {
-                            const pct = Math.round((ev.loaded / ev.total) * 100);
-                            progressBar.style.width = pct + '%';
-                            percentText.textContent = pct + '%';
-                        }
-                    });
-                    xhr.addEventListener('load', () => {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            resolve(JSON.parse(xhr.responseText));
-                        } else {
-                            try { reject(JSON.parse(xhr.responseText)); }
-                            catch (err) { reject({ error: 'HTTP ' + xhr.status }); }
-                        }
-                    });
-                    xhr.addEventListener('error', () => reject({ error: 'Network error' }));
-                    xhr.open('POST', '/api/settings/recordings/upload');
-                    xhr.send(formData);
-                });
+                const gainSelect = document.getElementById('sysRecGain');
+                const result = await uploadRecordingFile(
+                    fileInput.files[0],
+                    nameInput.value,
+                    gainSelect ? gainSelect.value : '0',
+                    (pct) => {
+                        progressBar.style.width = pct + '%';
+                        percentText.textContent = pct + '%';
+                    }
+                );
 
                 if (result.success) {
                     showToast(result.message, 'success');
@@ -8643,10 +8998,87 @@ function isTabAllowed(tabName) {
 
         let studioPreviewAudio = null;
 
+        // The studio works on two kinds of targets: a system recording
+        // (asterisk.recordings) or a Music-on-Hold track (a file inside a MoH
+        // category folder). The target descriptor drives every URL the modal
+        // talks to.
+        let studioTarget = { kind: 'recording', id: null, category: '', filename: '', label: '' };
+
+        function studioEndpoints() {
+            if (studioTarget && studioTarget.kind === 'moh') {
+                const cat = encodeURIComponent(studioTarget.category || '');
+                const file = encodeURIComponent(studioTarget.filename || '');
+                return {
+                    info: `/api/config/moh/file/info?category=${cat}&file=${file}`,
+                    audio: `/api/config/moh/stream/${cat}/${file}`,
+                    dsp: '/api/config/moh/file/dsp'
+                };
+            }
+            const id = (studioTarget && studioTarget.id) || '';
+            return {
+                info: `/api/config/recordings/${id}/info`,
+                audio: `/api/config/recordings/audio/${id}`,
+                dsp: `/api/config/recordings/${id}/dsp`
+            };
+        }
+        window.studioEndpoints = studioEndpoints;
+
+        // Open the studio for a Music-on-Hold track.
+        async function openMohStudioModal(category, filename) {
+            const cat = String(category || '').trim();
+            const file = String(filename || '').trim();
+            if (!cat || !file) return;
+            closeAllModals();
+            studioTarget = { kind: 'moh', id: null, category: cat, filename: file, label: file };
+            document.getElementById('dspRecId').value = file;
+            document.getElementById('dspRecFilename').value = file;
+            document.getElementById('dspDisplayTitle').textContent = file;
+            document.getElementById('dspTargetNameBadge').textContent = cat + ' / ' + file;
+            if (studioPreviewAudio) {
+                studioPreviewAudio.pause();
+                studioPreviewAudio = null;
+            }
+            const playIcon = document.getElementById('dspPlayIcon');
+            if (playIcon) playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+
+            try {
+                const res = await fetch(studioEndpoints().info);
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    showToast(data.error || 'Could not load the MoH track.', 'error');
+                    return;
+                }
+                if (data.dspSettings && typeof data.dspSettings === 'object') {
+                    const s = data.dspSettings;
+                    if (s.normDb !== undefined && s.normDb !== null) document.getElementById('dspNormDb').value = String(s.normDb);
+                    if (s.gainDb !== undefined && s.gainDb !== null) {
+                        document.getElementById('dspGainDb').value = s.gainDb;
+                        document.getElementById('dspGainBadge').textContent = (s.gainDb > 0 ? '+' : '') + s.gainDb + ' dB';
+                    }
+                    if (s.compand) document.getElementById('dspCompand').value = s.compand;
+                } else if (data.gainDb) {
+                    document.getElementById('dspGainDb').value = data.gainDb;
+                    document.getElementById('dspGainBadge').textContent = (data.gainDb > 0 ? '+' : '') + data.gainDb + ' dB';
+                }
+                if (data.stat) {
+                    if (data.stat.length) document.getElementById('dspStatDuration').textContent = data.stat.length + 's';
+                    if (data.stat.maxAmplitude) document.getElementById('dspStatPeak').textContent = data.stat.maxAmplitude;
+                    if (data.stat.rmsAmplitude) document.getElementById('dspStatRms').textContent = data.stat.rmsAmplitude;
+                }
+            } catch (err) {
+                console.error('MoH studio load error:', err.message);
+            }
+
+            openModal('recordingStudioModal');
+            if (typeof syncStudioSilenceControls === 'function') syncStudioSilenceControls();
+        }
+        window.openMohStudioModal = openMohStudioModal;
+
         async function openRecordingStudioModal(id) {
             closeAllModals();
             const rec = (loadedRecordingsList || []).find(r => String(r.id) === String(id));
             if (!rec) return;
+            studioTarget = { kind: 'recording', id: id, category: '', filename: rec.filename || '', label: rec.displayname || ('#' + id) };
 
             document.getElementById('dspRecId').value = id;
             document.getElementById('dspRecFilename').value = rec.filename || '';
@@ -8685,7 +9117,7 @@ function isTabAllowed(tabName) {
             document.getElementById('dspGenerateCodecs').checked = true;
             syncStudioSilenceControls();
             try {
-                const res = await fetch(`/api/config/recordings/${id}/info`);
+                const res = await fetch(studioEndpoints().info);
                 if (res.ok) {
                     const data = await res.json();
                     if (data.stat) {
@@ -8816,7 +9248,7 @@ function isTabAllowed(tabName) {
             const id = document.getElementById('dspRecId').value;
             if (!id) return;
             const playIcon = document.getElementById('dspPlayIcon');
-            const url = `/api/config/recordings/audio/${id}?t=${Date.now()}`;
+            const url = `${studioEndpoints().audio}?t=${Date.now()}`;
 
             if (studioPreviewAudio) {
                 if (studioPreviewAudio.paused) {
@@ -8945,11 +9377,17 @@ function isTabAllowed(tabName) {
                 generateCodecs: document.getElementById('dspGenerateCodecs').checked
             };
 
+            // MoH targets need their category / file in the payload
+            if (studioTarget && studioTarget.kind === 'moh') {
+                payload.category = studioTarget.category;
+                payload.filename = studioTarget.filename;
+            }
+
             applyBtn.disabled = true;
             applyBtn.innerHTML = `<svg class="animate-spin h-3.5 w-3.5 text-white inline-block shrink-0 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> <span>${isRtl ? 'جاري معالجة الصوت...' : 'Processing audio...'}</span>`;
 
             try {
-                const res = await fetch(`/api/config/recordings/${id}/dsp`, {
+                const res = await fetch(studioEndpoints().dsp, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -8984,11 +9422,17 @@ function isTabAllowed(tabName) {
             const isRtl = '<%= isRtl %>' === 'true';
             if (!confirm(isRtl ? 'هل أنت متأكد من استعادة الملف الأصلي الخام وإلغاء جميع الفلاتر والمؤثرات؟' : 'Revert audio to untouched original master and clear all DSP effects?')) return;
 
+            const resetBody = { resetToOriginal: true };
+            if (studioTarget && studioTarget.kind === 'moh') {
+                resetBody.category = studioTarget.category;
+                resetBody.filename = studioTarget.filename;
+            }
+
             try {
-                const res = await fetch(`/api/config/recordings/${id}/dsp`, {
+                const res = await fetch(studioEndpoints().dsp, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resetToOriginal: true })
+                    body: JSON.stringify(resetBody)
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -8997,7 +9441,11 @@ function isTabAllowed(tabName) {
                         studioPreviewAudio.pause();
                         studioPreviewAudio = null;
                     }
-                    openRecordingStudioModal(id);
+                    if (studioTarget && studioTarget.kind === 'moh') {
+                        openMohStudioModal(studioTarget.category, studioTarget.filename);
+                    } else {
+                        openRecordingStudioModal(id);
+                    }
                     fetchRecordings();
                 } else {
                     showToast(data.error || 'Failed to reset recording', 'error');
@@ -14000,7 +14448,7 @@ function isTabAllowed(tabName) {
                             <audio preload="metadata" data-player-audio data-total-duration="${f.duration || 0}">
                                 <source src="${escapeHtml(f.streamUrl)}" type="audio/wav">
                             </audio>
-                            <button data-player-playpause class="shrink-0 w-7 h-7 rounded-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] flex items-center justify-center transition cursor-pointer shadow-sm text-white" aria-label="Play / Pause">
+                            <button data-player-playpause class="audio-play-btn shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition cursor-pointer shadow-sm" aria-label="Play / Pause">
                                 <svg data-icon-play class="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                                 <svg data-icon-pause class="w-3.5 h-3.5 fill-white hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                             </button>
@@ -14011,7 +14459,7 @@ function isTabAllowed(tabName) {
                             <span data-player-duration class="text-[10px] font-mono font-bold text-[var(--text-muted)] min-w-[34px] shrink-0 select-none">${escapeHtml(f.durationFormatted || '--:--')}</span>
                             <div class="flex items-center gap-1 shrink-0">
                                 <div class="relative flex items-center group/vol shrink-0" data-volume-group>
-                                    <button type="button" data-player-mute class="shrink-0 w-7 h-7 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition cursor-pointer" aria-label="Mute / Unmute">
+                                    <button type="button" data-player-mute class="audio-icon-btn shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer" aria-label="Mute / Unmute">
                                         <svg data-icon-vol-high class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M11 5L6 9H2v6h4l5 4V5z"/></svg>
                                         <svg data-icon-vol-mute class="w-3.5 h-3.5 text-rose-400 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/><path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
                                     </button>
@@ -14032,8 +14480,11 @@ function isTabAllowed(tabName) {
                             </div>
                         </div>
                     </td>
-                    <td class="py-3 px-4 text-center">
-                        <button type="button" onclick="deleteMohFile('${escapeHtml(cat.name)}', '${escapeHtml(f.filename)}')" class="px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded-lg border border-red-500/30 cursor-pointer transition-colors"><span>${isRtl ? 'حذف' : 'Delete'}</span></button>
+                    <td class="py-3 px-4 text-center whitespace-nowrap">
+                        <div class="flex items-center justify-center gap-2">
+                            <button type="button" onclick="openMohStudioModal('${escapeHtml(cat.name)}', '${escapeHtml(f.filename)}')" class="px-2.5 py-1 text-xs font-semibold text-purple-400 hover:bg-purple-500/10 rounded-lg border border-purple-500/30 cursor-pointer transition-colors"><span>${isRtl ? 'استوديو' : 'Studio'}</span></button>
+                            <button type="button" onclick="deleteMohFile('${escapeHtml(cat.name)}', '${escapeHtml(f.filename)}')" class="px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded-lg border border-red-500/30 cursor-pointer transition-colors"><span>${isRtl ? 'حذف' : 'Delete'}</span></button>
+                        </div>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -14575,15 +15026,24 @@ function isTabAllowed(tabName) {
                         if (ann.noanswer) opts.push('<span class="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold">No Answer</span>');
                         const optsHtml = opts.length ? opts.join(' ') : '<span class="text-[var(--text-muted)]">-</span>';
 
+                        const recCell = ann.recording_missing
+                            ? '<span class="text-red-400 font-semibold">' + (isRtl ? 'التسجيل مفقود' : 'Recording missing') + '</span>' +
+                              '<span class="block text-[10px] font-mono text-red-400/70">' + (isRtl ? 'اختر تسجيلاً بديلاً - الإعلان صامت الآن' : 'Pick another recording - this announcement is silent') + '</span>'
+                            : (ann.recording_name
+                                ? '<span class="text-emerald-400 font-semibold">' + escapeHtml(ann.recording_name) + '</span>' +
+                                  (ann.recording_filename ? '<span class="block text-[10px] font-mono text-[var(--text-muted)]">' + escapeHtml(ann.recording_filename) + '</span>' : '')
+                                : '<span class="text-[var(--text-muted)]">' + (isRtl ? 'تحويل النص إلى كلام' : 'Text-to-Speech') + '</span>');
+
                         tr.innerHTML = `
                             <td class="py-3 px-4 font-mono font-bold text-[var(--text-primary)]">${ann.announcement_id}</td>
                             <td class="py-3 px-4 font-bold text-[var(--text-primary)]">${escapeHtml(ann.description || '')}</td>
-                            <td class="py-3 px-4 text-emerald-400 font-semibold">${escapeHtml(ann.recording_name || 'None (ID: ' + ann.recording_id + ')')}</td>
+                            <td class="py-3 px-4">${recCell}</td>
                             <td class="py-3 px-4 font-mono font-bold text-amber-400">${ann.repeat_msg ? escapeHtml(ann.repeat_msg) : '-'}</td>
                             <td class="py-3 px-4 flex items-center gap-1 flex-wrap">${optsHtml}</td>
                             <td class="py-3 px-4 font-mono text-xs text-blue-400 font-bold">${formatDestination(ann.post_dest)}</td>
                             <td class="py-3 px-4 text-center">
                                 <div class="flex items-center justify-center gap-2">
+                                    <button type="button" onclick="openAnnouncementStudioById(${ann.announcement_id})" ${ann.recording_id > 0 && !ann.recording_missing ? '' : 'disabled'} class="px-2.5 py-1 text-xs font-semibold text-purple-400 hover:bg-purple-500/10 rounded border border-purple-500/30 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"><span>${isRtl ? 'استوديو' : 'Studio'}</span></button>
                                     <button type="button" onclick="editAnnouncement(${ann.announcement_id})" class="px-2.5 py-1 text-xs font-semibold text-blue-400 hover:bg-blue-500/10 rounded border border-blue-500/30 transition cursor-pointer"><span>${isRtl ? 'تعديل' : 'Edit'}</span></button>
                                     <button type="button" onclick="deleteAnnouncement(${ann.announcement_id})" class="px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/10 rounded border border-red-500/30 transition cursor-pointer"><span>${isRtl ? 'حذف' : 'Delete'}</span></button>
                                 </div>
@@ -14600,15 +15060,196 @@ function isTabAllowed(tabName) {
             const sel = document.getElementById('annRecording');
             if (!sel) return;
             sel.innerHTML = '<option value="0">== ' + (isRtl ? 'بدون تسجيل (استخدام تحويل النص إلى كلام)' : 'None (Use Text-To-Speech TTS)') + ' ==</option>';
-            (loadedRecordingsList || []).forEach(r => {
+            const list = loadedRecordingsList || [];
+            const known = list.some(r => String(r.id) === String(selectedId));
+            // The announcement may point at a recording that was deleted: keep it
+            // selectable (and flagged) instead of silently falling back to TTS.
+            if (selectedId > 0 && !known) {
+                const opt = document.createElement('option');
+                opt.value = selectedId;
+                opt.textContent = (isRtl ? 'تسجيل مفقود' : 'Missing recording') + ' (ID: ' + selectedId + ')';
+                opt.selected = true;
+                sel.appendChild(opt);
+            }
+            list.forEach(r => {
                 const opt = document.createElement('option');
                 opt.value = r.id;
                 opt.textContent = r.displayname + ' (ID: ' + r.id + ')';
                 if (String(r.id) === String(selectedId)) opt.selected = true;
                 sel.appendChild(opt);
             });
+            updateAnnouncementRecordingState();
         }
         window.populateAnnouncementRecordingsDropdown = populateAnnouncementRecordingsDropdown;
+
+        // Reflect the studio state (gain / DSP) of the selected recording and
+        // flag a recording that no longer exists - Issabel would generate an
+        // empty Playback() for it and the announcement would be silent.
+        function updateAnnouncementRecordingState() {
+            const stateEl = document.getElementById('annRecordingState');
+            const studioBtn = document.getElementById('annStudioBtn');
+            const previewBtn = document.getElementById('annPreviewBtn');
+            const sel = document.getElementById('annRecording');
+            if (!sel) return;
+            const recId = parseInt(sel.value, 10) || 0;
+            const rec = (loadedRecordingsList || []).find(r => String(r.id) === String(recId));
+
+            if (studioBtn) studioBtn.disabled = !rec;
+            if (previewBtn) previewBtn.disabled = !rec;
+
+            if (!stateEl) return;
+            if (!rec) {
+                if (recId > 0) {
+                    stateEl.innerHTML = '<span class="text-red-400 font-semibold">' + (isRtl ? 'التسجيل الصوتي مفقود' : 'The selected recording is missing') + '</span>' +
+                        ' <span class="text-[var(--text-muted)]">' + (isRtl ? '- اختر تسجيلاً آخر أو ارفع تسجيلاً جديداً' : '- pick another recording or upload a new one') + '</span>';
+                    stateEl.className = 'text-[10px] mt-1.5';
+                } else {
+                    stateEl.innerHTML = '<span class="text-[var(--text-muted)]">' + (isRtl ? 'سيتم استخدام تحويل النص إلى كلام' : 'Text-to-speech will be used') + '</span>';
+                    stateEl.className = 'text-[10px] text-[var(--text-muted)] mt-1.5';
+                }
+                return;
+            }
+            const gain = (rec.gain_db !== undefined && rec.gain_db !== null) ? Number(rec.gain_db) : 0;
+            const dsp = rec.dsp_settings ? (isRtl ? 'معالجة DSP مفعّلة' : 'DSP processing applied') : (isRtl ? 'بدون معالجة DSP' : 'no DSP processing');
+            stateEl.innerHTML = '<span class="font-mono">' + escapeHtml(rec.displayname || ('#' + recId)) + '</span>' +
+                ' <span class="text-[var(--text-muted)]">·</span> ' +
+                '<span class="font-mono">' + (gain > 0 ? '+' : '') + gain + ' dB</span>' +
+                ' <span class="text-[var(--text-muted)]">·</span> ' +
+                '<span>' + dsp + '</span>' +
+                ' <span class="text-[var(--text-muted)]">·</span> ' +
+                '<span class="font-mono">' + escapeHtml(rec.filename || '') + '</span>';
+            stateEl.className = 'text-[10px] text-[var(--text-secondary)] mt-1.5';
+        }
+        window.updateAnnouncementRecordingState = updateAnnouncementRecordingState;
+
+        // Open the audio studio (SoX DSP) for the announcement's recording.
+        function openAnnouncementStudio() {
+            const sel = document.getElementById('annRecording');
+            if (!sel) return;
+            const recId = parseInt(sel.value, 10) || 0;
+            if (!recId) {
+                showToast(isRtl ? 'اختر تسجيلاً صوتياً أولاً' : 'Select a system recording first', 'error');
+                return;
+            }
+            if (typeof openRecordingStudioModal === 'function') {
+                openRecordingStudioModal(recId);
+            } else {
+                showToast(isRtl ? 'الاستوديو غير متاح' : 'The audio studio is not available', 'error');
+            }
+        }
+        window.openAnnouncementStudio = openAnnouncementStudio;
+
+        // Open the audio studio for a recording that is attached to an
+        // announcement (used by the Announcements table).
+        function openAnnouncementStudioById(announcementId) {
+            const ann = (loadedAnnouncementsList || []).find(a => String(a.announcement_id) === String(announcementId));
+            if (!ann) {
+                showToast(isRtl ? 'الإعلان غير موجود' : 'Announcement not found', 'error');
+                return;
+            }
+            const recId = parseInt(ann.recording_id, 10) || 0;
+            if (!recId || ann.recording_missing) {
+                showToast(isRtl ? 'لا يوجد تسجيل مرتبط بهذا الإعلان' : 'This announcement has no usable recording', 'error');
+                return;
+            }
+            if (typeof openRecordingStudioModal === 'function') {
+                openRecordingStudioModal(recId);
+            } else {
+                showToast(isRtl ? 'الاستوديو غير متاح' : 'The audio studio is not available', 'error');
+            }
+        }
+        window.openAnnouncementStudioById = openAnnouncementStudioById;
+
+        // Preview the announcement's recording.
+        let announcementPreviewAudio = null;
+        function previewAnnouncementRecording() {
+            const sel = document.getElementById('annRecording');
+            if (!sel) return;
+            const recId = parseInt(sel.value, 10) || 0;
+            if (!recId) {
+                showToast(isRtl ? 'اختر تسجيلاً صوتياً أولاً' : 'Select a system recording first', 'error');
+                return;
+            }
+            try {
+                if (announcementPreviewAudio) {
+                    announcementPreviewAudio.pause();
+                    announcementPreviewAudio = null;
+                }
+                announcementPreviewAudio = new Audio('/api/config/recordings/audio/' + recId + '?t=' + Date.now());
+                announcementPreviewAudio.play().catch(() => {
+                    showToast(isRtl ? 'تعذر تشغيل الصوت' : 'Could not play the recording', 'error');
+                });
+            } catch (err) {
+                showToast(isRtl ? 'تعذر تشغيل الصوت' : 'Could not play the recording', 'error');
+            }
+        }
+        window.previewAnnouncementRecording = previewAnnouncementRecording;
+
+        // Upload a new system recording from inside the Announcements modal and
+        // select it as soon as it lands in the library.
+        function openRecordingUploadModal() {
+            const form = document.getElementById('recordingUploadModalForm');
+            if (form) form.reset();
+            const wrap = document.getElementById('ruProgressWrap');
+            if (wrap) wrap.classList.add('hidden');
+            openModal('recordingUploadModal');
+        }
+        window.openRecordingUploadModal = openRecordingUploadModal;
+
+        async function submitRecordingUploadModal(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('ruName');
+            const fileInput = document.getElementById('ruFile');
+            const gainSelect = document.getElementById('ruGain');
+            const submitBtn = document.getElementById('ruSubmitBtn');
+            const wrap = document.getElementById('ruProgressWrap');
+            const bar = document.getElementById('ruProgressBar');
+            const percent = document.getElementById('ruPercent');
+
+            if (!fileInput || !fileInput.files.length) {
+                showToast(isRtl ? 'اختر ملف صوتي' : 'Please select an audio file', 'error');
+                return;
+            }
+            if (submitBtn) submitBtn.disabled = true;
+            if (wrap) wrap.classList.remove('hidden');
+            if (bar) bar.style.width = '0%';
+            if (percent) percent.textContent = '0%';
+
+            try {
+                const result = await uploadRecordingFile(
+                    fileInput.files[0],
+                    nameInput ? nameInput.value : '',
+                    gainSelect ? gainSelect.value : '0',
+                    (pct) => {
+                        if (bar) bar.style.width = pct + '%';
+                        if (percent) percent.textContent = pct + '%';
+                    }
+                );
+                if (!result.success) {
+                    showToast(result.error || (isRtl ? 'فشل الرفع' : 'Upload failed'), 'error');
+                    return;
+                }
+                showToast(result.message || (isRtl ? 'تم الرفع' : 'Uploaded'), 'success');
+                closeModal('recordingUploadModal');
+                // Refresh the library, then select the new recording.
+                await fetchRecordings();
+                const newId = (result.recording && result.recording.id) || result.id || 0;
+                if (newId) {
+                    const sel = document.getElementById('annRecording');
+                    if (sel) {
+                        sel.value = String(newId);
+                        if (typeof onAnnRecordingChange === 'function') onAnnRecordingChange();
+                    }
+                }
+                populateAnnouncementRecordingsDropdown(newId || 0);
+            } catch (err) {
+                showToast(err.error || err.message || (isRtl ? 'فشل الرفع' : 'Upload failed'), 'error');
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+                setTimeout(() => { if (wrap) wrap.classList.add('hidden'); }, 600);
+            }
+        }
+        window.submitRecordingUploadModal = submitRecordingUploadModal;
 
         function onAnnRecordingChange() {
             const recId = parseInt(document.getElementById('annRecording').value, 10) || 0;
@@ -14636,6 +15277,10 @@ function isTabAllowed(tabName) {
                 allowSkip.disabled = false;
                 allowSkip.closest('label').classList.remove('opacity-40', 'cursor-not-allowed');
             }
+
+            // Keep the studio state line and the Studio/Preview buttons in sync
+            // with the selected recording.
+            updateAnnouncementRecordingState();
         }
         window.onAnnRecordingChange = onAnnRecordingChange;
 

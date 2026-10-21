@@ -14628,6 +14628,240 @@ app.delete('/api/config/queues/:extension', async (req, res) => {
 
 // --- SYSTEM RECORDINGS MANAGEMENT APIs ---
 
+// Shared SoX effect chain for the audio studio. Used by both the system
+// recordings and the Music-on-Hold tracks so both behave identically.
+function buildStudioDspChain(o) {
+    const dspEffects = [];
+
+    // 1. Silence trimming at start and end
+    if (o.trimSilence) {
+        dspEffects.push('silence 1 0.1 1% reverse silence 1 0.1 1% reverse');
+    }
+
+    // 2. Normalization / Leveling
+    if (o.normDb !== null && o.normDb !== undefined) {
+        dspEffects.push(`norm ${o.normDb}`);
+    } else if (o.gainDb !== null && o.gainDb !== undefined && o.gainDb !== 0) {
+        dspEffects.push(`vol ${o.gainDb} dB`);
+    }
+
+    // 3. Bandpass (G.711 Telephony Sinc Filter)
+    if (o.bandpass) {
+        dspEffects.push('sinc 300-3400');
+    }
+
+    // 4. Hiss / Rumble Filter
+    if (o.hissFilter) {
+        dspEffects.push('highpass 200 lowpass 3500');
+    }
+
+    // 5. Compander (Broadcast or Soft Vocal Leveler)
+    if (o.compand === 'broadcast') {
+        dspEffects.push('compand 0.05,0.2 6:-60,-40,-20 -10 -60 0.05');
+    } else if (o.compand === 'soft') {
+        dspEffects.push('compand 0.1,0.3 6:-70,-50,-30 -15 -70 0.1');
+    }
+
+    // 6. Bass & Treble Equalization
+    if (o.bass !== 0) {
+        dspEffects.push(`bass ${o.bass > 0 ? '+' : ''}${o.bass}`);
+    }
+    if (o.treble !== 0) {
+        dspEffects.push(`treble ${o.treble > 0 ? '+' : ''}${o.treble}`);
+    }
+
+    // 7. Speech Pacing / Tempo (without pitch change)
+    if (Math.abs(o.tempo - 1.0) >= 0.02) {
+        dspEffects.push(`tempo -s ${o.tempo.toFixed(2)}`);
+    }
+
+    // 8. Lead & Trail Padding
+    if (o.padLead > 0 || o.padTrail > 0) {
+        dspEffects.push(`pad ${o.padLead.toFixed(2)} ${o.padTrail.toFixed(2)}`);
+    }
+
+    return dspEffects;
+}
+
+// Resolve the MoH category directory of a category name.
+function resolveMohCategoryDir(categoryName) {
+    const wanted = String(categoryName || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    const cats = parseMohConf();
+    const cat = cats.find(c => c.name === wanted)
+        || cats.find(c => String(c.name).trim().toLowerCase() === wanted)
+        || null;
+    if (!cat) return null;
+    let dirPath = cat.directory;
+    if (!dirPath) {
+        dirPath = cat.name === 'default' ? MOH_ROOT : path.join(MOH_ROOT, cat.name);
+    }
+    return { cat, dirPath: path.resolve(dirPath) };
+}
+
+// sox output arguments for a given target extension (keeps the original
+// container of the MoH track).
+function soxOutputArgsForExt(ext) {
+    switch (ext) {
+        case '.alaw': return '-t al';
+        case '.ulaw': return '-t ul';
+        case '.sln': return '-t raw -e signed-integer -b 16';
+        case '.raw': return '-t raw';
+        default: return '';
+    }
+}
+
+// Process a Music-on-Hold track in place with the audio studio chain.
+// The pristine copy is kept outside the category folder so the MoH browser
+// does not list it as a track.
+async function processMohDsp(categoryName, fileName, options = {}) {
+    const resolved = resolveMohCategoryDir(String(categoryName || '').trim());
+    if (!resolved) throw new Error('Unknown MoH category.');
+    const dirPath = resolved.dirPath;
+
+    const safeName = path.basename(String(fileName || '').trim());
+    if (!safeName || safeName === '.' || safeName === '..') throw new Error('Invalid MoH file name.');
+
+    const srcPath = path.join(dirPath, safeName);
+    if (!fs.existsSync(srcPath)) throw new Error('MoH file not found on disk.');
+
+    const ext = path.extname(safeName).toLowerCase() || '.wav';
+    const backupDir = path.join(MOH_ROOT, '.studio-backup', resolved.cat.name);
+    const backupPath = path.join(backupDir, safeName + '.orig' + ext);
+    try {
+        fs.mkdirSync(backupDir, { recursive: true });
+        if (!fs.existsSync(backupPath)) fs.copyFileSync(srcPath, backupPath);
+    } catch (e) {
+        throw new Error('Could not create the MoH audio backup: ' + e.message);
+    }
+
+    const { exec: execCb, execSync: execSyncFn } = require('child_process');
+
+    const gainDb = options.gainDb !== undefined && options.gainDb !== null && options.gainDb !== '' ? Math.max(-50, Math.min(20, parseInt(options.gainDb, 10) || 0)) : null;
+    const normDb = options.normDb !== undefined && options.normDb !== null && options.normDb !== '' ? Math.max(-50, Math.min(0, parseInt(options.normDb, 10) || 0)) : null;
+    const compand = ['broadcast', 'soft', 'off'].includes(options.compand) ? options.compand : 'off';
+    const bandpass = Boolean(options.bandpass);
+    const hissFilter = Boolean(options.hissFilter);
+    const bass = options.bass !== undefined && options.bass !== null && options.bass !== '' ? Math.max(-12, Math.min(12, parseInt(options.bass, 10) || 0)) : 0;
+    const treble = options.treble !== undefined && options.treble !== null && options.treble !== '' ? Math.max(-12, Math.min(12, parseInt(options.treble, 10) || 0)) : 0;
+    const tempo = options.tempo !== undefined && options.tempo !== null && options.tempo !== '' ? Math.max(0.7, Math.min(1.5, parseFloat(options.tempo) || 1.0)) : 1.0;
+    const trimSilence = Boolean(options.trimSilence);
+    const fadeIn = options.fadeIn !== undefined && options.fadeIn !== null && options.fadeIn !== '' ? Math.max(0, Math.min(2.0, parseFloat(options.fadeIn) || 0)) : 0;
+    const fadeOut = options.fadeOut !== undefined && options.fadeOut !== null && options.fadeOut !== '' ? Math.max(0, Math.min(2.0, parseFloat(options.fadeOut) || 0)) : 0;
+    const enablePadLead = options.enablePadLead !== undefined ? Boolean(options.enablePadLead) : (parseFloat(options.padLead) > 0);
+    const enablePadTrail = options.enablePadTrail !== undefined ? Boolean(options.enablePadTrail) : (parseFloat(options.padTrail) > 0);
+    const rawPadLead = options.padLead !== undefined && options.padLead !== null && options.padLead !== '' ? Math.max(0, Math.min(10.0, parseFloat(options.padLead) || 0)) : 0;
+    const rawPadTrail = options.padTrail !== undefined && options.padTrail !== null && options.padTrail !== '' ? Math.max(0, Math.min(10.0, parseFloat(options.padTrail) || 0)) : 0;
+    const padLead = enablePadLead ? rawPadLead : 0;
+    const padTrail = enablePadTrail ? rawPadTrail : 0;
+
+    const isReset = options.resetToOriginal === true || (
+        (gainDb === null || gainDb === 0) &&
+        normDb === null &&
+        compand === 'off' &&
+        !bandpass &&
+        !hissFilter &&
+        bass === 0 &&
+        treble === 0 &&
+        Math.abs(tempo - 1.0) < 0.01 &&
+        !trimSilence &&
+        fadeIn === 0 &&
+        fadeOut === 0 &&
+        padLead === 0 &&
+        padTrail === 0
+    );
+
+    const chainOpts = { gainDb, normDb, compand, bandpass, hissFilter, bass, treble, tempo, trimSilence, padLead, padTrail };
+    const tmp1 = path.join('/tmp', `moh_dsp1_${Date.now()}.wav`);
+    const tmp2 = path.join('/tmp', `moh_dsp2_${Date.now()}.wav`);
+
+    try {
+        if (isReset) {
+            fs.copyFileSync(backupPath, srcPath);
+        } else {
+            const dspEffects = buildStudioDspChain(chainOpts);
+            const pass1Cmd = `sox "${backupPath}" -r 8000 -c 1 -b 16 "${tmp1}" ${dspEffects.join(' ')}`;
+            await new Promise((resolve, reject) => {
+                execCb(pass1Cmd, (err, stdout, stderr) => {
+                    if (err) return reject(new Error(`SoX Pass 1 failed: ${stderr || err.message}`));
+                    resolve();
+                });
+            });
+
+            let finalTmp = tmp1;
+            if (fadeIn > 0 || fadeOut > 0) {
+                const pass2Cmd = `sox "${tmp1}" -r 8000 -c 1 -b 16 "${tmp2}" fade t ${fadeIn.toFixed(2)} 0 ${fadeOut.toFixed(2)}`;
+                await new Promise((resolve, reject) => {
+                    execCb(pass2Cmd, (err, stdout, stderr) => {
+                        if (err) return reject(new Error(`SoX Pass 2 fade failed: ${stderr || err.message}`));
+                        resolve();
+                    });
+                });
+                finalTmp = tmp2;
+            }
+
+            // Write the result back in the original container/format.
+            const outArgs = soxOutputArgsForExt(ext);
+            const writeCmd = `sox "${finalTmp}" ${outArgs} "${srcPath}"`;
+            await new Promise((resolve, reject) => {
+                execCb(writeCmd, (err, stdout, stderr) => {
+                    if (err) return reject(new Error(`Writing the processed MoH file failed: ${stderr || err.message}`));
+                    resolve();
+                });
+            });
+        }
+
+        try {
+            execSyncFn(`chown asterisk:asterisk "${srcPath}" 2>/dev/null; chmod 664 "${srcPath}" 2>/dev/null`);
+        } catch (_) {}
+
+        // Persist the active DSP settings in AstDB (separate namespace from the
+        // system recordings).
+        const activeSettings = isReset ? {} : {
+            gainDb,
+            normDb,
+            compand,
+            bandpass,
+            hissFilter,
+            bass,
+            treble,
+            tempo,
+            trimSilence,
+            fadeIn,
+            fadeOut,
+            enablePadLead,
+            enablePadTrail,
+            padLead: rawPadLead || padLead,
+            padTrail: rawPadTrail || padTrail
+        };
+        const effectiveGain = normDb !== null ? normDb : (gainDb || 0);
+        const astdbKey = `${resolved.cat.name}/${safeName}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+        try {
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put MOH "${astdbKey}/gain" ${effectiveGain}`]);
+            const safeJson = JSON.stringify(activeSettings).replace(/"/g, '\\"');
+            await execFileAsync(ASTERISK_BIN, ['-rx', `database put MOH "${astdbKey}/dsp" "${safeJson}"`]);
+        } catch (_) {}
+
+        let statOutput = {};
+        try {
+            const rawStat = execSyncFn(`sox "${srcPath}" -n stat 2>&1`, { encoding: 'utf8' });
+            statOutput.length = (rawStat.match(/Length \(seconds\):\s+([\d\.]+)/) || [])[1] || '0';
+            statOutput.maxAmplitude = (rawStat.match(/Maximum amplitude:\s+([\d\.]+)/) || [])[1] || '0';
+            statOutput.rmsAmplitude = (rawStat.match(/RMS\s+amplitude:\s+([\d\.]+)/) || [])[1] || '0';
+        } catch (_) {}
+
+        return {
+            settings: activeSettings,
+            effectiveGain,
+            stat: statOutput,
+            category: resolved.cat.name,
+            filename: safeName
+        };
+    } finally {
+        if (fs.existsSync(tmp1)) try { fs.unlinkSync(tmp1); } catch (_) {}
+        if (fs.existsSync(tmp2)) try { fs.unlinkSync(tmp2); } catch (_) {}
+    }
+}
+
 async function processRecordingDsp(recId, filename, options = {}) {
     const cleanRel = String(filename || '').trim();
     if (!cleanRel) throw new Error('Invalid recording filename.');
@@ -14696,54 +14930,11 @@ async function processRecordingDsp(recId, filename, options = {}) {
             fs.copyFileSync(origPath, wavPath);
         } else {
             // Build SoX arguments chain for Pass 1 (DSP & filters)
-            const dspEffects = [];
-
-            // 1. Silence trimming at start and end
-            if (trimSilence) {
-                dspEffects.push('silence 1 0.1 1% reverse silence 1 0.1 1% reverse');
-            }
-
-            // 2. Normalization / Leveling
-            if (normDb !== null) {
-                dspEffects.push(`norm ${normDb}`);
-            } else if (gainDb !== null && gainDb !== 0) {
-                dspEffects.push(`vol ${gainDb} dB`);
-            }
-
-            // 3. Bandpass (G.711 Telephony Sinc Filter)
-            if (bandpass) {
-                dspEffects.push('sinc 300-3400');
-            }
-
-            // 4. Hiss / Rumble Filter
-            if (hissFilter) {
-                dspEffects.push('highpass 200 lowpass 3500');
-            }
-
-            // 5. Compander (Broadcast or Soft Vocal Leveler)
-            if (compand === 'broadcast') {
-                dspEffects.push('compand 0.05,0.2 6:-60,-40,-20 -10 -60 0.05');
-            } else if (compand === 'soft') {
-                dspEffects.push('compand 0.1,0.3 6:-70,-50,-30 -15 -70 0.1');
-            }
-
-            // 6. Bass & Treble Equalization
-            if (bass !== 0) {
-                dspEffects.push(`bass ${bass > 0 ? '+' : ''}${bass}`);
-            }
-            if (treble !== 0) {
-                dspEffects.push(`treble ${treble > 0 ? '+' : ''}${treble}`);
-            }
-
-            // 7. Speech Pacing / Tempo (without pitch change)
-            if (Math.abs(tempo - 1.0) >= 0.02) {
-                dspEffects.push(`tempo -s ${tempo.toFixed(2)}`);
-            }
-
-            // 8. Lead & Trail Padding
-            if (padLead > 0 || padTrail > 0) {
-                dspEffects.push(`pad ${padLead.toFixed(2)} ${padTrail.toFixed(2)}`);
-            }
+            // (shared with the Music-on-Hold studio - identical behaviour)
+            const dspEffects = buildStudioDspChain({
+                gainDb, normDb, compand, bandpass, hissFilter,
+                bass, treble, tempo, trimSilence, padLead, padTrail
+            });
 
             const pass1Cmd = `sox "${origPath}" -r 8000 -c 1 -b 16 "${tmp1}" ${dspEffects.join(' ')}`;
             await new Promise((resolve, reject) => {
@@ -15082,7 +15273,9 @@ app.get('/api/config/announcements', async (req, res) => {
     try {
         const [rows] = await pool.query(`
             SELECT a.announcement_id, a.description, a.recording_id, a.allow_skip, a.post_dest, a.return_ivr, a.noanswer, a.repeat_msg, a.tts_lang, a.tts_text,
-                   r.displayname AS recording_name
+                   r.displayname AS recording_name,
+                   CAST(r.filename AS CHAR) AS recording_filename,
+                   CASE WHEN a.recording_id > 0 AND r.id IS NULL THEN 1 ELSE 0 END AS recording_missing
             FROM \`asterisk\`.\`announcement\` a
             LEFT JOIN \`asterisk\`.\`recordings\` r ON a.recording_id = r.id
             ORDER BY CAST(a.announcement_id AS UNSIGNED) ASC
@@ -15092,6 +15285,24 @@ app.get('/api/config/announcements', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// Shared validation for the announcement create/update handlers: an
+// announcement must point at a system recording that still exists, otherwise
+// Issabel generates an empty Playback() and the announcement is completely
+// silent. When no recording is chosen the announcement must carry TTS text.
+async function validateAnnouncementAudio(recId, ttsText) {
+    if (recId > 0) {
+        const [recRows] = await pool.query('SELECT id, displayname FROM `asterisk`.`recordings` WHERE id = ?', [recId]);
+        if (!recRows.length) {
+            return 'The selected system recording no longer exists. Please choose another recording or use text-to-speech.';
+        }
+        return null;
+    }
+    if (!String(ttsText || '').trim()) {
+        return 'Choose a system recording, or enter the text to be spoken.';
+    }
+    return null;
+}
 
 // POST /api/config/announcements - Create Announcement
 app.post('/api/config/announcements', async (req, res) => {
@@ -15111,6 +15322,11 @@ app.post('/api/config/announcements', async (req, res) => {
         const rawTtsLang = String(tts_lang || '').trim();
         const ttsLangVal = recId === 0 ? (SUPPORTED_TTS_LANGS.includes(rawTtsLang) ? rawTtsLang : 'en-US') : 'en-US';
         const ttsTextVal = recId === 0 ? String(tts_text || '').trim() : '';
+
+        const audioError = await validateAnnouncementAudio(recId, ttsTextVal);
+        if (audioError) {
+            return res.status(400).json({ success: false, error: audioError });
+        }
 
         const [r] = await pool.query(`
             INSERT INTO \`asterisk\`.\`announcement\`
@@ -15153,6 +15369,11 @@ app.put('/api/config/announcements/:id', async (req, res) => {
         const rawTtsLang = String(tts_lang || '').trim();
         const ttsLangVal = recId === 0 ? (SUPPORTED_TTS_LANGS.includes(rawTtsLang) ? rawTtsLang : 'en-US') : 'en-US';
         const ttsTextVal = recId === 0 ? String(tts_text || '').trim() : '';
+
+        const audioError = await validateAnnouncementAudio(recId, ttsTextVal);
+        if (audioError) {
+            return res.status(400).json({ success: false, error: audioError });
+        }
 
         await pool.query(`
             UPDATE \`asterisk\`.\`announcement\`
@@ -18480,6 +18701,82 @@ app.delete('/api/config/moh/file', requireAuth, async (req, res) => {
 });
 
 // GET /api/config/moh/stream/:category/:file - Stream MoH Audio for Browser Preview
+// GET /api/config/moh/file/info - Audio statistics + stored studio state for a MoH track
+app.get('/api/config/moh/file/info', requireAuth, async (req, res) => {
+    try {
+        const category = String(req.query.category || '').trim();
+        const fileName = path.basename(String(req.query.file || '').trim());
+        if (!category || !fileName) {
+            return res.status(400).json({ success: false, error: 'Category and file are required.' });
+        }
+        const resolved = resolveMohCategoryDir(category);
+        if (!resolved) return res.status(404).json({ success: false, error: 'MoH category not found.' });
+
+        const filePath = path.join(resolved.dirPath, fileName);
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ success: false, error: 'MoH file not found on disk.' });
+        }
+
+        const { execSync: execSyncFn } = require('child_process');
+        const stat = {};
+        try {
+            const rawStat = execSyncFn(`sox "${filePath}" -n stat 2>&1`, { encoding: 'utf8' });
+            stat.length = parseFloat((rawStat.match(/Length \(seconds\):\s+([\d\.]+)/) || [])[1] || '0').toFixed(2);
+            stat.maxAmplitude = parseFloat((rawStat.match(/Maximum amplitude:\s+([\d\.]+)/) || [])[1] || '0').toFixed(4);
+            stat.rmsAmplitude = parseFloat((rawStat.match(/RMS\s+amplitude:\s+([\d\.]+)/) || [])[1] || '0').toFixed(4);
+            stat.volumeAdjustment = parseFloat((rawStat.match(/Volume adjustment:\s+([\d\.]+)/) || [])[1] || '0').toFixed(2);
+        } catch (_) {}
+
+        const astdbKey = `${resolved.cat.name}/${fileName}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+        let gainDb = 0;
+        let dspSettings = null;
+        try {
+            const outGain = await execFileAsync(ASTERISK_BIN, ['-rx', `database get MOH "${astdbKey}/gain"`]);
+            const mGain = (outGain || '').match(/(?:Value|Result):\s*(-?\d+)/i);
+            if (mGain) gainDb = parseInt(mGain[1], 10);
+            const outDsp = await execFileAsync(ASTERISK_BIN, ['-rx', `database get MOH "${astdbKey}/dsp"`]);
+            const mDsp = (outDsp || '').match(/(?:Value|Result):\s*(.+)$/im);
+            if (mDsp) dspSettings = JSON.parse(mDsp[1]);
+        } catch (_) {}
+
+        const ext = path.extname(fileName).toLowerCase();
+        const fileStat = fs.statSync(filePath);
+        res.json({
+            success: true,
+            category: resolved.cat.name,
+            filename: fileName,
+            format: (ext ? ext.substring(1) : 'wav').toUpperCase(),
+            size: fileStat.size,
+            stat,
+            gainDb,
+            dspSettings
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/config/moh/file/dsp - Apply the audio studio chain to a MoH track
+app.post('/api/config/moh/file/dsp', requireAuth, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const { category } = body;
+        const categoryName = String(category || '').trim();
+        const fileName = path.basename(String(body.filename || body.file || '').trim());
+        if (!categoryName || !fileName) {
+            return res.status(400).json({ success: false, error: 'Category and file are required.' });
+        }
+        const result = await processMohDsp(categoryName, fileName, body);
+        res.json({
+            success: true,
+            ...result,
+            message: `Audio effects applied successfully to "${fileName}".`
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.get('/api/config/moh/stream/:category/:file', requireAuth, (req, res) => {
     try {
         const catName = req.params.category.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
@@ -20825,7 +21122,17 @@ app.post('/api/settings/recordings/upload', (req, res) => {
             // Save to Issabel filesystem + DB
             await saveRecordingToFS(wavPath, recordingName, gainDb);
 
-            res.json({ success: true, message: 'Recording "' + recordingName + '" uploaded successfully.' });
+            // Return the new recording id so the caller can select it right away
+            let newRecordingId = 0;
+            try {
+                const [idRows] = await pool.query(
+                    'SELECT id FROM `asterisk`.`recordings` WHERE filename = ? ORDER BY id DESC LIMIT 1',
+                    ['custom/' + safeName]
+                );
+                if (idRows && idRows.length) newRecordingId = idRows[0].id;
+            } catch (_) {}
+
+            res.json({ success: true, id: newRecordingId, message: 'Recording "' + recordingName + '" uploaded successfully.' });
         } catch (convErr) {
             // Cleanup on failure
             if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath);
