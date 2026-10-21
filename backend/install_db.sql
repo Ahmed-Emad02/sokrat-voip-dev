@@ -720,3 +720,47 @@ CREATE TABLE IF NOT EXISTS `laya_maintenance_events` (
   INDEX `idx_laya_dongle_time` (`dongle_name`, `created_at`),
   INDEX `idx_laya_result` (`result`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- Record every call by default.
+-- The dialplan's [sub-record-check] gate reads the recording mode from these
+-- tables; when it is empty ("dontcare") the call is silently never recorded.
+-- Queues live in Issabel's `queues_config`, which may not exist yet on a
+-- fresh install, so each statement is guarded and idempotent.
+-- ---------------------------------------------------------------------------
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_config')
+         AND EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
+    'UPDATE `asterisk`.`queues_config` SET `monitor_type` = ''bgrnd'' WHERE `monitor_type` IS NULL OR `monitor_type` = ''''',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+-- The queue recording gate is Issabel's `monitor-format` key in
+-- queues_details: without it Issabel emits `Gosub(sub-record-check,s,1(q,<ext>,dontcare))`
+-- and the queue is silently NEVER recorded. Add it to every queue that is
+-- missing it so all queues record by default.
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_config')
+         AND EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
+    'INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags)
+       SELECT q.extension, ''monitor-format'', ''wav'', 0
+       FROM `asterisk`.`queues_config` q
+       WHERE q.extension NOT IN (SELECT d.id FROM `asterisk`.`queues_details` d WHERE d.keyword = ''monitor-format'')',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+UPDATE `asterisk`.`ringgroups` SET `recording` = 'always'
+  WHERE `recording` IS NULL OR `recording` = '' OR `recording` = 'dontcare';
+
+UPDATE `asterisk`.`users` SET `recording` = 'out=always|in=always'
+  WHERE `recording` IS NULL OR `recording` = '' OR `recording` = 'dontcare';

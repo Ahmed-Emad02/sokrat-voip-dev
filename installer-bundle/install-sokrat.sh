@@ -2019,9 +2019,13 @@ exten => record,n,Set(__REC_STATUS=RECORDING)
 exten => record,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
 exten => record,n,Return()
 
+; NOTE: ${MONITOR_OPTIONS} is deliberately NOT passed to MixMonitor here.
+; Issabel sets it to 'b' for queues, and Asterisk's 'b' flag only saves audio
+; while the monitored channel is bridged - on a queue the monitored leg is
+; often never bridged, which produced 44-byte (header-only) recordings.
 exten => recq,1,Set(MONITOR_FILENAME=${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME})
 exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
-exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS}${MONITOR_OPTIONS},${MIXMON_POST})
+exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => recq,n,Set(__REC_STATUS=RECORDING)
 exten => recq,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
 exten => recq,n,Return()
@@ -2040,6 +2044,25 @@ exten => recconf,n,Return()
 SUBRECORD_OVERRIDE
     fi
 fi
+
+# Ensure the queue recording path does not use the "bridged only" MixMonitor
+# flag (${MONITOR_OPTIONS}). Issabel sets MONITOR_OPTIONS=b for queues and
+# Asterisk's "b" flag only writes audio while the monitored channel is
+# bridged - on a queue it often never is, which produced 44-byte (header-only)
+# recordings. Idempotent.
+python3 - "$OVERRIDE_CONF" << 'PY_RECQUEUE'
+import sys
+path = sys.argv[1]
+old = "exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS}${MONITOR_OPTIONS},${MIXMON_POST})"
+new = "exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})"
+try:
+    content = open(path, encoding="utf-8").read()
+except Exception:
+    sys.exit(0)
+if old in content:
+    open(path, "w", encoding="utf-8").write(content.replace(old, new))
+    print("  Patched queue recording MixMonitor (dropped bridged-only flag)")
+PY_RECQUEUE
 
 # Strip old [func-apply-sipheaders-custom] before appending
 echo "  Stripping old [func-apply-sipheaders-custom]..."

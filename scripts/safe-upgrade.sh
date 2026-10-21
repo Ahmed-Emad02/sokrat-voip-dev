@@ -147,6 +147,28 @@ ensure_db_index "mobile_devices" "uniq_platform_device" "UNIQUE KEY \`uniq_platf
 ensure_db_column "announcement" "tts_lang" "VARCHAR(10) NOT NULL DEFAULT 'en-US'"
 ensure_db_column "announcement" "tts_text" "TEXT NOT NULL DEFAULT ('')"
 
+# Record every call by default (idempotent): the dialplan's [sub-record-check]
+# gate reads the recording mode from these tables, and an empty mode
+# ("dontcare") means the call is silently never recorded.
+RECQUEUES_TABLE=$(mysql "${MYSQL_AUTH[@]}" asterisk -Nse \
+    "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='asterisk' AND TABLE_NAME='queues_config'" 2>/dev/null || echo "0")
+if [ "$RECQUEUES_TABLE" != "0" ]; then
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "UPDATE \`asterisk\`.\`queues_config\` SET \`monitor_type\`='bgrnd' WHERE \`monitor_type\` IS NULL OR \`monitor_type\`=''" 2>/dev/null || true
+    # The recording gate itself is Issabel's `monitor-format` key: without it
+    # Issabel emits dontcare and the queue is silently never recorded.
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "INSERT INTO \`asterisk\`.\`queues_details\` (id, keyword, data, flags)
+         SELECT q.extension, 'monitor-format', 'wav', 0 FROM \`asterisk\`.\`queues_config\` q
+         WHERE q.extension NOT IN (SELECT d.id FROM \`asterisk\`.\`queues_details\` d WHERE d.keyword = 'monitor-format')" 2>/dev/null || true
+    echo "  Queues: call recording enabled by default (monitor-format=wav)"
+fi
+mysql "${MYSQL_AUTH[@]}" asterisk -e \
+    "UPDATE \`asterisk\`.\`ringgroups\` SET \`recording\`='always' WHERE \`recording\` IS NULL OR \`recording\`='' OR \`recording\`='dontcare'" 2>/dev/null || true
+mysql "${MYSQL_AUTH[@]}" asterisk -e \
+    "UPDATE \`asterisk\`.\`users\` SET \`recording\`='out=always|in=always' WHERE \`recording\` IS NULL OR \`recording\`='' OR \`recording\`='dontcare'" 2>/dev/null || true
+echo "  Extensions and ring groups: call recording enabled by default"
+
 # Seed new webhook settings keys (idempotent INSERT IGNORE)
 mysql "${MYSQL_AUTH[@]}" asterisk -e "
 INSERT IGNORE INTO dashboard_settings (setting_key, setting_value) VALUES
@@ -539,9 +561,13 @@ exten => record,n,Set(__REC_STATUS=RECORDING)
 exten => record,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
 exten => record,n,Return()
 
+; NOTE: ${MONITOR_OPTIONS} is deliberately NOT passed to MixMonitor here.
+; Issabel sets it to 'b' for queues, and Asterisk's 'b' flag only saves audio
+; while the monitored channel is bridged - on a queue the monitored leg is
+; often never bridged, which produced 44-byte (header-only) recordings.
 exten => recq,1,Set(MONITOR_FILENAME=${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME})
 exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
-exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS}${MONITOR_OPTIONS},${MIXMON_POST})
+exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => recq,n,Set(__REC_STATUS=RECORDING)
 exten => recq,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
 exten => recq,n,Return()
@@ -561,6 +587,17 @@ exten => recconf,n,Return()
             ov_content = ov_content.rstrip() + "\n\n" + subrecord_override.strip() + "\n"
             with open(override_conf, "w", encoding="utf-8") as f:
                 f.write(ov_content)
+
+        # Drop the "bridged only" MixMonitor flag (${MONITOR_OPTIONS}) from the
+        # queue recording path - it produced 44-byte (header-only) recordings.
+        # Idempotent, and also fixes servers that already had the block.
+        _recq_old = "exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS}${MONITOR_OPTIONS},${MIXMON_POST})"
+        _recq_new = "exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})"
+        if _recq_old in ov_content:
+            ov_content = ov_content.replace(_recq_old, _recq_new)
+            with open(override_conf, "w", encoding="utf-8") as f:
+                f.write(ov_content)
+            print("  Patched queue recording MixMonitor (dropped bridged-only flag)")
 
     # Update [ext-external-failover] with smart alternate dongle selection
     content = re.sub(r'\[ext-external-failover\].*?(?=\n\[|\Z)', '', content, flags=re.DOTALL)
