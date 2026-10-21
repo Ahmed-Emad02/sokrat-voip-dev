@@ -243,7 +243,7 @@ const isRtl = activeLang === 'ar';
 
                 <!-- ALLOWED GSM DONGLES CHECKBOXES -->
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.allowedDongles %></label>
+                    <span class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.allowedDongles %></span>
                     <div id="campDonglesRoster" class="flex flex-wrap gap-2 p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg min-h-[46px]">
                         <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل شرائح GSM المتاحة...' : 'Loading available GSM dongles...' %></span>
                     </div>
@@ -252,7 +252,7 @@ const isRtl = activeLang === 'ar';
 
                 <!-- ASSIGNED AGENTS DISTRIBUTION CHECKBOXES -->
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.assignedAgents %></label>
+                    <span class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.assignedAgents %></span>
                     <div id="campAgentsRoster" class="flex flex-wrap gap-2 p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg min-h-[46px]">
                         <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل تحويلات الموظفين...' : 'Loading PBX agent extensions...' %></span>
                     </div>
@@ -285,7 +285,7 @@ const isRtl = activeLang === 'ar';
                 <!-- CAMPAIGN-LEVEL DYNAMIC LEAD FIELDS -->
                 <div class="pt-2 border-t border-[var(--border-primary)]">
                     <div class="flex items-center justify-between gap-2 mb-1">
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase"><%= t.leadFields %></label>
+                        <span class="block text-xs font-bold text-[var(--text-secondary)] uppercase"><%= t.leadFields %></span>
                         <button type="button" onclick="addCampaignField()" class="dialer-control dialer-control-info"><span>+</span><span><%= t.addField %></span></button>
                     </div>
                     <p class="text-[10px] text-[var(--text-muted)] mb-1"><%= t.builtInLeadFields %></p>
@@ -429,11 +429,11 @@ const isRtl = activeLang === 'ar';
             <h3 class="text-sm font-extrabold mb-3"><%= t.addDnc %></h3>
             <form onsubmit="addDncNumber(event)" class="space-y-3">
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.phoneNumber %></label>
+                    <label for="dncPhoneInput" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.phoneNumber %></label>
                     <input type="text" id="dncPhoneInput" required class="config-input w-full font-mono text-xs" placeholder="01012345678">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.reason %></label>
+                    <label for="dncReasonInput" class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1"><%= t.reason %></label>
                     <input type="text" id="dncReasonInput" class="config-input w-full text-xs" placeholder="<%= isRtl ? 'طلب العميل / عدم الرغبة في الاتصال' : 'Customer request / opt-out' %>">
                 </div>
                 <div class="flex justify-end gap-2 pt-2 border-t border-[var(--border-primary)]">

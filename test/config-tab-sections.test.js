@@ -6,9 +6,13 @@ const ejs = require('ejs');
 
 const configEjsPath = path.join(__dirname, '../views/config.ejs');
 
-test('views/config.ejs renders all 17 PBX tab sections as direct siblings at equal DOM depth', async () => {
+test('views/config.ejs renders all PBX tab sections as direct siblings at equal DOM depth', async () => {
     const content = fs.readFileSync(configEjsPath, 'utf8');
 
+    // NOTE: config.ejs defines its own isTabAllowed() helper which gates each
+    // section against the `allowedTabs` array, so the array must list every
+    // tab for the full section set to render. 'stt' and 'audioprocessing' are
+    // always allowed by the template.
     const html = ejs.render(content, {
         currentPage: '/config',
         currentLang: 'en',
@@ -17,7 +21,7 @@ test('views/config.ejs renders all 17 PBX tab sections as direct siblings at equ
         isRoot: true,
         user: { username: 'admin', isRoot: true },
         currentUser: { username: 'admin', isRoot: true },
-        allowedTabs: ['extensions', 'callcodes', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram', 'announcements', 'modem', 'dongles', 'terminal', 'federation'],
+        allowedTabs: ['extensions', 'callcodes', 'ringgroups', 'inbound', 'trunks', 'outbound', 'queues', 'timegroups', 'timeconditions', 'voicemail', 'ivr', 'recordings', 'diagram', 'announcements', 'modem', 'dongles', 'terminal', 'federation', 'stt', 'audioprocessing', 'ipscan'],
         isTabAllowed: () => true
     }, { filename: configEjsPath });
 
@@ -41,7 +45,36 @@ test('views/config.ejs renders all 17 PBX tab sections as direct siblings at equ
         }
     }
 
-    assert.equal(sectionReport.length, 18, 'Must render all tab sections');
+    const EXPECTED_SECTIONS = [
+        'section-extensions',
+        'section-ringgroups',
+        'section-queues',
+        'section-ivr',
+        'section-recordings',
+        'section-stt',
+        'section-trunks',
+        'section-inbound',
+        'section-outbound',
+        'section-voicemail',
+        'section-diagram',
+        'section-timegroups',
+        'section-timeconditions',
+        'section-announcements',
+        'section-modem',
+        'section-audioprocessing',
+        'section-terminal',
+        'section-callcodes',
+        'section-federation',
+        'section-ipscan',
+    ];
+
+    const rendered = sectionReport.map(s => s.id);
+    assert.deepEqual(
+        rendered.slice().sort(),
+        EXPECTED_SECTIONS.slice().sort(),
+        `config.ejs must render exactly the expected tab sections. Rendered: ${rendered.join(', ')}`
+    );
+    assert.equal(sectionReport.length, EXPECTED_SECTIONS.length, 'Must render all tab sections');
     const depths = new Set(sectionReport.map(s => s.depthAtOpen));
     assert.equal(depths.size, 1, `All tab sections must open at the exact same DOM depth (got ${[...depths].join(', ')})`);
 });

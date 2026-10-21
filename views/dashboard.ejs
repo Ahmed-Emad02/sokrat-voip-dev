@@ -164,6 +164,58 @@ const isRtl = currentLang === 'ar';
             background-color: var(--bg-secondary); 
             border: 1px solid var(--border-primary); 
         }
+        /* The dashboard filter bar is a flat, borderless control strip that sits
+           directly on the page background. The ID selector outranks the later
+           !important .panel-surface rules from sidebar.ejs. */
+        #dashFilterForm {
+            background-color: transparent !important;
+            background-image: none !important;
+            border: 0 !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            box-shadow: none !important;
+        }
+        html.light-theme #dashFilterForm {
+            background-color: transparent !important;
+            border: 0 !important;
+        }
+        /* Hero stat row dividers.
+           The container supplies the rule above and below the whole row, and
+           each card carries the vertical rule that separates it from the card
+           before it. inline-start keeps the correct side in RTL.
+           !important is required because .hero-card-clean forces
+           border-width:0 !important on the cards. */
+        #heroStatsGrid > a {
+            border-inline-start: 1px solid var(--border-primary) !important;
+        }
+        #heroStatsGrid > a:first-child {
+            border-inline-start: 0 !important;
+        }
+        @media (max-width: 639px) {
+            /* Single column: horizontal rules between the stacked cards. */
+            #heroStatsGrid > a { border-inline-start: 0 !important; }
+            #heroStatsGrid > a + a { border-top: 1px solid var(--border-primary) !important; }
+        }
+        @media (min-width: 640px) and (max-width: 1023px) {
+            /* Two columns: only the second column carries the vertical rule. */
+            #heroStatsGrid > a:nth-child(odd) { border-inline-start: 0 !important; }
+        }
+        /* Second stat row (2 / 4 / 8 columns): same divider contract, with the
+           column boundaries recalculated for each breakpoint. */
+        #heroTilesGrid > a {
+            border-inline-start: 1px solid var(--border-primary) !important;
+        }
+        #heroTilesGrid > a:first-child {
+            border-inline-start: 0 !important;
+        }
+        @media (max-width: 639px) {
+            /* Two columns: only the even tiles carry the vertical rule. */
+            #heroTilesGrid > a:nth-child(odd) { border-inline-start: 0 !important; }
+        }
+        @media (min-width: 640px) and (max-width: 1023px) {
+            /* Four columns: the first tile of each row starts a new column. */
+            #heroTilesGrid > a:nth-child(4n+1) { border-inline-start: 0 !important; }
+        }
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
         .card-stat { 
@@ -187,6 +239,133 @@ const isRtl = currentLang === 'ar';
             box-shadow: none !important;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
+        }
+
+        /* ============================================================
+           PREMIUM STAT CARD HOVER
+           1. Cursor-tracking spotlight in the card's accent colour
+           2. Gradient hairline ring that fades in
+           3. Micro-lift with an accent-tinted shadow
+           4. Icon scale + chevron nudge micro-interactions
+
+           NOTE on specificity: .hero-card-clean ships a selector list whose
+           most specific member is ".light-theme .hero-card-clean:hover"
+           (0,3,0) and it forces box-shadow:none !important. A rule only
+           beats that with a higher specificity, so every hover rule below is
+           anchored on the grid ID (1,2,0). The accent classes are declared
+           AFTER .hero-stat-card so they win the --card-accent-rgb override.
+           ============================================================ */
+        .hero-stat-card {
+            --card-accent-rgb: 239 68 68;
+            --glow-x: 50%;
+            --glow-y: 0%;
+            position: relative;
+            isolation: isolate;
+            transition:
+                transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 320ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .stat-accent-red     { --card-accent-rgb: 239 68 68; }
+        .stat-accent-crimson { --card-accent-rgb: 220 38 38; }
+        .stat-accent-emerald { --card-accent-rgb: 52 211 153; }
+        .stat-accent-sky     { --card-accent-rgb: 14 165 233; }
+        .stat-accent-amber   { --card-accent-rgb: 245 158 11; }
+        .stat-accent-purple  { --card-accent-rgb: 168 85 247; }
+        .stat-accent-rose    { --card-accent-rgb: 244 63 94; }
+        .stat-accent-cyan    { --card-accent-rgb: 34 211 238; }
+        .stat-accent-indigo  { --card-accent-rgb: 129 140 248; }
+
+        /* 1. Cursor spotlight */
+        #heroStatsGrid .hero-stat-card::before,
+        #heroTilesGrid .hero-stat-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: radial-gradient(
+                300px circle at var(--glow-x) var(--glow-y),
+                rgb(var(--card-accent-rgb) / 0.24),
+                rgb(var(--card-accent-rgb) / 0.08) 42%,
+                transparent 72%
+            );
+            opacity: 0;
+            transition: opacity 280ms ease-out;
+            pointer-events: none;
+            z-index: -1;
+        }
+        /* 2. Gradient hairline ring */
+        #heroStatsGrid .hero-stat-card::after,
+        #heroTilesGrid .hero-stat-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(135deg,
+                rgb(var(--card-accent-rgb) / 0.95) 0%,
+                rgb(var(--card-accent-rgb) / 0.18) 36%,
+                transparent 56%,
+                rgb(var(--card-accent-rgb) / 0.6) 100%);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 300ms ease-out;
+            pointer-events: none;
+            z-index: 2;
+        }
+        /* 3. Micro-lift + accent shadow */
+        #heroStatsGrid .hero-stat-card:hover,
+        #heroStatsGrid .hero-stat-card:focus-visible,
+        #heroTilesGrid .hero-stat-card:hover,
+        #heroTilesGrid .hero-stat-card:focus-visible {
+            transform: translateY(-3px) scale(1.006) !important;
+            box-shadow:
+                0 22px 46px -22px rgb(var(--card-accent-rgb) / 0.6),
+                0 2px 12px -6px rgb(var(--card-accent-rgb) / 0.3) !important;
+        }
+        #heroStatsGrid .hero-stat-card:hover::before,
+        #heroStatsGrid .hero-stat-card:focus-visible::before,
+        #heroTilesGrid .hero-stat-card:hover::before,
+        #heroTilesGrid .hero-stat-card:focus-visible::before { opacity: 1; }
+        #heroStatsGrid .hero-stat-card:hover::after,
+        #heroStatsGrid .hero-stat-card:focus-visible::after,
+        #heroTilesGrid .hero-stat-card:hover::after,
+        #heroTilesGrid .hero-stat-card:focus-visible::after { opacity: 1; }
+        /* 4. Micro-interactions */
+        .hero-stat-card .stat-arrow {
+            transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), color 200ms ease;
+        }
+        #heroStatsGrid .hero-stat-card:hover .stat-arrow,
+        #heroStatsGrid .hero-stat-card:focus-visible .stat-arrow,
+        #heroTilesGrid .hero-stat-card:hover .stat-arrow,
+        #heroTilesGrid .hero-stat-card:focus-visible .stat-arrow {
+            transform: translateX(4px);
+        }
+        html[dir="rtl"] #heroStatsGrid .hero-stat-card:hover .stat-arrow,
+        html[dir="rtl"] #heroStatsGrid .hero-stat-card:focus-visible .stat-arrow,
+        html[dir="rtl"] #heroTilesGrid .hero-stat-card:hover .stat-arrow,
+        html[dir="rtl"] #heroTilesGrid .hero-stat-card:focus-visible .stat-arrow {
+            transform: translateX(-4px);
+        }
+        #heroStatsGrid .hero-stat-card:hover svg.group-hover\:scale-110,
+        #heroStatsGrid .hero-stat-card:focus-visible svg.group-hover\:scale-110,
+        #heroTilesGrid .hero-stat-card:hover svg.group-hover\:scale-110,
+        #heroTilesGrid .hero-stat-card:focus-visible svg.group-hover\:scale-110 {
+            transform: scale(1.12);
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .hero-stat-card,
+            .hero-stat-card::before,
+            .hero-stat-card::after,
+            .hero-stat-card .stat-arrow {
+                transition: none !important;
+            }
+            #heroStatsGrid .hero-stat-card:hover,
+            #heroStatsGrid .hero-stat-card:focus-visible,
+            #heroTilesGrid .hero-stat-card:hover,
+            #heroTilesGrid .hero-stat-card:focus-visible { transform: none !important; }
         }
         input, select, button { 
             transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); 
@@ -509,11 +688,11 @@ const isRtl = currentLang === 'ar';
         %>
 
         <!-- Section 1: Hero KPI Cards (4 prominent cards) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 shrink-0">
+        <div id="heroStatsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 shrink-0 border-y border-[var(--border-primary)]">
             <!-- Hero Card 1: Total Calls -->
             <a href="<%= baseUrl %>&statusFilter=ALL&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض إجمالي المكالمات في سجل الاتصالات' : 'View total calls in Call History' %>"
-               class="hero-card-clean rounded-2xl p-5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
+               class="hero-card-clean rounded-2xl p-5 hero-stat-card stat-accent-red bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-3">
                         <svg class="w-8 h-8 text-[var(--accent-color)] shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -524,7 +703,7 @@ const isRtl = currentLang === 'ar';
                             <p class="text-xs text-zinc-500 font-mono mt-0.5"><span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= isRtl ? 'إجمالي الحركة' : 'Total volume' %></span></p>
                         </div>
                     </div>
-                    <svg class="w-4 h-4 text-zinc-600 group-hover:text-[var(--accent-color)] transition-colors shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <svg class="stat-arrow w-4 h-4 text-zinc-600 group-hover:text-[var(--accent-color)] transition-colors transition-transform shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
                     </svg>
                 </div>
@@ -536,29 +715,28 @@ const isRtl = currentLang === 'ar';
                 </div>
             </a>
 
-            <!-- Hero Card 2: Answer Rate -->
+            <!-- Hero Card 2: Total Talk Time -->
             <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
-               title="<%= isRtl ? 'عرض المكالمات المجابة في سجل الاتصالات' : 'View answered calls in Call History' %>"
-               class="hero-card-clean rounded-2xl p-5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
+               title="<%= isRtl ? 'عرض تفاصيل أوقات المكالمات في سجل الاتصالات' : 'View total talk time in Call History' %>"
+               class="hero-card-clean rounded-2xl p-5 hero-stat-card stat-accent-cyan bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-3">
-                        <svg class="w-8 h-8 text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/>
+                        <svg class="w-8 h-8 text-cyan-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                         </svg>
                         <div>
-                            <p class="text-[11px] font-bold uppercase text-zinc-400 tracking-wider"><%= t.answerRate %></p>
-                            <p class="text-xs text-emerald-400/80 font-mono mt-0.5"><span class="card-stat-val"><%= stats.answeredCalls %></span> / <span class="card-stat-val"><%= stats.totalCalls %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= isRtl ? 'مجابة' : 'answered' %></span></p>
+                            <p class="text-[11px] font-bold uppercase text-zinc-400 tracking-wider"><%= t.totalAirtime %></p>
+                            <p class="text-xs text-cyan-400/80 font-mono mt-0.5"><span class="card-stat-val"><%= Math.round(stats.totalTalkSec) %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= t.sec %></span></p>
                         </div>
                     </div>
-                    <svg class="w-4 h-4 text-zinc-600 group-hover:text-emerald-400 transition-colors shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <svg class="stat-arrow w-4 h-4 text-zinc-600 group-hover:text-cyan-400 transition-colors transition-transform shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
                     </svg>
                 </div>
                 <div class="mt-4">
-                    <p class="text-3xl sm:text-4xl font-black text-white card-stat-val tracking-tight"><%= ansPercent %>%</p>
+                    <p class="text-3xl sm:text-4xl font-black text-white card-stat-val tracking-tight"><%= stats.totalTalkMin %> <span class="text-[11px] font-bold text-cyan-400 <%= isRtl ? 'font-sans' : 'font-mono' %>"><%= t.min %></span></p>
                     <div class="mt-3 h-1.5 w-full bg-zinc-800/50 rounded-full overflow-hidden">
-                        <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: <%= ansPercent %>%"></div>
+                        <div class="h-full bg-cyan-500 rounded-full transition-all duration-500" style="width: <%= ansPercent %>%"></div>
                     </div>
                 </div>
             </a>
@@ -566,7 +744,7 @@ const isRtl = currentLang === 'ar';
             <!-- Hero Card 3: Answered Calls -->
             <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات التي تم الرد عليها في سجل الاتصالات' : 'View answered calls in Call History' %>"
-               class="hero-card-clean rounded-2xl p-5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
+               class="hero-card-clean rounded-2xl p-5 hero-stat-card stat-accent-emerald bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-3">
                         <svg class="w-8 h-8 text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -577,7 +755,7 @@ const isRtl = currentLang === 'ar';
                             <p class="text-xs text-emerald-400/80 font-mono mt-0.5"><span class="card-stat-val"><%= stats.totalCalls ? Math.round((stats.answeredCalls / stats.totalCalls) * 100) : 0 %>%</span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= isRtl ? 'نسبة الرد' : 'completion' %></span></p>
                         </div>
                     </div>
-                    <svg class="w-4 h-4 text-zinc-600 group-hover:text-emerald-400 transition-colors shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <svg class="stat-arrow w-4 h-4 text-zinc-600 group-hover:text-emerald-400 transition-colors transition-transform shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
                     </svg>
                 </div>
@@ -592,7 +770,7 @@ const isRtl = currentLang === 'ar';
             <!-- Hero Card 4: External Calls -->
             <a href="<%= baseUrl %>&callScopeFilter=EXTERNAL&statusFilter=ALL" 
                title="<%= isRtl ? 'عرض المكالمات الخارجية في سجل الاتصالات' : 'View external calls in Call History' %>"
-               class="hero-card-clean rounded-2xl p-5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
+               class="hero-card-clean rounded-2xl p-5 hero-stat-card stat-accent-indigo bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group relative flex flex-col justify-between overflow-hidden">
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex items-center gap-3">
                         <svg class="w-8 h-8 text-indigo-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -603,7 +781,7 @@ const isRtl = currentLang === 'ar';
                             <p class="text-xs text-indigo-400/80 font-mono mt-0.5"><span class="card-stat-val"><%= stats.externalMin || 0 %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= t.min %> <%= t.airMinutes %></span></p>
                         </div>
                     </div>
-                    <svg class="w-4 h-4 text-zinc-600 group-hover:text-indigo-400 transition-colors shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <svg class="stat-arrow w-4 h-4 text-zinc-600 group-hover:text-indigo-400 transition-colors transition-transform shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M10 19l-7-7m0 0l7-7m-7 7h18' : 'M14 5l7 7m0 0l-7 7m7-7H3' %>"/>
                     </svg>
                 </div>
@@ -628,7 +806,137 @@ const isRtl = currentLang === 'ar';
             </div>
         </div>
 
-        <!-- Section 3: Operations Row (Hourly Distribution + Top Talkers) -->
+        <!-- Section 3: Secondary Metric Tiles (8 compact cards) -->
+        <div id="heroTilesGrid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-6 shrink-0 border-y border-[var(--border-primary)]">
+            <!-- Tile 1: Total Inbound Calls -->
+            <a href="<%= baseUrl %>&directionFilter=INBOUND&statusFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات الواردة في سجل الاتصالات' : 'View inbound calls in Call History' %>"
+               class="hero-card-clean rounded-xl p-3.5 hero-stat-card stat-accent-sky bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
+                <div class="flex items-center justify-between gap-1">
+                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.inbound %></span>
+                    <svg class="w-4 h-4 text-sky-500 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m0 0l-5-5m5 5l5-5"/></svg>
+                </div>
+                <div class="mt-2">
+                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.inboundCount %></p>
+                    <p class="text-[10px] font-bold text-sky-400 font-mono mt-1 truncate"><span class="card-stat-val"><%= stats.inboundMin %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= t.min %></span></p>
+                </div>
+            </a>
+
+            <!-- Tile 2: Total Outbound Calls -->
+            <a href="<%= baseUrl %>&directionFilter=OUTBOUND&statusFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات الصادرة في سجل الاتصالات' : 'View outbound calls in Call History' %>"
+               class="hero-card-clean rounded-xl p-3.5 hero-stat-card stat-accent-amber bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
+                <div class="flex items-center justify-between gap-1">
+                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.outbound %></span>
+                    <svg class="w-4 h-4 text-amber-500 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5m0 0l-5 5m5-5l5 5"/></svg>
+                </div>
+                <div class="mt-2">
+                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.outboundCount %></p>
+                    <p class="text-[10px] font-bold text-amber-400/80 font-mono mt-1 truncate"><span class="card-stat-val"><%= stats.outboundMin %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= t.min %></span></p>
+                </div>
+            </a>
+
+            <!-- Tile 3: Internal Calls -->
+            <a href="<%= baseUrl %>&callScopeFilter=INTERNAL&statusFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات الداخلية في سجل الاتصالات' : 'View internal calls in Call History' %>"
+               class="hero-card-clean rounded-xl p-3.5 hero-stat-card stat-accent-purple bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
+                <div class="flex items-center justify-between gap-1">
+                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.internalCalls %></span>
+                    <svg class="w-4 h-4 text-purple-500 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+                </div>
+                <div class="mt-2">
+                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.internalCount || 0 %></p>
+                    <p class="text-[10px] font-bold text-purple-400 font-mono mt-1 truncate"><span class="card-stat-val"><%= stats.internalMin || 0 %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= t.min %></span></p>
+                </div>
+            </a>
+
+            <!-- Tile 4: No Answer / Missed -->
+            <a href="<%= baseUrl %>&statusFilter=NO ANSWER&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات الفائتة في سجل الاتصالات' : 'View missed calls in Call History' %>"
+               class="hero-card-clean rounded-xl p-3.5 hero-stat-card stat-accent-rose bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
+                <div class="flex items-center justify-between gap-1">
+                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.noAnswer %></span>
+                    <svg class="w-4 h-4 text-rose-500 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0119 12.55"/><path d="M5 12.55a10.94 10.94 0 015.17-2.39"/><path d="M10.71 5.05A16 16 0 0122.58 9"/><path d="M1.42 9a15.91 15.91 0 014.7-2.88"/><path d="M8.53 16.11a6 6 0 016.95 0"/><path d="M12 20h.01"/></svg>
+                </div>
+                <div class="mt-2">
+                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.noAnswerCalls %></p>
+                    <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
+                        <div class="h-full bg-rose-500 rounded-full" style="width: <%= stats.totalCalls ? (stats.noAnswerCalls / stats.totalCalls) * 100 : 0 %>%"></div>
+                    </div>
+                </div>
+            </a>
+
+            <!-- Tile 5: Busy Calls -->
+            <a href="<%= baseUrl %>&statusFilter=BUSY&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات المشغولة في سجل الاتصالات' : 'View busy calls in Call History' %>"
+               class="hero-card-clean rounded-xl p-3.5 hero-stat-card stat-accent-amber bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
+                <div class="flex items-center justify-between gap-1">
+                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.busy %></span>
+                    <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 00-.586-1.414L12 12l-4.414 4.414A2 2 0 007.586 18.828V22"/><path d="M7 2v4.172a2 2 0 00.586 1.414L12 12l4.414-4.414A2 2 0 0017 6.172V2"/></svg>
+                </div>
+                <div class="mt-2">
+                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.busyCalls %></p>
+                    <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
+                        <div class="h-full bg-amber-500 rounded-full" style="width: <%= stats.totalCalls ? (stats.busyCalls / stats.totalCalls) * 100 : 0 %>%"></div>
+                    </div>
+                </div>
+            </a>
+
+            <!-- Tile 6: Failed Calls -->
+            <a href="<%= baseUrl %>&statusFilter=FAILED&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات الفاشلة في سجل الاتصالات' : 'View failed calls in Call History' %>"
+               class="hero-card-clean rounded-xl p-3.5 hero-stat-card stat-accent-crimson bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
+                <div class="flex items-center justify-between gap-1">
+                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.failed %></span>
+                    <svg class="w-4 h-4 text-red-600 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                </div>
+                <div class="mt-2">
+                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.failedCalls %></p>
+                    <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
+                        <div class="h-full bg-red-600 rounded-full" style="width: <%= stats.totalCalls ? (stats.failedCalls / stats.totalCalls) * 100 : 0 %>%"></div>
+                    </div>
+                </div>
+            </a>
+
+            <!-- Tile 7: Answer Rate -->
+            <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض المكالمات المجابة في سجل الاتصالات' : 'View answered calls in Call History' %>"
+               class="hero-card-clean rounded-xl p-3.5 hero-stat-card stat-accent-emerald bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
+                <div class="flex items-center justify-between gap-1">
+                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.answerRate %></span>
+                    <svg class="w-4 h-4 text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/>
+                        <path d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/>
+                    </svg>
+                </div>
+                <div class="mt-2">
+                    <p class="text-xl font-bold text-white card-stat-val"><%= ansPercent %>%</p>
+                    <p class="text-[10px] font-bold text-emerald-400/80 font-mono mt-1 truncate"><span class="card-stat-val"><%= stats.answeredCalls %></span> / <span class="card-stat-val"><%= stats.totalCalls %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= isRtl ? 'مجابة' : 'answered' %></span></p>
+                </div>
+            </a>
+
+            <!-- Tile 8: Avg Call Duration -->
+            <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
+               title="<%= isRtl ? 'عرض تفاصيل مدة المكالمات في سجل الاتصالات' : 'View average duration in Call History' %>"
+               class="hero-card-clean rounded-xl p-3.5 hero-stat-card stat-accent-indigo bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
+                <div class="flex items-center justify-between gap-1">
+                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.avgDuration %></span>
+                    <svg class="w-4 h-4 text-indigo-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/><path d="M12 2v3"/></svg>
+                </div>
+                <div class="mt-2">
+                    <p class="text-xl font-bold text-white card-stat-val">
+                        <% if (avgSec >= 60) { %>
+                            <span><%= Math.floor(avgSec / 60) %></span><span class="text-[11px] font-bold <%= isRtl ? 'font-sans' : 'font-mono' %>"><%= t.min %></span> <span><%= avgSec % 60 %></span><span class="text-[11px] font-bold <%= isRtl ? 'font-sans' : 'font-mono' %>"><%= t.sec %></span>
+                        <% } else { %>
+                            <span><%= avgSec %></span><span class="text-[11px] font-bold <%= isRtl ? 'font-sans' : 'font-mono' %>"><%= t.sec %></span>
+                        <% } %>
+                    </p>
+                    <p class="text-[10px] font-bold text-indigo-400/80 mt-1 truncate"><%= isRtl ? 'لكل مكالمة' : 'per call' %></p>
+                </div>
+            </a>
+        </div>
+
+        <!-- Section 4: Operations Row (Hourly Distribution + Top Talkers) -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 shrink-0">
             <div class="rounded-2xl flex flex-col h-full overflow-hidden bg-transparent border-0 border-none shadow-none">
                 <div class="px-2 py-3 bg-transparent border-none flex items-center justify-between gap-3 shrink-0 flex-nowrap">
@@ -668,133 +976,6 @@ const isRtl = currentLang === 'ar';
                     <div id="topTalkersChart" class="w-full flex-1 min-h-[280px] h-full" style="height: 100%; min-height: 280px;"></div>
                 </div>
             </div>
-        </div>
-
-        <!-- Section 4: Secondary Metric Tiles (8 compact cards) -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-6 shrink-0">
-            <!-- Tile 1: Total Inbound Calls -->
-            <a href="<%= baseUrl %>&directionFilter=INBOUND&statusFilter=ALL" 
-               title="<%= isRtl ? 'عرض المكالمات الواردة في سجل الاتصالات' : 'View inbound calls in Call History' %>"
-               class="hero-card-clean rounded-xl p-3.5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
-                <div class="flex items-center justify-between gap-1">
-                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.inbound %></span>
-                    <span class="w-2 h-2 rounded-full bg-sky-500 shrink-0"></span>
-                </div>
-                <div class="mt-2">
-                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.inboundCount %></p>
-                    <p class="text-[10px] font-bold text-sky-400 font-mono mt-1 truncate"><span class="card-stat-val"><%= stats.inboundMin %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= t.min %></span></p>
-                </div>
-            </a>
-
-            <!-- Tile 2: Total Outbound Calls -->
-            <a href="<%= baseUrl %>&directionFilter=OUTBOUND&statusFilter=ALL" 
-               title="<%= isRtl ? 'عرض المكالمات الصادرة في سجل الاتصالات' : 'View outbound calls in Call History' %>"
-               class="hero-card-clean rounded-xl p-3.5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
-                <div class="flex items-center justify-between gap-1">
-                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.outbound %></span>
-                    <span class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
-                </div>
-                <div class="mt-2">
-                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.outboundCount %></p>
-                    <p class="text-[10px] font-bold text-amber-400/80 font-mono mt-1 truncate"><span class="card-stat-val"><%= stats.outboundMin %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= t.min %></span></p>
-                </div>
-            </a>
-
-            <!-- Tile 3: Internal Calls -->
-            <a href="<%= baseUrl %>&callScopeFilter=INTERNAL&statusFilter=ALL" 
-               title="<%= isRtl ? 'عرض المكالمات الداخلية في سجل الاتصالات' : 'View internal calls in Call History' %>"
-               class="hero-card-clean rounded-xl p-3.5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
-                <div class="flex items-center justify-between gap-1">
-                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.internalCalls %></span>
-                    <span class="w-2 h-2 rounded-full bg-purple-500 shrink-0"></span>
-                </div>
-                <div class="mt-2">
-                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.internalCount || 0 %></p>
-                    <p class="text-[10px] font-bold text-purple-400 font-mono mt-1 truncate"><span class="card-stat-val"><%= stats.internalMin || 0 %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= t.min %></span></p>
-                </div>
-            </a>
-
-            <!-- Tile 4: No Answer / Missed -->
-            <a href="<%= baseUrl %>&statusFilter=NO ANSWER&directionFilter=ALL" 
-               title="<%= isRtl ? 'عرض المكالمات الفائتة في سجل الاتصالات' : 'View missed calls in Call History' %>"
-               class="hero-card-clean rounded-xl p-3.5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
-                <div class="flex items-center justify-between gap-1">
-                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.noAnswer %></span>
-                    <span class="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
-                </div>
-                <div class="mt-2">
-                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.noAnswerCalls %></p>
-                    <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
-                        <div class="h-full bg-rose-500 rounded-full" style="width: <%= stats.totalCalls ? (stats.noAnswerCalls / stats.totalCalls) * 100 : 0 %>%"></div>
-                    </div>
-                </div>
-            </a>
-
-            <!-- Tile 5: Busy Calls -->
-            <a href="<%= baseUrl %>&statusFilter=BUSY&directionFilter=ALL" 
-               title="<%= isRtl ? 'عرض المكالمات المشغولة في سجل الاتصالات' : 'View busy calls in Call History' %>"
-               class="hero-card-clean rounded-xl p-3.5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
-                <div class="flex items-center justify-between gap-1">
-                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.busy %></span>
-                    <span class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
-                </div>
-                <div class="mt-2">
-                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.busyCalls %></p>
-                    <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
-                        <div class="h-full bg-amber-500 rounded-full" style="width: <%= stats.totalCalls ? (stats.busyCalls / stats.totalCalls) * 100 : 0 %>%"></div>
-                    </div>
-                </div>
-            </a>
-
-            <!-- Tile 6: Failed Calls -->
-            <a href="<%= baseUrl %>&statusFilter=FAILED&directionFilter=ALL" 
-               title="<%= isRtl ? 'عرض المكالمات الفاشلة في سجل الاتصالات' : 'View failed calls in Call History' %>"
-               class="hero-card-clean rounded-xl p-3.5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
-                <div class="flex items-center justify-between gap-1">
-                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.failed %></span>
-                    <span class="w-2 h-2 rounded-full bg-red-600 shrink-0"></span>
-                </div>
-                <div class="mt-2">
-                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.failedCalls %></p>
-                    <div class="mt-2 h-1 w-full bg-zinc-800/50 rounded-full overflow-hidden">
-                        <div class="h-full bg-red-600 rounded-full" style="width: <%= stats.totalCalls ? (stats.failedCalls / stats.totalCalls) * 100 : 0 %>%"></div>
-                    </div>
-                </div>
-            </a>
-
-            <!-- Tile 7: Total Talk Time -->
-            <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
-               title="<%= isRtl ? 'عرض تفاصيل أوقات المكالمات في سجل الاتصالات' : 'View total talk time in Call History' %>"
-               class="hero-card-clean rounded-xl p-3.5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
-                <div class="flex items-center justify-between gap-1">
-                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.totalAirtime %></span>
-                    <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0"></span>
-                </div>
-                <div class="mt-2">
-                    <p class="text-xl font-bold text-white card-stat-val"><%= stats.totalTalkMin %> <span class="text-[11px] font-bold text-cyan-400 <%= isRtl ? 'font-sans' : 'font-mono' %>"><%= t.min %></span></p>
-                    <p class="text-[10px] font-bold text-cyan-400/80 font-mono mt-1 truncate"><span class="card-stat-val"><%= Math.round(stats.totalTalkSec) %></span> <span class="<%= isRtl ? 'font-sans font-bold' : '' %>"><%= t.sec %></span></p>
-                </div>
-            </a>
-
-            <!-- Tile 8: Avg Call Duration -->
-            <a href="<%= baseUrl %>&statusFilter=ANSWERED&directionFilter=ALL" 
-               title="<%= isRtl ? 'عرض تفاصيل مدة المكالمات في سجل الاتصالات' : 'View average duration in Call History' %>"
-               class="hero-card-clean rounded-xl p-3.5 hero-stat-card bg-transparent border-0 border-transparent hover:border-transparent transition-all duration-200 cursor-pointer group flex flex-col justify-between overflow-hidden">
-                <div class="flex items-center justify-between gap-1">
-                    <span class="text-[10px] font-bold uppercase text-zinc-400 tracking-wider truncate"><%= t.avgDuration %></span>
-                    <span class="w-2 h-2 rounded-full bg-indigo-400 shrink-0"></span>
-                </div>
-                <div class="mt-2">
-                    <p class="text-xl font-bold text-white card-stat-val">
-                        <% if (avgSec >= 60) { %>
-                            <span><%= Math.floor(avgSec / 60) %></span><span class="text-[11px] font-bold <%= isRtl ? 'font-sans' : 'font-mono' %>"><%= t.min %></span> <span><%= avgSec % 60 %></span><span class="text-[11px] font-bold <%= isRtl ? 'font-sans' : 'font-mono' %>"><%= t.sec %></span>
-                        <% } else { %>
-                            <span><%= avgSec %></span><span class="text-[11px] font-bold <%= isRtl ? 'font-sans' : 'font-mono' %>"><%= t.sec %></span>
-                        <% } %>
-                    </p>
-                    <p class="text-[10px] font-bold text-indigo-400/80 mt-1 truncate"><%= isRtl ? 'لكل مكالمة' : 'per call' %></p>
-                </div>
-            </a>
         </div>
 
         <!-- Section 5: Proportional Breakdown Row (3 Donuts) -->
@@ -894,6 +1075,43 @@ const isRtl = currentLang === 'ar';
                     easing: 'easeOutCubic'
                 });
             }
+
+            /* Premium stat card hover: cursor-tracking spotlight.
+               One delegated pointermove listener feeds --glow-x / --glow-y to the
+               hovered card. rAF-throttled so it never blocks the main thread. */
+            (function initStatCardSpotlight() {
+                if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+                let activeCard = null;
+                let latest = null;
+                let rafId = null;
+
+                const applyGlow = () => {
+                    rafId = null;
+                    if (!activeCard || !latest) return;
+                    const rect = activeCard.getBoundingClientRect();
+                    if (!rect.width || !rect.height) return;
+                    const x = ((latest.clientX - rect.left) / rect.width) * 100;
+                    const y = ((latest.clientY - rect.top) / rect.height) * 100;
+                    activeCard.style.setProperty('--glow-x', x.toFixed(2) + '%');
+                    activeCard.style.setProperty('--glow-y', y.toFixed(2) + '%');
+                };
+
+                document.addEventListener('pointermove', (e) => {
+                    const card = e.target && e.target.closest ? e.target.closest('.hero-stat-card') : null;
+                    if (!card) return;
+                    if (card !== activeCard) activeCard = card;
+                    latest = e;
+                    if (rafId) return;
+                    rafId = requestAnimationFrame(applyGlow);
+                }, { passive: true });
+
+                // Keep the glow anchored to the card when the pointer leaves the window.
+                document.addEventListener('pointerout', (e) => {
+                    if (!e.relatedTarget) {
+                        latest = null;
+                    }
+                }, { passive: true });
+            })();
 
             const isLight = document.documentElement.classList.contains('light-theme');
             const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#dc2626';

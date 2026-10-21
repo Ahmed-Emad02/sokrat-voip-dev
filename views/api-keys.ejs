@@ -492,7 +492,7 @@
                 </div>
 
                 <div class="relative">
-                    <label class="block text-[var(--text-secondary)] mb-1 font-bold">
+                    <label for="keyScopes" class="block text-[var(--text-secondary)] mb-1 font-bold">
                         <%= currentLang === 'ar' ? 'نطاق الصلاحيات' : 'Granted Scopes' %> *
                     </label>
                     <div id="scopesDropdownTrigger" class="min-h-[42px] w-full bg-black/40 border border-[var(--border-primary)] rounded-lg p-2 flex items-center justify-between gap-1.5 cursor-pointer hover:border-zinc-500 transition relative">
@@ -635,7 +635,7 @@
                 const opt = document.createElement('label');
                 opt.className = 'flex items-start gap-2 p-2 rounded-lg cursor-pointer transition hover:bg-[var(--bg-hover)] ' + (isChecked ? 'bg-black/30 border border-zinc-700/60' : 'border border-transparent');
                 opt.innerHTML = `
-                    <input type="checkbox" value="${item.key}" ${isChecked ? 'checked' : ''} class="mt-0.5 rounded border-zinc-700 text-red-600 focus:ring-red-500">
+                    <input type="checkbox" id="scope_opt_${item.key}" name="scope_opt_${item.key}" value="${item.key}" ${isChecked ? 'checked' : ''} class="mt-0.5 rounded border-zinc-700 text-red-600 focus:ring-red-500">
                     <div class="flex-1 min-w-0">
                         <div class="font-bold text-[11px] text-[var(--text-primary)] leading-tight">${item.label}</div>
                         <div class="text-[10px] text-[var(--text-muted)] leading-tight truncate mt-0.5">${item.desc}</div>

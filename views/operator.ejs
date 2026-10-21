@@ -268,7 +268,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             color: #09090b !important;
         }
         .light-theme #switchboardGrid .panel-surface.state-offline .employee-title {
-            color: #71717a !important;
+            color: #64748b !important;
         }
         .light-theme #switchboardGrid .panel-surface.state-offline .employee-group-chip {
             background-color: #f4f4f5 !important;
@@ -286,15 +286,26 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             justify-content: center;
             transition: all 150ms ease;
         }
+        /* Tailwind's `hidden` utility lives in @layer utilities, while the
+           unlayered rule above always wins the cascade - so a badge marked
+           `hidden` was still rendered as an empty 14x20px pill. */
+        .employee-ip-badge.hidden {
+            display: none !important;
+        }
+        /* The IP of a disconnected extension is stale information: the peer is
+           not reachable, so the address is not shown at all. */
+        #switchboardGrid .panel-surface.state-offline .employee-ip-badge {
+            display: none !important;
+        }
         #switchboardGrid .panel-surface.state-offline .employee-ip-badge {
             background-color: rgba(39, 39, 42, 0.6);
             border-color: rgba(63, 63, 70, 0.4);
-            color: #a1a1aa;
+            color: #94a3b8;
         }
         .light-theme #switchboardGrid .panel-surface.state-offline .employee-ip-badge {
             background-color: #f4f4f5 !important;
             border-color: #e4e4e7 !important;
-            color: #52525b !important;
+            color: #64748b !important;
         }
         #switchboardGrid .panel-surface.state-idle .employee-ip-badge,
         .light-theme #switchboardGrid .panel-surface.state-idle .employee-ip-badge {
@@ -313,6 +324,26 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             background-color: rgba(0, 0, 0, 0.3) !important;
             border-color: rgba(255, 255, 255, 0.35) !important;
             color: #ffffff !important;
+        }
+
+        /* The IP address is plain reference text, not a status chip: drop the
+           pill background and border so only the address itself is shown.
+           The agent-status button next to it keeps its badge styling. */
+        #switchboardGrid .panel-surface.state-offline [id^="ipText-"].employee-ip-badge,
+        #switchboardGrid .panel-surface.state-idle [id^="ipText-"].employee-ip-badge,
+        #switchboardGrid .panel-surface.state-ringing [id^="ipText-"].employee-ip-badge,
+        #switchboardGrid .panel-surface.state-incall [id^="ipText-"].employee-ip-badge {
+            background-color: transparent !important;
+            border-width: 0 !important;
+            border-color: transparent !important;
+        }
+        .light-theme #switchboardGrid .panel-surface.state-offline [id^="ipText-"].employee-ip-badge,
+        .light-theme #switchboardGrid .panel-surface.state-idle [id^="ipText-"].employee-ip-badge,
+        .light-theme #switchboardGrid .panel-surface.state-ringing [id^="ipText-"].employee-ip-badge,
+        .light-theme #switchboardGrid .panel-surface.state-incall [id^="ipText-"].employee-ip-badge {
+            background-color: transparent !important;
+            border-width: 0 !important;
+            border-color: transparent !important;
         }
 
         /* === STATE 2: ONLINE / IDLE (ORANGE) === */
@@ -456,6 +487,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             border-color: rgba(255, 255, 255, 0.3) !important;
             color: #ffffff !important;
         }
+
         .live-panel-header {
             display: flex;
             align-items: flex-start;
@@ -697,7 +729,58 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             text-transform: uppercase;
             letter-spacing: 0.06em;
         }
-    </style>
+
+        /* ============================================================
+           AGENT STATUS SWITCH + DROPDOWN
+           The switch is hidden entirely while the extension is offline
+           (an operator cannot change the status of a disconnected agent).
+           The dropdown reuses the shared filter-dropdown contract
+           (.config-dropdown-menu / -options / -option) so it looks and
+           behaves exactly like every other dropdown in the product, and is
+           positioned as a fixed floating panel under the badge so it can
+           never be clipped by the card.
+           ============================================================ */
+        .agent-status-switch.is-offline {
+            display: none !important;
+        }
+        .status-option-dot {
+            width: 0.5rem;
+            height: 0.5rem;
+            border-radius: 9999px;
+            flex-shrink: 0;
+        }
+        .status-option-label {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .status-option-check {
+            width: 0.875rem;
+            height: 0.875rem;
+            flex-shrink: 0;
+            opacity: 0;
+            transition: opacity 150ms ease;
+        }
+        .status-option.is-selected .status-option-check {
+            opacity: 1;
+        }
+        .status-option:hover .status-option-check {
+            opacity: 0.5;
+        }
+        .status-option.is-selected:hover .status-option-check {
+            opacity: 1;
+        }
+
+                /* Live panel cards keep the classic solid state colours.
+           The ringing card pulses its border; honour reduced-motion. */
+        @media (prefers-reduced-motion: reduce) {
+            #switchboardGrid .panel-surface.state-ringing {
+                animation: none !important;
+            }
+        }
+</style>
 <style>
     /* Agent status button: EXACT sizing and structure of employee-ip-badge */
     .agent-status-badge-btn {
@@ -713,12 +796,12 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
     #switchboardGrid .panel-surface.state-offline .agent-status-badge-btn {
         background-color: rgba(39, 39, 42, 0.6) !important;
         border-color: rgba(63, 63, 70, 0.4) !important;
-        color: #a1a1aa !important;
+        color: #94a3b8 !important;
     }
     .light-theme #switchboardGrid .panel-surface.state-offline .agent-status-badge-btn {
         background-color: #f4f4f5 !important;
         border-color: #e4e4e7 !important;
-        color: #52525b !important;
+        color: #64748b !important;
     }
     #switchboardGrid .panel-surface:not(.state-offline) .agent-status-badge-btn.status-available {
         background-color: rgba(16, 185, 129, 0.18) !important;
@@ -977,7 +1060,11 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                         </span>
                                         <% } %>
                                     </div>
-                                    <span class="employee-title <%= emp.title ? '' : 'employee-title-empty' %>" title="<%= emp.title || t.noTitle %>"><%= emp.title || t.noTitle %></span>
+                                    <% if (emp.title) { %>
+                                    <span class="employee-title" title="<%= emp.title %>"><%= emp.title %></span>
+                                    <% } else { %>
+                                    <span class="employee-title employee-title-empty" aria-hidden="true"></span>
+                                    <% } %>
                                     <% if (emp.is_group_admin || (emp.ring_groups && emp.ring_groups.length > 0)) { %>
                                     <div class="flex items-center gap-1 flex-wrap mt-0.5">
                                         <% if (emp.is_group_admin) { %>
@@ -1018,51 +1105,56 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                         else if (statusSlug === 'available') statusBgClass = 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 shadow-sm';
                                         else if (statusSlug === 'offline') statusBgClass = 'bg-zinc-800/90 text-zinc-300 border border-zinc-600';
                                     %>
-                                    <div class="relative inline-block">
+                                    <div id="agentStatusSwitch-<%= emp.cardId %>" class="agent-status-switch relative inline-block <%= isOnline ? '' : 'is-offline' %>">
                                         <button type="button" id="agentStatusBadge-<%= emp.cardId %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name %>" data-status="<%= statusSlug %>" data-start="<%= startTimeMs || '' %>" onclick="toggleStatusDropdown('<%= emp.cardId %>', event)" class="employee-ip-badge agent-status-badge-btn status-<%= statusSlug %> font-mono font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition select-none" title="<%= isRtl ? 'تغيير حالة الموظف: ' : 'Change Agent Status: ' %><%= statusLabel %>">
                                             <span class="agent-status-label"><%= statusLabel %></span>
                                             <span id="agentStatusTimer-<%= emp.cardId %>" class="font-mono font-bold <%= (isDynamicStatus && startTimeMs) ? '' : 'hidden' %>">00:00</span>
                                             <svg class="w-2.5 h-2.5 opacity-70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
                                         </button>
-                                        <div id="statusDropdown-<%= emp.cardId %>" class="hidden absolute z-[9999] mt-1 w-44 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 text-xs font-mono text-zinc-200 end-0">
-                                            <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'available', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
-                                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                                <span><%= isRtl ? 'متاح (Available)' : 'Available' %></span>
-                                            </button>
-                                            <% 
-                                            const dynDefs = (typeof agentStatusDefinitions !== 'undefined' && Array.isArray(agentStatusDefinitions)) ? agentStatusDefinitions : [];
-                                            dynDefs.forEach(def => {
-                                                const defColor = def.color || '#f59e0b';
-                                                const defLabel = isRtl ? (def.label_ar || def.label_en || def.status_key) : (def.label_en || def.label_ar || def.status_key);
+                                        <div id="statusDropdown-<%= emp.cardId %>" class="config-dropdown-menu hidden" role="listbox" aria-label="<%= isRtl ? 'حالة الموظف' : 'Agent Status' %>">
+                                            <div class="config-dropdown-options space-y-0.5">
+                                                <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'available', '<%= emp.cardId %>')" class="config-dropdown-option status-option flex items-center gap-2 transition-colors <%= statusSlug === 'available' ? 'is-selected font-bold' : '' %>" role="option" aria-selected="<%= statusSlug === 'available' %>">
+                                                    <span class="status-option-dot bg-emerald-500"></span>
+                                                    <span class="status-option-label"><%= isRtl ? 'متاح (Available)' : 'Available' %></span>
+                                                    <svg class="status-option-check text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                                </button>
+                                                <% 
+                                                const dynDefs = (typeof agentStatusDefinitions !== 'undefined' && Array.isArray(agentStatusDefinitions)) ? agentStatusDefinitions : [];
+                                                dynDefs.forEach(def => {
+                                                    const defColor = def.color || '#f59e0b';
+                                                    const defLabel = isRtl ? (def.label_ar || def.label_en || def.status_key) : (def.label_en || def.label_ar || def.status_key);
                                             %>
-                                            <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', '<%= def.status_key %>', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2">
-                                                <span class="w-2 h-2 rounded-full" style="background:<%= defColor %>;"></span>
-                                                <span><%= defLabel %></span>
-                                            </button>
-                                            <% }); %>
-                                            <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'offline', '<%= emp.cardId %>')" class="w-full text-start px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2 border-t border-zinc-800 text-zinc-400">
-                                                <span class="w-2 h-2 rounded-full bg-zinc-500"></span>
-                                                <span><%= isRtl ? 'غير متاح (Offline)' : 'Offline' %></span>
-                                            </button>
+                                                <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', '<%= def.status_key %>', '<%= emp.cardId %>')" class="config-dropdown-option status-option flex items-center gap-2 transition-colors <%= statusSlug === def.status_key ? 'is-selected font-bold' : '' %>" role="option" aria-selected="<%= statusSlug === def.status_key %>">
+                                                    <span class="status-option-dot" style="background:<%= defColor %>;"></span>
+                                                    <span class="status-option-label"><%= defLabel %></span>
+                                                    <svg class="status-option-check" style="color:<%= defColor %>;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                                </button>
+                                                <% }); %>
+                                                <button type="button" onclick="setOperatorAgentStatus('<%= emp.extension %>', '<%= emp.name %>', 'offline', '<%= emp.cardId %>')" class="config-dropdown-option status-option flex items-center gap-2 transition-colors <%= statusSlug === 'offline' ? 'is-selected font-bold' : '' %>" role="option" aria-selected="<%= statusSlug === 'offline' %>">
+                                                    <span class="status-option-dot bg-zinc-500"></span>
+                                                    <span class="status-option-label"><%= isRtl ? 'غير متاح (Offline)' : 'Offline' %></span>
+                                                    <svg class="status-option-check text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                     <% } %>
-                                    <span id="ipText-<%= emp.cardId %>" class="employee-ip-badge font-mono font-bold px-1.5 py-0.5 rounded border truncate max-w-[125px] select-all <%= emp.ip ? '' : 'hidden' %>" title="<%= emp.ip || '' %>"><%= emp.ip || '' %></span>
+                                    <span id="ipText-<%= emp.cardId %>" class="employee-ip-badge font-mono font-bold px-1.5 py-0.5 rounded truncate max-w-[125px] select-all <%= emp.ip ? '' : 'hidden' %>" title="<%= emp.ip || '' %>"><%= emp.ip || '' %></span>
                                 </div>
                             </div>
 
                             <div class="border-t border-zinc-900/50 pt-2 mt-3">
-                                <div class="flex items-center justify-between gap-2 min-w-0">
-                                    <div class="flex items-center gap-1.5 min-w-0">
+                                <div class="flex items-center justify-end gap-2 min-w-0">
+                                    <span id="partner-<%= emp.cardId %>" title="<%= partnerNum %>" class="text-xs font-mono font-bold truncate max-w-[9rem] mr-auto <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
+                                        <%= partnerNum %>
+                                    </span>
+                                    <div class="flex items-center gap-1.5 min-w-0 shrink-0">
                                         <span id="badge-<%= emp.cardId %>" class="h-2 w-2 rounded-full shrink-0 bg-transparent transition-all duration-300"></span>
-                                        <span id="status-<%= emp.cardId %>" class="text-xs font-bold uppercase tracking-wide text-zinc-500 truncate transition-all duration-300">
+                                        <span id="status-<%= emp.cardId %>" class="text-xs font-bold uppercase tracking-wide text-zinc-400 truncate transition-all duration-300">
                                             <%= callState === 'incall' ? t.incall : callState === 'ringing' ? t.ringing : t.noCall %>
                                         </span>
                                         <span id="timer-<%= emp.cardId %>" class="text-xs font-mono font-bold text-[var(--accent-color)] tracking-wider <%= callState === 'incall' ? '' : 'hidden' %>">00:00</span>
                                     </div>
-                                    <span id="partner-<%= emp.cardId %>" title="<%= partnerNum %>" class="text-xs font-mono font-bold truncate max-w-[9rem] <%= (callState === 'incall' || callState === 'ringing') ? '' : 'hidden' %>">
-                                        <%= partnerNum %>
-                                    </span>
                                 </div>
                                 <% if (hasAnyCallAction) { %>
                                 <div class="mt-2 relative">
@@ -1288,6 +1380,11 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                             if (label) label.textContent = online ? '<%= t.online %>' : '<%= t.offline %>';
                             const callState = localCallStatus[ext]?.state || 'Idle';
                             updateCardStateClass(ext, online, callState);
+                            // The status switch is only meaningful while the
+                            // extension is actually connected.
+                            if (typeof window.setAgentStatusSwitchAvailability === 'function') {
+                                window.setAgentStatusSwitchAvailability(ext, !!online);
+                            }
                         }
                         if (window.refreshIntercomRosterIfOpen) window.refreshIntercomRosterIfOpen();
                         if (window.refreshTransferRosterIfOpen) window.refreshTransferRosterIfOpen();
@@ -1709,37 +1806,88 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                 });
             }
 
+            /* The status dropdown follows the same contract as every other
+               dropdown in the product: it is a fixed floating panel appended to
+               <body> and positioned under its trigger, so it can never be
+               clipped by the extension card it belongs to. */
+            function ensureStatusDropdownInBody(dd, trigger) {
+                if (!dd) return null;
+                if (dd.parentElement !== document.body) {
+                    document.body.appendChild(dd);
+                }
+                if (trigger && typeof window.positionConfigDropdown === 'function') {
+                    window.positionConfigDropdown(trigger, dd, 320);
+                }
+                return dd;
+            }
+
+            function closeStatusDropdown(el) {
+                if (!el) return;
+                el.classList.add('hidden');
+                const trigger = el._trigger;
+                if (trigger) trigger.setAttribute('aria-expanded', 'false');
+            }
+
+            function closeAllStatusDropdowns(exceptId) {
+                document.querySelectorAll('[id^="statusDropdown-"]').forEach(el => {
+                    if (el.id !== exceptId) closeStatusDropdown(el);
+                });
+            }
+
             window.toggleStatusDropdown = function(cardId, e) {
                 if (e) e.stopPropagation();
-                document.querySelectorAll('[id^="statusDropdown-"]').forEach(el => {
-                    if (el.id !== 'statusDropdown-' + cardId) {
-                        el.classList.add('hidden');
-                        const pCard = el.closest('article');
-                        if (pCard) pCard.style.zIndex = '';
-                    }
-                });
+                const trigger = document.getElementById('agentStatusBadge-' + cardId);
                 const dd = document.getElementById('statusDropdown-' + cardId);
-                if (dd) {
-                    const willShow = dd.classList.contains('hidden');
-                    dd.classList.toggle('hidden');
-                    const parentCard = dd.closest('article');
-                    if (parentCard) {
-                        parentCard.style.zIndex = willShow ? '9998' : '';
+                if (!dd || !trigger) return;
+
+                // The switch is hidden while the extension is offline, so there
+                // is nothing to toggle. Guard anyway in case the state changed
+                // between render and click.
+                const sw = document.getElementById('agentStatusSwitch-' + cardId);
+                if (sw && sw.classList.contains('is-offline')) return;
+
+                const isOpening = dd.classList.contains('hidden');
+                closeAllStatusDropdowns(dd.id);
+
+                if (isOpening) {
+                    ensureStatusDropdownInBody(dd, trigger);
+                    dd._trigger = trigger;
+                    dd.classList.remove('hidden');
+                    trigger.setAttribute('aria-expanded', 'true');
+                    if (typeof window.positionConfigDropdown === 'function') {
+                        window.positionConfigDropdown(trigger, dd, 320);
                     }
+                    // Keep it glued to the badge if the page scrolls or resizes.
+                    dd._reposition = () => {
+                        if (!dd.classList.contains('hidden') && typeof window.positionConfigDropdown === 'function') {
+                            window.positionConfigDropdown(trigger, dd, 320);
+                        }
+                    };
+                } else {
+                    closeStatusDropdown(dd);
                 }
             };
 
             document.addEventListener('click', () => {
-                document.querySelectorAll('[id^="statusDropdown-"]').forEach(el => {
-                    el.classList.add('hidden');
-                    const pCard = el.closest('article');
-                    if (pCard) pCard.style.zIndex = '';
-                });
+                closeAllStatusDropdowns(null);
             });
+
+            /* Shows the status switch only while the extension is online.
+               An offline agent cannot have their status changed, so the switch
+               is removed from the card entirely. */
+            window.setAgentStatusSwitchAvailability = function(cardId, online) {
+                const sw = document.getElementById('agentStatusSwitch-' + cardId);
+                if (!sw) return;
+                sw.classList.toggle('is-offline', !online);
+                if (!online) {
+                    const dd = document.getElementById('statusDropdown-' + cardId);
+                    if (dd) closeStatusDropdown(dd);
+                }
+            };
 
             window.setOperatorAgentStatus = async function(ext, name, status, cardId) {
                 const dd = document.getElementById('statusDropdown-' + cardId);
-                if (dd) dd.classList.add('hidden');
+                if (dd) closeStatusDropdown(dd);
                 try {
                     const res = await fetch('/api/employee/agent-status', {
                         method: 'POST',
@@ -2553,11 +2701,11 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                            <label class="text-[10px] font-bold text-[var(--text-muted)] block mb-1"><%= isRtl ? 'اسم المجموعة (عربي)' : 'Group Name (Arabic)' %></label>
+                            <label for="newGroupNameAr" class="text-[10px] font-bold text-[var(--text-muted)] block mb-1"><%= isRtl ? 'اسم المجموعة (عربي)' : 'Group Name (Arabic)' %></label>
                             <input type="text" id="newGroupNameAr" required placeholder="<%= isRtl ? 'مثال: المبيعات أو الدعم الفني' : 'e.g. Sales' %>" class="config-input text-xs w-full">
                         </div>
                         <div>
-                            <label class="text-[10px] font-bold text-[var(--text-muted)] block mb-1"><%= isRtl ? 'اسم المجموعة (إنجليزي)' : 'Group Name (English)' %></label>
+                            <label for="newGroupNameEn" class="text-[10px] font-bold text-[var(--text-muted)] block mb-1"><%= isRtl ? 'اسم المجموعة (إنجليزي)' : 'Group Name (English)' %></label>
                             <input type="text" id="newGroupNameEn" required placeholder="<%= isRtl ? 'e.g. Sales or Support' : 'e.g. Sales' %>" class="config-input text-xs w-full">
                         </div>
                     </div>
@@ -2603,13 +2751,13 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                     <!-- Row 1: Status Names (Arabic & English) -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
+                            <label for="newStatusLabelAr" class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
                                 <%= isRtl ? 'اسم الحالة (عربي)' : 'Status Name (Arabic)' %> <span class="text-red-500">*</span>
                             </label>
                             <input type="text" id="newStatusLabelAr" required placeholder="<%= isRtl ? 'مثال: صلاة أو تدريب أو استراحة' : 'e.g. Prayer / Meeting' %>" class="config-input text-xs w-full h-[38px]">
                         </div>
                         <div>
-                            <label class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
+                            <label for="newStatusLabelEn" class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
                                 <%= isRtl ? 'الاسم بالإنجليزي (اختياري)' : 'Status Name (English - Optional)' %>
                             </label>
                             <input type="text" id="newStatusLabelEn" placeholder="e.g. Prayer / Training / Break" class="config-input text-xs w-full h-[38px]">
@@ -2619,7 +2767,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                     <!-- Row 2: Associated Group & Color Picker -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                         <div>
-                            <label class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
+                            <label for="newStatusGroupSelect" class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
                                 <%= isRtl ? 'المجموعة المرتبطة' : 'Associated Group' %>
                             </label>
                             <select id="newStatusGroupSelect" class="config-input text-xs w-full h-[38px]">
@@ -2627,7 +2775,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                             </select>
                         </div>
                         <div>
-                            <label class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
+                            <label for="newStatusColor" class="text-[11px] font-bold text-[var(--text-secondary)] block mb-1">
                                 <%= isRtl ? 'لون المؤشر' : 'Indicator Color' %>
                             </label>
                             <div class="flex items-center justify-between gap-2 h-[38px] px-2.5 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)]">

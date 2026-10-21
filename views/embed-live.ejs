@@ -981,11 +981,11 @@ const isRtl = (lang === 'ar');
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                            <label class="text-[10px] font-bold text-slate-500 block mb-1"><%= isRtl ? 'اسم المجموعة (عربي)' : 'Group Name (Arabic)' %></label>
+                            <label for="newGroupNameAr" class="text-[10px] font-bold text-slate-500 block mb-1"><%= isRtl ? 'اسم المجموعة (عربي)' : 'Group Name (Arabic)' %></label>
                             <input type="text" id="newGroupNameAr" required placeholder="<%= isRtl ? 'مثال: المبيعات أو الدعم الفني' : 'e.g. Sales' %>" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-none">
                         </div>
                         <div>
-                            <label class="text-[10px] font-bold text-slate-500 block mb-1"><%= isRtl ? 'اسم المجموعة (إنجليزي)' : 'Group Name (English)' %></label>
+                            <label for="newGroupNameEn" class="text-[10px] font-bold text-slate-500 block mb-1"><%= isRtl ? 'اسم المجموعة (إنجليزي)' : 'Group Name (English)' %></label>
                             <input type="text" id="newGroupNameEn" required placeholder="<%= isRtl ? 'e.g. Sales or Support' : 'e.g. Sales' %>" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-none">
                         </div>
                     </div>
@@ -1031,13 +1031,13 @@ const isRtl = (lang === 'ar');
                     <!-- Row 1: Status Names (Arabic & English) -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="text-[11px] font-bold text-slate-600 block mb-1">
+                            <label for="newStatusLabelAr" class="text-[11px] font-bold text-slate-600 block mb-1">
                                 اسم الحالة (عربي) <span class="text-red-500">*</span>
                             </label>
                             <input type="text" id="newStatusLabelAr" required placeholder="مثال: صلاة أو تدريب أو استراحة" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-none h-[38px] bg-white text-slate-800">
                         </div>
                         <div>
-                            <label class="text-[11px] font-bold text-slate-600 block mb-1">
+                            <label for="newStatusLabelEn" class="text-[11px] font-bold text-slate-600 block mb-1">
                                 الاسم بالإنجليزي (اختياري)
                             </label>
                             <input type="text" id="newStatusLabelEn" placeholder="e.g. Prayer / Training / Break" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-none h-[38px] bg-white text-slate-800">
@@ -1047,7 +1047,7 @@ const isRtl = (lang === 'ar');
                     <!-- Row 2: Associated Group & Color Picker -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                         <div>
-                            <label class="text-[11px] font-bold text-slate-600 block mb-1">
+                            <label for="newStatusGroupSelect" class="text-[11px] font-bold text-slate-600 block mb-1">
                                 المجموعة المرتبطة
                             </label>
                             <select id="newStatusGroupSelect" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg outline-none h-[38px] bg-white text-slate-800">
@@ -1055,7 +1055,7 @@ const isRtl = (lang === 'ar');
                             </select>
                         </div>
                         <div>
-                            <label class="text-[11px] font-bold text-slate-600 block mb-1">
+                            <label for="newStatusColor" class="text-[11px] font-bold text-slate-600 block mb-1">
                                 لون المؤشر
                             </label>
                             <div class="flex items-center justify-between gap-2 h-[38px] px-2.5 rounded-lg border border-slate-300 bg-white">

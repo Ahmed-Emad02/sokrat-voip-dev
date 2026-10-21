@@ -375,9 +375,24 @@ test('Queue CRUD validation enforces exact Issabel parity (extension, name, coll
 
 test('server.js implements Issabel-parity collision checks in queue endpoints', () => {
     const serverCode = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-    assert.ok(serverCode.includes("SELECT extension FROM `asterisk`.`queues_config` WHERE extension = ?"));
-    assert.ok(serverCode.includes("SELECT extension FROM `asterisk`.`users` WHERE extension = ?"));
-    assert.ok(serverCode.includes("SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?"));
+    // The collision lookup selects the key column plus optional descriptive
+    // columns (e.g. 'extension, name'), so match on the table + WHERE clause
+    // rather than on an exact column list.
+    assert.match(
+        serverCode,
+        /SELECT\s+extension(?:,\s*\w+)?\s+FROM\s+`asterisk`\.`queues_config`\s+WHERE\s+extension\s*=\s*\?/,
+        'Must run a parameterised collision lookup against asterisk.queues_config'
+    );
+    assert.match(
+        serverCode,
+        /SELECT\s+extension(?:,\s*\w+)?\s+FROM\s+`asterisk`\.`users`\s+WHERE\s+extension\s*=\s*\?/,
+        'Must run a parameterised collision lookup against asterisk.users'
+    );
+    assert.match(
+        serverCode,
+        /SELECT\s+grpnum(?:,\s*\w+)?\s+FROM\s+`asterisk`\.`ringgroups`\s+WHERE\s+grpnum\s*=\s*\?/,
+        'Must run a parameterised collision lookup against asterisk.ringgroups'
+    );
     assert.ok(serverCode.includes("rawName.slice(0, 35)"));
 });
 

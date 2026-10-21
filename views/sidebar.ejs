@@ -1130,9 +1130,68 @@ function can(tab) {
         outline: none !important;
     }
 
+    /* Shared icon-only toolbar button.
+       Used by the Contacts, CDR and other page toolbars so every header action
+       renders as an identical, uniformly coloured square glyph button. */
+    .icon-tool-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        flex-shrink: 0;
+        padding: 0;
+        border-radius: 0.75rem;
+        background-color: rgba(225, 29, 72, 0.25) !important;
+        color: #fecdd3 !important;
+        border: 1px solid rgba(244, 63, 94, 0.5) !important;
+        transition: all 150ms ease-in-out;
+        cursor: pointer;
+        position: relative;
+    }
+    .icon-tool-btn:hover {
+        background-color: rgba(225, 29, 72, 0.4) !important;
+        color: #ffffff !important;
+        border-color: rgba(244, 63, 94, 0.8) !important;
+    }
+    .icon-tool-btn:focus-visible {
+        outline: 2px solid rgba(244, 63, 94, 0.8);
+        outline-offset: 2px;
+    }
+    .icon-tool-btn svg {
+        width: 1.15rem;
+        height: 1.15rem;
+        color: currentColor;
+    }
+    .icon-tool-btn .tool-btn-badge {
+        position: absolute;
+        top: -0.35rem;
+        inset-inline-end: -0.35rem;
+        min-width: 1.1rem;
+        padding: 0 0.2rem;
+        border-radius: 9999px;
+        background-color: var(--accent-color);
+        color: #ffffff;
+        font-family: 'JetBrains Mono', 'Cairo', monospace;
+        font-size: 0.5rem;
+        font-weight: 800;
+        line-height: 1.1rem;
+        text-align: center;
+        white-space: nowrap;
+    }
+    html.light-theme .icon-tool-btn {
+        background-color: #ffe4e6 !important;
+        color: #881337 !important;
+        border: 1px solid #f43f5e !important;
+    }
+    html.light-theme .icon-tool-btn:hover {
+        background-color: #fecdd3 !important;
+        color: #4c0519 !important;
+        border-color: #e11d48 !important;
+    }
+
     /* Shared dropdown contract for native selects and application comboboxes. */
-    .config-dropdown-trigger {
-        min-height: 2.125rem;
+    .config-dropdown-trigger {        min-height: 2.125rem;
         background: var(--bg-card) !important;
         border-color: var(--border-primary) !important;
         color: var(--text-primary) !important;
@@ -3845,20 +3904,20 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
         </div>
         <form id="webhookForm" onsubmit="saveWebhookSettings(event)" class="overflow-y-auto flex-1 px-6 py-4 space-y-4">
             <div class="flex items-center justify-between">
-                <label class="text-xs font-bold text-[var(--text-primary)]"><%= currentLang === 'ar' ? 'تفعيل' : 'Enabled' %></label>
+                <span class="text-xs font-bold text-[var(--text-primary)]"><%= currentLang === 'ar' ? 'تفعيل' : 'Enabled' %></span>
                 <label class="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" id="webhookEnabled" class="sr-only peer">
                     <div class="w-9 h-5 bg-[var(--bg-hover)] rounded-full peer peer-checked:bg-[var(--accent-color)] transition after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition peer-checked:after:translate-x-full"></div>
                 </label>
             </div>
             <div>
-                <label class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5"><%= currentLang === 'ar' ? 'رابط الويب هوك' : 'Webhook URL' %></label>
+                <label for="webhookUrl" class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5"><%= currentLang === 'ar' ? 'رابط الويب هوك' : 'Webhook URL' %></label>
                 <input type="url" id="webhookUrl" placeholder="https://your-crm.com/api/incoming-call" class="w-full px-3 py-2 text-xs bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-1 focus:ring-[var(--accent-color)] outline-none">
                 <p class="text-[10px] text-[var(--text-muted)] mt-1">Sokrat will HTTP POST <code class="text-[var(--accent-color)]">{ event, caller_number, called_number, dongle, timestamp }</code> to this URL</p>
             </div>
             <div>
-                <label class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5"><%= currentLang === 'ar' ? 'مفتاح التوقيع (اختياري)' : 'Signing Secret (optional)' %></label>
-                <input type="password" id="webhookSecret" placeholder="Optional HMAC-SHA256 signing key" class="w-full px-3 py-2 text-xs bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-1 focus:ring-[var(--accent-color)] outline-none">
+                <label for="webhookSecret" class="block text-xs font-bold text-[var(--text-secondary)] mb-1.5"><%= currentLang === 'ar' ? 'مفتاح التوقيع (اختياري)' : 'Signing Secret (optional)' %></label>
+                <input type="password" id="webhookSecret" autocomplete="off" placeholder="Optional HMAC-SHA256 signing key" class="w-full px-3 py-2 text-xs bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-1 focus:ring-[var(--accent-color)] outline-none">
                 <p class="text-[10px] text-[var(--text-muted)] mt-1">If set, requests include <code class="text-[var(--accent-color)]">X-Sokrat-Signature</code> header (HMAC-SHA256 of the JSON body)</p>
             </div>
             <div id="webhookStatusMsg" class="text-xs hidden text-center py-1"></div>

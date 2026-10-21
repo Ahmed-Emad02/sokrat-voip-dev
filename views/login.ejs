@@ -468,7 +468,7 @@
 
     <!-- Bottom Half: Deep dark red gradient and login container -->
     <div class="login-bottom-half flex-1 flex items-center justify-center p-4 sm:p-6 relative z-0">
-        <div class="w-full max-w-[420px] flex flex-col items-center">
+        <div class="w-full max-w-[504px] flex flex-col items-center">
             
             <!-- Error Notification Banner -->
             <% if (typeof error !== 'undefined' && error) { %>
@@ -691,6 +691,149 @@
                 }
             });
         }
+
+        /* ============================================================
+           ANIMATED LOGIN FIELD PLACEHOLDERS
+           A terminal-style typewriter hint with a blinking block cursor.
+
+           The native `placeholder` attribute is animated directly, so the
+           hint keeps the browser's own alignment, colour, direction and
+           truncation behaviour - no overlay elements are needed and the
+           field keeps working with autofill, password managers and
+           screen readers.
+
+           Behaviour:
+             - Types the hint out character by character
+             - Holds, then erases and moves to the next hint
+             - Stops the moment the operator types (the real value
+               replaces the hint) and resumes when the field is cleared
+             - Fully disabled under prefers-reduced-motion
+           ============================================================ */
+        (function initAnimatedLoginPlaceholders() {
+            if (!window.requestAnimationFrame) return;
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+            var CURSOR = '\u258C';
+
+            var FIELDS = [
+                { id: 'username', hints: ['Enter username', 'Your PBX account'], typeMs: 62, eraseMs: 26, holdMs: 2300 },
+                { id: 'password', hints: ['\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'], typeMs: 105, eraseMs: 42, holdMs: 2700 }
+            ];
+
+            function Typewriter(el, opts) {
+                this.el = el;
+                this.hints = opts.hints;
+                this.typeMs = opts.typeMs;
+                this.eraseMs = opts.eraseMs;
+                this.holdMs = opts.holdMs;
+                this.staticHint = el.getAttribute('data-placeholder') || el.getAttribute('placeholder') || '';
+                el.setAttribute('data-placeholder', this.staticHint);
+                this.index = 0;
+                this.pos = 0;
+                this.phase = 'typing';
+                this.phaseTime = 0;
+                this.cursorOn = true;
+                this.cursorClock = 0;
+                this.raf = null;
+                this.last = 0;
+                this.running = false;
+            }
+
+            Typewriter.prototype.render = function () {
+                var hint = this.hints[this.index] || '';
+                var text = hint.substring(0, Math.max(0, Math.floor(this.pos)));
+                this.el.setAttribute('placeholder', text + (this.cursorOn ? CURSOR : ''));
+            };
+
+            Typewriter.prototype.update = function (dt) {
+                // Blinking block cursor runs in every phase.
+                this.cursorClock += dt;
+                if (this.cursorClock >= 520) {
+                    this.cursorClock = 0;
+                    this.cursorOn = !this.cursorOn;
+                }
+
+                this.phaseTime += dt;
+
+                if (this.phase === 'typing') {
+                    var hint = this.hints[this.index] || '';
+                    this.pos += dt / this.typeMs;
+                    if (this.pos >= hint.length) {
+                        this.pos = hint.length;
+                        this.phase = 'holding';
+                        this.phaseTime = 0;
+                    }
+                } else if (this.phase === 'holding') {
+                    if (this.phaseTime >= this.holdMs) {
+                        this.phase = 'erasing';
+                        this.phaseTime = 0;
+                    }
+                } else { // erasing
+                    this.pos -= dt / this.eraseMs;
+                    if (this.pos <= 0) {
+                        this.pos = 0;
+                        this.phase = 'typing';
+                        this.phaseTime = 0;
+                        this.index = (this.index + 1) % this.hints.length;
+                    }
+                }
+                this.render();
+            };
+
+            Typewriter.prototype.start = function () {
+                if (this.running) return;
+                this.running = true;
+                var self = this;
+                this.last = performance.now();
+                function frame(now) {
+                    if (!self.running) return;
+                    var dt = Math.min(120, now - self.last);
+                    self.last = now;
+                    self.update(dt);
+                    self.raf = requestAnimationFrame(frame);
+                }
+                this.raf = requestAnimationFrame(frame);
+            };
+
+            Typewriter.prototype.stop = function (restoreStatic) {
+                this.running = false;
+                if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; }
+                if (restoreStatic) this.el.setAttribute('placeholder', this.staticHint);
+            };
+
+            FIELDS.forEach(function (opts) {
+                var el = document.getElementById(opts.id);
+                if (!el) return;
+                var tw = new Typewriter(el, opts);
+
+                function shouldRun() {
+                    return document.visibilityState !== 'hidden' && el.value === '';
+                }
+
+                // The operator typed something: hand the field over to the real
+                // value and stop animating.
+                el.addEventListener('input', function () {
+                    if (el.value !== '') tw.stop(true);
+                    else if (shouldRun()) tw.start();
+                });
+
+                el.addEventListener('blur', function () {
+                    if (el.value === '' && shouldRun()) {
+                        tw.phase = 'typing';
+                        tw.phaseTime = 0;
+                        tw.start();
+                    }
+                });
+
+                // Do not burn CPU while the tab is in the background.
+                document.addEventListener('visibilitychange', function () {
+                    if (document.visibilityState === 'hidden') tw.stop(false);
+                    else if (shouldRun()) tw.start();
+                });
+
+                if (shouldRun()) tw.start();
+            });
+        })();
 
         // Initialize UI state on page load
         document.addEventListener('DOMContentLoaded', function() {

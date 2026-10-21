@@ -122,6 +122,133 @@ const isRtl = currentLang === 'ar';
             color: #4c0519 !important;
             border-color: #e11d48 !important;
         }
+        /* The unified icon-only toolbar button style lives in sidebar.ejs
+           (.icon-tool-btn) so every page toolbar shares the same look. */
+        /* Teardrop reveal for the inline contacts search field.
+           The field grows out of the toolbar button like a droplet: it starts as
+           a pinched circle and stretches into the full rounded bar.
+           NOTE: the element must stay display:flex in every state. Switching
+           from display:none cannot be transitioned, which is why the open
+           animation is driven by an explicit @keyframes instead. */
+        .contacts-search-drop {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: 0;
+            opacity: 0;
+            overflow: hidden;
+            /* Percentage radius: the browser resolves it against the CURRENT box
+               on every frame, so the droplet stays a perfect ellipse while it
+               grows. A fixed px value (or 9999px) gets proportionally rescaled
+               as the box resizes, which produces a visible seam mid-animation. */
+            border-radius: 50%;
+            transform-origin: left center;
+            transform: scaleX(0.25) scaleY(0.85);
+            background-color: rgba(24, 24, 27, 0.9);
+            /* The border width is animated from 0 -> 1px. A fixed 1px border
+               would keep 2px of layout width even at width:0, leaving a
+               residual gap between the toolbar buttons while collapsed.
+               (box-shadow is not an option: sidebar.ejs globally forces
+               box-shadow:none !important on every element.) */
+            border: 0 solid rgba(244, 63, 94, 0.45);
+            padding: 0 0;
+            /* The gap to the search button lives on the field itself, so that a
+               collapsed field contributes NO spacing at all and every toolbar
+               button ends up with an identical gap. */
+            margin-inline-start: 0;
+            pointer-events: none;
+        }
+        .contacts-search-drop.is-open {
+            width: 22rem;
+            opacity: 1;
+            padding: 0 0.85rem;
+            margin-inline-start: 0.5rem;
+            border-width: 1px;
+            pointer-events: auto;
+            animation: contactsSearchDropSpawn 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        .contacts-search-drop.is-closing {
+            width: 0;
+            opacity: 0;
+            padding: 0 0;
+            margin-inline-start: 0;
+            transform: scaleX(0.25) scaleY(0.85);
+            border-radius: 50%;
+            border-width: 0;
+            pointer-events: none;
+            animation: contactsSearchDropCollapse 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        /* Spawn: a droplet forms at the button and stretches into the bar.
+           The border stays a fully-rounded ellipse for the whole travel and
+           only relaxes into the rounded rectangle at the very end. */
+        @keyframes contactsSearchDropSpawn {
+            0% {
+                width: 0;
+                opacity: 0;
+                border-radius: 50%;
+                border-width: 0;
+                margin-inline-start: 0;
+                transform: scaleX(0.25) scaleY(0.85);
+            }
+            35% {
+                opacity: 1;
+            }
+            100% {
+                width: 22rem;
+                opacity: 1;
+                border-radius: 0.75rem;
+                border-width: 1px;
+                margin-inline-start: 0.5rem;
+                transform: scaleX(1) scaleY(1);
+            }
+        }
+        /* Collapse: the bar relaxes back into a full ellipse and vanishes. */
+        @keyframes contactsSearchDropCollapse {
+            0% {
+                width: 22rem;
+                opacity: 1;
+                border-radius: 0.75rem;
+                border-width: 1px;
+                margin-inline-start: 0.5rem;
+                transform: scaleX(1) scaleY(1);
+            }
+            100% {
+                width: 0;
+                opacity: 0;
+                border-radius: 50%;
+                border-width: 0;
+                margin-inline-start: 0;
+                transform: scaleX(0.25) scaleY(0.85);
+            }
+        }
+        .contacts-search-drop input {
+            min-width: 0;
+            flex: 1;
+            background: transparent;
+            border: 0;
+            outline: none;
+            color: #ffffff;
+            font-size: 0.875rem;
+            line-height: 1.5rem;
+            /* 2px trimmed from the top and bottom of the field */
+            padding: calc(0.6rem - 2px) 0;
+        }
+        .contacts-search-drop input::placeholder {
+            color: #52525b;
+        }
+        html[dir="rtl"] .contacts-search-drop {
+            transform-origin: right center;
+        }
+        html.light-theme .contacts-search-drop {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-color: rgba(244, 63, 94, 0.55);
+        }
+        html.light-theme .contacts-search-drop input {
+            color: #18181b;
+        }
+        html.light-theme .contacts-search-drop input::placeholder {
+            color: #a1a1aa;
+        }
         .btn-sync-astdb {
             background-color: rgba(245, 158, 11, 0.22) !important;
             color: #fef08a !important;
@@ -258,40 +385,41 @@ const isRtl = currentLang === 'ar';
     <%- include('sidebar') %>
     <div class="flex-1 p-8 relative">
         
-        <div class="mb-6 flex justify-between items-center">
+        <div class="mb-6 flex justify-between items-center gap-4 flex-wrap">
             <div class="<%= isRtl ? 'text-right' : '' %>">
                 <h2 class="text-3xl font-vibrant-display text-white tracking-tight <%= isRtl ? 'text-right' : '' %>"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
-            <% if (isSuperAdmin) { %>
             <div class="flex items-center gap-3">
-                <button onclick="openBlacklistModal()" class="blacklist-trigger-btn font-extrabold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer">
-                    <svg class="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                    </svg>
-                    <span><%= isRtl ? 'القائمة السوداء (الحظر الوارد)' : 'Inbound Blacklist' %></span>
-                </button>
-                <button onclick="openImportCsvModal()" class="config-btn-secondary font-bold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                    <span><%= isRtl ? 'استيراد CSV' : 'Import CSV' %></span>
-                </button>
-                <button onclick="openAddContactModal()" class="btn-primary px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span><%= isRtl ? 'إضافة جهة اتصال' : 'Add Contact' %></span>
-                </button>
+                <div class="flex items-center">
+                    <button onclick="toggleContactsSearch()" id="contactsSearchToggle" class="icon-tool-btn" title="<%= t.searchPlaceholder %>" aria-label="<%= t.searchPlaceholder %>" aria-expanded="false" aria-controls="contactsSearchDrop">
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </button>
+                    <div id="contactsSearchDrop" class="contacts-search-drop">
+                        <input type="text" id="contactsSearchInput" oninput="filterContacts()" placeholder="<%= t.searchPlaceholder %>" autocomplete="off">
+                    </div>
+                </div>
+                <% if (isSuperAdmin) { %>
+                <div class="flex items-center gap-3">
+                    <button onclick="openBlacklistModal()" class="icon-tool-btn" title="<%= isRtl ? 'القائمة السوداء (الحظر الوارد)' : 'Inbound Blacklist' %>" aria-label="<%= isRtl ? 'القائمة السوداء (الحظر الوارد)' : 'Inbound Blacklist' %>">
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                    </button>
+                    <button onclick="openImportCsvModal()" class="icon-tool-btn" title="<%= isRtl ? 'استيراد CSV' : 'Import CSV' %>" aria-label="<%= isRtl ? 'استيراد CSV' : 'Import CSV' %>">
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                    </button>
+                    <button onclick="openAddContactModal()" class="icon-tool-btn" title="<%= isRtl ? 'إضافة جهة اتصال' : 'Add Contact' %>" aria-label="<%= isRtl ? 'إضافة جهة اتصال' : 'Add Contact' %>">
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                </div>
+                <% } %>
             </div>
-            <% } %>
-        </div>
-
-        <!-- Search -->
-        <div class="panel-surface p-4 rounded-2xl mb-6 flex items-center gap-3">
-            <svg class="w-5 h-5 text-zinc-500 <%= isRtl ? 'mr-1' : 'ml-1' %>" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input type="text" id="contactsSearchInput" oninput="filterContacts()" placeholder="<%= t.searchPlaceholder %>" class="flex-1 bg-transparent border-0 text-sm text-white placeholder-zinc-600 focus:outline-none">
         </div>
 
         <!-- Directory Table -->
@@ -300,11 +428,11 @@ const isRtl = currentLang === 'ar';
                 <table class="w-full text-start border-collapse">
                     <thead>
                         <tr class="bg-black/40 text-zinc-400 text-xs font-bold uppercase border-b border-[#27272a]">
-                            <th class="p-4 tracking-wider text-start"><%= t.nameCol %></th>
-                            <th class="p-4 tracking-wider text-start"><%= t.lastNameCol %></th>
-                            <th class="p-4 tracking-wider text-start"><%= t.phoneCol %></th>
+                            <th class="px-4 py-[14px] tracking-wider text-start"><%= t.nameCol %></th>
+                            <th class="px-4 py-[14px] tracking-wider text-start"><%= t.lastNameCol %></th>
+                            <th class="px-4 py-[14px] tracking-wider text-start"><%= t.phoneCol %></th>
                             <% if (isSuperAdmin) { %>
-                            <th class="p-4 tracking-wider text-end w-40"><%= t.actionsCol %></th>
+                            <th class="px-4 py-[14px] tracking-wider text-end w-40"><%= t.actionsCol %></th>
                             <% } %>
                         </tr>
                     </thead>
@@ -459,6 +587,71 @@ const isRtl = currentLang === 'ar';
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             if (typeof window.updateClock === 'function') window.updateClock();
+        });
+
+        // Teardrop search field: expands out of the toolbar button on demand
+        let contactsSearchOpen = false;
+        let contactsSearchCloseTimer = null;
+
+        function openContactsSearch() {
+            const drop = document.getElementById('contactsSearchDrop');
+            const toggle = document.getElementById('contactsSearchToggle');
+            const input = document.getElementById('contactsSearchInput');
+            if (!drop) return;
+
+            if (contactsSearchCloseTimer) {
+                clearTimeout(contactsSearchCloseTimer);
+                contactsSearchCloseTimer = null;
+            }
+
+            drop.classList.remove('is-closing');
+            drop.classList.add('is-open');
+            contactsSearchOpen = true;
+            if (toggle) toggle.setAttribute('aria-expanded', 'true');
+
+            // Focus after the teardrop has started expanding
+            setTimeout(() => { if (input && contactsSearchOpen) input.focus(); }, 120);
+        }
+
+        function closeContactsSearch() {
+            const drop = document.getElementById('contactsSearchDrop');
+            const toggle = document.getElementById('contactsSearchToggle');
+            if (!drop || !contactsSearchOpen) return;
+
+            contactsSearchOpen = false;
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
+            drop.classList.remove('is-open');
+            drop.classList.add('is-closing');
+
+            if (contactsSearchCloseTimer) clearTimeout(contactsSearchCloseTimer);
+            contactsSearchCloseTimer = setTimeout(() => {
+                drop.classList.remove('is-closing');
+                contactsSearchCloseTimer = null;
+            }, 320);
+        }
+
+        function toggleContactsSearch() {
+            if (contactsSearchOpen) {
+                closeContactsSearch();
+            } else {
+                openContactsSearch();
+            }
+        }
+
+        // Close the teardrop on Escape or when clicking outside the toolbar
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && contactsSearchOpen) {
+                closeContactsSearch();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!contactsSearchOpen) return;
+            const drop = document.getElementById('contactsSearchDrop');
+            const toggle = document.getElementById('contactsSearchToggle');
+            if (drop && drop.contains(e.target)) return;
+            if (toggle && toggle.contains(e.target)) return;
+            closeContactsSearch();
         });
 
         // Fast Client-side filter

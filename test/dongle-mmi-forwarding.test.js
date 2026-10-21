@@ -257,50 +257,37 @@ test('server.js exposes dedicated POST /api/gsm-dongles/call-forwarding and enha
     assert.match(serverJs, /parseMmiCallForwardingDetails\(code\)/, 'USSD route must check parseMmiCallForwardingDetails');
 });
 
-test('views/gsm-dongles.ejs includes Call Forwarding tab, form, and toast handlers', () => {
+test('views/gsm-dongles.ejs exposes a USSD-only console (Call Forwarding UI removed)', () => {
     const viewPath = path.join(__dirname, '../views/gsm-dongles.ejs');
     const viewContent = fs.readFileSync(viewPath, 'utf8');
 
-    // 1. Tab switcher buttons
-    assert.match(viewContent, /id="tab-btn-ussd"/, 'View must render tab-btn-ussd');
-    assert.match(viewContent, /id="tab-btn-forwarding"/, 'View must render tab-btn-forwarding');
-    assert.match(viewContent, /switchConsoleTab\('forwarding'\)/, 'View must invoke switchConsoleTab');
+    // 1. The USSD console is still fully present
+    assert.match(viewContent, /id="ussd-execution-form"/, 'View must render the USSD execution form');
+    assert.match(viewContent, /id="ussd-target-dongle"/, 'View must render the USSD target dongle selector');
+    assert.match(viewContent, /id="ussd-code-input"/, 'View must render the USSD code input');
+    assert.match(viewContent, /id="ussd-submit-btn"/, 'View must render the USSD submit button');
+    assert.match(viewContent, /id="console-tab-title"/, 'View must keep the console title');
 
-    // 2. Call Forwarding Helper Form & Controls
-    assert.match(viewContent, /id="forwarding-execution-form"/, 'View must render forwarding-execution-form');
-    assert.match(viewContent, /id="cf-target-dongle"/, 'View must render cf-target-dongle selector');
-    assert.match(viewContent, /id="cf-scenario"/, 'View must render cf-scenario selector');
-    assert.match(viewContent, /value="21"/, 'Scenario must have Unconditional (21)');
-    assert.match(viewContent, /value="67"/, 'Scenario must have Busy (67)');
-    assert.match(viewContent, /value="61"/, 'Scenario must have No Reply (61)');
-    assert.match(viewContent, /value="62"/, 'Scenario must have Not Available (62)');
-    assert.match(viewContent, /value="004"/, 'Scenario must have All Conditional (004)');
-    assert.match(viewContent, /value="002"/, 'Scenario must have All Forwarding (002)');
-
-    // 3. Action and input fields
-    assert.match(viewContent, /id="cf-action"/, 'View must render cf-action selector');
-    assert.match(viewContent, /value="activate"/, 'Action must have activate');
-    assert.match(viewContent, /value="query"/, 'Action must have query');
-    assert.match(viewContent, /value="cancel"/, 'Action must have cancel');
-    assert.match(viewContent, /id="cf-number-input"/, 'View must render cf-number-input');
-    assert.match(viewContent, /id="cf-delay-select"/, 'View must render cf-delay-select');
-    assert.match(viewContent, /id="cf-submit-btn"/, 'View must render cf-submit-btn');
-
-    // 5. Client JavaScript functions
-    assert.match(viewContent, /window\.switchConsoleTab\s*=/, 'View must define window.switchConsoleTab');
-    assert.match(viewContent, /window\.openDongleCallForwarding\s*=/, 'View must define window.openDongleCallForwarding');
-    assert.match(viewContent, /window\.onCfScenarioChange\s*=/, 'View must define window.onCfScenarioChange');
-    assert.match(viewContent, /window\.onCfActionChange\s*=/, 'View must define window.onCfActionChange');
-
-    // 6. Endpoint dispatch and toast alerts
-    assert.match(viewContent, /fetch\('\/api\/gsm-dongles\/call-forwarding'/, 'Form submission must call /api/gsm-dongles/call-forwarding');
-    assert.match(viewContent, /showToast\(toastTitle[^,]*,\s*data\.message,\s*'success'\)/, 'Success must show toast notification');
-    assert.match(viewContent, /showToast\(toastTitle[^,]*,\s*errText,\s*'error'\)/, 'Failure must show error toast notification');
-
-    // 7. Dynamic Dropdown Synchronization
-    assert.match(viewContent, /document\.getElementById\('cf-target-dongle'\)/, 'View must select cf-target-dongle for dynamic refresh');
-    assert.match(viewContent, /populateTargetDropdown\(cfTarget/, 'refreshDevicesList must dynamically populate cfTarget dropdown');
-    assert.match(viewContent, /cfTargetEl\.addEventListener\('change'/, 'cfTarget must sync device selection on change');
+    // 2. The Call Forwarding tab switcher and its form are gone.
+    //    Call forwarding does not work on the deployed modems, so the whole UI
+    //    entry point was removed rather than left as a dead tab.
+    assert.doesNotMatch(viewContent, /id="tab-btn-ussd"/, 'USSD tab button must be removed - the console is no longer a tab switcher');
+    assert.doesNotMatch(viewContent, /id="tab-btn-forwarding"/, 'Call Forwarding tab button must be removed');
+    assert.doesNotMatch(viewContent, /switchConsoleTab/, 'switchConsoleTab must be removed');
+    assert.doesNotMatch(viewContent, /id="forwarding-execution-form"/, 'Call Forwarding form must be removed');
+    assert.doesNotMatch(viewContent, /id="cf-target-dongle"/, 'Call Forwarding target selector must be removed');
+    assert.doesNotMatch(viewContent, /id="cf-scenario"/, 'Call Forwarding scenario selector must be removed');
+    assert.doesNotMatch(viewContent, /id="cf-action"/, 'Call Forwarding action selector must be removed');
+    assert.doesNotMatch(viewContent, /id="cf-number-input"/, 'Call Forwarding number input must be removed');
+    assert.doesNotMatch(viewContent, /id="cf-delay-select"/, 'Call Forwarding delay selector must be removed');
+    assert.doesNotMatch(viewContent, /id="cf-submit-btn"/, 'Call Forwarding submit button must be removed');
+    assert.doesNotMatch(viewContent, /window\.openDongleCallForwarding/, 'openDongleCallForwarding must be removed');
+    assert.doesNotMatch(viewContent, /window\.onCfScenarioChange/, 'onCfScenarioChange must be removed');
+    assert.doesNotMatch(viewContent, /window\.onCfActionChange/, 'onCfActionChange must be removed');
+    assert.doesNotMatch(viewContent, /fetch\('\/api\/gsm-dongles\/call-forwarding'/, 'Call Forwarding API dispatch must be removed');
+    assert.doesNotMatch(viewContent, /populateTargetDropdown\(cfTarget/, 'Call Forwarding dropdown refresh must be removed');
+    assert.doesNotMatch(viewContent, /cfTargetEl\.addEventListener\('change'/, 'Call Forwarding change listener must be removed');
+    assert.doesNotMatch(viewContent, /action === 'call-forwarding'/, 'Call Forwarding dongle action branch must be removed');
 });
 
 test('all client script blocks in views/gsm-dongles.ejs parse as valid JavaScript with zero syntax errors', async () => {

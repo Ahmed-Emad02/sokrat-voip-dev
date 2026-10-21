@@ -462,9 +462,43 @@ function isTabAllowed(tabName) {
         #configTopPillsScroll {
             scrollbar-width: none !important;
             -ms-overflow-style: none !important;
+            scroll-behavior: auto !important;   /* JS drives the smooth scroll */
+            scroll-padding-inline: 1rem;
+            overscroll-behavior-x: contain;
+            touch-action: pan-x;
         }
         #configTopPillsScroll::-webkit-scrollbar {
             display: none !important;
+        }
+        /* Edge fades that appear only when there is content to scroll to,
+           giving the hidden scrollbar a visual affordance. */
+        #configTopPillBar { position: relative; }
+        #configTopPillBar::before,
+        #configTopPillBar::after {
+            content: "";
+            position: absolute;
+            top: 0.625rem;
+            bottom: 0.625rem;
+            width: 2.25rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 220ms ease;
+            z-index: 5;
+        }
+        #configTopPillBar::before {
+            inset-inline-start: 0;
+            background: linear-gradient(to right, var(--bg-secondary), transparent);
+        }
+        #configTopPillBar::after {
+            inset-inline-end: 0;
+            background: linear-gradient(to left, var(--bg-secondary), transparent);
+        }
+        #configTopPillBar.can-scroll-start::before { opacity: 1; }
+        #configTopPillBar.can-scroll-end::after { opacity: 1; }
+        #configTopPillsScroll:focus-visible {
+            outline: 2px solid var(--accent-color, #dc2626);
+            outline-offset: 3px;
+            border-radius: 0.75rem;
         }
         /* Time Group Rule Pill & Badge High-Contrast Visibility */
         .timegroup-rule-pill {
@@ -992,7 +1026,7 @@ function isTabAllowed(tabName) {
         <div id="configTopPillBar" class="w-full mb-6 shrink-0 <%= isRtl ? 'rtl' : 'ltr' %>">
             <div class="panel-surface rounded-2xl p-2.5 border border-[var(--border-primary)] flex items-center justify-between gap-3 bg-[var(--bg-secondary)] shadow-sm">
                 <!-- Left: Scrollable Pill Navigation Strip -->
-                <div id="configTopPillsScroll" class="flex-1 min-w-0 overflow-x-auto no-scrollbar flex items-center gap-1.5 py-0.5 px-1 scroll-smooth">
+                <div id="configTopPillsScroll" class="flex-1 min-w-0 overflow-x-auto no-scrollbar flex items-center gap-1.5 py-0.5 px-1" role="tablist" aria-label="Configuration sections" tabindex="0">
                     <% if (isTabAllowed('extensions')) { %>
                     <button type="button" onclick="switchTab('extensions')" data-tab-target="extensions" title="<%= isRtl ? 'التحويلات' : 'Extensions' %>" class="config-top-pill config-tab-btn config-tab-btn-extensions config-tab-active">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -6525,14 +6559,12 @@ function isTabAllowed(tabName) {
                 btn.classList.add('config-tab-active');
             });
 
-            // Auto-scroll active pill into view smoothly in top bar
-            const topPillsScroll = document.getElementById('configTopPillsScroll');
-            if (topPillsScroll) {
-                const activePill = topPillsScroll.querySelector('[data-tab-target="' + tabId + '"]');
-                if (activePill) {
-                    activePill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                }
-            }
+            // Auto-scroll the active pill into view.
+            // NOTE: scrollIntoView() is NOT used here - it scrolls EVERY scrollable
+            // ancestor including the document, which yanked the whole page
+            // sideways whenever a tab was switched. We scroll the pill strip
+            // only, and centre the pill inside it.
+            scrollTopPillIntoView(tabId, false);
 
             stopRtcpTimer();
             if (tabId === 'audioprocessing') { loadAudioGlobals(); loadPerDongleAudioProfiles(); loadPerExtensionAudioProfiles(); }
@@ -6651,18 +6683,134 @@ function isTabAllowed(tabName) {
             window.setPbxNavLayout(current === 'topbar' ? 'sidebar' : 'topbar');
         };
 
+        /* ===== Config top pill strip: scrolling engine =====
+           Fixes the previously broken horizontal scrolling:
+             - The 3x wheel multiplier made the strip feel sluggish and
+               overshoot past the last pill.
+             - preventDefault() was called even when the strip could not
+               scroll, which blocked page scrolling.
+             - The container had scroll-smooth, so every wheel tick was
+               animated and lagged behind the pointer.
+           Now: native 1:1 delta, no smooth behaviour on wheel, and
+           preventDefault only when the strip can actually scroll. */
         function initTopPillBarWheelScroll() {
             const scrollContainer = document.getElementById('configTopPillsScroll');
             if (!scrollContainer || scrollContainer._wheelAttached) return;
             scrollContainer._wheelAttached = true;
 
             scrollContainer.addEventListener('wheel', function(e) {
-                const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
-                if (delta !== 0) {
-                    e.preventDefault();
-                    scrollContainer.scrollLeft += (delta * 3.0);
+                if (e.ctrlKey) return;                       // let pinch-zoom through
+                const maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth;
+                if (maxScroll <= 1) return;                  // nothing to scroll: do not block the page
+
+                const rtl = getComputedStyle(scrollContainer).direction === 'rtl';
+
+                // Trackpads report deltaX for horizontal swipes; mice only
+                // report deltaY. Prefer the axis the user is actually using.
+                const absX = Math.abs(e.deltaX);
+                const absY = Math.abs(e.deltaY);
+                let delta;
+                if (absX > absY) {
+                    delta = e.deltaX;                         // trackpad: 1:1
+                } else {
+                    delta = e.deltaY * 1.5;                  // mouse wheel: 1.5x for a usable pace
                 }
+                if (!delta) return;
+
+                // Horizontal position, expressed 0 = start edge, maxScroll = end edge.
+                const pos = rtl ? -scrollContainer.scrollLeft : scrollContainer.scrollLeft;
+                const goingForward = delta > 0;
+                const nextPos = pos + (rtl ? -delta : delta);
+
+                // Only hand the gesture back to the page when the strip is
+                // ALREADY at the edge and the user keeps pushing past it.
+                // Scrolling DOWN must always reveal the LATER pills.
+                const pastEnd = goingForward && nextPos > maxScroll + 1;
+                const beforeStart = !goingForward && nextPos < -1;
+                if (pastEnd || beforeStart) return;           // let the page scroll instead
+
+                e.preventDefault();
+                scrollContainer.scrollLeft += (rtl ? -delta : delta);
+                updateTopPillScrollAffordance();
             }, { passive: false });
+
+            scrollContainer.addEventListener('scroll', updateTopPillScrollAffordance, { passive: true });
+            window.addEventListener('resize', updateTopPillScrollAffordance);
+            // Web fonts and late layout can change the strip width, so re-measure
+            // the overflow once the browser has settled.
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(updateTopPillScrollAffordance).catch(() => {});
+            }
+            requestAnimationFrame(updateTopPillScrollAffordance);
+            setTimeout(updateTopPillScrollAffordance, 350);
+
+            /* Left/Right arrow keys move between pills (roving tabindex). */
+            scrollContainer.addEventListener('keydown', function(e) {
+                if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+                const pills = Array.from(scrollContainer.querySelectorAll('.config-tab-btn'));
+                if (!pills.length) return;
+                const idx = pills.indexOf(document.activeElement);
+                if (idx === -1) return;
+                e.preventDefault();
+                const dir = (e.key === 'ArrowRight') ? 1 : -1;
+                const next = pills[(idx + dir + pills.length) % pills.length];
+                if (!next) return;
+                next.focus({ preventScroll: true });
+                const tabId = next.getAttribute('data-tab-target');
+                if (tabId && typeof window.switchTab === 'function') window.switchTab(tabId);
+            });
+
+            updateTopPillScrollAffordance();
+        }
+
+        /* Shows the left/right edge fades only when there is content to reach. */
+        function updateTopPillScrollAffordance() {
+            const sc = document.getElementById('configTopPillsScroll');
+            const bar = document.getElementById('configTopPillBar');
+            if (!sc || !bar) return;
+            const max = sc.scrollWidth - sc.clientWidth;
+            if (max <= 1) {
+                bar.classList.remove('can-scroll-start', 'can-scroll-end');
+                return;
+            }
+            const pos = Math.abs(sc.scrollLeft);
+            bar.classList.toggle('can-scroll-start', pos > 2);
+            bar.classList.toggle('can-scroll-end', pos < max - 2);
+        }
+
+        /* Brings a pill into view inside the strip.
+           Scrolls ONLY the strip - never the page - and does the minimum
+           amount of scrolling needed, so switching tabs does not make the
+           whole strip jump around. */
+        function scrollTopPillIntoView(tabId, animate) {
+            const sc = document.getElementById('configTopPillsScroll');
+            if (!sc) return;
+            const pill = sc.querySelector('[data-tab-target="' + tabId + '"]');
+            if (!pill) return;
+
+            const margin = 12;
+            const pillLeft = pill.offsetLeft;
+            const pillRight = pillLeft + pill.offsetWidth;
+            const viewLeft = sc.scrollLeft;
+            const viewRight = sc.scrollLeft + sc.clientWidth;
+
+            let delta = 0;
+            if (pillLeft - margin < viewLeft) {
+                delta = (pillLeft - margin) - viewLeft;
+            } else if (pillRight + margin > viewRight) {
+                delta = (pillRight + margin) - viewRight;
+            }
+            if (delta === 0) { updateTopPillScrollAffordance(); return; }
+
+            const rtl = getComputedStyle(sc).direction === 'rtl';
+            const next = sc.scrollLeft + (rtl ? -delta : delta);
+
+            if (animate === false) {
+                sc.scrollTo({ left: next, behavior: 'auto' });
+            } else {
+                sc.scrollTo({ left: next, behavior: 'smooth' });
+            }
+            updateTopPillScrollAffordance();
         }
 
         // --- 1. EXTENSIONS ---
@@ -13221,8 +13369,8 @@ function isTabAllowed(tabName) {
 
                 <!-- Interval Name / Description (Optional) -->
                 <div>
-                    <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">${isRtl ? 'اسم الفترة / وصف القاعدة (اختياري)' : 'Interval Name / Description (Optional)'}</label>
-                    <input type="text" name="rule_name[]" value="${escapeHtml(ruleName)}" placeholder="${isRtl ? 'مثال: ساعات العمل الرسمية / فترة صباحية' : 'e.g. Regular Business Hours / Morning Shift'}" oninput="updateRulePreviewChip(this)" class="rule-name config-input w-full py-1.5 text-xs font-semibold">
+                    <label for="ruleNameInput" class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1">${isRtl ? 'اسم الفترة / وصف القاعدة (اختياري)' : 'Interval Name / Description (Optional)'}</label>
+                    <input type="text" id="ruleNameInput" name="rule_name[]" value="${escapeHtml(ruleName)}" placeholder="${isRtl ? 'مثال: ساعات العمل الرسمية / فترة صباحية' : 'e.g. Regular Business Hours / Morning Shift'}" oninput="updateRulePreviewChip(this)" class="rule-name config-input w-full py-1.5 text-xs font-semibold">
                 </div>
 
                 <!-- Time Range -->

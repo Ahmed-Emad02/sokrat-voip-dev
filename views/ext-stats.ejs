@@ -1181,10 +1181,10 @@ const isRtl = currentLang === 'ar';
                             </thead>
                             <tbody class="divide-y divide-[#27272a]/10 text-xs font-mono">`;
                 const dispMap = {
-                    ANSWERED: 'bg-[var(--accent-color)]/10 text-[var(--accent-color)] border border-[var(--accent-color)]/25',
-                    BUSY: 'bg-amber-400/10 text-amber-400 border border-amber-400/25',
-                    'NO ANSWER': 'bg-teal-400/10 text-teal-400 border border-teal-400/25',
-                    FAILED: 'bg-purple-400/10 text-purple-400 border border-purple-400/25'
+                    ANSWERED: 'text-[var(--accent-color)]',
+                    BUSY: 'text-amber-400',
+                    'NO ANSWER': 'text-teal-400',
+                    FAILED: 'text-purple-400'
                 };
                 data.recentCalls.forEach(call => {
                     html += `
@@ -1193,7 +1193,7 @@ const isRtl = currentLang === 'ar';
                             <td class="p-3 text-white">${call.dst}</td>
                             <td class="p-3 text-zinc-400">${fmtDur(call.billsec)}</td>
                             <td class="p-3 whitespace-nowrap">
-                                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded text-[10px] font-mono font-black tracking-wider whitespace-nowrap ${dispMap[call.disposition] || 'bg-zinc-800 text-zinc-400 border border-zinc-700/50'}">
+                                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded text-[10px] font-mono font-black tracking-wider whitespace-nowrap ${dispMap[call.disposition] || 'text-zinc-400'}">
                                     ${call.disposition}
                                 </span>
                             </td>

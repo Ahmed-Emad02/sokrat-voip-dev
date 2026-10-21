@@ -1,7 +1,7 @@
 <%
 const words = {
     en: {
-        title: "GSM Dongles", subtitle: "Console",
+        title: "GSM Dongles",
         thID: "Dongle ID",
         thProvider: "Provider Name",
         thNumber: "SIM Number",
@@ -92,28 +92,10 @@ const words = {
         auditTableLive: "Live Device (Asterisk)",
         auditTableStatus: "Status / Diagnostics",
         auditTableAction: "Action",
-        callForwardingTitle: "Call Forwarding",
-        cfTabUssd: "USSD >_",
-        cfTabForwarding: "Call Forwarding",
-        cfScenario: "Forwarding Scenario",
-        cfAlways: "Always / All Calls (Unconditional)",
-        cfBusy: "When Busy",
-        cfNoReply: "When No Answer (No Reply)",
-        cfNotReachable: "When Unreachable / Switched Off",
-        cfAllConditional: "All Conditional (Busy, No Reply, Unreachable)",
-        cfAllForwarding: "All Forwarding Types",
-        cfAction: "Action",
-        cfActionActivate: "Activate Forwarding",
-        cfActionQuery: "Check Status (Query)",
-        cfActionCancel: "Deactivate / Cancel",
         cfForwardToNumber: "Forward To Phone Number",
-        cfNoReplyDelay: "No Answer Delay",
         cfSendBtn: "Send Code",
-        cfExecuting: "Executing...",
         cfSeconds: "seconds",
         cfDefaultSec: "seconds (Default)",
-        btnCallForwarding: "Call Forwarding",
-        legendCallForwardingDesc: "Configures 3GPP Call Forwarding (always, busy, no answer, unreachable).",
         atDiagTitle: "AT Diagnostics (Root)",
         atDiagModalTitle: "Modem AT Diagnostic Console",
         atDiagModalSubtitle: "Direct cellular baseband command execution & AI-assisted explanation",
@@ -200,7 +182,7 @@ const words = {
         smsBackToThreads: "Back to conversations"
     },
     ar: {
-        title: "شرائح الاتصال", subtitle: "GSM",
+        title: "شرائح الاتصال",
         thID: "رمز الشريحة",
         thProvider: "شبكة الاتصال",
         thNumber: "رقم الهاتف",
@@ -289,28 +271,10 @@ const words = {
         auditTableLive: "الجهاز الحقيقي (Asterisk)",
         auditTableStatus: "الحالة والتشخيص",
         auditTableAction: "الإجراء",
-        callForwardingTitle: "تحويل المكالمات",
-        cfTabUssd: "لوحة USSD >_",
-        cfTabForwarding: "تحويل المكالمات",
-        cfScenario: "حالة التحويل (السيناريو)",
-        cfAlways: "دائماً / تحويل كلي لكافة المكالمات (Unconditional)",
-        cfBusy: "عند انشغال الخط (When Busy)",
-        cfNoReply: "عند عدم الرد (When No Answer)",
-        cfNotReachable: "عند غير متاح أو مغلق (Not Available)",
-        cfAllConditional: "كافة الحالات المشروطة (مشغول + لا رد + غير متاح)",
-        cfAllForwarding: "جميع أنواع التحويل (All Forwarding)",
-        cfAction: "الإجراء المطلوب",
-        cfActionActivate: "تفعيل التحويل إلى رقم (Activate)",
-        cfActionQuery: "فحص واستعلام الحالة (Check Status)",
-        cfActionCancel: "إلغاء وإيقاف التحويل (Cancel)",
         cfForwardToNumber: "رقم هاتف التحويل",
-        cfNoReplyDelay: "مهلة عدم الرد بالثواني",
         cfSendBtn: "إرسال الكود",
-        cfExecuting: "جاري الإرسال...",
         cfSeconds: "ثواني",
         cfDefaultSec: "ثانية (الافتراضي)",
-        btnCallForwarding: "تحويل المكالمات",
-        legendCallForwardingDesc: "ضبط تحويل المكالمات عبر الشبكة الخلوية 3GPP (كلي، مشغول، لا رد، غير متاح).",
         atDiagTitle: "فحص وتشخيص AT (خاص بـ root)",
         atDiagModalTitle: "لوحة الفحص والتشخيص المباشر للمودم (AT)",
         atDiagModalSubtitle: "تنفيذ مباشر لأوامر الشبكة وقراءة استجابة الشريحة مع التفسير الذكي",
@@ -584,7 +548,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             align-items: center !important;
             width: 100% !important;
             gap: 0.875rem !important;
-            padding: 0.65rem 1rem !important;
+            /* 3px added on every side: 0.65rem -> 0.8375rem (10.4px -> 13.4px)
+               vertically and 1rem -> 1.1875rem (16px -> 19px) horizontally. */
+            padding: 0.8375rem 1.1875rem !important;
         }
         @media (max-width: 900px) {
             .dongle-device-card.dongle-minimal-row {
@@ -1524,17 +1490,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         <!-- Header Section -->
         <div class="mb-6 shrink-0 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
             <div class="flex items-center gap-3">
-                <div class="text-[var(--accent-color)] flex items-center justify-center shrink-0">
-                    <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="10" y="2" width="4" height="4" rx="0.5" />
-                        <line x1="11" y1="3.5" x2="11.01" y2="3.5" stroke-width="2" />
-                        <line x1="13" y1="3.5" x2="13.01" y2="3.5" stroke-width="2" />
-                        <rect x="7" y="6" width="10" height="15" rx="2" />
-                        <circle cx="12" cy="17" r="1" fill="currentColor" />
-                    </svg>
-                </div>
                 <div>
-                    <h2 class="text-2xl sm:text-3xl font-vibrant-display text-[var(--text-primary)] tracking-tight"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
+                    <h2 class="text-2xl sm:text-3xl font-vibrant-display text-[var(--text-primary)] tracking-tight"><%= t.title %></h2>
                 </div>
             </div>
 
@@ -1556,9 +1513,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <span id="gsm-device-ready" class="text-sm font-black text-emerald-400 font-mono">0</span>
                 </div>
                 <!-- Laya Autonomous Watcher Agent Status Pill (Icon Only) -->
-                <button type="button" id="btn-open-laya-modal" onclick="openLayaModal()" class="h-10 w-10 rounded-xl bg-purple-500/15 border border-purple-500/30 hover:bg-purple-500/25 flex items-center justify-center shrink-0 transition cursor-pointer shadow-sm group relative" title="<%= isRtl ? 'المساعد الذكي لَيا للرقابة الذاتية على المودمات' : 'Laya Autonomous GSM Watcher & Healing Agent' %>">
+                <button type="button" id="btn-open-laya-modal" onclick="openLayaModal()" class="icon-tool-btn group relative" title="<%= isRtl ? 'المساعد الذكي لَيا للرقابة الذاتية على المودمات' : 'Laya Autonomous GSM Watcher & Healing Agent' %>" aria-label="<%= isRtl ? 'المساعد الذكي لَيا للرقابة الذاتية على المودمات' : 'Laya Autonomous GSM Watcher & Healing Agent' %>">
                     <!-- Laya Cyber-Cat Sentinel SVG -->
-                    <svg class="w-5 h-5 text-purple-400 shrink-0 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg class="shrink-0 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <!-- Cat Ears -->
                         <path d="M4 10L6.5 3l4.5 4.5" fill="currentColor" fill-opacity="0.15" />
                         <path d="M20 10L17.5 3l-4.5 4.5" fill="currentColor" fill-opacity="0.15" />
@@ -1577,13 +1534,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-600 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-purple-600"></span>
                     </span>
-                    <span id="laya-badge-score" class="hidden">100%</span>
+                    <span id="laya-badge-score" class="tool-btn-badge hidden">100%</span>
                 </button>
-                <button id="global-audit-btn" type="button" onclick="openDongleAuditModal()" title="<%= t.btnAuditHardware %>" aria-label="<%= t.btnAuditHardware %>" class="dongle-action-button dongle-action-secondary toolbar-icon-btn cursor-pointer shrink-0">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                <button id="global-audit-btn" type="button" onclick="openDongleAuditModal()" title="<%= t.btnAuditHardware %>" aria-label="<%= t.btnAuditHardware %>" class="icon-tool-btn shrink-0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                 </button>
-                <button id="global-reset-usb-btn" type="button" title="<%= t.btnResetAllUsb %>" aria-label="<%= t.btnResetAllUsb %>" class="dongle-action-button dongle-action-primary toolbar-icon-btn cursor-pointer shrink-0">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                <button id="global-reset-usb-btn" type="button" title="<%= t.btnResetAllUsb %>" aria-label="<%= t.btnResetAllUsb %>" class="icon-tool-btn shrink-0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
                 </button>
             </div>
         </div>
@@ -1630,7 +1587,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <!-- Left Pane: Conversations / Endpoints List -->
                         <div id="sms-threads-pane" class="w-full sm:w-[32%] lg:w-[34%] xl:w-[28%] min-w-[200px] max-w-[300px] border-e border-[var(--border-primary)] flex flex-col bg-[var(--bg-primary)]/40 shrink-0">
                             <!-- Search & Filter Bar -->
-                            <div class="p-2 border-b border-[var(--border-primary)] bg-[var(--bg-card)]/50 space-y-1.5 shrink-0">
+                            <div class="p-2 pb-[10px] border-b border-[var(--border-primary)] bg-[var(--bg-card)]/50 space-y-1.5 shrink-0">
                                 <div class="relative">
                                     <input type="text" id="sms-thread-search" oninput="handleSmsSearch(this.value)" placeholder="<%= t.smsSearchPlaceholder || 'Search number or text...' %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1 text-xs text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-[var(--accent-color)] font-mono">
                                     <svg class="w-3.5 h-3.5 text-zinc-500 absolute end-2.5 top-2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -1669,7 +1626,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                                 <!-- Chat Actions (Dongle selector, delete thread) -->
                                 <div class="flex items-center gap-1.5 shrink-0">
-                                    <div class="w-40 sm:w-48 shrink-0">
+                                    <div class="w-56 sm:w-[17rem] shrink-0">
                                         <select id="sms-reply-dongle" class="text-xs font-semibold font-mono" title="<%= t.smsSenderDongle || 'Sender Dongle' %>">
                                             <% if (devices && devices.length > 0) { %>
                                                 <% devices.forEach(d => { %>
@@ -1724,16 +1681,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                 </div>
                                 <span id="console-tab-title"><%= t.ussdTitle %></span>
                             </h3>
-                            <div class="flex items-center gap-1 p-0.5 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)]">
-                                <button type="button" id="tab-btn-ussd" onclick="switchConsoleTab('ussd')" class="px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer bg-indigo-600 text-white border border-indigo-400 shadow-md flex items-center gap-1.5">
-                                    <span class="font-mono font-black">&gt;_</span>
-                                    <span><%= t.cfTabUssd || 'USSD >_' %></span>
-                                </button>
-                                <button type="button" id="tab-btn-forwarding" onclick="switchConsoleTab('forwarding')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)] border border-transparent flex items-center gap-1.5">
-                                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l5 5-5 5"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v7a4 4 0 004 4h12"/></svg>
-                                    <span><%= t.cfTabForwarding || (isRtl ? 'تحويل المكالمات' : 'Call Forwarding') %></span>
-                                </button>
-                            </div>
                         </div>
 
                         <form id="ussd-execution-form" class="flex flex-col gap-2.5">
@@ -1756,7 +1703,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="ussd-code-input">
                                         <%= isRtl ? 'رمز الـ USSD *' : 'USSD Code *' %>
                                     </label>
-                                    <div class="flex items-center bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 focus-within:border-indigo-500 transition-colors">
+                                    <div class="flex items-center px-2.5">
                                         <span class="text-indigo-400 font-bold font-mono text-xs leading-none select-none me-1.5">&gt;_</span>
                                         <input type="text" id="ussd-code-input" class="w-full bg-transparent border-0 outline-none py-1.5 text-xs text-[var(--text-primary)] font-mono placeholder-zinc-500" placeholder="e.g. *100# or *50#" required autocomplete="off">
                                     </div>
@@ -1767,83 +1714,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                 <span id="btn-label"><%= t.sendBtn %></span>
                                 <div id="btn-spinner" class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin hidden"></div>
                             </button>
-                        </form>
-
-                        <!-- Call Forwarding Helper Form -->
-                        <form id="forwarding-execution-form" class="hidden flex flex-col gap-2.5">
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
-                                <div>
-                                    <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="cf-target-dongle">
-                                        <%= isRtl ? 'الشريحة المستهدفة *' : 'Target Dongle *' %>
-                                    </label>
-                                    <select id="cf-target-dongle" class="config-input w-full py-1.5 text-xs font-semibold cursor-pointer" required>
-                                        <option value="" disabled <%= initialSelectedDongleId ? '' : 'selected' %> hidden><%= t.selectPlaceholder %></option>
-                                        <% if (devices && devices.length > 0) { %>
-                                            <% devices.forEach(d => { %>
-                                                <option value="<%= d.ID %>" <%= d.ID === initialSelectedDongleId ? 'selected' : '' %>><%= d.ID %> (<%= d.Number || 'Unknown SIM' %>)</option>
-                                            <% }) %>
-                                        <% } %>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="cf-scenario">
-                                        <%= t.cfScenario %> *
-                                    </label>
-                                    <select id="cf-scenario" class="config-input w-full py-1.5 text-xs font-semibold cursor-pointer" required onchange="onCfScenarioChange()">
-                                        <option value="21"><%= t.cfAlways %></option>
-                                        <option value="67"><%= t.cfBusy %></option>
-                                        <option value="61"><%= t.cfNoReply %></option>
-                                        <option value="62"><%= t.cfNotReachable %></option>
-                                        <option value="004"><%= t.cfAllConditional %></option>
-                                        <option value="002"><%= t.cfAllForwarding %></option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="cf-action">
-                                        <%= t.cfAction %> *
-                                    </label>
-                                    <select id="cf-action" class="config-input w-full py-1.5 text-xs font-semibold cursor-pointer" required onchange="onCfActionChange()">
-                                        <option value="activate"><%= t.cfActionActivate %></option>
-                                        <option value="query"><%= t.cfActionQuery %></option>
-                                        <option value="cancel"><%= t.cfActionCancel %></option>
-                                    </select>
-                                </div>
-
-                                <div id="cf-number-container">
-                                    <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase block mb-1" for="cf-number-input">
-                                        <%= t.cfForwardToNumber %> *
-                                    </label>
-                                    <div class="flex items-center bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg px-2.5 focus-within:border-emerald-500 transition-colors">
-                                        <svg class="w-3.5 h-3.5 text-emerald-400 me-1.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
-                                        <input type="tel" id="cf-number-input" class="w-full bg-transparent border-0 outline-none py-1.5 text-xs text-[var(--text-primary)] font-mono placeholder-zinc-500" placeholder="01011719380" required autocomplete="off">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex items-center justify-between gap-3 pt-1 flex-wrap">
-                                <div id="cf-delay-container" class="hidden items-center gap-2">
-                                    <label class="text-[10px] font-bold text-[var(--text-secondary)] uppercase" for="cf-delay-select">
-                                        <%= t.cfNoReplyDelay %>:
-                                    </label>
-                                    <select id="cf-delay-select" class="config-input py-1 text-xs font-mono">
-                                        <option value="20">20 <%= t.cfDefaultSec %></option>
-                                        <option value="5">5 <%= t.cfSeconds %></option>
-                                        <option value="10">10 <%= t.cfSeconds %></option>
-                                        <option value="15">15 <%= t.cfSeconds %></option>
-                                        <option value="25">25 <%= t.cfSeconds %></option>
-                                        <option value="30">30 <%= t.cfSeconds %></option>
-                                    </select>
-                                </div>
-
-                                <div class="ms-auto flex items-center gap-2">
-                                    <button type="submit" id="cf-submit-btn" class="config-btn-primary px-5 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer">
-                                        <span id="cf-btn-label"><%= t.cfSendBtn %></span>
-                                        <div id="cf-btn-spinner" class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin hidden"></div>
-                                    </button>
-                                </div>
-                            </div>
                         </form>
                     </div>
                     <!-- USSD Terminal Display -->
@@ -2816,9 +2686,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <form id="laya-schedule-form" onsubmit="saveLayaSchedule(event)" class="p-4 bg-[var(--bg-card)] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
                         <!-- Enable Toggle -->
                         <div class="flex flex-col gap-1.5">
-                            <label class="text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
+                            <span class="text-[11px] font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
                                 <span><%= isRtl ? 'الحالة المجدولة' : 'Schedule Status' %></span>
-                            </label>
+                            </span>
                             <label class="relative inline-flex items-center cursor-pointer select-none">
                                 <input type="checkbox" id="laya-sched-enabled" class="sr-only peer">
                                 <div class="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
@@ -3472,7 +3342,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     if (action === 'virtual-replug') virtualReplug(id);
                     if (action === 'reset-usb') virtualReplug(id);
                     if (action === 'populate-hardware') populateDongleHardware(id, card.dataset.imei, card.dataset.imsi);
-                    if (action === 'call-forwarding') openDongleCallForwarding(id);
                 });
             }
 
@@ -3542,11 +3411,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         ussdTarget.value = id;
                         ussdTarget.dispatchEvent(new Event('change', { bubbles: true }));
                     }
-                    const cfTarget = document.getElementById('cf-target-dongle');
-                    if (cfTarget && cfTarget.value !== id) {
-                        cfTarget.value = id;
-                        cfTarget.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
                     const replyDongle = document.getElementById('sms-reply-dongle');
                     if (replyDongle && replyDongle.value.toLowerCase() !== normalizedId.toLowerCase()) {
                         replyDongle.value = normalizedId;
@@ -3612,15 +3476,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             // Sync detail card and table highlight when select dropdown is changed
             if (ussdTarget) {
                 ussdTarget.addEventListener('change', (e) => {
-                    if (isSyncingSelect) return;
-                    if (e.target.value && e.target.value !== selectedDongleId) {
-                        selectDevice(e.target.value);
-                    }
-                });
-            }
-            const cfTargetEl = document.getElementById('cf-target-dongle');
-            if (cfTargetEl) {
-                cfTargetEl.addEventListener('change', (e) => {
                     if (isSyncingSelect) return;
                     if (e.target.value && e.target.value !== selectedDongleId) {
                         selectDevice(e.target.value);
@@ -5483,181 +5338,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     ussdSubmitBtn.disabled = false;
                 });
             });
-            // Console Tab Switcher Logic (USSD vs Call Forwarding)
-            window.switchConsoleTab = function(tab) {
-                const ussdForm = document.getElementById('ussd-execution-form');
-                const cfForm = document.getElementById('forwarding-execution-form');
-                const btnUssd = document.getElementById('tab-btn-ussd');
-                const btnCf = document.getElementById('tab-btn-forwarding');
-                const tabTitle = document.getElementById('console-tab-title');
-                const tabIcon = document.getElementById('console-tab-icon');
-                if (!ussdForm || !cfForm) return;
-
-                if (tab === 'forwarding') {
-                    ussdForm.classList.add('hidden');
-                    cfForm.classList.remove('hidden');
-
-                    if (btnUssd) {
-                        btnUssd.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)] border border-transparent flex items-center gap-1.5';
-                    }
-                    if (btnCf) {
-                        btnCf.className = 'px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer bg-emerald-600 text-white border border-emerald-400 shadow-md flex items-center gap-1.5';
-                    }
-                    if (tabTitle) tabTitle.textContent = words.callForwardingTitle || (isRtl ? 'تحويل المكالمات' : 'Call Forwarding');
-                    if (tabIcon) {
-                        tabIcon.className = 'flex items-center justify-center text-emerald-400 shrink-0';
-                        tabIcon.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l5 5-5 5"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v7a4 4 0 004 4h12"/></svg>';
-                    }
-                } else {
-                    cfForm.classList.add('hidden');
-                    ussdForm.classList.remove('hidden');
-
-                    if (btnUssd) {
-                        btnUssd.className = 'px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer bg-indigo-600 text-white border border-indigo-400 shadow-md flex items-center gap-1.5';
-                    }
-                    if (btnCf) {
-                        btnCf.className = 'px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)] border border-transparent flex items-center gap-1.5';
-                    }
-                    if (tabTitle) tabTitle.textContent = words.ussdTitle;
-                    if (tabIcon) {
-                        tabIcon.className = 'flex items-center justify-center text-indigo-400 shrink-0';
-                        tabIcon.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>';
-                    }
-                }
-            };
-
-            window.openDongleCallForwarding = function(dongleId) {
-                if (!dongleId) return;
-                selectDevice(dongleId);
-                const cfTarget = document.getElementById('cf-target-dongle');
-                if (cfTarget) cfTarget.value = dongleId;
-                switchConsoleTab('forwarding');
-                const formEl = document.getElementById('forwarding-execution-form');
-                if (formEl && formEl.scrollIntoView) {
-                    formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            };
-
-            window.onCfScenarioChange = function() {
-                const scenario = document.getElementById('cf-scenario').value;
-                const delayContainer = document.getElementById('cf-delay-container');
-                if (!delayContainer) return;
-                if (scenario === '61' || scenario === '004') {
-                    delayContainer.classList.remove('hidden');
-                    delayContainer.classList.add('flex');
-                } else {
-                    delayContainer.classList.add('hidden');
-                    delayContainer.classList.remove('flex');
-                }
-            };
-
-            window.onCfActionChange = function() {
-                const action = document.getElementById('cf-action').value;
-                const numInput = document.getElementById('cf-number-input');
-                const numContainer = document.getElementById('cf-number-container');
-                if (!numInput) return;
-
-                if (action === 'query' || action === 'cancel') {
-                    numInput.required = false;
-                    numInput.disabled = true;
-                    numInput.placeholder = isRtl ? '(غير مطلوب لهذا الإجراء)' : '(Not required)';
-                    if (numContainer) numContainer.classList.add('opacity-50');
-                } else {
-                    numInput.required = true;
-                    numInput.disabled = false;
-                    numInput.placeholder = '01011719380';
-                    if (numContainer) numContainer.classList.remove('opacity-50');
-                }
-            };
-
-            const forwardingForm = document.getElementById('forwarding-execution-form');
-            if (forwardingForm) {
-                forwardingForm.addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    const targetEl = document.getElementById('cf-target-dongle');
-                    const scenarioEl = document.getElementById('cf-scenario');
-                    const actionEl = document.getElementById('cf-action');
-                    const numberEl = document.getElementById('cf-number-input');
-                    const delayEl = document.getElementById('cf-delay-select');
-                    const submitBtn = document.getElementById('cf-submit-btn');
-                    const btnLabel = document.getElementById('cf-btn-label');
-                    const btnSpinner = document.getElementById('cf-btn-spinner');
-
-                    const target = targetEl ? targetEl.value : '';
-                    const scenario = scenarioEl ? scenarioEl.value : '21';
-                    const action = actionEl ? actionEl.value : 'activate';
-                    const number = numberEl ? numberEl.value.trim() : '';
-                    const delay = delayEl ? delayEl.value : '20';
-
-                    if (!target) {
-                        showToast(isRtl ? 'خطأ' : 'Error', isRtl ? 'يرجى اختيار الشريحة المستهدفة' : 'Target dongle is required', 'error');
-                        return;
-                    }
-                    if (action === 'activate' && !number) {
-                        showToast(isRtl ? 'خطأ' : 'Error', isRtl ? 'يرجى إدخال رقم هاتف التحويل' : 'Forwarding phone number is required', 'error');
-                        if (numberEl) numberEl.focus();
-                        return;
-                    }
-
-                    if (btnLabel) btnLabel.textContent = words.cfExecuting || (isRtl ? 'جاري الإرسال...' : 'Executing...');
-                    if (btnSpinner) btnSpinner.classList.remove('hidden');
-                    if (submitBtn) submitBtn.disabled = true;
-
-                    const placeholderEl = document.getElementById('terminal-placeholder');
-                    if (placeholderEl && placeholderEl.parentNode) {
-                        placeholderEl.parentNode.removeChild(placeholderEl);
-                    }
-
-                    const scenarioLabel = scenarioEl && scenarioEl.selectedIndex >= 0 ? scenarioEl.options[scenarioEl.selectedIndex].text : scenario;
-                    const actionLabel = actionEl && actionEl.selectedIndex >= 0 ? actionEl.options[actionEl.selectedIndex].text : action;
-                    const cmdLine = document.createElement('div');
-                    cmdLine.className = 'ussd-cmd-line mt-2 pt-2 text-xs font-mono';
-                    cmdLine.textContent = `[${new Date().toLocaleTimeString()}] > exec-forwarding -d ${target} -s ${scenario} (${scenarioLabel}) -a ${action} ${number ? ('-n ' + number) : ''}`;
-                    terminalScreen.appendChild(cmdLine);
-                    terminalScreen.scrollTop = terminalScreen.scrollHeight;
-
-                    fetch('/api/gsm-dongles/call-forwarding', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            dongle: target,
-                            scenario,
-                            action,
-                            number,
-                            delay
-                        })
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        const toastTitle = words.callForwardingTitle || (isRtl ? 'تحويل المكالمات' : 'Call Forwarding');
-                        if (data.success) {
-                            appendUssdResponse(data.logTime || new Date().toLocaleTimeString(), data.message, false);
-                            showToast(toastTitle + ' (' + target + ')', data.message, 'success');
-                        } else {
-                            const errText = data.error || data.message || (isRtl ? 'فشل إرسال كود التحويل' : 'Failed to execute call forwarding');
-                            const respLine = document.createElement('div');
-                            respLine.className = 'ussd-err-box font-bold p-2.5 rounded-lg border mt-1';
-                            respLine.textContent = `[System Error] ${errText}`;
-                            terminalScreen.appendChild(respLine);
-                            terminalScreen.scrollTop = terminalScreen.scrollHeight;
-                            showToast(toastTitle + ' (' + target + ')', errText, 'error');
-                        }
-                    })
-                    .catch(err => {
-                        const errorLine = document.createElement('div');
-                        errorLine.className = 'ussd-err-box font-bold p-2.5 rounded-lg border mt-1';
-                        errorLine.textContent = `[Network Error] ${err.message}`;
-                        terminalScreen.appendChild(errorLine);
-                        terminalScreen.scrollTop = terminalScreen.scrollHeight;
-                        showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error');
-                    })
-                    .finally(() => {
-                        if (btnLabel) btnLabel.textContent = words.cfSendBtn || (isRtl ? 'إرسال الكود' : 'Send Code');
-                        if (btnSpinner) btnSpinner.classList.add('hidden');
-                        if (submitBtn) submitBtn.disabled = false;
-                    });
-                });
-            }
 
             // WebSocket live USSD responses capture
             if (socket) {
@@ -5772,12 +5452,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             ? String(currentSelected)
                             : (loadedDevices[0] ? String(loadedDevices[0].ID || '') : '');
 
-                        const cfTarget = document.getElementById('cf-target-dongle');
-                        const currentCfSelected = cfTarget && cfTarget.value ? cfTarget.value : nextSelected;
-                        const nextCfSelected = loadedDevices.some(device => String(device.ID || '') === String(currentCfSelected || ''))
-                            ? String(currentCfSelected)
-                            : nextSelected;
-
                         function populateTargetDropdown(el, selectedVal, fallbackNumber) {
                             if (!el) return;
                             el.innerHTML = '';
@@ -5807,10 +5481,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         if (ussdTarget) {
                             populateTargetDropdown(ussdTarget, nextSelected, 'Unknown');
                         }
-                        if (cfTarget) {
-                            populateTargetDropdown(cfTarget, nextCfSelected, 'Unknown SIM');
-                        }
-
                         renderDongleCards();
                         if (typeof updateReportDropdowns === 'function') {
                             updateReportDropdowns();

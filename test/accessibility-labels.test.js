@@ -3,6 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
+// A tag attribute region may contain EJS expressions such as
+// value="<%= typeof x !== 'undefined' ? x : '' %>", and those contain '>'
+// characters. A naive /<input\b([^>]*?)>/ match therefore truncates the tag at
+// the first '>' inside the EJS block, hiding any attributes that follow it.
+// This matcher treats an EJS block as an atomic unit.
+const EJS_BLOCK = '<%[\\s\\S]*?%>';
+const INPUT_TAG = new RegExp(`<(input|select|textarea)\\b((?:[^>]|${EJS_BLOCK})*?)>`, 'gi');
+
 test('All <label> elements across all views have valid programmatic associations (for attribute or wrapped input)', () => {
     const viewsDir = path.join(__dirname, '../views');
     const files = fs.readdirSync(viewsDir).filter(f => f.endsWith('.ejs')).map(f => path.join(viewsDir, f));
@@ -64,7 +72,7 @@ test('All form control elements (<input>, <select>, <textarea>) across all views
 
     for (const filepath of files) {
         const content = fs.readFileSync(filepath, 'utf8');
-        const tagMatches = content.matchAll(/<(input|select|textarea)\b([^>]*?)>/gi);
+        const tagMatches = content.matchAll(INPUT_TAG);
 
         for (const m of tagMatches) {
             const tagType = m[1].toLowerCase();
@@ -92,7 +100,7 @@ test('All autofillable credential/contact inputs across views have explicit auto
 
     for (const filepath of files) {
         const content = fs.readFileSync(filepath, 'utf8');
-        const matches = content.matchAll(/<input\b([^>]*?)>/gi);
+        const matches = content.matchAll(INPUT_TAG);
 
         for (const m of matches) {
             const attrs = m[1];

@@ -49,6 +49,23 @@
             border: 1px solid var(--border-primary);
             border-radius: 1.25rem;
         }
+        /* Flat, borderless cards on the Users page.
+           The body-scoped selector is used deliberately: sidebar.ejs ships a
+           global .panel-surface rule with !important and it is emitted AFTER
+           this stylesheet, so a plain class rule would lose the cascade tie. */
+        body .panel-surface {
+            background: transparent !important;
+            background-color: transparent !important;
+            background-image: none !important;
+            border: 0 !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            box-shadow: none !important;
+        }
+        html.light-theme body .panel-surface {
+            background: transparent !important;
+            border: 0 !important;
+        }
         .user-input {
             background-color: var(--bg-primary);
             border: 1px solid var(--border-primary);
@@ -70,6 +87,31 @@
         }
         .light-theme .user-input:focus {
             border-color: var(--accent-color) !important;
+        }
+        /* Uniform control height for the create-user form.
+           Three different control types are used in the same row and they each
+           rendered at a different height:
+             text inputs (.user-input)            44.5px
+             checklist dropdown buttons (.user-input) 38px
+             enhanced-select trigger (.config-dropdown-trigger) 34px
+           All of them are pinned to one 44.5px box so the row lines up. */
+        #createUserForm .user-input,
+        #createUserForm .custom-select-wrapper .config-dropdown-trigger {
+            min-height: 2.78125rem;
+            padding-top: 0.625rem;
+            padding-bottom: 0.625rem;
+            line-height: 1.5;
+        }
+        #createUserForm .custom-select-wrapper .config-dropdown-trigger {
+            background-color: var(--bg-primary) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--border-primary) !important;
+        }
+        #createUserForm.light-theme .custom-select-wrapper .config-dropdown-trigger,
+        html.light-theme #createUserForm .custom-select-wrapper .config-dropdown-trigger {
+            background-color: #ffffff !important;
+            color: #111827 !important;
+            border-color: #d4d4dd !important;
         }
         .extension-dropdown-menu,
         .dongle-dropdown-menu {
@@ -141,14 +183,6 @@
             <!-- Page Header -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <div class="flex items-center gap-2 mb-1">
-                        <a href="/?lang=<%= currentLang %>" class="text-xs font-semibold text-zinc-400 hover:text-white transition flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M9 5l7 7-7 7' : 'M15 19l-7-7 7-7' %>"/></svg>
-                            <span><%= isRtl ? 'الرئيسية' : 'Dashboard' %></span>
-                        </a>
-                        <span class="text-zinc-600 text-xs">/</span>
-                        <span class="text-xs text-[var(--accent-color)] font-bold"><%= isRtl ? 'المستخدمين' : 'Users' %></span>
-                    </div>
                     <h1 class="text-2xl md:text-3xl font-black tracking-tight flex items-center gap-2">
                         <span><%= isRtl ? 'إدارة المستخدمين والصلاحيات' : 'User & Access Control' %></span>
                     </h1>
@@ -216,7 +250,7 @@
                         <span><%= isRtl ? 'إضافة مستخدم جديد' : 'Add New User' %></span>
                     </h2>
                 </div>
-                <form method="POST" action="/users/add" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
+                <form id="createUserForm" method="POST" action="/users/add" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
                     <div>
                         <label for="createUsername" class="block text-[10px] font-extrabold uppercase text-zinc-400 mb-1.5 tracking-wider"><%= isRtl ? 'اسم المستخدم *' : 'Username *' %></label>
                         <input type="text" id="createUsername" name="username" autocomplete="username" placeholder="e.g. jsmith" required class="user-input">
@@ -605,7 +639,7 @@
                                                         <div class="flex flex-wrap gap-2">
                                                             <% cat.permissions.forEach(function(p) { %>
                                                                 <label class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-xs text-[var(--text-muted)] opacity-60 cursor-not-allowed">
-                                                                    <input type="checkbox" class="tab-checkbox" checked disabled>
+                                                                    <input type="checkbox" id="perm_<%= cat.id %>_<%= p.key %>" name="perm_<%= cat.id %>_<%= p.key %>" class="tab-checkbox" checked disabled>
                                                                     <span><%= isRtl ? p.labelAr : p.label %></span>
                                                                 </label>
                                                             <% }); %>
