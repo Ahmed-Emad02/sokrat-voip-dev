@@ -21,14 +21,16 @@ from laya.config import (
     SOCKET_PATH,
     SCHEDULED_RESTART_DEFAULT_START,
     SCHEDULED_RESTART_DEFAULT_END,
-    SCHEDULED_RESTART_DEFAULT_COOLDOWN
+    SCHEDULED_RESTART_DEFAULT_COOLDOWN,
+    AT_FAULT_LOOKBACK_SEC
 )
 from laya.sensors.cli import (
     parse_dongle_devices_summary,
     get_dongle_device_state,
     parse_active_channels,
     get_total_active_calls,
-    is_any_dongle_call_active
+    is_any_dongle_call_active,
+    scan_asterisk_log_for_dongle_faults
 )
 from laya.sensors.sysfs import scan_usb_modems
 from laya.sensors.db import (
@@ -38,12 +40,13 @@ from laya.sensors.db import (
     get_scheduled_restart_settings,
     set_scheduled_restart_setting,
     is_kill_switch_active,
-    record_maintenance_event
+    record_maintenance_event,
+    prune_stale_dongle_health
 )
 from laya.evaluator.state_machine import DongleStateManager
 from laya.evaluator.heuristics import evaluate_dongle_anomalies, ANOMALY_NONE
 from laya.healer.ladder import RecoveryLadder
-from laya.healer.actions import action_restart_dongle, is_call_active_on_dongle
+from laya.healer.actions import action_restart_dongle, action_cfun_restart, action_baseband_reboot, is_call_active_on_dongle
 from datetime import datetime
 
 
@@ -55,6 +58,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("laya")
 
+# Number of watch cycles between stale dongle health row prunes
+PRUNE_EVERY_CYCLES = 12
+# Minimum seconds between repeated anomaly log lines for the same dongle+type
+ANOMALY_LOG_THROTTLE_SEC = 300
+
 class LayaEngine:
     def __init__(self):
         self.running = False
@@ -65,6 +73,7 @@ class LayaEngine:
         self.server_sock = None
         self.last_scheduled_restart_epoch = 0
         self.is_restarting_sequence = False
+        self._anomaly_log_throttle = {}
 
 
     def start_ipc_server(self):
@@ -203,28 +212,49 @@ class LayaEngine:
             if not dongle_id:
                 continue
 
-            # Query detail if device is active or deep triage requested
-            detail = None
-            if dev.get("state") != "Not connected" or deep:
-                detail = get_dongle_device_state(dongle_id)
+            # ALWAYS query the device state. Previously Asterisk's detail was
+            # skipped for 'Not connected' dongles, which made the physical USB
+            # presence check blind exactly in the failure scenario we must detect.
+            detail = get_dongle_device_state(dongle_id)
+
+            # Ground truth from the driver's own log signatures
+            at_fault, at_sig, at_count = scan_asterisk_log_for_dongle_faults(
+                dongle_id, lookback_seconds=AT_FAULT_LOOKBACK_SEC
+            )
 
             # Update state machine
             health_data = self.state_mgr.update_dongle(dev, detail, active_channels, usb_modems)
+            health_data["at_fault_confirmed"] = at_fault
+            health_data["at_fault_signature"] = at_sig
+            health_data["at_fault_count"] = at_count
             self.last_dongle_cache[dongle_id] = health_data
 
             # Anomaly evaluation
-            anomaly_type, reason, _ = evaluate_dongle_anomalies(health_data, detail)
+            anomaly_type, reason, recommended_level = evaluate_dongle_anomalies(health_data, detail)
 
             if anomaly_type != ANOMALY_NONE:
-                logger.warning(f"Anomaly detected on {dongle_id}: [{anomaly_type}] {reason}")
-                action_name, lvl, ok, det = self.healer_ladder.attempt_recovery(
-                    dongle_id, anomaly_type, reason, health_data, detail
-                )
-                self.state_mgr.mark_healing_action(dongle_id, lvl, action_name)
-                health_data["healing_level"] = lvl
-                health_data["last_heal_action"] = action_name
-                health_data["last_heal_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                logger.info(f"Recovery executed on {dongle_id} (Level {lvl}): {action_name} -> {det}")
+                # Throttle anomaly logging so a persistent condition does not
+                # flood the journal on every 5 second poll cycle.
+                sig_key = f"{dongle_id}:{anomaly_type}"
+                last_logged = self._anomaly_log_throttle.get(sig_key, 0)
+                if (time.time() - last_logged) >= ANOMALY_LOG_THROTTLE_SEC:
+                    self._anomaly_log_throttle[sig_key] = time.time()
+                    logger.warning(f"Anomaly detected on {dongle_id}: [{anomaly_type}] {reason}")
+
+                if recommended_level == 0:
+                    # Report-only anomalies (e.g. hardware physically absent)
+                    # cannot be fixed by software. Do not burn recovery rungs.
+                    health_data["healing_level"] = 0
+                    health_data["last_heal_action"] = "Report Only (No Software Remedy)"
+                else:
+                    action_name, lvl, ok, det = self.healer_ladder.attempt_recovery(
+                        dongle_id, anomaly_type, reason, health_data, detail
+                    )
+                    self.state_mgr.mark_healing_action(dongle_id, lvl, action_name)
+                    health_data["healing_level"] = lvl
+                    health_data["last_heal_action"] = action_name
+                    health_data["last_heal_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                    logger.info(f"Recovery executed on {dongle_id} (Level {lvl}): {action_name} -> {det}")
             else:
                 # Reset ladder once back to healthy
                 if health_data.get("status") == "healthy":
@@ -233,6 +263,19 @@ class LayaEngine:
             # Persist to database
             upsert_dongle_health(health_data)
             cycle_results.append(health_data)
+
+        # Periodically prune health rows for dongles that no longer exist
+        self._cycle_counter = getattr(self, "_cycle_counter", 0) + 1
+        if self._cycle_counter % PRUNE_EVERY_CYCLES == 0:
+            try:
+                prune_res = prune_stale_dongle_health(devices)
+                if prune_res.get("pruned"):
+                    logger.info(
+                        f"Pruned {prune_res['pruned']} stale dongle health row(s); "
+                        f"kept: {', '.join(prune_res.get('kept', []))}"
+                    )
+            except Exception as e:
+                logger.warning(f"Stale dongle health prune failed: {e}")
 
         return cycle_results
 
@@ -313,6 +356,12 @@ class LayaEngine:
 
             restarted = []
             skipped = []
+            hygiene_enabled = False
+            try:
+                from laya.sensors.db import get_baseband_hygiene_settings
+                hygiene_enabled = bool(get_baseband_hygiene_settings().get("hygiene_enabled"))
+            except Exception:
+                hygiene_enabled = False
 
             for idx, dev in enumerate(connected_dongles):
                 dongle_id = dev["id"].lower().strip()
@@ -324,10 +373,22 @@ class LayaEngine:
                     break
 
                 logger.info(f"[{source}] [{idx+1}/{len(connected_dongles)}] Restarting {dongle_id}...")
-                success, details = action_restart_dongle(
-                    dongle_id,
-                    reason=f"{source} ({start_str}-{end_str})"
-                )
+
+                if hygiene_enabled:
+                    # Layer 4-B: safe baseband hygiene.
+                    # AT+CFUN=1 restarts only the radio/protocol stack, so the
+                    # USB device never drops off the bus. The action verifies the
+                    # modem identity (IMEI/IMSI) and falls back to a targeted
+                    # Asterisk-level restart if the radio re-attach did not settle.
+                    success, details = action_cfun_restart(
+                        dongle_id,
+                        reason=f"{source} ({start_str}-{end_str}) - baseband hygiene"
+                    )
+                else:
+                    success, details = action_restart_dongle(
+                        dongle_id,
+                        reason=f"{source} ({start_str}-{end_str})"
+                    )
 
                 if success:
                     restarted.append(dongle_id)

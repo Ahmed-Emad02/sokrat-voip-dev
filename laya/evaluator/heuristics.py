@@ -11,6 +11,17 @@ ANOMALY_ZOMBIE_CHANNEL = "ZOMBIE_CHANNEL"
 ANOMALY_MODEM_DEADLOCK = "MODEM_DEADLOCK"
 ANOMALY_UNINITIALIZED_CONNECTED = "UNINITIALIZED_CONNECTED"
 ANOMALY_CARRIER_DROP = "CARRIER_DROP"
+ANOMALY_MODEM_FIRMWARE_DEAD = "MODEM_FIRMWARE_DEAD"
+ANOMALY_HARDWARE_ABSENT = "HARDWARE_ABSENT"
+
+# States that indicate the modem is genuinely not usable right now
+BROKEN_STATES = (
+    "Not connected",
+    "Not initialized",
+    "GSM not responding",
+    "Free",           # only broken when combined with a confirmed AT fault
+    "Unknown",
+)
 
 def evaluate_dongle_anomalies(health_data, detail=None):
     """
@@ -56,7 +67,20 @@ def evaluate_dongle_anomalies(health_data, detail=None):
                 3  # Level 3: Targeted Dongle Restart
             )
 
-    # 4. Check for Physical USB Present but Asterisk "Not connected"
+    # 4. MODEM FIRMWARE DEADLOCK (ground truth from the driver's own error signature).
+    #    The chan_dongle driver logs "timedout while waiting 'OK' in response to 'AT'"
+    #    when the modem baseband stops answering. A single transient timeout during
+    #    normal call teardown is harmless, so this anomaly REQUIRES the dongle to
+    #    currently be in a non-healthy state as well.
+    if health_data.get("at_fault_confirmed") and state not in ("Free", "Active"):
+        return (
+            ANOMALY_MODEM_FIRMWARE_DEAD,
+            f"Modem baseband stopped answering AT ('{health_data.get('at_fault_signature')}', "
+            f"{health_data.get('at_fault_count')} occurrence(s)) while state='{state}'",
+            4  # Level 4: Hardware USB Bus Reset - soft restarts cannot revive a dead baseband
+        )
+
+    # 5. Check for Physical USB Present but Asterisk "Not connected"
     if state == "Not connected" and usb_present:
         consecutive_errors = health_data.get("consecutive_errors", 0)
         if consecutive_errors >= 3:
@@ -66,7 +90,7 @@ def evaluate_dongle_anomalies(health_data, detail=None):
                 3  # Level 3: Restart dongle module in Asterisk
             )
 
-    # 5. Check for Carrier Drop while supposed to be Free
+    # 6. Check for Carrier Drop while supposed to be Free
     if state == "Free":
         carrier_reg = health_data.get("carrier_registered", 1)
         rssi = health_data.get("rssi", 0)
@@ -78,5 +102,16 @@ def evaluate_dongle_anomalies(health_data, detail=None):
                     f"Modem in Free state but completely unregistered with 0 RSSI for {consecutive_errors} cycles",
                     1  # Level 1: Soft AT inquiry to trigger network re-search
                 )
+
+    # 7. HARDWARE ABSENT - the modem is simply not plugged in / not enumerated.
+    #    This is a physical situation, not a software fault. Healing cannot fix it,
+    #    so we report it quietly instead of burning recovery rungs and spamming alerts.
+    if state == "Not connected" and not usb_present:
+        return (
+            ANOMALY_HARDWARE_ABSENT,
+            f"Modem hardware not enumerated on the USB bus "
+            f"(configured ports: {health_data.get('configured_ports')}) - physical check required",
+            0  # No automated healing; escalate to operator awareness only
+        )
 
     return (ANOMALY_NONE, "Modem operational", 0)

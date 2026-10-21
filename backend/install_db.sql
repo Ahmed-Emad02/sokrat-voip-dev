@@ -62,6 +62,12 @@ INSERT IGNORE INTO `dashboard_settings` (`setting_key`, `setting_value`) VALUES
   ('laya_scheduled_restart_end', '07:00'),
   ('laya_scheduled_restart_cooldown_sec', '25'),
   ('laya_scheduled_restart_last_run', ''),
+  ('laya_baseband_hygiene_enabled', 'true'),
+  ('laya_baseband_reboot_enabled', 'false'),
+  ('laya_baseband_reboot_confirmed', 'false'),
+  ('laya_baseband_recovery_timeout_sec', '60'),
+  ('laya_cfun_restart_enabled', 'true'),
+  ('laya_cfun_restart_threshold', '3'),
   ('laya_kill_switch_active', 'true');
 
 

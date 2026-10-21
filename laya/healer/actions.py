@@ -18,7 +18,9 @@ from laya.sensors.cli import (
 from laya.sensors.sysfs import (
     find_modem_sysfs_for_port,
     find_modem_sysfs_for_dongle,
-    get_dongles_sharing_sysfs_device
+    get_dongles_sharing_sysfs_device,
+    get_usb_raw_dev_node,
+    trigger_usbdevfs_reset
 )
 from laya.sensors.db import (
     record_maintenance_event,
@@ -150,13 +152,16 @@ def action_restart_dongle(dongle_id, reason="Targeted dongle restart"):
     update_maintenance_event_result(event_id, result_str, details)
     return success, details
 
-def action_sysfs_usb_reset(dongle_id, audio_port=None, reason="Hardware sysfs USB bus reset"):
+def action_sysfs_usb_reset(dongle_id, audio_port=None, reason="Hardware sysfs USB bus reset", data_port=None):
     """
-    Level 4: Kernel-level USB device unbind and re-bind for wedged hardware.
+    Level 4: Kernel-level hardware USB bus reset (USBDEVFS_RESET) and driver re-bind.
     STRICT MULTI-DONGLE ISOLATION:
       1. Resolves USB sysfs path ONLY from ports configured for THIS dongle in dongle.conf.
       2. Checks all shared dongles on this physical USB device to ensure NONE have active calls.
-      3. Only re-inits the affected dongles in Asterisk.
+      3. Sends hardware USBDEVFS_RESET ioctl directly to physical /dev/bus/usb node (Layer 2).
+      4. Re-binds sysfs driver to refresh kernel interfaces.
+      5. Only re-inits the affected dongles in Asterisk.
+      6. Verifies the modem actually came back before reporting success.
     """
     target = dongle_id.lower().strip()
     if is_call_active_on_dongle(target):
@@ -165,7 +170,7 @@ def action_sysfs_usb_reset(dongle_id, audio_port=None, reason="Hardware sysfs US
         return False, details
 
     # Strictly locate USB sysfs path for this dongle's configured ports only
-    sysfs_name, _ = find_modem_sysfs_for_dongle(target, audio_port)
+    sysfs_name, _ = find_modem_sysfs_for_dongle(target, audio_port, data_port)
     if not sysfs_name:
         details = f"Safety Abort: Cannot verify physical USB sysfs device for {target}. Aborting to protect other dongles."
         record_maintenance_event(target, reason, 4, f"Sysfs USB Rebind ({target})", "failed", details)
@@ -183,10 +188,20 @@ def action_sysfs_usb_reset(dongle_id, audio_port=None, reason="Hardware sysfs US
         dongle_name=target,
         trigger_reason=reason,
         recovery_level=4,
-        action_taken=f"Sysfs USB Driver Rebind ({sysfs_name})",
+        action_taken=f"Hardware USB Bus Reset ({sysfs_name})",
         result="in_progress"
     )
 
+    # 1. Execute Layer 2 Hardware Bus Reset via raw device node if available
+    raw_node = get_usb_raw_dev_node(sysfs_name)
+    hw_reset_msg = ""
+    hw_reset_ok = False
+    if raw_node:
+        hw_reset_ok, hw_msg = trigger_usbdevfs_reset(raw_node)
+        hw_reset_msg = f" [USBDEVFS_RESET: {'OK' if hw_reset_ok else hw_msg}]"
+        time.sleep(1)
+
+    # 2. Kernel driver unbind & re-bind
     unbind_path = "/sys/bus/usb/drivers/usb/unbind"
     bind_path = "/sys/bus/usb/drivers/usb/bind"
 
@@ -203,8 +218,16 @@ def action_sysfs_usb_reset(dongle_id, audio_port=None, reason="Hardware sysfs US
             for d in (shared_dongles or [target]):
                 restart_dongle_module(d)
                 restarted.append(d)
-            update_maintenance_event_result(event_id, "success", f"Rebound {sysfs_name}; restarted {', '.join(restarted)}")
-            return True, f"Rebound {sysfs_name}"
+
+            # 3. Post-heal verification: the modem must actually come back.
+            recovered, verify_details = verify_dongle_recovered(target, timeout=45)
+            summary_details = f"Rebound {sysfs_name}{hw_reset_msg}; restarted {', '.join(restarted)}; {verify_details}"
+            if recovered:
+                update_maintenance_event_result(event_id, "success", summary_details)
+                return True, summary_details
+            else:
+                update_maintenance_event_result(event_id, "failed", summary_details)
+                return False, summary_details
         else:
             details = "Sysfs driver unbind/bind paths not writable"
             update_maintenance_event_result(event_id, "failed", details)
@@ -213,6 +236,33 @@ def action_sysfs_usb_reset(dongle_id, audio_port=None, reason="Hardware sysfs US
         details = f"Sysfs reset error: {str(e)}"
         update_maintenance_event_result(event_id, "failed", details)
         return False, details
+
+def verify_dongle_recovered(dongle_id, timeout=45, poll_interval=3):
+    """
+    Post-heal verification: waits for the modem to return to a usable state.
+
+    A recovery action is only reported as successful when the modem actually
+    re-registers with the carrier. Without this, a failed hardware reset would
+    still be logged as 'success' and would burn a recovery rung silently.
+
+    Returns (recovered: bool, details: str).
+    """
+    from laya.sensors.cli import parse_dongle_devices_summary
+
+    target = dongle_id.lower().strip()
+    deadline = time.time() + timeout
+    last_state = "Unknown"
+
+    while time.time() < deadline:
+        for dev in parse_dongle_devices_summary():
+            if dev.get("id", "").lower() == target:
+                last_state = dev.get("state", "Unknown")
+                if last_state in ("Free", "Active"):
+                    return True, f"Recovered: {target} is '{last_state}' (RSSI {dev.get('rssi', 0)})"
+                break
+        time.sleep(poll_interval)
+
+    return False, f"NOT recovered: {target} still '{last_state}' after {timeout}s"
 
 def action_escalate_alert(dongle_id, reason, details="", dry_run=False):
     """
@@ -243,7 +293,7 @@ def action_escalate_alert(dongle_id, reason, details="", dry_run=False):
         f"  • Level 1: Soft AT Inquiries (CPAS/CSQ) ❌\n"
         f"  • Level 2: Orphan Channel Terminations ❌\n"
         f"  • Level 3: Targeted Dongle Restarts ❌\n"
-        f"  • Level 4: Kernel Sysfs USB Bus Re-binds ❌\n\n"
+        f"  • Level 4: Hardware USB Bus Reset (USBDEVFS_RESET + sysfs rebind) ❌\n\n"
         f"<b>Diagnostic Telemetry:</b>\n"
         f"<code>{details or 'Repeated hardware or carrier timeouts'}</code>\n\n"
         f"<b>Required Action:</b> Please inspect physical modem USB connection or SIM card seating.\n"
@@ -264,3 +314,232 @@ def action_escalate_alert(dongle_id, reason, details="", dry_run=False):
     res_str = "success" if tg_ok else "failed"
     update_maintenance_event_result(event_id, res_str, tg_info)
     return tg_ok, tg_info
+
+# =============================================================================
+# Layer 4 — Baseband Hygiene Actions
+# =============================================================================
+
+def snapshot_modem_identity(dongle_id):
+    """
+    Captures the modem's identity fingerprint (IMEI / IMSI / model / firmware /
+    subscriber number) so that a post-action verification can prove the SAME
+    physical modem and SAME SIM came back.
+
+    Without this check a driver that silently re-binds to the wrong USB device
+    would look like a successful recovery.
+
+    Returns a dict snapshot (empty values when unavailable).
+    """
+    from laya.sensors.cli import get_dongle_device_state
+
+    detail = get_dongle_device_state(dongle_id) or {}
+    return {
+        "imei": detail.get("imei"),
+        "imsi": detail.get("imsi"),
+        "model": detail.get("model"),
+        "firmware": detail.get("firmware"),
+        "subscriber_number": detail.get("subscriber_number"),
+        "state": detail.get("state"),
+    }
+
+def verify_modem_identity(dongle_id, snapshot):
+    """
+    Verifies that the modem that came back carries the SAME identity as the
+    snapshot taken before the action.
+
+    Returns (ok: bool, details: str).
+    """
+    from laya.sensors.cli import get_dongle_device_state
+
+    detail = get_dongle_device_state(dongle_id) or {}
+    if not detail:
+        return False, "Modem state could not be read after the action"
+
+    problems = []
+    for field in ("imei", "imsi"):
+        before = (snapshot or {}).get(field)
+        after = detail.get(field)
+        if before and after and before != after:
+            problems.append(f"{field} changed {before} -> {after}")
+
+    state = (detail.get("state") or "").lower()
+    if "not connected" in state or "not initialized" in state:
+        problems.append(f"state is '{detail.get('state')}'")
+
+    if problems:
+        return False, "; ".join(problems)
+    return True, (f"identity verified (IMEI {detail.get('imei')}, "
+                  f"IMSI {detail.get('imsi')}, state '{detail.get('state')}')")
+
+def action_cfun_restart(dongle_id, reason="Baseband radio stack re-attach (AT+CFUN=1)"):
+    """
+    Layer 4-A: SAFE baseband hygiene.
+
+    Sends AT+CFUN=1 which restarts ONLY the radio / protocol stack. The USB
+    composite device is NOT rebooted, so the modem never drops off the bus,
+    never loses its USB session and never requires a physical replug.
+
+    Verified on Huawei E173 hardware: the modem answers 'OK', stays on the bus,
+    keeps its IMEI / IMSI, re-registers with the carrier and remains able to
+    place calls.
+
+    The action is asynchronous: the modem restarts its radio stack underneath
+    the driver, so the driver's in-flight AT command times out and the driver
+    re-initialises. We therefore wait for the driver to come back and verify.
+
+    Returns (success: bool, details: str).
+    """
+    from laya.sensors.cli import get_dongle_device_state, send_dongle_at_command
+    from laya.config import BASEBAND_REINIT_TIMEOUT_SEC
+
+    target = dongle_id.lower().strip()
+    if not target.startswith("dongle"):
+        return False, "Safety Abort: Invalid dongle identifier"
+
+    if is_call_active_on_dongle(target):
+        details = f"Aborted AT+CFUN=1: Active voice call in progress on {target}"
+        record_maintenance_event(target, reason, 1, f"Baseband Radio Re-attach ({target})", "failed", details)
+        return False, details
+
+    before = snapshot_modem_identity(target)
+    event_id = record_maintenance_event(
+        dongle_name=target,
+        trigger_reason=reason,
+        recovery_level=1,
+        action_taken=f"Baseband Radio Re-attach AT+CFUN=1 ({target})",
+        result="in_progress"
+    )
+
+    ok, resp, err = send_dongle_at_command(target, "AT+CFUN=1")
+    if not ok:
+        details = f"AT+CFUN=1 could not be queued: {err or resp}"
+        update_maintenance_event_result(event_id, "failed", details)
+        return False, details
+
+    # The radio stack restarts asynchronously. Give the driver time to notice,
+    # time out its pending command and re-initialise the modem.
+    time.sleep(5)
+
+    deadline = time.time() + BASEBAND_REINIT_TIMEOUT_SEC
+    state = "Unknown"
+    while time.time() < deadline:
+        detail = get_dongle_device_state(target) or {}
+        state = detail.get("state", "Unknown")
+        if state and "not connected" not in state.lower() and "not initialized" not in state.lower():
+            break
+        time.sleep(2)
+
+    identity_ok, identity_details = verify_modem_identity(target, before)
+    if identity_ok:
+        update_maintenance_event_result(event_id, "success", identity_details)
+        return True, identity_details
+
+    # The modem did not come back cleanly on its own. Escalate to a targeted
+    # Asterisk-level restart, which is still safe (no USB bus reset).
+    logger_msg = f"AT+CFUN=1 did not yield a clean return ({identity_details}); issuing targeted dongle restart"
+    update_maintenance_event_result(event_id, "in_progress", logger_msg)
+    restart_ok, restart_details = action_restart_dongle(target, reason=f"{reason} (post-CFUN recovery)")
+    time.sleep(3)
+    identity_ok2, identity_details2 = verify_modem_identity(target, before)
+    if identity_ok2:
+        update_maintenance_event_result(event_id, "success", f"{identity_details2} after targeted restart")
+        return True, f"{identity_details2} (after targeted restart)"
+    update_maintenance_event_result(event_id, "failed", f"{identity_details2} | {restart_details}")
+    return False, f"{identity_details2} | {restart_details}"
+
+def action_baseband_reboot(dongle_id, reason="Full baseband reboot (AT^RESET)"):
+    """
+    Layer 4-C: FULL baseband reboot via AT^RESET.  DESTRUCTIVE / OPERATOR-ONLY.
+
+    Empirically verified on Huawei E173 hardware: AT^RESET is accepted with
+    'OK' and reboots the baseband, BUT the modem then removes itself from the
+    USB bus entirely and does NOT re-enumerate. Neither USBDEVFS_RESET, nor a
+    sysfs driver rebind, nor a USB hub port power-cycle can bring it back.
+    Only a physical replug does.
+
+    Because of that, this action is:
+      * disabled by default ('laya_baseband_reboot_enabled'),
+      * additionally gated behind an explicit acknowledgement
+        ('laya_baseband_reboot_confirmed'),
+      * never part of any automated schedule,
+      * and always captures the physical USB location first so the operator
+        escalation can name the exact port that needs a physical reseat.
+
+    Returns (success: bool, details: str).
+    """
+    from laya.sensors.cli import get_dongle_device_state, send_dongle_at_command
+    from laya.sensors.db import get_baseband_hygiene_settings
+    from laya.sensors.sysfs import find_modem_sysfs_for_dongle, get_usb_raw_dev_node
+    from laya.config import BASEBAND_REBOOT_DEFAULT_TIMEOUT
+
+    target = dongle_id.lower().strip()
+    if not target.startswith("dongle"):
+        return False, "Safety Abort: Invalid dongle identifier"
+
+    settings = get_baseband_hygiene_settings()
+    if not settings.get("reboot_enabled"):
+        return False, ("Safety Abort: Full baseband reboot is DISABLED "
+                       "(laya_baseband_reboot_enabled = false)")
+    if not settings.get("reboot_confirmed"):
+        return False, ("Safety Abort: Full baseband reboot requires explicit operator "
+                       "acknowledgement (laya_baseband_reboot_confirmed = false)")
+
+    if is_call_active_on_dongle(target):
+        details = f"Aborted AT^RESET: Active voice call in progress on {target}"
+        record_maintenance_event(target, reason, 1, f"Baseband Reboot ({target})", "failed", details)
+        return False, details
+
+    # Capture the physical USB location BEFORE the modem disappears from the bus
+    sysfs_name, _ = find_modem_sysfs_for_dongle(target)
+    raw_node = get_usb_raw_dev_node(sysfs_name) if sysfs_name else None
+    physical_hint = f"USB sysfs '{sysfs_name}'" if sysfs_name else "unknown USB port"
+    if raw_node:
+        physical_hint += f" ({raw_node})"
+
+    before = snapshot_modem_identity(target)
+    event_id = record_maintenance_event(
+        dongle_name=target,
+        trigger_reason=reason,
+        recovery_level=1,
+        action_taken=f"Full Baseband Reboot AT^RESET ({target})",
+        result="in_progress"
+    )
+
+    ok, resp, err = send_dongle_at_command(target, "AT^RESET")
+    if not ok:
+        details = f"AT^RESET could not be queued: {err or resp}"
+        update_maintenance_event_result(event_id, "failed", details)
+        return False, details
+
+    timeout = settings.get("recovery_timeout_sec") or BASEBAND_REBOOT_DEFAULT_TIMEOUT
+    deadline = time.time() + timeout
+    reappeared = False
+    last_state = "Unknown"
+
+    while time.time() < deadline:
+        time.sleep(3)
+        detail = get_dongle_device_state(target) or {}
+        last_state = detail.get("state", "Unknown")
+        # The modem is back when Asterisk reports a live identity again
+        if detail.get("imei") and "not connected" not in last_state.lower():
+            reappeared = True
+            break
+
+    if reappeared:
+        identity_ok, identity_details = verify_modem_identity(target, before)
+        if identity_ok:
+            update_maintenance_event_result(event_id, "success", identity_details)
+            return True, identity_details
+        update_maintenance_event_result(event_id, "failed", identity_details)
+        return False, identity_details
+
+    # The modem did not come back. This is the documented, EXPECTED failure mode
+    # for AT^RESET on several Huawei firmwares: a physical reseat is required.
+    physical_msg = (
+        f"Physical reseat required at {physical_hint}. "
+        f"Last known IMEI {before.get('imei')}, IMSI {before.get('imsi')}, "
+        f"subscriber {before.get('subscriber_number')}. "
+        f"Modem did not re-enumerate within {timeout}s (last state: {last_state})."
+    )
+    update_maintenance_event_result(event_id, "failed", physical_msg)
+    return False, physical_msg

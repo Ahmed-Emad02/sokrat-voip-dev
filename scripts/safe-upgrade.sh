@@ -158,6 +158,12 @@ INSERT IGNORE INTO dashboard_settings (setting_key, setting_value) VALUES
   ('laya_scheduled_restart_end', '07:00'),
   ('laya_scheduled_restart_cooldown_sec', '25'),
   ('laya_scheduled_restart_last_run', ''),
+  ('laya_baseband_hygiene_enabled', 'true'),
+  ('laya_baseband_reboot_enabled', 'false'),
+  ('laya_baseband_reboot_confirmed', 'false'),
+  ('laya_baseband_recovery_timeout_sec', '60'),
+  ('laya_cfun_restart_enabled', 'true'),
+  ('laya_cfun_restart_threshold', '3'),
   ('laya_kill_switch_active', 'true');
 
 " 2>/dev/null || true
@@ -597,6 +603,35 @@ same => n(done),Hangup()
         r'exten => s,1,Set\(DONGLE_TARGET=\$\{DONGLENAME\}\)\s*\n\s*same => n,Set\(CHANNEL\(hangup_handler_push\)=cdr-cause-capture,s,1\)\s*\n\s*same => n,ExecIf\(\$\["\$\{MY_SIM_NUMBER\}" = "" \| "\$\{MY_SIM_NUMBER\}" = "\+1234567890"\]\?Set\(MY_SIM_NUMBER=\)\)\s*\n\s*same => n\(process\),NoOp\(--- Incoming call from Dongle \$\{DONGLENAME\} \(EXTEN: \$\{EXTEN\}\) ---\)',
         'exten => s,1,Goto(s,process)\nsame => n(process),NoOp(--- Incoming call from Dongle ${DONGLENAME} (EXTEN: ${EXTEN}) ---)\nsame => n,Set(DONGLE_TARGET=${DONGLENAME})\nsame => n,Set(CHANNEL(hangup_handler_push)=cdr-cause-capture,s,1)\nsame => n,ExecIf($["${MY_SIM_NUMBER}" = "" | "${MY_SIM_NUMBER}" = "+1234567890"]?Set(MY_SIM_NUMBER=))',
         content
+    )
+
+    # Strip the legacy PER-DONGLE DSP block from [from-dongle-custom].
+    # Audio filtering (RNNOISE / DENOISE / AGC / JITTERBUFFER) must be derived from
+    # the CALLING EXTENSION in the trunk predial hook, never from the dongle that
+    # happens to carry the call. Leaving the legacy block in place applies the
+    # wrong filter to inbound cellular calls and re-applies it again on the
+    # outbound leg, so the call is filtered twice with mismatched settings.
+    def _strip_dongle_dsp(match):
+        body = match.group(0)
+        # Remove the contiguous legacy DSP resolution block only.
+        body = re.sub(
+            r'\n?same => n,NoOp\(--- Resolving DSP for Inbound Dongle \$\{DONGLENAME\} ---\)'
+            r'(?:\n?same => n,[^\n]*)*?'
+            r'(?=\n?same => n,ExecIf\(\$?\["\$\{MY_SIM_NUMBER\}" = "")',
+            '\n',
+            body
+        )
+        # Safety net: drop any remaining per-dongle audio statements in this context.
+        body = re.sub(r'\n?same => n,Set\(D_(?:DENOISE|RNNOISE|THRESH|HANG|MINDB|AGC|JB)=[^\n]*', '', body)
+        body = re.sub(r'\n?same => n,ExecIf\(\$?\["\$\{D_[^"]*"[^\n]*', '', body)
+        body = re.sub(r'\n?same => n,Set\((?:RNNOISE|DENOISE|AGC|JITTERBUFFER)\([^\n]*', '', body)
+        return body
+
+    content = re.sub(
+        r'\[from-dongle-custom\].*?(?=\n\[|\Z)',
+        _strip_dongle_dsp,
+        content,
+        flags=re.DOTALL
     )
 
     # Ensure ChanSpy volume boost for supervisor listening (qv(2))

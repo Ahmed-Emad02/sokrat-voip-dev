@@ -65,6 +65,17 @@ if [ -n "$CALL_ACTIVE" ]; then
     exit 2
 fi
 
+# Layer 2: Hardware USB Bus Reset via USBDEVFS_RESET ioctl
+python3 -c "
+import sys
+sys.path.insert(0, '/opt/sokrat-voip')
+from laya.sensors.sysfs import get_usb_raw_dev_node, trigger_usbdevfs_reset
+node = get_usb_raw_dev_node('$SYSFS_DEV')
+if node:
+    ok, msg = trigger_usbdevfs_reset(node)
+    print(f'[LAYA-USB-RESET] Layer 2: {msg}')
+" 2>/dev/null || true
+
 echo "[LAYA-USB-RESET] Unbinding $SYSFS_DEV from USB driver..."
 echo -n "$SYSFS_DEV" > "$UNBIND"
 sleep 2

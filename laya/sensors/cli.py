@@ -5,7 +5,18 @@ Executes safe non-blocking Asterisk queries and parses structured telemetry.
 
 import subprocess
 import re
+import os
+import select
+import time
+import termios
+import datetime
 from laya.config import ASTERISK_BIN
+
+# Serial liveness verdicts
+LIVENESS_ALIVE = "ALIVE"      # Modem answered AT (baseband firmware is responsive)
+LIVENESS_DEAD = "DEAD"        # Port present but modem did not answer (firmware deadlock)
+LIVENESS_ABSENT = "ABSENT"    # No such serial device node (hardware not enumerated)
+LIVENESS_BUSY = "BUSY"        # Port held by another process (chan_dongle owns it)
 
 def exec_asterisk_cmd(cmd_args, timeout=5):
     """
@@ -204,9 +215,36 @@ def parse_active_channels():
 def send_dongle_at_command(dongle_id, at_cmd):
     """
     Sends an AT command to a dongle via Asterisk 'dongle cmd <id> <cmd>'.
-    Returns (success: bool, response_str: str).
+
+    The Asterisk CLI always exits with status 0, so the response text must be
+    inspected to detect a failure. The driver answers with either
+        "[<id>] '<cmd>' AT command queued"      -> success
+        "[<id>] '<cmd>' Device disconnected"     -> failure
+        "[<id>] '<cmd>' <error text>"            -> failure
+
+    Returns (success: bool, response_str: str, stderr: str).
     """
-    return exec_asterisk_cmd(f"dongle cmd {dongle_id} {at_cmd}", timeout=5)
+    success, stdout, stderr = exec_asterisk_cmd(f"dongle cmd {dongle_id} {at_cmd}", timeout=5)
+    if not success:
+        return False, stdout, stderr or "Asterisk CLI command failed"
+
+    out = (stdout or "").strip()
+    if not out:
+        return False, "", "Empty response from Asterisk CLI"
+
+    if "AT command queued" in out:
+        return True, out, ""
+
+    # Any other wording (e.g. "Device disconnected", "No such device") is a failure
+    return False, out, out
+
+def dongle_at_command_queued(dongle_id, at_cmd):
+    """
+    Convenience wrapper: returns only the boolean success flag of an AT command
+    being accepted into the driver's command queue.
+    """
+    ok, _resp, _err = send_dongle_at_command(dongle_id, at_cmd)
+    return ok
 
 def hangup_asterisk_channel(channel_name):
     """
@@ -219,6 +257,237 @@ def restart_dongle_module(dongle_id):
     Restarts a single dongle in chan_dongle: 'dongle restart now <dongle_id>'.
     """
     return exec_asterisk_cmd(f"dongle restart now {dongle_id}", timeout=6)
+
+def _device_port_held_by(dev_node):
+    """
+    Returns the PID of the process currently holding dev_node open, or None.
+    Used to avoid probing a serial port that chan_dongle already owns, because
+    the driver consumes the AT reply and the probe would report a false DEAD.
+    """
+    target = os.path.realpath(dev_node)
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        fd_dir = f"/proc/{pid}/fd"
+        try:
+            fds = os.listdir(fd_dir)
+        except Exception:
+            continue
+        for fd in fds:
+            try:
+                link = os.readlink(f"{fd_dir}/{fd}")
+            except Exception:
+                continue
+            if link == target:
+                try:
+                    with open(f"/proc/{pid}/comm", "r") as f:
+                        comm = f.read().strip()
+                except Exception:
+                    comm = "?"
+                return int(pid), comm
+    return None
+
+def probe_dongle_serial_liveness(dongle_id, port=None, timeout=2.0):
+    """
+    Ground-truth liveness probe: writes a raw 'AT' command directly to the modem's
+    PCUI/control serial port, bypassing Asterisk entirely.
+
+    This is the ONLY signal that can distinguish a *dead modem baseband* from a
+    *dormant but healthy modem*, because Asterisk's own view is the component that
+    is broken in the exact scenario we need to detect.
+
+    IMPORTANT: the probe refuses to run while chan_dongle still owns the port,
+    because the driver would consume the 'OK' reply and produce a false DEAD.
+    The port is only released by the driver when the dongle has been disconnected,
+    which is precisely the state we need to interrogate.
+
+    Returns a dict:
+      {
+        "verdict":   LIVENESS_ALIVE | LIVENESS_DEAD | LIVENESS_ABSENT | LIVENESS_BUSY,
+        "port":      the serial device path used (or None),
+        "response":  raw text returned by the modem (or ""),
+        "holder":    "pid/comm" of the process owning the port (or None),
+        "detail":    human readable explanation
+      }
+    """
+    result = {
+        "verdict": LIVENESS_ABSENT,
+        "port": None,
+        "response": "",
+        "holder": None,
+        "detail": "No serial port resolved"
+    }
+
+    # Resolve the control port for THIS dongle only (strict isolation)
+    dev_node = port
+    if not dev_node:
+        try:
+            from laya.sensors.sysfs import get_dongle_configured_ports_from_conf
+            conf_ports = get_dongle_configured_ports_from_conf(dongle_id)
+            dev_node = conf_ports.get("data") or conf_ports.get("audio")
+        except Exception:
+            dev_node = None
+
+    if not dev_node:
+        result["detail"] = "No data=/audio= port configured in dongle.conf"
+        return result
+
+    result["port"] = dev_node
+
+    if not os.path.exists(dev_node):
+        result["verdict"] = LIVENESS_ABSENT
+        result["detail"] = f"{dev_node} does not exist (modem not enumerated on USB bus)"
+        return result
+
+    # Ownership guard: never race chan_dongle for the port
+    holder = _device_port_held_by(dev_node)
+    if holder:
+        result["verdict"] = LIVENESS_BUSY
+        result["holder"] = f"{holder[0]}/{holder[1]}"
+        result["detail"] = f"{dev_node} is owned by {holder[0]}/{holder[1]} (chan_dongle active) - probe skipped"
+        return result
+
+    fd = None
+    try:
+        fd = os.open(dev_node, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    except OSError as e:
+        if e.errno in (11, 16):  # EAGAIN / EBUSY
+            result["verdict"] = LIVENESS_BUSY
+            result["detail"] = f"{dev_node} could not be opened (device busy)"
+        else:
+            result["verdict"] = LIVENESS_DEAD
+            result["detail"] = f"{dev_node} could not be opened: {e}"
+        return result
+
+    try:
+        # Standard 8N1 115200 raw serial configuration
+        attr = termios.tcgetattr(fd)
+        attr[0] = 0                      # iflag: raw
+        attr[1] = 0                      # oflag: raw
+        attr[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
+        attr[3] = 0                      # lflag: raw
+        attr[4] = termios.B115200
+        attr[5] = termios.B115200
+        attr[6][termios.VMIN] = 0
+        attr[6][termios.VTIME] = 0
+        termios.tcsetattr(fd, termios.TCSANOW, attr)
+
+        try:
+            termios.tcflush(fd, termios.TCIOFLUSH)
+        except Exception:
+            pass
+
+        os.write(fd, b"AT\r\n")
+
+        deadline = time.time() + timeout
+        buf = b""
+        while time.time() < deadline:
+            r, _, _ = select.select([fd], [], [], 0.2)
+            if r:
+                try:
+                    chunk = os.read(fd, 512)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                buf += chunk
+                if b"OK" in buf or b"ERROR" in buf:
+                    break
+
+        text = buf.decode(errors="ignore").strip()
+        result["response"] = text
+
+        if "OK" in text:
+            result["verdict"] = LIVENESS_ALIVE
+            result["detail"] = "Modem answered 'AT' with OK"
+        elif text:
+            result["verdict"] = LIVENESS_ALIVE
+            result["detail"] = f"Modem responded: {text[:80]}"
+        else:
+            result["verdict"] = LIVENESS_DEAD
+            result["detail"] = f"No response from {dev_node} within {timeout}s (firmware deadlock suspected)"
+    except Exception as e:
+        result["verdict"] = LIVENESS_DEAD
+        result["detail"] = f"Serial probe error on {dev_node}: {e}"
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+
+    return result
+
+def scan_asterisk_log_for_dongle_faults(dongle_id, log_path="/var/log/asterisk/full", lookback_seconds=300):
+    """
+    Parses the Asterisk log for the driver's own failure signatures for a specific
+    dongle within the recent past.
+
+    These signatures are emitted by the Sokrat-patched chan_dongle and are the
+    authoritative indicator that the modem baseband stopped answering AT commands:
+      - PRIMARY  "timedout while waiting"  -> modem stopped answering AT entirely
+      - PRIMARY  "Error initializing Dongle" -> init sequence could not complete
+      - WEAK     "Dongle has disconnected" -> only meaningful when paired with a primary
+
+    Timestamps embedded in the log lines are used to honour lookback_seconds, so
+    stale historical faults never trigger a heal.
+
+    Returns (found: bool, signature: str, occurrences: int).
+    """
+    primary_sigs = ["timedout while waiting", "Error initializing Dongle"]
+    weak_sigs = ["Dongle has disconnected"]
+
+    try:
+        if not os.path.isfile(log_path):
+            return False, "", 0
+        size = os.path.getsize(log_path)
+        read_size = min(size, 4 * 1024 * 1024)
+        with open(log_path, "rb") as f:
+            f.seek(size - read_size)
+            raw = f.read().decode(errors="ignore")
+    except Exception:
+        return False, "", 0
+
+    cutoff = time.time() - lookback_seconds
+    now = datetime.datetime.now()
+    found_sig = ""
+    count = 0
+
+    for line in raw.splitlines():
+        if f"[{dongle_id}]" not in line and f"[{dongle_id.lower()}]" not in line:
+            continue
+
+        is_primary = any(s in line for s in primary_sigs)
+        is_weak = any(s in line for s in weak_sigs)
+        if not (is_primary or is_weak):
+            continue
+
+        # Honour the lookback window using the log's own timestamp
+        ts_match = re.match(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', line)
+        if ts_match:
+            try:
+                line_ts = datetime.datetime.strptime(ts_match.group(1), "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                line_ts = now
+            if (now - line_ts).total_seconds() > lookback_seconds:
+                continue
+        else:
+            # No parsable timestamp -> do not trust the line
+            continue
+
+        if is_primary:
+            count += 1
+            if not found_sig:
+                for s in primary_sigs:
+                    if s in line:
+                        found_sig = s
+                        break
+        elif is_weak:
+            # Weak signal only counts when a primary fault was already seen
+            if count > 0:
+                count += 1
+
+    return (count > 0), found_sig, count
 
 def get_total_active_calls():
     """

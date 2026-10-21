@@ -202,3 +202,47 @@ def get_dongles_sharing_sysfs_device(sysfs_name, conf_path="/etc/asterisk/dongle
     except Exception:
         pass
     return shared_dongles
+
+def get_usb_raw_dev_node(sysfs_name):
+    """
+    Given a USB sysfs device name (e.g. '1-2'), resolves the raw USB device node path
+    in /dev/bus/usb/<bus:03d>/<dev:03d> by reading busnum and devnum.
+    Returns path (str) or None.
+    """
+    sysfs_dir = os.path.join("/sys/bus/usb/devices", sysfs_name)
+    bus_file = os.path.join(sysfs_dir, "busnum")
+    dev_file = os.path.join(sysfs_dir, "devnum")
+    if not (os.path.isfile(bus_file) and os.path.isfile(dev_file)):
+        return None
+    try:
+        with open(bus_file, "r") as f:
+            bus = int(f.read().strip())
+        with open(dev_file, "r") as f:
+            dev = int(f.read().strip())
+        raw_node = f"/dev/bus/usb/{bus:03d}/{dev:03d}"
+        return raw_node if os.path.exists(raw_node) else None
+    except Exception:
+        return None
+
+def trigger_usbdevfs_reset(usb_dev_node):
+    """
+    Layer 2 Hardware Reset: Sends the USBDEVFS_RESET ioctl (_IO('U', 20) = 21780)
+    to raw USB dev node. Pulses D+/D- lines low (SE0 state for 20ms) forcing the
+    modem's physical PHY to trigger a silicon-level Power-On Reset (POR).
+    Returns (success: bool, message: str).
+    """
+    if not usb_dev_node or not os.path.exists(usb_dev_node):
+        return False, f"Raw USB device node '{usb_dev_node}' not found"
+
+    import fcntl
+    USBDEVFS_RESET = 21780  # _IO('U', 20) = (ord('U') << 8) | 20
+    try:
+        fd = os.open(usb_dev_node, os.O_WRONLY)
+        try:
+            fcntl.ioctl(fd, USBDEVFS_RESET, 0)
+        finally:
+            os.close(fd)
+        return True, f"Hardware USBDEVFS_RESET executed on {usb_dev_node}"
+    except Exception as e:
+        return False, f"USBDEVFS_RESET ioctl failed on {usb_dev_node}: {e}"
+

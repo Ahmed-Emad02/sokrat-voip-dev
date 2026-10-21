@@ -3,6 +3,8 @@ Laya Sensors — MariaDB Database Storage Interface
 Persists real-time health metrics and maintenance audit logs.
 """
 
+import os
+
 try:
     import pymysql
     import pymysql.cursors
@@ -285,3 +287,102 @@ def set_scheduled_restart_setting(key, value):
         print(f"[LAYA-DB-WARN] set_scheduled_restart_setting error: {e}")
         return False
 
+
+def prune_stale_dongle_health(valid_dongles, conf_path="/etc/asterisk/dongle.conf"):
+    """
+    Removes health rows for dongles that no longer exist.
+
+    A dongle is considered valid when it is either:
+      - currently reported by Asterisk ('dongle show devices'), OR
+      - still declared as a [dongleX] section in /etc/asterisk/dongle.conf
+
+    Without this, rows for removed dongles linger forever with an ever-growing
+    consecutive_errors counter, which pollutes the dashboard and hides real faults.
+    """
+    import re as _re
+    valid = set()
+    for d in (valid_dongles or []):
+        did = (d.get("id") if isinstance(d, dict) else str(d)) or ""
+        if did:
+            valid.add(did.lower())
+
+    # Include sections still declared in dongle.conf
+    try:
+        if os.path.isfile(conf_path):
+            with open(conf_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    m = _re.match(r'^\[(dongle[0-9A-Za-z_]+)\]', line, _re.IGNORECASE)
+                    if m:
+                        valid.add(m.group(1).lower())
+    except Exception:
+        pass
+
+    if not valid:
+        return {"pruned": 0, "kept": [], "error": "No valid dongle list - refusing to prune"}
+
+    placeholders = ", ".join(["%s"] * len(valid))
+    query = f"DELETE FROM `laya_dongle_health` WHERE LOWER(`dongle_name`) NOT IN ({placeholders})"
+    try:
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(query, tuple(valid))
+            deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return {"pruned": deleted, "kept": sorted(valid), "error": None}
+    except Exception as e:
+        print(f"[LAYA-DB-WARN] prune_stale_dongle_health error: {e}")
+        return {"pruned": 0, "kept": sorted(valid), "error": str(e)}
+
+def get_baseband_hygiene_settings():
+    """
+    Fetches the Layer 4 baseband hygiene settings from dashboard_settings.
+
+    Returns a dict with:
+      hygiene_enabled      - master switch for safe hygiene (AT+CFUN=1)
+      cfun_enabled         - allow AT+CFUN=1 radio re-attach at recovery Level 1
+      cfun_threshold       - consecutive unregistered cycles before re-attach
+      reboot_enabled       - operator-only AT^RESET (destructive, off by default)
+      reboot_confirmed     - explicit acknowledgement gate for AT^RESET
+      recovery_timeout_sec - re-enumeration watch window for AT^RESET
+    """
+    settings = {
+        "hygiene_enabled": True,
+        "cfun_enabled": True,
+        "cfun_threshold": 3,
+        "reboot_enabled": False,
+        "reboot_confirmed": False,
+        "recovery_timeout_sec": 60,
+    }
+    query = "SELECT setting_key, setting_value FROM `dashboard_settings` WHERE setting_key LIKE 'laya_baseband%' OR setting_key LIKE 'laya_cfun%'"
+    try:
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        for r in rows:
+            k = r.get("setting_key", "")
+            v = r.get("setting_value", "")
+            if k == "laya_baseband_hygiene_enabled":
+                settings["hygiene_enabled"] = (str(v).lower() in ("true", "1", "yes"))
+            elif k == "laya_baseband_reboot_enabled":
+                settings["reboot_enabled"] = (str(v).lower() in ("true", "1", "yes"))
+            elif k == "laya_baseband_reboot_confirmed":
+                settings["reboot_confirmed"] = (str(v).lower() in ("true", "1", "yes"))
+            elif k == "laya_cfun_restart_enabled":
+                settings["cfun_enabled"] = (str(v).lower() in ("true", "1", "yes"))
+            elif k == "laya_cfun_restart_threshold" and v:
+                try:
+                    settings["cfun_threshold"] = max(1, int(v))
+                except ValueError:
+                    pass
+            elif k == "laya_baseband_recovery_timeout_sec" and v:
+                try:
+                    settings["recovery_timeout_sec"] = max(15, int(v))
+                except ValueError:
+                    pass
+        conn.close()
+    except Exception as e:
+        print(f"[LAYA-DB-WARN] get_baseband_hygiene_settings error: {e}")
+    return settings

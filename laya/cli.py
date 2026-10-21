@@ -285,6 +285,57 @@ def cmd_simulate_escalation(args):
     else:
         print(f"(Dry-run mode active: live Telegram message skipped).\n")
 
+def cmd_baseband(args):
+    """
+    Layer 4 operator commands:
+      hygiene   - inspect the baseband hygiene configuration
+      reattach  - safe radio stack re-attach (AT+CFUN=1), USB device never drops
+      reboot    - FULL baseband reboot (AT^RESET). Destructive: the modem removes
+                  itself from the USB bus and needs a physical reseat.
+    """
+    from laya.sensors.db import get_baseband_hygiene_settings
+    from laya.healer.actions import action_cfun_restart, action_baseband_reboot
+
+    target = (args.dongle or "").lower()
+    settings = get_baseband_hygiene_settings()
+
+    if args.action == "hygiene":
+        if getattr(args, "json", False):
+            print(json.dumps(settings, indent=2))
+            return
+        print(f"\n{BOLD}{CYAN}=== Sokrat Laya Baseband Hygiene Configuration ==={RESET}\n")
+        print(f"  Hygiene enabled        : {GREEN if settings['hygiene_enabled'] else RED}{settings['hygiene_enabled']}{RESET}")
+        print(f"  AT+CFUN=1 re-attach    : {GREEN if settings['cfun_enabled'] else RED}{settings['cfun_enabled']}{RESET}")
+        print(f"  CFUN threshold         : {settings['cfun_threshold']} cycle(s)")
+        print(f"  AT^RESET reboot        : {RED if settings['reboot_enabled'] else GREEN}{settings['reboot_enabled']}{RESET}")
+        print(f"  Reboot acknowledged    : {RED if settings['reboot_confirmed'] else GREEN}{settings['reboot_confirmed']}{RESET}")
+        print(f"  Recovery timeout       : {settings['recovery_timeout_sec']}s")
+        print(f"\n  {YELLOW}WARNING{RESET}: AT^RESET removes the modem from the USB bus and")
+        print(f"  cannot be recovered in software. Only a physical reseat restores it.")
+        print()
+        return
+
+    if not target:
+        print(f"{RED}ERROR{RESET}: a dongle identifier is required (e.g. dongle0)")
+        return
+
+    if args.action == "reattach":
+        print(f"\n{BOLD}{CYAN}=== Baseband Radio Re-attach (AT+CFUN=1) on {target} ==={RESET}\n")
+        print("  This restarts ONLY the radio/protocol stack.")
+        print("  The USB device stays on the bus - no physical reseat required.\n")
+        ok, details = action_cfun_restart(target, reason="Operator CLI: baseband radio re-attach")
+        print(f"  Result : {GREEN + 'SUCCESS' + RESET if ok else RED + 'FAILED' + RESET}")
+        print(f"  Details: {details}\n")
+        return
+
+    if args.action == "reboot":
+        print(f"\n{BOLD}{RED}=== FULL BASEBAND REBOOT (AT^RESET) on {target} ==={RESET}\n")
+        print(f"  {RED}DESTRUCTIVE{RESET}: the modem will remove itself from the USB bus and")
+        print(f"  will NOT re-enumerate. A physical reseat is required afterwards.\n")
+        ok, details = action_baseband_reboot(target, reason="Operator CLI: full baseband reboot")
+        print(f"  Result : {GREEN + 'SUCCESS' + RESET if ok else RED + 'FAILED' + RESET}")
+        print(f"  Details: {details}\n")
+
 def cmd_schedule(args):
     # Check if modifying settings
     modifying = False
@@ -421,6 +472,11 @@ def main():
     p_sched.add_argument("--run-now", action="store_true", help="Immediately run the 1-by-1 sequential restart sequence with active call protection")
     p_sched.add_argument("--force", action="store_true", help="Bypass active call check when used with --run-now (emergency use only)")
 
+    # baseband (Layer 4)
+    p_bb = subparsers.add_parser("baseband", help="Layer 4 baseband hygiene: safe radio re-attach (AT+CFUN=1) or destructive reboot (AT^RESET)")
+    p_bb.add_argument("action", choices=["hygiene", "reattach", "reboot"], help="hygiene=show config, reattach=AT+CFUN=1, reboot=AT^RESET (destructive)")
+    p_bb.add_argument("dongle", nargs="?", default="", help="Target dongle identifier (e.g. dongle0)")
+
     args = parser.parse_args()
     if not args.subcommand or args.subcommand == "status":
         cmd_status(args)
@@ -436,6 +492,8 @@ def main():
         cmd_simulate_escalation(args)
     elif args.subcommand == "schedule":
         cmd_schedule(args)
+    elif args.subcommand == "baseband":
+        cmd_baseband(args)
     else:
         parser.print_help()
 

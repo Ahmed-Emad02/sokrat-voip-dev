@@ -14,7 +14,9 @@ from laya.evaluator.heuristics import (
     ANOMALY_ZOMBIE_CHANNEL,
     ANOMALY_MODEM_DEADLOCK,
     ANOMALY_UNINITIALIZED_CONNECTED,
-    ANOMALY_CARRIER_DROP
+    ANOMALY_CARRIER_DROP,
+    ANOMALY_MODEM_FIRMWARE_DEAD,
+    ANOMALY_HARDWARE_ABSENT
 )
 from laya.healer.actions import (
     action_soft_at_probe,
@@ -22,6 +24,8 @@ from laya.healer.actions import (
     action_restart_dongle,
     action_sysfs_usb_reset,
     action_escalate_alert,
+    action_cfun_restart,
+    action_baseband_reboot,
     is_call_active_on_dongle
 )
 
@@ -29,6 +33,19 @@ class RecoveryLadder:
     def __init__(self):
         # Tracking: { dongle_id: { 'last_level': int, 'last_action_time': float, 'attempts_at_level': int, 'last_alert_time': float } }
         self._history = {}
+
+    def _cfun_allowed(self):
+        """
+        Layer 4-A gate: the AT+CFUN=1 radio re-attach is only used when the
+        operator has enabled baseband hygiene. Disabled => fall back to the
+        passive soft AT probe.
+        """
+        try:
+            from laya.sensors.db import get_baseband_hygiene_settings
+            settings = get_baseband_hygiene_settings()
+            return bool(settings.get("hygiene_enabled")) and bool(settings.get("cfun_enabled"))
+        except Exception:
+            return False
 
     def get_dongle_history(self, dongle_id):
         dongle_id = dongle_id.lower()
@@ -73,6 +90,16 @@ class RecoveryLadder:
         target_level = 1
         if anomaly_type == ANOMALY_ZOMBIE_CHANNEL:
             target_level = 2
+        elif anomaly_type == ANOMALY_MODEM_FIRMWARE_DEAD:
+            # The modem baseband has stopped answering AT commands entirely.
+            # Soft restarts (Level 3) re-open the SAME dead serial port and can
+            # never revive a wedged baseband, so go straight to the hardware
+            # level USB bus reset.
+            target_level = 4
+        elif anomaly_type == ANOMALY_HARDWARE_ABSENT:
+            # Physical absence cannot be healed by software. Report only.
+            rec["last_action_time"] = now
+            return "No Action (Hardware Absent)", 0, False, "Modem not enumerated on the USB bus - physical check required"
         elif anomaly_type in (ANOMALY_MODEM_DEADLOCK, ANOMALY_UNINITIALIZED_CONNECTED):
             target_level = 3 if rec["last_level"] < 3 else 4
         elif anomaly_type == ANOMALY_CARRIER_DROP:
@@ -90,8 +117,16 @@ class RecoveryLadder:
         details = ""
 
         if target_level == 1:
-            action_name = "Level 1: Soft AT Probe"
-            success, details = action_soft_at_probe(dongle_id, reason)
+            # Layer 4-A: if the modem is alive but has lost its carrier
+            # registration, a radio stack re-attach (AT+CFUN=1) is the correct
+            # remedy. It restarts ONLY the radio stack, so the USB device never
+            # drops off the bus and the modem never needs a physical replug.
+            if anomaly_type == ANOMALY_CARRIER_DROP and self._cfun_allowed():
+                action_name = f"Level 1: Baseband Radio Re-attach AT+CFUN=1 ({dongle_id})"
+                success, details = action_cfun_restart(dongle_id, reason)
+            else:
+                action_name = "Level 1: Soft AT Probe"
+                success, details = action_soft_at_probe(dongle_id, reason)
         elif target_level == 2:
             channel_name = health_data.get("active_channel")
             if channel_name:
@@ -105,8 +140,9 @@ class RecoveryLadder:
             success, details = action_restart_dongle(dongle_id, reason)
         elif target_level == 4:
             audio_port = detail.get("audio_port") if detail else None
-            action_name = f"Level 4: Sysfs USB Driver Rebind ({dongle_id})"
-            success, details = action_sysfs_usb_reset(dongle_id, audio_port, reason)
+            data_port = detail.get("data_port") if detail else None
+            action_name = f"Level 4: Hardware USB Bus Reset ({dongle_id})"
+            success, details = action_sysfs_usb_reset(dongle_id, audio_port, reason, data_port=data_port)
         elif target_level >= 5:
             # 30-minute repeat alert throttle
             last_alert = rec.get("last_alert_time", 0)

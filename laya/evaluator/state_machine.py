@@ -4,7 +4,36 @@ Maintains state histories, duration timers, and computes dynamic health scores.
 """
 
 import time
+import os
 from laya.config import STUCK_STATE_THRESHOLD_SEC
+
+def _resolve_configured_ports(dongle_id):
+    """
+    Resolves the audio/data serial ports configured for a dongle straight from
+    dongle.conf. This works even when the dongle is 'Not connected' in Asterisk,
+    which is precisely the blind spot that previously hid frozen modems.
+    """
+    try:
+        from laya.sensors.sysfs import get_dongle_configured_ports_from_conf
+        return get_dongle_configured_ports_from_conf(dongle_id)
+    except Exception:
+        return {"audio": None, "data": None}
+
+def _usb_device_present_for_ports(ports, usb_modems):
+    """
+    Returns True when at least one of the configured serial nodes for this dongle
+    is actually backed by a live USB modem in the sysfs scan.
+    """
+    if not usb_modems or not ports:
+        return False
+    wanted = {os.path.basename(p) for p in ports.values() if p}
+    if not wanted:
+        return False
+    for m in usb_modems:
+        for p in m.get("ports", []):
+            if p.get("port") in wanted and p.get("present"):
+                return True
+    return False
 
 class DongleStateManager:
     def __init__(self):
@@ -65,18 +94,18 @@ class DongleStateManager:
         if curr_state == "Not connected":
             is_carrier_registered = 0
 
-        # Physical USB presence check
-        usb_present = False
-        if usb_modems is not None:
-            # Check if any port matches detail's audio or data port
-            for m in usb_modems:
-                for p in m.get("ports", []):
-                    if detail and (p.get("node") in (detail.get("audio_port"), detail.get("data_port"))):
-                        usb_present = True
-                        break
-                if usb_present:
-                    break
-        else:
+        # Physical USB presence check.
+        # CRITICAL: this must NOT depend on `detail`, because Asterisk deliberately
+        # withholds device state for 'Not connected' dongles. Previously that made
+        # usb_present permanently False for disconnected dongles, which rendered the
+        # "hardware present but Asterisk cannot talk to it" anomaly undetectable.
+        conf_ports = _resolve_configured_ports(dongle_id)
+        usb_present = _usb_device_present_for_ports(conf_ports, usb_modems)
+        if not usb_present and detail:
+            # Fallback to the ports reported by Asterisk itself
+            fallback = {"audio": detail.get("audio_port"), "data": detail.get("data_port")}
+            usb_present = _usb_device_present_for_ports(fallback, usb_modems)
+        if usb_modems is None:
             usb_present = (curr_state != "Not connected")
 
         # Compute Health Score (0 to 100)
@@ -132,6 +161,7 @@ class DongleStateManager:
             "last_heal_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(rec["last_heal_at"])) if rec["last_heal_at"] else None,
             "consecutive_errors": rec["consecutive_errors"],
             "usb_present": usb_present,
+            "configured_ports": conf_ports,
             "curr_state": curr_state,
             "matching_channels": matching_channels
         }
