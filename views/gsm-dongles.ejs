@@ -1480,6 +1480,113 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             background-color: #050505 !important;
             border: 1px solid #1f1f23 !important;
         }
+
+        /* --- New Chat teardrop field -------------------------------------
+           Same effect as the contacts search field: a droplet forms at the
+           button and stretches into the bar next to it. */
+        .sokrat-new-chat-drop {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: 0;
+            opacity: 0;
+            overflow: hidden;
+            /* Percentage radius: resolved against the CURRENT box on every
+               frame, so the droplet stays a perfect ellipse while it grows. */
+            border-radius: 50%;
+            transform-origin: <%= isRtl ? 'right center' : 'left center' %>;
+            transform: scaleX(0.25) scaleY(0.85);
+            background-color: rgba(24, 24, 27, 0.9);
+            border: 0 solid rgba(244, 63, 94, 0.45);
+            padding: 0 0;
+            margin-inline-start: 0;
+            pointer-events: none;
+        }
+        .sokrat-new-chat-drop.is-open {
+            width: 15rem;
+            opacity: 1;
+            padding: 0 0.5rem;
+            margin-inline-start: 0.5rem;
+            border-width: 1px;
+            pointer-events: auto;
+            animation: sokratNewChatDropSpawn 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        .sokrat-new-chat-drop.is-closing {
+            width: 0;
+            opacity: 0;
+            padding: 0 0;
+            margin-inline-start: 0;
+            transform: scaleX(0.25) scaleY(0.85);
+            border-radius: 50%;
+            border-width: 0;
+            pointer-events: none;
+            animation: sokratNewChatDropCollapse 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        /* Spawn: a droplet forms at the button and stretches into the bar. */
+        @keyframes sokratNewChatDropSpawn {
+            0% {
+                width: 0;
+                opacity: 0;
+                border-radius: 50%;
+                border-width: 0;
+                margin-inline-start: 0;
+                transform: scaleX(0.25) scaleY(0.85);
+            }
+            35% {
+                opacity: 1;
+            }
+            100% {
+                width: 15rem;
+                opacity: 1;
+                border-radius: 0.75rem;
+                border-width: 1px;
+                margin-inline-start: 0.5rem;
+                transform: scaleX(1) scaleY(1);
+            }
+        }
+        /* Collapse: the bar relaxes back into a full ellipse and vanishes. */
+        @keyframes sokratNewChatDropCollapse {
+            0% {
+                width: 15rem;
+                opacity: 1;
+                border-radius: 0.75rem;
+                border-width: 1px;
+                margin-inline-start: 0.5rem;
+                transform: scaleX(1) scaleY(1);
+            }
+            100% {
+                width: 0;
+                opacity: 0;
+                border-radius: 50%;
+                border-width: 0;
+                margin-inline-start: 0;
+                transform: scaleX(0.25) scaleY(0.85);
+            }
+        }
+        .sokrat-new-chat-drop input {
+            min-width: 0;
+            flex: 1;
+            background: transparent;
+            border: 0;
+            outline: none;
+            color: #ffffff;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px;
+        }
+        .sokrat-new-chat-drop input::placeholder {
+            color: rgba(255, 255, 255, 0.35);
+        }
+        /* Light theme: the field follows the page (white surface, dark text). */
+        html.light-theme .sokrat-new-chat-drop {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-color: rgba(244, 63, 94, 0.55);
+        }
+        html.light-theme .sokrat-new-chat-drop input {
+            color: #18181b;
+        }
+        html.light-theme .sokrat-new-chat-drop input::placeholder {
+            color: #a1a1aa;
+        }
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
@@ -1571,10 +1678,19 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             </div>
                         </div>
                         <div class="flex items-center gap-1.5 shrink-0">
-                            <button type="button" onclick="startNewChatPrompt()" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--accent-color)] hover:opacity-90 text-white flex items-center gap-1 transition cursor-pointer shadow-sm">
-                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                                <span class="hidden sm:inline"><%= t.smsNewChat || 'New Chat' %></span>
-                            </button>
+                            <div class="flex items-center">
+                                <button type="button" onclick="toggleNewChatField()" id="sms-new-chat-btn" aria-expanded="false" aria-controls="sokrat-new-chat-drop" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--accent-color)] hover:opacity-90 text-white flex items-center gap-1 transition cursor-pointer shadow-sm">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                    <span class="hidden sm:inline"><%= t.smsNewChat || 'New Chat' %></span>
+                                </button>
+                                <!-- Teardrop field: expands next to the button -->
+                                <div id="sokrat-new-chat-drop" class="sokrat-new-chat-drop">
+                                    <input id="sokrat-new-chat-input" type="tel" inputmode="tel" autocomplete="off" spellcheck="false" onkeydown="handleNewChatKeydown(event)" aria-label="<%= isRtl ? 'رقم الهاتف' : 'Phone number' %>" />
+                                    <button type="button" onclick="submitNewChatNumber()" class="text-[var(--accent-color)] hover:opacity-80 transition cursor-pointer shrink-0" title="<%= isRtl ? 'بدء محادثة' : 'Start chat' %>">
+                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                    </button>
+                                </div>
+                            </div>
                             <span id="sms-inbox-count" class="px-2 py-0.5 rounded-md bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[10px] font-mono font-bold text-[var(--text-secondary)]">0</span>
                             <button type="button" onclick="clearSmsInbox()" class="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-[var(--bg-hover)] transition cursor-pointer" title="<%= isRtl ? 'مسح كافة الرسائل' : 'Clear All Messages' %>">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -1587,10 +1703,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <!-- Left Pane: Conversations / Endpoints List -->
                         <div id="sms-threads-pane" class="w-full sm:w-[32%] lg:w-[34%] xl:w-[28%] min-w-[200px] max-w-[300px] border-e border-[var(--border-primary)] flex flex-col bg-[var(--bg-primary)]/40 shrink-0">
                             <!-- Search & Filter Bar -->
-                            <div class="p-2 pb-[10px] border-b border-[var(--border-primary)] bg-[var(--bg-card)]/50 space-y-1.5 shrink-0">
+                            <div class="p-2 pb-2 border-b border-[var(--border-primary)] bg-[var(--bg-card)]/50 space-y-1.5 shrink-0">
                                 <div class="relative">
-                                    <input type="text" id="sms-thread-search" oninput="handleSmsSearch(this.value)" placeholder="<%= t.smsSearchPlaceholder || 'Search number or text...' %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1 text-xs text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-[var(--accent-color)] font-mono">
-                                    <svg class="w-3.5 h-3.5 text-zinc-500 absolute end-2.5 top-2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                    <input type="text" id="sms-thread-search" oninput="handleSmsSearch(this.value)" placeholder="<%= t.smsSearchPlaceholder || 'Search number or text...' %>" class="w-full h-[34px] bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1 text-xs text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-[var(--accent-color)] font-mono">
+                                    <svg class="w-3.5 h-3.5 text-zinc-500 absolute end-2.5 top-[10px] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                                 </div>
                             </div>
 
@@ -1606,17 +1722,17 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <div id="sms-chat-pane" class="hidden sm:flex flex-1 flex-col bg-[var(--bg-card)]/30 overflow-hidden min-w-0">
                             <!-- Chat Active Header -->
                             <div id="sms-chat-header" class="px-3.5 py-2 border-b border-[var(--border-primary)] bg-[var(--bg-card)]/70 flex items-center justify-between gap-2 shrink-0">
-                                <div class="flex items-center gap-2 min-w-0">
+                                <div class="flex items-center gap-2 min-w-0 flex-1">
                                     <button type="button" onclick="backToThreadList()" class="sm:hidden p-1 rounded-lg hover:bg-[var(--bg-hover)] text-zinc-400 cursor-pointer" title="<%= t.smsBackToThreads || 'Back' %>">
                                         <svg class="w-4 h-4 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
                                     </button>
                                     <div class="w-7 h-7 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs font-mono shrink-0" id="sms-active-avatar">
                                         #
                                     </div>
-                                    <div class="min-w-0">
-                                        <div class="flex items-center gap-1.5">
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center gap-1.5 min-w-0">
                                             <span class="font-black text-xs text-white font-mono truncate" id="sms-active-number">-</span>
-                                            <button type="button" id="sms-active-copy-btn" onclick="copyActiveNumber()" class="text-zinc-400 hover:text-white p-0.5 cursor-pointer" title="<%= t.smsCopyNumber || 'Copy number' %>">
+                                            <button type="button" id="sms-active-copy-btn" onclick="copyActiveNumber()" class="text-zinc-400 hover:text-white p-0.5 cursor-pointer shrink-0" title="<%= t.smsCopyNumber || 'Copy number' %>">
                                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                                             </button>
                                         </div>
@@ -1626,8 +1742,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                                 <!-- Chat Actions (Dongle selector, delete thread) -->
                                 <div class="flex items-center gap-1.5 shrink-0">
-                                    <div class="w-56 sm:w-[17rem] shrink-0">
-                                        <select id="sms-reply-dongle" class="text-xs font-semibold font-mono" title="<%= t.smsSenderDongle || 'Sender Dongle' %>">
+                                    <div class="w-24 sm:w-32 min-w-[3.5rem] shrink">
+                                        <select id="sms-reply-dongle" class="text-xs font-semibold font-mono max-w-full" title="<%= t.smsSenderDongle || 'Sender Dongle' %>">
                                             <% if (devices && devices.length > 0) { %>
                                                 <% devices.forEach(d => { %>
                                                     <option value="<%= d.ID %>" <%= d.ID === initialSelectedDongleId ? 'selected' : '' %>><%= d.ID %> (<%= d.Number || 'No SIM' %>)</option>
@@ -2926,6 +3042,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             let selectedDongleId = null;
             let allSmsMessages = [];
             let activeThreadEndpoint = null;
+            // Endpoint of a brand-new conversation opened with the "New Chat" button.
+            // It has no thread entry yet, so the thread list re-render must not drop it.
+            let pendingNewChatEndpoint = null;
             let smsSearchQuery = '';
             let lastUssdText = "";
             let lastUssdTime = 0;
@@ -3399,6 +3518,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     if (!options || !options.skipSms || previousSelected !== normalizedId) {
                         if (previousSelected !== normalizedId) {
                             activeThreadEndpoint = null;
+                            pendingNewChatEndpoint = null;
                         }
                         filterAndRenderSms();
                     }
@@ -4259,14 +4379,23 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         <div class="text-center py-12 text-zinc-500 text-xs italic" id="sms-empty-placeholder">
                             ${query ? (isRtl ? 'لا توجد نتائج بحث' : 'No matches found') : (isRtl ? 'لا توجد محادثات لهذه الشريحة' : 'No conversations found for this dongle')}
                         </div>`;
-                    activeThreadEndpoint = null;
+                    // A pending brand-new conversation stays open even when the thread
+                    // list is empty - the user still wants to write the first message.
+                    if (activeThreadEndpoint !== pendingNewChatEndpoint) {
+                        activeThreadEndpoint = null;
+                    }
                     renderChatMessages();
                     return;
                 }
 
-                // If activeThreadEndpoint is no longer valid for this dongle, reset it
+                // If activeThreadEndpoint is no longer valid for this dongle, reset it.
+                // A brand-new conversation (started with the "New Chat" button) has no
+                // thread entry yet, so it must be kept - otherwise the re-render below
+                // would drop the number the user just typed and re-open the previous chat.
                 if (activeThreadEndpoint && !filteredThreads.some(t => t.endpoint === activeThreadEndpoint)) {
-                    activeThreadEndpoint = null;
+                    if (activeThreadEndpoint !== pendingNewChatEndpoint) {
+                        activeThreadEndpoint = null;
+                    }
                 }
 
                 let html = '';
@@ -4309,7 +4438,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             }
 
             window.selectSmsThread = function(endpoint, shouldFocus = false) {
-                activeThreadEndpoint = normalizePhoneEndpoint(endpoint);
+                const cleanEndpoint = normalizePhoneEndpoint(endpoint);
+                // Selecting a thread that is not the pending brand-new conversation
+                // means the user picked an existing one - drop the pending marker.
+                if (cleanEndpoint !== pendingNewChatEndpoint) {
+                    pendingNewChatEndpoint = null;
+                }
+                activeThreadEndpoint = cleanEndpoint;
 
                 const chatPane = document.getElementById('sms-chat-pane');
                 const threadsPane = document.getElementById('sms-threads-pane');
@@ -4498,15 +4633,112 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 }
             };
 
-            window.startNewChatPrompt = function() {
-                const num = prompt(isRtl ? 'أدخل رقم هاتف المحادثة (مثال: +201012345678 أو 01012345678):' : 'Enter phone number (e.g. +201012345678 or 01012345678):');
-                if (!num || !num.trim()) return;
-                const clean = normalizePhoneEndpoint(num);
-                if (clean.length < 3) {
-                    alert(isRtl ? 'رقم الهاتف غير صالح' : 'Invalid phone number');
+            // --- New Chat teardrop field ---------------------------------
+            // Same behaviour as the contacts search field: the button expands a
+            // field next to it, the number typed there opens (or creates) the
+            // conversation.
+            let newChatFieldOpen = false;
+            let newChatFieldCloseTimer = null;
+
+            window.openNewChatField = function() {
+                const drop = document.getElementById('sokrat-new-chat-drop');
+                const btn = document.getElementById('sms-new-chat-btn');
+                const input = document.getElementById('sokrat-new-chat-input');
+                if (!drop) return;
+
+                if (newChatFieldCloseTimer) {
+                    clearTimeout(newChatFieldCloseTimer);
+                    newChatFieldCloseTimer = null;
+                }
+
+                drop.classList.remove('is-closing');
+                drop.classList.add('is-open');
+                newChatFieldOpen = true;
+                if (btn) btn.setAttribute('aria-expanded', 'true');
+
+                // Focus after the teardrop has started expanding
+                setTimeout(() => { if (input && newChatFieldOpen) input.focus(); }, 120);
+            };
+
+            window.closeNewChatField = function() {
+                const drop = document.getElementById('sokrat-new-chat-drop');
+                const btn = document.getElementById('sms-new-chat-btn');
+                if (!drop || !newChatFieldOpen) return;
+
+                newChatFieldOpen = false;
+                if (btn) btn.setAttribute('aria-expanded', 'false');
+                drop.classList.remove('is-open');
+                drop.classList.add('is-closing');
+
+                if (newChatFieldCloseTimer) clearTimeout(newChatFieldCloseTimer);
+                newChatFieldCloseTimer = setTimeout(() => {
+                    drop.classList.remove('is-closing');
+                    newChatFieldCloseTimer = null;
+                }, 320);
+            };
+
+            window.toggleNewChatField = function() {
+                if (newChatFieldOpen) {
+                    window.closeNewChatField();
+                } else {
+                    window.openNewChatField();
+                }
+            };
+
+            window.submitNewChatNumber = function() {
+                const input = document.getElementById('sokrat-new-chat-input');
+                const num = input ? String(input.value || '') : '';
+                if (!num || !num.trim()) {
+                    window.closeNewChatField();
                     return;
                 }
-                selectSmsThread(clean);
+                const clean = normalizePhoneEndpoint(num);
+                if (clean.length < 3) {
+                    showToast(
+                        isRtl ? 'رقم غير صالح' : 'Invalid number',
+                        isRtl ? 'أدخل رقم هاتف صحيح' : 'Enter a valid phone number',
+                        'error'
+                    );
+                    if (input) { input.focus(); input.select(); }
+                    return;
+                }
+                // Keep the new endpoint alive across the thread-list re-render: it
+                // has no history yet, so renderSmsThreads() would otherwise clear
+                // it and re-open the previous conversation.
+                pendingNewChatEndpoint = clean;
+                selectSmsThread(clean, true);
+                if (input) input.value = '';
+                window.closeNewChatField();
+            };
+
+            window.handleNewChatKeydown = function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    window.submitNewChatNumber();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    window.closeNewChatField();
+                }
+            };
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && newChatFieldOpen) {
+                    window.closeNewChatField();
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!newChatFieldOpen) return;
+                const drop = document.getElementById('sokrat-new-chat-drop');
+                const btn = document.getElementById('sms-new-chat-btn');
+                if (drop && drop.contains(e.target)) return;
+                if (btn && btn.contains(e.target)) return;
+                window.closeNewChatField();
+            });
+
+            // Kept for backwards compatibility with the old prompt()-based button.
+            window.startNewChatPrompt = function() {
+                window.toggleNewChatField();
             };
 
             window.deleteActiveThread = async function() {
