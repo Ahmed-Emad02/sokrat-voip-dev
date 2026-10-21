@@ -1894,10 +1894,24 @@ exten => recconf,n,Set(__REC_STATUS=RECORDING)
 exten => recconf,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
 exten => recconf,n,Return()
 
+; === Sokrat VoIP: Recording Continuity Across Queue / Ring-Group Hops ===
+; Issabel tears the recording down at every queue hop: sub-record-cancel
+; stops the MixMonitor, DELETES the file with `rm -f` and clears
+; CDR(recordingfile). A call that traverses a queue chain therefore ends up
+; with no audio at all, and a CDR that points at a file which no longer
+; exists (the app then shows an empty player). Keep the recording running
+; instead: one continuous file for the whole call, and the CDR keeps
+; pointing at it.
+[sub-record-cancel]
+include => sub-record-cancel-custom
+exten => s,1,Set(__REC_POLICY_MODE=${REC_POLICY_MODE_SAVE})
+exten => s,n,Return()
+
 ;--== end of [sub-record-check] ==--;
 SUBRECORD_OVERRIDE
     fi
 fi
+
 
 # Ensure the queue recording path does not use the "bridged only" MixMonitor
 # flag (${MONITOR_OPTIONS}). Issabel sets MONITOR_OPTIONS=b for queues and

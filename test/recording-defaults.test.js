@@ -61,6 +61,28 @@ test('every installer can repair an override file that already has [sub-record-c
     }
 });
 
+test('every installer keeps the recording alive across queue hops', () => {
+    // Issabel's sub-record-cancel stops the MixMonitor, DELETES the file with
+    // `rm -f` and clears CDR(recordingfile) at every queue hop, which wipes
+    // the audio of a call that traverses a queue chain. The override must
+    // return before any of that happens.
+    for (const installer of INSTALLERS) {
+        const content = read(installer);
+        assert.ok(
+            content.includes('[sub-record-cancel]'),
+            `${installer} must override [sub-record-cancel]`
+        );
+        assert.ok(
+            content.includes('exten => s,1,Set(__REC_POLICY_MODE=${REC_POLICY_MODE_SAVE})'),
+            `${installer} must restore the recording policy in [sub-record-cancel]`
+        );
+        assert.ok(
+            !content.includes('System(rm -f ${MON_BASE}'),
+            `${installer} must not delete the recording file`
+        );
+    }
+});
+
 test('backend/install_db.sql records every call by default', () => {
     const content = read('backend/install_db.sql');
 

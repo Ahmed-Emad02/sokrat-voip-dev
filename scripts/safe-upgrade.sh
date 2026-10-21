@@ -588,6 +588,27 @@ exten => recconf,n,Return()
             with open(override_conf, "w", encoding="utf-8") as f:
                 f.write(ov_content)
 
+        # Recording continuity across queue hops (see the [sub-record-cancel]
+        # block written below). Idempotent: replaces an existing block.
+        cancel_override = """
+; === Sokrat VoIP: Recording Continuity Across Queue / Ring-Group Hops ===
+; Issabel tears the recording down at every queue hop: sub-record-cancel
+; stops the MixMonitor, DELETES the file with `rm -f` and clears
+; CDR(recordingfile). A call that traverses a queue chain therefore ends up
+; with no audio at all, and a CDR that points at a file which no longer
+; exists (the app then shows an empty player). Keep the recording running
+; instead: one continuous file for the whole call, and the CDR keeps
+; pointing at it.
+[sub-record-cancel]
+include => sub-record-cancel-custom
+exten => s,1,Set(__REC_POLICY_MODE=${REC_POLICY_MODE_SAVE})
+exten => s,n,Return()
+"""
+        content = re.sub(r'\[sub-record-cancel\].*?(?=\n\[|\Z)', '', content, flags=re.DOTALL)
+        content = content.rstrip() + "\n\n" + cancel_override.strip() + "\n"
+        with open(override_conf, "w", encoding="utf-8") as f:
+            f.write(content)
+
         # Drop the "bridged only" MixMonitor flag (${MONITOR_OPTIONS}) from the
         # queue recording path - it produced 44-byte (header-only) recordings.
         # Idempotent, and also fixes servers that already had the block.
