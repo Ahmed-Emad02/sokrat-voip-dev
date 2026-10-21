@@ -2159,6 +2159,18 @@ const pool = mysql.createPool({
 });
 
 let activeCalls = {};
+// Extensions that currently have a live Asterisk channel. Maintained by the
+// reconciler and used to stop a transient device-status flap from wiping a
+// call that is still up.
+let liveCallExtensions = new Set();
+
+// Keep the original start time when another channel appears for an
+// extension that is already in a call (second leg, consult, transfer) -
+// otherwise the call timer restarts from zero in the middle of a call.
+function existingCallStart(ext) {
+    const existing = activeCalls[ext];
+    return (existing && existing.start) ? existing.start : Date.now();
+}
 let sipPresence = {};
 let pjsipPresence = {};
 let iaxPresence = {};
@@ -3270,8 +3282,11 @@ function connectAMI() {
                     } else {
                         setExtensionOffline(name, 'ExtensionStatus');
                     }
-                    // Clear call from activeCalls if extension status reports Idle (0) or unavailable/unregistered
-                    if ((statusStr === '0' || !isOnline) && activeCalls[name]) {
+                    // Clear call from activeCalls if extension status reports Idle (0) or
+                    // unavailable/unregistered - but never while the extension still has a
+                    // live channel: a device status flap mid-call would otherwise drop the
+                    // call entry and restart the call timer from zero.
+                    if ((statusStr === '0' || !isOnline) && activeCalls[name] && !liveCallExtensions.has(name)) {
                         delete activeCalls[name];
                         notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: name, callData: null });
                     }
@@ -3288,9 +3303,8 @@ function connectAMI() {
             // New channel = new call, always fresh timestamp
             if (event.Event === 'Newchannel') {
                 // Fire inbound call webhook for incoming GSM dongle calls.
-                // Numbers are forwarded EXACTLY as Asterisk reports them (no E.164
-                // reformatting, no national<->international guessing). The receiving
-                // CRM owns any normalization needed for its own lead lookup.
+                // Numbers are forwarded EXACTLY as Asterisk reports them; the
+                // receiving CRM owns any normalization.
                 let inboundDongleId = extractDongleIdFromChannel(event.Channel);
                 if (inboundDongleId && event.CallerIDNum && event.CallerIDNum !== '<unknown>') {
                     let calledNum = event.Exten || event.ConnectedLineNum || '';
@@ -3313,7 +3327,7 @@ function connectAMI() {
                     activeCalls[exten] = {
                         state: 'Ringing',
                         partner: partner,
-                        start: Date.now(),
+                        start: existingCallStart(exten),
                         channel: event.Channel
                     };
                     notifyCrmLiveBroadcaster(); io.emit('callUpdate', { extension: exten, callData: activeCalls[exten] });
@@ -3349,6 +3363,10 @@ function connectAMI() {
 
                     if (isUp && partner && partner !== 'Connecting...' && activeCalls[partner]) {
                         activeCalls[partner].state = 'In Call';
+                        // The partner side has to show the same duration, so it
+                        // needs the same start time and its own update.
+                        if (!activeCalls[partner].start) activeCalls[partner].start = start;
+                        io.emit('callUpdate', { extension: partner, callData: activeCalls[partner] });
                     }
 
                     notifyCrmLiveBroadcaster();
@@ -3447,6 +3465,9 @@ async function reconcileActiveCallsWithAsterisk() {
         const liveLines = output.split('\n').filter(Boolean);
         const liveExts = new Set();
         const liveChans = new Set();
+        // The earliest start per extension - the channel duration is the
+        // authoritative age of the call.
+        const liveStarts = new Map();
 
         for (const line of liveLines) {
             const parts = line.split('!');
@@ -3455,6 +3476,12 @@ async function reconcileActiveCallsWithAsterisk() {
             const ext = getExtensionFromChannel(chan);
             if (ext) {
                 liveExts.add(ext);
+                const durationSec = parseInt(parts[11], 10) || 0;
+                if (durationSec > 0) {
+                    const startTs = Date.now() - (durationSec * 1000);
+                    const known = liveStarts.get(ext);
+                    if (known === undefined || startTs < known) liveStarts.set(ext, startTs);
+                }
                 // Automatically discover ongoing calls not yet in activeCalls (e.g. across server restart)
                 if (!activeCalls[ext]) {
                     const stateDesc = parts[4] || '';
@@ -3465,7 +3492,10 @@ async function reconcileActiveCallsWithAsterisk() {
                     } else if (parts[2] && parts[2] !== ext && parts[2] !== 's' && parts[2].length >= 3) {
                         partner = parts[2];
                     }
-                    const durationSec = parseInt(parts[10], 10) || 0;
+                    // `core show channels concise` field 11 is the channel
+                    // DURATION - field 10 is a constant. Reading the wrong
+                    // field made every re-discovered call look 3 seconds old.
+                    const durationSec = parseInt(parts[11], 10) || 0;
                     const startTs = Date.now() - (durationSec * 1000);
                     activeCalls[ext] = {
                         state: isUp ? 'In Call' : 'Ringing',
@@ -3476,6 +3506,21 @@ async function reconcileActiveCallsWithAsterisk() {
                     notifyCrmLiveBroadcaster();
                     io.emit('callUpdate', { extension: ext, callData: activeCalls[ext] });
                 }
+            }
+        }
+
+        // A call entry can be recreated (after a status flap) with a fresh
+        // start time, which made the live panel timer jump back to zero on a
+        // call that had been running for hours. The channel duration is the
+        // truth, so correct any entry that drifted.
+        liveCallExtensions = liveExts;
+        for (const [ext, startTs] of liveStarts) {
+            const call = activeCalls[ext];
+            if (!call) continue;
+            if (Math.abs((call.start || 0) - startTs) > 5000) {
+                call.start = startTs;
+                notifyCrmLiveBroadcaster();
+                io.emit('callUpdate', { extension: ext, callData: call });
             }
         }
 
@@ -17558,7 +17603,7 @@ app.get('/api/config/modem/rtcp', async (req, res) => {
             const exten = parts[2] || '';
             const state = parts[4] || '';
             const appName = parts[5] || '';
-            const duration = parts[10] || '0';
+            const duration = parts[11] || '0';
 
             if (!chanName) continue;
 
