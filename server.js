@@ -12727,6 +12727,18 @@ function updateVoicemailConf(extNum, displayName, vmVal) {
     }
 }
 
+// Apply a voicemail enable/disable to the live PBX: the ASTDB context the
+// dialplan reads (AMPUSER/<ext>/voicemail) plus the mailbox entry in
+// voicemail.conf. The extension PUT handler only updated the database, so
+// the change stayed dormant until the next service restart.
+function applyVoicemailState(extNum, displayName, vmVal) {
+    const vmContext = (vmVal === 'default' || vmVal === 'enabled') ? 'default' : 'novm';
+    exec(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/voicemail ${vmContext}"`, (err) => {
+        if (err) console.error('Voicemail ASTDB update error:', err.message);
+    });
+    updateVoicemailConf(extNum, displayName, vmVal);
+}
+
 // Helper function to sync extension astdb recording & user settings
 async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'both', vadGateVal = '1', vadDbVal = 'off', customDial = null, agcVal = '8000') {
     let techUpper = (tech || 'sip').toUpperCase();
@@ -13499,6 +13511,9 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             await pool.query('UPDATE `asterisk`.`users` SET name = ? WHERE extension = ?', [displayName, extNum]);
         }
         await pool.query('UPDATE `asterisk`.`users` SET voicemail = ?, recording = "out=always|in=always" WHERE extension = ?', [vmVal, extNum]);
+        // Provision the live PBX too, otherwise the new state only exists in
+        // the database until the service is restarted.
+        applyVoicemailState(extNum, displayName || extNum, vmVal);
 
         const sipUpdates = [
             ['dial', devDial, 27],
