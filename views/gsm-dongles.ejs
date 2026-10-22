@@ -1725,7 +1725,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     <div class="w-7 h-7 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs font-mono shrink-0" id="sms-active-avatar">
                                         #
                                     </div>
-                                    <div class="min-w-0 flex-1">
+                                    <div class="min-w-[4.5rem] flex-1">
                                         <div class="flex items-center gap-1.5 min-w-0">
                                             <span class="font-black text-xs text-white font-mono truncate" id="sms-active-number">-</span>
                                             <button type="button" id="sms-active-copy-btn" onclick="copyActiveNumber()" class="text-zinc-400 hover:text-white p-0.5 cursor-pointer shrink-0" title="<%= t.smsCopyNumber || 'Copy number' %>">
@@ -1738,7 +1738,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                                 <!-- Chat Actions (Dongle selector, delete thread) -->
                                 <div class="flex items-center gap-1.5 shrink-0">
-                                    <div class="w-24 sm:w-32 min-w-[3.5rem] shrink">
+                                    <div class="w-fit max-w-full shrink">
                                         <select id="sms-reply-dongle" class="text-xs font-semibold font-mono max-w-full" title="<%= t.smsSenderDongle || 'Sender Dongle' %>">
                                             <% if (devices && devices.length > 0) { %>
                                                 <% devices.forEach(d => { %>

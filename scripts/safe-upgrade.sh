@@ -761,6 +761,61 @@ else
     echo "  Warning: missing $WEBRTC_REPAIR_SCRIPT; WebRTC repair skipped."
 fi
 
+# 10x — Overlay VPN clients (ZeroTier / Tailscale) for remote management
+echo "  [10x] Installing overlay VPN clients (ZeroTier / Tailscale)..."
+install_overlay_vpn_clients() {
+    local pkg_mgr=""
+    if command -v dnf >/dev/null 2>&1; then
+        pkg_mgr="dnf"
+    elif command -v yum >/dev/null 2>&1; then
+        pkg_mgr="yum"
+    else
+        echo "  no dnf/yum available - skipping overlay VPN installation"
+        return 0
+    fi
+
+    # Tailscale is not shipped in the base Rocky/RHEL repositories
+    if ! command -v tailscale >/dev/null 2>&1; then
+        local os_major="8"
+        if [ -r /etc/os-release ]; then
+            os_major=$(awk -F= '/^VERSION_ID=/{gsub(/"/,"",$2); split($2,v,"."); print v[1]; exit}' /etc/os-release)
+        fi
+        if $pkg_mgr config-manager --add-repo "https://pkgs.tailscale.com/stable/rhel/${os_major}/tailscale.repo" >/dev/null 2>&1; then
+            echo "  tailscale repository added"
+        else
+            mkdir -p /etc/yum.repos.d
+            cat > /etc/yum.repos.d/sokrat-tailscale.repo << REPOEOF
+[tailscale]
+name=tailscale
+baseurl=https://pkgs.tailscale.com/stable/rhel/${os_major}
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://pkgs.tailscale.com/stable/rhel/${os_major}/tailscale.gpg
+REPOEOF
+            echo "  tailscale repository file written"
+        fi
+    fi
+
+    if $pkg_mgr install -y zerotier-one >/dev/null 2>&1; then
+        echo "  zerotier-one installed"
+    else
+        echo "  WARNING: could not install zerotier-one (continuing)"
+    fi
+    if $pkg_mgr install -y tailscale >/dev/null 2>&1; then
+        echo "  tailscale installed"
+    else
+        echo "  WARNING: could not install tailscale (continuing)"
+    fi
+
+    # Enable both services so they come up after a reboot. The networks
+    # themselves are joined from the Sokrat GUI (Settings -> Overlay VPN).
+    systemctl enable zerotier-one.service >/dev/null 2>&1 || true
+    systemctl enable tailscaled.service >/dev/null 2>&1 || true
+    echo "  overlay VPN services enabled - join the networks from Settings -> Overlay VPN"
+}
+install_overlay_vpn_clients
+
 # 6. Reload Asterisk Modules & Sokrat Daemons
 echo "[6/7] Refreshing Asterisk modules and restarting Sokrat services..."
 if command -v systemctl &>/dev/null && systemctl is-active asterisk >/dev/null 2>&1; then

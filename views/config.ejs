@@ -387,25 +387,27 @@ function isTabAllowed(tabName) {
             gap: 0.25rem;
             width: fit-content;
         }
+        /* Flat tech badges: no background, no border - only the label colour
+           carries the meaning. */
         .ext-tech-webrtc {
-            background-color: rgba(168, 85, 247, 0.15);
+            background-color: transparent;
             color: #d8b4fe;
-            border: 1px solid rgba(168, 85, 247, 0.35);
+            border: 0;
         }
         .ext-tech-sip {
-            background-color: rgba(100, 116, 139, 0.2);
+            background-color: transparent;
             color: #cbd5e1;
-            border: 1px solid rgba(148, 163, 184, 0.35);
+            border: 0;
         }
         html.light-theme .ext-tech-webrtc {
-            background-color: #f3e8ff !important;
+            background-color: transparent !important;
             color: #581c87 !important;
-            border-color: #c084fc !important;
+            border: 0 !important;
         }
         html.light-theme .ext-tech-sip {
-            background-color: #e2e8f0 !important;
+            background-color: transparent !important;
             color: #0f172a !important;
-            border-color: #64748b !important;
+            border: 0 !important;
         }
         .config-tab-btn {
             font-weight: 700;
@@ -7182,27 +7184,27 @@ function isTabAllowed(tabName) {
                         tr.className = 'hover:bg-[var(--bg-hover)] transition-colors';
                         const isVmOn = (ext.voicemail === 'default' || ext.voicemail === 'enabled');
                         const vmBadge = isVmOn
-                            ? `<span class="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">Enabled</span>`
-                            : `<span class="px-2 py-0.5 text-[11px] font-bold rounded bg-slate-500/15 text-slate-400 border border-slate-500/20">Disabled</span>`;
+                            ? `<span class="px-2 py-0.5 text-[11px] font-bold rounded text-emerald-400">Enabled</span>`
+                            : `<span class="px-2 py-0.5 text-[11px] font-bold rounded text-slate-400">Disabled</span>`;
                         const titleText = ext.title
                             ? `<span class="text-xs font-bold text-[var(--text-primary)] truncate">${escapeHtml(ext.title)}</span>`
                             : `<span class="text-[11px] text-[var(--text-muted)]">${isRtl ? 'بدون مسمى وظيفي' : 'No job title'}</span>`;
-                        const adminBadge = ext.is_group_admin ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono" title="${isRtl ? 'مدير المجموعة (صلاحية التقاط المكالمات)' : 'Group Admin (Call Pickup Authority)'}"><svg class="w-2.5 h-2.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg><span>Admin</span></span>` : '';
+                        const adminBadge = ext.is_group_admin ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold text-amber-400 font-mono" title="${isRtl ? 'مدير المجموعة (صلاحية التقاط المكالمات)' : 'Group Admin (Call Pickup Authority)'}"><svg class="w-2.5 h-2.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg><span>Admin</span></span>` : '';
                         const groupLabel = ext.emp_group ? escapeHtml(formatGroupName(ext.emp_group, isRtl)) : (isRtl ? 'بدون مجموعة' : 'Ungrouped');
                         const groupClass = ext.emp_group ? 'text-red-400 font-bold' : 'text-[var(--text-muted)]';
                         const groupText = `<div class="flex items-center gap-1.5 flex-wrap"><span class="text-[10px] truncate ${groupClass}">${groupLabel}</span>${adminBadge}</div>`;
                         const isWebRtcExt = (ext.tech === 'pjsip' || ext.tech === 'webrtc');
                         let policyBadges = '';
                         if (isWebRtcExt) {
-                            const aaColor = ext.auto_answer === 'force_on' ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/25' : (ext.auto_answer === 'force_off' ? 'text-rose-400 bg-rose-500/15 border-rose-500/25' : 'text-zinc-400 bg-zinc-500/10 border-zinc-500/20');
+                            const aaColor = ext.auto_answer === 'force_on' ? 'text-emerald-400' : (ext.auto_answer === 'force_off' ? 'text-rose-400' : 'text-zinc-400');
                             const aaLabel = ext.auto_answer === 'force_on' ? (isRtl ? 'رد: إجباري' : 'Auto: Force') : (ext.auto_answer === 'force_off' ? (isRtl ? 'رد: ممنوع' : 'Auto: Off') : (isRtl ? 'رد: حر' : 'Auto: User'));
-                            const dndColor = ext.dnd === 'force_on' ? 'text-amber-400 bg-amber-500/15 border-amber-500/25' : (ext.dnd === 'force_off' ? 'text-rose-400 bg-rose-500/15 border-rose-500/25' : 'text-zinc-400 bg-zinc-500/10 border-zinc-500/20');
+                            const dndColor = ext.dnd === 'force_on' ? 'text-amber-400' : (ext.dnd === 'force_off' ? 'text-rose-400' : 'text-zinc-400');
                             const dndLabel = ext.dnd === 'force_on' ? (isRtl ? 'DND: إجباري' : 'DND: Force') : (ext.dnd === 'force_off' ? (isRtl ? 'DND: ممنوع' : 'DND: Off') : (isRtl ? 'DND: حر' : 'DND: User'));
-                            const cancelBadge = (ext.disable_outbound_ringing_cancel == 1 || ext.disable_outbound_ringing_cancel === true) ? `<span class="px-1.5 py-0.5 text-[9px] font-bold rounded border text-rose-400 bg-rose-500/15 border-rose-500/25" title="${isRtl ? 'ممنوع إنهاء الرنين' : 'Block Ring Cancel'}">${isRtl ? 'قفل الرنين' : 'No Cancel'}</span>` : '';
-                            policyBadges = `<div class="flex items-center gap-1 mt-1 flex-wrap"><span class="px-1.5 py-0.5 text-[9px] font-bold rounded border ${aaColor}">${aaLabel}</span><span class="px-1.5 py-0.5 text-[9px] font-bold rounded border ${dndColor}">${dndLabel}</span>${cancelBadge}</div>`;
+                            const cancelBadge = (ext.disable_outbound_ringing_cancel == 1 || ext.disable_outbound_ringing_cancel === true) ? `<span class="px-1.5 py-0.5 text-[9px] font-bold rounded text-rose-400" title="${isRtl ? 'ممنوع إنهاء الرنين' : 'Block Ring Cancel'}">${isRtl ? 'قفل الرنين' : 'No Cancel'}</span>` : '';
+                            policyBadges = `<div class="flex items-center gap-1 mt-1 flex-wrap"><span class="px-1.5 py-0.5 text-[9px] font-bold rounded ${aaColor}">${aaLabel}</span><span class="px-1.5 py-0.5 text-[9px] font-bold rounded ${dndColor}">${dndLabel}</span>${cancelBadge}</div>`;
                         }
                         const techBadge = isWebRtcExt
-                            ? `<div class="flex flex-col gap-0.5"><span class="ext-tech-badge ext-tech-webrtc"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>WebRTC Softphone</span>${policyBadges}</div>`
+                            ? `<div class="flex flex-col gap-0.5"><span class="ext-tech-badge ext-tech-webrtc">WebRTC Softphone</span>${policyBadges}</div>`
                             : `<span class="ext-tech-badge ext-tech-sip">Generic SIP Device</span>`;
                         tr.innerHTML = `
                             <td class="py-3 px-4 font-mono font-bold text-[var(--text-primary)]">${escapeHtml(ext.extension)}</td>
@@ -7212,8 +7214,8 @@ function isTabAllowed(tabName) {
                             </td>
                             <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">${escapeHtml(ext.secret || '-')}</td>
                             <td class="py-3 px-4">${techBadge}</td>
-                            <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">Yes</span></td>
-                            <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded bg-purple-500/15 text-purple-400 border border-purple-500/20">Always</span></td>
+                            <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded text-emerald-400">Yes</span></td>
+                            <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded text-purple-400">Always</span></td>
                             <td class="py-3 px-4">${vmBadge}</td>
                             <td class="py-3 px-4 text-center">
                                 <div class="flex items-center justify-center gap-2">
@@ -8115,8 +8117,8 @@ function isTabAllowed(tabName) {
                             <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">${annText}</td>
                             <td class="py-3 px-4">${mohDisplay}</td>
                             <td class="py-3 px-4 font-mono text-xs text-[var(--text-secondary)]">${rg.grplist}</td>
-                            <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">Yes</span></td>
-                            <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded bg-purple-500/15 text-purple-400 border border-purple-500/20">Always</span></td>
+                            <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded text-emerald-400">Yes</span></td>
+                            <td class="py-3 px-4"><span class="px-2 py-0.5 text-[11px] font-bold rounded text-purple-400">Always</span></td>
                             <td class="py-3 px-4 font-mono text-xs text-blue-400 font-bold">${formatDestination(rg.postdest)}</td>
                             <td class="py-3 px-4 text-center">
                                 <div class="flex items-center justify-center gap-2">

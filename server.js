@@ -76,6 +76,14 @@ const {
     applyCallCodeBackendUpdate,
     resetCallCodesToDefaults
 } = require('./lib/call-codes');
+const {
+    overlayStatus,
+    installProvider,
+    serviceAction: overlayServiceAction,
+    joinNetwork: overlayJoinNetwork,
+    leaveNetwork: overlayLeaveNetwork,
+    PROVIDER_IDS: OVERLAY_PROVIDER_IDS
+} = require('./lib/overlay-vpn');
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
 let rawEncryptionKey = process.env.ENCRYPTION_KEY;
@@ -2132,7 +2140,7 @@ app.use('/api/config', (req, res, next) => {
 
 function sanitizeLogPayload(obj) {
     if (!obj || typeof obj !== 'object') return obj;
-    const sensitiveKeys = new Set(['password', 'password_confirmation', 'secret', 'token', 'authorization', 'pairing_code', 'client_secret', 'reset_token', 'sip_secret', 'secret_hash', 'credentials']);
+    const sensitiveKeys = new Set(['password', 'password_confirmation', 'secret', 'token', 'authorization', 'pairing_code', 'client_secret', 'reset_token', 'sip_secret', 'secret_hash', 'credentials', 'authkey', 'auth_key', 'apikey', 'api_key']);
     const copy = Array.isArray(obj) ? [] : {};
     for (const [k, v] of Object.entries(obj)) {
         if (sensitiveKeys.has(k.toLowerCase())) {
@@ -11718,6 +11726,82 @@ app.post('/api/system/asterisk-reload', requireAuth, requireTabPermission('stora
         }
         res.json({ success: true, message: 'PBX configuration and Asterisk core reloaded successfully' });
     });
+});
+
+// ---------------------------------------------------------------------------
+// Overlay VPN (ZeroTier / Tailscale) - root only management
+// ---------------------------------------------------------------------------
+function requireRootForOverlay(req, res) {
+    if (!isSuperAdmin(req)) {
+        res.status(403).json({ success: false, error: 'Forbidden: root privileges required' });
+        return false;
+    }
+    return true;
+}
+
+// GET /api/system/overlay/status - installed / running / joined networks
+app.get('/api/system/overlay/status', requireAuth, async (req, res) => {
+    if (!requireRootForOverlay(req, res)) return;
+    try {
+        const status = await overlayStatus();
+        res.json({ success: true, ...status });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// POST /api/system/overlay/:provider/action - install / start / stop / restart / enable / disable
+app.post('/api/system/overlay/:provider/action', requireAuth, async (req, res) => {
+    if (!requireRootForOverlay(req, res)) return;
+    const provider = String(req.params.provider || '').toLowerCase();
+    const action = String((req.body || {}).action || '').toLowerCase();
+    if (!OVERLAY_PROVIDER_IDS.includes(provider)) {
+        return res.status(400).json({ success: false, error: 'Invalid or unsupported provider' });
+    }
+    try {
+        let result;
+        if (action === 'install') {
+            result = await installProvider(provider);
+        } else {
+            result = await overlayServiceAction(provider, action);
+        }
+        const status = await overlayStatus();
+        res.json({ success: true, ...result, ...status });
+    } catch (error) {
+        res.status(500).json({ success: false, error: String(error.stderr || error.message || '').trim() });
+    }
+});
+
+// POST /api/system/overlay/:provider/join - join a network
+app.post('/api/system/overlay/:provider/join', requireAuth, async (req, res) => {
+    if (!requireRootForOverlay(req, res)) return;
+    const provider = String(req.params.provider || '').toLowerCase();
+    if (!OVERLAY_PROVIDER_IDS.includes(provider)) {
+        return res.status(400).json({ success: false, error: 'Invalid or unsupported provider' });
+    }
+    try {
+        const result = await overlayJoinNetwork(provider, req.body || {});
+        const status = await overlayStatus();
+        res.json({ success: true, ...result, ...status });
+    } catch (error) {
+        res.status(500).json({ success: false, error: String(error.stderr || error.message || '').trim() });
+    }
+});
+
+// POST /api/system/overlay/:provider/leave - leave a network
+app.post('/api/system/overlay/:provider/leave', requireAuth, async (req, res) => {
+    if (!requireRootForOverlay(req, res)) return;
+    const provider = String(req.params.provider || '').toLowerCase();
+    if (!OVERLAY_PROVIDER_IDS.includes(provider)) {
+        return res.status(400).json({ success: false, error: 'Invalid or unsupported provider' });
+    }
+    try {
+        const result = await overlayLeaveNetwork(provider, req.body || {});
+        const status = await overlayStatus();
+        res.json({ success: true, ...result, ...status });
+    } catch (error) {
+        res.status(500).json({ success: false, error: String(error.stderr || error.message || '').trim() });
+    }
 });
 
 // 3. GET /api/storage/export/pc - Package CDR CSV & recordings audio into a downloadable ZIP
