@@ -462,6 +462,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             border: none !important;
             box-shadow: none !important;
         }
+        #dongle-duration-stats-section {
+            background: transparent !important;
+            background-color: transparent !important;
+            border: none !important;
+            border-width: 0 !important;
+            box-shadow: none !important;
+        }
         
         .terminal-container {
             border: 1px solid var(--border-primary, #27272a);
@@ -1811,9 +1818,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             </div>
 
         <!-- 4. Dongle & SIM State Duration Analytics Section (Redesigned) -->
-        <section class="panel-surface rounded-2xl overflow-hidden shrink-0 flex flex-col gap-0 border border-[var(--border-primary)] mt-4" id="dongle-duration-stats-section">
+        <section class="rounded-2xl overflow-hidden shrink-0 flex flex-col gap-0 bg-transparent border-0 border-none shadow-none mt-4" id="dongle-duration-stats-section">
             <!-- Section Header -->
-            <div class="p-4 sm:px-6 border-b border-[var(--border-primary)] bg-[var(--bg-card)]/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="p-4 sm:px-6 border-b border-[var(--border-primary)]/50 bg-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
                     <div class="text-sky-400 flex items-center justify-center shrink-0">
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1837,7 +1844,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             </div>
 
             <!-- Filters Bar -->
-            <div class="p-4 sm:px-6 border-b border-[var(--border-primary)] bg-[var(--bg-primary)]/40 space-y-3">
+            <div class="p-4 sm:px-6 border-b border-[var(--border-primary)]/50 bg-transparent space-y-3">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
                     <div>
                         <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="reportStartDate"><%= t.reportStartTime %></label>
