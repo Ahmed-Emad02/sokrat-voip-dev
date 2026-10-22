@@ -462,11 +462,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             border: none !important;
             box-shadow: none !important;
         }
-        #dongle-duration-stats-section {
+        #dongle-duration-stats-section,
+        #dongleReportTableContainer,
+        #dongleReportTableContainer table,
+        #dongleReportTableContainer thead tr {
             background: transparent !important;
             background-color: transparent !important;
             border: none !important;
-            border-width: 0 !important;
             box-shadow: none !important;
         }
         
@@ -2017,11 +2019,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     </div>
                 </div>
 
-                <div class="rounded-xl border border-[var(--border-primary)] overflow-hidden bg-[var(--bg-card)]">
+                <div id="dongleReportTableContainer" class="rounded-xl overflow-hidden bg-transparent border-0 border-none shadow-none">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-start border-collapse text-xs">
+                        <table class="w-full text-start border-collapse text-xs bg-transparent border-0 border-none">
                             <thead>
-                                <tr class="bg-black/60 border-b border-[var(--border-primary)] text-[11px] uppercase font-black text-zinc-200 tracking-wider">
+                                <tr class="bg-transparent border-b border-[var(--border-primary)] text-[11px] uppercase font-black text-zinc-200 tracking-wider">
                                     <th class="py-3 px-4 text-start" id="report-col-target-header"><%= t.reportColDongle %></th>
                                     <th class="py-3 px-4 text-start" id="report-col-subtarget-header"><%= t.reportColSim %></th>
                                     <th class="py-3 px-4 text-start"><%= t.reportColFree %></th>
