@@ -609,11 +609,11 @@ function fmtDur(s) {
                 <%= t.pagShowing %> <%= (pagination.page - 1) * pagination.perPage + 1 %>-<%= Math.min(pagination.page * pagination.perPage, pagination.total) %> <%= t.pagOf %> <%= pagination.total %> <%= t.pagResults %>
             </span>
             <div class="flex items-center gap-1">
-                <button onclick="goToPage(<%= pagination.page - 1 %>)" <%= pagination.page <= 1 ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page <= 1 ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagPrev %></button>
+                <button type="button" onclick="goToPage(Math.max(1, pagination.page - 1))" <%= pagination.page <= 1 ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page <= 1 ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagPrev %></button>
                 <% for (let p = Math.max(1, pagination.page - 2); p <= Math.min(pagination.totalPages, pagination.page + 2); p++) { %>
-                    <button onclick="goToPage(<%= p %>)" class="px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition cursor-pointer <%= p === pagination.page ? 'bg-[var(--accent-color)] text-white' : 'text-zinc-400 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= p %></button>
+                    <button type="button" onclick="goToPage(<%= p %>)" class="px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition cursor-pointer <%= p === pagination.page ? 'bg-[var(--accent-color)] text-white' : 'text-zinc-400 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= p %></button>
                 <% } %>
-                <button onclick="goToPage(<%= pagination.page + 1 %>)" <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page >= pagination.totalPages ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagNext %></button>
+                <button type="button" onclick="goToPage(Math.min(pagination.totalPages, pagination.page + 1))" <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page >= pagination.totalPages ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagNext %></button>
             </div>
         </div>
         <% } %>
@@ -810,11 +810,11 @@ function fmtDur(s) {
                         <%= t.pagShowing %> <%= (pagination.page - 1) * pagination.perPage + 1 %>-<%= Math.min(pagination.page * pagination.perPage, pagination.total) %> <%= t.pagOf %> <%= pagination.total %> <%= t.pagResults %>
                     </span>
                     <div class="flex items-center gap-1">
-                        <button onclick="goToPage(<%= pagination.page - 1 %>)" <%= pagination.page <= 1 ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page <= 1 ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagPrev %></button>
+                        <button type="button" onclick="goToPage(Math.max(1, pagination.page - 1))" <%= pagination.page <= 1 ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page <= 1 ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagPrev %></button>
                         <% for (let p = Math.max(1, pagination.page - 2); p <= Math.min(pagination.totalPages, pagination.page + 2); p++) { %>
-                            <button onclick="goToPage(<%= p %>)" class="px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition cursor-pointer <%= p === pagination.page ? 'bg-[var(--accent-color)] text-white' : 'text-zinc-400 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= p %></button>
+                            <button type="button" onclick="goToPage(<%= p %>)" class="px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition cursor-pointer <%= p === pagination.page ? 'bg-[var(--accent-color)] text-white' : 'text-zinc-400 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= p %></button>
                         <% } %>
-                        <button onclick="goToPage(<%= pagination.page + 1 %>)" <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page >= pagination.totalPages ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagNext %></button>
+                        <button type="button" onclick="goToPage(Math.min(pagination.totalPages, pagination.page + 1))" <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %> class="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer <%= pagination.page >= pagination.totalPages ? 'text-zinc-700 bg-zinc-900/50 cursor-not-allowed' : 'text-zinc-300 bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] hover:text-white' %>"><%= t.pagNext %></button>
                     </div>
                 </div>
                 <% } %>
@@ -833,15 +833,15 @@ function fmtDur(s) {
         window.triggerAudioDownload = triggerAudioDownload;
 
         function goToPage(page) {
-            const formEl = document.getElementById('cdrFilterForm');
-            const pageEl = formEl ? formEl.querySelector('input[name="page"]') : null;
-            if (pageEl && formEl) {
-                const saved = localStorage.getItem('cdrPerPage');
-                const perPageEl = formEl.querySelector('input[name="perPage"]');
-                if (saved && perPageEl) perPageEl.value = saved;
-                pageEl.value = page;
-                formEl.submit();
-            }
+            // The pagination navigates by URL instead of submitting the filter
+            // form: the filters are already in the query string, so this works
+            // even when the form or its hidden page input is not on the page.
+            var target = Math.max(1, parseInt(page, 10) || 1);
+            var url = new URL(window.location.href);
+            url.searchParams.set('page', String(target));
+            var saved = localStorage.getItem('cdrPerPage');
+            if (saved) url.searchParams.set('perPage', saved);
+            window.location.href = url.toString();
         }
 
         // Sync perPage from localStorage on page load and form submission
