@@ -2565,6 +2565,33 @@ if systemctl list-unit-files NetworkManager.service >/dev/null 2>&1; then
     fi
 fi
 
+
+# [10z] Disable the host firewall
+# The PBX needs a wide range of ports (SIP signalling, the RTP range, the
+# WebRTC softphone, the CRM endpoints and the web UI) and a firewalld rule
+# that is one port short silently breaks the calls, so the installers turn
+# the local firewall off. The host is then reachable on every port.
+echo "  [10z] Disabling the firewall..."
+if systemctl list-unit-files firewalld.service >/dev/null 2>&1; then
+    firewall-cmd --panic-off >/dev/null 2>&1 || true
+    systemctl stop firewalld >/dev/null 2>&1 || true
+    systemctl disable firewalld >/dev/null 2>&1 || true
+    echo "  firewalld stopped and disabled"
+elif command -v firewall-cmd >/dev/null 2>&1; then
+    firewall-cmd --panic-off >/dev/null 2>&1 || true
+    echo "  firewalld panic mode switched off"
+else
+    echo "  no firewalld on this host - nothing to disable"
+fi
+# The legacy iptables services can carry their own rules.
+for fwsvc in iptables ip6tables; do
+    if systemctl list-unit-files "$fwsvc.service" >/dev/null 2>&1; then
+        systemctl stop "$fwsvc" >/dev/null 2>&1 || true
+        systemctl disable "$fwsvc" >/dev/null 2>&1 || true
+    fi
+done
+echo "  WARNING: the host firewall is off - every port is exposed to the network"
+
 # 10g — Initialize sim_mappings.json
 echo "  [10g] Initializing sim_mappings.json..."
 if [ ! -f "$INSTALL_DIR/sim_mappings.json" ]; then
