@@ -1590,7 +1590,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 </div>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
+            <div class="flex sm:flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto sm:overflow-visible no-scrollbar max-w-full py-0.5 sm:py-0">
                 <div class="h-10 inline-flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1 shrink-0">
                     <button type="button" id="btn-view-grid" onclick="setDongleViewMode('grid')" title="<%= t.viewGrid %>" aria-label="<%= t.viewGrid %>" class="w-8 h-8 rounded-lg flex items-center justify-center transition cursor-pointer bg-[var(--accent-color)] text-white">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -1722,8 +1722,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                 </div>
 
                                 <!-- Chat Actions (Dongle selector, delete thread) -->
-                                <div class="flex items-center gap-1.5 shrink-0">
-                                    <div class="w-fit max-w-full shrink">
+                                <div class="flex items-center gap-1.5 min-w-0 shrink sm:shrink-0 max-w-[130px] sm:max-w-none">
+                                    <div class="w-full sm:w-fit min-w-0 max-w-full">
                                         <select id="sms-reply-dongle" class="text-xs font-semibold font-mono max-w-full" title="<%= t.smsSenderDongle || 'Sender Dongle' %>">
                                             <% if (devices && devices.length > 0) { %>
                                                 <% devices.forEach(d => { %>
@@ -3312,8 +3312,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     </div>
                                 </div>
 
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div class="dongle-metric">
+                                <div class="grid grid-cols-5 sm:grid-cols-2 gap-2">
+                                    <div class="dongle-metric col-span-3 sm:col-span-1">
                                         <span class="dongle-metric-label">${isRtl ? 'رقم الشريحة' : 'DID / SIM'}</span>
                                         <div class="flex items-center gap-1 min-w-0">
                                             <span id="display-num-${escapeHtml(id)}" class="dongle-metric-value font-mono flex-1 truncate">${escapeHtml(phoneNumber)}</span>
@@ -3321,18 +3321,18 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                             <button type="button" data-dongle-action="edit-number" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'تعديل الرقم' : 'Edit number'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4z"/></svg></button>
                                         </div>
                                     </div>
-                                    <div class="dongle-metric">
+                                    <div class="dongle-metric col-span-2 sm:col-span-1">
                                         <span class="dongle-metric-label">${isRtl ? 'الإشارة' : 'Signal'}</span>
                                         <div class="flex items-end justify-between gap-2">
                                             <span class="dongle-metric-value font-mono" style="color:${signal.activeColor}">${signal.percent}%</span>
                                             <div class="flex items-end gap-0.5 h-[24px]">${signal.barsHtml}</div>
                                         </div>
                                     </div>
-                                    <div class="dongle-metric col-span-2">
+                                    <div class="dongle-metric col-span-5 sm:col-span-2">
                                         <span class="dongle-metric-label">IMSI · ${isRtl ? 'هوية الشريحة' : 'SIM Identity'}</span>
                                         <span class="dongle-metric-value font-mono truncate" title="${escapeHtml(imsi)}">${escapeHtml(imsi)}</span>
                                     </div>
-                                    <div class="dongle-hardware-summary col-span-2 flex items-center justify-between gap-2 min-w-0">
+                                    <div class="dongle-hardware-summary col-span-5 sm:col-span-2 flex items-center justify-between gap-2 min-w-0">
                                         <span class="font-black uppercase tracking-wider shrink-0">${isRtl ? 'الجهاز' : 'Hardware'}</span>
                                         <span class="font-mono truncate text-end" title="${escapeHtml(`${model} · ${mode} · ${firmware}`)}">${escapeHtml(model)} · ${escapeHtml(mode)} · ${escapeHtml(firmware)}</span>
                                     </div>
@@ -3348,7 +3348,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                         </span>
                                         <span class="text-[9px] font-mono text-[var(--text-muted)] font-bold">${escapeHtml(id)}</span>
                                     </div>
-                                    <div class="grid grid-cols-4 gap-1.5 w-full">
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full">
                                         <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^CARDLOCK?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check SIM Lock & remaining attempts counter">^CARDLOCK?</button>
                                         <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^SYSINFO')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check network service state, domain & roaming">^SYSINFO</button>
                                         <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT+CREG?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check GSM network registration status">+CREG?</button>

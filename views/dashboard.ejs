@@ -634,15 +634,15 @@ const isRtl = currentLang === 'ar';
             </div>
 
             <!-- Bottom Action Bar -->
-            <div class="flex items-center justify-between gap-3 pt-2 border-t border-[var(--border-primary)]/50">
-                <div class="flex items-center gap-2">
-                    <a href="/?lang=<%= currentLang %>" class="filter-action-btn h-8 inline-flex items-center justify-center" title="<%= t.reset %>">
+            <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[var(--border-primary)]/50">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <a href="/?lang=<%= currentLang %>" class="filter-action-btn flex-1 sm:flex-none h-8 inline-flex items-center justify-center" title="<%= t.reset %>">
                         <svg class="w-3.5 h-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                         <span><%= t.reset %></span>
                     </a>
-                    <button type="button" id="dashToggleMoreBtn" onclick="toggleDashboardMoreFilters()" class="filter-action-btn h-8 inline-flex items-center justify-center" title="<%= hasActiveSecondary ? t.lessFilters : t.moreFilters %>">
+                    <button type="button" id="dashToggleMoreBtn" onclick="toggleDashboardMoreFilters()" class="filter-action-btn flex-1 sm:flex-none h-8 inline-flex items-center justify-center" title="<%= hasActiveSecondary ? t.lessFilters : t.moreFilters %>">
                         <svg id="dashToggleMoreFilterIcon" class="w-3.5 h-3.5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
                         </svg>
@@ -655,7 +655,7 @@ const isRtl = currentLang === 'ar';
                         <% } %>
                     </button>
                 </div>
-                <button type="submit" class="btn-primary h-8 px-5 rounded-lg text-xs font-bold uppercase tracking-wider inline-flex items-center justify-center cursor-pointer"><%= t.btn %></button>
+                <button type="submit" class="btn-primary h-8 px-4 sm:px-5 rounded-lg text-xs font-bold uppercase tracking-wider inline-flex items-center justify-center cursor-pointer w-full sm:w-auto shrink-0"><%= t.btn %></button>
             </div>
         </form>
 

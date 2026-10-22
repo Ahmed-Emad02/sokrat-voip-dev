@@ -742,7 +742,7 @@ const isRtl = activeLang === 'ar';
                         </div>
 
                         <!-- Compact Action Toolbar -->
-                        <div class="flex items-center justify-between gap-1 pt-2 border-t border-[var(--border-primary)]/60">
+                        <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-1.5 sm:gap-1 pt-2 border-t border-[var(--border-primary)]/60">
                             <div class="flex items-center gap-1">
                                 ${c.status === 'running'
                                     ? `<button onclick="controlCampaign(${c.id}, 'pause')" class="dialer-control dialer-control-neutral py-1 px-2.5 text-[11px]" title="Pause">

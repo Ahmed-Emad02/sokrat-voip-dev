@@ -3069,18 +3069,21 @@ function can(tab) {
             updateCollapseButtonIcon(true);
         }
 
-        // Mobile Sidebar Drawer Toggle
+        // Mobile Sidebar Drawer Toggle & Swipe Gestures
         const sidebar = document.getElementById('appSidebar');
         const overlay = document.getElementById('sidebarOverlay');
-        const openBtn = document.getElementById('mobileMenuBtn');
-        const closeBtn = document.getElementById('closeSidebarBtn');
         const isRtl = document.documentElement.dir === 'rtl';
+
+        function isSidebarOpen() {
+            return sidebar && !sidebar.classList.contains(isRtl ? 'translate-x-full' : '-translate-x-full');
+        }
 
         function openSidebar() {
             if (sidebar && overlay) {
                 sidebar.classList.remove(isRtl ? 'translate-x-full' : '-translate-x-full');
                 sidebar.classList.add('translate-x-0');
                 overlay.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
             }
         }
 
@@ -3089,12 +3092,83 @@ function can(tab) {
                 sidebar.classList.remove('translate-x-0');
                 sidebar.classList.add(isRtl ? 'translate-x-full' : '-translate-x-full');
                 overlay.classList.add('hidden');
+                document.body.style.overflow = '';
             }
         }
 
-        if (openBtn) openBtn.addEventListener('click', openSidebar);
-        if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
+        window.openAppSidebar = openSidebar;
+        window.closeAppSidebar = closeSidebar;
+
         if (overlay) overlay.addEventListener('click', closeSidebar);
+
+        // Mobile Edge & Surface Swipe Gestures
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let isTrackingSwipe = false;
+        let swipeMode = null;
+
+        document.addEventListener('touchstart', function(e) {
+            if (window.innerWidth >= 768) return;
+            if (!e.touches || e.touches.length !== 1) return;
+
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            isTrackingSwipe = true;
+
+            const isOpen = isSidebarOpen();
+            if (!isOpen) {
+                // To open: touch must start near the edge (< 70px in LTR, or right edge in RTL)
+                // OR touch starts on the mobile-topbar
+                const isNearEdge = isRtl
+                    ? (touchStartX >= window.innerWidth - 70)
+                    : (touchStartX <= 70);
+                const isOnTopBar = e.target.closest && e.target.closest('.mobile-topbar');
+
+                if (isNearEdge || isOnTopBar) {
+                    swipeMode = 'open';
+                } else {
+                    isTrackingSwipe = false;
+                    swipeMode = null;
+                }
+            } else {
+                // When open: any horizontal swipe across drawer or overlay can close it
+                swipeMode = 'close';
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchend', function(e) {
+            if (!isTrackingSwipe || !swipeMode) return;
+            if (!e.changedTouches || e.changedTouches.length !== 1) return;
+
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+
+            isTrackingSwipe = false;
+
+            // Only respond when horizontal swipe movement dominates vertical scroll
+            if (Math.abs(deltaX) < 35 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) {
+                swipeMode = null;
+                return;
+            }
+
+            if (swipeMode === 'open') {
+                if (!isRtl && deltaX > 40) {
+                    openSidebar();
+                } else if (isRtl && deltaX < -40) {
+                    openSidebar();
+                }
+            } else if (swipeMode === 'close') {
+                if (!isRtl && deltaX < -35) {
+                    closeSidebar();
+                } else if (isRtl && deltaX > 35) {
+                    closeSidebar();
+                }
+            }
+
+            swipeMode = null;
+        }, { passive: true });
     }
 
     if (document.readyState === 'loading') {
@@ -3131,20 +3205,14 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 </script>
 
 <!-- Sidebar Backdrop Overlay (Mobile only) -->
-<div id="sidebarOverlay" class="fixed inset-0 bg-black/65 backdrop-blur-sm z-40 hidden md:hidden"></div>
+<div id="sidebarOverlay" class="fixed inset-0 bg-black/65 backdrop-blur-sm z-[45] hidden md:hidden"></div>
 
 <!-- Mobile topbar -->
-<div class="mobile-topbar md:hidden w-full bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] flex items-center justify-between px-6 py-4 sticky top-0 z-40">
-    <button id="mobileMenuBtn" class="p-2 -m-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer" title="Open menu">
-        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-    </button>
+<div class="mobile-topbar md:hidden w-full bg-[var(--bg-secondary)] border-b border-[var(--border-primary)] flex items-center justify-center px-6 py-3.5 sticky top-0 z-40">
     <div class="flex items-center gap-2.5">
         <img src="/logo_light_text.png" alt="Sokrat VOIP" class="w-8 h-8 object-contain rounded-lg mobile-logo-theme">
         <span class="text-sm font-black text-[var(--text-primary)] tracking-wider">Sokrat <span class="text-[var(--accent-color)]">VOIP</span></span>
     </div>
-    <div class="w-6"></div>
 </div>
 <script>
     (function() {
@@ -3180,12 +3248,6 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                     Sokrat <span class="text-[var(--accent-color)]">VOIP</span>
                 </h1>
             </div>
-            <!-- Close Button for Mobile -->
-            <button id="closeSidebarBtn" class="md:hidden absolute top-4 <%= isRtl ? 'left-4' : 'right-4' %> p-2 text-[var(--text-secondary)] hover:text-white transition cursor-pointer" title="Close menu">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-            </button>
         </div>
 
         <!-- Sidebar Menu Navigation -->
