@@ -195,12 +195,27 @@ collect_default_setup() {
     fi
 }
 
+# The answers of an earlier step of the installation (the offline setup script
+# asks them before its long work) are reused, so the operator only types them
+# once. SOKRAT_INPUTS_FILE is the same file the shared collector uses.
+SOKRAT_INPUTS_FILE="${SOKRAT_INPUTS_FILE:-/var/lib/sokrat/install-inputs.env}"
+if [[ -f "$SOKRAT_INPUTS_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$SOKRAT_INPUTS_FILE" 2>/dev/null || true
+fi
 collect_default_setup
 echo " Default setup: $DEFAULT_SETUP"
 collect_client_name
 echo " Client name: $CLIENT_NAME"
 collect_dongle_count
 echo " GSM dongles selected: $NUM_DONGLES"
+mkdir -p "$(dirname "$SOKRAT_INPUTS_FILE")" 2>/dev/null || true
+{
+    echo "CLIENT_NAME='${CLIENT_NAME:-}'"
+    echo "NUM_DONGLES='${NUM_DONGLES:-}'"
+    echo "DEFAULT_SETUP='${DEFAULT_SETUP:-}'"
+} > "$SOKRAT_INPUTS_FILE" 2>/dev/null || true
+chmod 600 "$SOKRAT_INPUTS_FILE" 2>/dev/null || true
 echo "============================================"
 echo ""
 

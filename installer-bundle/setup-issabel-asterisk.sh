@@ -19,6 +19,14 @@ echo " Default SIP Protocol: $SIP_DRIVER"
 echo " Internet Dependent:   NO (100% Local Bundle)"
 echo "=================================================================="
 
+# The installation questions come first, before the long package work below,
+# and the answers are stored so install-sokrat.sh does not ask them again.
+if [[ -f "$SCRIPT_DIR/collect-install-inputs.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/collect-install-inputs.sh"
+    collect_install_inputs || true
+fi
+
 # 1. Join split parts and unpack RPMs and Binaries
 if [ ! -d "$SCRIPT_DIR/all-rpms" ] && [ ! -d "$SCRIPT_DIR/rpms" ] && ls "$SCRIPT_DIR"/sokrat-prereqs.tar.gz.part-* 1> /dev/null 2>&1; then
     echo "--> Reassembling multi-part offline archive and unpacking..."
