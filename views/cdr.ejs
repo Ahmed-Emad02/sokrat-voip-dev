@@ -513,9 +513,13 @@ function fmtDur(s) {
 
             <!-- Row 2: Secondary / Advanced Filters (7-column responsive grid) -->
             <% 
+                let selectedTrk = Array.isArray(filters.trunkFilter) ? filters.trunkFilter : (filters.trunkFilter && filters.trunkFilter !== 'ALL' ? [filters.trunkFilter] : ['ALL']);
+                let isAllTrk = selectedTrk.includes('ALL') || selectedTrk.length === 0;
+                let isTrunkActive = !isAllTrk;
+
                 let cdrHasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
                                            (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') ||
-                                           (filters.trunkFilter && filters.trunkFilter !== 'ALL') ||
+                                           isTrunkActive ||
                                            (filters.searchSrc && filters.searchSrc.trim() !== '') ||
                                            (filters.searchDst && filters.searchDst.trim() !== '') ||
                                            (filters.searchDid && filters.searchDid.trim() !== '') ||
@@ -523,7 +527,7 @@ function fmtDur(s) {
                 let cdrActiveSecondaryCount = 0;
                 if (filters.directionFilter && filters.directionFilter !== 'ALL') cdrActiveSecondaryCount++;
                 if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') cdrActiveSecondaryCount++;
-                if (filters.trunkFilter && filters.trunkFilter !== 'ALL') cdrActiveSecondaryCount++;
+                if (isTrunkActive) cdrActiveSecondaryCount++;
                 if (filters.searchSrc && filters.searchSrc.trim() !== '') cdrActiveSecondaryCount++;
                 if (filters.searchDst && filters.searchDst.trim() !== '') cdrActiveSecondaryCount++;
                 if (filters.searchDid && filters.searchDid.trim() !== '') cdrActiveSecondaryCount++;
@@ -550,18 +554,42 @@ function fmtDur(s) {
                         <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
                     </select>
                 </div>
-                        <div>
-                    <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider">LINE</label>
-                    <select id="cdrTrunkFilter" name="trunkFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL" <%= (!filters.trunkFilter || filters.trunkFilter === 'ALL') ? 'selected' : '' %>><%= t.allTrunks %></option>
-                        <option value="INTERNAL" <%= filters.trunkFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.trunkInternal %></option>
-                        <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
-                            <% availableTrunks.forEach(trk => { %>
-                                <option value="<%= trk.id %>" <%= filters.trunkFilter === trk.id ? 'selected' : '' %>><%= trk.label %></option>
-                            <% }) %>
-                        <% } %>
-                    </select>
-                </div>
+                        <div class="relative">
+                            <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.trunk %></label>
+                            <select name="trunkFilter" id="cdrTrunkFilter" multiple class="hidden no-enhance">
+                                <option value="ALL" <%= isAllTrk ? 'selected' : '' %>><%= t.allTrunks %></option>
+                                <option value="INTERNAL" <%= (!isAllTrk && selectedTrk.includes('INTERNAL')) ? 'selected' : '' %>><%= t.trunkInternal %></option>
+                                <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
+                                    <% availableTrunks.forEach(trk => { %>
+                                        <option value="<%= trk.id %>" <%= (!isAllTrk && selectedTrk.includes(trk.id)) ? 'selected' : '' %>><%= trk.label %></option>
+                                    <% }) %>
+                                <% } %>
+                            </select>
+
+                            <button type="button" id="cdrTrunkChecklistBtn" onclick="toggleChecklistMenu('cdrTrunkChecklistMenu', event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] flex items-center justify-between gap-2 cursor-pointer text-start">
+                                <span id="cdrTrunkChecklistLabel" class="truncate font-semibold"><%= t.allTrunks %></span>
+                                <svg class="w-3.5 h-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+
+                            <div id="cdrTrunkChecklistMenu" class="checklist-menu hidden absolute left-0 right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl p-2 z-[9999] max-h-56 overflow-y-auto space-y-1" style="scrollbar-width:thin">
+                                <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="cdr_trk_chk_all">
+                                    <input type="checkbox" id="cdr_trk_chk_all" name="cdr_trk_chk_all" value="ALL" <%= isAllTrk ? 'checked' : '' %> onchange="onTrunkChecklistChange(this)" class="cdr-trk-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                                    <span class="font-bold text-[var(--text-primary)]"><%= t.allTrunks %></span>
+                                </label>
+                                <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="cdr_trk_chk_internal">
+                                    <input type="checkbox" id="cdr_trk_chk_internal" name="cdr_trk_chk" value="INTERNAL" <%= (!isAllTrk && selectedTrk.includes('INTERNAL')) ? 'checked' : '' %> onchange="onTrunkChecklistChange(this)" class="cdr-trk-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                                    <span class="text-zinc-300 font-mono"><%= t.trunkInternal %></span>
+                                </label>
+                                <% if (typeof availableTrunks !== 'undefined' && Array.isArray(availableTrunks)) { %>
+                                    <% availableTrunks.forEach(trk => { %>
+                                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="cdr_trk_chk_<%= trk.id.replace(/[^a-zA-Z0-9_-]/g, '_') %>">
+                                            <input type="checkbox" id="cdr_trk_chk_<%= trk.id.replace(/[^a-zA-Z0-9_-]/g, '_') %>" name="cdr_trk_chk" value="<%= trk.id %>" <%= (!isAllTrk && selectedTrk.includes(trk.id)) ? 'checked' : '' %> onchange="onTrunkChecklistChange(this)" class="cdr-trk-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                                            <span class="text-zinc-300 font-mono"><%= trk.label %></span>
+                                        </label>
+                                    <% }) %>
+                                <% } %>
+                            </div>
+                        </div>
                         <div>
                             <label for="cdrSearchSrc" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.src %></label>
                             <input type="text" id="cdrSearchSrc" name="searchSrc" value="<%= filters.searchSrc || '' %>" placeholder="e.g., 101" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -1300,9 +1328,51 @@ function syncStatusChecklistUI() {
             syncStatusChecklistUI();
         }
 
+        function syncTrunkChecklistUI() {
+            const chks = Array.from(document.querySelectorAll('.cdr-trk-chk'));
+            const select = document.getElementById('cdrTrunkFilter');
+            const labelSpan = document.getElementById('cdrTrunkChecklistLabel');
+            if (!select || !labelSpan) return;
+
+            const selectedVals = chks.filter(c => c.checked).map(c => c.value);
+            Array.from(select.options).forEach(opt => {
+                opt.selected = selectedVals.includes(opt.value);
+            });
+
+            const nonAllSelected = selectedVals.filter(v => v !== 'ALL');
+            if (selectedVals.includes('ALL') || nonAllSelected.length === 0) {
+                labelSpan.textContent = <%- JSON.stringify(t.allTrunks) %>;
+            } else if (nonAllSelected.length === 1) {
+                const opt = Array.from(select.options).find(o => o.value === nonAllSelected[0]);
+                labelSpan.textContent = opt ? opt.textContent : nonAllSelected[0];
+            } else {
+                const isRtl = <%= isRtl ? 'true' : 'false' %>;
+                const countText = isRtl ? ('محدد (' + nonAllSelected.length + ')') : (nonAllSelected.length + ' Selected');
+                labelSpan.textContent = countText;
+            }
+        }
+
+        function onTrunkChecklistChange(chk) {
+            const chks = Array.from(document.querySelectorAll('.cdr-trk-chk'));
+            const allChk = chks.find(c => c.value === 'ALL');
+            if (chk.value === 'ALL') {
+                if (chk.checked) {
+                    chks.forEach(c => { if (c !== chk) c.checked = false; });
+                } else {
+                    chk.checked = true;
+                }
+            } else {
+                if (allChk) allChk.checked = false;
+                const checkedCount = chks.filter(c => c.checked && c.value !== 'ALL').length;
+                if (checkedCount === 0 && allChk) allChk.checked = true;
+            }
+            syncTrunkChecklistUI();
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             syncExtChecklistUI();
             syncStatusChecklistUI();
+            syncTrunkChecklistUI();
 
             const cdrHasServerActiveSecondary = <%= cdrHasActiveSecondary ? 'true' : 'false' %>;
             if (!cdrHasServerActiveSecondary) {

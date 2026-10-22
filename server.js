@@ -5769,7 +5769,15 @@ app.get('/', async (req, res) => {
 
         const directionFilter = hasExplicitFilters ? (req.query.directionFilter || 'ALL') : (dashDefaults?.directionFilter || 'ALL');
         const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (dashDefaults?.callScopeFilter || 'ALL');
-        const trunkFilter = String(req.query.trunkFilter || 'ALL').trim();
+        
+        let selectedTrunks = hasExplicitFilters ? req.query.trunkFilter : (dashDefaults?.trunkFilter || req.query.trunkFilter);
+        if (!selectedTrunks) selectedTrunks = ['ALL'];
+        else if (!Array.isArray(selectedTrunks)) selectedTrunks = [selectedTrunks];
+        if (selectedTrunks.length > 1 && selectedTrunks.includes('ALL')) {
+            selectedTrunks = selectedTrunks.filter(t => t !== 'ALL');
+        }
+        const trunkFilterList = selectedTrunks.includes('ALL') ? 'ALL' : selectedTrunks;
+
         const { trunks: dashTrunksList, dongles: dashDonglesList, availableTrunks } = await getAvailableTrunksAndDongles();
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
@@ -5826,8 +5834,8 @@ app.get('/', async (req, res) => {
             query += ` AND ${callScopeCase} = ?`;
             queryParams.push(callScopeFilter);
         }
-        if (trunkFilter !== 'ALL') {
-            const tf = buildTrunkFilterSql(trunkFilter, dashDonglesList, dashTrunksList);
+        if (trunkFilterList !== 'ALL') {
+            const tf = buildTrunkFilterSql(trunkFilterList, dashDonglesList, dashTrunksList);
             if (tf.clause) {
                 query += tf.clause;
                 queryParams.push(...tf.params);
@@ -5985,7 +5993,7 @@ app.get('/', async (req, res) => {
                 searchUniqueId,
                 directionFilter,
                 callScopeFilter,
-                trunkFilter
+                trunkFilter: trunkFilterList
             },
             moment,
             trendData: JSON.stringify(trendData),
@@ -6079,41 +6087,44 @@ function resolveTrunkForCdr(row, trunksList = [], donglesList = []) {
 }
 
 function buildTrunkFilterSql(trunkFilter, donglesList = [], trunksList = []) {
-    if (!trunkFilter || trunkFilter === 'ALL') return { clause: '', params: [] };
-
-    if (trunkFilter === 'INTERNAL') {
-        return {
-            clause: " AND (" + CDR_CALL_SCOPE_CASE + " = 'INTERNAL' OR (c.channel NOT LIKE 'Dongle/%' AND c.dstchannel NOT LIKE 'Dongle/%' AND c.dcontext NOT LIKE 'ext-trunk%' AND c.lastdata NOT LIKE '%dialout-trunk%'))",
-            params: []
-        };
+    let filters = Array.isArray(trunkFilter) ? trunkFilter : [trunkFilter];
+    filters = filters.map(f => String(f || '').trim()).filter(Boolean);
+    if (filters.length > 1 && filters.includes('ALL')) {
+        filters = filters.filter(f => f !== 'ALL');
     }
+    if (filters.length === 0 || filters.includes('ALL')) return { clause: '', params: [] };
 
-    if (trunkFilter.startsWith('dongle:')) {
-        const dName = trunkFilter.split(':')[1].trim();
-        const dObj = donglesList.find(d => d.dongle_name === dName);
-        const imei = dObj ? dObj.imei : '';
-        return {
-            clause: " AND (c.channel LIKE CONCAT('Dongle/', ?, '-%') OR c.dstchannel LIKE CONCAT('Dongle/', ?, '-%') OR c.lastdata LIKE CONCAT('%dongle/', ?, '/%') OR (? != '' AND c.lastdata LIKE CONCAT('%dongle/i:', ?, '/%')) OR c.userfield LIKE CONCAT('%via ', ?, '%'))",
-            params: [dName, dName, dName, imei, imei, dName]
-        };
-    }
+    const clauses = [];
+    const params = [];
 
-    if (trunkFilter.startsWith('trunk:')) {
-        const tId = parseInt(trunkFilter.split(':')[1], 10);
-        const tObj = trunksList.find(t => t.trunkid === tId);
-        const tName = tObj ? tObj.name : '';
-        let imei = '';
-        if (tObj && tObj.channelid && tObj.channelid.includes('dongle/i:')) {
-            const m = tObj.channelid.match(/dongle\/i:([0-9]+)/);
-            if (m) imei = m[1];
+    for (const f of filters) {
+        if (f === 'INTERNAL') {
+            clauses.push("(" + CDR_CALL_SCOPE_CASE + " = 'INTERNAL' OR (c.channel NOT LIKE 'Dongle/%' AND c.dstchannel NOT LIKE 'Dongle/%' AND c.dcontext NOT LIKE 'ext-trunk%' AND c.lastdata NOT LIKE '%dialout-trunk%'))");
+        } else if (f.startsWith('dongle:')) {
+            const dName = f.split(':')[1].trim();
+            const dObj = donglesList.find(d => d.dongle_name === dName);
+            const imei = dObj ? dObj.imei : '';
+            clauses.push("(c.channel LIKE CONCAT('Dongle/', ?, '-%') OR c.dstchannel LIKE CONCAT('Dongle/', ?, '-%') OR c.lastdata LIKE CONCAT('%dongle/', ?, '/%') OR (? != '' AND c.lastdata LIKE CONCAT('%dongle/i:', ?, '/%')) OR c.userfield LIKE CONCAT('%via ', ?, '%'))");
+            params.push(dName, dName, dName, imei, imei, dName);
+        } else if (f.startsWith('trunk:')) {
+            const tId = parseInt(f.split(':')[1], 10);
+            const tObj = trunksList.find(t => t.trunkid === tId);
+            const tName = tObj ? tObj.name : '';
+            let imei = '';
+            if (tObj && tObj.channelid && tObj.channelid.includes('dongle/i:')) {
+                const m = tObj.channelid.match(/dongle\/i:([0-9]+)/);
+                if (m) imei = m[1];
+            }
+            clauses.push("(c.lastdata LIKE CONCAT('%dialout-trunk,', ?, ',%') OR (? != '' AND c.lastdata LIKE CONCAT('%dongle/i:', ?, '/%')) OR (? != '' AND (c.channel LIKE CONCAT('%', ?, '%') OR c.dstchannel LIKE CONCAT('%', ?, '%'))))");
+            params.push(tId, imei, imei, tName, tName, tName);
         }
-        return {
-            clause: " AND (c.lastdata LIKE CONCAT('%dialout-trunk,', ?, ',%') OR (? != '' AND c.lastdata LIKE CONCAT('%dongle/i:', ?, '/%')) OR (? != '' AND (c.channel LIKE CONCAT('%', ?, '%') OR c.dstchannel LIKE CONCAT('%', ?, '%'))))",
-            params: [tId, imei, imei, tName, tName, tName]
-        };
     }
 
-    return { clause: '', params: [] };
+    if (clauses.length === 0) return { clause: '', params: [] };
+    return {
+        clause: " AND (" + clauses.join(' OR ') + ")",
+        params
+    };
 }
 
 function formatDestination(row, ringGroupSet = new Set(), forExport = false) {
@@ -6223,7 +6234,15 @@ app.get('/cdr', async (req, res) => {
 
         const directionFilter = hasExplicitFilters ? (req.query.directionFilter || 'ALL') : (cdrDefaults?.directionFilter || 'ALL');
         const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (cdrDefaults?.callScopeFilter || 'ALL');
-        const trunkFilter = String(req.query.trunkFilter || 'ALL').trim();
+        
+        let selectedTrunks = hasExplicitFilters ? req.query.trunkFilter : (cdrDefaults?.trunkFilter || req.query.trunkFilter);
+        if (!selectedTrunks) selectedTrunks = ['ALL'];
+        else if (!Array.isArray(selectedTrunks)) selectedTrunks = [selectedTrunks];
+        if (selectedTrunks.length > 1 && selectedTrunks.includes('ALL')) {
+            selectedTrunks = selectedTrunks.filter(t => t !== 'ALL');
+        }
+        const trunkFilterList = selectedTrunks.includes('ALL') ? 'ALL' : selectedTrunks;
+
         const { trunks: cdrTrunksList, dongles: cdrDonglesList, availableTrunks } = await getAvailableTrunksAndDongles();
         const searchSrc = req.query.searchSrc || '';
         const searchDst = req.query.searchDst || '';
@@ -6322,8 +6341,8 @@ app.get('/cdr', async (req, res) => {
             queryParams.push(`%${searchTranscript}%`);
             countParams.push(`%${searchTranscript}%`);
         }
-        if (trunkFilter !== 'ALL') {
-            const tf = buildTrunkFilterSql(trunkFilter, cdrDonglesList, cdrTrunksList);
+        if (trunkFilterList !== 'ALL') {
+            const tf = buildTrunkFilterSql(trunkFilterList, cdrDonglesList, cdrTrunksList);
             if (tf.clause) {
                 query += tf.clause; countQuery += tf.clause;
                 queryParams.push(...tf.params);
@@ -6354,7 +6373,7 @@ app.get('/cdr', async (req, res) => {
         res.render('cdr', {
             calls: formattedRows,
             availableTrunks,
-            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, trunkFilter, page, perPage },
+            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, trunkFilter: trunkFilterList, page, perPage },
             pagination: { total, totalPages, page, perPage },
             moment
         });
@@ -6401,7 +6420,15 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
         const directionFilter = req.query.directionFilter || 'ALL';
         const callScopeFilter = req.query.callScopeFilter || 'ALL';
-        const trunkFilter = String(req.query.trunkFilter || 'ALL').trim();
+        
+        let selectedTrunks = req.query.trunkFilter;
+        if (!selectedTrunks) selectedTrunks = ['ALL'];
+        else if (!Array.isArray(selectedTrunks)) selectedTrunks = [selectedTrunks];
+        if (selectedTrunks.length > 1 && selectedTrunks.includes('ALL')) {
+            selectedTrunks = selectedTrunks.filter(t => t !== 'ALL');
+        }
+        const trunkFilterList = selectedTrunks.includes('ALL') ? 'ALL' : selectedTrunks;
+
         const { trunks: expTrunksList, dongles: expDonglesList } = await getAvailableTrunksAndDongles();
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
@@ -6462,8 +6489,8 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
             query += clause;
             queryParams.push(callScopeFilter);
         }
-        if (trunkFilter !== 'ALL') {
-            const tf = buildTrunkFilterSql(trunkFilter, expDonglesList, expTrunksList);
+        if (trunkFilterList !== 'ALL') {
+            const tf = buildTrunkFilterSql(trunkFilterList, expDonglesList, expTrunksList);
             if (tf.clause) {
                 query += tf.clause;
                 queryParams.push(...tf.params);

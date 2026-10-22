@@ -3346,8 +3346,15 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
                <%= curPage === '/dialer' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
                 <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 11l18-5v12L3 14v-3z"/>
-                    <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
+                    <rect x="3" y="3" width="4" height="4" rx="1"></rect>
+                    <rect x="10" y="3" width="4" height="4" rx="1"></rect>
+                    <rect x="17" y="3" width="4" height="4" rx="1"></rect>
+                    <rect x="3" y="10" width="4" height="4" rx="1"></rect>
+                    <rect x="10" y="10" width="4" height="4" rx="1"></rect>
+                    <rect x="17" y="10" width="4" height="4" rx="1"></rect>
+                    <rect x="3" y="17" width="4" height="4" rx="1"></rect>
+                    <rect x="10" y="17" width="4" height="4" rx="1"></rect>
+                    <rect x="17" y="17" width="4" height="4" rx="1"></rect>
                 </svg>
                 <span class="sidebar-text"><%= sbT.dialerLink %></span>
             </a>
