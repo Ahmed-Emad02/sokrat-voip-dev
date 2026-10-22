@@ -3252,7 +3252,7 @@ function isTabAllowed(tabName) {
                                 <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="extTech"><%= isRtl ? 'نوع جهاز التحويلة *' : 'Extension Tech / Device Type *' %></label>
                                 <select id="extTech" class="config-input w-full text-xs font-semibold">
                                     <option value="sip" selected><%= isRtl ? 'هاتف شبكة اعتيادي (Generic SIP Device - UDP / Port 5060)' : 'Generic SIP Device (Hardware / Port 5060)' %></option>
-                                    <option value="webrtc"><%= isRtl ? 'هاتف المتصفح البرمجي (WebRTC Softphone - WSS / Port 5066)' : 'WebRTC Softphone (Browser WSS / Port 5066)' %></option>
+                                    <option value="webrtc"><%= isRtl ? 'هاتف WebRTC (موبايل / متصفح - WS 8088 أو WSS 8089)' : 'WebRTC Softphone (Mobile / Browser - WS 8088, WSS 8089)' %></option>
                                 </select>
                             </div>
                             <div>
@@ -3383,7 +3383,7 @@ function isTabAllowed(tabName) {
                             <span><%= isRtl ? 'الإعدادات التلقائية المطبقة للنظام:' : 'Automatic System Extension Defaults:' %></span>
                         </div>
                         <ul class="text-[var(--text-muted)] list-disc list-inside text-[11px] space-y-0.5 font-medium">
-                            <li><strong>Device Port:</strong> 5066 (WebRTC / WSS) or 5060 (SIP / UDP)</li>
+                            <li><strong>Device Port:</strong> 8088 (WebRTC / WS, default) or 8089 (WSS); 5060 (SIP / UDP)</li>
                             <li><strong>NAT Setting:</strong> Enabled (nat = yes)</li>
                             <li><strong>Call Recording:</strong> ALWAYS (Inbound/Outbound Internal & External)</li>
                         </ul>
