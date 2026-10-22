@@ -496,14 +496,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         html.light-theme .dongle-device-card[class*="dongle-state-"] .dongle-at-diag-panel {
             background: transparent !important;
             background-color: transparent !important;
-            border: none !important;
-            border-width: 0 !important;
-            box-shadow: none !important;
-        }
-        .dongle-device-card .dongle-routing-trunk:hover {
-            border: none !important;
-            box-shadow: none !important;
-            background: transparent !important;
         }
         
         .terminal-container {
@@ -3316,7 +3308,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                             <p class="text-[10px] text-[var(--text-muted)] truncate">${escapeHtml(provider)}</p>
                                         </div>
                                     </div>
-                                    <span class="text-[9px] font-bold text-[var(--text-muted)] shrink-0">${isRtl ? 'المجموعة' : 'Group'} ${escapeHtml(dev.Group || '0')}</span>
+                                    <span class="px-2 py-1 rounded-lg bg-transparent border border-[var(--border-primary)] text-[9px] font-bold text-[var(--text-muted)] shrink-0">${isRtl ? 'المجموعة' : 'Group'} ${escapeHtml(dev.Group || '0')}</span>
                                 </div>
 
                                 <div class="dongle-priority-grid grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -3324,7 +3316,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                         <span class="dongle-metric-label">IMEI · ${isRtl ? 'هوية الجهاز' : 'Device Identity'}</span>
                                         <div class="flex items-center gap-2 min-w-0">
                                             <span class="dongle-priority-value font-mono flex-1">${escapeHtml(imei)}</span>
-                                            ${imei !== '-' && imei !== 'Unknown' ? `<button type="button" data-dongle-action="copy-imei" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer shrink-0" title="${isRtl ? 'نسخ IMEI' : 'Copy IMEI'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
+                                            ${imei !== '-' && imei !== 'Unknown' ? `<button type="button" data-dongle-action="copy-imei" class="w-6 h-6 rounded-md bg-transparent border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center cursor-pointer shrink-0" title="${isRtl ? 'نسخ IMEI' : 'Copy IMEI'}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>` : ''}
                                         </div>
                                     </div>
                                     <div class="dongle-priority-metric">
@@ -3364,7 +3356,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                                 ${renderDongleRouting(dev)}
                                 ${isRootUser ? `
-                                <div class="dongle-at-diag-panel mt-2.5 py-1.5 flex flex-col gap-2 bg-transparent border-0 border-none shadow-none">
+                                <div class="dongle-at-diag-panel mt-2.5 p-3 rounded-xl bg-transparent border border-[var(--border-primary)] flex flex-col gap-2">
                                     <div class="flex items-center justify-between">
                                         <span class="text-[10px] font-black uppercase text-purple-400 tracking-wider flex items-center gap-1.5">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
