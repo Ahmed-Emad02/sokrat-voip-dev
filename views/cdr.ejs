@@ -126,6 +126,13 @@ function fmtDur(s) {
         input, select, button { 
             transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); 
         }
+        #cdrFilterForm {
+            background: transparent !important;
+            background-color: transparent !important;
+            border: none !important;
+            border-width: 0 !important;
+            box-shadow: none !important;
+        }
         /* Unified Filter Typography */
         #cdrFilterForm label,
         #cdrFilterForm select,
@@ -386,8 +393,7 @@ function fmtDur(s) {
         </div>
 
         <!-- Compact Balanced Filter Form -->
-        <!-- Compact Balanced Filter Form -->
-        <form id="cdrFilterForm" action="/cdr" method="GET" class="panel-surface p-3 px-3.5 rounded-xl mb-4 flex flex-col relative z-30">
+        <form id="cdrFilterForm" action="/cdr" method="GET" class="mb-4 flex flex-col relative z-30 bg-transparent border-0 border-none shadow-none">
             <input type="hidden" name="lang" value="<%= currentLang %>">
             <input type="hidden" name="page" value="1">
             
