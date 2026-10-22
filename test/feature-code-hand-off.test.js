@@ -9,6 +9,7 @@ const {
     END_MARK,
     SOKRAT_OWNED_CODES,
     fetchIssabelFeatureCodes,
+    selectArgumentCodes,
     buildFeatureCodeBlock,
     patchExtensionsCustomConf,
     syncFeatureCodeHandOff
@@ -51,6 +52,55 @@ test('feature-code hand-off block declares one literal per code', () => {
     assert.ok(block.includes('exten => *97,1,Goto(from-internal-additional,${EXTEN},1)'), '*97 is a literal hand-off');
     assert.ok(block.includes('exten => *72,1,Goto(from-internal-additional,${EXTEN},1)'), '*72 is a literal hand-off');
     assert.ok(!block.includes('_*X.'), 'the block does not add any pickup pattern');
+});
+
+test('the Issabel argument forms are picked out of Issabel\'s dialplan', () => {
+    const dialplan = [
+        '[app-dialvm]',
+        'exten => *98,1,Macro(user-callerid,)',
+        'exten => _*98.,1,Answer',
+        'exten => _*98.,n,Macro(get-vmcontext,${EXTEN:3})',
+        '',
+        '[app-cf-on]',
+        'exten => _*72.,1,Set(EXTEN=${EXTEN:3})',
+        '',
+        '[app-userlogonoff]',
+        'exten => _*11.,1,Macro(user-logon,${EXTEN:3},)',
+        '',
+        '[app-speeddial]',
+        'exten => _*0.,1,Macro(user-callerid,)',
+        '',
+        '[app-hotelwakeup]',
+        'exten => _*740101.,1,Set(toext=${EXTEN:7})',
+        '',
+        '[not-a-feature]',
+        'exten => _*123.,1,NoOp(some other pattern)'
+    ].join('\n');
+
+    const codes = selectArgumentCodes(dialplan, ['*0', '*11', '*72', '*740', '*98', '*123']);
+    assert.deepEqual(codes, ['0', '72', '98', '740101'],
+        'only the enabled Issabel codes are taken, shortest first');
+
+    assert.ok(!codes.includes('11'), '*11 is left alone: it collides with the *1 pickup alias');
+    assert.ok(!codes.includes('123'), 'a pattern that is not an enabled feature code is not taken');
+});
+
+test('the argument forms keep the Sokrat pickup for a registered extension', () => {
+    const block = buildFeatureCodeBlock(['*98'], ['98']);
+    assert.ok(block.includes('exten => _*98.,1,NoOp('), '*98<arg> is declared as a pattern');
+    assert.ok(
+        block.includes('same => n,GotoIf($["${DB(DEVICE/${EXTEN:1}/dial)}" != ""]?sokrat-pickup-target,1)'),
+        'a registered extension keeps the directed pickup'
+    );
+    assert.ok(block.includes('same => n,Goto(from-internal-additional,${EXTEN},1)'), 'anything else goes to Issabel');
+    assert.ok(block.includes('exten => sokrat-pickup-target,1,NoOp('), 'the pickup fallback is declared');
+    assert.ok(block.includes('same => n,Pickup('), 'the pickup fallback picks the extension up');
+});
+
+test('the block without argument forms stays exactly as before', () => {
+    const block = buildFeatureCodeBlock(['*97'], []);
+    assert.ok(!block.includes('sokrat-pickup-target'), 'no pickup fallback without argument codes');
+    assert.ok(!block.includes('_*98.'), 'no argument pattern without argument codes');
 });
 
 test('feature-code hand-off is written inside [from-internal-custom] and is idempotent', () => {
@@ -114,6 +164,39 @@ test('feature-code hand-off reads the codes from Issabel featurecodes table', as
     fs.rmSync(path.dirname(res.filePath), { recursive: true, force: true });
 });
 
+test('the sync also picks up the argument forms from Issabel\'s dialplan', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sokrat-fc-'));
+    const issabel = path.join(dir, 'extensions_additional.conf');
+    fs.writeFileSync(issabel, [
+        '[app-dialvm]',
+        'exten => _*98.,1,Answer',
+        'exten => _*98.,n,Macro(get-vmcontext,${EXTEN:3})'
+    ].join('\n'), 'utf8');
+
+    const pool = { query: async () => [[{ code: '*98' }]] };
+    const custom = path.join(dir, 'extensions_custom.conf');
+    fs.writeFileSync(custom, '[from-internal-custom]\n', 'utf8');
+    const res = await syncFeatureCodeHandOff(pool, {
+        filePath: custom,
+        issabelDialplanFile: issabel
+    });
+    assert.deepEqual(res.argumentCodes, ['98'], 'the argument form is detected');
+    const content = fs.readFileSync(res.filePath, 'utf8');
+    assert.ok(content.includes('exten => _*98.,1,NoOp('), 'the argument form is written to the dialplan');
+    assert.ok(content.includes('sokrat-pickup-target'), 'the pickup fallback is written too');
+
+    // No Issabel dialplan yet (fresh install): the sync must not fail.
+    const custom2 = path.join(dir, 'extensions_custom2.conf');
+    fs.writeFileSync(custom2, '[from-internal-custom]\n', 'utf8');
+    const missing = await syncFeatureCodeHandOff(pool, {
+        filePath: custom2,
+        issabelDialplanFile: path.join(dir, 'does-not-exist.conf')
+    });
+    assert.deepEqual(missing.argumentCodes, [], 'no argument forms without Issabel\'s dialplan');
+
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('deployed dialplan hands Issabel feature codes back to Issabel', (t) => {
     if (!fs.existsSync(DIALPLAN)) {
         t.skip('extensions_custom.conf not present on this host');
@@ -133,6 +216,8 @@ test('deployed dialplan hands Issabel feature codes back to Issabel', (t) => {
         );
     }
     assert.ok(ctx.includes('exten => _*X.,1,NoOp(--- Directed / Ring Group Pickup'), 'Sokrat pickup pattern still present');
+    assert.ok(ctx.includes('exten => _*98.,1,NoOp('), '*98<mailbox> is declared so it wins over the pickup pattern');
+    assert.ok(ctx.includes('sokrat-pickup-target'), 'the directed-pickup fallback for the argument forms is present');
 });
 
 test('installers and safe-upgrade keep the feature-code hand-off in sync', () => {

@@ -730,7 +730,11 @@ PYEOF
     # holds a matching pattern - so Issabel's codes (*97 my voicemail, *72 call
     # forward, *78 DND, ...) were swallowed by the pickup rule. Each code is
     # declared as a LITERAL inside [from-internal-custom] instead, and a literal
-    # always wins over a pattern in the same context.
+    # always wins over a pattern in the same context. The Issabel codes that
+    # take an argument (*98<mailbox>, *72<ext>, ...) need the same fix and are
+    # declared as a pattern there as well: a more specific pattern wins over
+    # _*X. in the same context, and the Sokrat directed pickup is kept for the
+    # numbers that are a registered extension.
     if [ -f "$INSTALL_DIR/lib/feature-code-hand-off.js" ]; then
         (cd "$INSTALL_DIR" && node lib/feature-code-hand-off.js) || echo "  Warning: feature-code hand-off sync failed"
     else

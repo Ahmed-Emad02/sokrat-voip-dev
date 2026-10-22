@@ -1172,11 +1172,21 @@ async function initAuthDb() {
     // Hand Issabel's own feature codes (*97 voicemail, *72 call forward, ...)
     // back to Issabel: the Sokrat directed-pickup patterns would otherwise
     // swallow them because Asterisk drops literals that arrive via an include
-    // once the context already holds a matching pattern.
+    // once the context already holds a matching pattern. The Issabel codes that
+    // take an argument (*98<mailbox>, *72<ext>, ...) need the same treatment.
     try {
         const fcSync = await syncFeatureCodeHandOff(pool);
         console.log(`Feature-code hand-off sync: ${fcSync.codes.length} Issabel codes, ` +
+            `${fcSync.argumentCodes.length} argument codes, ` +
             `${fcSync.changed ? 'dialplan updated' : 'dialplan already up to date'}`);
+        if (fcSync.changed) {
+            try {
+                await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
+                console.log('Feature-code hand-off: dialplan reloaded');
+            } catch (reloadErr) {
+                console.error('Feature-code hand-off dialplan reload failed:', reloadErr.message);
+            }
+        }
     } catch (fcErr) {
         console.error('Feature-code hand-off boot sync error:', fcErr.message);
     }
