@@ -243,7 +243,7 @@
             </div>
 
             <!-- Create User Card -->
-            <div class="panel-surface p-6 relative z-10">
+            <div class="panel-surface p-5 relative z-10">
                 <div class="flex items-center justify-between mb-5">
                     <h2 class="text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-[var(--accent-color)]"></span>
@@ -357,6 +357,7 @@
             <div class="panel-surface overflow-hidden relative z-0">
                 <div class="p-5 border-b border-[#27272a] bg-black/20 flex flex-col sm:flex-row items-center justify-between gap-4">
                     <h2 class="text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-[var(--accent-color)]"></span>
                         <span><%= isRtl ? 'قائمة المستخدمين المسجلين' : 'Registered Users' %></span>
                     </h2>
                     <!-- Table Search Filter -->
@@ -491,7 +492,7 @@
             <!-- Group Management Section (Super Admin Only) -->
             <% if (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) { %>
                 <div class="space-y-6 pt-4">
-                    <div class="flex items-center justify-between border-b border-[#27272a] pb-3">
+                    <div class="flex items-center justify-between border-b border-[#27272a] pb-5">
                         <div>
                             <h2 class="text-lg font-black tracking-tight text-white"><%= isRtl ? 'إدارة المجموعات والصلاحيات' : 'Groups & Permissions' %></h2>
                             <p class="text-xs text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'إنشاء مجموعات وتعيين صلاحيات الوصول لتبويبات اللوحة' : 'Create groups and assign tab access permissions to control feature visibility' %></p>
@@ -499,8 +500,8 @@
                     </div>
 
                     <!-- Add Group Form -->
-                    <div class="panel-surface p-6">
-                        <h3 class="text-sm font-extrabold uppercase tracking-wider text-white mb-4 flex items-center gap-2">
+                    <div class="panel-surface p-5">
+                        <h3 class="text-sm font-extrabold uppercase tracking-wider text-white mb-5 flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-blue-500"></span>
                             <span><%= isRtl ? 'إضافة مجموعة جديدة' : 'Create New Group' %></span>
                         </h3>
