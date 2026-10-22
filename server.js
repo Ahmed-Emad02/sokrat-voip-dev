@@ -84,6 +84,12 @@ const {
     leaveNetwork: overlayLeaveNetwork,
     PROVIDER_IDS: OVERLAY_PROVIDER_IDS
 } = require('./lib/overlay-vpn');
+const {
+    listConnections: networkListConnections,
+    configureConnection: networkConfigureConnection,
+    activateConnection: networkActivateConnection,
+    rollbackConnection: networkRollbackConnection
+} = require('./lib/network-manager');
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
 let rawEncryptionKey = process.env.ENCRYPTION_KEY;
@@ -11811,6 +11817,117 @@ app.post('/api/system/overlay/:provider/leave', requireAuth, async (req, res) =>
         res.json({ success: true, ...result, ...status });
     } catch (error) {
         res.status(500).json({ success: false, error: String(error.stderr || error.message || '').trim() });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Network manager - root only management of the IP assignment (DHCP / static)
+// ---------------------------------------------------------------------------
+function requestLocalAddress(req) {
+    try {
+        const addr = (req.socket && req.socket.localAddress) || '';
+        return String(addr || '').replace(/^::ffff:/, '');
+    } catch (err) {
+        return '';
+    }
+}
+
+function requireRootForNetwork(req, res) {
+    if (!isSuperAdmin(req)) {
+        res.status(403).json({ success: false, error: 'Forbidden: root privileges required' });
+        return false;
+    }
+    return true;
+}
+
+// GET /api/system/network/connections - the interfaces and their DHCP/static state
+app.get('/api/system/network/connections', requireAuth, async (req, res) => {
+    if (!requireRootForNetwork(req, res)) return;
+    try {
+        const connections = await networkListConnections({ localAddress: requestLocalAddress(req) });
+        res.json({ success: true, connections });
+    } catch (error) {
+        res.status(500).json({ success: false, error: String(error.stderr || error.message || '').trim() });
+    }
+});
+
+// POST /api/system/network/connection/:uuid/configure - switch DHCP <-> static
+app.post('/api/system/network/connection/:uuid/configure', requireAuth, async (req, res) => {
+    if (!requireRootForNetwork(req, res)) return;
+    const uuid = String(req.params.uuid || '').trim();
+    const body = req.body || {};
+    if (!uuid) {
+        return res.status(400).json({ success: false, error: 'Missing connection' });
+    }
+    try {
+        // The connection has to be an editable physical interface.
+        const connections = await networkListConnections({ localAddress: requestLocalAddress(req) });
+        const connection = connections.find((c) => c.uuid === uuid);
+        if (!connection) {
+            return res.status(404).json({ success: false, error: 'Unknown connection' });
+        }
+        if (!connection.editable) {
+            return res.status(400).json({ success: false, error: 'This connection type cannot be changed here' });
+        }
+        if (connection.protected && !body.force) {
+            return res.status(409).json({
+                success: false,
+                error: 'This interface carries the default route. Changing it can cut the connection to this server.'
+            });
+        }
+        const profile = {
+            method: String(body.method || '').trim(),
+            address: body.address !== undefined ? body.address : (connection.addresses[0] || '').split('/')[0],
+            prefix: body.prefix !== undefined && body.prefix !== null && body.prefix !== ''
+                ? body.prefix
+                : ((connection.addresses[0] || '').split('/')[1] || 24),
+            gateway: body.gateway !== undefined ? body.gateway : connection.gateway,
+            dns: body.dns !== undefined ? body.dns : connection.dns
+        };
+        const result = await networkConfigureConnection(uuid, profile);
+        const connectionsAfter = await networkListConnections();
+        res.json({
+            success: true,
+            applied: result.applied,
+            rolledBack: result.rolledBack,
+            warnings: result.warnings || [],
+            error: result.error || null,
+            connections: connectionsAfter
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: String(error.stderr || error.message || '').trim() });
+    }
+});
+
+// POST /api/system/network/connection/:uuid/apply - re-activate the interface
+app.post('/api/system/network/connection/:uuid/apply', requireAuth, async (req, res) => {
+    if (!requireRootForNetwork(req, res)) return;
+    const uuid = String(req.params.uuid || '').trim();
+    if (!uuid) {
+        return res.status(400).json({ success: false, error: 'Missing connection' });
+    }
+    try {
+        const result = await networkActivateConnection(uuid);
+        const connections = await networkListConnections({ localAddress: requestLocalAddress(req) });
+        res.json({ success: true, ...result, connections });
+    } catch (error) {
+        res.status(500).json({ success: false, error: String(error.stderr || error.message || '').trim() });
+    }
+});
+
+// POST /api/system/network/connection/:uuid/rollback - restore the last profile
+app.post('/api/system/network/connection/:uuid/rollback', requireAuth, async (req, res) => {
+    if (!requireRootForNetwork(req, res)) return;
+    const uuid = String(req.params.uuid || '').trim();
+    if (!uuid) {
+        return res.status(400).json({ success: false, error: 'Missing connection' });
+    }
+    try {
+        const result = await networkRollbackConnection(uuid);
+        const connections = await networkListConnections({ localAddress: requestLocalAddress(req) });
+        res.json({ success: true, ...result, connections });
+    } catch (error) {
+        res.status(400).json({ success: false, error: String(error.stderr || error.message || '').trim() });
     }
 });
 

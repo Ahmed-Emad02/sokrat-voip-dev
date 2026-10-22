@@ -830,6 +830,37 @@ REPOEOF
 }
 install_overlay_vpn_clients
 
+# [10y] NetworkManager - the GUI network manager changes the DHCP / static
+# state of the physical interfaces with nmcli, so NetworkManager has to be
+# installed and running.
+echo "  [10y] Checking NetworkManager..."
+if command -v nmcli >/dev/null 2>&1; then
+    echo "  NetworkManager already installed"
+elif command -v dnf >/dev/null 2>&1; then
+    if dnf install -y NetworkManager >/dev/null 2>&1; then
+        echo "  NetworkManager installed"
+    else
+        echo "  WARNING: could not install NetworkManager (continuing)"
+    fi
+elif command -v yum >/dev/null 2>&1; then
+    if yum install -y NetworkManager >/dev/null 2>&1; then
+        echo "  NetworkManager installed"
+    else
+        echo "  WARNING: could not install NetworkManager (continuing)"
+    fi
+else
+    echo "  WARNING: no dnf/yum available - the network manager will be limited"
+fi
+if systemctl list-unit-files NetworkManager.service >/dev/null 2>&1; then
+    systemctl enable NetworkManager >/dev/null 2>&1 || true
+    systemctl start NetworkManager >/dev/null 2>&1 || true
+    if systemctl is-active --quiet NetworkManager; then
+        echo "  NetworkManager enabled and running"
+    else
+        echo "  WARNING: NetworkManager is not running (continuing)"
+    fi
+fi
+
 # 6. Reload Asterisk Modules & Sokrat Daemons
 echo "[6/7] Refreshing Asterisk modules and restarting Sokrat services..."
 if command -v systemctl &>/dev/null && systemctl is-active asterisk >/dev/null 2>&1; then
