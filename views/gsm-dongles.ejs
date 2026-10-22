@@ -466,7 +466,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         #dongleReportTableContainer,
         #dongleReportTableContainer table,
         #dongleReportTableContainer thead tr,
-        #device-details-panel {
+        #device-details-panel,
+        #usb-hardware-monitor-section {
             background: transparent !important;
             background-color: transparent !important;
             border: none !important;
@@ -2116,7 +2117,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             </div>
 
         <!-- USB Hardware (lsusb) & Serial Endpoints (/dev/ttyUSB*) Dual Monitor -->
-        <section class="panel-surface rounded-2xl p-5 sm:p-6 flex flex-col gap-5 shrink-0">
+        <section id="usb-hardware-monitor-section" class="rounded-2xl p-5 sm:p-6 flex flex-col gap-5 shrink-0 bg-transparent border-0 border-none shadow-none">
             <!-- Header with Live Metric Badges -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border-primary)]">
                 <div>
