@@ -361,6 +361,29 @@ test('the VPN modal has the network tab', () => {
     assert.ok(sidebar.includes('/api/system/network/connections'), 'the panel reads the API');
 });
 
+test('the network cards use the same visual language', () => {
+    const sidebar = fs.readFileSync(path.join(REPO, 'views/sidebar.ejs'), 'utf8');
+    // One badge helper for every pill, so the method and the state look the same.
+    assert.ok(sidebar.includes('function networkManagerBadge('), 'one badge helper');
+    assert.ok(sidebar.includes('function networkManagerMethodBadge('), 'the method badge uses it');
+    assert.ok(sidebar.includes('function networkManagerStateBadge('), 'the state badge uses it');
+    // The DHCP / static toggle is painted by one function, so the active and
+    // the inactive button always carry the same classes.
+    assert.ok(sidebar.includes('netMethodBtn'), 'the toggle buttons share a class');
+    assert.ok(sidebar.includes("classList.toggle('hover:text-[var(--text-primary)]', !active)"),
+        'the inactive toggle button keeps the hover style');
+    // Every card has the same order: header, address, form, actions.
+    const card = sidebar.slice(sidebar.indexOf('function renderNetworkManager'));
+    const order = ['networkManagerMethodBadge(c.method)', 'networkManagerStateBadge(c.active)',
+        'networkManagerLeaseInfo(c.dhcp)', 'staticForm +', 'networkManagerApply'];
+    let last = -1;
+    for (const part of order) {
+        const at = card.indexOf(part);
+        assert.ok(at > last, `${part} keeps its place in the card`);
+        last = at;
+    }
+});
+
 test('the installers keep the NetworkManager step in sync', () => {
     for (const rel of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
         const content = fs.readFileSync(path.join(REPO, rel), 'utf8');

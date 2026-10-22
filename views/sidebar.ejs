@@ -6000,14 +6000,27 @@ function networkManagerLabel(en, ar) {
     return OVERLAY_VPN_IS_AR ? ar : en;
 }
 
-function networkManagerMethodBadge(method) {
-    var map = {
-        auto: ['DHCP', 'text-emerald-400'],
-        manual: ['STATIC', 'text-amber-400'],
-        disabled: ['DISABLED', 'text-zinc-400']
+function networkManagerBadge(text, tone) {
+    var tones = {
+        emerald: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+        sky: 'text-sky-400 border-sky-500/30 bg-sky-500/10',
+        amber: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+        zinc: 'text-zinc-400 border-zinc-500/30 bg-zinc-500/10'
     };
-    var entry = map[method] || map.disabled;
-    return '<span class="text-[10px] font-black ' + entry[1] + '">' + overlayVpnEscape(entry[0]) + '</span>';
+    return '<span class="px-1.5 py-0.5 rounded border text-[10px] font-black leading-none ' +
+        (tones[tone] || tones.zinc) + '">' + overlayVpnEscape(text) + '</span>';
+}
+
+function networkManagerMethodBadge(method) {
+    if (method === 'auto') return networkManagerBadge('DHCP', 'sky');
+    if (method === 'manual') return networkManagerBadge(networkManagerLabel('STATIC', 'ثابت'), 'amber');
+    return networkManagerBadge(networkManagerLabel('OFF', 'معطّل'), 'zinc');
+}
+
+function networkManagerStateBadge(active) {
+    return active
+        ? networkManagerBadge(networkManagerLabel('UP', 'تعمل'), 'emerald')
+        : networkManagerBadge(networkManagerLabel('DOWN', 'متوقفة'), 'zinc');
 }
 
 function networkManagerLeaseInfo(dhcp) {
@@ -6046,8 +6059,8 @@ function renderNetworkManager(connections) {
 
         var methodToggle =
             '<div class="inline-flex rounded-lg border border-[var(--border-primary)] overflow-hidden">' +
-            '<button type="button" onclick="networkManagerSetMethod(\'' + overlayVpnEscape(c.uuid) + '\',\'auto\')" data-net-method="auto" data-net-uuid="' + overlayVpnEscape(c.uuid) + '" class="px-3 py-1 text-[10px] font-black transition cursor-pointer ' + (isManual ? 'text-[var(--text-muted)] hover:text-[var(--text-primary)]' : 'bg-[var(--accent-color)] text-white') + '">' + networkManagerLabel('DHCP', 'DHCP') + '</button>' +
-            '<button type="button" onclick="networkManagerSetMethod(\'' + overlayVpnEscape(c.uuid) + '\',\'manual\')" data-net-method="manual" data-net-uuid="' + overlayVpnEscape(c.uuid) + '" class="px-3 py-1 text-[10px] font-black transition cursor-pointer ' + (isManual ? 'bg-[var(--accent-color)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]') + '">' + networkManagerLabel('STATIC', 'ثابت') + '</button>' +
+            '<button type="button" onclick="networkManagerSetMethod(\'' + overlayVpnEscape(c.uuid) + '\',\'auto\')" data-net-method="auto" data-net-uuid="' + overlayVpnEscape(c.uuid) + '" class="netMethodBtn px-2.5 py-1 text-[10px] font-bold transition cursor-pointer ' + (isManual ? 'text-[var(--text-muted)] hover:text-[var(--text-primary)]' : 'bg-[var(--accent-color)] text-white') + '">' + networkManagerLabel('DHCP', 'DHCP') + '</button>' +
+            '<button type="button" onclick="networkManagerSetMethod(\'' + overlayVpnEscape(c.uuid) + '\',\'manual\')" data-net-method="manual" data-net-uuid="' + overlayVpnEscape(c.uuid) + '" class="netMethodBtn px-2.5 py-1 text-[10px] font-bold transition cursor-pointer ' + (isManual ? 'bg-[var(--accent-color)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]') + '">' + networkManagerLabel('STATIC', 'ثابت') + '</button>' +
             '</div>';
 
         var staticForm =
@@ -6068,18 +6081,14 @@ function renderNetworkManager(connections) {
 
         var warning = c.protected
             ? '<div class="text-[10px] text-amber-400 leading-relaxed">' +
-              networkManagerLabel('This interface carries the default route - changing it can cut the connection to this server. If the interface does not come back, the old settings are restored automatically.', 'هذه الواجهة تحمل المسار الافتراضي - تغييرها قد يقطع الاتصال بهذا الخادم. إذا لم تعود الواجهة للعمل، تُستعاد الإعدادات السابقة تلقائياً.') +
+              networkManagerLabel('This interface carries the default route or your session - changing it can cut the connection to this server. If the interface does not come back, the old settings are restored automatically.', 'هذه الواجهة تحمل المسار الافتراضي أو جلستك - تغييرها قد يقطع الاتصال بهذا الخادم. إذا لم تعود الواجهة للعمل، تُستعاد الإعدادات السابقة تلقائياً.') +
               '</div>'
             : '';
 
-        var stateText = c.active
-            ? '<span class="text-[10px] font-black text-emerald-400">' + networkManagerLabel('UP', 'تعمل') + '</span>'
-            : '<span class="text-[10px] font-black text-zinc-400">' + networkManagerLabel('DOWN', 'متوقفة') + '</span>';
-
         return '<div class="rounded-xl border border-[var(--border-primary)] p-4 space-y-3 bg-[var(--bg-primary)]/30">' +
             '<div class="flex items-center justify-between gap-2 flex-wrap">' +
-                '<span class="text-sm font-black text-[var(--text-primary)] font-mono">' + overlayVpnEscape(c.name) + '</span>' +
-                '<div class="flex items-center gap-3">' + networkManagerMethodBadge(c.method) + stateText + '</div>' +
+                '<span class="text-sm font-black text-[var(--text-primary)]">' + overlayVpnEscape(c.name) + '</span>' +
+                '<div class="flex items-center gap-1.5">' + networkManagerMethodBadge(c.method) + networkManagerStateBadge(c.active) + '</div>' +
             '</div>' +
             '<div class="text-[11px] font-mono text-[var(--text-secondary)]">' +
                 overlayVpnEscape(current || networkManagerLabel('no address', 'لا يوجد عنوان')) +
@@ -6087,11 +6096,11 @@ function renderNetworkManager(connections) {
             '</div>' +
             networkManagerLeaseInfo(c.dhcp) +
             warning +
-            '<div class="flex items-center gap-2 flex-wrap pt-1 border-t border-[var(--border-primary)]">' + methodToggle +
-                '<button type="button" onclick="networkManagerApply(\'' + overlayVpnEscape(c.uuid) + '\')" class="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-[var(--accent-color)] text-white hover:opacity-90 transition cursor-pointer">' + networkManagerLabel('Apply', 'تطبيق') + '</button>' +
-                '<button type="button" onclick="networkManagerRollback(\'' + overlayVpnEscape(c.uuid) + '\')" class="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer">' + networkManagerLabel('Revert', 'تراجع') + '</button>' +
-            '</div>' +
             staticForm +
+            '<div class="flex items-center gap-2 flex-wrap pt-2.5 border-t border-[var(--border-primary)]">' + methodToggle +
+                '<button type="button" onclick="networkManagerApply(\'' + overlayVpnEscape(c.uuid) + '\')" class="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-[var(--accent-color)] text-white hover:opacity-90 transition cursor-pointer">' + networkManagerLabel('Apply', 'تطبيق') + '</button>' +
+                '<button type="button" onclick="networkManagerRollback(\'' + overlayVpnEscape(c.uuid) + '\')" class="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-color)] transition cursor-pointer">' + networkManagerLabel('Revert', 'تراجع') + '</button>' +
+            '</div>' +
         '</div>';
     }).join('');
 
@@ -6124,6 +6133,7 @@ function networkManagerSetMethod(uuid, method) {
         buttons[i].classList.toggle('bg-[var(--accent-color)]', active);
         buttons[i].classList.toggle('text-white', active);
         buttons[i].classList.toggle('text-[var(--text-muted)]', !active);
+        buttons[i].classList.toggle('hover:text-[var(--text-primary)]', !active);
     }
 }
 
