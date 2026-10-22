@@ -157,6 +157,17 @@ const isRtl = activeLang === 'ar';
         .dialer-control-danger { background: var(--accent-color); color: #fff; }
         .dialer-control-danger:hover { background: var(--accent-hover); filter: none; }
         .lead-fields-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
+        .campaign-dropdown-menu {
+            transform-origin: top right;
+            animation: campaignMenuFadeIn 140ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        [dir="rtl"] .campaign-dropdown-menu {
+            transform-origin: top left;
+        }
+        @keyframes campaignMenuFadeIn {
+            from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
     </style>
 </head>
 <body class="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen flex flex-col md:flex-row m-0 p-0 font-mono">
@@ -218,90 +229,111 @@ const isRtl = activeLang === 'ar';
 
     <!-- MODAL 1: CREATE / EDIT CAMPAIGN -->
     <div id="createCampaignModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-xl w-full p-6 text-[var(--text-primary)] max-h-[90vh] overflow-y-auto">
-            <h3 id="modalCampTitle" class="text-base font-extrabold mb-4"><%= t.createCampaign %></h3>
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-xl w-full p-5 sm:p-6 text-[var(--text-primary)] max-h-[90vh] overflow-y-auto">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between pb-3.5 mb-4 border-b border-[var(--border-primary)]">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center font-bold">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="4" height="4" rx="1"></rect>
+                            <rect x="10" y="3" width="4" height="4" rx="1"></rect>
+                            <rect x="17" y="3" width="4" height="4" rx="1"></rect>
+                            <rect x="3" y="10" width="4" height="4" rx="1"></rect>
+                            <rect x="10" y="10" width="4" height="4" rx="1"></rect>
+                            <rect x="17" y="10" width="4" height="4" rx="1"></rect>
+                            <rect x="3" y="17" width="4" height="4" rx="1"></rect>
+                            <rect x="10" y="17" width="4" height="4" rx="1"></rect>
+                            <rect x="17" y="17" width="4" height="4" rx="1"></rect>
+                        </svg>
+                    </div>
+                    <h3 id="modalCampTitle" class="text-base font-extrabold text-[var(--text-primary)]"><%= t.createCampaign %></h3>
+                </div>
+                <button type="button" onclick="closeModal('createCampaignModal')" class="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition cursor-pointer" title="<%= t.cancel %>">
+                    ✕
+                </button>
+            </div>
+
             <form onsubmit="saveCampaign(event)" class="space-y-3.5">
                 <input type="hidden" id="editCampId">
-                <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campName"><%= t.campaignName %></label>
-                    <input type="text" id="campName" required maxlength="100" class="config-input w-full" placeholder="<%= isRtl ? 'مثال: عملاء عقارات VIP' : 'e.g. Real Estate VIP Leads' %>">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campOutboundRoute"><%= t.outboundRoute %></label>
-                    <select id="campOutboundRoute" class="config-input w-full">
-                        <option value="">— <%= t.allDongles %> —</option>
-                    </select>
+
+                <!-- Row 1: Campaign Name & Outbound Route -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campName"><%= t.campaignName %> <span class="text-rose-400">*</span></label>
+                        <input type="text" id="campName" required maxlength="100" class="config-input w-full" placeholder="<%= isRtl ? 'مثال: عملاء عقارات VIP' : 'e.g. VIP Leads' %>">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campOutboundRoute"><%= t.outboundRoute %></label>
+                        <select id="campOutboundRoute" class="config-input w-full">
+                            <option value="">— <%= t.allDongles %> —</option>
+                        </select>
+                    </div>
                 </div>
 
-                <!-- ALLOWED GSM DONGLES CHECKBOXES -->
+                <!-- Row 2: Allowed GSM Dongles -->
                 <div>
-                    <span class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.allowedDongles %></span>
-                    <div id="campDonglesRoster" class="flex flex-wrap gap-2 p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg min-h-[46px]">
+                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.allowedDongles %></span>
+                    <div id="campDonglesRoster" class="flex flex-wrap gap-1.5 p-2.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl min-h-[42px] max-h-28 overflow-y-auto">
                         <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل شرائح GSM المتاحة...' : 'Loading available GSM dongles...' %></span>
                     </div>
-                    <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'حدد الشرائح المسموح لها بإجراء الاتصالات الصادرة. إلغاء التحديد يعني استخدام المسار الافتراضي.' : 'Select which dongles can place outbound calls. Uncheck all to use outbound route default.' %></p>
                 </div>
 
-                <!-- ASSIGNED AGENTS DISTRIBUTION CHECKBOXES -->
+                <!-- Row 3: Assigned Agents -->
                 <div>
-                    <span class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.assignedAgents %></span>
-                    <div id="campAgentsRoster" class="flex flex-wrap gap-2 p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg min-h-[46px]">
+                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.assignedAgents %></span>
+                    <div id="campAgentsRoster" class="flex flex-wrap gap-1.5 p-2.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl min-h-[42px] max-h-28 overflow-y-auto">
                         <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل تحويلات الموظفين...' : 'Loading PBX agent extensions...' %></span>
                     </div>
-                    <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'حدد التحويلات التي ستستقبل المكالمات عند الرد. إلغاء التحديد يوزع على جميع الموظفين المتصلين.' : 'Select which extensions will receive bridged calls. Uncheck all to distribute to all online agents.' %></p>
                 </div>
 
+                <!-- Row 4: Pacing & Timing -->
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campMaxDials"><%= t.maxDials %></label>
+                        <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campMaxDials"><%= t.maxDials %></label>
                         <input type="number" id="campMaxDials" value="1" min="1" max="20" class="config-input w-full">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campWrapupSec"><%= t.wrapupTime %></label>
+                        <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campWrapupSec"><%= t.wrapupTime %> (sec)</label>
                         <input type="number" id="campWrapupSec" value="15" min="0" max="300" class="config-input w-full">
                     </div>
                 </div>
-                <!-- PHONE NUMBER MASKING OPTION -->
-                <div class="p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg flex items-start gap-2.5">
-                    <input type="checkbox" id="campMaskPhone" class="w-4 h-4 mt-0.5 rounded text-amber-500 cursor-pointer">
-                    <div class="flex-1">
-                        <label for="campMaskPhone" class="text-xs font-bold text-[var(--text-primary)] cursor-pointer block">
-                            <%= isRtl ? 'إخفاء أرقام العملاء على شاشة الموظف (مثال: 010*****380)' : 'Mask Customer Numbers on Agent Screen (e.g. 010*****380)' %>
-                        </label>
-                        <p class="text-[10px] text-[var(--text-muted)] mt-0.5">
-                            <%= isRtl ? 'إخفاء الأرقام الوسطى لحماية الخصوصية (إظهار أول 3 وآخر 3 أرقام فقط للموظف مع الاتصال بالرقم الكامل تلقائياً)' : 'Hides middle digits from agents to protect privacy (only first 3 and last 3 digits visible; full number is dialed automatically)' %>
-                        </p>
-                    </div>
-                </div>
 
-                <!-- CAMPAIGN-LEVEL DYNAMIC LEAD FIELDS -->
-                <div class="pt-2 border-t border-[var(--border-primary)]">
-                    <div class="flex items-center justify-between gap-2 mb-1">
-                        <span class="block text-xs font-bold text-[var(--text-secondary)] uppercase"><%= t.leadFields %></span>
-                        <button type="button" onclick="addCampaignField()" class="dialer-control dialer-control-info"><span>+</span><span><%= t.addField %></span></button>
+                <!-- Row 5: Mask Phone Numbers Toggle -->
+                <label class="p-2.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl flex items-center justify-between gap-3 cursor-pointer hover:border-[var(--border-accent)] transition select-none">
+                    <span class="text-xs font-bold text-[var(--text-primary)]">
+                        <%= isRtl ? 'إخفاء أرقام العملاء على شاشة الموظف (010*****380)' : 'Mask Customer Numbers on Agent Screen (e.g. 010*****380)' %>
+                    </span>
+                    <input type="checkbox" id="campMaskPhone" class="w-4 h-4 rounded accent-amber-500 cursor-pointer">
+                </label>
+
+                <!-- Row 6: Custom Lead Fields -->
+                <div class="pt-1">
+                    <div class="flex items-center justify-between gap-2 mb-1.5">
+                        <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase"><%= t.leadFields %></span>
+                        <button type="button" onclick="addCampaignField()" class="dialer-control dialer-control-info py-0.5 px-2 text-[11px] rounded-lg">
+                            <span>+</span><span><%= t.addField %></span>
+                        </button>
                     </div>
-                    <p class="text-[10px] text-[var(--text-muted)] mb-1"><%= t.builtInLeadFields %></p>
-                    <p class="text-[10px] text-[var(--text-muted)] mb-2"><%= t.leadFieldsNote %></p>
-                    <div id="campaignFieldsEditor" class="space-y-2 p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg">
+                    <div id="campaignFieldsEditor" class="space-y-1.5 p-2.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl">
                         <div class="text-xs text-[var(--text-muted)] italic"><%= t.noCustomFields %></div>
                     </div>
                 </div>
 
-                <!-- LEADS FILE UPLOAD DIRECTLY IN CREATE CAMPAIGN MODAL -->
-                <div id="campLeadsFileGroup" class="pt-2 border-t border-[var(--border-primary)]">
-                    <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="campLeadsFile">
-                        <%= isRtl ? 'ملف الأرقام (CSV أو XLSX) - اختياري' : 'Import Leads File (CSV or XLSX) - Optional' %>
-                    </label>
+                <!-- Row 7: Leads File Upload -->
+                <div id="campLeadsFileGroup" class="pt-1">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase" for="campLeadsFile">
+                            <%= isRtl ? 'ملف الأرقام (CSV أو XLSX) - اختياري' : 'Import Leads File (CSV or XLSX) - Optional' %>
+                        </label>
+                        <span class="text-[10px] text-zinc-500 font-mono">2 columns: Name, Phone</span>
+                    </div>
                     <input type="file" id="campLeadsFile" accept=".csv,.xlsx,.xls" class="config-input w-full text-xs cursor-pointer">
-                    <p class="text-[10px] text-amber-400 mt-1 flex items-center gap-1">
-                        <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        <span><%= t.templateNote2Col %> (<%= t.addressBookNote %>)</span>
-                    </p>
                 </div>
 
-                <div class="flex justify-end gap-2 pt-4 border-t border-[var(--border-primary)]">
-                    <button type="button" onclick="closeModal('createCampaignModal')" class="config-btn-secondary px-3 py-1.5 text-xs"><%= t.cancel %></button>
-                    <button type="submit" id="saveCampSubmitBtn" class="config-btn-primary px-4 py-1.5 text-xs"><%= t.saveCampaign %></button>
+                <!-- Modal Actions -->
+                <div class="flex justify-end gap-2 pt-3 border-t border-[var(--border-primary)]">
+                    <button type="button" onclick="closeModal('createCampaignModal')" class="config-btn-secondary px-3.5 py-1.5 text-xs font-bold rounded-xl"><%= t.cancel %></button>
+                    <button type="submit" id="saveCampSubmitBtn" class="config-btn-primary px-4 py-1.5 text-xs font-bold rounded-xl"><%= t.saveCampaign %></button>
                 </div>
             </form>
         </div>
@@ -672,28 +704,29 @@ const isRtl = activeLang === 'ar';
 
                                     <!-- 3-Dot Dropdown -->
                                     <div class="relative">
-                                        <button type="button" onclick="toggleCampaignMenu(event, ${c.id})" class="p-1 rounded hover:bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-white transition cursor-pointer" title="Options">
-                                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                                        <button type="button" onclick="toggleCampaignMenu(event, ${c.id})" class="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/80 active:scale-95 transition-all cursor-pointer" title="Options">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
                                         </button>
-                                        <div id="campaignMenu-${c.id}" class="hidden campaign-dropdown-menu absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] shadow-2xl z-30 p-1 text-xs font-medium backdrop-blur-md">
-                                            <button onclick="openEditCampaignModal(${JSON.stringify(c).replace(/"/g, '&quot;')})" class="w-full text-start px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2.5 cursor-pointer transition">
-                                                <svg class="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                        <div id="campaignMenu-${c.id}" class="hidden campaign-dropdown-menu absolute ${isRtl ? 'left-0' : 'right-0'} top-full mt-1.5 w-48 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-primary)] shadow-2xl z-30 p-1.5 text-xs font-semibold backdrop-blur-xl">
+                                            <button onclick="openEditCampaignModal(${JSON.stringify(c).replace(/"/g, '&quot;')})" class="w-full text-start px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2 cursor-pointer transition">
+                                                <svg class="w-3.5 h-3.5 text-sky-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                                 <span>${escapeHtml(t.editCamp || 'Edit')}</span>
                                             </button>
-                                            <button onclick="controlCampaign(${c.id}, 'reset')" class="w-full text-start px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2.5 cursor-pointer transition">
-                                                <svg class="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                            <button onclick="controlCampaign(${c.id}, 'reset')" class="w-full text-start px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2 cursor-pointer transition">
+                                                <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                                                 <span>${escapeHtml(t.resetLeads || 'Reset Leads')}</span>
                                             </button>
-                                            <a href="/api/dialer/leads/template?campaign_id=${c.id}" class="w-full text-start px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2.5 cursor-pointer transition">
-                                                <svg class="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                            <div class="my-1 border-t border-[var(--border-primary)]/60"></div>
+                                            <a href="/api/dialer/leads/template?campaign_id=${c.id}" class="w-full text-start px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2 cursor-pointer transition">
+                                                <svg class="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                                                 <span>${escapeHtml(t.downloadCampaignTemplate || 'Template')}</span>
                                             </a>
-                                            <a href="/api/dialer/campaigns/${c.id}/export" class="w-full text-start px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2.5 cursor-pointer transition">
-                                                <svg class="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                            <a href="/api/dialer/campaigns/${c.id}/export" class="w-full text-start px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2 cursor-pointer transition">
+                                                <svg class="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                                 <span>${escapeHtml(t.export || 'Export CSV')}</span>
                                             </a>
                                             <div class="my-1 border-t border-[var(--border-primary)]/60"></div>
-                                            <button onclick="controlCampaign(${c.id}, 'delete')" class="w-full text-start px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 flex items-center gap-2.5 cursor-pointer transition">
+                                            <button onclick="controlCampaign(${c.id}, 'delete')" class="w-full text-start px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 flex items-center gap-2 cursor-pointer transition">
                                                 <svg class="w-3.5 h-3.5 text-rose-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                                 <span>${escapeHtml(t.deleteCamp || 'Delete')}</span>
                                             </button>
