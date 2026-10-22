@@ -309,9 +309,9 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
         }
         #switchboardGrid .panel-surface.state-idle .employee-ip-badge,
         .light-theme #switchboardGrid .panel-surface.state-idle .employee-ip-badge {
-            background-color: rgba(0, 0, 0, 0.14) !important;
-            border-color: rgba(0, 0, 0, 0.22) !important;
-            color: #111827 !important;
+            background-color: rgba(0, 0, 0, 0.28) !important;
+            border-color: rgba(255, 255, 255, 0.22) !important;
+            color: #ffffff !important;
         }
         #switchboardGrid .panel-surface.state-ringing .employee-ip-badge,
         .light-theme #switchboardGrid .panel-surface.state-ringing .employee-ip-badge {
@@ -346,12 +346,17 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
             border-color: transparent !important;
         }
 
-        /* === STATE 2: ONLINE / IDLE (YELLOW / AMBER) === */
-        #switchboardGrid .panel-surface.state-idle,
+        /* === STATE 2: ONLINE / IDLE (ORANGE) === */
+        #switchboardGrid .panel-surface.state-idle {
+            /* the same deep Sokrat crimson the panel's primary buttons render */
+            background-color: #991b1b !important;
+            border-color: rgba(239, 68, 68, 0.4) !important;
+            color: #ffffff !important;
+        }
         .light-theme #switchboardGrid .panel-surface.state-idle {
-            background-color: #f59e0b !important;
-            border-color: rgba(255, 255, 255, 0.25) !important;
-            color: #111827 !important;
+            background-color: #7f1d1d !important;
+            border-color: rgba(239, 68, 68, 0.45) !important;
+            color: #ffffff !important;
         }
         #switchboardGrid .panel-surface.state-idle:hover,
         .light-theme #switchboardGrid .panel-surface.state-idle:hover {
@@ -361,18 +366,18 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
         #switchboardGrid .panel-surface.state-idle .text-base.font-bold,
         .light-theme #switchboardGrid .panel-surface.state-idle .text-white,
         .light-theme #switchboardGrid .panel-surface.state-idle .text-base.font-bold {
-            color: #111827 !important;
+            color: #ffffff !important;
         }
         #switchboardGrid .panel-surface.state-idle .extension-number {
-            color: #7f1d1d !important;
+            color: #fee2e2 !important;
         }
         #switchboardGrid .panel-surface.state-idle .employee-title {
-            color: #3f2d00 !important;
+            color: rgba(255, 255, 255, 0.75) !important;
         }
         #switchboardGrid .panel-surface.state-idle .employee-group-chip {
-            border-color: rgba(17, 24, 39, 0.18) !important;
-            background: rgba(17, 24, 39, 0.10) !important;
-            color: #111827 !important;
+            border-color: rgba(255, 255, 255, 0.30) !important;
+            background: rgba(255, 255, 255, 0.16) !important;
+            color: #ffffff !important;
         }
         #switchboardGrid .panel-surface.state-idle [id^="sipBadge-"],
         #switchboardGrid .panel-surface.state-idle [id^="badge-"] {
@@ -380,17 +385,17 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
         }
         #switchboardGrid .panel-surface.state-idle [id^="sipLabel-"],
         #switchboardGrid .panel-surface.state-idle [id^="status-"] {
-            color: #052e16 !important;
+            color: #ffffff !important;
             font-weight: 800 !important;
         }
         #switchboardGrid .panel-surface.state-idle .border-t {
-            border-color: rgba(17, 24, 39, 0.15) !important;
+            border-color: rgba(255, 255, 255, 0.25) !important;
         }
         #switchboardGrid .panel-surface.state-idle .action-select,
         .light-theme #switchboardGrid .panel-surface.state-idle .action-select {
-            background-color: rgba(0, 0, 0, 0.12) !important;
-            border-color: rgba(0, 0, 0, 0.18) !important;
-            color: #111827 !important;
+            background-color: rgba(0, 0, 0, 0.28) !important;
+            border-color: rgba(255, 255, 255, 0.28) !important;
+            color: #ffffff !important;
         }
 
         /* === STATE 3: RINGING (PURPLE) === */
@@ -883,15 +888,9 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
     }
     #switchboardGrid .panel-surface.state-idle .agent-status-badge-btn,
     .light-theme #switchboardGrid .panel-surface.state-idle .agent-status-badge-btn {
-        background-color: rgba(0, 0, 0, 0.14) !important;
-        border-color: rgba(0, 0, 0, 0.22) !important;
-        color: #111827 !important;
-    }
-    #switchboardGrid .panel-surface.state-idle .agent-status-badge-btn .agent-status-label,
-    #switchboardGrid .panel-surface.state-idle .agent-status-badge-btn [id^="agentStatusTimer-"],
-    .light-theme #switchboardGrid .panel-surface.state-idle .agent-status-badge-btn .agent-status-label,
-    .light-theme #switchboardGrid .panel-surface.state-idle .agent-status-badge-btn [id^="agentStatusTimer-"] {
-        color: #111827 !important;
+        background-color: rgba(0, 0, 0, 0.32) !important;
+        border-color: rgba(255, 255, 255, 0.22) !important;
+        color: #ffffff !important;
     }
     html.light-theme [id^="statusDropdown-"] {
         background-color: rgba(255, 255, 255, 0.98) !important;
