@@ -2065,23 +2065,23 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     </div>
 
                     <!-- Live Signal & Service Status Strip -->
-                    <div class="flex items-center gap-2.5 flex-wrap">
-                        <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)]">
+                    <div class="flex items-center gap-3 sm:gap-4 flex-wrap">
+                        <div class="h-8 flex items-center gap-2 bg-transparent border-0">
                             <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase"><%= isRtl ? 'الإشارة' : 'Signal' %>:</span>
                             <div class="flex items-end gap-0.5 h-[14px] shrink-0" id="diag-signal-bars"></div>
                             <span id="diag-signal-text" class="text-xs font-bold text-[var(--text-primary)] font-mono whitespace-nowrap">-</span>
                         </div>
 
-                        <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)]">
+                        <div class="h-8 flex items-center gap-2 bg-transparent border-0">
                             <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase"><%= isRtl ? 'الخدمة' : 'Service' %>:</span>
-                            <div id="diag-service-badge"></div>
+                            <div id="diag-service-badge" class="flex items-center"></div>
                             <span id="diag-carrier-text" class="text-xs font-bold text-[var(--accent-color)]">-</span>
                         </div>
 
-                        <div class="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] text-[10px]">
-                            <div><span class="text-[9px] font-bold text-[var(--text-muted)] uppercase me-1"><%= isRtl ? 'صوت' : 'Voice' %>:</span><span id="chk-voice" class="text-zinc-500 font-bold font-mono">-</span></div>
-                            <div class="border-s border-[var(--border-primary)] ps-2.5"><span class="text-[9px] font-bold text-[var(--text-muted)] uppercase me-1"><%= isRtl ? 'رسائل' : 'SMS' %>:</span><span id="chk-sms" class="text-zinc-500 font-bold font-mono">-</span></div>
-                            <div class="border-s border-[var(--border-primary)] ps-2.5"><span class="text-[9px] font-bold text-[var(--text-muted)] uppercase me-1">USSD:</span><span id="chk-ussd" class="text-zinc-500 font-bold font-mono">-</span></div>
+                        <div class="h-8 flex items-center gap-3 bg-transparent border-0 text-[10px]">
+                            <div class="flex items-center"><span class="text-[9px] font-bold text-[var(--text-muted)] uppercase me-1"><%= isRtl ? 'صوت' : 'Voice' %>:</span><span id="chk-voice" class="text-zinc-500 font-bold font-mono">-</span></div>
+                            <div class="flex items-center"><span class="text-[9px] font-bold text-[var(--text-muted)] uppercase me-1"><%= isRtl ? 'رسائل' : 'SMS' %>:</span><span id="chk-sms" class="text-zinc-500 font-bold font-mono">-</span></div>
+                            <div class="flex items-center"><span class="text-[9px] font-bold text-[var(--text-muted)] uppercase me-1">USSD:</span><span id="chk-ussd" class="text-zinc-500 font-bold font-mono">-</span></div>
                         </div>
                     </div>
                 </div>
