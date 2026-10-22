@@ -2344,12 +2344,16 @@ REPOEOF
         fi
     fi
 
-    if $pkg_mgr install -y zerotier-one >/dev/null 2>&1; then
+    if command -v zerotier-cli >/dev/null 2>&1; then
+        echo "  zerotier-one already installed"
+    elif $pkg_mgr install -y zerotier-one >/dev/null 2>&1; then
         echo "  zerotier-one installed"
     else
         echo "  WARNING: could not install zerotier-one (continuing)"
     fi
-    if $pkg_mgr install -y tailscale >/dev/null 2>&1; then
+    if command -v tailscale >/dev/null 2>&1; then
+        echo "  tailscale already installed"
+    elif $pkg_mgr install -y tailscale >/dev/null 2>&1; then
         echo "  tailscale installed"
     else
         echo "  WARNING: could not install tailscale (continuing)"
