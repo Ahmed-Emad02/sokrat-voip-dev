@@ -663,7 +663,7 @@ VALUES
   ('queue_agent_pause', 'forward', '*46', '*46', 'Queue Agent Pause / Resume', 'استراحة مؤقتة في الطابور (*46)', 'Puts agent on temporary break pause without unregistering from queue.', 'أخذ استراحة مؤقتة داخل الطابور دون تسجيل خروج كامل.', '*46', '*46', 'precall', 1, 1, 28, 'featurecode', 'queues', 'que_pause_toggle', NULL),
   ('diag_echo_test', 'diagnostics', '*43', '*43', 'Audio Echo & Latency Test', 'اختبار صدى الصوت وزمن الاستجابة (*43)', 'Echoes back spoken voice in real-time to assess network latency and audio fidelity.', 'إعادة سماع صوتك فوراً لفحص زمن استجابة الشبكة وجودة الصوت.', '*43', '*43', 'precall', 1, 1, 29, 'featurecode', 'infoservices', 'echotest', NULL),
   ('diag_rnnoise_vad', 'diagnostics', '*88', '*88', 'AI RNNoise + VAD Gate Echo Test', 'فحص عزل الضوضاء الذكي مع كتم الصمت (*88)', 'Live test of neural noise suppression with VAD gate (total silence on breath/pauses).', 'اختبار عزل الضوضاء بالذكاء الاصطناعي مع كتم تام أثناء الوقفات.', '*88', '*88', 'precall', 1, 1, 30, 'dialplan_rnnoise', NULL, 'vad', NULL),
-  ('diag_rnnoise_cont', 'diagnostics', '*87', '*87', 'AI RNNoise Continuous Echo Test', 'فحص عزل الضوضاء المستمر (*87)', 'Live test of continuous neural noise cancellation without hard silence gate.', 'اختبار فلترة التشويش والضوضاء العصبية المستمرة دون كتم تام.', '*87', '*87', 'precall', 1, 1, 31, 'dialplan_rnnoise', NULL, 'cont', NULL),
+  ('diag_rnnoise_cont', 'diagnostics', '*86', '*86', 'AI RNNoise Continuous Echo Test', 'فحص عزل الضوضاء المستمر (*86)', 'Live test of continuous neural noise cancellation without hard silence gate.', 'اختبار فلترة التشويش والضوضاء العصبية المستمرة دون كتم تام.', '*86', '*86', 'precall', 1, 1, 31, 'dialplan_rnnoise', NULL, 'cont', NULL),
   ('diag_rnnoise_raw', 'diagnostics', '*89', '*89', 'Raw Audio Baseline Test', 'اختبار الصوت الخام للمقارنة (*89)', 'Raw unfiltered microphone stream to benchmark noise cancellation performance.', 'سماع الصوت الطبيعي بدون فلترة لمقارنة فاعلية الذكاء الاصطناعي.', '*89', '*89', 'precall', 1, 1, 32, 'dialplan_rnnoise', NULL, 'raw', NULL),
   ('diag_my_voicemail', 'diagnostics', '*97', '*97', 'My Voicemail', 'صندوق البريد الصوتي الشخصي (*97)', 'Direct access to your extension\'s voicemail inbox.', 'الدخول إلى صندوق البريد الصوتي الخاص بتحويلتك لسماع الرسائل.', '*97', '*97', 'precall', 1, 1, 33, 'featurecode', 'voicemail', 'myvoicemail', NULL),
   ('diag_blacklist', 'diagnostics', '*30 / *32', '*30 / *32', 'Blacklist Caller (*30 / *32)', 'إضافة رقم للقائمة السوداء (*30 / *32)', 'Blocks nuisance numbers from calling your PBX (*32 blocks the last caller immediately).', 'حظر الأرقام المزعجة من الاتصال بالمقسم (*32 لحظر آخر متصل فوراً).', '*30 / *32', '*30 / *32', 'precall', 1, 1, 34, 'featurecode_pair', 'blacklist', 'blacklist_add', 'blacklist_last'),
@@ -682,6 +682,14 @@ ON DUPLICATE KEY UPDATE
   backend_module = VALUES(backend_module),
   backend_feature = VALUES(backend_feature),
   backend_feature_secondary = VALUES(backend_feature_secondary);
+
+-- The RNNoise continuous echo test moved from *87 (Issabel owns *87 as its
+-- conference-status feature code) to *86, which is free.
+UPDATE `sokrat_call_codes`
+   SET `code` = '*86', `default_code` = '*86',
+       `example_en` = '*86', `example_ar` = '*86',
+       `name_ar` = 'فحص عزل الضوضاء المستمر (*86)'
+ WHERE `id` = 'diag_rnnoise_cont' AND `code` = '*87';
 
 -- Sokrat Laya GSM Maintenance Agent: Real-time Dongle Health Status
 CREATE TABLE IF NOT EXISTS `laya_dongle_health` (

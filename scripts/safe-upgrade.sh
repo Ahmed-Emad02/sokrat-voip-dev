@@ -296,6 +296,12 @@ try:
     # Remove all legacy [dongle-hangup-cleanup] contexts
     content = re.sub(r'\[dongle-hangup-cleanup\].*?(?=\n\[|\Z)', '', content, flags=re.DOTALL)
 
+    # The RNNoise continuous echo test moved from *87 (Issabel owns *87 as its
+    # conference-status feature code) to *86, which is free.
+    content = content.replace(
+        'exten => *87,1,NoOp(--- RNNoise AI Noise Suppression Continuous Echo Test ---)',
+        'exten => *86,1,NoOp(--- RNNoise AI Noise Suppression Continuous Echo Test ---)')
+
     # Remove hangup handler pushes that trigger dongle cleanup
     content = re.sub(r'^\s*same\s*=>\s*n,Set\(CHANNEL\(hangup_handler_push\)=dongle-hangup-cleanup,s,1\)\r?\n', '', content, flags=re.MULTILINE)
 
