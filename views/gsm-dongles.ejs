@@ -465,7 +465,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         #dongle-duration-stats-section,
         #dongleReportTableContainer,
         #dongleReportTableContainer table,
-        #dongleReportTableContainer thead tr {
+        #dongleReportTableContainer thead tr,
+        #device-details-panel {
             background: transparent !important;
             background-color: transparent !important;
             border: none !important;
@@ -2049,7 +2050,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         </section>
 
             <!-- Lower Row: Selected Device Details (Short, Wide & Dense Horizontal Card directly under SMS & USSD) -->
-            <div id="device-details-panel" class="panel-surface rounded-2xl p-5 flex flex-col gap-4 mt-4 w-full">
+            <div id="device-details-panel" class="rounded-2xl p-5 flex flex-col gap-4 mt-4 w-full bg-transparent border-0 border-none shadow-none">
                 <!-- Header with ID & Live Diagnostics Badges -->
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-[var(--border-primary)] pb-3">
                     <div class="flex items-center gap-3">
