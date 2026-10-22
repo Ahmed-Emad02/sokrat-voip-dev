@@ -1822,18 +1822,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             <!-- Section Header -->
             <div class="p-4 sm:px-6 border-b border-[var(--border-primary)]/50 bg-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
-                    <div class="text-sky-400 flex items-center justify-center shrink-0">
-                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="18" y1="20" x2="18" y2="10" />
-                            <line x1="12" y1="20" x2="12" y2="4" />
-                            <line x1="6" y1="20" x2="6" y2="14" />
-                            <path d="M3 13l5-5 5 5 8-8" />
-                            <polyline points="16 5 21 5 21 10" />
-                        </svg>
-                    </div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <h3 class="text-sm sm:text-base font-black text-[var(--text-primary)] uppercase tracking-wider"><%= t.stateDurationTitle %></h3>
-                    </div>
+                    <h3 class="text-sm sm:text-base font-black text-[var(--text-primary)] uppercase tracking-wider"><%= t.stateDurationTitle %></h3>
                 </div>
                 <div class="flex items-center gap-2">
                     <button type="button" onclick="fetchDongleStateReports()" id="dongle-report-refresh-btn" class="dongle-action-button dongle-action-primary cursor-pointer px-3.5 py-1.5 h-8 rounded-xl text-xs font-bold flex items-center gap-1.5">
