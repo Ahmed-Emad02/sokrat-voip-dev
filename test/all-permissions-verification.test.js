@@ -434,6 +434,7 @@ test('8. Verification of TAB_ROUTE_MAP middleware route gating and hierarchical 
         res.locals.allowedTabs = userPerms;
         if (userPerms.includes(tab) || (tab === 'call_history' && userPerms.includes('cdr')) || (tab === 'campaigns' && userPerms.includes('dialer'))) return next();
         if (tab === 'operator' && userPerms.some(p => p.startsWith('operator-'))) return next();
+        if (tab === 'ext-stats' && (userPerms.includes('operator') || userPerms.some(p => p.startsWith('operator-')))) return next();
         if ((tab === 'call_history' || tab === 'cdr') && userPerms.some(p => p.startsWith('cdr-'))) return next();
         if (tab === 'gsm-dongles' && userPerms.some(p => p.startsWith('gsm-'))) return next();
         if (tab === 'config' && userPerms.some(p => p.startsWith('config-'))) return next();
@@ -468,6 +469,7 @@ test('8. Verification of TAB_ROUTE_MAP middleware route gating and hierarchical 
     // 4. Hierarchical sub-action access
     const hierarchicalChecks = [
         { path: '/operator', perm: 'operator-hijack' },
+        { path: '/ext-stats', perm: 'operator-listen' },
         { path: '/cdr', perm: 'cdr-audio-listen' },
         { path: '/gsm-dongles', perm: 'gsm-control' },
         { path: '/config', perm: 'config-announcements' }

@@ -62,6 +62,7 @@ function can(tab) {
     if (tab === 'call_history' && (allowed.includes('cdr') || allowed.some(p => p.startsWith('cdr-')))) return true;
     if (tab === 'cdr' && (allowed.includes('call_history') || allowed.some(p => p.startsWith('cdr-')))) return true;
     if (tab === 'operator' && allowed.some(p => p.startsWith('operator-'))) return true;
+    if (tab === 'ext-stats' && (allowed.includes('ext-stats') || allowed.includes('operator') || allowed.some(p => p.startsWith('operator-')))) return true;
     if (tab === 'contacts' && allowed.some(p => p.startsWith('contacts-'))) return true;
     if (tab === 'voicemails' && allowed.some(p => p.startsWith('voicemail-'))) return true;
     if (tab === 'gsm-dongles' && allowed.some(p => p.startsWith('gsm-'))) return true;

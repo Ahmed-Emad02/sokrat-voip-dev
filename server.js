@@ -472,7 +472,7 @@ const PERMISSION_CATEGORIES = [
             { key: 'dashboard', label: 'Executive Dashboard', labelAr: 'لوحة المتابعة الرئيسية' },
             { key: 'call_history', label: 'Call History', labelAr: 'سجل المكالمات' },
             { key: 'operator', label: 'Live Switchboard', labelAr: 'لوحة التحكم الحية' },
-            { key: 'ext-stats', label: 'Extension Statistics', labelAr: 'إحصائيات التحويلات' },
+            { key: 'ext-stats', label: 'Employee Analytics & Stats', labelAr: 'تحليلات وإحصائيات الموظفين' },
             { key: 'contacts', label: 'Contacts', labelAr: 'جهات الاتصال' },
             { key: 'voicemails', label: 'Voicemails', labelAr: 'البريد الصوتي' },
             { key: 'gsm-dongles', label: 'GSM Dongles', labelAr: 'دونجلات GSM' },
@@ -1279,6 +1279,7 @@ const perms = req.session.userPermissions || [];
         if (tabName === 'cdr' && perms.includes('call_history')) return next();
         if (tabName === 'campaigns' && perms.includes('dialer')) return next();
         if (tabName === 'dialer' && perms.includes('campaigns')) return next();
+        if (tabName === 'ext-stats' && (perms.includes('ext-stats') || perms.includes('operator') || perms.some(p => p.startsWith('operator-')))) return next();
 return res.status(403).json({ success: false, error: `Forbidden: Missing ${tabName} permission` });
 };
 }
@@ -2067,6 +2068,10 @@ app.use(async (req, res, next) => {
     if (userPerms.includes(tab) || (tab === 'call_history' && userPerms.includes('cdr'))) return next();
     // Hierarchical permissions: access to any operator action permits viewing the live operator board
     if (tab === 'operator' && userPerms.some(p => p.startsWith('operator-'))) {
+        return next();
+    }
+    // Extension statistics is accessed contextually from Live Panel: grant access if ext-stats or operator is permitted
+    if (tab === 'ext-stats' && (userPerms.includes('ext-stats') || userPerms.includes('operator') || userPerms.some(p => p.startsWith('operator-')))) {
         return next();
     }
     // Hierarchical permissions: access to any CDR action permits viewing Call History
@@ -7777,8 +7782,19 @@ function calculateShiftOverlapSec(startMs, endMs, intervals) {
 // --- API: GENERAL EXTENSIONS OVERVIEW ---
 app.get('/api/ext-overview', async (req, res) => {
     try {
+        if (!isSuperAdmin(req)) {
+            const perms = req.session.userPermissions || [];
+            if (!perms.includes('ext-stats') && !perms.includes('operator') && !perms.some(p => p.startsWith('operator-'))) {
+                return res.status(403).json({ success: false, error: 'Forbidden: Missing permission to view extension overview.' });
+            }
+        }
         const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
         const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
+        const direction = req.query.direction || 'all';
+        const disposition = req.query.disposition || 'all';
+        const callType = req.query.callType || 'all';
+        const durationFilter = req.query.durationFilter || 'all';
+        const searchNumber = req.query.searchNumber ? String(req.query.searchNumber).trim().toLowerCase() : '';
 
         const workHoursEnabled = req.query.workHoursEnabled === 'true' || req.query.workHoursEnabled === true || req.query.workHoursEnabled === '1';
         const shiftStart = req.query.shiftStart ? String(req.query.shiftStart).trim() : '09:00';
@@ -7811,37 +7827,64 @@ app.get('/api/ext-overview', async (req, res) => {
                 const isInShift = activeIntervals.some(inv => callDateMs >= inv.startMs && callDateMs <= inv.endMs);
                 if (!isInShift) return;
             }
+            if (disposition !== 'all' && row.disposition !== disposition) return;
+
             const sec = parseInt(row.billsec) || 0;
+            if (durationFilter === 'answered' && sec <= 0) return;
+            if (durationFilter === 'short' && (sec < 0 || sec >= 30)) return;
+            if (durationFilter === 'medium' && (sec < 30 || sec > 180)) return;
+            if (durationFilter === 'long' && sec <= 180) return;
+
+            if (searchNumber) {
+                const srcMatch = String(row.src || '').toLowerCase().includes(searchNumber);
+                const dstMatch = String(row.dst || '').toLowerCase().includes(searchNumber);
+                if (!srcMatch && !dstMatch) return;
+            }
+
             const callClass = classifyCdr(row);
+            const isExternal = callClass.direction === 'INBOUND' || callClass.direction === 'OUTBOUND';
+            if (callType === 'external' && !isExternal) return;
+            if (callType === 'internal' && isExternal) return;
+
             const srcExt = row.src || getExtensionFromChannel(row.channel);
             const dstExt = row.dst || getExtensionFromChannel(row.dstchannel);
 
             if (srcExt && employeeMetrics[srcExt]) {
-                employeeMetrics[srcExt].totalCalls++;
-                if (dstExt) employeeMetrics[srcExt].uniqueNumbers.add(dstExt);
-                if (callClass.direction === 'OUTBOUND') {
-                    employeeMetrics[srcExt].outboundCalls++;
-                    if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].outboundTalkSec += sec;
-                } else if (callClass.direction === 'INBOUND') {
-                    employeeMetrics[srcExt].inboundCalls++;
-                    if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].inboundTalkSec += sec;
-                } else {
-                    employeeMetrics[srcExt].outboundCalls++;
-                    if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].outboundTalkSec += sec;
+                let callDir = 'internal';
+                if (callClass.direction === 'OUTBOUND') callDir = 'outbound';
+                else if (callClass.direction === 'INBOUND') callDir = 'inbound';
+                if (direction === 'all' || direction === callDir) {
+                    employeeMetrics[srcExt].totalCalls++;
+                    if (dstExt) employeeMetrics[srcExt].uniqueNumbers.add(dstExt);
+                    if (callDir === 'outbound') {
+                        employeeMetrics[srcExt].outboundCalls++;
+                        if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].outboundTalkSec += sec;
+                    } else if (callDir === 'inbound') {
+                        employeeMetrics[srcExt].inboundCalls++;
+                        if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].inboundTalkSec += sec;
+                    } else {
+                        employeeMetrics[srcExt].outboundCalls++;
+                        if (row.disposition === 'ANSWERED') employeeMetrics[srcExt].outboundTalkSec += sec;
+                    }
                 }
             }
             if (dstExt && employeeMetrics[dstExt] && dstExt !== srcExt) {
-                employeeMetrics[dstExt].totalCalls++;
-                if (srcExt) employeeMetrics[dstExt].uniqueNumbers.add(srcExt);
-                if (callClass.direction === 'INBOUND') {
-                    employeeMetrics[dstExt].inboundCalls++;
-                    if (row.disposition === 'ANSWERED') employeeMetrics[dstExt].inboundTalkSec += sec;
-                } else if (callClass.direction === 'OUTBOUND') {
-                    employeeMetrics[dstExt].outboundCalls++;
-                    if (row.disposition === 'ANSWERED') employeeMetrics[dstExt].outboundTalkSec += sec;
-                } else {
-                    employeeMetrics[dstExt].inboundCalls++;
-                    if (row.disposition === 'ANSWERED') employeeMetrics[dstExt].inboundTalkSec += sec;
+                let callDir = 'internal';
+                if (callClass.direction === 'INBOUND') callDir = 'inbound';
+                else if (callClass.direction === 'OUTBOUND') callDir = 'outbound';
+                if (direction === 'all' || direction === callDir) {
+                    employeeMetrics[dstExt].totalCalls++;
+                    if (srcExt) employeeMetrics[dstExt].uniqueNumbers.add(srcExt);
+                    if (callDir === 'inbound') {
+                        employeeMetrics[dstExt].inboundCalls++;
+                        if (row.disposition === 'ANSWERED') employeeMetrics[dstExt].inboundTalkSec += sec;
+                    } else if (callDir === 'outbound') {
+                        employeeMetrics[dstExt].outboundCalls++;
+                        if (row.disposition === 'ANSWERED') employeeMetrics[dstExt].outboundTalkSec += sec;
+                    } else {
+                        employeeMetrics[dstExt].inboundCalls++;
+                        if (row.disposition === 'ANSWERED') employeeMetrics[dstExt].inboundTalkSec += sec;
+                    }
                 }
             }
         });
@@ -7932,6 +7975,12 @@ app.get('/ext-stats', (req, res) => {
 app.get('/api/ext-stats/:extension', async (req, res) => {
     try {
         const { extension } = req.params;
+        if (!isSuperAdmin(req)) {
+            const perms = req.session.userPermissions || [];
+            if (!perms.includes('ext-stats') && !perms.includes('operator') && !perms.some(p => p.startsWith('operator-'))) {
+                return res.status(403).json({ success: false, error: 'Forbidden: Missing permission to view extension statistics.' });
+            }
+        }
         const scopedExts = getUserScopedExtensions(req);
         if (scopedExts && !scopedExts.includes(extension)) {
             return res.status(403).json({ success: false, error: 'Forbidden: You can only view statistics for your assigned extension.' });
@@ -7939,6 +7988,10 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
         const startDate = req.query.startDate ? moment(req.query.startDate).format('YYYY-MM-DD HH:mm:ss') : moment().startOf('day').format('YYYY-MM-DD HH:mm:ss');
         const endDate = req.query.endDate ? moment(req.query.endDate).format('YYYY-MM-DD HH:mm:ss') : moment().endOf('day').format('YYYY-MM-DD HH:mm:ss');
         const direction = req.query.direction || 'all';
+        const disposition = req.query.disposition || 'all';
+        const callType = req.query.callType || 'all';
+        const durationFilter = req.query.durationFilter || 'all';
+        const searchNumber = req.query.searchNumber ? String(req.query.searchNumber).trim().toLowerCase() : '';
 
         const workHoursEnabled = req.query.workHoursEnabled === 'true' || req.query.workHoursEnabled === true || req.query.workHoursEnabled === '1';
         const shiftStart = req.query.shiftStart ? String(req.query.shiftStart).trim() : '09:00';
@@ -7975,8 +8028,26 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
                 const isInShift = activeIntervals.some(inv => callDateMs >= inv.startMs && callDateMs <= inv.endMs);
                 if (!isInShift) return;
             }
+            if (disposition !== 'all' && row.disposition !== disposition) return;
+
             const sec = parseInt(row.billsec) || 0;
+            if (durationFilter === 'answered' && sec <= 0) return;
+            if (durationFilter === 'short' && (sec < 0 || sec >= 30)) return;
+            if (durationFilter === 'medium' && (sec < 30 || sec > 180)) return;
+            if (durationFilter === 'long' && sec <= 180) return;
+
+            if (searchNumber) {
+                const srcMatch = String(row.src || '').toLowerCase().includes(searchNumber);
+                const dstMatch = String(row.dst || '').toLowerCase().includes(searchNumber);
+                const cnumMatch = String(row.cnum || '').toLowerCase().includes(searchNumber);
+                if (!srcMatch && !dstMatch && !cnumMatch) return;
+            }
+
             const callClass = classifyCdr(row);
+            const isExternal = callClass.direction === 'INBOUND' || callClass.direction === 'OUTBOUND';
+            if (callType === 'external' && !isExternal) return;
+            if (callType === 'internal' && isExternal) return;
+
             const isSrc = row.src === extension || row.cnum === extension || getExtensionFromChannel(row.channel) === extension;
             const isDst = row.dst === extension || getExtensionFromChannel(row.dstchannel) === extension;
 
@@ -8054,8 +8125,26 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
                 const isInShift = activeIntervals.some(inv => callDateMs >= inv.startMs && callDateMs <= inv.endMs);
                 if (!isInShift) continue;
             }
+            if (disposition !== 'all' && row.disposition !== disposition) continue;
+
             const sec = parseInt(row.billsec) || 0;
+            if (durationFilter === 'answered' && sec <= 0) continue;
+            if (durationFilter === 'short' && (sec < 0 || sec >= 30)) continue;
+            if (durationFilter === 'medium' && (sec < 30 || sec > 180)) continue;
+            if (durationFilter === 'long' && sec <= 180) continue;
+
+            if (searchNumber) {
+                const srcMatch = String(row.src || '').toLowerCase().includes(searchNumber);
+                const dstMatch = String(row.dst || '').toLowerCase().includes(searchNumber);
+                const cnumMatch = String(row.cnum || '').toLowerCase().includes(searchNumber);
+                if (!srcMatch && !dstMatch && !cnumMatch) continue;
+            }
+
             const callClass = classifyCdr(row);
+            const isExternal = callClass.direction === 'INBOUND' || callClass.direction === 'OUTBOUND';
+            if (callType === 'external' && !isExternal) continue;
+            if (callType === 'internal' && isExternal) continue;
+
             const isSrc = row.src === extension || row.cnum === extension || getExtensionFromChannel(row.channel) === extension;
             const isDst = row.dst === extension || getExtensionFromChannel(row.dstchannel) === extension;
             if (!isSrc && !isDst) continue;

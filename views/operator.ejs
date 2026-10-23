@@ -124,6 +124,7 @@ const canHijack = isSuper || userAllowedTabs.includes('operator-hijack') || (has
 const canTransfer = isSuper || userAllowedTabs.includes('operator-transfer') || (hasFullOperatorTab && !hasSpecificOperatorAction);
 const canHangup = isSuper || userAllowedTabs.includes('operator-hangup') || (hasFullOperatorTab && !hasSpecificOperatorAction);
 const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || canTransfer || canHangup;
+const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || userAllowedTabs.includes('operator') || userAllowedTabs.some(p => p.startsWith('operator-'));
 %>
 <!DOCTYPE html>
 <html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
@@ -1074,6 +1075,7 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                             <div class="flex items-start justify-between gap-3 min-w-0">
                                 <div class="min-w-0 flex-1 <%= isRtl ? 'text-right' : 'text-left' %>">
                                     <div class="flex items-center gap-2 min-w-0 flex-wrap">
+                                        <% if (canViewExtStats) { %>
                                         <a href="/ext-stats?ext=<%= emp.extension %>&lang=<%= currentLang %>"
                                            class="text-base font-bold text-white hover:text-[var(--accent-color)] hover:underline truncate transition-colors cursor-pointer"
                                            title="<%= isRtl ? 'عرض إحصائيات ' + emp.name : 'View statistics for ' + emp.name %>"
@@ -1086,6 +1088,10 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                                            onclick="event.stopPropagation()">
                                             <%= emp.isRemote ? emp.dialAlias : emp.extension %>
                                         </a>
+                                        <% } else { %>
+                                        <span class="text-base font-bold text-white truncate" title="<%= emp.name %>"><%= emp.name %></span>
+                                        <span class="extension-number text-xs font-mono font-black text-[var(--accent-color)] shrink-0"><%= emp.isRemote ? emp.dialAlias : emp.extension %></span>
+                                        <% } %>
                                         <% if (hasConnectedPbxs) { %>
                                         <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold <%= emp.isRemote ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30' %>">
                                             #<%= emp.siteCode %>

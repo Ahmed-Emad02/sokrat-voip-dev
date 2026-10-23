@@ -56,7 +56,29 @@ const words = {
         dayWed: "Wed",
         dayThu: "Thu",
         dayFri: "Fri",
-        daySat: "Sat"
+        daySat: "Sat",
+        internal: "Internal",
+        callType: "Call Type",
+        allDispositions: "All Dispositions",
+        answeredDisp: "Answered",
+        noAnswerDisp: "No Answer / Missed",
+        busyDisp: "Busy",
+        failedDisp: "Failed",
+        allCallTypes: "All Call Types",
+        externalCalls: "External Trunks Only",
+        internalCalls: "Internal Calls Only",
+        allDurations: "All Durations",
+        durAnswered: "Answered (> 0s)",
+        durShort: "Short (< 30s)",
+        durMedium: "Medium (30s - 3m)",
+        durLong: "Long (> 3m)",
+        searchParty: "Search Number / Party",
+        searchPartyPlaceholder: "Filter by phone or CID...",
+        searchRosterPlaceholder: "Search employee or ext...",
+        department: "Department",
+        allDepartments: "All Departments",
+        ungrouped: "Ungrouped",
+        resetFilters: "Reset Filters"
     },
     ar: {
         title: "الموظفين", subtitle: "",
@@ -114,7 +136,29 @@ const words = {
         dayWed: "أربعاء",
         dayThu: "خميس",
         dayFri: "جمعة",
-        daySat: "سبت"
+        daySat: "سبت",
+        internal: "داخلي",
+        callType: "نوع المكالمة",
+        allDispositions: "جميع الحالات",
+        answeredDisp: "تم الرد",
+        noAnswerDisp: "لم يرد / فائتة",
+        busyDisp: "مشغول",
+        failedDisp: "فشلت",
+        allCallTypes: "جميع أنواع المكالمات",
+        externalCalls: "خطوط خارجية فقط",
+        internalCalls: "مكالمات داخلية فقط",
+        allDurations: "جميع المدد",
+        durAnswered: "تم الرد (> 0ث)",
+        durShort: "قصيرة (< 30ث)",
+        durMedium: "متوسطة (30ث - 3د)",
+        durLong: "طويلة (> 3د)",
+        searchParty: "بحث برقم أو طرف المكالمة",
+        searchPartyPlaceholder: "تصفية برقم الهاتف أو CID...",
+        searchRosterPlaceholder: "بحث باسم أو تحويلة...",
+        department: "القسم / المجموعة",
+        allDepartments: "جميع الأقسام",
+        ungrouped: "بدون مجموعة",
+        resetFilters: "إعادة ضبط"
     }
 };
 const t = words[currentLang];
@@ -517,7 +561,8 @@ const isRtl = currentLang === 'ar';
                 <button type="button" onclick="setExtDatePreset('30days')" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"><%= isRtl ? 'هذا الشهر' : 'This Month' %></button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-2.5 items-end">
+            <!-- Extended Filters Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5 items-end">
                 <div>
                     <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="startDate"><%= t.startTime %></label>
                     <input type="datetime-local" id="startDate" name="startDate" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -532,11 +577,56 @@ const isRtl = currentLang === 'ar';
                         <option value="all"><%= t.allDir %></option>
                         <option value="inbound"><%= t.inbound %></option>
                         <option value="outbound"><%= t.outbound %></option>
+                        <option value="internal"><%= t.internal %></option>
                     </select>
                 </div>
-                <div class="md:col-span-2 flex items-end gap-2">
-                    <button type="submit" class="btn-primary flex-1 py-1.5 text-xs uppercase tracking-wider cursor-pointer"><%= t.apply %></button>
+                <div id="dispFilterCol">
+                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="disposition"><%= t.disposition %></label>
+                    <select id="disposition" name="disposition" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="all"><%= t.allDispositions %></option>
+                        <option value="ANSWERED"><%= t.answeredDisp %></option>
+                        <option value="NO ANSWER"><%= t.noAnswerDisp %></option>
+                        <option value="BUSY"><%= t.busyDisp %></option>
+                        <option value="FAILED"><%= t.failedDisp %></option>
+                    </select>
                 </div>
+                <div id="callTypeFilterCol">
+                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="callType"><%= t.callType %></label>
+                    <select id="callType" name="callType" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="all"><%= t.allCallTypes %></option>
+                        <option value="external"><%= t.externalCalls %></option>
+                        <option value="internal"><%= t.internalCalls %></option>
+                    </select>
+                </div>
+                <div id="durFilterCol">
+                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="durationFilter"><%= t.duration %></label>
+                    <select id="durationFilter" name="durationFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="all"><%= t.allDurations %></option>
+                        <option value="answered"><%= t.durAnswered %></option>
+                        <option value="short"><%= t.durShort %></option>
+                        <option value="medium"><%= t.durMedium %></option>
+                        <option value="long"><%= t.durLong %></option>
+                    </select>
+                </div>
+                <div id="searchFilterCol">
+                    <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="searchNumber"><%= t.searchParty %></label>
+                    <div class="relative">
+                        <input type="text" id="searchNumber" name="searchNumber" placeholder="<%= t.searchPartyPlaceholder %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg ps-8 pe-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] font-mono">
+                        <svg class="w-3.5 h-3.5 absolute start-2.5 top-2.5 text-[var(--text-muted)] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons: Apply & Reset -->
+            <div class="flex items-center justify-end gap-2 pt-1 border-t border-[var(--border-primary)]/40">
+                <button type="button" onclick="resetExtFilters()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-zinc-400 hover:text-white hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition cursor-pointer flex items-center gap-1.5" title="<%= t.resetFilters %>">
+                    <svg class="w-3.5 h-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span><%= t.resetFilters %></span>
+                </button>
+                <button type="submit" class="btn-primary px-5 py-1.5 text-xs uppercase tracking-wider font-bold cursor-pointer flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                    <span><%= t.apply %></span>
+                </button>
             </div>
             <!-- Working Hours & Shift Filter -->
             <div class="pt-2 border-t border-[var(--border-primary)]/60">
@@ -588,11 +678,28 @@ const isRtl = currentLang === 'ar';
             <div id="extListCol" class="panel-surface rounded-2xl w-full md:w-60 shrink-0 flex flex-col min-h-0">
                 <div class="px-4 py-3.5 border-b border-[#27272a] bg-black/30 shrink-0 flex items-center justify-between">
                     <span class="text-xs font-bold uppercase tracking-widest text-zinc-400"><%= t.extList %></span>
+                    <span id="extRosterCount" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60"><%= roster.length %></span>
                 </div>
                 
+                <!-- Roster Search & Filter Controls -->
+                <div class="p-2 border-b border-[#27272a]/60 bg-black/10 shrink-0 flex flex-col gap-1.5">
+                    <div class="relative">
+                        <input type="text" id="extSearchInput" oninput="filterRoster()" placeholder="<%= t.searchRosterPlaceholder %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg ps-7 pe-2 py-1 text-xs text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-[var(--accent-color)] font-mono">
+                        <svg class="w-3 h-3 absolute start-2 top-2 text-zinc-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                    <% if (typeof employeeGroups !== 'undefined' && employeeGroups && employeeGroups.length > 0) { %>
+                    <select id="extGroupFilter" onchange="filterRoster()" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2 py-1 text-[11px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                        <option value="all"><%= t.allDepartments %></option>
+                        <% employeeGroups.forEach(grp => { %>
+                            <option value="<%= grp %>"><%= grp %></option>
+                        <% }) %>
+                    </select>
+                    <% } %>
+                </div>
+
                 <!-- Navigation Items -->
                 <div class="p-2 border-b border-[#27272a]/60 bg-black/10 shrink-0">
-                    <div id="btnOverview" class="ext-card panel-surface rounded-xl px-3 py-2.5 text-sm flex items-center gap-3 active font-black tracking-wide text-[var(--accent-color)] border border-[#27272a]" onclick="selectOverview()">
+                    <div id="btnOverview" class="ext-card panel-surface rounded-xl px-3 py-2 text-sm flex items-center gap-3 active font-black tracking-wide text-[var(--accent-color)] border border-[#27272a]" onclick="selectOverview()">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
                         <span><%= t.overview %></span>
                     </div>
@@ -600,7 +707,7 @@ const isRtl = currentLang === 'ar';
 
                 <div id="extList" class="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
                     <% roster.forEach(emp => { %>
-                        <div class="ext-card panel-surface rounded-xl px-3 py-2.5 text-sm flex items-center gap-3 <%= !emp.online ? 'opacity-40' : '' %>" data-ext="<%= emp.extension %>" onclick="selectExtension('<%= emp.extension %>')">
+                        <div class="ext-card panel-surface rounded-xl px-3 py-2.5 text-sm flex items-center gap-3 <%= !emp.online ? 'opacity-40' : '' %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name ? emp.name.toLowerCase() : '' %>" data-group="<%= emp.emp_group || '' %>" onclick="selectExtension('<%= emp.extension %>')">
                             <span class="text-[var(--accent-color)] font-bold font-mono text-xs"><%= emp.extension %></span>
                             <span class="text-white font-mono font-bold truncate flex-1"><%= emp.name %></span>
                             <span class="w-2 h-2 rounded-full <%= emp.online ? 'bg-[var(--accent-color)]' : 'bg-zinc-700' %> shrink-0"></span>
@@ -740,7 +847,6 @@ const isRtl = currentLang === 'ar';
             document.getElementById('btnOverview').classList.add('active');
             document.getElementById('overviewHeaderBtn').classList.add('hidden');
             document.getElementById('exportPdfBtn')?.classList.add('hidden');
-            document.getElementById('dirFilterCol').classList.add('hidden'); // Hide direction filter since overview spans all
             const extListCol = document.getElementById('extListCol');
             if (extListCol) extListCol.classList.remove('hidden');
             loadOverview();
@@ -754,11 +860,93 @@ const isRtl = currentLang === 'ar';
             if (card) card.classList.add('active');
             document.getElementById('overviewHeaderBtn').classList.remove('hidden');
             document.getElementById('exportPdfBtn')?.classList.remove('hidden');
-            document.getElementById('dirFilterCol').classList.remove('hidden');
             if (window.innerWidth < 768) {
                 document.getElementById('extListCol')?.classList.add('hidden');
             }
             loadStats(ext);
+        }
+
+        function filterRoster() {
+            const q = (document.getElementById('extSearchInput')?.value || '').toLowerCase().trim();
+            const grp = document.getElementById('extGroupFilter')?.value || 'all';
+            let visibleCount = 0;
+            document.querySelectorAll('#extList .ext-card[data-ext]').forEach(card => {
+                const ext = card.getAttribute('data-ext') || '';
+                const name = card.getAttribute('data-name') || '';
+                const cardGrp = card.getAttribute('data-group') || '';
+                const matchesQuery = !q || ext.includes(q) || name.includes(q);
+                const matchesGrp = grp === 'all' || cardGrp === grp;
+                if (matchesQuery && matchesGrp) {
+                    card.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+            const counter = document.getElementById('extRosterCount');
+            if (counter) counter.textContent = visibleCount;
+        }
+
+        function getFilterQueryParams() {
+            const startDate = (document.getElementById('startDate_raw') || document.getElementById('startDate')).value;
+            const endDate = (document.getElementById('endDate_raw') || document.getElementById('endDate')).value;
+            const direction = document.getElementById('direction')?.value || 'all';
+            const disposition = document.getElementById('disposition')?.value || 'all';
+            const callType = document.getElementById('callType')?.value || 'all';
+            const durationFilter = document.getElementById('durationFilter')?.value || 'all';
+            const searchNumber = (document.getElementById('searchNumber')?.value || '').trim();
+            const lang = '<%= currentLang %>';
+            const shiftParams = getShiftQueryParams();
+
+            return {
+                startDate,
+                endDate,
+                direction,
+                disposition,
+                callType,
+                durationFilter,
+                searchNumber,
+                lang,
+                ...shiftParams
+            };
+        }
+
+        function resetExtFilters() {
+            const now = new Date();
+            const start = new Date(now);
+            start.setDate(start.getDate() - 7);
+            const startStr = formatDate(start);
+            const endStr = formatDate(now);
+
+            const rawStart = document.getElementById('startDate_raw') || document.getElementById('startDate');
+            const rawEnd = document.getElementById('endDate_raw') || document.getElementById('endDate');
+
+            if (rawStart && rawStart._flatpickr) {
+                rawStart._flatpickr.setDate(start, true);
+            } else if (rawStart) {
+                rawStart.value = startStr;
+            }
+
+            if (rawEnd && rawEnd._flatpickr) {
+                rawEnd._flatpickr.setDate(now, true);
+            } else if (rawEnd) {
+                rawEnd.value = endStr;
+            }
+
+            if (document.getElementById('direction')) document.getElementById('direction').value = 'all';
+            if (document.getElementById('disposition')) document.getElementById('disposition').value = 'all';
+            if (document.getElementById('callType')) document.getElementById('callType').value = 'all';
+            if (document.getElementById('durationFilter')) document.getElementById('durationFilter').value = 'all';
+            if (document.getElementById('searchNumber')) document.getElementById('searchNumber').value = '';
+
+            const workHoursCb = document.getElementById('workHoursEnabled');
+            if (workHoursCb && workHoursCb.checked) {
+                workHoursCb.checked = false;
+                toggleWorkHours(false);
+            } else {
+                if (currentExtension) loadStats(currentExtension);
+                else loadOverview();
+            }
         }
 
         function toggleWorkHours(checked) {
@@ -806,9 +994,6 @@ const isRtl = currentLang === 'ar';
 
         function loadOverview() {
             overviewPage = 1;
-            const startDate = (document.getElementById('startDate_raw') || document.getElementById('startDate')).value;
-            const endDate = (document.getElementById('endDate_raw') || document.getElementById('endDate')).value;
-            const lang = '<%= currentLang %>';
             const panel = document.getElementById('detailPanel');
             
             panel.innerHTML = `
@@ -817,8 +1002,7 @@ const isRtl = currentLang === 'ar';
                 </div>
             `;
 
-            const shiftParams = getShiftQueryParams();
-            const params = new URLSearchParams({ startDate, endDate, lang, ...shiftParams });
+            const params = new URLSearchParams(getFilterQueryParams());
             fetch(`/api/ext-overview?${params}`)
                 .then(r => r.json())
                 .then(data => {
@@ -1030,10 +1214,6 @@ const isRtl = currentLang === 'ar';
         }
 
         function loadStats(ext) {
-            const startDate = (document.getElementById('startDate_raw') || document.getElementById('startDate')).value;
-            const endDate = (document.getElementById('endDate_raw') || document.getElementById('endDate')).value;
-            const direction = document.getElementById('direction').value;
-            const lang = '<%= currentLang %>';
             const panel = document.getElementById('detailPanel');
 
             panel.innerHTML = `
@@ -1042,8 +1222,7 @@ const isRtl = currentLang === 'ar';
                 </div>
             `;
 
-            const shiftParams = getShiftQueryParams();
-            const params = new URLSearchParams({ startDate, endDate, direction, lang, ...shiftParams });
+            const params = new URLSearchParams(getFilterQueryParams());
             fetch(`/api/ext-stats/${ext}?${params}`)
                 .then(r => r.json())
                 .then(data => renderStats(data))
