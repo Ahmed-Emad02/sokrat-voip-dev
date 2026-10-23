@@ -2118,7 +2118,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                 <span><%= isRtl ? 'تفاصيل ومواصفات الجهاز' : 'Selected Device Specifications' %></span>
                                 <span id="info-id" class="px-2.5 py-0.5 rounded-lg bg-red-500/10 text-[var(--accent-color)] border border-red-500/20 font-mono text-xs font-black">-</span>
                             </h4>
-                            <p class="text-[10px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'بيانات الهوية والعتاد والتشخيص المباشر للمودم المحدد' : 'Hardware identification, firmware specs, and live diagnostics' %></p>
                         </div>
                     </div>
 
@@ -2176,7 +2175,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     <h3 class="text-sm font-extrabold text-[var(--text-primary)]">
                         <%= t.usbHardwareMonitor %>
                     </h3>
-                    <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= t.usbHardwareDesc %></p>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap">
                     <span id="lsusb-modems-badge" class="px-2.5 py-1 rounded-lg text-xs font-bold font-mono bg-purple-300 text-black border border-purple-400 flex items-center gap-1.5 shadow-sm">
