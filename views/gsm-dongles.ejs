@@ -1612,6 +1612,35 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         html.light-theme .sokrat-new-chat-drop input::placeholder {
             color: #a1a1aa;
         }
+
+        /* LSUSB Device Cards: borderless with clean dividers and no hover effects */
+        .lsusb-device-card {
+            border: none !important;
+            box-shadow: none !important;
+            transition: none !important;
+            cursor: default !important;
+            background: transparent !important;
+        }
+        .lsusb-device-card:hover {
+            border-color: transparent !important;
+            box-shadow: none !important;
+            transform: none !important;
+        }
+        @media (min-width: 640px) {
+            .lsusb-device-card:not(:last-child) {
+                border-inline-end: 1px solid rgba(168, 85, 247, 0.25) !important;
+                padding-inline-end: 1.5rem !important;
+            }
+        }
+        @media (max-width: 639px) {
+            .lsusb-device-card:not(:last-child) {
+                border-bottom: 1px solid rgba(168, 85, 247, 0.25) !important;
+                padding-bottom: 1rem !important;
+            }
+        }
+        .light-theme .lsusb-device-card:not(:last-child) {
+            border-color: rgba(147, 51, 234, 0.25) !important;
+        }
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
@@ -2173,7 +2202,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     </h4>
                     <span class="text-[10px] text-[var(--text-muted)] font-mono">Bus / Dev ID</span>
                 </div>
-                <div id="lsusb-devices-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <div id="lsusb-devices-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
                     <div class="text-[var(--text-muted)] text-xs italic col-span-full py-4 text-center">Loading physical hardware...</div>
                 </div>
             </div>
@@ -5039,13 +5068,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         : `<span class="text-[10px] text-amber-400 font-mono font-bold">${isRtl ? 'لا توجد منافذ TTY' : 'No TTY ports'}</span>`;
 
                     return `
-                        <div class="flex flex-col gap-2.5 p-3.5 rounded-xl border border-purple-500/30 bg-purple-950/20 transition hover:border-purple-400/60 shadow-sm">
+                        <div class="lsusb-device-card flex flex-col gap-2.5 py-1 px-1 sm:px-2 bg-transparent cursor-default">
                             <div class="flex items-center justify-between gap-2">
                                 <div class="flex items-center gap-2 min-w-0">
                                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 shadow-xs"></span>
                                     <span class="font-black text-xs text-[var(--text-primary)] truncate">${escapeUsbText(modem.vendorName || '')} ${escapeUsbText(modem.modelName || 'GSM Modem')}</span>
                                 </div>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-purple-300 border border-purple-400 shrink-0">${escapeUsbText(modem.hardwareId)}</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-purple-300 border border-purple-400 shrink-0 text-black">${escapeUsbText(modem.hardwareId)}</span>
                             </div>
 
                             <div class="grid grid-cols-2 gap-2 text-[10px] font-mono pt-2 border-t border-purple-500/20">
