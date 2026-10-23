@@ -1074,8 +1074,18 @@ const hasAnyCallAction = canListen || canWhisper || canBarge || canHijack || can
                             <div class="flex items-start justify-between gap-3 min-w-0">
                                 <div class="min-w-0 flex-1 <%= isRtl ? 'text-right' : 'text-left' %>">
                                     <div class="flex items-center gap-2 min-w-0 flex-wrap">
-                                        <span class="text-base font-bold text-white truncate" title="<%= emp.name %>"><%= emp.name %></span>
-                                        <span class="extension-number text-xs font-mono font-black text-[var(--accent-color)] shrink-0"><%= emp.isRemote ? emp.dialAlias : emp.extension %></span>
+                                        <a href="/ext-stats?ext=<%= emp.extension %>&lang=<%= currentLang %>"
+                                           class="text-base font-bold text-white hover:text-[var(--accent-color)] hover:underline truncate transition-colors cursor-pointer"
+                                           title="<%= isRtl ? 'عرض إحصائيات ' + emp.name : 'View statistics for ' + emp.name %>"
+                                           onclick="event.stopPropagation()">
+                                            <%= emp.name %>
+                                        </a>
+                                        <a href="/ext-stats?ext=<%= emp.extension %>&lang=<%= currentLang %>"
+                                           class="extension-number text-xs font-mono font-black text-[var(--accent-color)] hover:underline shrink-0 cursor-pointer"
+                                           title="<%= emp.isRemote ? emp.dialAlias : emp.extension %>"
+                                           onclick="event.stopPropagation()">
+                                            <%= emp.isRemote ? emp.dialAlias : emp.extension %>
+                                        </a>
                                         <% if (hasConnectedPbxs) { %>
                                         <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold <%= emp.isRemote ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30' %>">
                                             #<%= emp.siteCode %>

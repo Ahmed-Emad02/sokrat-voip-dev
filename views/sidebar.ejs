@@ -3286,17 +3286,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
             </a>
             <% } %>
 
-            <!-- 4. Employees -->
-            <% if (can('ext-stats')) { %>
-            <a href="/ext-stats?lang=<%= currentLang %>" title="<%= sbT.extLink %>"
-               class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative
-               <%= curPage === '/ext-stats' ? 'bg-[var(--accent-color)] text-white border border-[var(--accent-color)]/20' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]' %>">
-                <svg class="w-4 h-4 me-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
-                <span class="sidebar-text"><%= sbT.extLink %></span>
-            </a>
-            <% } %>
-
-            <!-- 5. Address Book -->
+            <!-- 4. Address Book -->
             <% if (can('contacts')) { %>
             <a href="/contacts?lang=<%= currentLang %>" title="<%= sbT.contactsLink %>"
                class="nav-item flex items-center px-4 py-3 rounded-lg transition-all duration-150 text-sm font-semibold relative

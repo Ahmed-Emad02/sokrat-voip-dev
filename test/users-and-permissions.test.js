@@ -458,7 +458,7 @@ test('TAB_ROUTE_MAP correctly maps all route paths with leading slashes includin
     assert.ok(configSidebarHtml.includes('/operator?lang='), 'Sidebar during /config request must show /operator');
     assert.ok(configSidebarHtml.includes('/gsm-dongles?lang='), 'Sidebar during /config request must show /gsm-dongles');
     assert.ok(configSidebarHtml.includes('/voicemails?lang='), 'Sidebar during /config request must show /voicemails');
-    assert.ok(configSidebarHtml.includes('/ext-stats?lang='), 'Sidebar during /config request must show /ext-stats');
+    assert.equal(configSidebarHtml.includes('/ext-stats?lang='), false, 'Ext stats tab is now accessed contextually from Live Panel and omitted from sidebar');
     assert.ok(configSidebarHtml.includes('/storage?lang='), 'Sidebar during /config request must show /storage');
     assert.ok(configSidebarHtml.includes('/contacts?lang='), 'Sidebar during /config request must show /contacts');
     assert.ok(configSidebarHtml.includes('/?lang='), 'Sidebar during /config request must show /');

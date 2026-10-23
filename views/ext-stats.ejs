@@ -485,7 +485,12 @@ const isRtl = currentLang === 'ar';
                 <h2 class="text-3xl font-vibrant-display text-white tracking-tight <%= isRtl ? 'text-right' : '' %>"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
             <!-- Header Actions -->
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2.5 flex-wrap">
+                <a href="/operator?lang=<%= currentLang %>" class="bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] text-[var(--text-secondary)] hover:text-white px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer flex items-center gap-2" title="<%= isRtl ? 'العودة للوحة المراقبة' : 'Back to Live Panel' %>">
+                    <svg class="w-4 h-4 rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                    <span><%= isRtl ? 'لوحة المراقبة' : 'Live Panel' %></span>
+                </a>
+
                 <button id="exportPdfBtn" onclick="exportReportPdf()" class="hidden bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] text-[var(--text-primary)] px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer flex items-center gap-2" title="<%= isRtl ? 'حفظ التقارير بتنسيق PDF' : 'Save PDF Report' %>">
                     <svg class="w-4 h-4 text-[var(--accent-color)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                     <span><%= t.exportPdf %></span>
@@ -494,7 +499,7 @@ const isRtl = currentLang === 'ar';
                 <!-- Back to Overview Button in Title Bar -->
                 <button id="overviewHeaderBtn" onclick="selectOverview()" class="hidden bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-[var(--border-accent)] text-[var(--accent-color)] hover:text-[var(--accent-hover)] px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
-                    <%= t.overview %>
+                    <span><%= t.overview %></span>
                 </button>
             </div>
         </div>
@@ -502,6 +507,16 @@ const isRtl = currentLang === 'ar';
         <!-- Filter Form -->
         <form id="filterForm" class="panel-surface p-3 px-4 rounded-xl mb-4 flex flex-col gap-2.5 relative z-30">
             <input type="hidden" name="lang" value="<%= currentLang %>">
+
+            <!-- Quick Presets -->
+            <div class="flex items-center gap-1.5 flex-wrap pb-1 border-b border-[var(--border-primary)]/40">
+                <span class="text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-wider me-1"><%= isRtl ? 'الفترة:' : 'Presets:' %></span>
+                <button type="button" onclick="setExtDatePreset('today')" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"><%= isRtl ? 'اليوم' : 'Today' %></button>
+                <button type="button" onclick="setExtDatePreset('yesterday')" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"><%= isRtl ? 'أمس' : 'Yesterday' %></button>
+                <button type="button" onclick="setExtDatePreset('7days')" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"><%= isRtl ? 'آخر 7 أيام' : 'Last 7 Days' %></button>
+                <button type="button" onclick="setExtDatePreset('30days')" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-[var(--bg-primary)] border border-[var(--border-primary)] text-zinc-300 hover:text-white hover:border-[var(--accent-color)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"><%= isRtl ? 'هذا الشهر' : 'This Month' %></button>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-5 gap-2.5 items-end">
                 <div>
                     <label class="block text-xs font-black uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="startDate"><%= t.startTime %></label>
@@ -568,9 +583,9 @@ const isRtl = currentLang === 'ar';
                 </div>
             </div>
         </form>
-        <div class="flex gap-6 flex-1 min-h-0">
+        <div class="flex flex-col md:flex-row gap-4 md:gap-6 flex-1 min-h-0">
             <!-- Left Extensions List -->
-            <div id="extListCol" class="panel-surface rounded-2xl w-60 shrink-0 flex flex-col min-h-0">
+            <div id="extListCol" class="panel-surface rounded-2xl w-full md:w-60 shrink-0 flex flex-col min-h-0">
                 <div class="px-4 py-3.5 border-b border-[#27272a] bg-black/30 shrink-0 flex items-center justify-between">
                     <span class="text-xs font-bold uppercase tracking-widest text-zinc-400"><%= t.extList %></span>
                 </div>
@@ -668,9 +683,56 @@ const isRtl = currentLang === 'ar';
             // Initialize digital clock in sidebar
             if (typeof window.updateClock === 'function') window.updateClock();
 
-            // Default to overview mode on load
-            selectOverview();
+            // Check URL query parameters for ?ext= or ?extension=
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetExt = urlParams.get('ext') || urlParams.get('extension');
+            if (targetExt) {
+                selectExtension(targetExt);
+            } else {
+                selectOverview();
+            }
         });
+
+        function setExtDatePreset(preset) {
+            const now = new Date();
+            let start = new Date(now);
+            let end = new Date(now);
+
+            if (preset === 'today') {
+                start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+                end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+            } else if (preset === 'yesterday') {
+                start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+                end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59);
+            } else if (preset === '7days') {
+                start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                end = now;
+            } else if (preset === '30days') {
+                start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+                end = now;
+            }
+
+            const rawStart = document.getElementById('startDate_raw') || document.getElementById('startDate');
+            const rawEnd = document.getElementById('endDate_raw') || document.getElementById('endDate');
+
+            if (rawStart && rawStart._flatpickr) {
+                rawStart._flatpickr.setDate(start, true);
+            } else if (rawStart) {
+                rawStart.value = formatDate(start);
+            }
+
+            if (rawEnd && rawEnd._flatpickr) {
+                rawEnd._flatpickr.setDate(end, true);
+            } else if (rawEnd) {
+                rawEnd.value = formatDate(end);
+            }
+
+            if (currentExtension) {
+                loadStats(currentExtension);
+            } else {
+                loadOverview();
+            }
+        }
 
         function selectOverview() {
             currentExtension = null;
@@ -679,6 +741,8 @@ const isRtl = currentLang === 'ar';
             document.getElementById('overviewHeaderBtn').classList.add('hidden');
             document.getElementById('exportPdfBtn')?.classList.add('hidden');
             document.getElementById('dirFilterCol').classList.add('hidden'); // Hide direction filter since overview spans all
+            const extListCol = document.getElementById('extListCol');
+            if (extListCol) extListCol.classList.remove('hidden');
             loadOverview();
         }
 
@@ -691,6 +755,9 @@ const isRtl = currentLang === 'ar';
             document.getElementById('overviewHeaderBtn').classList.remove('hidden');
             document.getElementById('exportPdfBtn')?.classList.remove('hidden');
             document.getElementById('dirFilterCol').classList.remove('hidden');
+            if (window.innerWidth < 768) {
+                document.getElementById('extListCol')?.classList.add('hidden');
+            }
             loadStats(ext);
         }
 
@@ -1003,7 +1070,7 @@ const isRtl = currentLang === 'ar';
             const endDateVal = document.getElementById('endDate')?.value || '';
 
             // Printable Header Banner with Employee Name & ID
-            html += `<div class="print-header-banner flex items-center justify-between pb-4 mb-6 border-b border-[var(--border-primary)]">
+            html += `<div class="print-header-banner flex items-center justify-between pb-4 mb-6 border-b border-[var(--border-primary)] flex-wrap gap-3">
                 <div class="flex items-center gap-3">
                     <span class="accent-orange font-mono bg-[var(--bg-primary)] border border-[var(--border-primary)] px-3 py-1.5 rounded-xl text-lg font-black">${data.extension}</span>
                     <div>
@@ -1011,9 +1078,17 @@ const isRtl = currentLang === 'ar';
                         <p class="text-xs font-semibold text-[var(--text-muted)] tracking-wider uppercase mt-0.5"><%= isRtl ? 'تقرير تحليلات أداء الموظف' : 'Employee Performance Analytics Report' %></p>
                     </div>
                 </div>
-                <div class="text-end ${rtl ? 'text-start' : 'text-end'} text-xs text-[var(--text-muted)] font-mono">
-                    <p class="font-bold text-[var(--text-primary)]">SOKRAT VOIP ANALYTICS</p>
-                    <p class="mt-0.5">${startDateVal} &mdash; ${endDateVal}</p>
+                <div class="flex items-center gap-3">
+                    <a href="/cdr?targetExtension=${encodeURIComponent(data.extension)}&startDate=${encodeURIComponent(document.getElementById('startDate')?.value || '')}&endDate=${encodeURIComponent(document.getElementById('endDate')?.value || '')}&lang=<%= currentLang %>"
+                       class="no-print bg-[var(--bg-primary)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-[var(--accent-color)] text-zinc-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                       title="<%= isRtl ? 'عرض سجل مكالمات هذه التحويلة' : 'View this extension in Call History' %>">
+                        <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span><%= isRtl ? 'سجل المكالمات' : 'Call History' %></span>
+                    </a>
+                    <div class="text-end ${rtl ? 'text-start' : 'text-end'} text-xs text-[var(--text-muted)] font-mono">
+                        <p class="font-bold text-[var(--text-primary)]">SOKRAT VOIP ANALYTICS</p>
+                        <p class="mt-0.5">${startDateVal} &mdash; ${endDateVal}</p>
+                    </div>
                 </div>
             </div>`;
 

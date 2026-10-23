@@ -212,13 +212,12 @@ test('4. Verification of group permission resolution and parent-child hierarchy 
     assert.ok(allResolved.includes('dialer'), 'dialer alias must be present when campaigns is granted');
 });
 
-test('5. Verification of Sidebar navigation visibility for all 9 standard pages and root-only Auto-Dial', async () => {
+test('5. Verification of Sidebar navigation visibility for all 8 standard pages and root-only Auto-Dial', async () => {
     const sidebarEjsPath = path.join(__dirname, '../views/sidebar.ejs');
     const pageKeys = [
         { key: 'dashboard', url: '/?lang=' },
         { key: 'call_history', url: '/cdr?lang=' },
         { key: 'operator', url: '/operator?lang=' },
-        { key: 'ext-stats', url: '/ext-stats?lang=' },
         { key: 'contacts', url: '/contacts?lang=' },
         { key: 'voicemails', url: '/voicemails?lang=' },
         { key: 'gsm-dongles', url: '/gsm-dongles?lang=' },
