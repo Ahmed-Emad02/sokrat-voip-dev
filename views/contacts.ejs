@@ -143,6 +143,9 @@ const isRtl = currentLang === 'ar';
             align-items: center;
             gap: 0.5rem;
             width: 0;
+            height: 2.5rem !important;
+            max-height: 2.5rem !important;
+            box-sizing: border-box !important;
             opacity: 0;
             overflow: hidden;
             /* Percentage radius: the browser resolves it against the CURRENT box
@@ -168,6 +171,10 @@ const isRtl = currentLang === 'ar';
         }
         .contacts-search-drop.is-open {
             width: 22rem;
+            max-width: calc(100vw - 16rem);
+            height: 2.5rem !important;
+            max-height: 2.5rem !important;
+            box-sizing: border-box !important;
             opacity: 1;
             padding: 0 0.85rem;
             margin-inline-start: 0.5rem;
@@ -177,6 +184,9 @@ const isRtl = currentLang === 'ar';
         }
         .contacts-search-drop.is-closing {
             width: 0;
+            height: 2.5rem !important;
+            max-height: 2.5rem !important;
+            box-sizing: border-box !important;
             opacity: 0;
             padding: 0 0;
             margin-inline-start: 0;
@@ -232,14 +242,16 @@ const isRtl = currentLang === 'ar';
         .contacts-search-drop input {
             min-width: 0;
             flex: 1;
+            height: 100% !important;
+            box-sizing: border-box !important;
             background: transparent;
             border: 0;
             outline: none;
             color: #ffffff;
             font-size: 0.875rem;
-            line-height: 1.5rem;
-            /* 2px trimmed from the top and bottom of the field */
-            padding: calc(0.6rem - 2px) 0;
+            line-height: normal !important;
+            padding: 0 !important;
+            margin: 0 !important;
         }
         .contacts-search-drop input::placeholder {
             color: #52525b;
@@ -393,12 +405,12 @@ const isRtl = currentLang === 'ar';
     <%- include('sidebar') %>
     <div class="flex-1 p-8 relative">
         
-        <div class="mb-6 flex justify-between items-center gap-4 flex-wrap">
+        <div class="mb-6 flex justify-between items-center gap-4 flex-wrap min-h-[2.5rem]">
             <div class="<%= isRtl ? 'text-right' : '' %>">
                 <h2 class="text-3xl font-vibrant-display text-white tracking-tight <%= isRtl ? 'text-right' : '' %>"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
-            <div class="flex items-center gap-3">
-                <div class="flex items-center">
+            <div class="flex items-center gap-3 h-10 shrink-0">
+                <div class="flex items-center h-10 shrink-0">
                     <button onclick="toggleContactsSearch()" id="contactsSearchToggle" class="icon-tool-btn" title="<%= t.searchPlaceholder %>" aria-label="<%= t.searchPlaceholder %>" aria-expanded="false" aria-controls="contactsSearchDrop">
                         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -409,7 +421,7 @@ const isRtl = currentLang === 'ar';
                     </div>
                 </div>
                 <% if (isSuperAdmin) { %>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 h-10 shrink-0">
                     <button onclick="openBlacklistModal()" class="icon-tool-btn" title="<%= isRtl ? 'القائمة السوداء (الحظر الوارد)' : 'Inbound Blacklist' %>" aria-label="<%= isRtl ? 'القائمة السوداء (الحظر الوارد)' : 'Inbound Blacklist' %>">
                         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
