@@ -93,7 +93,7 @@ module.exports = function createExtensionContactsRouter(pool) {
                  JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = a.lead_id
                  LEFT JOIN \`asterisk\`.\`dialer_campaigns\` c ON c.id = a.campaign_id
                  WHERE a.agent_extension = ? AND a.active_flag = 1
-                 ORDER BY a.id DESC
+                 ORDER BY a.created_at DESC
                  LIMIT 1`,
                 [extension],
             );
