@@ -133,6 +133,23 @@ ensure_db_index "dashboard_users" "idx_dash_users_extension" "KEY \`idx_dash_use
 ensure_db_index "dashboard_users" "idx_unique_email" "UNIQUE KEY \`idx_unique_email\` (\`email\`)"
 ensure_db_column "dashboard_user_extensions" "peer_id" "INT DEFAULT NULL"
 ensure_db_index "dashboard_user_extensions" "idx_peer_id" "KEY \`idx_peer_id\` (\`peer_id\`)"
+ensure_db_column "sokrat_federation_settings" "local_node_uuid" "VARCHAR(36) DEFAULT NULL"
+ensure_db_column "sokrat_federation_peers" "node_uuid" "VARCHAR(36) DEFAULT NULL"
+ensure_db_column "sokrat_federation_peers" "api_version" "SMALLINT UNSIGNED NOT NULL DEFAULT 1"
+ensure_db_column "sokrat_federation_peers" "node_version" "VARCHAR(50) DEFAULT NULL"
+ensure_db_column "sokrat_federation_peers" "allow_report_read" "TINYINT(1) NOT NULL DEFAULT 1"
+ensure_db_column "sokrat_federation_peers" "allow_contact_write" "TINYINT(1) NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_peers" "allow_dongle_control" "TINYINT(1) NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_peers" "allow_campaign_control" "TINYINT(1) NOT NULL DEFAULT 0"
+# Federation Phase 0: every node needs a stable identity, and legacy peer rows
+# pointed at the softphone vhost (:8443) which does not serve the federation API.
+mysql "${MYSQL_AUTH[@]}" asterisk -e "
+UPDATE \`sokrat_federation_settings\`
+SET \`local_node_uuid\` = UUID()
+WHERE \`id\` = 1 AND (\`local_node_uuid\` IS NULL OR \`local_node_uuid\` = '');
+UPDATE \`sokrat_federation_peers\`
+SET \`api_base_url\` = REPLACE(\`api_base_url\`, ':8443', '')
+WHERE \`api_base_url\` LIKE '%:8443%';" 2>/dev/null || true
 ensure_db_column "gsm_dongles" "dynamic_enabled" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "employee_extras" "is_group_admin" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "storage_settings" "auto_purge_days" "INT DEFAULT 90"

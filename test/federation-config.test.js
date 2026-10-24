@@ -26,6 +26,14 @@ test('Schema & Migration Parity: backend/install_db.sql and install.sh include f
     assert.match(sql, /`site_code` VARCHAR\(10\) NOT NULL UNIQUE/, 'sokrat_federation_peers must define unique site_code');
     assert.match(sql, /`iax_secret_enc` TEXT NOT NULL/, 'sokrat_federation_peers must define iax_secret_enc');
     assert.match(sql, /`allow_outbound_egress` TINYINT\(1\)/, 'sokrat_federation_peers must define allow_outbound_egress');
+    assert.match(sql, /`local_node_uuid` VARCHAR\(36\)/, 'sokrat_federation_settings must define local_node_uuid');
+    assert.match(sql, /`node_uuid` VARCHAR\(36\)/, 'sokrat_federation_peers must define node_uuid');
+    assert.match(sql, /`api_version` SMALLINT UNSIGNED NOT NULL DEFAULT 1/, 'sokrat_federation_peers must define api_version');
+    assert.match(sql, /`allow_report_read` TINYINT\(1\) NOT NULL DEFAULT 1/, 'sokrat_federation_peers must define allow_report_read');
+    assert.match(sql, /`allow_contact_write` TINYINT\(1\) NOT NULL DEFAULT 0/, 'sokrat_federation_peers must define allow_contact_write');
+    assert.match(sql, /`allow_dongle_control` TINYINT\(1\) NOT NULL DEFAULT 0/, 'sokrat_federation_peers must define allow_dongle_control');
+    assert.match(sql, /`allow_campaign_control` TINYINT\(1\) NOT NULL DEFAULT 0/, 'sokrat_federation_peers must define allow_campaign_control');
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS `sokrat_federation_node_status`/, 'install_db.sql must create sokrat_federation_node_status');
 
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_extensions`/, 'install_db.sql must create sokrat_federation_remote_extensions');
     assert.match(sql, /`dial_alias` VARCHAR\(30\) NOT NULL UNIQUE/, 'sokrat_federation_remote_extensions must define dial_alias');
@@ -188,4 +196,35 @@ test('Federation Bootstrap: lib/federation-bootstrap.js exports core functions a
     assert.equal(typeof bootstrap.syncRemotePeerEntities, 'function', 'syncRemotePeerEntities must be exported');
     assert.equal(typeof bootstrap.removeRemoteFederationSetup, 'function', 'removeRemoteFederationSetup must be exported');
     assert.equal(typeof bootstrap.getLocalIpAddress, 'function', 'getLocalIpAddress must be exported');
+    assert.equal(typeof bootstrap.inspectRemoteCode, 'function', 'inspectRemoteCode must be exported');
+    assert.equal(typeof bootstrap.decideCodeSync, 'function', 'decideCodeSync must be exported');
+});
+
+test('Federation Bootstrap: code sync only runs when remote checksums differ', () => {
+    const { decideCodeSync } = require('../lib/federation-bootstrap');
+    const local = { 'server.js': 'aaa', 'lib/federation-auth.js': 'bbb' };
+
+    const upToDate = decideCodeSync(local, { hashes: { ...local }, version: '1.1.0' }, 'auto');
+    assert.equal(upToDate.sync, false);
+    assert.equal(upToDate.reason, 'up-to-date');
+
+    const drifted = decideCodeSync(local, { hashes: { 'server.js': 'ccc', 'lib/federation-auth.js': 'bbb' }, version: '1.1.0' }, 'auto');
+    assert.equal(drifted.sync, true);
+    assert.equal(drifted.reason, 'checksum-mismatch');
+    assert.deepEqual(drifted.changed, ['server.js']);
+
+    const missing = decideCodeSync(local, { hashes: { 'server.js': 'aaa' }, version: '1.1.0' }, 'auto');
+    assert.equal(missing.sync, true);
+    assert.equal(missing.reason, 'missing-files');
+    assert.deepEqual(missing.missing, ['lib/federation-auth.js']);
+
+    assert.equal(decideCodeSync(local, { hashes: local }, true).reason, 'forced');
+    assert.equal(decideCodeSync(local, { hashes: local }, false).sync, false);
+});
+
+test('Federation Bootstrap: peer API URLs never use the softphone :8443 vhost', () => {
+    const bootstrapSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'federation-bootstrap.js'), 'utf8');
+    assert.doesNotMatch(bootstrapSrc, /https:\/\/\$\{host\}:8443/, 'bootstrap must not write :8443 peer URLs');
+    assert.doesNotMatch(bootstrapSrc, /https:\/\/\$\{resolvedLocalIp\}:8443/, 'bootstrap must not advertise :8443 to peers');
+    assert.match(bootstrapSrc, /normalizeFederationBaseUrl/, 'bootstrap must normalize peer API URLs');
 });

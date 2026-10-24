@@ -5381,6 +5381,14 @@ function isTabAllowed(tabName) {
                     </label>
                 </div>
 
+                <label for="connSyncCode" class="flex items-start gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
+                    <input type="checkbox" id="connSyncCode" class="mt-0.5 rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
+                    <span class="text-xs font-bold text-[var(--text-primary)]">
+                        <%= isRtl ? 'مزامنة كود التطبيق إلى السيرفر البعيد' : 'Sync app code to remote node' %>
+                        <span class="block text-[10px] font-normal text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'افتراضيًا تتم المزامنة فقط عند اختلاف الملفات. فعّل هذا الخيار للفرض دائمًا.' : 'By default code is copied only when checksums differ. Enable to force an overwrite.' %></span>
+                    </span>
+                </label>
+
                 <!-- Status Output / Spinner Area -->
                 <div id="connBootstrapStatusArea" class="hidden p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-mono text-amber-400">
                     <div class="flex items-center gap-2">
@@ -5430,6 +5438,22 @@ function isTabAllowed(tabName) {
                     <label for="editPeerAllowEgress" class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
                         <input type="checkbox" id="editPeerAllowEgress" class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
                         <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'مشاركة خطوط GSM والصادر' : 'Allow Outbound / GSM Egress' %></span>
+                    </label>
+                    <label for="editPeerAllowReportRead" class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
+                        <input type="checkbox" id="editPeerAllowReportRead" class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
+                        <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'قراءة التقارير والسجلات' : 'Read reports &amp; CDR' %></span>
+                    </label>
+                    <label for="editPeerAllowContactWrite" class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
+                        <input type="checkbox" id="editPeerAllowContactWrite" class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
+                        <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'السماح بكتابة جهات الاتصال' : 'Allow contact writes' %></span>
+                    </label>
+                    <label for="editPeerAllowDongleControl" class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
+                        <input type="checkbox" id="editPeerAllowDongleControl" class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
+                        <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'السماح بالتحكم في الشرائح' : 'Allow dongle control' %></span>
+                    </label>
+                    <label for="editPeerAllowCampaignControl" class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
+                        <input type="checkbox" id="editPeerAllowCampaignControl" class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
+                        <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'السماح بالتحكم في الحملات' : 'Allow campaign control' %></span>
                     </label>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
@@ -16763,6 +16787,7 @@ function isTabAllowed(tabName) {
             const nodeName = document.getElementById('connRemoteNodeName').value.trim();
             const allowInternal = document.getElementById('connAllowInternal').checked ? 1 : 0;
             const allowEgress = document.getElementById('connAllowEgress').checked ? 1 : 0;
+            const forceCodeSync = document.getElementById('connSyncCode') ? document.getElementById('connSyncCode').checked : false;
 
             const statusArea = document.getElementById('connBootstrapStatusArea');
             const statusText = document.getElementById('connBootstrapStatusText');
@@ -16783,7 +16808,8 @@ function isTabAllowed(tabName) {
                     siteCode,
                     nodeName,
                     allowInternalDialing: allowInternal,
-                    allowOutboundEgress: allowEgress
+                    allowOutboundEgress: allowEgress,
+                    codeSync: forceCodeSync ? 'force' : 'auto'
                 })
             })
             .then(res => res.json())
@@ -16858,6 +16884,14 @@ function isTabAllowed(tabName) {
             document.getElementById('editPeerHost').value = peer.host || '';
             document.getElementById('editPeerAllowInternal').checked = Number(peer.allow_internal_dialing) !== 0;
             document.getElementById('editPeerAllowEgress').checked = Number(peer.allow_outbound_egress) !== 0;
+            const reportRead = document.getElementById('editPeerAllowReportRead');
+            if (reportRead) reportRead.checked = Number(peer.allow_report_read) !== 0;
+            const contactWrite = document.getElementById('editPeerAllowContactWrite');
+            if (contactWrite) contactWrite.checked = Number(peer.allow_contact_write) !== 0;
+            const dongleControl = document.getElementById('editPeerAllowDongleControl');
+            if (dongleControl) dongleControl.checked = Number(peer.allow_dongle_control) !== 0;
+            const campaignControl = document.getElementById('editPeerAllowCampaignControl');
+            if (campaignControl) campaignControl.checked = Number(peer.allow_campaign_control) !== 0;
             openModal('editPeerModal');
         }
 
@@ -16868,11 +16902,18 @@ function isTabAllowed(tabName) {
             const host = document.getElementById('editPeerHost').value.trim();
             const allow_internal_dialing = document.getElementById('editPeerAllowInternal').checked ? 1 : 0;
             const allow_outbound_egress = document.getElementById('editPeerAllowEgress').checked ? 1 : 0;
+            const allow_report_read = document.getElementById('editPeerAllowReportRead')?.checked ? 1 : 0;
+            const allow_contact_write = document.getElementById('editPeerAllowContactWrite')?.checked ? 1 : 0;
+            const allow_dongle_control = document.getElementById('editPeerAllowDongleControl')?.checked ? 1 : 0;
+            const allow_campaign_control = document.getElementById('editPeerAllowCampaignControl')?.checked ? 1 : 0;
 
             fetch(`/api/config/federation/peers/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ node_name, host, allow_internal_dialing, allow_outbound_egress })
+                body: JSON.stringify({
+                    node_name, host, allow_internal_dialing, allow_outbound_egress,
+                    allow_report_read, allow_contact_write, allow_dongle_control, allow_campaign_control
+                })
             })
             .then(res => res.json())
             .then(data => {

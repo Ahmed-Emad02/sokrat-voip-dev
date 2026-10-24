@@ -890,6 +890,7 @@ ensure_db_index() {
 ensure_db_column "dashboard_users" "group_id" "INT DEFAULT NULL"
 ensure_db_column "dashboard_users" "extension" "VARCHAR(20) DEFAULT NULL"
 ensure_db_column "dashboard_users" "reset_token_expires" "DATETIME DEFAULT NULL"
+ensure_db_column "gsm_dongles" "dynamic_enabled" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_index "dashboard_users" "idx_dash_users_extension" "KEY \`idx_dash_users_extension\` (\`extension\`)"
 ensure_db_index "dashboard_users" "idx_unique_email" "UNIQUE KEY \`idx_unique_email\` (\`email\`)"
 
