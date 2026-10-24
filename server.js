@@ -348,6 +348,11 @@ let federationCdrViewReady = false;
  * installs pay nothing for federation. Any scope that includes a peer reads the
  * union view, optionally filtered by site code.
  */
+function federationScopeIncludesLocal(scope) {
+    if (!scope || !Array.isArray(scope.sites) || scope.sites.length === 0) return true;
+    return scope.sites.map(String).includes(String(scope.localSiteCode || '10'));
+}
+
 function buildCdrSource(scope) {
     const localSiteCode = String((scope && scope.localSiteCode) || '10');
     const includeRemote = Boolean(scope && scope.includeRemote) && federationCdrViewReady;
@@ -10321,12 +10326,16 @@ function getEnrichedDevices() {
 // Page View route
 app.get('/gsm-dongles', async (req, res) => {
     try {
+        const scope = res.locals.federationScope;
+        const includeLocal = federationScopeIncludesLocal(scope);
         const [allowedDongles, enriched, remoteNodes] = await Promise.all([
             getUserAllowedDongles(req),
             getEnrichedDevices(),
-            getFederationRemoteDongles(res.locals.federationScope)
+            getFederationRemoteDongles(scope)
         ]);
-        const filteredDevices = allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
+        const filteredDevices = includeLocal
+            ? (allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched)
+            : [];
         res.render('gsm-dongles', {
             devices: filteredDevices,
             remoteNodes,
@@ -10340,12 +10349,16 @@ app.get('/gsm-dongles', async (req, res) => {
 // API Endpoint to fetch latest device status
 app.get('/api/gsm-dongles', async (req, res) => {
     try {
+        const scope = res.locals.federationScope;
+        const includeLocal = federationScopeIncludesLocal(scope);
         const [allowedDongles, enriched, remoteNodes] = await Promise.all([
             getUserAllowedDongles(req),
             getEnrichedDevices(),
-            getFederationRemoteDongles(res.locals.federationScope)
+            getFederationRemoteDongles(scope)
         ]);
-        const filteredDevices = allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
+        const filteredDevices = includeLocal
+            ? (allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched)
+            : [];
         res.json({ success: true, devices: filteredDevices, remoteNodes });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -12915,8 +12928,18 @@ async function syncAllCampaignLeadsToAddressBook(dbConn) {
 
 app.get('/contacts', requireAuth, async (req, res) => {
     try {
-        const stdout = await runSqliteQuery("SELECT id, name, last_name, telefono FROM contact ORDER BY name ASC, last_name ASC;");
-        const contacts = parseSqliteRows(stdout);
+        const scope = res.locals.federationScope;
+        const includeLocal = federationScopeIncludesLocal(scope);
+        const stdout = includeLocal
+            ? await runSqliteQuery("SELECT id, name, last_name, telefono FROM contact ORDER BY name ASC, last_name ASC;")
+            : '';
+        const localContacts = includeLocal
+            ? parseSqliteRows(stdout).map(contact => ({ ...contact, is_remote: false }))
+            : [];
+        const remoteContacts = await getFederationRemoteContacts(scope);
+        const contacts = [...localContacts, ...remoteContacts].sort((a, b) =>
+            `${a.name} ${a.last_name}`.localeCompare(`${b.name} ${b.last_name}`, undefined, { sensitivity: 'base' })
+        );
         const currentLang = res.locals.currentLang || 'en';
         res.render('contacts', {
             contacts,
@@ -12931,8 +12954,18 @@ app.get('/contacts', requireAuth, async (req, res) => {
 
 app.get('/api/contacts', requireAuth, requireTabPermission('contacts'), async (req, res) => {
     try {
-        const stdout = await runSqliteQuery("SELECT id, name, last_name, telefono FROM contact ORDER BY name ASC, last_name ASC;");
-        const contacts = parseSqliteRows(stdout);
+        const scope = res.locals.federationScope;
+        const includeLocal = federationScopeIncludesLocal(scope);
+        const stdout = includeLocal
+            ? await runSqliteQuery("SELECT id, name, last_name, telefono FROM contact ORDER BY name ASC, last_name ASC;")
+            : '';
+        const localContacts = includeLocal
+            ? parseSqliteRows(stdout).map(contact => ({ ...contact, is_remote: false }))
+            : [];
+        const remoteContacts = await getFederationRemoteContacts(scope);
+        const contacts = [...localContacts, ...remoteContacts].sort((a, b) =>
+            `${a.name} ${a.last_name}`.localeCompare(`${b.name} ${b.last_name}`, undefined, { sensitivity: 'base' })
+        );
         res.json({ success: true, contacts });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -20380,6 +20413,40 @@ async function getFederationRemoteDongles(scope) {
     }
 }
 
+async function getFederationRemoteContacts(scope) {
+    if (!scope || !scope.includeRemote) return [];
+    const allSites = Array.isArray(scope.allSites) ? scope.allSites.map(String) : [];
+    const selected = Array.isArray(scope.sites) ? scope.sites.map(String) : [];
+    const restrict = selected.length > 0 && selected.length < allSites.length;
+    const params = [];
+    let where = '';
+    if (restrict) {
+        where = ' AND p.site_code IN (?)';
+        params.push(selected);
+    }
+    try {
+        const [rows] = await pool.query(`
+            SELECT rc.source_id, rc.name, rc.last_name, rc.telefono,
+                   p.site_code, p.node_name
+            FROM \`asterisk\`.\`sokrat_federation_remote_contacts\` rc
+            JOIN \`asterisk\`.\`sokrat_federation_peers\` p ON p.id = rc.peer_id
+            WHERE p.allow_report_read = 1${where}
+            ORDER BY rc.name ASC, rc.last_name ASC
+        `, params);
+        return (rows || []).map(row => ({
+            id: `fed:${row.site_code}:${row.source_id}`,
+            name: row.name || '',
+            last_name: row.last_name || '',
+            telefono: row.telefono || '',
+            is_remote: true,
+            site_code: String(row.site_code),
+            node_name: row.node_name || `Site ${row.site_code}`
+        }));
+    } catch (_) {
+        return [];
+    }
+}
+
 async function getFederationInventoryCounts() {    const count = async (table) => {
         try {
             const [rows] = await pool.query(`SELECT COUNT(*) AS total FROM \`asterisk\`.\`${table}\``);
@@ -20469,7 +20536,27 @@ app.get('/api/federation/v1/inventory', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
-// 17. GET /api/federation/v1/cdr - Incremental CDR mirror feed for central reports
+// 17. GET /api/federation/v1/contacts - Address book snapshot for central search
+app.get('/api/federation/v1/contacts', async (req, res) => {
+    try {
+        const [node, stdout] = await Promise.all([
+            getFederationNodeIdentity(),
+            runSqliteQuery("SELECT id, name, last_name, telefono FROM contact ORDER BY name ASC, last_name ASC;")
+        ]);
+        const contacts = parseSqliteRows(stdout);
+        res.json({
+            success: true,
+            api_version: FEDERATION_API_VERSION,
+            server_time: new Date().toISOString(),
+            node,
+            count: contacts.length,
+            contacts
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+// 18. GET /api/federation/v1/cdr - Incremental CDR mirror feed for central reports
 app.get('/api/federation/v1/cdr', async (req, res) => {
     try {
         const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit, 10) || 1000));

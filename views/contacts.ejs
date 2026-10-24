@@ -462,12 +462,22 @@ const isRtl = currentLang === 'ar';
                             <tr id="noContactsRow"><td colspan="<%= isSuperAdmin ? 4 : 3 %>" class="p-8 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>
                         <% } else { %>
                             <% contacts.forEach(contact => { %>
-                                <tr class="contact-row hover:bg-zinc-900/60 transition" data-name="<%= contact.name.toLowerCase() %>" data-lastname="<%= contact.last_name.toLowerCase() %>" data-phone="<%= contact.telefono %>">
-                                    <td class="p-4 font-bold text-white font-name"><%= contact.name %></td>
-                                    <td class="p-4 text-zinc-300 font-lastname"><%= contact.last_name %></td>
-                                    <td class="p-4 text-zinc-400 font-mono font-phone"><%= contact.telefono %></td>
+                                <tr class="contact-row hover:bg-zinc-900/60 transition" data-name="<%= String(contact.name || '').toLowerCase() %>" data-lastname="<%= String(contact.last_name || '').toLowerCase() %>" data-phone="<%= contact.telefono || '' %>">
+                                    <td class="p-4 font-bold text-white font-name">
+                                        <%= contact.name || '' %>
+                                        <% if (contact.is_remote) { %>
+                                        <span class="ms-2 inline-flex items-center text-[9px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)] align-middle" title="<%= contact.node_name || ('Site ' + contact.site_code) %>">
+                                            Site <%= contact.site_code %>
+                                        </span>
+                                        <% } %>
+                                    </td>
+                                    <td class="p-4 text-zinc-300 font-lastname"><%= contact.last_name || '' %></td>
+                                    <td class="p-4 text-zinc-400 font-mono font-phone"><%= contact.telefono || '' %></td>
                                     <% if (isSuperAdmin) { %>
                                     <td class="p-4 text-end select-none">
+                                        <% if (contact.is_remote) { %>
+                                        <span class="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]"><%= isRtl ? 'قراءة فقط' : 'read-only' %></span>
+                                        <% } else { %>
                                         <div class="flex items-center justify-end gap-2 whitespace-nowrap">
                                             <button onclick="openEditContactModal('<%= contact.id %>', '<%= contact.name %>', '<%= contact.last_name %>', '<%= contact.telefono %>')" class="config-btn-secondary px-2.5 py-1 text-[11px] font-bold uppercase rounded transition cursor-pointer">
                                                 <%= t.editBtn %>
@@ -476,6 +486,7 @@ const isRtl = currentLang === 'ar';
                                                 <%= t.deleteBtn %>
                                             </button>
                                         </div>
+                                        <% } %>
                                     </td>
                                     <% } %>
                                 </tr>

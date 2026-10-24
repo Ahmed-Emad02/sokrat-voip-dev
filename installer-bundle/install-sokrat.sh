@@ -981,6 +981,19 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_remote_dongles\` (
   UNIQUE KEY \`idx_peer_dongle\` (\`peer_id\`, \`dongle_name\`),
   KEY \`idx_peer_id\` (\`peer_id\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS \`sokrat_federation_remote_contacts\` (
+  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+  \`peer_id\` INT NOT NULL,
+  \`source_id\` VARCHAR(64) NOT NULL,
+  \`name\` VARCHAR(150) DEFAULT NULL,
+  \`last_name\` VARCHAR(150) DEFAULT NULL,
+  \`telefono\` VARCHAR(50) NOT NULL,
+  \`synced_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY \`idx_peer_source\` (\`peer_id\`, \`source_id\`),
+  KEY \`idx_peer_id\` (\`peer_id\`),
+  KEY \`idx_phone\` (\`telefono\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 " 2>/dev/null || true
 
 ensure_db_column "dashboard_user_extensions" "peer_id" "INT DEFAULT NULL"

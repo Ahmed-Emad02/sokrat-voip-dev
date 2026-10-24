@@ -9,6 +9,7 @@ const {
     normalizeActiveCalls,
     normalizeLivePayload,
     normalizeInventoryPayload,
+    normalizeContactsPayload,
     parseSignalPct,
     markPeerOffline,
     upsertNodeStatus
@@ -77,6 +78,32 @@ test('Federation Aggregator: inventory payload normalizes counts and defaults', 
     assert.equal(legacy.counts.queues, 1);
     assert.equal(legacy.counts.trunks, 2);
     assert.equal(legacy.counts.ivr, 0);
+});
+
+test('Federation Aggregator: contact payload is normalized and invalid rows dropped', () => {
+    const payload = normalizeContactsPayload({
+        success: true,
+        node: { uuid: 'abc', site_code: '20' },
+        contacts: [
+            { id: 7, name: 'Alice', last_name: 'Nassar', telefono: '01000000001' },
+            { id: 8, name: 'Bob', last_name: '', telefono: '01000000002' },
+            { id: 9, name: 'No Phone', last_name: 'X', telefono: '' },
+            null
+        ]
+    });
+    assert.equal(payload.node.site_code, '20');
+    assert.equal(payload.contacts.length, 2);
+    assert.deepEqual(payload.contacts[0], {
+        sourceId: '7',
+        name: 'Alice',
+        lastName: 'Nassar',
+        phone: '01000000001'
+    });
+    // legacy phone/phone alias
+    const legacy = normalizeContactsPayload({ contacts: [{ phone: '0111', first_name: 'Legacy' }] });
+    assert.equal(legacy.contacts.length, 1);
+    assert.equal(legacy.contacts[0].phone, '0111');
+    assert.equal(legacy.contacts[0].name, 'Legacy');
 });
 
 test('Federation Aggregator: RSSI is converted from the 0-31 modem scale to a percent', () => {
@@ -212,6 +239,7 @@ test('Federation Phase 1 schema: new tables and columns exist in every deploymen
         assert.match(content, /CREATE TABLE IF NOT EXISTS `sokrat_federation_node_status`/, `${name} must create node status`);
         assert.match(content, /CREATE TABLE IF NOT EXISTS `sokrat_federation_sync_state`/, `${name} must create sync state`);
         assert.match(content, /CREATE TABLE IF NOT EXISTS `sokrat_federation_action_log`/, `${name} must create action log`);
+        assert.match(content, /CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_contacts`/, `${name} must create the remote contact cache`);
         assert.match(content, /`asterisk_version`/, `${name} must include node metric columns`);
         assert.match(content, /`signal_pct`/, `${name} must include dongle live columns`);
     }
@@ -220,12 +248,14 @@ test('Federation Phase 1 schema: new tables and columns exist in every deploymen
     assert.match(upgrade, /ensure_db_column "sokrat_federation_node_status" "extensions_online"/);
     assert.match(upgrade, /ensure_db_column "sokrat_federation_remote_dongles" "signal_pct"/);
     assert.match(upgrade, /ensure_db_column "sokrat_federation_remote_dongles" "active_call"/);
+    assert.match(upgrade.replace(/\\`/g, '`'), /CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_contacts`/, 'safe-upgrade must create the remote contact cache');
 });
 
 test('Federation Phase 1 endpoints: agent and central routes are registered', () => {
     const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
     assert.match(server, /app\.get\('\/api\/federation\/v1\/live'/);
     assert.match(server, /app\.get\('\/api\/federation\/v1\/inventory'/);
+    assert.match(server, /app\.get\('\/api\/federation\/v1\/contacts'/);
     assert.match(server, /app\.get\('\/api\/federation\/overview', requireAuth/);
     assert.match(server, /app\.get\('\/api\/federation\/nodes', requireAuth/);
     assert.match(server, /app\.post\('\/api\/federation\/nodes\/:id\/sync', requireAuth/);
@@ -241,4 +271,14 @@ test('Federation Phase 1 dashboard: node rail renders bilingual cards and listen
     assert.match(view, /\/api\/federation\/overview/);
     assert.match(view, /federation:overview/);
     assert.match(view, /isRtl \? 'السيرفرات المرتبطة' : 'Connected PBXs'/);
+});
+
+test('Federation contacts: the address book merges remote rows read-only', () => {
+    const view = fs.readFileSync(path.join(__dirname, '..', 'views', 'contacts.ejs'), 'utf8');
+    assert.match(view, /contact\.is_remote/, 'remote contacts must be flagged');
+    assert.match(view, /Site <%= contact\.site_code %>/, 'remote contacts must show their site');
+    assert.match(view, /read-only/, 'remote contacts must be read-only');
+    const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    assert.match(server, /getFederationRemoteContacts\(scope\)/, 'the contacts page must merge remote rows');
+    assert.match(server, /federationScopeIncludesLocal\(scope\)/, 'the contacts page must honor a remote-only scope');
 });

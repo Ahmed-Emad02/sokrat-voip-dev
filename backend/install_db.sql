@@ -633,6 +633,21 @@ CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_dongles` (
   KEY `idx_peer_id` (`peer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Cached address book from every peer. Contacts stay in each node's SQLite
+-- file; `source_id` is the local SQLite id and is only unique per peer.
+CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_contacts` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `peer_id` INT NOT NULL,
+  `source_id` VARCHAR(64) NOT NULL,
+  `name` VARCHAR(150) DEFAULT NULL,
+  `last_name` VARCHAR(150) DEFAULT NULL,
+  `telefono` VARCHAR(50) NOT NULL,
+  `synced_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `idx_peer_source` (`peer_id`, `source_id`),
+  KEY `idx_peer_id` (`peer_id`),
+  KEY `idx_phone` (`telefono`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `extension_status_current` (
   `extension` VARCHAR(20) NOT NULL PRIMARY KEY,
   `status` ENUM('offline', 'idle', 'ringing', 'incall') NOT NULL DEFAULT 'offline',

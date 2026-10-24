@@ -172,6 +172,22 @@ WHERE \`id\` = 1 AND (\`local_node_uuid\` IS NULL OR \`local_node_uuid\` = '');
 UPDATE \`sokrat_federation_peers\`
 SET \`api_base_url\` = REPLACE(\`api_base_url\`, ':8443', '')
 WHERE \`api_base_url\` LIKE '%:8443%';" 2>/dev/null || true
+
+# Federation Phase 2: cached address book from every peer.
+mysql "${MYSQL_AUTH[@]}" asterisk -e "
+CREATE TABLE IF NOT EXISTS \`sokrat_federation_remote_contacts\` (
+  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+  \`peer_id\` INT NOT NULL,
+  \`source_id\` VARCHAR(64) NOT NULL,
+  \`name\` VARCHAR(150) DEFAULT NULL,
+  \`last_name\` VARCHAR(150) DEFAULT NULL,
+  \`telefono\` VARCHAR(50) NOT NULL,
+  \`synced_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY \`idx_peer_source\` (\`peer_id\`, \`source_id\`),
+  KEY \`idx_peer_id\` (\`peer_id\`),
+  KEY \`idx_phone\` (\`telefono\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;" 2>/dev/null || true
+
 ensure_db_column "gsm_dongles" "dynamic_enabled" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "employee_extras" "is_group_admin" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "storage_settings" "auto_purge_days" "INT DEFAULT 90"
