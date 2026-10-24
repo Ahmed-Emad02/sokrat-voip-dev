@@ -2787,11 +2787,58 @@ else
     echo "  Notice: /opt/sokrat-softphone not provisioned; skipping sokrat-softphone service"
 fi
 
-# Provision the loopback-only offline whisper.cpp engine and queue worker.
-echo "  Provisioning Sokrat offline Speech-To-Text engine..."
-chmod +x /opt/sokrat-voip/scripts/install-local-stt.sh
-/opt/sokrat-voip/scripts/install-local-stt.sh
-echo "  Sokrat offline STT engine and worker enabled"
+# Provision Sokrat Cloud Speech-To-Text queue worker.
+echo "  Provisioning Sokrat Cloud Speech-To-Text worker..."
+systemctl stop sokrat-whisper.service 2>/dev/null || true
+systemctl disable sokrat-whisper.service 2>/dev/null || true
+rm -f /etc/systemd/system/sokrat-whisper.service 2>/dev/null || true
+
+mkdir -p /etc/sokrat-voip
+cat > /etc/sokrat-voip/stt.env << STTENV
+DB_HOST=localhost
+DB_USER=root
+DB_PASS_B64=$(printf '%s' "${MYSQL_ROOT_PWD}" | base64 -w0)
+STT_MAX_ATTEMPTS=3
+STT_MAX_PENDING_JOBS=20
+STTENV
+chown root:asterisk /etc/sokrat-voip/stt.env 2>/dev/null || true
+chmod 0640 /etc/sokrat-voip/stt.env 2>/dev/null || true
+
+cat > /etc/systemd/system/sokrat-stt.service << 'UNIT'
+[Unit]
+Description=Sokrat VoIP Cloud Speech-To-Text Worker
+After=network.target mariadb.service mysqld.service asterisk.service
+Wants=asterisk.service
+
+[Service]
+Type=simple
+User=asterisk
+Group=asterisk
+SupplementaryGroups=asterisk
+WorkingDirectory=/opt/sokrat-voip
+EnvironmentFile=/etc/sokrat-voip/stt.env
+ExecStart=/usr/bin/node /opt/sokrat-voip/scripts/stt-worker.js
+Restart=always
+RestartSec=5
+Nice=15
+CPUShares=256
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=512M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/spool/asterisk/monitor /var/spool/asterisk/voicemail
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now sokrat-stt.service 2>/dev/null || true
+echo "  Sokrat Cloud STT worker enabled and started"
 
 # Provision Sokrat System Watchdog & Alert Daemon
 echo "  Provisioning Sokrat System Watchdog & Alert Daemon..."

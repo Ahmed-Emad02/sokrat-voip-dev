@@ -1549,10 +1549,10 @@ function isTabAllowed(tabName) {
                         </div>
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
-                                <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التفريغ الصوتي المحلي (STT)' : 'Local Speech-to-Text (STT)' %></h2>
-                                <span id="sttOverviewStatusBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Local Offline</span>
+                                <h2 class="text-lg font-extrabold text-[var(--text-primary)]"><%= isRtl ? 'التفريغ الصوتي بالذكاء الاصطناعي (STT)' : 'Cloud Speech-to-Text (STT)' %></h2>
+                                <span id="sttOverviewStatusBadge" class="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Cloud AI</span>
                             </div>
-                            <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تفريغ المكالمات والبريد الصوتي محلياً بدون إرسال الصوت خارج السنترال، مع دعم اختياري للمزودات السحابية.' : 'Offline call and voicemail transcription without sending audio outside the PBX, with optional cloud providers.' %></p>
+                            <p class="text-[11px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تفريغ المكالمات والبريد الصوتي عبر واجهات الذكاء الاصطناعي السحابية (منصت Munsit، Groq، OpenAI، Deepgram).' : 'Call and voicemail transcription via Cloud AI APIs (Munsit, Groq, OpenAI, Deepgram).' %></p>
                         </div>
                     </div>
                     <div class="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
@@ -1571,7 +1571,7 @@ function isTabAllowed(tabName) {
                         <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-xs">AI</div>
                         <div class="min-w-0">
                             <span class="text-[10px] uppercase font-bold text-[var(--text-muted)] block"><%= isRtl ? 'المزود والنموذج' : 'Active Provider & Model' %></span>
-                            <span id="sttOverviewProvider" class="text-xs font-mono font-bold text-white truncate block">LOCAL: ggml-small-q5_1.bin</span>
+                            <span id="sttOverviewProvider" class="text-xs font-mono font-bold text-white truncate block">MUNSIT (Egyptian Arabic AI)</span>
                         </div>
                     </div>
                     <div class="flex items-center gap-3 p-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-card)]">
@@ -1602,18 +1602,18 @@ function isTabAllowed(tabName) {
                 <div class="flex items-center justify-between border-b border-[var(--border-primary)] pb-3">
                     <div class="flex items-center gap-2.5">
                         <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
-                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-[var(--text-primary)]"><%= isRtl ? 'خصائص التشغيل المحلي والأمان' : 'Offline Architecture & Telephony Safety' %></h3>
+                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-[var(--text-primary)]"><%= isRtl ? 'محرك المعالجة السحابي والأمان' : 'Cloud AI Architecture & Telephony Safety' %></h3>
                     </div>
-                    <span class="text-[10px] font-mono font-bold text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">127.0.0.1:8178</span>
+                    <span class="text-[10px] font-mono font-bold text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">Cloud API</span>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                     <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
                         <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'محرك المعالجة' : 'Inference Engine' %></span>
-                        <span class="font-bold font-mono text-[var(--text-primary)]">whisper.cpp v1.9.5</span>
+                        <span class="font-bold font-mono text-[var(--text-primary)]">Munsit / Whisper Cloud API</span>
                     </div>
                     <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
-                        <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'النموذج ومكتشف الصوت' : 'Model & VAD' %></span>
-                        <span class="font-bold font-mono text-[var(--text-primary)]">Small Q5_1 + Silero</span>
+                        <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'دعم اللهجة المصرية' : 'Dialect Support' %></span>
+                        <span class="font-bold font-mono text-[var(--text-primary)]">Egyptian Arabic AI</span>
                     </div>
                     <div class="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
                         <span class="text-[10px] text-[var(--text-muted)] font-bold uppercase block mb-1"><%= isRtl ? 'حماية المكالمات النشطة' : 'Live Call Priority' %></span>

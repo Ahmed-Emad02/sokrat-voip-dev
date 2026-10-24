@@ -169,6 +169,13 @@ mysql "${MYSQL_AUTH[@]}" asterisk -e \
     "UPDATE \`asterisk\`.\`users\` SET \`recording\`='out=always|in=always' WHERE \`recording\` IS NULL OR \`recording\`='' OR \`recording\`='dontcare'" 2>/dev/null || true
 echo "  Extensions and ring groups: call recording enabled by default"
 
+# Decommission local whisper and migrate STT settings to Cloud AI
+mysql "${MYSQL_AUTH[@]}" asterisk -e "
+    UPDATE stt_settings
+    SET engine='cloud_api', provider='munsit', api_url='https://api.munsit.com/api/v1/audio/transcribe', model_name='munsit'
+    WHERE engine='local_whisper' OR provider='local';
+" 2>/dev/null || true
+
 # Seed new webhook settings keys (idempotent INSERT IGNORE)
 mysql "${MYSQL_AUTH[@]}" asterisk -e "
 INSERT IGNORE INTO dashboard_settings (setting_key, setting_value) VALUES
@@ -899,6 +906,17 @@ elif command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
     asterisk -rx "module unload chan_dongle.so" >/dev/null 2>&1 || true
     sleep 1
     asterisk -rx "module load chan_dongle.so" >/dev/null 2>&1 || true
+fi
+
+# Decommission obsolete local whisper service and files
+if systemctl is-active --quiet sokrat-whisper.service 2>/dev/null; then
+    systemctl stop sokrat-whisper.service 2>/dev/null || true
+    systemctl disable sokrat-whisper.service 2>/dev/null || true
+fi
+rm -f /etc/systemd/system/sokrat-whisper.service 2>/dev/null || true
+rm -rf /opt/sokrat-stt /var/lib/sokrat-stt/models 2>/dev/null || true
+if [ -f /etc/systemd/system/sokrat-stt.service ]; then
+    sed -i 's/ sokrat-whisper\.service//g' /etc/systemd/system/sokrat-stt.service 2>/dev/null || true
 fi
 
 systemctl daemon-reload 2>/dev/null || true

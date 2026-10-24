@@ -1013,15 +1013,15 @@ async function initAuthDb() {
         CREATE TABLE IF NOT EXISTS \`asterisk\`.\`stt_settings\` (
             \`id\` INT PRIMARY KEY DEFAULT 1,
             \`enabled\` TINYINT(1) DEFAULT 1,
-            \`engine\` VARCHAR(32) DEFAULT 'local_whisper',
-            \`provider\` VARCHAR(32) DEFAULT 'local',
+            \`engine\` VARCHAR(32) DEFAULT 'cloud_api',
+            \`provider\` VARCHAR(32) DEFAULT 'munsit',
             \`api_key\` TEXT DEFAULT NULL,
-            \`api_url\` VARCHAR(255) DEFAULT 'http://127.0.0.1:8178/inference',
-            \`model_name\` VARCHAR(64) DEFAULT 'ggml-small-q5_1.bin',
+            \`api_url\` VARCHAR(255) DEFAULT 'https://api.munsit.com/api/v1/audio/transcribe',
+            \`model_name\` VARCHAR(64) DEFAULT 'munsit',
             \`language\` VARCHAR(10) DEFAULT 'ar',
             \`prompt\` TEXT DEFAULT NULL,
-            \`transcribe_calls\` TINYINT(1) DEFAULT 1,
-            \`transcribe_voicemails\` TINYINT(1) DEFAULT 1,
+            \`transcribe_calls\` TINYINT(1) DEFAULT 0,
+            \`transcribe_voicemails\` TINYINT(1) DEFAULT 0,
             \`min_duration_sec\` INT DEFAULT 3,
             \`max_concurrency\` INT DEFAULT 1,
             \`pause_during_calls\` TINYINT(1) DEFAULT 1,
@@ -7565,15 +7565,15 @@ app.get('/api/config/stt', requireAuth, requireConfigPermission('recordings'), a
     try {
         let settings = {
             enabled: 1,
-            engine: 'local_whisper',
-            provider: 'local',
+            engine: 'cloud_api',
+            provider: 'munsit',
             api_key: '',
-            api_url: 'http://127.0.0.1:8178/inference',
-            model_name: 'ggml-small-q5_1.bin',
+            api_url: 'https://api.munsit.com/api/v1/audio/transcribe',
+            model_name: 'munsit',
             language: 'ar',
             prompt: 'محادثة هاتفية خدمة عملاء بالعامية المصرية: ألو، أيوة يا فندم، تمام، إزيك، معاك، الخط، حاضر، شكراً، مع السلامة.',
-            transcribe_calls: 1,
-            transcribe_voicemails: 1,
+            transcribe_calls: 0,
+            transcribe_voicemails: 0,
             min_duration_sec: 3,
             pause_during_calls: 1
         };
@@ -7587,7 +7587,7 @@ app.get('/api/config/stt', requireAuth, requireConfigPermission('recordings'), a
     }
 });
 
-// 6. PUT /api/config/stt - Update local/cloud STT engine settings
+// 6. PUT /api/config/stt - Update cloud STT engine settings
 app.put('/api/config/stt', requireAuth, requireConfigPermission('recordings'), async (req, res) => {
     try {
         const {
@@ -7605,20 +7605,12 @@ app.put('/api/config/stt', requireAuth, requireConfigPermission('recordings'), a
         } = req.body;
 
         const isEnabled = (enabled === 1 || enabled === true || enabled === '1') ? 1 : 0;
-        const validProvider = ['local', 'munsit', 'groq', 'openai', 'deepgram', 'custom'].includes(provider) ? provider : 'local';
-        const engine = validProvider === 'local' ? 'local_whisper' : 'cloud_api';
+        const validProvider = ['munsit', 'groq', 'openai', 'deepgram', 'custom'].includes(provider) ? provider : 'munsit';
+        const engine = 'cloud_api';
         const apiKeyVal = api_key !== undefined ? String(api_key).trim() : '';
         let apiUrlVal = api_url !== undefined ? String(api_url).trim() : '';
-        if (engine === 'local_whisper') {
-            apiUrlVal = apiUrlVal || 'http://127.0.0.1:8178/inference';
-            const localUrl = new URL(apiUrlVal);
-            const host = localUrl.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-            if (localUrl.protocol !== 'http:' || !['127.0.0.1', 'localhost', '::1'].includes(host)) {
-                return res.status(400).json({ success: false, error: 'Local whisper.cpp endpoint must use HTTP on loopback.' });
-            }
-        }
-        const model = String(model_name || (engine === 'local_whisper' ? 'ggml-small-q5_1.bin' : 'whisper-large-v3')).trim();
-        const lang = String(language || (engine === 'local_whisper' ? 'ar' : 'auto')).trim();
+        const model = String(model_name || (validProvider === 'munsit' ? 'munsit' : 'whisper-large-v3')).trim();
+        const lang = String(language || 'ar').trim();
         const promptVal = prompt !== undefined ? String(prompt).trim() : '';
         const trCalls = (transcribe_calls === 1 || transcribe_calls === true || transcribe_calls === '1') ? 1 : 0;
         const trVm = (transcribe_voicemails === 1 || transcribe_voicemails === true || transcribe_voicemails === '1') ? 1 : 0;
@@ -7672,7 +7664,7 @@ app.post('/api/config/stt/test-connection', requireAuth, requireConfigPermission
         const { testSttConnection } = require('./scripts/stt-worker');
         const result = await testSttConnection({
             ...req.body,
-            engine: req.body.provider === 'local' ? 'local_whisper' : 'cloud_api'
+            engine: 'cloud_api'
         });
         res.json(result);
     } catch (e) {

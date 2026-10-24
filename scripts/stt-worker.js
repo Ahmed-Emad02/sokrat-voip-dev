@@ -328,9 +328,7 @@ function isLocalSettings(settings = {}) {
 
 async function transcribeAudio(audioPath, settings) {
     if (isLocalSettings(settings)) {
-        return transcribeWithLocalWhisper(audioPath, {
-            apiUrl: settings.api_url, language: settings.language || 'ar', prompt: settings.prompt, signal: settings.signal
-        });
+        throw new Error('Local whisper engine has been removed. Please select a Cloud STT provider (Munsit, Groq, OpenAI, Deepgram, or Custom) in settings.');
     }
     return transcribeWithCloudAi(audioPath, {
         provider: settings.provider, apiKey: settings.api_key, apiUrl: settings.api_url,
@@ -339,18 +337,18 @@ async function transcribeAudio(audioPath, settings) {
 }
 
 async function testSttConnection(settings = {}) {
+    if (isLocalSettings(settings)) {
+        throw new Error('Local whisper engine has been removed. Please configure a Cloud STT provider (Munsit, Groq, OpenAI, Deepgram, or Custom).');
+    }
     const startTime = Date.now();
-    const local = isLocalSettings(settings);
-    const tmpAudio = path.join(os.tmpdir(), `stt_test_${Date.now()}.${local ? 'wav' : 'mp3'}`);
+    const tmpAudio = path.join(os.tmpdir(), `stt_test_${Date.now()}.mp3`);
     try {
-        const wav = local ? tmpAudio : `${tmpAudio}.wav`;
+        const wav = `${tmpAudio}.wav`;
         await execFileAsync('ffmpeg', [
             '-y', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono', '-t', '0.6', '-c:a', 'pcm_s16le', wav
         ], { timeout: 10_000 });
-        if (!local) {
-            await prepareAudioForUpload(wav, tmpAudio);
-            fs.unlinkSync(wav);
-        }
+        await prepareAudioForUpload(wav, tmpAudio);
+        try { if (fs.existsSync(wav)) fs.unlinkSync(wav); } catch (_) {}
         const resultText = await transcribeAudio(tmpAudio, {
             ...settings,
             api_key: settings.api_key || settings.apiKey,
@@ -359,7 +357,7 @@ async function testSttConnection(settings = {}) {
         });
         return {
             success: true,
-            message: `${local ? 'Local whisper.cpp' : 'Cloud API'} connection verified successfully.`,
+            message: 'Cloud API connection verified successfully.',
             latencyMs: Date.now() - startTime,
             sampleResult: resultText || '[No speech in health-check audio]'
         };
@@ -376,8 +374,8 @@ async function getSttSettings(pool) {
         if (rows?.length) return rows[0];
     } catch (_) {}
     return {
-        enabled: 1, engine: 'local_whisper', provider: 'local', api_key: '', api_url: LOCAL_ENDPOINT,
-        model_name: 'ggml-small-q5_1.bin', language: 'ar', prompt: DEFAULT_PROMPTS.ar,
+        enabled: 1, engine: 'cloud_api', provider: 'munsit', api_key: '', api_url: 'https://api.munsit.com/api/v1/audio/transcribe',
+        model_name: 'munsit', language: 'ar', prompt: DEFAULT_PROMPTS.ar,
         transcribe_calls: 1, transcribe_voicemails: 1, min_duration_sec: 3, pause_during_calls: 1
     };
 }
