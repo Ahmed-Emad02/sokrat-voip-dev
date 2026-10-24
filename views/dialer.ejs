@@ -228,10 +228,10 @@ const isRtl = activeLang === 'ar';
     <div id="toastContainer" class="fixed bottom-5 end-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
 
     <!-- MODAL 1: CREATE / EDIT CAMPAIGN -->
-    <div id="createCampaignModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-xl w-full p-5 sm:p-6 text-[var(--text-primary)] max-h-[90vh] overflow-y-auto">
+    <div id="createCampaignModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-3 sm:p-5">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-5xl xl:max-w-6xl w-full p-5 sm:p-6 text-[var(--text-primary)] max-h-[92vh] flex flex-col shadow-2xl">
             <!-- Modal Header -->
-            <div class="flex items-center justify-between pb-3.5 mb-4 border-b border-[var(--border-primary)]">
+            <div class="flex items-center justify-between pb-3.5 mb-4 border-b border-[var(--border-primary)] shrink-0">
                 <div class="flex items-center gap-2.5">
                     <div class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center font-bold">
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -246,134 +246,175 @@ const isRtl = activeLang === 'ar';
                             <rect x="17" y="17" width="4" height="4" rx="1"></rect>
                         </svg>
                     </div>
-                    <h3 id="modalCampTitle" class="text-base font-extrabold text-[var(--text-primary)]"><%= t.createCampaign %></h3>
+                    <div>
+                        <h3 id="modalCampTitle" class="text-base font-extrabold text-[var(--text-primary)]"><%= t.createCampaign %></h3>
+                        <p class="text-[11px] text-[var(--text-muted)]"><%= isRtl ? 'إعداد خيارات الاتصال، الموظفين، ونموذج المتابعة بعد المكالمة' : 'Configure pacing, agent distribution, and post-call intake form' %></p>
+                    </div>
                 </div>
                 <button type="button" onclick="closeModal('createCampaignModal')" class="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition cursor-pointer" title="<%= t.cancel %>">
                     ✕
                 </button>
             </div>
 
-            <form onsubmit="saveCampaign(event)" class="space-y-3.5">
+            <form onsubmit="saveCampaign(event)" class="overflow-y-auto space-y-4 pr-1 flex-1" style="scrollbar-width: thin;">
                 <input type="hidden" id="editCampId">
 
-                <!-- Row 1: Campaign Name & Outbound Route -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campName"><%= t.campaignName %> <span class="text-rose-400">*</span></label>
-                        <input type="text" id="campName" required maxlength="100" class="config-input w-full" placeholder="<%= isRtl ? 'مثال: عملاء عقارات VIP' : 'e.g. VIP Leads' %>">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campOutboundRoute"><%= t.outboundRoute %></label>
-                        <select id="campOutboundRoute" class="config-input w-full">
-                            <option value="">— <%= t.allDongles %> —</option>
-                        </select>
-                    </div>
-                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    <!-- LEFT COLUMN: Campaign Basics, Hardware & Agents (5 cols) -->
+                    <div class="lg:col-span-5 space-y-3.5">
+                        <!-- Section 1: Campaign Fundamentals -->
+                        <div class="p-3.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl space-y-3">
+                            <div class="flex items-center gap-2 pb-1.5 border-b border-[var(--border-primary)]">
+                                <span class="text-xs font-black uppercase tracking-wider text-[var(--text-secondary)]"><%= isRtl ? 'بيانات الحملة وتوزيع المكالمات' : 'Campaign Basics & Pacing' %></span>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campName"><%= t.campaignName %> <span class="text-rose-400">*</span></label>
+                                <input type="text" id="campName" required maxlength="100" class="config-input w-full text-xs" placeholder="<%= isRtl ? 'مثال: عملاء عقارات VIP' : 'e.g. VIP Leads' %>">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campOutboundRoute"><%= t.outboundRoute %></label>
+                                <select id="campOutboundRoute" class="config-input w-full text-xs">
+                                    <option value="">— <%= t.allDongles %> —</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campMaxDials"><%= t.maxDials %></label>
+                                    <input type="number" id="campMaxDials" value="1" min="1" max="20" class="config-input w-full text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campWrapupSec"><%= t.wrapupTime %> (sec)</label>
+                                    <input type="number" id="campWrapupSec" value="15" min="0" max="300" class="config-input w-full text-xs">
+                                </div>
+                            </div>
+                            <label class="p-2.5 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg flex items-center justify-between gap-3 cursor-pointer hover:border-[var(--border-accent)] transition select-none">
+                                <span class="text-xs font-bold text-[var(--text-primary)]">
+                                    <%= isRtl ? 'إخفاء أرقام العملاء على شاشة الموظف (010*****380)' : 'Mask Numbers on Agent Screen' %>
+                                </span>
+                                <input type="checkbox" id="campMaskPhone" class="w-4 h-4 rounded accent-amber-500 cursor-pointer">
+                            </label>
+                        </div>
 
-                <!-- Row 2: Allowed GSM Dongles -->
-                <div>
-                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.allowedDongles %></span>
-                    <div id="campDonglesRoster" class="flex flex-wrap gap-1.5 p-2.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl min-h-[42px] max-h-28 overflow-y-auto">
-                        <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل شرائح GSM المتاحة...' : 'Loading available GSM dongles...' %></span>
-                    </div>
-                </div>
+                        <!-- Section 2: Hardware & Agents -->
+                        <div class="p-3.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl space-y-3">
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-1.5">
+                                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase"><%= t.allowedDongles %></span>
+                                    <div class="flex items-center gap-1.5 text-[10px]">
+                                        <button type="button" onclick="toggleAllDongles(true)" class="text-amber-400 hover:underline cursor-pointer"><%= isRtl ? 'تحديد الكل' : 'Select All' %></button>
+                                        <span class="text-zinc-500">|</span>
+                                        <button type="button" onclick="toggleAllDongles(false)" class="text-zinc-400 hover:underline cursor-pointer"><%= isRtl ? 'إلغاء' : 'None' %></button>
+                                    </div>
+                                </div>
+                                <div id="campDonglesRoster" class="flex flex-wrap gap-1.5 p-2 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg min-h-[42px] max-h-32 overflow-y-auto" style="scrollbar-width: thin;">
+                                    <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل شرائح GSM المتاحة...' : 'Loading available GSM dongles...' %></span>
+                                </div>
+                            </div>
 
-                <!-- Row 3: Assigned Agents -->
-                <div>
-                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= t.assignedAgents %></span>
-                    <div id="campAgentsRoster" class="flex flex-wrap gap-1.5 p-2.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl min-h-[42px] max-h-28 overflow-y-auto">
-                        <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل تحويلات الموظفين...' : 'Loading PBX agent extensions...' %></span>
-                    </div>
-                </div>
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-1.5">
+                                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase"><%= t.assignedAgents %></span>
+                                    <div class="flex items-center gap-1.5 text-[10px]">
+                                        <button type="button" onclick="toggleAllAgents(true)" class="text-amber-400 hover:underline cursor-pointer"><%= isRtl ? 'تحديد الكل' : 'Select All' %></button>
+                                        <span class="text-zinc-500">|</span>
+                                        <button type="button" onclick="toggleAllAgents(false)" class="text-zinc-400 hover:underline cursor-pointer"><%= isRtl ? 'إلغاء' : 'None' %></button>
+                                    </div>
+                                </div>
+                                <div id="campAgentsRoster" class="flex flex-wrap gap-1.5 p-2 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg min-h-[42px] max-h-36 overflow-y-auto" style="scrollbar-width: thin;">
+                                    <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري تحميل تحويلات الموظفين...' : 'Loading PBX agent extensions...' %></span>
+                                </div>
+                            </div>
+                        </div>
 
-                <!-- Row 4: Pacing & Timing -->
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campMaxDials"><%= t.maxDials %></label>
-                        <input type="number" id="campMaxDials" value="1" min="1" max="20" class="config-input w-full">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campWrapupSec"><%= t.wrapupTime %> (sec)</label>
-                        <input type="number" id="campWrapupSec" value="15" min="0" max="300" class="config-input w-full">
-                    </div>
-                </div>
+                        <!-- Section 3: Custom Lead Fields & File Upload -->
+                        <div class="p-3.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl space-y-3">
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-1.5">
+                                    <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase"><%= t.leadFields %></span>
+                                    <button type="button" onclick="addCampaignField()" class="dialer-control dialer-control-info py-0.5 px-2 text-[11px] rounded-lg">
+                                        <span>+</span><span><%= t.addField %></span>
+                                    </button>
+                                </div>
+                                <div id="campaignFieldsEditor" class="space-y-1.5 p-2 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg max-h-36 overflow-y-auto" style="scrollbar-width: thin;">
+                                    <div class="text-xs text-[var(--text-muted)] italic"><%= t.noCustomFields %></div>
+                                </div>
+                            </div>
 
-                <!-- Row 5: Mask Phone Numbers Toggle -->
-                <label class="p-2.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl flex items-center justify-between gap-3 cursor-pointer hover:border-[var(--border-accent)] transition select-none">
-                    <span class="text-xs font-bold text-[var(--text-primary)]">
-                        <%= isRtl ? 'إخفاء أرقام العملاء على شاشة الموظف (010*****380)' : 'Mask Customer Numbers on Agent Screen (e.g. 010*****380)' %>
-                    </span>
-                    <input type="checkbox" id="campMaskPhone" class="w-4 h-4 rounded accent-amber-500 cursor-pointer">
-                </label>
-
-                <!-- Row 6: Custom Lead Fields -->
-                <div class="pt-1">
-                    <div class="flex items-center justify-between gap-2 mb-1.5">
-                        <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase"><%= t.leadFields %></span>
-                        <button type="button" onclick="addCampaignField()" class="dialer-control dialer-control-info py-0.5 px-2 text-[11px] rounded-lg">
-                            <span>+</span><span><%= t.addField %></span>
-                        </button>
-                    </div>
-                    <div id="campaignFieldsEditor" class="space-y-1.5 p-2.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl">
-                        <div class="text-xs text-[var(--text-muted)] italic"><%= t.noCustomFields %></div>
-                    </div>
-                </div>
-
-                <!-- Row 7: Post-call follow-up form -->
-                <div class="pt-1">
-                    <div class="flex items-center justify-between gap-2 mb-1.5">
-                        <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase">
-                            <%= isRtl ? 'نموذج المتابعة بعد المكالمة' : 'Post-call follow-up form' %>
-                        </span>
-                        <button type="button" onclick="addFollowupField()" class="dialer-control dialer-control-info py-0.5 px-2 text-[11px] rounded-lg">
-                            <span>+</span><span><%= isRtl ? 'إضافة حقل' : 'Add field' %></span>
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 mb-2">
-                        <label class="p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg flex items-center gap-2 cursor-pointer select-none">
-                            <input type="checkbox" id="fuRequireSubmit" class="w-4 h-4 accent-red-500 cursor-pointer">
-                            <span class="text-[11px] font-bold text-[var(--text-primary)]"><%= isRtl ? 'إلزامي بعد المكالمة' : 'Require submit' %></span>
-                        </label>
-                        <label class="p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg flex items-center gap-2 cursor-pointer select-none">
-                            <input type="checkbox" id="fuAllowSkip" class="w-4 h-4 accent-red-500 cursor-pointer" checked>
-                            <span class="text-[11px] font-bold text-[var(--text-primary)]"><%= isRtl ? 'السماح بالتخطي' : 'Allow skip' %></span>
-                        </label>
-                        <label class="p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg flex items-center gap-2 cursor-pointer select-none">
-                            <input type="checkbox" id="fuSkipReason" class="w-4 h-4 accent-red-500 cursor-pointer">
-                            <span class="text-[11px] font-bold text-[var(--text-primary)]"><%= isRtl ? 'سبب التخطي إلزامي' : 'Skip reason required' %></span>
-                        </label>
-                        <div class="p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg">
-                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5" for="fuEditWindow"><%= isRtl ? 'نافذة التعديل (دقائق)' : 'Edit window (min)' %></label>
-                            <input type="number" id="fuEditWindow" value="10" min="0" max="1440" class="config-input w-full py-0.5 text-xs">
+                            <div id="campLeadsFileGroup" class="pt-1">
+                                <div class="flex items-center justify-between gap-2 mb-1">
+                                    <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase" for="campLeadsFile">
+                                        <%= isRtl ? 'ملف الأرقام (CSV أو XLSX) - اختياري' : 'Import Leads File (CSV or XLSX) - Optional' %>
+                                    </label>
+                                    <span class="text-[10px] text-zinc-500 font-mono">2 columns: Name, Phone</span>
+                                </div>
+                                <input type="file" id="campLeadsFile" accept=".csv,.xlsx,.xls" class="config-input w-full text-xs cursor-pointer">
+                            </div>
                         </div>
                     </div>
-                    <div class="mb-2">
-                        <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'النتائج المسموحة (فارغ = الكل)' : 'Allowed dispositions (empty = all)' %></span>
-                        <div id="fuDispositions" class="flex flex-wrap gap-1.5 p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl min-h-[36px]">
-                            <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري التحميل...' : 'Loading...' %></span>
+
+                    <!-- RIGHT COLUMN: Post-Call Follow-up Form Studio (7 cols) -->
+                    <div class="lg:col-span-7 space-y-3.5">
+                        <div class="p-4 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl space-y-3.5">
+                            <div class="flex items-center justify-between gap-2 pb-2 border-b border-[var(--border-primary)]">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-6 h-6 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 flex items-center justify-center font-bold text-xs">
+                                            ✓
+                                        </div>
+                                        <span class="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]">
+                                            <%= isRtl ? 'نموذج المتابعة بعد المكالمة' : 'Post-Call Follow-Up Form Studio' %>
+                                        </span>
+                                    </div>
+                                    <p class="text-[10px] text-[var(--text-muted)] mt-0.5"><%= isRtl ? 'تظهر هذه الحقول للموظف في التطبيق بعد انتهاء المكالمة لجمع بيانات العميل.' : 'Fields presented to the agent immediately after the call ends to capture CRM data.' %></p>
+                                </div>
+                                <button type="button" onclick="addFollowupField()" class="dialer-control dialer-control-info py-1 px-3 text-xs font-bold rounded-lg shrink-0 flex items-center gap-1.5 shadow-sm">
+                                    <span>+</span><span><%= isRtl ? 'إضافة حقل' : 'Add Field' %></span>
+                                </button>
+                            </div>
+
+                            <!-- Settings Matrix -->
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <label class="p-2 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg flex items-center gap-2 cursor-pointer select-none hover:border-[var(--border-accent)] transition">
+                                    <input type="checkbox" id="fuRequireSubmit" class="w-4 h-4 accent-red-500 cursor-pointer">
+                                    <span class="text-[11px] font-bold text-[var(--text-primary)] leading-tight"><%= isRtl ? 'إلزامي بعد المكالمة' : 'Require submit' %></span>
+                                </label>
+                                <label class="p-2 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg flex items-center gap-2 cursor-pointer select-none hover:border-[var(--border-accent)] transition">
+                                    <input type="checkbox" id="fuAllowSkip" class="w-4 h-4 accent-red-500 cursor-pointer" checked>
+                                    <span class="text-[11px] font-bold text-[var(--text-primary)] leading-tight"><%= isRtl ? 'السماح بالتخطي' : 'Allow skip' %></span>
+                                </label>
+                                <label class="p-2 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg flex items-center gap-2 cursor-pointer select-none hover:border-[var(--border-accent)] transition">
+                                    <input type="checkbox" id="fuSkipReason" class="w-4 h-4 accent-red-500 cursor-pointer">
+                                    <span class="text-[11px] font-bold text-[var(--text-primary)] leading-tight"><%= isRtl ? 'سبب التخطي إلزامي' : 'Skip reason required' %></span>
+                                </label>
+                                <div class="p-2 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg">
+                                    <label class="block text-[9px] font-bold text-[var(--text-secondary)] uppercase mb-0.5" for="fuEditWindow"><%= isRtl ? 'نافذة التعديل (دقائق)' : 'Edit window (min)' %></label>
+                                    <input type="number" id="fuEditWindow" value="10" min="0" max="1440" class="config-input w-full py-0.5 text-xs">
+                                </div>
+                            </div>
+
+                            <!-- Allowed Dispositions -->
+                            <div>
+                                <span class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'النتائج المسموحة لعرض النموذج (فارغ = جميع النتائج)' : 'Trigger Dispositions (empty = show for all dispositions)' %></span>
+                                <div id="fuDispositions" class="flex flex-wrap gap-1.5 p-2 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg min-h-[36px]">
+                                    <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري التحميل...' : 'Loading...' %></span>
+                                </div>
+                            </div>
+
+                            <!-- Dynamic Follow-up Fields Editor -->
+                            <div>
+                                <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1.5"><%= isRtl ? 'الحقول ونموذج الإدخال' : 'Form Fields' %></span>
+                                <div id="followupFieldsEditor" class="space-y-2.5 p-1 max-h-[50vh] overflow-y-auto" style="scrollbar-width: thin;">
+                                    <div class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'لا توجد حقول متابعة بعد' : 'No follow-up fields yet' %></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div id="followupFieldsEditor" class="space-y-1.5 p-2.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl">
-                        <div class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'لا توجد حقول متابعة بعد' : 'No follow-up fields yet' %></div>
-                    </div>
-                    <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تظهر هذه الحقول للموظف في التطبيق بعد انتهاء المكالمة.' : 'These fields appear in the agent app after the call ends.' %></p>
                 </div>
 
-                <!-- Row 8: Leads File Upload -->
-                <div id="campLeadsFileGroup" class="pt-1">
-                    <div class="flex items-center justify-between gap-2 mb-1">
-                        <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase" for="campLeadsFile">
-                            <%= isRtl ? 'ملف الأرقام (CSV أو XLSX) - اختياري' : 'Import Leads File (CSV or XLSX) - Optional' %>
-                        </label>
-                        <span class="text-[10px] text-zinc-500 font-mono">2 columns: Name, Phone</span>
-                    </div>
-                    <input type="file" id="campLeadsFile" accept=".csv,.xlsx,.xls" class="config-input w-full text-xs cursor-pointer">
-                </div>
-
-                <!-- Modal Actions -->
-                <div class="flex justify-end gap-2 pt-3 border-t border-[var(--border-primary)]">
-                    <button type="button" onclick="closeModal('createCampaignModal')" class="config-btn-secondary px-3.5 py-1.5 text-xs font-bold rounded-xl"><%= t.cancel %></button>
-                    <button type="submit" id="saveCampSubmitBtn" class="config-btn-primary px-4 py-1.5 text-xs font-bold rounded-xl"><%= t.saveCampaign %></button>
+                <!-- Modal Actions (Footer) -->
+                <div class="flex justify-end gap-2 pt-3 border-t border-[var(--border-primary)] shrink-0">
+                    <button type="button" onclick="closeModal('createCampaignModal')" class="config-btn-secondary px-4 py-2 text-xs font-bold rounded-xl"><%= t.cancel %></button>
+                    <button type="submit" id="saveCampSubmitBtn" class="config-btn-primary px-5 py-2 text-xs font-bold rounded-xl"><%= t.saveCampaign %></button>
                 </div>
             </form>
         </div>
@@ -727,6 +768,28 @@ const isRtl = activeLang === 'ar';
             renderDispositionChoices();
         }
 
+        const FOLLOWUP_TYPE_META = {
+            text: { icon: '📝', label: 'Single-line Text', label_ar: 'نص سطر واحد' },
+            textarea: { icon: '📄', label: 'Multi-line Notes', label_ar: 'نص متعدد الأسطر / ملاحظات' },
+            select: { icon: '📋', label: 'Dropdown Menu', label_ar: 'قائمة منسدلة' },
+            radio: { icon: '🔘', label: 'Radio Choices', label_ar: 'خيارات اختيار واحد' },
+            tel: { icon: '📞', label: 'Phone Number', label_ar: 'رقم هاتف' },
+            number: { icon: '🔢', label: 'Number / Amount', label_ar: 'رقم / مبلغ' },
+            date: { icon: '📅', label: 'Date Picker', label_ar: 'منتقي التاريخ' },
+            datetime: { icon: '⏰', label: 'Date & Time', label_ar: 'تاريخ ووقت' },
+            checkbox: { icon: '☑️', label: 'Checkbox', label_ar: 'مربع اختيار' }
+        };
+
+        function toggleAllDongles(checked) {
+            document.querySelectorAll('input[name="dongleCheckbox"]').forEach(cb => { cb.checked = Boolean(checked); });
+        }
+        window.toggleAllDongles = toggleAllDongles;
+
+        function toggleAllAgents(checked) {
+            document.querySelectorAll('input[name="agentCheckbox"]').forEach(cb => { cb.checked = Boolean(checked); });
+        }
+        window.toggleAllAgents = toggleAllAgents;
+
         function followupOptionsToText(options) {
             return (options || []).map((option) => [option.value, option.label, option.label_ar].filter(Boolean).join('|')).join(' ; ');
         }
@@ -744,123 +807,306 @@ const isRtl = activeLang === 'ar';
             const container = document.getElementById('followupFieldsEditor');
             if (!container) return;
             if (followupDraft.fields.length === 0) {
-                container.innerHTML = `<div class="text-xs text-[var(--text-muted)] italic">${isRtl ? 'لا توجد حقول متابعة بعد' : 'No follow-up fields yet'}</div>`;
+                container.innerHTML = `<div class="p-6 text-center border-2 border-dashed border-[var(--border-primary)] rounded-xl bg-[var(--bg-secondary)]/30">
+                    <div class="w-10 h-10 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center mx-auto mb-2 font-bold text-sm">📋</div>
+                    <p class="text-xs font-bold text-[var(--text-primary)] mb-1">${isRtl ? 'لا توجد حقول مضافة لنموذج المتابعة' : 'No follow-up form fields defined yet'}</p>
+                    <p class="text-[11px] text-[var(--text-muted)] mb-3">${isRtl ? 'أضف حقولاً مثل: سبب الرفض، ميعاد المعاينة، الميزانية، أو الملاحظات.' : 'Add fields like: reason, appointment date, customer budget, or call notes.'}</p>
+                    <button type="button" onclick="addFollowupField()" class="dialer-control dialer-control-info px-3 py-1 text-xs font-bold rounded-lg inline-flex items-center gap-1.5 shadow-sm">
+                        <span>+</span><span>${isRtl ? 'إضافة أول حقل' : 'Add First Field'}</span>
+                    </button>
+                </div>`;
                 return;
             }
             container.innerHTML = '';
             followupDraft.fields.forEach((field, index) => {
-                const row = document.createElement('div');
-                row.className = 'rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2 space-y-1.5';
+                const card = document.createElement('div');
+                card.className = 'rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-3 space-y-3 shadow-sm hover:border-[var(--border-accent)] transition-all';
 
-                const top = document.createElement('div');
-                top.className = 'grid grid-cols-2 gap-1.5';
+                // --- CARD HEADER ---
+                const header = document.createElement('div');
+                header.className = 'flex items-center justify-between pb-2 border-b border-[var(--border-primary)]/70 gap-2';
 
-                const keyInput = document.createElement('input');
-                keyInput.className = 'config-input w-full text-xs';
-                keyInput.placeholder = t.fieldKey || 'Field key';
-                keyInput.value = field.key;
-                keyInput.maxLength = 64;
-                keyInput.addEventListener('input', () => { field.key = keyInput.value; });
+                const meta = FOLLOWUP_TYPE_META[field.type] || { icon: '📝', label: field.type, label_ar: field.type };
 
-                const typeSelect = document.createElement('select');
-                typeSelect.className = 'config-input w-full text-xs';
-                FOLLOWUP_FIELD_TYPES.forEach((type) => {
-                    const option = document.createElement('option');
-                    option.value = type;
-                    option.textContent = type;
-                    if (field.type === type) option.selected = true;
-                    typeSelect.appendChild(option);
-                });
-                typeSelect.addEventListener('change', () => {
-                    field.type = typeSelect.value;
-                    if (field.type !== 'select' && field.type !== 'radio') field.options = [];
-                    renderFollowupFields();
-                });
+                const left = document.createElement('div');
+                left.className = 'flex items-center gap-2 min-w-0';
+                left.innerHTML = `
+                    <span class="px-2 py-0.5 text-[10px] font-mono font-black rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30">#${index + 1}</span>
+                    <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-[var(--bg-card)] border border-[var(--border-primary)] text-[var(--text-secondary)] flex items-center gap-1">
+                        <span>${meta.icon}</span> <span>${isRtl ? meta.label_ar : meta.label}</span>
+                    </span>
+                    <span class="text-xs font-bold text-[var(--text-primary)] truncate max-w-[160px] sm:max-w-[200px]">
+                        ${fuEscape(field.label || field.label_ar || field.key || 'Untitled Field')}
+                    </span>
+                `;
 
-                const labelInput = document.createElement('input');
-                labelInput.className = 'config-input w-full text-xs';
-                labelInput.placeholder = 'English label';
-                labelInput.value = field.label;
-                labelInput.maxLength = 120;
-                labelInput.addEventListener('input', () => { field.label = labelInput.value; });
+                const right = document.createElement('div');
+                right.className = 'flex items-center gap-1 shrink-0';
 
-                const labelArInput = document.createElement('input');
-                labelArInput.className = 'config-input w-full text-xs';
-                labelArInput.placeholder = 'التسمية بالعربية';
-                labelArInput.value = field.label_ar;
-                labelArInput.maxLength = 120;
-                labelArInput.addEventListener('input', () => { field.label_ar = labelArInput.value; });
-
-                top.append(keyInput, typeSelect, labelInput, labelArInput);
-
-                const bottom = document.createElement('div');
-                bottom.className = 'flex items-center gap-2 flex-wrap';
-
-                const requiredLabel = document.createElement('label');
-                requiredLabel.className = 'flex items-center gap-1 text-[10px] font-bold text-[var(--text-secondary)] cursor-pointer select-none';
-                const requiredInput = document.createElement('input');
-                requiredInput.type = 'checkbox';
-                requiredInput.className = 'w-3.5 h-3.5 accent-red-500 cursor-pointer';
-                requiredInput.checked = Boolean(field.required);
-                requiredInput.addEventListener('change', () => { field.required = requiredInput.checked; });
-                requiredLabel.append(requiredInput, document.createTextNode(isRtl ? 'إلزامي' : 'Required'));
-
-                let optionsInput = null;
-                if (field.type === 'select' || field.type === 'radio') {
-                    optionsInput = document.createElement('input');
-                    optionsInput.className = 'config-input flex-1 min-w-[180px] text-[11px]';
-                    optionsInput.placeholder = 'value|Label|التسمية ; value2|Label2|التسمية2';
-                    optionsInput.value = followupOptionsToText(field.options);
-                    optionsInput.addEventListener('input', () => {
-                        field.options = parseFollowupOptions(optionsInput.value, field.options);
-                    });
-                }
-
-                const upButton = document.createElement('button');
-                upButton.type = 'button';
-                upButton.className = 'dialer-control dialer-control-neutral px-2 py-0.5 text-[11px]';
-                upButton.textContent = '↑';
-                upButton.disabled = index === 0;
-                upButton.onclick = () => {
-                    if (index === 0) return;
+                const upBtn = document.createElement('button');
+                upBtn.type = 'button';
+                upBtn.className = 'w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-zinc-400 hover:text-white hover:bg-zinc-700/60 transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer';
+                upBtn.title = isRtl ? 'تحريك للأعلى' : 'Move Up';
+                upBtn.textContent = '↑';
+                upBtn.disabled = index === 0;
+                upBtn.onclick = () => {
                     const [moved] = followupDraft.fields.splice(index, 1);
                     followupDraft.fields.splice(index - 1, 0, moved);
                     renderFollowupFields();
                 };
 
-                const downButton = document.createElement('button');
-                downButton.type = 'button';
-                downButton.className = 'dialer-control dialer-control-neutral px-2 py-0.5 text-[11px]';
-                downButton.textContent = '↓';
-                downButton.disabled = index === followupDraft.fields.length - 1;
-                downButton.onclick = () => {
-                    if (index >= followupDraft.fields.length - 1) return;
+                const downBtn = document.createElement('button');
+                downBtn.type = 'button';
+                downBtn.className = 'w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-zinc-400 hover:text-white hover:bg-zinc-700/60 transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer';
+                downBtn.title = isRtl ? 'تحريك للأسفل' : 'Move Down';
+                downBtn.textContent = '↓';
+                downBtn.disabled = index === followupDraft.fields.length - 1;
+                downBtn.onclick = () => {
                     const [moved] = followupDraft.fields.splice(index, 1);
                     followupDraft.fields.splice(index + 1, 0, moved);
                     renderFollowupFields();
                 };
 
-                const removeButton = document.createElement('button');
-                removeButton.type = 'button';
-                removeButton.className = 'dialer-control dialer-control-danger px-2 py-0.5 text-[11px]';
-                removeButton.textContent = t.removeField || 'Remove';
-                removeButton.onclick = () => {
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'w-6 h-6 rounded flex items-center justify-center text-xs font-bold text-rose-400 hover:text-white hover:bg-rose-500/80 transition cursor-pointer ml-1';
+                removeBtn.title = isRtl ? 'حذف الحقل' : 'Delete Field';
+                removeBtn.textContent = '✕';
+                removeBtn.onclick = () => {
                     followupDraft.fields.splice(index, 1);
                     renderFollowupFields();
                 };
 
-                bottom.append(requiredLabel);
-                if (optionsInput) bottom.append(optionsInput);
-                bottom.append(upButton, downButton, removeButton);
-                row.append(top, bottom);
-                container.appendChild(row);
+                right.append(upBtn, downBtn, removeBtn);
+                header.append(left, right);
+                card.appendChild(header);
+
+                // --- CARD BODY ---
+                const body = document.createElement('div');
+                body.className = 'space-y-2.5';
+
+                // Row 1: English Label & Arabic Label
+                const labelsRow = document.createElement('div');
+                labelsRow.className = 'grid grid-cols-1 sm:grid-cols-2 gap-2.5';
+
+                const labelCol = document.createElement('div');
+                labelCol.innerHTML = `<label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'التسمية بالإنجليزية' : 'English Label'} <span class="text-rose-400">*</span></label>`;
+                const labelInput = document.createElement('input');
+                labelInput.className = 'config-input w-full text-xs';
+                labelInput.placeholder = 'e.g. Budget or Notes';
+                labelInput.value = field.label || '';
+                labelInput.maxLength = 120;
+                labelInput.addEventListener('input', () => {
+                    field.label = labelInput.value;
+                    if (field.key.startsWith('followup_') && labelInput.value) {
+                        const slug = labelInput.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+                        if (slug) {
+                            field.key = slug;
+                            const keyEl = card.querySelector(`input[data-field-key="${index}"]`);
+                            if (keyEl) keyEl.value = slug;
+                        }
+                    }
+                });
+                labelCol.appendChild(labelInput);
+
+                const labelArCol = document.createElement('div');
+                labelArCol.innerHTML = `<label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'التسمية بالعربية' : 'Arabic Label'}</label>`;
+                const labelArInput = document.createElement('input');
+                labelArInput.className = 'config-input w-full text-xs';
+                labelArInput.placeholder = 'مثال: الميزانية أو الملاحظات';
+                labelArInput.value = field.label_ar || '';
+                labelArInput.maxLength = 120;
+                labelArInput.addEventListener('input', () => { field.label_ar = labelArInput.value; });
+                labelArCol.appendChild(labelArInput);
+
+                labelsRow.append(labelCol, labelArCol);
+                body.appendChild(labelsRow);
+
+                // Row 2: Type, Key, and Required Toggle
+                const metaRow = document.createElement('div');
+                metaRow.className = 'grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end';
+
+                // Type (5 cols)
+                const typeCol = document.createElement('div');
+                typeCol.className = 'sm:col-span-5';
+                typeCol.innerHTML = `<label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'نوع الحقل' : 'Field Type'}</label>`;
+                const typeSelect = document.createElement('select');
+                typeSelect.className = 'config-input w-full text-xs';
+                FOLLOWUP_FIELD_TYPES.forEach((type) => {
+                    const opt = document.createElement('option');
+                    opt.value = type;
+                    const m = FOLLOWUP_TYPE_META[type] || { icon: '', label: type, label_ar: type };
+                    opt.textContent = `${m.icon} ${isRtl ? m.label_ar : m.label}`;
+                    if (field.type === type) opt.selected = true;
+                    typeSelect.appendChild(opt);
+                });
+                typeSelect.addEventListener('change', () => {
+                    field.type = typeSelect.value;
+                    if (field.type !== 'select' && field.type !== 'radio') {
+                        field.options = [];
+                    } else if (!field.options || field.options.length === 0) {
+                        field.options = [
+                            { value: 'option_1', label: 'Option 1', label_ar: 'الخيار 1' },
+                            { value: 'option_2', label: 'Option 2', label_ar: 'الخيار 2' }
+                        ];
+                    }
+                    renderFollowupFields();
+                });
+                typeCol.appendChild(typeSelect);
+
+                // Key (4 cols)
+                const keyCol = document.createElement('div');
+                keyCol.className = 'sm:col-span-4';
+                keyCol.innerHTML = `<label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'معرّف الحقل (Key)' : 'Field Key'}</label>`;
+                const keyInput = document.createElement('input');
+                keyInput.className = 'config-input w-full text-xs font-mono';
+                keyInput.placeholder = 'key_name';
+                keyInput.value = field.key || '';
+                keyInput.maxLength = 64;
+                keyInput.dataset.fieldKey = String(index);
+                keyInput.addEventListener('input', () => {
+                    field.key = keyInput.value.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+                    keyInput.value = field.key;
+                });
+                keyCol.appendChild(keyInput);
+
+                // Required Checkbox (3 cols)
+                const reqCol = document.createElement('div');
+                reqCol.className = 'sm:col-span-3';
+                const reqLabel = document.createElement('label');
+                reqLabel.className = 'flex items-center gap-2 p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg cursor-pointer select-none hover:border-[var(--border-accent)] transition h-[34px]';
+                const reqInput = document.createElement('input');
+                reqInput.type = 'checkbox';
+                reqInput.className = 'w-4 h-4 accent-amber-500 rounded cursor-pointer';
+                reqInput.checked = Boolean(field.required);
+                reqInput.addEventListener('change', () => { field.required = reqInput.checked; });
+                reqLabel.append(reqInput, Object.assign(document.createElement('span'), {
+                    className: 'text-xs font-bold text-[var(--text-primary)]',
+                    textContent: isRtl ? 'إلزامي' : 'Required'
+                }));
+                reqCol.appendChild(reqLabel);
+
+                metaRow.append(typeCol, keyCol, reqCol);
+                body.appendChild(metaRow);
+
+                // Row 3: If Select or Radio, render the Options Studio!
+                if (field.type === 'select' || field.type === 'radio') {
+                    const optStudio = document.createElement('div');
+                    optStudio.className = 'p-3 rounded-xl border border-amber-500/25 bg-amber-500/5 space-y-2.5';
+
+                    const optHead = document.createElement('div');
+                    optHead.className = 'flex items-center justify-between';
+                    optHead.innerHTML = `
+                        <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                            <span>📋</span>
+                            <span>${isRtl ? 'خيارات القائمة' : 'Choice Options'} (${(field.options || []).length})</span>
+                        </span>
+                        <span class="text-[10px] text-zinc-400">${isRtl ? 'الخيارات المعروضة للموظف' : 'Options shown to the agent in the choice list'}</span>
+                    `;
+                    optStudio.appendChild(optHead);
+
+                    // Existing options chips
+                    const chipsWrap = document.createElement('div');
+                    chipsWrap.className = 'flex flex-wrap gap-1.5 min-h-[28px]';
+                    if (!field.options || field.options.length === 0) {
+                        chipsWrap.innerHTML = `<span class="text-xs text-amber-400/70 italic">${isRtl ? 'لا توجد خيارات مضافة بعد. أضف خيارات أدناه.' : 'No choices added yet. Add options below.'}</span>`;
+                    } else {
+                        field.options.forEach((opt, optIdx) => {
+                            const chip = document.createElement('span');
+                            chip.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-xs text-[var(--text-primary)] shadow-sm';
+                            chip.innerHTML = `
+                                <span class="font-bold">${fuEscape(opt.label)}</span>
+                                ${opt.label_ar && opt.label_ar !== opt.label ? `<span class="text-zinc-400 text-[10px]">(${fuEscape(opt.label_ar)})</span>` : ''}
+                            `;
+                            const chipDel = document.createElement('button');
+                            chipDel.type = 'button';
+                            chipDel.className = 'text-zinc-400 hover:text-rose-400 font-bold ml-1 text-sm cursor-pointer transition';
+                            chipDel.textContent = '✕';
+                            chipDel.title = isRtl ? 'حذف هذا الخيار' : 'Remove choice';
+                            chipDel.onclick = () => {
+                                field.options.splice(optIdx, 1);
+                                renderFollowupFields();
+                            };
+                            chip.appendChild(chipDel);
+                            chipsWrap.appendChild(chip);
+                        });
+                    }
+                    optStudio.appendChild(chipsWrap);
+
+                    // Quick-add bar
+                    const addBar = document.createElement('div');
+                    addBar.className = 'flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap';
+
+                    const newLabelInput = document.createElement('input');
+                    newLabelInput.className = 'config-input flex-1 min-w-[140px] text-xs';
+                    newLabelInput.placeholder = isRtl ? 'اسم الخيار (أو قائمة مفصولة بفواصل)' : 'New choice (or comma-separated list)';
+
+                    const newLabelArInput = document.createElement('input');
+                    newLabelArInput.className = 'config-input w-36 text-xs';
+                    newLabelArInput.placeholder = isRtl ? 'بالعربية (اختياري)' : 'Arabic (optional)';
+
+                    const addOptBtn = document.createElement('button');
+                    addOptBtn.type = 'button';
+                    addOptBtn.className = 'dialer-control dialer-control-info px-3 py-1.5 text-xs font-bold whitespace-nowrap rounded-lg flex items-center gap-1 cursor-pointer';
+                    addOptBtn.innerHTML = `<span>+</span><span>${isRtl ? 'إضافة خيار' : 'Add Choice'}</span>`;
+
+                    const handleAdd = () => {
+                        const rawEn = newLabelInput.value.trim();
+                        const rawAr = newLabelArInput.value.trim();
+                        if (!rawEn) return;
+                        if (!field.options) field.options = [];
+
+                        if (rawEn.includes(',')) {
+                            const splitEn = rawEn.split(',').map(s => s.trim()).filter(Boolean);
+                            const splitAr = rawAr.includes(',') ? rawAr.split(',').map(s => s.trim()).filter(Boolean) : [];
+                            splitEn.forEach((item, idx) => {
+                                const val = item.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40) || `opt_${Date.now()}`;
+                                field.options.push({
+                                    value: val,
+                                    label: item,
+                                    label_ar: splitAr[idx] || item
+                                });
+                            });
+                        } else {
+                            const val = rawEn.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40) || `opt_${Date.now()}`;
+                            field.options.push({
+                                value: val,
+                                label: rawEn,
+                                label_ar: rawAr || rawEn
+                            });
+                        }
+                        renderFollowupFields();
+                    };
+
+                    addOptBtn.onclick = handleAdd;
+                    newLabelInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAdd();
+                        }
+                    });
+                    newLabelArInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAdd();
+                        }
+                    });
+
+                    addBar.append(newLabelInput, newLabelArInput, addOptBtn);
+                    optStudio.appendChild(addBar);
+                    body.appendChild(optStudio);
+                }
+
+                card.appendChild(body);
+                container.appendChild(card);
             });
         }
 
         function addFollowupField() {
             if (followupDraft.fields.length >= 40) return;
+            const idx = followupDraft.fields.length + 1;
             followupDraft.fields.push({
-                key: `followup_${followupDraft.fields.length + 1}`,
+                key: `field_${idx}`,
                 label: '',
                 label_ar: '',
                 type: 'text',
@@ -869,7 +1115,7 @@ const isRtl = activeLang === 'ar';
             });
             renderFollowupFields();
             const inputs = document.querySelectorAll('#followupFieldsEditor input.config-input');
-            if (inputs.length) inputs[inputs.length - 4]?.focus();
+            if (inputs.length) inputs[inputs.length - 2]?.focus();
         }
 
         function collectFollowupConfig() {
