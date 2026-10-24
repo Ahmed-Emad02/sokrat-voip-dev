@@ -1075,6 +1075,7 @@ function isTabAllowed(tabName) {
 
     <!-- Main Content Panel -->
     <div class="flex-1 min-w-0 p-3.5 sm:p-6 md:p-8 w-full">
+        <%- include('partials/node-scope-selector') %>
         <!-- PBX Top Bar Horizontal Navigation (Option 2: Scrollable Pill Bar with Wheel Scrolling) -->
         <div id="configTopPillBar" class="w-full mb-6 shrink-0 <%= isRtl ? 'rtl' : 'ltr' %>">
             <div class="panel-surface rounded-2xl p-2.5 border border-[var(--border-primary)] flex items-center justify-between gap-3 bg-[var(--bg-secondary)] shadow-sm">

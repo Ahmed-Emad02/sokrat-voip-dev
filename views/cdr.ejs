@@ -366,6 +366,7 @@ function fmtDur(s) {
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
     <div class="flex-1 p-5 md:p-6 relative">
+        <%- include('partials/node-scope-selector') %>
         
         <!-- Header Bar with Integrated Action -->
         <div class="mb-3 flex items-center justify-between gap-4 flex-wrap">
@@ -687,6 +688,12 @@ function fmtDur(s) {
                                         <div class="flex flex-col gap-0.5 justify-center leading-none">
                                             <span class="text-xs text-white font-mono font-bold"><%= moment(call.calldate).format('YYYY-MM-DD') %></span>
                                             <span class="text-[11px] text-zinc-300 font-mono font-semibold"><%= moment(call.calldate).format('HH:mm:ss') %></span>
+                                            <% if (call.node_site_code && (call.is_local === 0 || call.is_local === '0')) { %>
+                                            <span class="inline-flex items-center gap-1 text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/25 whitespace-nowrap" title="<%= call.node_name || ('Site ' + call.node_site_code) %>">
+                                                <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><rect x="2" y="3" width="20" height="6" rx="2"/><rect x="2" y="15" width="20" height="6" rx="2"/></svg>
+                                                Site <%= call.node_site_code %>
+                                            </span>
+                                            <% } %>
                                         </div>
                                     </td>
                                                                         <td data-col="src" class="p-4 font-bold text-white font-mono whitespace-nowrap">
@@ -769,7 +776,7 @@ function fmtDur(s) {
                                         <% } %>
                                     </td>
                                     <td data-col="rec" class="p-4 text-end min-w-[340px]">
-                                        <% if (call.disposition === 'ANSWERED' && call.recordingfile) { %>
+                                        <% if (call.disposition === 'ANSWERED' && call.recordingfile && call.is_local !== 0 && call.is_local !== '0') { %>
                                             <div class="audio-player flex items-center gap-2 min-w-[320px] max-w-[380px] <%= isRtl ? 'flex-row-reverse ml-auto' : 'ml-auto' %>">
                                                 <audio preload="none" data-player-audio>
                                                     <source src="/audio/<%= call.uniqueid %>">
@@ -820,7 +827,7 @@ function fmtDur(s) {
                                     </td>
                                     <td data-col="did" class="p-4 font-mono text-xs text-zinc-300 whitespace-nowrap hidden"><%= call.did && call.did.trim() ? call.did.trim() : '-' %></td>
                                     <td data-col="uniqueid" class="p-4 text-zinc-400 text-[11px] font-mono whitespace-nowrap hidden"><%= call.uniqueid %></td>
-                                    <% if (canDeleteCdr) { %>
+                                    <% if (canDeleteCdr && call.is_local !== 0 && call.is_local !== '0') { %>
                                         <td data-col="actions" class="p-4 text-center">
                                             <button type="button" data-action="delete-cdr" data-uniqueid="<%= call.uniqueid %>" data-calldate="<%= moment(call.calldate).format('YYYY-MM-DD HH:mm:ss') %>" class="p-1 rounded-lg text-xs font-bold text-rose-400 hover:text-rose-300 bg-transparent hover:bg-transparent border-0 border-none transition cursor-pointer" title="<%= t.deleteBtn %>">
                                                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>

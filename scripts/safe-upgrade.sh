@@ -141,6 +141,28 @@ ensure_db_column "sokrat_federation_peers" "allow_report_read" "TINYINT(1) NOT N
 ensure_db_column "sokrat_federation_peers" "allow_contact_write" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "sokrat_federation_peers" "allow_dongle_control" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "sokrat_federation_peers" "allow_campaign_control" "TINYINT(1) NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "asterisk_version" "VARCHAR(64) DEFAULT NULL"
+ensure_db_column "sokrat_federation_node_status" "uptime_sec" "BIGINT DEFAULT NULL"
+ensure_db_column "sokrat_federation_node_status" "load1" "DECIMAL(6,2) DEFAULT NULL"
+ensure_db_column "sokrat_federation_node_status" "disk_pct" "TINYINT DEFAULT NULL"
+ensure_db_column "sokrat_federation_node_status" "extensions_total" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "extensions_online" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "dongles_total" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "dongles_free" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "active_calls" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "calls_today" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_remote_dongles" "state" "VARCHAR(32) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "signal_pct" "TINYINT DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "operator_name" "VARCHAR(64) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "imsi" "VARCHAR(32) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "imei" "VARCHAR(32) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "sim_number" "VARCHAR(32) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "active_call" "VARCHAR(128) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "last_seen_at" "DATETIME DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "updated_at" "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+mysql "${MYSQL_AUTH[@]}" asterisk -e "
+ALTER TABLE \`sokrat_federation_node_status\`
+  MODIFY COLUMN \`status\` ENUM('online','degraded','offline','error','unreachable') NOT NULL DEFAULT 'offline';" 2>/dev/null || true
 # Federation Phase 0: every node needs a stable identity, and legacy peer rows
 # pointed at the softphone vhost (:8443) which does not serve the federation API.
 mysql "${MYSQL_AUTH[@]}" asterisk -e "

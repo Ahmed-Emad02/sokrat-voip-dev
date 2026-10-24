@@ -244,6 +244,7 @@ function fmtDur(s) {
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
     <div class="flex-1 p-8 relative">
+        <%- include('partials/node-scope-selector') %>
         <!-- Header Bar with Integrated Action -->
         <div class="mb-4 flex items-center justify-between gap-4 flex-wrap">
             <div class="<%= isRtl ? 'text-right' : '' %>">

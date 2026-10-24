@@ -11,7 +11,10 @@ const {
     PROVIDER_IDS,
     SERVICE_ACTIONS,
     parseZeroTierNetworks,
-    parseTailscaleStatus
+    parseTailscaleStatus,
+    classifyTailscaleAuthKey,
+    describeTailscaleJoinError,
+    joinNetwork
 } = require('../lib/overlay-vpn');
 
 const serverSrc = fs.readFileSync(serverJsPath, 'utf8');
@@ -102,4 +105,100 @@ test('the settings menu exposes the overlay VPN entry to root only', () => {
     assert.ok(btnPos > rootBranch && btnPos < elseBranch, 'the overlay VPN entry must be inside the root-only branch');
     assert.ok(sidebarSrc.includes('/api/system/overlay/status'), 'the client must read the status endpoint');
     assert.ok(sidebarSrc.includes('/join'), 'the client must be able to join a network');
+});
+
+test('Tailscale credential types are classified before exec', () => {
+    const authKey = 'tskey-auth-k123456CNTRL-abcdefghijklmnopqrstuvwxyz';
+    const accepted = classifyTailscaleAuthKey(authKey);
+    assert.equal(accepted.valid, true);
+    assert.equal(accepted.kind, 'auth-key');
+
+    const apiToken = classifyTailscaleAuthKey('tskey-api-k123456CNTRL-abcdefghijklmnopqrstuvwxyz');
+    assert.equal(apiToken.valid, false);
+    assert.equal(apiToken.kind, 'api-token');
+    assert.match(apiToken.error, /API access token/);
+    assert.match(apiToken.error, /tskey-auth-/);
+
+    const clientSecret = classifyTailscaleAuthKey('tskey-client-k123456CNTRL-abcdefghijklmnopqrstuvwxyz');
+    assert.equal(clientSecret.valid, false);
+    assert.equal(clientSecret.kind, 'client-secret');
+
+    assert.equal(classifyTailscaleAuthKey('').kind, 'empty');
+    assert.equal(classifyTailscaleAuthKey('hello').kind, 'unknown');
+    assert.equal(classifyTailscaleAuthKey('tskey-auth-short').kind, 'malformed');
+    assert.equal(classifyTailscaleAuthKey('tskey-auth-k123456CNTRL-abc def').kind, 'malformed');
+});
+
+test('Tailscale join errors are mapped to actionable messages', () => {
+    const invalid = describeTailscaleJoinError({ stderr: 'invalid key: unable to validate API key\n' });
+    assert.equal(invalid.statusCode, 400);
+    assert.match(invalid.message, /node auth key/);
+    assert.match(invalid.message, /tskey-auth-/);
+
+    assert.match(describeTailscaleJoinError({ stderr: 'auth key expired' }).message, /expired/);
+    assert.match(describeTailscaleJoinError({ stderr: 'key revoked by admin' }).message, /revoked/);
+    assert.match(describeTailscaleJoinError({ stderr: 'authkey already used' }).message, /single-use/);
+    assert.equal(describeTailscaleJoinError({ stderr: 'failed to connect to local tailscaled' }).statusCode, 503);
+    assert.equal(describeTailscaleJoinError({ stderr: 'permission denied' }).statusCode, 403);
+});
+
+test('joinNetwork refuses an API token without running tailscale', async () => {
+    let called = false;
+    await assert.rejects(
+        joinNetwork('tailscale', { authKey: 'tskey-api-k123456CNTRL-abcdefghijklmnopqrstuvwxyz' }, async () => {
+            called = true;
+        }),
+        (error) => {
+            assert.equal(error.statusCode, 400);
+            assert.match(error.message, /API access token/);
+            return true;
+        }
+    );
+    assert.equal(called, false, 'tailscale must not be executed for a rejected credential');
+});
+
+test('joinNetwork maps tailscaled invalid-key stderr to HTTP 400 and redacts the key', async () => {
+    const authKey = 'tskey-auth-k123456CNTRL-abcdefghijklmnopqrstuvwxyz';
+    const fakeExec = async () => {
+        const error = new Error('Command failed: tailscale up');
+        error.stderr = `invalid key: unable to validate API key (${authKey})\n`;
+        throw error;
+    };
+    await assert.rejects(joinNetwork('tailscale', { authKey }, fakeExec), (error) => {
+        assert.equal(error.statusCode, 400);
+        assert.match(error.message, /node auth key/);
+        assert.ok(!error.message.includes(authKey), 'the auth key must not leak into the message');
+        assert.ok(!String(error.detail).includes(authKey), 'the auth key must not leak into the detail');
+        return true;
+    });
+});
+
+test('joinNetwork passes a valid auth key with accept-routes disabled', async () => {
+    const authKey = 'tskey-auth-k123456CNTRL-abcdefghijklmnopqrstuvwxyz';
+    let seen = null;
+    const fakeExec = async (file, args) => {
+        seen = { file, args };
+        return { stdout: 'Success.\n', stderr: '' };
+    };
+    const result = await joinNetwork('tailscale', { authKey }, fakeExec);
+    assert.equal(seen.file, 'tailscale');
+    assert.deepEqual(seen.args, ['up', `--authkey=${authKey}`, '--accept-routes=false']);
+    assert.match(result.message, /Tailscale is up/);
+});
+
+test('the join route honors the mapped status code and logs the detail', () => {
+    const joinRoute = serverSrc.slice(
+        serverSrc.indexOf("app.post('/api/system/overlay/:provider/join'"),
+        serverSrc.indexOf("app.post('/api/system/overlay/:provider/leave'")
+    );
+    assert.ok(joinRoute.includes('Number(error.statusCode) || 500'), 'the route must use the mapped status code');
+    assert.ok(joinRoute.includes('console.error'), 'the route must log the failure detail');
+    assert.ok(joinRoute.includes('error.detail'), 'the route must log the sanitized tailscaled detail');
+});
+
+test('the join UI rejects API tokens before calling the API', () => {
+    assert.ok(sidebarSrc.includes('tskey-api-'), 'the client must detect API access tokens');
+    assert.ok(sidebarSrc.includes('tskey-client-'), 'the client must detect OAuth client secrets');
+    assert.ok(sidebarSrc.includes('tskey-auth-'), 'the client must require a node auth key');
+    assert.ok(sidebarSrc.includes('Tailscale Admin'), 'the client must point at the admin console');
 });

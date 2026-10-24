@@ -512,14 +512,92 @@ CREATE TABLE IF NOT EXISTS `sokrat_federation_peers` (
 
 CREATE TABLE IF NOT EXISTS `sokrat_federation_node_status` (
   `peer_id` INT PRIMARY KEY,
-  `status` ENUM('online', 'offline', 'error', 'unreachable') NOT NULL DEFAULT 'offline',
+  `status` ENUM('online', 'degraded', 'offline', 'error', 'unreachable') NOT NULL DEFAULT 'offline',
   `last_seen_at` DATETIME DEFAULT NULL,
   `last_error` VARCHAR(255) DEFAULT NULL,
   `latency_ms` INT DEFAULT NULL,
   `api_version` SMALLINT UNSIGNED DEFAULT NULL,
   `node_version` VARCHAR(50) DEFAULT NULL,
+  `asterisk_version` VARCHAR(64) DEFAULT NULL,
+  `uptime_sec` BIGINT DEFAULT NULL,
+  `load1` DECIMAL(6,2) DEFAULT NULL,
+  `disk_pct` TINYINT DEFAULT NULL,
+  `extensions_total` INT NOT NULL DEFAULT 0,
+  `extensions_online` INT NOT NULL DEFAULT 0,
+  `dongles_total` INT NOT NULL DEFAULT 0,
+  `dongles_free` INT NOT NULL DEFAULT 0,
+  `active_calls` INT NOT NULL DEFAULT 0,
+  `calls_today` INT NOT NULL DEFAULT 0,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `sokrat_federation_sync_state` (
+  `peer_id` INT NOT NULL,
+  `resource` VARCHAR(32) NOT NULL,
+  `status` ENUM('idle', 'syncing', 'ok', 'error') NOT NULL DEFAULT 'idle',
+  `last_sync_at` DATETIME DEFAULT NULL,
+  `last_success_at` DATETIME DEFAULT NULL,
+  `cursor_value` VARCHAR(255) DEFAULT NULL,
+  `rows_synced` INT NOT NULL DEFAULT 0,
+  `last_error` VARCHAR(500) DEFAULT NULL,
+  PRIMARY KEY (`peer_id`, `resource`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `sokrat_federation_action_log` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `peer_id` INT NOT NULL,
+  `actor` VARCHAR(64) DEFAULT NULL,
+  `action` VARCHAR(64) NOT NULL,
+  `target` VARCHAR(128) DEFAULT NULL,
+  `payload` JSON DEFAULT NULL,
+  `status` ENUM('pending', 'ok', 'error') NOT NULL DEFAULT 'pending',
+  `response` TEXT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY `idx_peer_created` (`peer_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Mirrored CDR from every peer. Lives beside the local cdr table so reports can
+-- union both sources without cross-database joins on the large table.
+CREATE TABLE IF NOT EXISTS `asteriskcdrdb`.`sokrat_federation_remote_cdr` (
+  `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `peer_id` INT NOT NULL,
+  `uniqueid` VARCHAR(150) NOT NULL,
+  `linkedid` VARCHAR(150) DEFAULT NULL,
+  `global_call_id` VARCHAR(150) DEFAULT NULL,
+  `calldate` DATETIME NOT NULL,
+  `clid` VARCHAR(120) DEFAULT NULL,
+  `src` VARCHAR(80) DEFAULT NULL,
+  `dst` VARCHAR(80) DEFAULT NULL,
+  `dcontext` VARCHAR(80) DEFAULT NULL,
+  `channel` VARCHAR(120) DEFAULT NULL,
+  `dstchannel` VARCHAR(120) DEFAULT NULL,
+  `lastapp` VARCHAR(80) DEFAULT NULL,
+  `lastdata` VARCHAR(255) DEFAULT NULL,
+  `duration` INT DEFAULT 0,
+  `billsec` INT DEFAULT 0,
+  `disposition` VARCHAR(45) DEFAULT NULL,
+  `amaflags` INT DEFAULT NULL,
+  `accountcode` VARCHAR(80) DEFAULT NULL,
+  `userfield` VARCHAR(255) DEFAULT NULL,
+  `did` VARCHAR(80) DEFAULT NULL,
+  `recordingfile` VARCHAR(255) DEFAULT NULL,
+  `cnum` VARCHAR(80) DEFAULT NULL,
+  `cnam` VARCHAR(80) DEFAULT NULL,
+  `outbound_cnum` VARCHAR(80) DEFAULT NULL,
+  `outbound_cnam` VARCHAR(80) DEFAULT NULL,
+  `dst_cnam` VARCHAR(80) DEFAULT NULL,
+  `peeraccount` VARCHAR(80) DEFAULT NULL,
+  `sequence` INT DEFAULT 0,
+  `direction` ENUM('INBOUND','OUTBOUND','INTERNAL','UNKNOWN') DEFAULT 'UNKNOWN',
+  `call_scope` ENUM('INTERNAL','EXTERNAL','UNKNOWN') DEFAULT 'UNKNOWN',
+  `fed_leg` TINYINT(1) NOT NULL DEFAULT 0,
+  `synced_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uq_peer_uniqueid` (`peer_id`, `uniqueid`),
+  KEY `idx_calldate` (`calldate`),
+  KEY `idx_src` (`src`),
+  KEY `idx_dst` (`dst`),
+  KEY `idx_gclid` (`global_call_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_extensions` (
@@ -542,6 +620,15 @@ CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_dongles` (
   `phone_number` VARCHAR(50) DEFAULT NULL,
   `provider` VARCHAR(50) DEFAULT NULL,
   `status` VARCHAR(50) DEFAULT 'Unknown',
+  `state` VARCHAR(32) DEFAULT NULL,
+  `signal_pct` TINYINT DEFAULT NULL,
+  `operator_name` VARCHAR(64) DEFAULT NULL,
+  `imsi` VARCHAR(32) DEFAULT NULL,
+  `imei` VARCHAR(32) DEFAULT NULL,
+  `sim_number` VARCHAR(32) DEFAULT NULL,
+  `active_call` VARCHAR(128) DEFAULT NULL,
+  `last_seen_at` DATETIME DEFAULT NULL,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY `idx_peer_dongle` (`peer_id`, `dongle_name`),
   KEY `idx_peer_id` (`peer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

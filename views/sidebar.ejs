@@ -5920,7 +5920,12 @@ function renderOverlayVpn(providers) {
         const joinField = p.id === 'zerotier'
             ? '<input id="overlayJoin_' + p.id + '" type="text" placeholder="' + (OVERLAY_VPN_IS_AR ? 'معرّف الشبكة (Network ID)' : 'Network ID') + '" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-[11px]! font-mono bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">' +
               '<input id="overlayJoinName_' + p.id + '" type="text" placeholder="' + (OVERLAY_VPN_IS_AR ? 'اسم محلي (اختياري)' : 'Local name (optional)') + '" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-[11px]! font-mono bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">'
-            : '<input id="overlayJoin_' + p.id + '" type="password" autocomplete="off" placeholder="' + (OVERLAY_VPN_IS_AR ? 'مفتاح المصادقة (Auth key)' : 'Auth key') + '" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-[11px]! font-mono bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">';
+            : '<input id="overlayJoin_' + p.id + '" type="password" autocomplete="off" placeholder="tskey-auth-…" class="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-[11px]! font-mono bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">';
+        const joinHint = p.id === 'tailscale'
+            ? '<div class="text-[10px]! text-[var(--text-muted)] leading-relaxed">' + (OVERLAY_VPN_IS_AR
+                ? 'استخدم مفتاح عقدة من Tailscale Admin → Settings → Keys يبدأ بـ tskey-auth-. رموز API (tskey-api-) لا تعمل.'
+                : 'Use a node auth key from Tailscale Admin → Settings → Keys (starts with tskey-auth-). API access tokens (tskey-api-) will not work.') + '</div>'
+            : '';
 
         return '<div class="rounded-xl border border-[var(--border-primary)] p-4 space-y-3 bg-[var(--bg-primary)]/30">' +
             '<div class="flex items-center justify-between gap-2 flex-wrap">' +
@@ -5933,6 +5938,7 @@ function renderOverlayVpn(providers) {
             '<div class="flex items-center gap-1.5 flex-wrap pt-1 border-t border-[var(--border-primary)]">' + joinField +
                 '<button type="button" onclick="overlayVpnJoin(\'' + overlayVpnEscape(p.id) + '\')" class="px-3 py-1.5 text-[11px]! font-bold rounded-lg bg-[var(--accent-color)] text-white hover:opacity-90 transition cursor-pointer shrink-0">' + (OVERLAY_VPN_IS_AR ? 'انضمام' : 'Join') + '</button>' +
             '</div>' +
+            joinHint +
         '</div>';
     }).join('');
 
@@ -5969,6 +5975,32 @@ async function overlayVpnJoin(provider) {
     const value = field ? String(field.value || '').trim() : '';
     if (!value) {
         showToast(OVERLAY_VPN_IS_AR ? 'أدخل قيمة أولاً' : 'Enter a value first', 'error');
+        return;
+    }
+    if (provider === 'tailscale') {
+        if (/^tskey-api-/i.test(value)) {
+            showToast(OVERLAY_VPN_IS_AR
+                ? 'هذا رمز API وليس مفتاح عقدة. أنشئ مفتاحاً يبدأ بـ tskey-auth- من Tailscale Admin → Settings → Keys.'
+                : 'That is an API access token, not a node auth key. Generate a key starting with tskey-auth- in Tailscale Admin → Settings → Keys.', 'error');
+            return;
+        }
+        if (/^tskey-client-/i.test(value)) {
+            showToast(OVERLAY_VPN_IS_AR
+                ? 'هذا سرّ عميل OAuth وليس مفتاح عقدة. أنشئ مفتاحاً يبدأ بـ tskey-auth-.'
+                : 'That is an OAuth client secret, not a node auth key. Generate a key starting with tskey-auth-.', 'error');
+            return;
+        }
+        if (!/^tskey-auth-/i.test(value)) {
+            showToast(OVERLAY_VPN_IS_AR
+                ? 'مفتاح Tailscale يجب أن يبدأ بـ tskey-auth-.'
+                : 'A Tailscale auth key must start with tskey-auth-.', 'error');
+            return;
+        }
+    }
+    if (provider === 'zerotier' && !/^[0-9a-f]{16}$/i.test(value)) {
+        showToast(OVERLAY_VPN_IS_AR
+            ? 'معرّف شبكة ZeroTier يجب أن يكون 16 حرفاً ست عشرياً.'
+            : 'A ZeroTier network id must be 16 hexadecimal characters.', 'error');
         return;
     }
     const nameField = document.getElementById('overlayJoinName_' + provider);

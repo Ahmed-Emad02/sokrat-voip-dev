@@ -106,6 +106,7 @@ const isRtl = currentLang === 'ar';
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="/js/jssip.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         /* Enforce typography across all elements including Tailwind v4 resets */
         html[dir="rtl"], html[dir="rtl"] body, html[dir="rtl"] * {
@@ -437,11 +438,21 @@ const isRtl = currentLang === 'ar';
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
     <div class="flex-1 p-5 md:p-6 relative flex flex-col min-h-screen">
+        <%- include('partials/node-scope-selector') %>
 
         <div class="mb-3 shrink-0 flex items-center <%= isRtl ? 'justify-start text-right' : 'justify-between' %>">
             <div class="<%= isRtl ? 'text-right w-full' : '' %>">
                 <h2 class="text-3xl font-vibrant-display text-white tracking-tight <%= isRtl ? 'text-right' : '' %>"><%= t.title %> <span class="accent-orange"><%= t.subtitle %></span></h2>
             </div>
+        </div>
+
+        <!-- Federation node rail: every connected PBX in one strip -->
+        <div id="federationNodeRail" class="hidden mb-4 panel-surface rounded-xl p-3 relative z-20">
+            <div class="flex items-center justify-between gap-3 mb-2">
+                <h3 class="text-xs font-extrabold uppercase tracking-wider text-[var(--text-secondary)]"><%= isRtl ? 'السيرفرات المرتبطة' : 'Connected PBXs' %></h3>
+                <span id="fedRailTotals" class="text-[11px] font-bold text-[var(--text-muted)] font-mono"></span>
+            </div>
+            <div id="fedRailNodes" class="flex gap-2.5 overflow-x-auto pb-1" style="scrollbar-width:thin"></div>
         </div>
 
         <!-- Compact Balanced Filter Form -->
@@ -2265,6 +2276,125 @@ function syncStatusChecklistUI() {
                 } catch (e) {}
             }
         });
+    </script>
+    <script>
+        // Federation node rail. Read-only: the rail shows cached health from the
+        // central node and degrades each card independently when a peer is down.
+        (function() {
+            const isRtl = <%= isRtl ? 'true' : 'false' %>;
+            const rail = document.getElementById('federationNodeRail');
+            const nodesEl = document.getElementById('fedRailNodes');
+            const totalsEl = document.getElementById('fedRailTotals');
+            if (!rail || !nodesEl) return;
+
+            const labels = {
+                local: isRtl ? 'محلي' : 'Local',
+                online: isRtl ? 'متصل' : 'Online',
+                offline: isRtl ? 'غير متصل' : 'Offline',
+                degraded: isRtl ? 'محدود' : 'Degraded',
+                ext: isRtl ? 'تحويلة' : 'ext',
+                dongles: isRtl ? 'شرائح' : 'SIMs',
+                calls: isRtl ? 'مكالمات' : 'calls',
+                ms: 'ms'
+            };
+
+            function esc(value) {
+                return String(value == null ? '' : value)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            function statusColor(status) {
+                if (status === 'online') return '#22c55e';
+                if (status === 'degraded') return '#f59e0b';
+                return '#ef4444';
+            }
+
+            function renderCard(node) {
+                const status = node.status || 'offline';
+                const color = statusColor(status);
+                const statusLabel = labels[status] || status;
+                const name = esc(node.nodeName || ('Site ' + node.siteCode));
+                const site = esc(node.siteCode || '');
+                const extTotal = Number(node.extensionsTotal || 0);
+                const extOnline = Number(node.extensionsOnline || 0);
+                const dongles = Number(node.donglesTotal || 0);
+                const donglesFree = Number(node.donglesFree || 0);
+                const calls = Number(node.activeCalls || 0);
+                const latency = node.latencyMs != null ? `${node.latencyMs} ${labels.ms}` : '';
+                const isLocal = Boolean(node.isLocal);
+
+                return `
+                    <div class="shrink-0 min-w-[190px] rounded-lg border px-3 py-2 bg-[var(--bg-primary)]"
+                         style="border-color:${color}55">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full shrink-0" style="background:${color}"></span>
+                                    <span class="text-xs font-extrabold text-[var(--text-primary)] truncate">${name}</span>
+                                </div>
+                                <div class="text-[10px] font-mono text-[var(--text-muted)] mt-0.5">
+                                    ${isLocal ? labels.local : ('Site ' + site)}
+                                    ${latency ? ' · ' + esc(latency) : ''}
+                                </div>
+                            </div>
+                            <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
+                                  style="color:${color};background:${color}1a">${esc(statusLabel)}</span>
+                        </div>
+                        <div class="mt-1.5 grid grid-cols-3 gap-1 text-center">
+                            <div>
+                                <div class="text-[11px] font-bold font-mono text-[var(--text-primary)]">${extOnline}/${extTotal}</div>
+                                <div class="text-[9px] text-[var(--text-muted)] uppercase">${labels.ext}</div>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold font-mono text-[var(--text-primary)]">${donglesFree}/${dongles}</div>
+                                <div class="text-[9px] text-[var(--text-muted)] uppercase">${labels.dongles}</div>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold font-mono" style="color:${calls > 0 ? '#f59e0b' : 'var(--text-primary)'}">${calls}</div>
+                                <div class="text-[9px] text-[var(--text-muted)] uppercase">${labels.calls}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function render(overview) {
+                const nodes = Array.isArray(overview && overview.nodes) ? overview.nodes : [];
+                if (!nodes.length) {
+                    rail.classList.add('hidden');
+                    return;
+                }
+                rail.classList.remove('hidden');
+                nodesEl.innerHTML = nodes.map(renderCard).join('');
+                const totals = overview.totals || {};
+                if (totalsEl) {
+                    totalsEl.textContent =
+                        `${Number(totals.extensionOnline || 0)}/${Number(totals.extensionTotal || 0)} ${labels.ext} · ` +
+                        `${Number(totals.dongleFree || 0)}/${Number(totals.dongleTotal || 0)} ${labels.dongles} · ` +
+                        `${Number(totals.activeCalls || 0)} ${labels.calls}`;
+                }
+            }
+
+            async function refresh() {
+                try {
+                    const res = await fetch('/api/federation/overview', { headers: { Accept: 'application/json' } });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (data && data.success) render(data);
+                } catch (_) {}
+            }
+
+            refresh();
+            setInterval(refresh, 10000);
+
+            try {
+                if (typeof io === 'function') {
+                    const socket = io();
+                    socket.on('federation:overview', render);
+                }
+            } catch (_) {}
+        })();
     </script>
     <script>
         // Fix Flatpickr month dropdown: force select dropdown visible, handle click for showPicker()

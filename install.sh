@@ -1001,14 +1001,49 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_peers\` (
 
 CREATE TABLE IF NOT EXISTS \`sokrat_federation_node_status\` (
   \`peer_id\` INT PRIMARY KEY,
-  \`status\` ENUM('online', 'offline', 'error', 'unreachable') NOT NULL DEFAULT 'offline',
+  \`status\` ENUM('online', 'degraded', 'offline', 'error', 'unreachable') NOT NULL DEFAULT 'offline',
   \`last_seen_at\` DATETIME DEFAULT NULL,
   \`last_error\` VARCHAR(255) DEFAULT NULL,
   \`latency_ms\` INT DEFAULT NULL,
   \`api_version\` SMALLINT UNSIGNED DEFAULT NULL,
   \`node_version\` VARCHAR(50) DEFAULT NULL,
+  \`asterisk_version\` VARCHAR(64) DEFAULT NULL,
+  \`uptime_sec\` BIGINT DEFAULT NULL,
+  \`load1\` DECIMAL(6,2) DEFAULT NULL,
+  \`disk_pct\` TINYINT DEFAULT NULL,
+  \`extensions_total\` INT NOT NULL DEFAULT 0,
+  \`extensions_online\` INT NOT NULL DEFAULT 0,
+  \`dongles_total\` INT NOT NULL DEFAULT 0,
+  \`dongles_free\` INT NOT NULL DEFAULT 0,
+  \`active_calls\` INT NOT NULL DEFAULT 0,
+  \`calls_today\` INT NOT NULL DEFAULT 0,
   \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY \`idx_status\` (\`status\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS \`sokrat_federation_sync_state\` (
+  \`peer_id\` INT NOT NULL,
+  \`resource\` VARCHAR(32) NOT NULL,
+  \`status\` ENUM('idle', 'syncing', 'ok', 'error') NOT NULL DEFAULT 'idle',
+  \`last_sync_at\` DATETIME DEFAULT NULL,
+  \`last_success_at\` DATETIME DEFAULT NULL,
+  \`cursor_value\` VARCHAR(255) DEFAULT NULL,
+  \`rows_synced\` INT NOT NULL DEFAULT 0,
+  \`last_error\` VARCHAR(500) DEFAULT NULL,
+  PRIMARY KEY (\`peer_id\`, \`resource\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS \`sokrat_federation_action_log\` (
+  \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+  \`peer_id\` INT NOT NULL,
+  \`actor\` VARCHAR(64) DEFAULT NULL,
+  \`action\` VARCHAR(64) NOT NULL,
+  \`target\` VARCHAR(128) DEFAULT NULL,
+  \`payload\` JSON DEFAULT NULL,
+  \`status\` ENUM('pending', 'ok', 'error') NOT NULL DEFAULT 'pending',
+  \`response\` TEXT DEFAULT NULL,
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY \`idx_peer_created\` (\`peer_id\`, \`created_at\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS \`sokrat_federation_remote_extensions\` (
@@ -1031,6 +1066,15 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_remote_dongles\` (
   \`phone_number\` VARCHAR(50) DEFAULT NULL,
   \`provider\` VARCHAR(50) DEFAULT NULL,
   \`status\` VARCHAR(50) DEFAULT 'Unknown',
+  \`state\` VARCHAR(32) DEFAULT NULL,
+  \`signal_pct\` TINYINT DEFAULT NULL,
+  \`operator_name\` VARCHAR(64) DEFAULT NULL,
+  \`imsi\` VARCHAR(32) DEFAULT NULL,
+  \`imei\` VARCHAR(32) DEFAULT NULL,
+  \`sim_number\` VARCHAR(32) DEFAULT NULL,
+  \`active_call\` VARCHAR(128) DEFAULT NULL,
+  \`last_seen_at\` DATETIME DEFAULT NULL,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY \`idx_peer_dongle\` (\`peer_id\`, \`dongle_name\`),
   KEY \`idx_peer_id\` (\`peer_id\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -1047,6 +1091,25 @@ ensure_db_column "sokrat_federation_peers" "allow_report_read" "TINYINT(1) NOT N
 ensure_db_column "sokrat_federation_peers" "allow_contact_write" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "sokrat_federation_peers" "allow_dongle_control" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "sokrat_federation_peers" "allow_campaign_control" "TINYINT(1) NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "asterisk_version" "VARCHAR(64) DEFAULT NULL"
+ensure_db_column "sokrat_federation_node_status" "uptime_sec" "BIGINT DEFAULT NULL"
+ensure_db_column "sokrat_federation_node_status" "load1" "DECIMAL(6,2) DEFAULT NULL"
+ensure_db_column "sokrat_federation_node_status" "disk_pct" "TINYINT DEFAULT NULL"
+ensure_db_column "sokrat_federation_node_status" "extensions_total" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "extensions_online" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "dongles_total" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "dongles_free" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "active_calls" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_node_status" "calls_today" "INT NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_remote_dongles" "state" "VARCHAR(32) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "signal_pct" "TINYINT DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "operator_name" "VARCHAR(64) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "imsi" "VARCHAR(32) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "imei" "VARCHAR(32) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "sim_number" "VARCHAR(32) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "active_call" "VARCHAR(128) DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "last_seen_at" "DATETIME DEFAULT NULL"
+ensure_db_column "sokrat_federation_remote_dongles" "updated_at" "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
 
 # Normalize legacy HTTPS API URLs that pointed at the softphone vhost (:8443).
 mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "

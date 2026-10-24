@@ -316,17 +316,68 @@ const CDR_DISPOSITION_SQL = `
 //    uniqueid (the post-fail "Congestion()" continuation used to surface as a
 //    phantom FAILED row seconds after the real attempt) — keep the primary
 //    segment (longest duration, latest sequence as tiebreaker).
-const CDR_HISTORY_FILTERS_SQL = `
+function buildCdrHistoryFiltersSql(sourceTable, options = {}) {
+    const table = sourceTable || tables.cdr;
+    // In the federated union the same uniqueid can exist on two PBXs, so the
+    // duplicate-segment probe must stay inside one node.
+    const nodeScope = options.isUnion ? ' AND cx.node_site_code = c.node_site_code' : '';
+    return `
     AND c.dst NOT IN ('ussd','sms','report','s','*87','*88','*89')
     AND c.dcontext NOT LIKE 'test-%'
     AND c.dcontext NOT LIKE '%benchmark%'
     AND c.dcontext <> 'play_audio'
     AND NOT EXISTS (
-        SELECT 1 FROM ${tables.cdr} cx
-        WHERE cx.uniqueid = c.uniqueid
+        SELECT 1 FROM ${table} cx
+        WHERE cx.uniqueid = c.uniqueid${nodeScope}
           AND (cx.duration > c.duration OR (cx.duration = c.duration AND cx.sequence > c.sequence))
     )
 `;
+}
+
+const CDR_HISTORY_FILTERS_SQL = buildCdrHistoryFiltersSql(tables.cdr);
+const FEDERATION_CDR_VIEW = tableName(CDR_DB, 'sokrat_cdr_all');
+// Flipped on after initFederationDb confirms the union view exists. Until then
+// reports keep the local path instead of failing on a missing relation.
+let federationCdrViewReady = false;
+
+/**
+ * Resolve which CDR relation a report should read and how to restrict it to the
+ * PBXs selected in the global scope selector.
+ *
+ * Local-only scopes keep the original `asteriskcdrdb.cdr` path so single-node
+ * installs pay nothing for federation. Any scope that includes a peer reads the
+ * union view, optionally filtered by site code.
+ */
+function buildCdrSource(scope) {
+    const localSiteCode = String((scope && scope.localSiteCode) || '10');
+    const includeRemote = Boolean(scope && scope.includeRemote) && federationCdrViewReady;
+    if (!includeRemote) {
+        return {
+            table: tables.cdr,
+            isUnion: false,
+            filtersSql: CDR_HISTORY_FILTERS_SQL,
+            nodeFilterSql: '',
+            nodeFilterParams: [],
+            sites: [localSiteCode]
+        };
+    }
+
+    const allSites = Array.isArray(scope.allSites) && scope.allSites.length
+        ? scope.allSites.map(String)
+        : [localSiteCode];
+    const selected = Array.isArray(scope.sites) && scope.sites.length
+        ? scope.sites.map(String)
+        : allSites;
+    const restrict = selected.length < allSites.length;
+    return {
+        table: FEDERATION_CDR_VIEW,
+        isUnion: true,
+        filtersSql: buildCdrHistoryFiltersSql(FEDERATION_CDR_VIEW, { isUnion: true }),
+        nodeFilterSql: restrict ? ' AND c.node_site_code IN (?)' : '',
+        nodeFilterParams: restrict ? [selected] : [],
+        sites: selected
+    };
+}
 app.set('view engine', 'ejs');
 const staticCacheOptions = { maxAge: '7d', etag: true };
 app.use(express.static(path.join(__dirname, 'public'), staticCacheOptions));
@@ -1181,6 +1232,15 @@ async function initAuthDb() {
         await initFederationDb(conn);
     } catch (fedErr) {
         console.error('Federation DB init error:', fedErr.message);
+    }
+    try {
+        const [viewRows] = await conn.execute(
+            'SELECT 1 FROM information_schema.views WHERE table_schema = ? AND table_name = ? LIMIT 1',
+            [CDR_DB, 'sokrat_cdr_all']
+        );
+        federationCdrViewReady = Array.isArray(viewRows) && viewRows.length > 0;
+    } catch (_) {
+        federationCdrViewReady = false;
     }
     await conn.end();
     await syncAllExtensionsAstdb();
@@ -2311,6 +2371,16 @@ federationHub = new FederationHub({
         } catch (err) {
             return { extensions: [], activeCalls: {} };
         }
+    },
+    getLocalMetricsFn: async () => {
+        const metrics = getFederationNodeMetrics();
+        return {
+            ...metrics,
+            calls_today: await getFederationCallsToday(),
+            extensions_total: Object.keys(peerStatus || {}).length,
+            dongles_total: (await buildFederationDongles()).length,
+            active_calls: Object.keys(activeCalls || {}).length
+        };
     },
     executeLocalActionFn: async ({ action, targetExtension, supervisorExtension, channel }) => {
         if (action === 'hangup' && channel) {
@@ -4104,7 +4174,7 @@ app.use(async (req, res, next) => {
             try {
                 const [sRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
                 if (sRows && sRows[0]) cachedFedSettings = sRows[0];
-                const [pRows] = await pool.query('SELECT id, node_name, host, site_code, status FROM `asterisk`.`sokrat_federation_peers`');
+                const [pRows] = await pool.query('SELECT id, node_name, host, site_code, status, allow_report_read, last_sync_at FROM `asterisk`.`sokrat_federation_peers`');
                 cachedFedPeers = pRows || [];
                 const [reRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_remote_extensions`');
                 cachedFedRemoteExts = reRows || [];
@@ -4114,6 +4184,64 @@ app.use(async (req, res, next) => {
         res.locals.federationSettings = cachedFedSettings;
         res.locals.federationPeers = cachedFedPeers;
         res.locals.federationRemoteExtensions = cachedFedRemoteExts;
+
+        // --- GLOBAL PBX SCOPE ---
+        // One selector drives dashboard, call history and extension stats. The
+        // cookie stores "local", "all", or a comma separated list of site codes.
+        const localSiteCode = String((cachedFedSettings && cachedFedSettings.local_site_code) || '10');
+        const localNodeName = (cachedFedSettings && cachedFedSettings.local_node_name) || 'Main PBX';
+        const peerNodes = (cachedFedPeers || []).map(p => ({
+            site_code: String(p.site_code),
+            node_name: p.node_name || `Site ${p.site_code}`,
+            host: p.host || '',
+            status: p.status || 'offline',
+            last_sync_at: p.last_sync_at || null,
+            is_local: false,
+            report_read: Number(p.allow_report_read) !== 0
+        }));
+        const allFedNodes = [
+            {
+                site_code: localSiteCode,
+                node_name: localNodeName,
+                host: 'local',
+                status: 'online',
+                last_sync_at: null,
+                is_local: true,
+                report_read: true
+            },
+            ...peerNodes
+        ];
+        const federationEnabled = peerNodes.length > 0;
+        const reportNodes = allFedNodes.filter(n => n.report_read);
+        const rawScopeCookie = String(reqCookies.fed_scope || '').trim();
+        let scopeMode = federationEnabled ? 'all' : 'local';
+        let scopeSelection = null;
+        if (rawScopeCookie === 'local') {
+            scopeMode = 'local';
+            scopeSelection = [localSiteCode];
+        } else if (rawScopeCookie && rawScopeCookie !== 'all') {
+            const requested = rawScopeCookie.split(',').map(s => s.trim()).filter(Boolean);
+            const valid = requested.filter(site => reportNodes.some(n => n.site_code === site));
+            if (valid.length > 0) {
+                scopeSelection = Array.from(new Set(valid));
+                scopeMode = (scopeSelection.length === 1 && scopeSelection[0] === localSiteCode) ? 'local' : 'selected';
+            }
+        }
+        if (!federationEnabled) {
+            scopeMode = 'local';
+            scopeSelection = [localSiteCode];
+        }
+        const scopeSites = scopeSelection || reportNodes.map(n => n.site_code);
+        res.locals.federationEnabled = federationEnabled;
+        res.locals.federationNodes = allFedNodes;
+        res.locals.federationScope = {
+            mode: scopeMode,
+            sites: scopeSites,
+            allSites: reportNodes.map(n => n.site_code),
+            localSiteCode,
+            includeRemote: scopeMode !== 'local' && reportNodes.some(n => !n.is_local && scopeSites.includes(n.site_code))
+        };
+        res.locals.federationScopeCookie = rawScopeCookie || (federationEnabled ? 'all' : 'local');
         next();
     } catch (err) { next(err); }
 });
@@ -5837,14 +5965,16 @@ app.get('/', async (req, res) => {
 
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
+        const cdrSource = buildCdrSource(res.locals.federationScope);
         let query = `
             SELECT c.src, c.dst, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.channel, c.dstchannel, c.calldate, c.did, c.uniqueid, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name
-            FROM ${tables.cdr} c
+            FROM ${cdrSource.table} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             WHERE c.calldate BETWEEN ? AND ?
-            ${CDR_HISTORY_FILTERS_SQL}
+            ${cdrSource.filtersSql}
+            ${cdrSource.nodeFilterSql}
         `;
-        let queryParams = [startDate, endDate];
+        let queryParams = [startDate, endDate, ...cdrSource.nodeFilterParams];
 
         if (targetExtensionFilter !== 'ALL') {
             const exts = targetExtensionFilter;
@@ -6306,31 +6436,35 @@ app.get('/cdr', async (req, res) => {
         const offset = (page - 1) * perPage;
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
+        const cdrSource = buildCdrSource(res.locals.federationScope);
+        const nodeColumns = cdrSource.isUnion ? ', c.node_site_code, c.node_name, c.is_local' : '';
 
         const searchTranscript = req.query.searchTranscript ? String(req.query.searchTranscript).trim() : '';
 
         let countQuery = `
             SELECT COUNT(*) as total
-            FROM ${tables.cdr} c
+            FROM ${cdrSource.table} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
             WHERE c.calldate BETWEEN ? AND ?
-            ${CDR_HISTORY_FILTERS_SQL}
+            ${cdrSource.filtersSql}
+            ${cdrSource.nodeFilterSql}
         `;
-        let countParams = [startDate, endDate];
+        let countParams = [startDate, endDate, ...cdrSource.nodeFilterParams];
 
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name${nodeColumns},
             stt.transcript, stt.status as stt_status, stt.duration_sec as stt_duration, stt.language as stt_lang,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
-            FROM ${tables.cdr} c
+            FROM ${cdrSource.table} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
             WHERE c.calldate BETWEEN ? AND ?
-            ${CDR_HISTORY_FILTERS_SQL}
+            ${cdrSource.filtersSql}
+            ${cdrSource.nodeFilterSql}
         `;
-        let queryParams = [startDate, endDate];
+        let queryParams = [startDate, endDate, ...cdrSource.nodeFilterParams];
 
         if (targetExtensionFilter !== 'ALL') {
             const exts = targetExtensionFilter;
@@ -6483,16 +6617,19 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         const { trunks: expTrunksList, dongles: expDonglesList } = await getAvailableTrunksAndDongles();
         const directionCase = CDR_DIRECTION_CASE;
         const callScopeCase = CDR_CALL_SCOPE_CASE;
+        const cdrSource = buildCdrSource(res.locals.federationScope);
+        const nodeColumns = cdrSource.isUnion ? ', c.node_site_code, c.node_name, c.is_local' : '';
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name${nodeColumns},
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
-            FROM ${tables.cdr} c
+            FROM ${cdrSource.table} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
             WHERE c.calldate BETWEEN ? AND ?
-            ${CDR_HISTORY_FILTERS_SQL}
+            ${cdrSource.filtersSql}
+            ${cdrSource.nodeFilterSql}
         `;
-        let queryParams = [startDate, endDate];
+        let queryParams = [startDate, endDate, ...cdrSource.nodeFilterParams];
 
         if (targetExtensionFilter !== 'ALL') {
             const exts = targetExtensionFilter;
@@ -6559,7 +6696,7 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         } catch (_) {}
 
         if (XLSX) {
-            const headers = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
+            const headers = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID", ...(cdrSource.isUnion ? ["PBX"] : [])];
             const dataRows = [headers];
             for (const row of rows) {
                 const formattedDst = formatDestination(row, ringGroupSet, true);
@@ -6578,7 +6715,8 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
                     String(row.call_scope || 'EXTERNAL'),
                     String(row.channel || ''),
                     String(row.dstchannel || ''),
-                    String(row.uniqueid || '')
+                    String(row.uniqueid || ''),
+                    ...(cdrSource.isUnion ? [String(row.node_site_code || '')] : [])
                 ]);
             }
             const wb = XLSX.utils.book_new();
@@ -6592,7 +6730,7 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         }
 
         // Fallback to CSV if XLSX is unavailable
-        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID"];
+        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID", ...(cdrSource.isUnion ? ["PBX"] : [])];
         let csvContent = "\ufeff";
         csvContent += csvHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n";
         for (const row of rows) {
@@ -6611,7 +6749,8 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
                 `"${row.call_scope || 'EXTERNAL'}"`,
                 `"${row.channel || ''}"`,
                 `"${row.dstchannel || ''}"`,
-                `"${row.uniqueid || ''}"`
+                `"${row.uniqueid || ''}"`,
+                ...(cdrSource.isUnion ? [`"${String(row.node_site_code || '').replace(/"/g, '""')}"`] : [])
             ];
             csvContent += rowData.join(",") + "\n";
         }
@@ -6664,22 +6803,25 @@ async function handleCdrSingleRecord(req, res) {
             return res.status(400).json({ success: false, error: 'uniqueid parameter is required' });
         }
 
+        const detailSource = buildCdrSource(res.locals.federationScope);
+        const detailNodeColumns = detailSource.isUnion ? ', c.node_site_code, c.node_name, c.is_local' : '';
         const [rows] = await pool.query(`
             SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastapp, c.lastdata,
                    c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition,
                    c.uniqueid, c.linkedid, c.recordingfile, c.channel, c.dstchannel,
                    c.did, c.userfield, c.accountcode, c.cnum, c.cnam, c.outbound_cnum,
-                   c.outbound_cnam, c.dst_cnam, c.peeraccount, c.sequence,
+                   c.outbound_cnam, c.dst_cnam, c.peeraccount, c.sequence${detailNodeColumns},
                    COALESCE(u_src.name, NULLIF(TRIM(c.cnam), ''), '') as src_name,
                    COALESCE(u_dst.name, NULLIF(TRIM(c.dst_cnam), ''), '') as dst_name,
                    ${CDR_DIRECTION_CASE} as direction,
                    ${CDR_CALL_SCOPE_CASE} as call_scope
-            FROM ${tables.cdr} c
+            FROM ${detailSource.table} c
             LEFT JOIN ${tables.users} u_src ON c.src = u_src.extension
             LEFT JOIN ${tables.users} u_dst ON c.dst = u_dst.extension
-            WHERE c.uniqueid = ? OR (c.linkedid = ? AND c.linkedid != '' AND c.linkedid IS NOT NULL)
+            WHERE (c.uniqueid = ? OR (c.linkedid = ? AND c.linkedid != '' AND c.linkedid IS NOT NULL))
+            ${detailSource.nodeFilterSql}
             ORDER BY c.calldate ASC, c.sequence ASC
-        `, [uniqueid, uniqueid]);
+        `, [uniqueid, uniqueid, ...detailSource.nodeFilterParams]);
 
         if (!rows || rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Call record not found', uniqueid });
@@ -7840,7 +7982,8 @@ app.get('/api/ext-overview', async (req, res) => {
         const workDays = req.query.workDays;
         const activeIntervals = buildShiftIntervals(startDate, endDate, workHoursEnabled, shiftStart, shiftEnd, workDays);
 
-        const [rows] = await pool.query(`SELECT src, dst, billsec, ${CDR_DISPOSITION_SQL} as disposition, channel, dstchannel FROM ${tables.cdr} c WHERE calldate BETWEEN ? AND ? ${CDR_HISTORY_FILTERS_SQL}`, [startDate, endDate]);
+        const extOverviewSource = buildCdrSource(res.locals.federationScope);
+        const [rows] = await pool.query(`SELECT src, dst, billsec, ${CDR_DISPOSITION_SQL} as disposition, channel, dstchannel FROM ${extOverviewSource.table} c WHERE calldate BETWEEN ? AND ? ${extOverviewSource.filtersSql} ${extOverviewSource.nodeFilterSql}`, [startDate, endDate, ...extOverviewSource.nodeFilterParams]);
 
         const employeeMetrics = {};
         res.locals.roster.forEach(emp => {
@@ -8037,14 +8180,16 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
         const workDays = req.query.workDays;
         const activeIntervals = buildShiftIntervals(startDate, endDate, workHoursEnabled, shiftStart, shiftEnd, workDays);
 
+        const extStatsSource = buildCdrSource(res.locals.federationScope);
         const [rows] = await pool.query(
              `SELECT c.calldate, c.src, c.dst, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.channel, c.dstchannel, c.uniqueid, c.cnum
-              FROM ${tables.cdr} c
+              FROM ${extStatsSource.table} c
               WHERE c.calldate BETWEEN ? AND ?
-              ${CDR_HISTORY_FILTERS_SQL}
+              ${extStatsSource.filtersSql}
+              ${extStatsSource.nodeFilterSql}
              AND (c.src = ? OR c.dst = ? OR c.cnum = ? OR c.channel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)') OR c.dstchannel REGEXP CONCAT('^[A-Za-z0-9_]+/', ?, '([^0-9]|$)'))
              ORDER BY c.calldate DESC`,
-            [startDate, endDate, extension, extension, extension, extension, extension]
+            [startDate, endDate, ...extStatsSource.nodeFilterParams, extension, extension, extension, extension, extension]
         );
 
         const stats = {
@@ -10176,13 +10321,15 @@ function getEnrichedDevices() {
 // Page View route
 app.get('/gsm-dongles', async (req, res) => {
     try {
-        const [allowedDongles, enriched] = await Promise.all([
+        const [allowedDongles, enriched, remoteNodes] = await Promise.all([
             getUserAllowedDongles(req),
-            getEnrichedDevices()
+            getEnrichedDevices(),
+            getFederationRemoteDongles(res.locals.federationScope)
         ]);
         const filteredDevices = allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
         res.render('gsm-dongles', {
             devices: filteredDevices,
+            remoteNodes,
             moment
         });
     } catch (error) {
@@ -10193,12 +10340,13 @@ app.get('/gsm-dongles', async (req, res) => {
 // API Endpoint to fetch latest device status
 app.get('/api/gsm-dongles', async (req, res) => {
     try {
-        const [allowedDongles, enriched] = await Promise.all([
+        const [allowedDongles, enriched, remoteNodes] = await Promise.all([
             getUserAllowedDongles(req),
-            getEnrichedDevices()
+            getEnrichedDevices(),
+            getFederationRemoteDongles(res.locals.federationScope)
         ]);
         const filteredDevices = allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched;
-        res.json({ success: true, devices: filteredDevices });
+        res.json({ success: true, devices: filteredDevices, remoteNodes });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -11954,7 +12102,11 @@ app.post('/api/system/overlay/:provider/join', requireAuth, async (req, res) => 
         const status = await overlayStatus();
         res.json({ success: true, ...result, ...status });
     } catch (error) {
-        res.status(500).json({ success: false, error: String(error.stderr || error.message || '').trim() });
+        const statusCode = Number(error.statusCode) || 500;
+        const message = String(error.message || error.stderr || '').trim();
+        const detail = String(error.detail || error.stderr || '').trim();
+        console.error(`[overlay] ${provider} join failed (HTTP ${statusCode}): ${detail || message}`);
+        res.status(statusCode).json({ success: false, error: message });
     }
 });
 
@@ -19453,6 +19605,87 @@ app.post('/api/config/dongle-mappings/:dongleName/toggle', requireAuth, async (r
 // ============================================================================
 
 // 1. GET /api/config/federation/settings - Retrieve local federation settings
+// ============================================================================
+// FEDERATION CENTRAL READ MODELS (Phase 1)
+// These endpoints serve the dashboard node rail. They read local caches only,
+// so a peer outage degrades a card instead of blocking the page.
+// ============================================================================
+app.get('/api/federation/overview', requireAuth, async (req, res) => {
+    try {
+        if (!federationHub) {
+            return res.status(503).json({ success: false, error: 'Federation hub is not initialized.' });
+        }
+        const overview = federationHub.getOverview();
+        if (!overview || !overview.timestamp) {
+            await federationHub.refreshOverview();
+        }
+        const panelRole = federationHub.localSettings?.panel_role || 'local';
+        res.json({
+            success: true,
+            ...federationHub.getOverview(),
+            panelRole
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/federation/dongles', requireAuth, async (req, res) => {
+    try {
+        const nodes = await getFederationRemoteDongles(res.locals.federationScope);
+        res.json({
+            success: true,
+            scope: res.locals.federationScope || null,
+            nodes,
+            totals: {
+                nodes: nodes.length,
+                dongles: nodes.reduce((sum, node) => sum + node.dongles.length, 0)
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/federation/nodes', requireAuth, async (req, res) => {
+    try {
+        if (!federationHub) {
+            return res.status(503).json({ success: false, error: 'Federation hub is not initialized.' });
+        }
+        let overview = federationHub.getOverview();
+        if (!overview || !overview.timestamp) {
+            overview = await federationHub.refreshOverview();
+        }
+        res.json({ success: true, nodes: overview.nodes || [], totals: overview.totals || {} });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/federation/nodes/:id/sync', requireAuth, async (req, res) => {
+    try {
+        if (!federationHub) {
+            return res.status(503).json({ success: false, error: 'Federation hub is not initialized.' });
+        }
+        const peerId = parseInt(req.params.id, 10);
+        if (!Number.isFinite(peerId)) {
+            return res.status(400).json({ success: false, error: 'Invalid node id.' });
+        }
+        await federationHub.reloadSettingsAndPeers();
+        const result = await federationHub.syncPeerNow(peerId);
+        if (!result.success) {
+            return res.status(502).json(result);
+        }
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ============================================================================
+// FEDERATION CONFIGURATION API
+// ============================================================================
+
 app.get('/api/config/federation/settings', requireAuth, async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
@@ -19953,6 +20186,341 @@ app.get('/api/federation/v1/live-state', async (req, res) => {
             peerStatus: peerStatus || {},
             peerIPs: peerIPs || {},
             activeCalls: activeCalls || {}
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Federation metric helpers. These run on every poll from the central node, so
+// expensive CLI probes are cached instead of shelling out on each request.
+let federationMetricsCache = { at: 0, value: null };
+const FEDERATION_METRICS_TTL_MS = 30000;
+
+function getFederationNodeMetrics() {
+    const now = Date.now();
+    if (federationMetricsCache.value && (now - federationMetricsCache.at) < FEDERATION_METRICS_TTL_MS) {
+        return federationMetricsCache.value;
+    }
+
+    let asteriskVersion = null;
+    try {
+        const out = execSync('asterisk -rx "core show version" 2>/dev/null', { encoding: 'utf8', timeout: 4000 });
+        const match = out.match(/Asterisk\s+([0-9][0-9A-Za-z.\-_]*)/i);
+        if (match) asteriskVersion = match[1];
+    } catch (_) {}
+
+    let diskPct = null;
+    try {
+        const dfOut = execSync('df -k / 2>/dev/null | tail -n 1', { encoding: 'utf8', timeout: 3000 }).trim();
+        const cols = dfOut.split(/\s+/);
+        const used = parseInt(cols[2], 10);
+        const available = parseInt(cols[3], 10);
+        if (Number.isFinite(used) && Number.isFinite(available) && (used + available) > 0) {
+            diskPct = Math.round((used / (used + available)) * 100);
+        }
+    } catch (_) {}
+
+    let load1 = null;
+    try {
+        load1 = Number(os.loadavg()[0].toFixed(2));
+    } catch (_) {}
+
+    let callsToday = 0;
+    const value = {
+        asterisk_version: asteriskVersion,
+        uptime_sec: Math.round(os.uptime()),
+        load1,
+        disk_pct: diskPct,
+        calls_today: callsToday
+    };
+    federationMetricsCache = { at: now, value };
+    return value;
+}
+
+async function getFederationCallsToday() {
+    try {
+        const [rows] = await pool.query(
+            'SELECT COUNT(*) AS total FROM `asteriskcdrdb`.`cdr` WHERE `calldate` >= CURDATE()'
+        );
+        return Number(rows[0]?.total) || 0;
+    } catch (_) {
+        return 0;
+    }
+}
+
+// RSSI from chan_dongle is a 0-31 index; some firmwares report dBm or a percent.
+function normalizeDongleSignal(value) {
+    if (value === null || value === undefined) return null;
+    const match = String(value).match(/-?\d+(?:\.\d+)?/);
+    if (!match) return null;
+    const n = Number(match[0]);
+    if (!Number.isFinite(n)) return null;
+    if (n < 0) return Math.max(0, Math.min(100, Math.round((n + 113) / 62 * 100)));
+    if (n <= 31) return Math.round((n / 31) * 100);
+    return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function getFederationActiveCallForDongle(dongleName) {
+    const needle = `dongle/${String(dongleName || '').toLowerCase()}`;
+    if (!needle || needle === 'dongle/') return null;
+    for (const [ext, call] of Object.entries(activeCalls || {})) {
+        if (!call) continue;
+        const channel = String(call.channel || '').toLowerCase();
+        if (channel && channel.includes(needle)) {
+            return `${ext}:${call.partner || ''}`.slice(0, 128);
+        }
+    }
+    return null;
+}
+
+async function buildFederationExtensions() {
+    const [users] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY extension ASC');
+    return (users || []).map(u => {
+        const ext = String(u.extension);
+        const call = activeCalls[ext];
+        let status = peerStatus[u.extension] ? 'online' : 'offline';
+        if (call) {
+            const callState = String(call.state || '').toLowerCase();
+            status = callState.includes('ring') ? 'ringing' : 'in_call';
+        }
+        return {
+            extension: ext,
+            name: u.name || u.extension,
+            status,
+            ip: peerIPs[u.extension] || null
+        };
+    });
+}
+
+async function buildFederationDongles() {
+    let devices = [];
+    try {
+        devices = await getEnrichedDevices();
+    } catch (_) {
+        devices = [];
+    }
+    return (devices || []).map(d => {
+        const name = String(d.ID || d.dongle_name || '').trim();
+        if (!name) return null;
+        const number = String(d.Number || '').trim();
+        return {
+            dongle_name: name.slice(0, 50),
+            phone_number: (number && number !== 'Unknown' && number !== '-') ? number.slice(0, 50) : null,
+            sim_number: (number && number !== 'Unknown' && number !== '-') ? number.slice(0, 32) : null,
+            provider: d['Provider Name'] ? String(d['Provider Name']).slice(0, 64) : null,
+            operator_name: d['Provider Name'] ? String(d['Provider Name']).slice(0, 64) : null,
+            status: String(d.State || 'Unknown').slice(0, 50),
+            state: String(d.State || 'Unknown').slice(0, 32),
+            signal_pct: normalizeDongleSignal(d.RSSI),
+            imsi: d.IMSI && d.IMSI !== '-' ? String(d.IMSI).slice(0, 32) : null,
+            imei: d.IMEI && d.IMEI !== '-' ? String(d.IMEI).slice(0, 32) : null,
+            model: d.Model ? String(d.Model).slice(0, 64) : null,
+            firmware: d.Firmware ? String(d.Firmware).slice(0, 64) : null,
+            active_call: getFederationActiveCallForDongle(name)
+        };
+    }).filter(Boolean);
+}
+
+/**
+ * Remote dongles for the pages, grouped by peer and filtered by the global PBX
+ * scope. Remote hardware is always read-only: control endpoints only accept
+ * local dongle ids.
+ */
+async function getFederationRemoteDongles(scope) {
+    if (!scope || !scope.includeRemote) return [];
+    const allSites = Array.isArray(scope.allSites) ? scope.allSites.map(String) : [];
+    const selected = Array.isArray(scope.sites) ? scope.sites.map(String) : [];
+    const restrict = selected.length > 0 && selected.length < allSites.length;
+    const params = [];
+    let where = '';
+    if (restrict) {
+        where = ' AND p.site_code IN (?)';
+        params.push(selected);
+    }
+    try {
+        const [rows] = await pool.query(`
+            SELECT d.dongle_name, d.phone_number, d.provider, d.status, d.state, d.signal_pct,
+                   d.operator_name, d.imsi, d.imei, d.sim_number, d.active_call, d.last_seen_at,
+                   p.site_code, p.node_name, p.status AS peer_status
+            FROM \`asterisk\`.\`sokrat_federation_remote_dongles\` d
+            JOIN \`asterisk\`.\`sokrat_federation_peers\` p ON p.id = d.peer_id
+            WHERE 1 = 1${where}
+            ORDER BY p.site_code ASC, d.dongle_name ASC
+        `, params);
+        const bySite = new Map();
+        for (const row of rows || []) {
+            const site = String(row.site_code || '');
+            if (!bySite.has(site)) {
+                bySite.set(site, {
+                    site_code: site,
+                    node_name: row.node_name || `Site ${site}`,
+                    status: row.peer_status || 'offline',
+                    dongles: []
+                });
+            }
+            bySite.get(site).dongles.push({
+                dongle_name: row.dongle_name,
+                phone_number: row.phone_number,
+                provider: row.provider,
+                status: row.status,
+                state: row.state,
+                signal_pct: row.signal_pct,
+                operator_name: row.operator_name,
+                imsi: row.imsi,
+                imei: row.imei,
+                sim_number: row.sim_number,
+                active_call: row.active_call,
+                last_seen_at: row.last_seen_at
+            });
+        }
+        return Array.from(bySite.values());
+    } catch (_) {
+        return [];
+    }
+}
+
+async function getFederationInventoryCounts() {    const count = async (table) => {
+        try {
+            const [rows] = await pool.query(`SELECT COUNT(*) AS total FROM \`asterisk\`.\`${table}\``);
+            return Number(rows[0]?.total) || 0;
+        } catch (_) {
+            return 0;
+        }
+    };
+    const [queues, ringgroups, trunks, ivr, incoming, outbound] = await Promise.all([
+        count('queues'),
+        count('ringgroups'),
+        count('trunks'),
+        count('ivr_details'),
+        count('incoming'),
+        count('outbound_routes')
+    ]);
+    return { queues, ringgroups, trunks, ivr, inbound_routes: incoming, outbound_routes: outbound };
+}
+
+async function getFederationNodeIdentity() {
+    const [rows] = await pool.query('SELECT local_site_code, local_node_name, local_node_uuid FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1');
+    const settings = rows[0] || {};
+    return {
+        uuid: settings.local_node_uuid || null,
+        site_code: settings.local_site_code || '10',
+        name: settings.local_node_name || 'Main PBX',
+        version: APP_VERSION
+    };
+}
+
+// 15. GET /api/federation/v1/live - Live presence, dongles, calls, and metrics
+app.get('/api/federation/v1/live', async (req, res) => {
+    try {
+        const [node, extensions, dongles, metrics, callsToday] = await Promise.all([
+            getFederationNodeIdentity(),
+            buildFederationExtensions(),
+            buildFederationDongles(),
+            Promise.resolve(getFederationNodeMetrics()),
+            getFederationCallsToday()
+        ]);
+
+        res.json({
+            success: true,
+            api_version: FEDERATION_API_VERSION,
+            server_time: new Date().toISOString(),
+            node,
+            extensions,
+            peerStatus: peerStatus || {},
+            peerIPs: peerIPs || {},
+            activeCalls: activeCalls || {},
+            dongles,
+            metrics: {
+                ...metrics,
+                calls_today: callsToday,
+                extensions_total: extensions.length,
+                extensions_online: extensions.filter(e => e.status !== 'offline').length,
+                dongles_total: dongles.length,
+                dongles_free: dongles.filter(d => /free|ready|available/i.test(String(d.state || d.status || ''))).length,
+                active_calls: Object.keys(activeCalls || {}).length
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 16. GET /api/federation/v1/inventory - Stable directory and feature counts
+app.get('/api/federation/v1/inventory', async (req, res) => {
+    try {
+        const [node, extensions, dongles, counts] = await Promise.all([
+            getFederationNodeIdentity(),
+            buildFederationExtensions(),
+            buildFederationDongles(),
+            getFederationInventoryCounts()
+        ]);
+
+        res.json({
+            success: true,
+            api_version: FEDERATION_API_VERSION,
+            server_time: new Date().toISOString(),
+            node,
+            extensions: extensions.map(e => ({ extension: e.extension, name: e.name })),
+            dongles,
+            counts
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+// 17. GET /api/federation/v1/cdr - Incremental CDR mirror feed for central reports
+app.get('/api/federation/v1/cdr', async (req, res) => {
+    try {
+        const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit, 10) || 1000));
+        const sinceParam = req.query.since ? moment(String(req.query.since)) : moment().subtract(30, 'days');
+        const untilParam = req.query.until ? moment(String(req.query.until)) : moment();
+        if (!sinceParam.isValid() || !untilParam.isValid()) {
+            return res.status(400).json({ success: false, error: 'Invalid since/until timestamp.' });
+        }
+        const since = sinceParam.format('YYYY-MM-DD HH:mm:ss');
+        const until = untilParam.format('YYYY-MM-DD HH:mm:ss');
+
+        const [rows] = await pool.query(`
+            SELECT c.calldate, c.clid, c.src, c.dst, c.dcontext, c.channel, c.dstchannel,
+                   c.lastapp, c.lastdata, c.duration, c.billsec,
+                   ${CDR_DISPOSITION_SQL} AS disposition,
+                   c.amaflags, c.accountcode, c.uniqueid, c.userfield, c.did, c.recordingfile,
+                   c.cnum, c.cnam, c.outbound_cnum, c.outbound_cnam, c.dst_cnam,
+                   c.linkedid, c.peeraccount, c.sequence,
+                   ${CDR_DIRECTION_CASE} AS direction,
+                   ${CDR_CALL_SCOPE_CASE} AS call_scope,
+                   CASE
+                       WHEN c.userfield LIKE 'SOKRAT_FED:%'
+                       THEN SUBSTRING_INDEX(SUBSTRING_INDEX(c.userfield, ':', 2), ':', -1)
+                       ELSE NULL
+                   END AS global_call_id,
+                   CASE WHEN c.userfield LIKE 'SOKRAT_FED:%:leg' THEN 1 ELSE 0 END AS fed_leg
+            FROM ${tables.cdr} c
+            WHERE c.calldate BETWEEN ? AND ?
+            ${CDR_HISTORY_FILTERS_SQL}
+            ORDER BY c.calldate ASC, c.uniqueid ASC
+            LIMIT ?
+        `, [since, until, limit]);
+
+        const [nodeRows] = await pool.query(
+            'SELECT local_site_code, local_node_name FROM `asterisk`.`sokrat_federation_settings` WHERE id = 1'
+        );
+        const node = nodeRows[0] || {};
+
+        res.json({
+            success: true,
+            api_version: FEDERATION_API_VERSION,
+            server_time: new Date().toISOString(),
+            node: {
+                site_code: node.local_site_code || '10',
+                name: node.local_node_name || 'Main PBX'
+            },
+            since,
+            until,
+            count: rows.length,
+            has_more: rows.length >= limit,
+            rows
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });

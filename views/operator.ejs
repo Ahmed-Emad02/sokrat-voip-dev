@@ -910,6 +910,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
 <body class="flex flex-col md:flex-row min-h-screen m-0 p-0">
     <%- include('sidebar') %>
     <div class="flex-1 p-8 relative flex flex-col min-h-screen">
+        <%- include('partials/node-scope-selector') %>
         
         <div class="live-panel-header mb-4 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="min-w-0 <%= isRtl ? 'text-right' : '' %>">
