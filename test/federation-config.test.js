@@ -180,3 +180,12 @@ test('Federation Hub: Multi-Node state engine partitions memory by composite key
 
     hub.stopPolling();
 });
+
+test('Federation Bootstrap: lib/federation-bootstrap.js exports core functions and resolves system binaries', () => {
+    const bootstrap = require('../lib/federation-bootstrap');
+    assert.equal(typeof bootstrap.bootstrapPeer, 'function', 'bootstrapPeer must be exported');
+    assert.equal(typeof bootstrap.qualifyIaxPeer, 'function', 'qualifyIaxPeer must be exported');
+    assert.equal(typeof bootstrap.syncRemotePeerEntities, 'function', 'syncRemotePeerEntities must be exported');
+    assert.equal(typeof bootstrap.removeRemoteFederationSetup, 'function', 'removeRemoteFederationSetup must be exported');
+    assert.equal(typeof bootstrap.getLocalIpAddress, 'function', 'getLocalIpAddress must be exported');
+});
