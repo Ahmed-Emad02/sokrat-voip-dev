@@ -20180,7 +20180,7 @@ async function runDialerPacerCycle() {
                     const cleanLeadName = sanitizeAmiValue(leadFullName);
 
                     // Direct dongle targeting if selected, else outbound route
-                    const cleanDialTarget = selectedDongle ? `Dongle/${selectedDongle}/${cleanPhone}` : '';
+                    const cleanDialTarget = selectedDongle ? `Dongle/${selectedDongle}` : '';
 
                     // Agent channel: route through autodialer-agent-setup to set PJSIP
                     // auto-answer SIP headers via dialplan HASH() before entering from-internal

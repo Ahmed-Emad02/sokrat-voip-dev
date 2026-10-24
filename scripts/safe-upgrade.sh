@@ -330,10 +330,11 @@ exten => s,1,NoOp(=== Progressive Dialer Outbound Leg: ${LEAD_PHONE} ===)
 same => n,Set(CALLERID(name)=${LEAD_NAME})
 same => n,Set(CALLERID(num)=${LEAD_PHONE})
 same => n,Set(CHANNEL(hangup_handler_push)=sub-autodialer-progressive-hangup,s,1)
+same => n,Set(TARGET_NUM=${IF($["${DIAL_NUM}"!=""]?${DIAL_NUM}:${LEAD_PHONE})})
 same => n,GotoIf($["${DIAL_TARGET}"!=""]?dial_target:dial_route)
-same => n(dial_target),Dial(${DIAL_TARGET}/${LEAD_PHONE},60,U(sub-autodialer-progressive-connect))
+same => n(dial_target),Dial(${DIAL_TARGET}/${TARGET_NUM},60,U(sub-autodialer-progressive-connect))
 same => n,Hangup()
-same => n(dial_route),Dial(Local/${LEAD_PHONE}@outbound-allroutes,60,U(sub-autodialer-progressive-connect))
+same => n(dial_route),Dial(Local/${TARGET_NUM}@outbound-allroutes,60,U(sub-autodialer-progressive-connect))
 same => n,Hangup()
 
 [sub-autodialer-progressive-connect]
