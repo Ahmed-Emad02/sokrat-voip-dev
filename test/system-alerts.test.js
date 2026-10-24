@@ -81,8 +81,6 @@ test('install.sh contains embedded alert configuration and sokrat-watchdog.servi
     assert.ok(clientIndex < dongleIndex, 'install.sh must collect client name before dongle count');
     assert.ok(installSh.includes('hostnamectl set-hostname'), 'install.sh must set machine hostname from client name');
     assert.ok(installSh.includes("VALUES ('client_name', '$CLIENT_NAME')"), 'install.sh must seed client_name in dashboard_settings');
-    assert.ok(installSh.includes('port=3001'), 'install.sh must configure Webmin on port 3001');
-    assert.ok(installSh.includes('systemctl enable --now webmin'), 'install.sh must enable and start webmin');
 });
 
 test('views/sidebar.ejs renders System Alerts entry and #alertsModal in English and Arabic', async () => {

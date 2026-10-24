@@ -919,6 +919,14 @@ if [ -f /etc/systemd/system/sokrat-stt.service ]; then
     sed -i 's/ sokrat-whisper\.service//g' /etc/systemd/system/sokrat-stt.service 2>/dev/null || true
 fi
 
+# Decommission Webmin service and repo if present
+if systemctl is-active --quiet webmin 2>/dev/null || systemctl is-enabled --quiet webmin 2>/dev/null; then
+    systemctl stop webmin 2>/dev/null || true
+    systemctl disable webmin 2>/dev/null || true
+fi
+rm -f /etc/systemd/system/webmin.service /usr/lib/systemd/system/webmin.service 2>/dev/null || true
+rm -f /etc/yum.repos.d/webmin.repo /etc/yum.repos.d/sokrat-webmin.repo 2>/dev/null || true
+
 systemctl daemon-reload 2>/dev/null || true
 systemctl restart sokrat-voip.service 2>/dev/null || true
 systemctl restart sokrat-watchdog.service 2>/dev/null || true

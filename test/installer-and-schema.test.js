@@ -94,7 +94,6 @@ test('installer-bundle/install-sokrat.sh prevents duplicate cloning and passes b
     assert.match(script, /if \[ -f "\$SCRIPT_DIR\/binaries\/chan_dongle\.so" \]/, 'install-sokrat.sh must look for chan_dongle.so in SCRIPT_DIR');
     assert.match(script, /command -v git/, 'install-sokrat.sh must check and install git at the beginning');
     assert.match(script, /packages\/nodejs-\*\.rpm/, 'install-sokrat.sh must check for offline nodejs RPM');
-    assert.match(script, /webmin-\*\.rpm/, 'install-sokrat.sh must check for offline webmin RPM');
     assert.match(script, /librnnoise\.so/, 'install-sokrat.sh must check for offline rnnoise library');
     assert.match(script, /binaries\/ffmpeg/, 'install-sokrat.sh must check for offline ffmpeg binary');
     assert.match(script, /cand_pico.*binaries/, 'install-sokrat.sh must check for offline pico2wave binary');
@@ -155,9 +154,6 @@ test('installer-bundle/setup-issabel-asterisk.sh passes syntax validation and do
 
     // Verify core binary installation is not erroneously nested
     assert.match(script, /packages\/nodejs-\*\.rpm/, 'setup-issabel-asterisk.sh must check for offline nodejs RPM');
-    assert.match(script, /packages\/webmin-\*\.rpm/, 'setup-issabel-asterisk.sh must check for offline webmin RPM');
-    assert.match(script, /export WEBMIN_PORT=3001/, 'setup-issabel-asterisk.sh must export WEBMIN_PORT=3001');
-    assert.match(script, /systemctl restart webmin/, 'setup-issabel-asterisk.sh must restart webmin service');
     assert.match(script, /librnnoise\.so/, 'setup-issabel-asterisk.sh must install rnnoise libraries');
     assert.match(script, /func_rnnoise\.so/, 'setup-issabel-asterisk.sh must install func_rnnoise.so module');
     assert.match(script, /--exclude="binaries\/chan_dongle\.so"/, 'setup-issabel-asterisk.sh must protect patched chan_dongle.so from tar overwrite');
@@ -244,10 +240,9 @@ test('offline installer packages and binaries are present in installer-bundle', 
     assert.ok(fs.existsSync(packagesDir), 'installer-bundle/packages must exist');
     assert.ok(fs.existsSync(binariesDir), 'installer-bundle/binaries must exist');
 
-    // Check Node.js and Webmin packages
+    // Check packages
     const pkgFiles = fs.readdirSync(packagesDir);
     assert.ok(pkgFiles.some(f => f.startsWith('nodejs-') && f.endsWith('.rpm')), 'nodejs RPM must be present in packages');
-    assert.ok(pkgFiles.some(f => f.startsWith('webmin-') && f.endsWith('.rpm')), 'webmin RPM must be present in packages');
     assert.ok(pkgFiles.some(f => f.startsWith('zerotier-one-') && f.endsWith('.rpm')), 'zerotier-one RPM must be present in packages');
     assert.ok(pkgFiles.some(f => f.startsWith('tailscale') && f.endsWith('.rpm')), 'tailscale RPM must be present in packages');
     assert.ok(pkgFiles.includes('sokrat-softphone.tar.gz'), 'sokrat-softphone.tar.gz must be present in packages');

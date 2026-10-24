@@ -105,7 +105,6 @@ curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/u
 | **443** | HTTPS | Sokrat VOIP Secure Web Dashboard | `admin` / `admin` (or `root`) |
 | **8443** | HTTPS | Sokrat VOICE WebRTC Standalone Softphone | Extension SIP secret |
 | **3000** | HTTP | Issabel 5 PBX Admin Web Interface | `admin` / `admin` |
-| **3001** | HTTPS | Webmin Linux System Control Panel | System root credentials |
 | **8095** | HTTP | Sokrat Push-to-Wake Gateway API | Internal / JWT |
 | **5060** | UDP/TCP | SIP Signaling Port (`chan_sip`) | SIP Credentials |
 | **5038** | TCP | Asterisk Manager Interface (AMI) | `admin` / `admin` |
@@ -146,7 +145,6 @@ curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/u
 | **Issabel PBX GUI** | `http://<server-ip>:3000/` | `admin` | `admin` |
 | **MySQL / MariaDB** | `localhost` | `root` | `admin` |
 | **Asterisk AMI** | `127.0.0.1:5038` | `admin` | `admin` |
-| **Webmin Panel** | `https://<server-ip>:3001/` | `root` | System root password |
 
 ---
 

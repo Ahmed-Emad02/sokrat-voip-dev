@@ -65,11 +65,11 @@ rpm -Uvh --replacepkgs --nodeps --nosignature --nodigest --oldpackage --excludep
 if command -v firewall-cmd &>/dev/null && systemctl is-active firewalld &>/dev/null; then
     echo "--> Configuring firewalld rules..."
     firewall-cmd --zone=public --add-service=http --add-service=https --permanent 2>/dev/null || true
-    firewall-cmd --zone=public --add-port=80/tcp --add-port=443/tcp --add-port=8443/tcp --add-port=3000/tcp --add-port=3001/tcp --add-port=5060/udp --add-port=10000-20000/udp --permanent 2>/dev/null || true
+    firewall-cmd --zone=public --add-port=80/tcp --add-port=443/tcp --add-port=8443/tcp --add-port=3000/tcp --add-port=5060/udp --add-port=10000-20000/udp --permanent 2>/dev/null || true
     firewall-cmd --reload 2>/dev/null || true
 fi
 
-# 5. Install binaries (Node.js, ffmpeg, pico2wave, librnnoise, webmin)
+# 5. Install binaries (Node.js, ffmpeg, pico2wave, librnnoise)
 echo "--> Installing core binaries..."
 if ls "$SCRIPT_DIR"/packages/nodejs-*.rpm 1>/dev/null 2>&1; then
     echo "--> Installing Node.js 22 from local packages..."
@@ -114,42 +114,6 @@ fi
 if [ -f "$SCRIPT_DIR/binaries/func_rnnoise.so" ]; then
     mkdir -p /usr/lib64/asterisk/modules
     cp "$SCRIPT_DIR/binaries/func_rnnoise.so" /usr/lib64/asterisk/modules/
-fi
-
-if ls "$SCRIPT_DIR"/packages/webmin-*.rpm 1>/dev/null 2>&1; then
-    echo "--> Installing Webmin from local packages..."
-    export WEBMIN_PORT=3001
-    rpm -Uvh --replacepkgs --nodeps --oldpackage "$SCRIPT_DIR"/packages/webmin-*.rpm 2>/dev/null || true
-    if [ ! -f /etc/systemd/system/webmin.service ] && [ ! -f /usr/lib/systemd/system/webmin.service ]; then
-        cat > /etc/systemd/system/webmin.service << 'UNIT'
-[Unit]
-Description=Webmin server daemon
-Wants=network-online.target
-After=network.target network-online.target
-
-[Service]
-Type=simple
-Environment="PERLLIB=/usr/libexec/webmin"
-ExecStart=/usr/libexec/webmin/miniserv.pl --nofork /etc/webmin/miniserv.conf
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
-RestartSec=2s
-TimeoutStopSec=300s
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-    fi
-    if [ -f /etc/webmin/miniserv.conf ]; then
-        sed -i 's/^port=.*/port=3001/' /etc/webmin/miniserv.conf
-        sed -i 's/^listen=.*/listen=3001/' /etc/webmin/miniserv.conf
-        grep -q "referrers_none=" /etc/webmin/miniserv.conf || echo "referrers_none=1" >> /etc/webmin/miniserv.conf
-        grep -q "referers_none=" /etc/webmin/config 2>/dev/null || echo "referers_none=1" >> /etc/webmin/config
-    fi
-    systemctl daemon-reload 2>/dev/null || true
-    systemctl unmask webmin 2>/dev/null || true
-    systemctl enable webmin 2>/dev/null || true
-    systemctl restart webmin 2>/dev/null || true
 fi
 
 if ls "$SCRIPT_DIR"/packages/zerotier-one-*.rpm 1>/dev/null 2>&1; then
@@ -227,7 +191,6 @@ echo "--> Starting Asterisk and Apache services..."
 systemctl enable --now httpd
 systemctl enable --now php-fpm
 systemctl enable --now asterisk
-systemctl restart webmin 2>/dev/null || true
 amportal a r 2>/dev/null || true
 
 echo "=================================================================="

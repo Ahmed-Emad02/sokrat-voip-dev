@@ -2952,59 +2952,10 @@ systemctl disable sokrat-laya.service 2>/dev/null || true
 systemctl stop sokrat-laya.service 2>/dev/null || true
 echo "  Sokrat Laya GSM maintenance daemon installed (disabled by default until enabled in UI)"
 
-# Provision Webmin Local Control Panel on Port 3001
-echo "  Configuring Webmin Control Panel (Port 3001)..."
-export WEBMIN_PORT=3001
-if [ ! -f /etc/yum.repos.d/webmin.repo ]; then
-    cat > /etc/yum.repos.d/webmin.repo << 'EOF'
-[webmin-noarch]
-name=Webmin - noarch
-baseurl=https://download.webmin.com/download/newkey/yum
-enabled=1
-gpgcheck=1
-gpgkey=https://download.webmin.com/developers-key.asc
-EOF
-    rpm --import https://download.webmin.com/developers-key.asc 2>/dev/null || true
-fi
-if ! rpm -q webmin &>/dev/null; then
-    dnf install -y webmin 2>/dev/null || yum install -y webmin 2>/dev/null || true
-fi
-
-if [ ! -f /etc/systemd/system/webmin.service ] && [ ! -f /usr/lib/systemd/system/webmin.service ]; then
-    cat > /etc/systemd/system/webmin.service << 'UNIT'
-[Unit]
-Description=Webmin server daemon
-Wants=network-online.target
-After=network.target network-online.target
-
-[Service]
-Type=simple
-Environment="PERLLIB=/usr/libexec/webmin"
-ExecStart=/usr/libexec/webmin/miniserv.pl --nofork /etc/webmin/miniserv.conf
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
-RestartSec=2s
-TimeoutStopSec=300s
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-fi
-
-if [ -f /etc/webmin/miniserv.conf ]; then
-    sed -i 's/^port=.*/port=3001/' /etc/webmin/miniserv.conf
-    sed -i 's/^listen=.*/listen=3001/' /etc/webmin/miniserv.conf
-    grep -q "referrers_none=" /etc/webmin/miniserv.conf || echo "referrers_none=1" >> /etc/webmin/miniserv.conf
-    grep -q "referers_none=" /etc/webmin/config 2>/dev/null || echo "referers_none=1" >> /etc/webmin/config
-    systemctl daemon-reload
-    systemctl unmask webmin 2>/dev/null || true
-    systemctl enable --now webmin 2>/dev/null || true
-    systemctl restart webmin 2>/dev/null || true
-    if ! systemctl is-active webmin &>/dev/null; then
-        /etc/webmin/restart 2>/dev/null || /etc/webmin/start 2>/dev/null || true
-    fi
-    echo "  Webmin Control Panel active on port 3001"
-fi
+# Decommission Webmin if present
+systemctl stop webmin 2>/dev/null || true
+systemctl disable webmin 2>/dev/null || true
+rm -f /etc/systemd/system/webmin.service /usr/lib/systemd/system/webmin.service 2>/dev/null || true
 
 # ──────────────────────────────────────────────
 # Step 13 — Set timezone to Africa/Cairo
@@ -3031,12 +2982,8 @@ echo ""
 echo "--- Sokrat VOICE Softphone Service ---"
 systemctl status sokrat-softphone --no-pager -l | head -12
 echo ""
-echo "--- Webmin Control Panel Service ---"
-systemctl status webmin --no-pager -l 2>/dev/null | head -10 || true
-echo ""
 echo "============================================"
 echo " Installation complete!"
 echo " Access Sokrat VOIP Dashboard on: http://<machine_ip>/"
 echo " Access Sokrat VOICE Softphone on: https://<machine_ip>/phone/ or https://<machine_ip>:8443/"
-echo " Access Webmin Control Panel on: https://<machine_ip>:3001/"
 echo "============================================"
