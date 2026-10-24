@@ -930,13 +930,18 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_settings\` (
   \`id\` TINYINT PRIMARY KEY DEFAULT 1,
   \`local_site_code\` VARCHAR(10) NOT NULL DEFAULT '10',
   \`local_node_name\` VARCHAR(100) NOT NULL DEFAULT 'Main PBX',
+  \`local_node_uuid\` VARCHAR(36) DEFAULT NULL,
   \`panel_role\` ENUM('local', 'central') NOT NULL DEFAULT 'local',
   \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT IGNORE INTO \`sokrat_federation_settings\` (\`id\`, \`local_site_code\`, \`local_node_name\`, \`panel_role\`)
-VALUES (1, '10', 'Main PBX', 'local');
+INSERT IGNORE INTO \`sokrat_federation_settings\` (\`id\`, \`local_site_code\`, \`local_node_name\`, \`panel_role\`, \`local_node_uuid\`)
+VALUES (1, '10', 'Main PBX', 'local', UUID());
+
+UPDATE \`sokrat_federation_settings\`
+SET \`local_node_uuid\` = UUID()
+WHERE \`id\` = 1 AND (\`local_node_uuid\` IS NULL OR \`local_node_uuid\` = '');
 
 INSERT IGNORE INTO \`dashboard_settings\` (\`setting_key\`, \`setting_value\`) VALUES
   ('alert_telegram_enabled', 'true'),
@@ -969,6 +974,7 @@ INSERT IGNORE INTO \`dashboard_settings\` (\`setting_key\`, \`setting_value\`) V
 CREATE TABLE IF NOT EXISTS \`sokrat_federation_peers\` (
   \`id\` INT AUTO_INCREMENT PRIMARY KEY,
   \`node_name\` VARCHAR(100) NOT NULL,
+  \`node_uuid\` VARCHAR(36) DEFAULT NULL,
   \`host\` VARCHAR(255) NOT NULL,
   \`site_code\` VARCHAR(10) NOT NULL UNIQUE,
   \`iax_port\` SMALLINT UNSIGNED NOT NULL DEFAULT 4569,
@@ -977,13 +983,31 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_peers\` (
   \`iax_secret_enc\` TEXT NOT NULL,
   \`api_base_url\` VARCHAR(255) NOT NULL,
   \`api_key_enc\` TEXT NOT NULL,
+  \`api_version\` SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+  \`node_version\` VARCHAR(50) DEFAULT NULL,
   \`tls_cert_fingerprint\` VARCHAR(128) DEFAULT NULL,
   \`allow_internal_dialing\` TINYINT(1) NOT NULL DEFAULT 1,
   \`allow_outbound_egress\` TINYINT(1) NOT NULL DEFAULT 1,
+  \`allow_report_read\` TINYINT(1) NOT NULL DEFAULT 1,
+  \`allow_contact_write\` TINYINT(1) NOT NULL DEFAULT 0,
+  \`allow_dongle_control\` TINYINT(1) NOT NULL DEFAULT 0,
+  \`allow_campaign_control\` TINYINT(1) NOT NULL DEFAULT 0,
   \`status\` ENUM('online', 'offline', 'error', 'unreachable') NOT NULL DEFAULT 'offline',
   \`last_sync_at\` DATETIME DEFAULT NULL,
   \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS \`sokrat_federation_node_status\` (
+  \`peer_id\` INT PRIMARY KEY,
+  \`status\` ENUM('online', 'offline', 'error', 'unreachable') NOT NULL DEFAULT 'offline',
+  \`last_seen_at\` DATETIME DEFAULT NULL,
+  \`last_error\` VARCHAR(255) DEFAULT NULL,
+  \`latency_ms\` INT DEFAULT NULL,
+  \`api_version\` SMALLINT UNSIGNED DEFAULT NULL,
+  \`node_version\` VARCHAR(50) DEFAULT NULL,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY \`idx_status\` (\`status\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS \`sokrat_federation_remote_extensions\` (
@@ -1014,7 +1038,20 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_remote_dongles\` (
 ensure_db_column "dashboard_user_extensions" "peer_id" "INT DEFAULT NULL"
 ensure_db_index "dashboard_user_extensions" "idx_peer_id" "KEY \`idx_peer_id\` (\`peer_id\`)"
 
-ensure_db_column "gsm_dongles" "dynamic_enabled" "TINYINT(1) NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_settings" "local_node_uuid" "VARCHAR(36) DEFAULT NULL"
+ensure_db_column "sokrat_federation_peers" "node_uuid" "VARCHAR(36) DEFAULT NULL"
+ensure_db_column "sokrat_federation_peers" "api_version" "SMALLINT UNSIGNED NOT NULL DEFAULT 1"
+ensure_db_column "sokrat_federation_peers" "node_version" "VARCHAR(50) DEFAULT NULL"
+ensure_db_column "sokrat_federation_peers" "allow_report_read" "TINYINT(1) NOT NULL DEFAULT 1"
+ensure_db_column "sokrat_federation_peers" "allow_contact_write" "TINYINT(1) NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_peers" "allow_dongle_control" "TINYINT(1) NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_peers" "allow_campaign_control" "TINYINT(1) NOT NULL DEFAULT 0"
+
+# Normalize legacy HTTPS API URLs that pointed at the softphone vhost (:8443).
+mysql -u root -p"$MYSQL_ROOT_PWD" asterisk -e "
+UPDATE \`sokrat_federation_peers\`
+SET \`api_base_url\` = REPLACE(\`api_base_url\`, ':8443', '')
+WHERE \`api_base_url\` LIKE '%:8443%';" 2>/dev/null || true
 
 ensure_db_column "employee_extras" "is_group_admin" "TINYINT(1) NOT NULL DEFAULT 0"
 

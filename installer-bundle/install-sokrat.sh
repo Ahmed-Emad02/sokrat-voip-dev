@@ -834,13 +834,18 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_settings\` (
   \`id\` TINYINT PRIMARY KEY DEFAULT 1,
   \`local_site_code\` VARCHAR(10) NOT NULL DEFAULT '10',
   \`local_node_name\` VARCHAR(100) NOT NULL DEFAULT 'Main PBX',
+  \`local_node_uuid\` VARCHAR(36) DEFAULT NULL,
   \`panel_role\` ENUM('local', 'central') NOT NULL DEFAULT 'local',
   \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT IGNORE INTO \`sokrat_federation_settings\` (\`id\`, \`local_site_code\`, \`local_node_name\`, \`panel_role\`)
-VALUES (1, '10', 'Main PBX', 'local');
+INSERT IGNORE INTO \`sokrat_federation_settings\` (\`id\`, \`local_site_code\`, \`local_node_name\`, \`panel_role\`, \`local_node_uuid\`)
+VALUES (1, '10', 'Main PBX', 'local', UUID());
+
+UPDATE \`sokrat_federation_settings\`
+SET \`local_node_uuid\` = UUID()
+WHERE \`id\` = 1 AND (\`local_node_uuid\` IS NULL OR \`local_node_uuid\` = '');
 
 INSERT IGNORE INTO \`dashboard_settings\` (\`setting_key\`, \`setting_value\`) VALUES
   ('alert_telegram_enabled', 'true'),
