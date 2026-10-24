@@ -14,6 +14,13 @@ const contactsStore = require('../lib/contacts');
 const { requireExtensionSignature } = require('../lib/extension-auth');
 const dialerFollowup = require('../lib/dialer-followup');
 
+/** Same mask as the dialer's caller ID (`010****380`). */
+function maskPhoneNumber(raw) {
+    const phone = String(raw || '').trim();
+    if (!phone || phone.length <= 6) return phone;
+    return phone.slice(0, 3) + '*'.repeat(phone.length - 6) + phone.slice(-3);
+}
+
 function sendContactError(res, err, fallbackMessage) {
     const status = Number(err && err.statusCode) || 500;
     if (status >= 500) console.error('[extension-contacts]', err && err.message);
@@ -89,7 +96,8 @@ module.exports = function createExtensionContactsRouter(pool) {
             const [rows] = await pool.query(
                 `SELECT a.attempt_uuid, a.status AS attempt_status, a.campaign_id, a.lead_id,
                         l.phone_number, l.first_name, l.last_name, l.company, l.custom_data,
-                        c.name AS campaign_name, c.lead_fields, c.followup_fields
+                        c.name AS campaign_name, c.lead_fields, c.followup_fields,
+                        c.mask_phone_numbers
                  FROM \`asterisk\`.\`dialer_call_attempts\` a
                  JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = a.lead_id
                  LEFT JOIN \`asterisk\`.\`dialer_campaigns\` c ON c.id = a.campaign_id
@@ -137,7 +145,7 @@ module.exports = function createExtensionContactsRouter(pool) {
                     campaign_id: row.campaign_id,
                     campaign_name: row.campaign_name || '',
                     lead_id: row.lead_id,
-                    phone: row.phone_number || '',
+                    phone: row.mask_phone_numbers ? maskPhoneNumber(row.phone_number) : (row.phone_number || ''),
                     first_name: row.first_name || '',
                     last_name: row.last_name || '',
                     company: row.company || '',
@@ -290,7 +298,7 @@ module.exports = function createExtensionContactsRouter(pool) {
             const [rows] = await pool.query(
                 `SELECT a.attempt_uuid, a.agent_extension, a.campaign_id, a.lead_id,
                         l.phone_number, l.first_name, l.last_name, l.company, l.custom_data,
-                        c.name AS campaign_name, c.followup_fields
+                        c.name AS campaign_name, c.followup_fields, c.mask_phone_numbers
                  FROM \`asterisk\`.\`dialer_call_attempts\` a
                  LEFT JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = a.lead_id
                  LEFT JOIN \`asterisk\`.\`dialer_campaigns\` c ON c.id = a.campaign_id
@@ -336,7 +344,7 @@ module.exports = function createExtensionContactsRouter(pool) {
                     campaign_id: attempt.campaign_id,
                     campaign_name: attempt.campaign_name || '',
                     lead_id: attempt.lead_id,
-                    phone: attempt.phone_number || '',
+                    phone: attempt.mask_phone_numbers ? maskPhoneNumber(attempt.phone_number) : (attempt.phone_number || ''),
                     first_name: attempt.first_name || '',
                     last_name: attempt.last_name || '',
                     company: attempt.company || '',
