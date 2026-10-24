@@ -21,8 +21,10 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
-dnf install -y cmake git curl gcc-toolset-12-gcc gcc-toolset-12-gcc-c++
-for command in git curl sha256sum cmake lscpu base64; do
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+BUNDLE_DIR="$(cd "$SCRIPT_DIR/../installer-bundle" 2>/dev/null && pwd)"
+
+for command in sha256sum lscpu base64 tar; do
     command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
 
@@ -31,48 +33,114 @@ if ! id asterisk >/dev/null 2>&1; then
     exit 1
 fi
 
+# 1. Install or compile whisper runtime
 install -d -m 0755 "$(dirname "$WHISPER_DIR")"
-if [[ ! -d "$WHISPER_DIR/.git" ]]; then
-    git clone --branch "$WHISPER_VERSION" --depth 1 https://github.com/ggml-org/whisper.cpp.git "$WHISPER_DIR"
-fi
-git -C "$WHISPER_DIR" fetch --tags --depth 1 origin "$WHISPER_VERSION"
-git -C "$WHISPER_DIR" checkout --detach "$WHISPER_VERSION"
+WHISPER_BUNDLE=""
+for cand_wb in "$BUNDLE_DIR/binaries/whisper-bin.tar.gz" "/opt/sokrat-voip/installer-bundle/binaries/whisper-bin.tar.gz" "/tmp/installer-bundle/binaries/whisper-bin.tar.gz"; do
+    if [[ -f "$cand_wb" ]]; then
+        WHISPER_BUNDLE="$cand_wb"
+        break
+    fi
+done
 
-source /opt/rh/gcc-toolset-12/enable
-if grep -qw avx2 /proc/cpuinfo && grep -qw fma /proc/cpuinfo; then
-    ggml_avx2=ON
-    ggml_fma=ON
+if [[ -n "$WHISPER_BUNDLE" ]]; then
+    echo "  Installing pre-compiled whisper.cpp runtime from offline bundle ($WHISPER_BUNDLE)..."
+    install -d -m 0755 "$WHISPER_DIR/build-sokrat/bin"
+    install -d -m 0755 "$WHISPER_DIR/build-gcc12/bin"
+    tar -xzf "$WHISPER_BUNDLE" -C "$WHISPER_DIR/build-sokrat/bin"
+    cp -a "$WHISPER_DIR/build-sokrat/bin/." "$WHISPER_DIR/build-gcc12/bin/" 2>/dev/null || true
+    chmod 0755 "$WHISPER_DIR/build-sokrat/bin/whisper-"* "$WHISPER_DIR/build-gcc12/bin/whisper-"* 2>/dev/null || true
+elif [[ -x "$WHISPER_DIR/build-sokrat/bin/whisper-server" ]] || [[ -x "$WHISPER_DIR/build-gcc12/bin/whisper-server" ]]; then
+    echo "  Whisper runtime already compiled at $WHISPER_DIR"
 else
-    ggml_avx2=OFF
-    ggml_fma=OFF
-fi
-if grep -qw bmi2 /proc/cpuinfo; then ggml_bmi2=ON; else ggml_bmi2=OFF; fi
-cmake -S "$WHISPER_DIR" -B "$WHISPER_DIR/build-sokrat" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DGGML_NATIVE=OFF \
-    -DGGML_AVX=ON \
-    -DGGML_AVX2="$ggml_avx2" \
-    -DGGML_FMA="$ggml_fma" \
-    -DGGML_F16C=ON \
-    -DGGML_BMI2="$ggml_bmi2" \
-    -DWHISPER_BUILD_TESTS=OFF \
-    -DWHISPER_BUILD_EXAMPLES=ON
-cmake --build "$WHISPER_DIR/build-sokrat" --target whisper-server whisper-cli -j2
+    echo "  Offline bundle not found, falling back to online compilation..."
+    dnf install -y cmake git curl gcc-toolset-12-gcc gcc-toolset-12-gcc-c++ 2>/dev/null || yum install -y cmake git curl gcc-toolset-12-gcc gcc-toolset-12-gcc-c++ || true
+    if [[ ! -d "$WHISPER_DIR/.git" ]]; then
+        git clone --branch "$WHISPER_VERSION" --depth 1 https://github.com/ggml-org/whisper.cpp.git "$WHISPER_DIR"
+    fi
+    git -C "$WHISPER_DIR" fetch --tags --depth 1 origin "$WHISPER_VERSION" 2>/dev/null || true
+    git -C "$WHISPER_DIR" checkout --detach "$WHISPER_VERSION" 2>/dev/null || true
 
+    source /opt/rh/gcc-toolset-12/enable 2>/dev/null || true
+    if grep -qw avx2 /proc/cpuinfo && grep -qw fma /proc/cpuinfo; then
+        ggml_avx2=ON
+        ggml_fma=ON
+    else
+        ggml_avx2=OFF
+        ggml_fma=OFF
+    fi
+    if grep -qw bmi2 /proc/cpuinfo; then ggml_bmi2=ON; else ggml_bmi2=OFF; fi
+    cmake -S "$WHISPER_DIR" -B "$WHISPER_DIR/build-sokrat" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DGGML_NATIVE=OFF \
+        -DGGML_AVX=ON \
+        -DGGML_AVX2="$ggml_avx2" \
+        -DGGML_FMA="$ggml_fma" \
+        -DGGML_F16C=ON \
+        -DGGML_BMI2="$ggml_bmi2" \
+        -DWHISPER_BUILD_TESTS=OFF \
+        -DWHISPER_BUILD_EXAMPLES=ON
+    cmake --build "$WHISPER_DIR/build-sokrat" --target whisper-server whisper-cli -j2
+fi
+
+# Ensure both paths exist for systemd service compatibility
+if [[ -d "$WHISPER_DIR/build-sokrat/bin" ]] && [[ ! -d "$WHISPER_DIR/build-gcc12/bin" ]]; then
+    mkdir -p "$WHISPER_DIR/build-gcc12"
+    ln -s "$WHISPER_DIR/build-sokrat/bin" "$WHISPER_DIR/build-gcc12/bin" 2>/dev/null || cp -a "$WHISPER_DIR/build-sokrat/bin" "$WHISPER_DIR/build-gcc12/bin"
+elif [[ -d "$WHISPER_DIR/build-gcc12/bin" ]] && [[ ! -d "$WHISPER_DIR/build-sokrat/bin" ]]; then
+    mkdir -p "$WHISPER_DIR/build-sokrat"
+    ln -s "$WHISPER_DIR/build-gcc12/bin" "$WHISPER_DIR/build-sokrat/bin" 2>/dev/null || cp -a "$WHISPER_DIR/build-gcc12/bin" "$WHISPER_DIR/build-sokrat/bin"
+fi
+
+# 2. Install or unpack offline models
 install -d -o asterisk -g asterisk -m 0750 "$STATE_DIR/models" "$STATE_DIR/tmp"
+
+# Check if models can be unpacked from offline bundle
+if ! [[ -s "$STATE_DIR/models/$MODEL_NAME" && -s "$STATE_DIR/models/$VAD_NAME" ]]; then
+    STT_MODEL_CHUNKS=""
+    for cand_chunk in "$BUNDLE_DIR" "/opt/sokrat-voip/installer-bundle" "/tmp/installer-bundle"; do
+        if ls "$cand_chunk"/sokrat-stt-models.tar.gz.part-* 1>/dev/null 2>&1; then
+            STT_MODEL_CHUNKS="$cand_chunk"
+            break
+        fi
+    done
+    if [[ -n "$STT_MODEL_CHUNKS" ]]; then
+        echo "  Unpacking offline STT voice models from bundle ($STT_MODEL_CHUNKS)..."
+        cat "$STT_MODEL_CHUNKS"/sokrat-stt-models.tar.gz.part-* | tar -xz -C "$STATE_DIR/models"
+    fi
+fi
+
 download_verified() {
     local url="$1" destination="$2" checksum="$3"
     if [[ -s "$destination" ]] && echo "$checksum  $destination" | sha256sum -c - >/dev/null 2>&1; then
         return 0
     fi
-    curl -fL --retry 3 --output "${destination}.part" "$url"
-    echo "$checksum  ${destination}.part" | sha256sum -c -
-    mv "${destination}.part" "$destination"
+    echo "  Downloading $(basename "$destination")..."
+    if ! curl -fL --connect-timeout 5 --max-time 120 --retry 2 --output "${destination}.part" "$url" 2>/dev/null; then
+        echo "  Notice: Could not download $(basename "$destination") (offline mode or network unavailable)"
+        rm -f "${destination}.part" 2>/dev/null || true
+        return 1
+    fi
+    if echo "$checksum  ${destination}.part" | sha256sum -c - >/dev/null 2>&1; then
+        mv "${destination}.part" "$destination"
+        return 0
+    else
+        echo "  Checksum mismatch for $(basename "$destination"), removing incomplete download"
+        rm -f "${destination}.part" 2>/dev/null || true
+        return 1
+    fi
 }
-download_verified "$MODEL_URL" "$STATE_DIR/models/$MODEL_NAME" "$MODEL_SHA256"
-download_verified "$VAD_URL" "$STATE_DIR/models/$VAD_NAME" "$VAD_SHA256"
-chown asterisk:asterisk "$STATE_DIR/models/$MODEL_NAME" "$STATE_DIR/models/$VAD_NAME"
-chmod 0640 "$STATE_DIR/models/$MODEL_NAME" "$STATE_DIR/models/$VAD_NAME"
+
+if ! (echo "$MODEL_SHA256  $STATE_DIR/models/$MODEL_NAME" | sha256sum -c - >/dev/null 2>&1); then
+    download_verified "$MODEL_URL" "$STATE_DIR/models/$MODEL_NAME" "$MODEL_SHA256"
+fi
+
+if ! (echo "$VAD_SHA256  $STATE_DIR/models/$VAD_NAME" | sha256sum -c - >/dev/null 2>&1); then
+    download_verified "$VAD_URL" "$STATE_DIR/models/$VAD_NAME" "$VAD_SHA256"
+fi
+
+chown -R asterisk:asterisk "$STATE_DIR/models"
+chmod 0640 "$STATE_DIR/models/"*.bin 2>/dev/null || true
 
 DB_USER="${DB_USER:-$(sed -n 's/^AMPDBUSER=//p' /etc/amportal.conf 2>/dev/null | head -n1)}"
 DB_HOST="${DB_HOST:-$(sed -n 's/^AMPDBHOST=//p' /etc/amportal.conf 2>/dev/null | head -n1)}"

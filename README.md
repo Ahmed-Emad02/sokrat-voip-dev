@@ -129,7 +129,10 @@ curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/u
 │   ├── setup-issabel-asterisk.sh   # Master offline PBX appliance installer
 │   ├── install-sokrat.sh           # Standalone application installer
 │   ├── sokrat-prereqs.tar.gz.*     # 670+ offline RPM packages (multi-part chunks)
-│   └── sokrat-npm-modules.tar.gz   # Pre-bundled npm dependencies (zero network required)
+│   ├── sokrat-npm-modules.tar.gz   # Pre-bundled npm dependencies (zero network required)
+│   ├── sokrat-stt-models.tar.gz.*  # Offline Whisper speech-to-text models (multi-part chunks)
+│   ├── binaries/                   # Pre-compiled whisper.cpp, static ffmpeg, chan_dongle, func_rnnoise
+│   └── packages/                   # ZeroTier, Tailscale, Softphone & Push Gateway bundles
 └── test/                   # Comprehensive automated test suite (56+ test specs)
 ```
 

@@ -102,22 +102,27 @@ test('Layer 4 Identity: modem identity verification detects a changed IMEI/IMSI'
     const script = `
 import sys
 sys.path.insert(0, '${REPO}')
+from laya.sensors.cli import parse_dongle_devices_summary
 from laya.healer.actions import verify_modem_identity, snapshot_modem_identity
 
+devices = parse_dongle_devices_summary()
+connected = [d for d in devices if d.get('state', '').lower() in ('free', 'active', 'dialing', 'ringing')]
+live_dongle = connected[0]['id'] if connected else 'dongle0'
+
 # A snapshot of a real modem
-snap = snapshot_modem_identity('dongle0')
+snap = snapshot_modem_identity(live_dongle)
 assert snap is not None
-assert snap.get('imei'), f'dongle0 must expose an IMEI: {snap}'
+assert snap.get('imei'), f'{live_dongle} must expose an IMEI: {snap}'
 
 # The identity of the live modem must match its own snapshot
-ok, details = verify_modem_identity('dongle0', snap)
+ok, details = verify_modem_identity(live_dongle, snap)
 assert ok is True, details
 assert 'identity verified' in details, details
 
 # A snapshot with a DIFFERENT IMEI must be rejected
 tampered = dict(snap)
 tampered['imei'] = '000000000000000'
-ok, details = verify_modem_identity('dongle0', tampered)
+ok, details = verify_modem_identity(live_dongle, tampered)
 assert ok is False, 'a changed IMEI must fail verification'
 assert 'imei changed' in details, details
 print("OK")

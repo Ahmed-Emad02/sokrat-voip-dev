@@ -248,12 +248,22 @@ test('offline installer packages and binaries are present in installer-bundle', 
     const pkgFiles = fs.readdirSync(packagesDir);
     assert.ok(pkgFiles.some(f => f.startsWith('nodejs-') && f.endsWith('.rpm')), 'nodejs RPM must be present in packages');
     assert.ok(pkgFiles.some(f => f.startsWith('webmin-') && f.endsWith('.rpm')), 'webmin RPM must be present in packages');
+    assert.ok(pkgFiles.some(f => f.startsWith('zerotier-one-') && f.endsWith('.rpm')), 'zerotier-one RPM must be present in packages');
+    assert.ok(pkgFiles.some(f => f.startsWith('tailscale') && f.endsWith('.rpm')), 'tailscale RPM must be present in packages');
+    assert.ok(pkgFiles.includes('sokrat-softphone.tar.gz'), 'sokrat-softphone.tar.gz must be present in packages');
+    assert.ok(pkgFiles.includes('sokrat-push-gateway.tar.gz'), 'sokrat-push-gateway.tar.gz must be present in packages');
 
-    // Check RNNoise binaries
+    // Check RNNoise, ffmpeg, and whisper binaries
     const binFiles = fs.readdirSync(binariesDir);
     assert.ok(binFiles.some(f => f.startsWith('librnnoise.so')), 'librnnoise must be present in binaries');
     assert.ok(binFiles.includes('func_rnnoise.so'), 'func_rnnoise.so must be present in binaries');
     assert.ok(binFiles.includes('rnnoise.h'), 'rnnoise.h must be present in binaries');
+    assert.ok(binFiles.includes('ffmpeg.tar.gz'), 'ffmpeg.tar.gz must be present in binaries');
+    assert.ok(binFiles.includes('whisper-bin.tar.gz'), 'whisper-bin.tar.gz must be present in binaries');
+
+    // Check STT voice model chunks
+    const bundleFiles = fs.readdirSync(path.join(rootDir, 'installer-bundle'));
+    assert.ok(bundleFiles.some(f => f.startsWith('sokrat-stt-models.tar.gz.part-')), 'sokrat-stt-models chunk parts must be present in installer-bundle');
 });
 
 test('install.sh and uninstall.sh pass bash syntax validation', () => {

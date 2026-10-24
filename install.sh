@@ -583,13 +583,31 @@ fi
 # Step 2 — Install Node.js 22
 # ──────────────────────────────────────────────
 echo "[2/14] Installing Node.js 22..."
-if ! command -v node &>/dev/null; then
-    curl -fsSL -o /tmp/nodesetup.sh "$NODE_SETUP_URL"
-    bash /tmp/nodesetup.sh
-    yum install -y nodejs
-    rm -f /tmp/nodesetup.sh
-else
+if command -v node &>/dev/null; then
     echo "  Node.js already installed: $(node -v)"
+else
+    NODE_RPM=""
+    for candidate in \
+        "$SCRIPT_DIR/installer-bundle/packages" \
+        "$INSTALL_DIR/installer-bundle/packages" \
+        "/tmp/sokrat-repo/installer-bundle/packages" \
+        "/tmp/installer-bundle/packages"; do
+        if ls "$candidate"/nodejs-*.rpm 1>/dev/null 2>&1; then
+            NODE_RPM=$(ls "$candidate"/nodejs-*.rpm 2>/dev/null | head -1)
+            break
+        fi
+    done
+    if [ -n "$NODE_RPM" ] && [ -f "$NODE_RPM" ]; then
+        echo "  Installing Node.js 22 from offline package $(basename "$NODE_RPM")..."
+        rpm -Uvh --replacepkgs --nodeps "$NODE_RPM" 2>/dev/null || true
+    fi
+    if ! command -v node &>/dev/null; then
+        curl -fsSL -o /tmp/nodesetup.sh "$NODE_SETUP_URL"
+        bash /tmp/nodesetup.sh
+        yum install -y nodejs
+        rm -f /tmp/nodesetup.sh
+    fi
+    echo "  Node.js installed: $(node -v 2>/dev/null || echo 'installed')"
 fi
 
 # ──────────────────────────────────────────────
@@ -644,7 +662,24 @@ chmod 644 /etc/profile.d/sokrat-aliases.sh
 # 3b — Clone / Update Sokrat VOICE (WebRTC Softphone)
 echo "  [3b] Cloning Sokrat VOICE (WebRTC Softphone) repository..."
 systemctl stop sokrat-softphone 2>/dev/null || true
-if [ -d "$SOFTPHONE_DIR/.git" ]; then
+SOFTPHONE_BUNDLE=""
+for candidate in \
+    "$SCRIPT_DIR/installer-bundle/packages/sokrat-softphone.tar.gz" \
+    "$INSTALL_DIR/installer-bundle/packages/sokrat-softphone.tar.gz" \
+    "/tmp/sokrat-repo/installer-bundle/packages/sokrat-softphone.tar.gz" \
+    "/tmp/installer-bundle/packages/sokrat-softphone.tar.gz"; do
+    if [ -f "$candidate" ]; then
+        SOFTPHONE_BUNDLE="$candidate"
+        break
+    fi
+done
+
+if [ -f "$SOFTPHONE_DIR/server.js" ]; then
+    echo "  Softphone source already present in $SOFTPHONE_DIR, proceeding..."
+elif [ -n "$SOFTPHONE_BUNDLE" ]; then
+    echo "  Extracting Sokrat VOICE softphone from offline bundle $(basename "$SOFTPHONE_BUNDLE")..."
+    tar -xzf "$SOFTPHONE_BUNDLE" -C /opt 2>/dev/null || true
+elif [ -d "$SOFTPHONE_DIR/.git" ]; then
     echo "  Directory $SOFTPHONE_DIR exists, maintaining local modifications..."
     cd "$SOFTPHONE_DIR"
     git config http.postBuffer 524288000 2>/dev/null || true
@@ -667,21 +702,57 @@ fi
 # Step 4 — Install Dependencies
 # ──────────────────────────────────────────────
 echo "[4/14] Installing npm dependencies..."
-if [ -f package-lock.json ]; then
+NPM_BUNDLE=""
+for candidate in \
+    "$SCRIPT_DIR/installer-bundle/sokrat-npm-modules.tar.gz" \
+    "$INSTALL_DIR/installer-bundle/sokrat-npm-modules.tar.gz" \
+    "/tmp/sokrat-repo/installer-bundle/sokrat-npm-modules.tar.gz" \
+    "/tmp/installer-bundle/sokrat-npm-modules.tar.gz"; do
+    if [ -f "$candidate" ]; then
+        NPM_BUNDLE="$candidate"
+        break
+    fi
+done
+
+if [ -n "$NPM_BUNDLE" ] && [ ! -d "$INSTALL_DIR/node_modules/express" ]; then
+    echo "  Extracting pre-bundled npm dependencies from $(basename "$NPM_BUNDLE")..."
+    tar -xzf "$NPM_BUNDLE" -C /opt 2>/dev/null || true
+fi
+
+if [ -d "$INSTALL_DIR/node_modules" ] && [ -f "$INSTALL_DIR/node_modules/express/package.json" ]; then
+    echo "  Dependencies already bundled in node_modules, skipping npm install."
+elif [ -f package-lock.json ]; then
     npm ci --omit=dev --prefer-offline --no-audit --no-fund 2>/dev/null || npm install --omit=dev --prefer-offline --no-audit --no-fund
 else
     npm install --omit=dev --prefer-offline --no-audit --no-fund
 fi
 
 echo "  [4a] Installing Sokrat VOICE softphone npm dependencies..."
-if [ -d "$SOFTPHONE_DIR" ]; then
+if [ -d "$SOFTPHONE_DIR/node_modules" ] && [ -f "$SOFTPHONE_DIR/node_modules/express/package.json" ]; then
+    echo "  Softphone dependencies already bundled in node_modules, skipping npm install."
+elif [ -d "$SOFTPHONE_DIR" ]; then
     cd "$SOFTPHONE_DIR"
     npm install --omit=dev --prefer-offline --no-audit --no-fund --fetch-timeout=3000 2>/dev/null || true
     cd "$INSTALL_DIR"
 fi
 echo "  [4b] Installing ffmpeg (static build, recording upload conversion)..."
 if ! command -v ffmpeg &>/dev/null && [ ! -x /usr/local/bin/ffmpeg ]; then
-    if [ -f "$INSTALL_DIR/installer-bundle/binaries/ffmpeg" ]; then
+    FFMPEG_ARCHIVE=""
+    for candidate in \
+        "$SCRIPT_DIR/installer-bundle/binaries/ffmpeg.tar.gz" \
+        "$INSTALL_DIR/installer-bundle/binaries/ffmpeg.tar.gz" \
+        "/tmp/sokrat-repo/installer-bundle/binaries/ffmpeg.tar.gz" \
+        "/tmp/installer-bundle/binaries/ffmpeg.tar.gz"; do
+        if [ -f "$candidate" ]; then
+            FFMPEG_ARCHIVE="$candidate"
+            break
+        fi
+    done
+    if [ -n "$FFMPEG_ARCHIVE" ]; then
+        echo "  Extracting ffmpeg from offline bundle $(basename "$FFMPEG_ARCHIVE")..."
+        tar -xzf "$FFMPEG_ARCHIVE" -C /usr/local/bin
+        chmod +x /usr/local/bin/ffmpeg
+    elif [ -f "$INSTALL_DIR/installer-bundle/binaries/ffmpeg" ]; then
         echo "  Installing ffmpeg from bundle..."
         cp "$INSTALL_DIR/installer-bundle/binaries/ffmpeg" /usr/local/bin/ffmpeg
         chmod +x /usr/local/bin/ffmpeg
@@ -1121,7 +1192,26 @@ fi
 # ──────────────────────────────────────────────
 echo "[6b/14] Installing Sokrat Push Gateway (mobile push-to-wake)..."
 git config --global --add safe.directory "$PUSH_GATEWAY_DIR" 2>/dev/null || true
-if [ -d "$PUSH_GATEWAY_DIR/.git" ]; then
+PUSH_GATEWAY_BUNDLE=""
+for candidate in \
+    "$SCRIPT_DIR/installer-bundle/packages/sokrat-push-gateway.tar.gz" \
+    "$INSTALL_DIR/installer-bundle/packages/sokrat-push-gateway.tar.gz" \
+    "/tmp/sokrat-repo/installer-bundle/packages/sokrat-push-gateway.tar.gz" \
+    "/tmp/installer-bundle/packages/sokrat-push-gateway.tar.gz"; do
+    if [ -f "$candidate" ]; then
+        PUSH_GATEWAY_BUNDLE="$candidate"
+        break
+    fi
+done
+
+if [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
+    echo "  Push gateway source already present in $PUSH_GATEWAY_DIR, proceeding..."
+    cd "$PUSH_GATEWAY_DIR"
+elif [ -n "$PUSH_GATEWAY_BUNDLE" ]; then
+    echo "  Extracting Sokrat Push Gateway from offline bundle $(basename "$PUSH_GATEWAY_BUNDLE")..."
+    tar -xzf "$PUSH_GATEWAY_BUNDLE" -C /opt 2>/dev/null || true
+    cd "$PUSH_GATEWAY_DIR"
+elif [ -d "$PUSH_GATEWAY_DIR/.git" ]; then
     echo "  Updating sokrat-push-gateway..."
     cd "$PUSH_GATEWAY_DIR"
     git fetch origin 2>/dev/null || true
@@ -1133,7 +1223,11 @@ fi
 
 # Gateway dependencies (apns2, firebase-admin, express, mysql2, dotenv)
 if [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
-    npm install --production --prefix "$PUSH_GATEWAY_DIR"
+    if [ -d "$PUSH_GATEWAY_DIR/node_modules" ] && [ -f "$PUSH_GATEWAY_DIR/node_modules/express/package.json" ]; then
+        echo "  Push gateway dependencies already bundled in node_modules, skipping npm install."
+    else
+        npm install --production --prefix "$PUSH_GATEWAY_DIR" 2>/dev/null || true
+    fi
 fi
 
 # Gateway .env (reuse the same MySQL root password and host settings)
@@ -2341,17 +2435,57 @@ install_overlay_vpn_clients() {
         return 0
     fi
 
-    # Tailscale is not shipped in the base Rocky/RHEL repositories
-    if ! command -v tailscale >/dev/null 2>&1; then
-        local os_major="8"
-        if [ -r /etc/os-release ]; then
-            os_major=$(awk -F= '/^VERSION_ID=/{gsub(/"/,"",$2); split($2,v,"."); print v[1]; exit}' /etc/os-release)
+    # 1. ZeroTier installation
+    if command -v zerotier-cli >/dev/null 2>&1; then
+        echo "  zerotier-one already installed"
+    else
+        local ZEROTIER_RPM=""
+        for candidate in "$SCRIPT_DIR/installer-bundle/packages" "$INSTALL_DIR/installer-bundle/packages" "/tmp/sokrat-repo/installer-bundle/packages" "/tmp/installer-bundle/packages"; do
+            if ls "$candidate"/zerotier-one-*.rpm 1>/dev/null 2>&1; then
+                ZEROTIER_RPM=$(ls "$candidate"/zerotier-one-*.rpm 2>/dev/null | head -1)
+                break
+            fi
+        done
+        if [ -n "$ZEROTIER_RPM" ] && [ -f "$ZEROTIER_RPM" ]; then
+            echo "  Installing zerotier-one from offline package $(basename "$ZEROTIER_RPM")..."
+            rpm -Uvh --replacepkgs --nodeps --oldpackage "$ZEROTIER_RPM" 2>/dev/null || true
         fi
-        if $pkg_mgr config-manager --add-repo "https://pkgs.tailscale.com/stable/rhel/${os_major}/tailscale.repo" >/dev/null 2>&1; then
-            echo "  tailscale repository added"
+        if ! command -v zerotier-cli >/dev/null 2>&1; then
+            if $pkg_mgr install -y zerotier-one >/dev/null 2>&1; then
+                echo "  zerotier-one installed"
+            else
+                echo "  WARNING: could not install zerotier-one (continuing)"
+            fi
         else
-            mkdir -p /etc/yum.repos.d
-            cat > /etc/yum.repos.d/sokrat-tailscale.repo << REPOEOF
+            echo "  zerotier-one installed"
+        fi
+    fi
+
+    # 2. Tailscale installation
+    if command -v tailscale >/dev/null 2>&1; then
+        echo "  tailscale already installed"
+    else
+        local TAILSCALE_RPM=""
+        for candidate in "$SCRIPT_DIR/installer-bundle/packages" "$INSTALL_DIR/installer-bundle/packages" "/tmp/sokrat-repo/installer-bundle/packages" "/tmp/installer-bundle/packages"; do
+            if ls "$candidate"/tailscale*.rpm 1>/dev/null 2>&1; then
+                TAILSCALE_RPM=$(ls "$candidate"/tailscale*.rpm 2>/dev/null | head -1)
+                break
+            fi
+        done
+        if [ -n "$TAILSCALE_RPM" ] && [ -f "$TAILSCALE_RPM" ]; then
+            echo "  Installing tailscale from offline package $(basename "$TAILSCALE_RPM")..."
+            rpm -Uvh --replacepkgs --nodeps --oldpackage "$TAILSCALE_RPM" 2>/dev/null || true
+        fi
+        if ! command -v tailscale >/dev/null 2>&1; then
+            local os_major="8"
+            if [ -r /etc/os-release ]; then
+                os_major=$(awk -F= '/^VERSION_ID=/{gsub(/"/,"",$2); split($2,v,"."); print v[1]; exit}' /etc/os-release)
+            fi
+            if $pkg_mgr config-manager --add-repo "https://pkgs.tailscale.com/stable/rhel/${os_major}/tailscale.repo" >/dev/null 2>&1; then
+                echo "  tailscale repository added"
+            else
+                mkdir -p /etc/yum.repos.d
+                cat > /etc/yum.repos.d/sokrat-tailscale.repo << REPOEOF
 [tailscale]
 name=tailscale
 baseurl=https://pkgs.tailscale.com/stable/rhel/${os_major}
@@ -2360,23 +2494,16 @@ gpgcheck=1
 repo_gpgcheck=1
 gpgkey=https://pkgs.tailscale.com/stable/rhel/${os_major}/tailscale.gpg
 REPOEOF
-            echo "  tailscale repository file written"
+                echo "  tailscale repository file written"
+            fi
+            if $pkg_mgr install -y tailscale >/dev/null 2>&1; then
+                echo "  tailscale installed"
+            else
+                echo "  WARNING: could not install tailscale (continuing)"
+            fi
+        else
+            echo "  tailscale installed"
         fi
-    fi
-
-    if command -v zerotier-cli >/dev/null 2>&1; then
-        echo "  zerotier-one already installed"
-    elif $pkg_mgr install -y zerotier-one >/dev/null 2>&1; then
-        echo "  zerotier-one installed"
-    else
-        echo "  WARNING: could not install zerotier-one (continuing)"
-    fi
-    if command -v tailscale >/dev/null 2>&1; then
-        echo "  tailscale already installed"
-    elif $pkg_mgr install -y tailscale >/dev/null 2>&1; then
-        echo "  tailscale installed"
-    else
-        echo "  WARNING: could not install tailscale (continuing)"
     fi
 
     # Enable both services so they come up after a reboot. The networks

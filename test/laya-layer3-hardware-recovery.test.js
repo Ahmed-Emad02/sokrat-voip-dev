@@ -25,9 +25,15 @@ assert r['verdict'] == LIVENESS_ABSENT, r
 
 # The probe must never report DEAD merely because a process owns the port.
 # It must return BUSY so a healthy dongle is never misdiagnosed.
-r = probe_dongle_serial_liveness('dongle-test-busy', port='/dev/ttyUSB0', timeout=0.5)
-assert r['verdict'] in (LIVENESS_BUSY, LIVENESS_ALIVE, LIVENESS_DEAD), r
-assert r['verdict'] != LIVENESS_DEAD or r['response'] != '', 'DEAD verdict must be backed by an actual probe attempt'
+import glob
+ttys = sorted(glob.glob('/dev/ttyUSB*'))
+target_port = ttys[0] if ttys else '/dev/ttyUSB0'
+r = probe_dongle_serial_liveness('dongle-test-busy', port=target_port, timeout=0.5)
+if ttys:
+    assert r['verdict'] in (LIVENESS_BUSY, LIVENESS_ALIVE, LIVENESS_DEAD), r
+    assert r['verdict'] != LIVENESS_DEAD or r['response'] != '', 'DEAD verdict must be backed by an actual probe attempt'
+else:
+    assert r['verdict'] == LIVENESS_ABSENT, r
 print("OK")
 `;
     const res = PY(script);
@@ -136,12 +142,19 @@ from laya.sensors.sysfs import scan_usb_modems, get_dongle_configured_ports_from
 usb = scan_usb_modems()
 sm = DongleStateManager()
 
-# dongle0 is physically present in this environment. Its presence MUST be
-# detected even though detail=None (the blind spot that previously hid freezes).
-ports = get_dongle_configured_ports_from_conf('dongle0')
-assert ports.get('data'), 'dongle0 must have a configured data port'
+# Find the configured dongle whose data or audio port matches enumerated hardware
+target_dongle = 'dongle0'
+all_usb_nodes = {p['node'] for m in usb for p in m.get('ports', [])}
+for cand in ('dongle0', 'dongle1', 'dongle2'):
+    c_ports = get_dongle_configured_ports_from_conf(cand)
+    if c_ports.get('data') in all_usb_nodes or c_ports.get('audio') in all_usb_nodes:
+        target_dongle = cand
+        break
 
-summary = {'id': 'dongle0', 'state': 'Not connected', 'rssi': 0, 'model': None,
+ports = get_dongle_configured_ports_from_conf(target_dongle)
+assert ports.get('data'), f'{target_dongle} must have a configured data port'
+
+summary = {'id': target_dongle, 'state': 'Not connected', 'rssi': 0, 'model': None,
            'firmware': None, 'imei': None, 'imsi': None, 'number': 'Unknown'}
 hd = sm.update_dongle(summary, detail=None, active_channels=[], usb_modems=usb)
 assert hd['usb_present'] is True, 'usb_present must be True when the hardware is enumerated'

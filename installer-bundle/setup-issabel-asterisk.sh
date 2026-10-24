@@ -80,7 +80,11 @@ if [ -f "$SCRIPT_DIR/binaries/node" ]; then
     chmod +x /usr/local/bin/node
 fi
 
-if [ -f "$SCRIPT_DIR/binaries/ffmpeg" ]; then
+if [ -f "$SCRIPT_DIR/binaries/ffmpeg.tar.gz" ]; then
+    echo "--> Extracting ffmpeg from local binaries..."
+    tar -xzf "$SCRIPT_DIR/binaries/ffmpeg.tar.gz" -C /usr/local/bin/
+    chmod +x /usr/local/bin/ffmpeg
+elif [ -f "$SCRIPT_DIR/binaries/ffmpeg" ]; then
     cp "$SCRIPT_DIR/binaries/ffmpeg" /usr/local/bin/
     chmod +x /usr/local/bin/ffmpeg
 fi
@@ -146,6 +150,18 @@ UNIT
     systemctl unmask webmin 2>/dev/null || true
     systemctl enable webmin 2>/dev/null || true
     systemctl restart webmin 2>/dev/null || true
+fi
+
+if ls "$SCRIPT_DIR"/packages/zerotier-one-*.rpm 1>/dev/null 2>&1; then
+    echo "--> Installing ZeroTier from local packages..."
+    rpm -Uvh --replacepkgs --nodeps --oldpackage "$SCRIPT_DIR"/packages/zerotier-one-*.rpm 2>/dev/null || true
+    systemctl enable zerotier-one.service 2>/dev/null || true
+fi
+
+if ls "$SCRIPT_DIR"/packages/tailscale*.rpm 1>/dev/null 2>&1; then
+    echo "--> Installing Tailscale from local packages..."
+    rpm -Uvh --replacepkgs --nodeps --oldpackage "$SCRIPT_DIR"/packages/tailscale*.rpm 2>/dev/null || true
+    systemctl enable tailscaled.service 2>/dev/null || true
 fi
 
 # 6. Start MariaDB and Asterisk

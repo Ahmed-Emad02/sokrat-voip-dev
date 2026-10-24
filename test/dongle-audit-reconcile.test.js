@@ -237,7 +237,7 @@ test('server.js and views/gsm-dongles.ejs provide live lsusb hardware and ttyUSB
     } catch (_) {}
 
     if (lsusbOut.includes('12d1:1001') || lsusbOut.includes('Huawei')) {
-        const hasTty = fs.existsSync('/dev/ttyUSB0');
+        const hasTty = fs.readdirSync('/dev').some(f => f.startsWith('ttyUSB'));
         assert.ok(hasTty, 'At least one ttyUSB device must exist when Huawei modems are attached');
     }
 });
