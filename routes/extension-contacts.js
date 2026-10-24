@@ -117,6 +117,15 @@ module.exports = function createExtensionContactsRouter(pool) {
             }
             if (!Array.isArray(leadFields)) leadFields = [];
             const followup = dialerFollowup.normalizeFollowupConfig(row.followup_fields);
+            let availableDispositions = [];
+            if (!dialerFollowup.isFollowupConfigEmpty(followup)) {
+                try {
+                    const [dispRows] = await pool.query(
+                        'SELECT name FROM \`asterisk\`.\`dialer_dispositions\` ORDER BY name ASC',
+                    );
+                    availableDispositions = (dispRows || []).map((item) => String(item.name || '')).filter(Boolean);
+                } catch (_) {}
+            }
 
             res.set('Cache-Control', 'no-store');
             return res.json({
@@ -135,7 +144,9 @@ module.exports = function createExtensionContactsRouter(pool) {
                     custom_data: customData,
                     lead_fields: leadFields,
                 },
-                followup: dialerFollowup.isFollowupConfigEmpty(followup) ? null : followup,
+                followup: dialerFollowup.isFollowupConfigEmpty(followup)
+                    ? null
+                    : { ...followup, available_dispositions: availableDispositions },
             });
         } catch (err) {
             console.error('[extension-dialer-lead]', err && err.message);
@@ -306,6 +317,17 @@ module.exports = function createExtensionContactsRouter(pool) {
             if (saved && typeof saved.data === 'string') {
                 try { saved = { ...saved, data: JSON.parse(saved.data) }; } catch (_) { saved = { ...saved, data: {} }; }
             }
+            const followupConfig = dialerFollowup.normalizeFollowupConfig(attempt.followup_fields);
+            let availableDispositions = [];
+            if (!dialerFollowup.isFollowupConfigEmpty(followupConfig)) {
+                try {
+                    const [dispRows] = await pool.query(
+                        'SELECT name FROM \`asterisk\`.\`dialer_dispositions\` ORDER BY name ASC',
+                    );
+                    availableDispositions = (dispRows || []).map((item) => String(item.name || '')).filter(Boolean);
+                } catch (_) {}
+            }
+
             res.set('Cache-Control', 'no-store');
             return res.json({
                 success: true,
@@ -320,9 +342,9 @@ module.exports = function createExtensionContactsRouter(pool) {
                     company: attempt.company || '',
                     custom_data: customData || {},
                 },
-                followup: dialerFollowup.isFollowupConfigEmpty(dialerFollowup.normalizeFollowupConfig(attempt.followup_fields))
+                followup: dialerFollowup.isFollowupConfigEmpty(followupConfig)
                     ? null
-                    : dialerFollowup.normalizeFollowupConfig(attempt.followup_fields),
+                    : { ...followupConfig, available_dispositions: availableDispositions },
                 saved,
             });
         } catch (err) {
