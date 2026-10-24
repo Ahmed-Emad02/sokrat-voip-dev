@@ -73,5 +73,76 @@ module.exports = function createExtensionContactsRouter(pool) {
         res.json({ success: true, extension: req.sokratExtension });
     });
 
+    /**
+     * The campaign lead currently assigned to this extension by the progressive
+     * dialer. Used by the desktop softphone for its incoming-call screen pop:
+     * the dialer only sends the lead's name/number as caller ID, so the extra
+     * campaign fields are fetched here when the agent's phone rings.
+     *
+     * Authenticated with the extension's own SIP password (HMAC), exactly like
+     * the contacts routes above.
+     */
+    router.get('/dialer/current', async (req, res) => {
+        const extension = String(req.sokratExtension || '').trim();
+        try {
+            const [rows] = await pool.query(
+                `SELECT a.attempt_uuid, a.status AS attempt_status, a.campaign_id, a.lead_id,
+                        l.phone_number, l.first_name, l.last_name, l.company, l.custom_data,
+                        c.name AS campaign_name, c.lead_fields
+                 FROM \`asterisk\`.\`dialer_call_attempts\` a
+                 JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = a.lead_id
+                 LEFT JOIN \`asterisk\`.\`dialer_campaigns\` c ON c.id = a.campaign_id
+                 WHERE a.agent_extension = ? AND a.active_flag = 1
+                 ORDER BY a.id DESC
+                 LIMIT 1`,
+                [extension],
+            );
+
+            if (!rows || rows.length === 0) {
+                res.set('Cache-Control', 'no-store');
+                return res.json({ success: true, lead: null });
+            }
+
+            const row = rows[0];
+            let customData = row.custom_data;
+            if (typeof customData === 'string') {
+                try { customData = JSON.parse(customData); } catch (_) { customData = {}; }
+            }
+            if (!customData || typeof customData !== 'object') customData = {};
+
+            let leadFields = row.lead_fields;
+            if (typeof leadFields === 'string') {
+                try { leadFields = JSON.parse(leadFields); } catch (_) { leadFields = []; }
+            }
+            if (!Array.isArray(leadFields)) leadFields = [];
+
+            res.set('Cache-Control', 'no-store');
+            return res.json({
+                success: true,
+                generated_at: new Date().toISOString(),
+                lead: {
+                    attempt_uuid: row.attempt_uuid,
+                    attempt_status: row.attempt_status,
+                    campaign_id: row.campaign_id,
+                    campaign_name: row.campaign_name || '',
+                    lead_id: row.lead_id,
+                    phone: row.phone_number || '',
+                    first_name: row.first_name || '',
+                    last_name: row.last_name || '',
+                    company: row.company || '',
+                    custom_data: customData,
+                    lead_fields: leadFields,
+                },
+            });
+        } catch (err) {
+            console.error('[extension-dialer-lead]', err && err.message);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to read the dialer lead',
+                code: 'dialer_lead_error',
+            });
+        }
+    });
+
     return router;
 };
