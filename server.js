@@ -35,6 +35,7 @@ const createCrmRouter = require('./routes/crm-integration');
 const createExtensionContactsRouter = require('./routes/extension-contacts');
 const registerCrmLiveSocket = require('./socket/crm-live');
 const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
+const dialerFollowup = require('./lib/dialer-followup');
 const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
 const gitHistoryService = require('./backend/git-history-service');
 const {
@@ -143,6 +144,7 @@ if ((process.env.USE_HTTPS === 'true' || process.env.SSL_PORT) && fs.existsSync(
     server = http.createServer(app);
 }
 const io = new Server(server);
+app.set('io', io);
 ffmpeg.setFfmpegPath('/usr/local/bin/ffmpeg');
 const PORT = (process.env.USE_HTTPS === 'true' && process.env.SSL_PORT) ? parseInt(process.env.SSL_PORT, 10) : (parseInt(process.env.PORT, 10) || 3000);
 let SESSION_SECRET = process.env.SESSION_SECRET;
@@ -832,6 +834,7 @@ async function initAuthDb() {
             max_queue_wait_sec INT DEFAULT 5,
             auto_answer TINYINT(1) DEFAULT 0,
             lead_fields TEXT DEFAULT NULL,
+            followup_fields LONGTEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
@@ -839,6 +842,7 @@ async function initAuthDb() {
     try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `assigned_agents` TEXT DEFAULT NULL AFTER `allowed_dongles`"); } catch (_) {}
     try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `mask_phone_numbers` TINYINT(1) DEFAULT 0 AFTER `auto_answer`"); } catch (_) {}
     try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `lead_fields` TEXT DEFAULT NULL AFTER `mask_phone_numbers`"); } catch (_) {}
+    try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `followup_fields` LONGTEXT DEFAULT NULL AFTER `lead_fields`"); } catch (_) {}
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dialer_leads (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -882,6 +886,25 @@ async function initAuthDb() {
             KEY idx_camp_status (campaign_id, status),
             KEY idx_lease (status, lease_expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS dialer_followups (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            attempt_uuid VARCHAR(64) NOT NULL UNIQUE,
+            campaign_id INT NOT NULL,
+            lead_id INT NOT NULL,
+            agent_extension VARCHAR(20) NOT NULL,
+            disposition VARCHAR(50) DEFAULT NULL,
+            data JSON NOT NULL,
+            skipped TINYINT(1) NOT NULL DEFAULT 0,
+            skip_reason VARCHAR(500) DEFAULT NULL,
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_campaign (campaign_id),
+            KEY idx_lead (lead_id),
+            KEY idx_agent (agent_extension),
+            KEY idx_submitted (submitted_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
     `);
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dialer_agent_states (
@@ -20558,7 +20581,7 @@ app.post('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req,
     }
 
     try {
-        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields } = req.body;
+        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields, followup_fields } = req.body;
         if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Campaign name is required' });
 
         const cidNum = origination_caller_id ? sanitizeAmiValue(origination_caller_id) : '101';
@@ -20593,8 +20616,10 @@ app.post('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req,
         }
         const cleanLeadFields = normalizeDialerFieldDefinitions(lead_fields);
         await pool.query('UPDATE `asterisk`.`dialer_campaigns` SET lead_fields = ? WHERE id = ?', [JSON.stringify(cleanLeadFields), r.insertId]);
+        const cleanFollowup = dialerFollowup.normalizeFollowupConfig(followup_fields);
+        await pool.query('UPDATE `asterisk`.`dialer_campaigns` SET followup_fields = ? WHERE id = ?', [JSON.stringify(cleanFollowup), r.insertId]);
 
-        res.json({ success: true, id: r.insertId, lead_fields: cleanLeadFields, message: 'Campaign created successfully' });
+        res.json({ success: true, id: r.insertId, lead_fields: cleanLeadFields, followup_fields: cleanFollowup, message: 'Campaign created successfully' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -20608,7 +20633,7 @@ app.put('/api/dialer/campaigns/:id', requireAuth, requireRootForDialer, async (r
     }
     try {
         const id = parseInt(req.params.id, 10);
-        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields } = req.body;
+        const { name, outbound_route_id, allowed_dongles, assigned_agents, origination_caller_id, wrapup_time_sec, max_concurrent_dials, mask_phone_numbers, lead_fields, followup_fields } = req.body;
         if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Campaign name is required' });
 
         let cleanDongles = null;
@@ -20641,7 +20666,12 @@ app.put('/api/dialer/campaigns/:id', requireAuth, requireRootForDialer, async (r
         ]);
         const cleanLeadFields = normalizeDialerFieldDefinitions(lead_fields);
         await pool.query('UPDATE `asterisk`.`dialer_campaigns` SET lead_fields = ? WHERE id = ?', [JSON.stringify(cleanLeadFields), id]);
-        res.json({ success: true, lead_fields: cleanLeadFields, message: 'Campaign updated successfully' });
+        let cleanFollowup = null;
+        if (followup_fields !== undefined) {
+            cleanFollowup = dialerFollowup.normalizeFollowupConfig(followup_fields);
+            await pool.query('UPDATE `asterisk`.`dialer_campaigns` SET followup_fields = ? WHERE id = ?', [JSON.stringify(cleanFollowup), id]);
+        }
+        res.json({ success: true, lead_fields: cleanLeadFields, followup_fields: cleanFollowup, message: 'Campaign updated successfully' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -20896,7 +20926,7 @@ app.post('/api/dialer/leads/:id/reset', requireAuth, requireRootForDialer, async
 });
 
 // POST /api/dialer/disposition
-app.post('/api/dialer/disposition', async (req, res) => {
+app.post('/api/dialer/disposition', requireAuth, async (req, res) => {
     try {
         const { attemptUuid, leadId, disposition, agentExtension } = req.body;
         if (!leadId || !disposition) {
@@ -20919,6 +20949,68 @@ app.post('/api/dialer/disposition', async (req, res) => {
         }
 
         res.json({ success: true, message: 'Disposition logged successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/dialer/followups - submitted post-call follow-ups
+app.get('/api/dialer/followups', requireAuth, requireRootForDialer, async (req, res) => {
+    try {
+        const campaignId = req.query.campaign_id ? parseInt(req.query.campaign_id, 10) : null;
+        const from = req.query.from ? String(req.query.from) : '';
+        const to = req.query.to ? String(req.query.to) : '';
+        const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 200));
+
+        let sql = `
+            SELECT f.attempt_uuid, f.campaign_id, f.lead_id, f.agent_extension,
+                   f.disposition, f.data, f.skipped, f.skip_reason, f.submitted_at,
+                   c.name AS campaign_name,
+                   l.phone_number, l.first_name, l.last_name, l.company,
+                   u.name AS agent_name
+            FROM \`asterisk\`.\`dialer_followups\` f
+            LEFT JOIN \`asterisk\`.\`dialer_campaigns\` c ON c.id = f.campaign_id
+            LEFT JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = f.lead_id
+            LEFT JOIN \`asterisk\`.\`users\` u ON u.extension = f.agent_extension
+            WHERE 1 = 1
+        `;
+        const params = [];
+        if (campaignId) { sql += ' AND f.campaign_id = ?'; params.push(campaignId); }
+        if (from) { sql += ' AND f.submitted_at >= ?'; params.push(from + ' 00:00:00'); }
+        if (to) { sql += ' AND f.submitted_at <= ?'; params.push(to + ' 23:59:59'); }
+        sql += ' ORDER BY f.submitted_at DESC LIMIT ?';
+        params.push(limit);
+
+        const [rows] = await pool.query(sql, params);
+        res.json({ success: true, followups: rows || [] });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/dialer/followups/:attemptUuid - one follow-up
+app.get('/api/dialer/followups/:attemptUuid', requireAuth, requireRootForDialer, async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT f.*, c.name AS campaign_name, c.followup_fields,
+                   l.phone_number, l.first_name, l.last_name, l.company, l.custom_data,
+                   u.name AS agent_name
+            FROM \`asterisk\`.\`dialer_followups\` f
+            LEFT JOIN \`asterisk\`.\`dialer_campaigns\` c ON c.id = f.campaign_id
+            LEFT JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = f.lead_id
+            LEFT JOIN \`asterisk\`.\`users\` u ON u.extension = f.agent_extension
+            WHERE f.attempt_uuid = ?
+            LIMIT 1
+        `, [String(req.params.attemptUuid || '')]);
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Follow-up not found' });
+        }
+        const row = rows[0];
+        let data = row.data;
+        if (typeof data === 'string') {
+            try { data = JSON.parse(data); } catch (_) { data = {}; }
+        }
+        res.json({ success: true, followup: { ...row, data: data || {} } });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

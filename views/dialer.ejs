@@ -319,7 +319,47 @@ const isRtl = activeLang === 'ar';
                     </div>
                 </div>
 
-                <!-- Row 7: Leads File Upload -->
+                <!-- Row 7: Post-call follow-up form -->
+                <div class="pt-1">
+                    <div class="flex items-center justify-between gap-2 mb-1.5">
+                        <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase">
+                            <%= isRtl ? 'نموذج المتابعة بعد المكالمة' : 'Post-call follow-up form' %>
+                        </span>
+                        <button type="button" onclick="addFollowupField()" class="dialer-control dialer-control-info py-0.5 px-2 text-[11px] rounded-lg">
+                            <span>+</span><span><%= isRtl ? 'إضافة حقل' : 'Add field' %></span>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <label class="p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="fuRequireSubmit" class="w-4 h-4 accent-red-500 cursor-pointer">
+                            <span class="text-[11px] font-bold text-[var(--text-primary)]"><%= isRtl ? 'إلزامي بعد المكالمة' : 'Require submit' %></span>
+                        </label>
+                        <label class="p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="fuAllowSkip" class="w-4 h-4 accent-red-500 cursor-pointer" checked>
+                            <span class="text-[11px] font-bold text-[var(--text-primary)]"><%= isRtl ? 'السماح بالتخطي' : 'Allow skip' %></span>
+                        </label>
+                        <label class="p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="fuSkipReason" class="w-4 h-4 accent-red-500 cursor-pointer">
+                            <span class="text-[11px] font-bold text-[var(--text-primary)]"><%= isRtl ? 'سبب التخطي إلزامي' : 'Skip reason required' %></span>
+                        </label>
+                        <div class="p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg">
+                            <label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5" for="fuEditWindow"><%= isRtl ? 'نافذة التعديل (دقائق)' : 'Edit window (min)' %></label>
+                            <input type="number" id="fuEditWindow" value="10" min="0" max="1440" class="config-input w-full py-0.5 text-xs">
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <span class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1"><%= isRtl ? 'النتائج المسموحة (فارغ = الكل)' : 'Allowed dispositions (empty = all)' %></span>
+                        <div id="fuDispositions" class="flex flex-wrap gap-1.5 p-2 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl min-h-[36px]">
+                            <span class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'جاري التحميل...' : 'Loading...' %></span>
+                        </div>
+                    </div>
+                    <div id="followupFieldsEditor" class="space-y-1.5 p-2.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl">
+                        <div class="text-xs text-[var(--text-muted)] italic"><%= isRtl ? 'لا توجد حقول متابعة بعد' : 'No follow-up fields yet' %></div>
+                    </div>
+                    <p class="text-[10px] text-[var(--text-muted)] mt-1"><%= isRtl ? 'تظهر هذه الحقول للموظف في التطبيق بعد انتهاء المكالمة.' : 'These fields appear in the agent app after the call ends.' %></p>
+                </div>
+
+                <!-- Row 8: Leads File Upload -->
                 <div id="campLeadsFileGroup" class="pt-1">
                     <div class="flex items-center justify-between gap-2 mb-1">
                         <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase" for="campLeadsFile">
@@ -336,6 +376,22 @@ const isRtl = activeLang === 'ar';
                     <button type="submit" id="saveCampSubmitBtn" class="config-btn-primary px-4 py-1.5 text-xs font-bold rounded-xl"><%= t.saveCampaign %></button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- MODAL: CAMPAIGN FOLLOW-UPS -->
+    <div id="followupsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-5xl w-full p-6 text-[var(--text-primary)] max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div>
+                    <h3 class="text-base font-extrabold"><%= isRtl ? 'متابعات الحملة' : 'Campaign Follow-ups' %></h3>
+                    <p id="followupsCampaignName" class="text-xs text-[var(--text-muted)]"></p>
+                </div>
+                <button type="button" onclick="closeModal('followupsModal')" class="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition cursor-pointer" title="<%= t.cancel %>">✕</button>
+            </div>
+            <div id="followupsContent" class="flex-1 overflow-auto">
+                <div class="text-xs text-[var(--text-muted)] italic p-4"><%= isRtl ? 'جاري التحميل...' : 'Loading...' %></div>
+            </div>
         </div>
     </div>
 
@@ -561,6 +617,347 @@ const isRtl = activeLang === 'ar';
                 seen.add(key);
                 return { key, label };
             }).filter(Boolean).slice(0, 20);
+        }
+
+        // ── Post-call follow-up form builder ───────────────────────────────
+        const FOLLOWUP_FIELD_TYPES = ['text', 'textarea', 'tel', 'number', 'date', 'datetime', 'select', 'radio', 'checkbox'];
+        let followupDraft = { settings: defaultFollowupSettings(), fields: [] };
+        let cachedDispositions = [];
+        let dispositionsLoaded = false;
+
+        function defaultFollowupSettings() {
+            return {
+                require_submit: false,
+                allow_skip: true,
+                skip_requires_reason: false,
+                edit_window_minutes: 10,
+                dispositions: []
+            };
+        }
+
+        function fuEscape(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[ch]));
+        }
+
+        function normalizeFollowupDraft(raw) {
+            let source = raw;
+            if (typeof source === 'string') {
+                try { source = JSON.parse(source); } catch (_) { source = null; }
+            }
+            const settings = source && typeof source === 'object' && source.settings ? source.settings : {};
+            const editWindow = Number(settings.edit_window_minutes);
+            const fields = Array.isArray(source && source.fields) ? source.fields : [];
+            return {
+                settings: {
+                    require_submit: Boolean(settings.require_submit),
+                    allow_skip: settings.allow_skip !== false,
+                    skip_requires_reason: Boolean(settings.skip_requires_reason),
+                    edit_window_minutes: Number.isFinite(editWindow) ? Math.min(1440, Math.max(0, editWindow)) : 10,
+                    dispositions: Array.isArray(settings.dispositions) ? settings.dispositions.map(String) : []
+                },
+                fields: fields.map((field) => ({
+                    key: String(field && field.key || '').trim(),
+                    label: String(field && field.label || '').trim(),
+                    label_ar: String(field && field.label_ar || '').trim(),
+                    type: FOLLOWUP_FIELD_TYPES.includes(String(field && field.type || '')) ? String(field.type) : 'text',
+                    required: Boolean(field && field.required),
+                    options: Array.isArray(field && field.options)
+                        ? field.options.map((option) => ({
+                            value: String(option && option.value || '').trim(),
+                            label: String(option && option.label || '').trim(),
+                            label_ar: String(option && option.label_ar || option && option.label || '').trim()
+                        })).filter((option) => option.value && option.label)
+                        : []
+                })).filter((field) => field.key)
+            };
+        }
+
+        function renderFollowupSettings() {
+            const requireSubmit = document.getElementById('fuRequireSubmit');
+            const allowSkip = document.getElementById('fuAllowSkip');
+            const skipReason = document.getElementById('fuSkipReason');
+            const editWindow = document.getElementById('fuEditWindow');
+            if (requireSubmit) requireSubmit.checked = Boolean(followupDraft.settings.require_submit);
+            if (allowSkip) allowSkip.checked = followupDraft.settings.allow_skip !== false;
+            if (skipReason) skipReason.checked = Boolean(followupDraft.settings.skip_requires_reason);
+            if (editWindow) editWindow.value = String(followupDraft.settings.edit_window_minutes);
+            renderDispositionChoices();
+        }
+
+        function renderDispositionChoices() {
+            const container = document.getElementById('fuDispositions');
+            if (!container) return;
+            if (!dispositionsLoaded) {
+                container.innerHTML = `<span class="text-xs text-[var(--text-muted)] italic">${isRtl ? 'جاري التحميل...' : 'Loading...'}</span>`;
+                return;
+            }
+            if (cachedDispositions.length === 0) {
+                container.innerHTML = `<span class="text-xs text-[var(--text-muted)] italic">${isRtl ? 'لا توجد نتائج معرفة على السنترال' : 'No dispositions defined on the PBX'}</span>`;
+                return;
+            }
+            container.innerHTML = cachedDispositions.map((disposition) => {
+                const name = String(disposition.name || '');
+                const checked = followupDraft.settings.dispositions.includes(name) ? 'checked' : '';
+                return `<label class="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[11px] cursor-pointer select-none">
+                    <input type="checkbox" class="w-3.5 h-3.5 accent-red-500 cursor-pointer" data-disposition="${fuEscape(name)}" ${checked}>
+                    <span>${fuEscape(name)}</span>
+                </label>`;
+            }).join('');
+            container.querySelectorAll('input[data-disposition]').forEach((input) => {
+                input.addEventListener('change', () => {
+                    const name = input.getAttribute('data-disposition');
+                    const set = new Set(followupDraft.settings.dispositions);
+                    if (input.checked) set.add(name); else set.delete(name);
+                    followupDraft.settings.dispositions = Array.from(set);
+                });
+            });
+        }
+
+        async function loadDispositionsForFollowups() {
+            try {
+                const res = await fetch('/api/dialer/dispositions');
+                const data = await res.json();
+                cachedDispositions = Array.isArray(data.dispositions) ? data.dispositions : [];
+            } catch (_) {
+                cachedDispositions = [];
+            }
+            dispositionsLoaded = true;
+            renderDispositionChoices();
+        }
+
+        function followupOptionsToText(options) {
+            return (options || []).map((option) => [option.value, option.label, option.label_ar].filter(Boolean).join('|')).join(' ; ');
+        }
+
+        function parseFollowupOptions(text, previous) {
+            const raw = String(text || '').trim();
+            if (!raw) return previous || [];
+            return raw.split(';').map((chunk) => chunk.trim()).filter(Boolean).map((chunk) => {
+                const [value, label, labelAr] = chunk.split('|').map((part) => String(part || '').trim());
+                return { value, label: label || value, label_ar: labelAr || label || value };
+            }).filter((option) => option.value && option.label).slice(0, 50);
+        }
+
+        function renderFollowupFields() {
+            const container = document.getElementById('followupFieldsEditor');
+            if (!container) return;
+            if (followupDraft.fields.length === 0) {
+                container.innerHTML = `<div class="text-xs text-[var(--text-muted)] italic">${isRtl ? 'لا توجد حقول متابعة بعد' : 'No follow-up fields yet'}</div>`;
+                return;
+            }
+            container.innerHTML = '';
+            followupDraft.fields.forEach((field, index) => {
+                const row = document.createElement('div');
+                row.className = 'rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] p-2 space-y-1.5';
+
+                const top = document.createElement('div');
+                top.className = 'grid grid-cols-2 gap-1.5';
+
+                const keyInput = document.createElement('input');
+                keyInput.className = 'config-input w-full text-xs';
+                keyInput.placeholder = t.fieldKey || 'Field key';
+                keyInput.value = field.key;
+                keyInput.maxLength = 64;
+                keyInput.addEventListener('input', () => { field.key = keyInput.value; });
+
+                const typeSelect = document.createElement('select');
+                typeSelect.className = 'config-input w-full text-xs';
+                FOLLOWUP_FIELD_TYPES.forEach((type) => {
+                    const option = document.createElement('option');
+                    option.value = type;
+                    option.textContent = type;
+                    if (field.type === type) option.selected = true;
+                    typeSelect.appendChild(option);
+                });
+                typeSelect.addEventListener('change', () => {
+                    field.type = typeSelect.value;
+                    if (field.type !== 'select' && field.type !== 'radio') field.options = [];
+                    renderFollowupFields();
+                });
+
+                const labelInput = document.createElement('input');
+                labelInput.className = 'config-input w-full text-xs';
+                labelInput.placeholder = 'English label';
+                labelInput.value = field.label;
+                labelInput.maxLength = 120;
+                labelInput.addEventListener('input', () => { field.label = labelInput.value; });
+
+                const labelArInput = document.createElement('input');
+                labelArInput.className = 'config-input w-full text-xs';
+                labelArInput.placeholder = 'التسمية بالعربية';
+                labelArInput.value = field.label_ar;
+                labelArInput.maxLength = 120;
+                labelArInput.addEventListener('input', () => { field.label_ar = labelArInput.value; });
+
+                top.append(keyInput, typeSelect, labelInput, labelArInput);
+
+                const bottom = document.createElement('div');
+                bottom.className = 'flex items-center gap-2 flex-wrap';
+
+                const requiredLabel = document.createElement('label');
+                requiredLabel.className = 'flex items-center gap-1 text-[10px] font-bold text-[var(--text-secondary)] cursor-pointer select-none';
+                const requiredInput = document.createElement('input');
+                requiredInput.type = 'checkbox';
+                requiredInput.className = 'w-3.5 h-3.5 accent-red-500 cursor-pointer';
+                requiredInput.checked = Boolean(field.required);
+                requiredInput.addEventListener('change', () => { field.required = requiredInput.checked; });
+                requiredLabel.append(requiredInput, document.createTextNode(isRtl ? 'إلزامي' : 'Required'));
+
+                let optionsInput = null;
+                if (field.type === 'select' || field.type === 'radio') {
+                    optionsInput = document.createElement('input');
+                    optionsInput.className = 'config-input flex-1 min-w-[180px] text-[11px]';
+                    optionsInput.placeholder = 'value|Label|التسمية ; value2|Label2|التسمية2';
+                    optionsInput.value = followupOptionsToText(field.options);
+                    optionsInput.addEventListener('input', () => {
+                        field.options = parseFollowupOptions(optionsInput.value, field.options);
+                    });
+                }
+
+                const upButton = document.createElement('button');
+                upButton.type = 'button';
+                upButton.className = 'dialer-control dialer-control-neutral px-2 py-0.5 text-[11px]';
+                upButton.textContent = '↑';
+                upButton.disabled = index === 0;
+                upButton.onclick = () => {
+                    if (index === 0) return;
+                    const [moved] = followupDraft.fields.splice(index, 1);
+                    followupDraft.fields.splice(index - 1, 0, moved);
+                    renderFollowupFields();
+                };
+
+                const downButton = document.createElement('button');
+                downButton.type = 'button';
+                downButton.className = 'dialer-control dialer-control-neutral px-2 py-0.5 text-[11px]';
+                downButton.textContent = '↓';
+                downButton.disabled = index === followupDraft.fields.length - 1;
+                downButton.onclick = () => {
+                    if (index >= followupDraft.fields.length - 1) return;
+                    const [moved] = followupDraft.fields.splice(index, 1);
+                    followupDraft.fields.splice(index + 1, 0, moved);
+                    renderFollowupFields();
+                };
+
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'dialer-control dialer-control-danger px-2 py-0.5 text-[11px]';
+                removeButton.textContent = t.removeField || 'Remove';
+                removeButton.onclick = () => {
+                    followupDraft.fields.splice(index, 1);
+                    renderFollowupFields();
+                };
+
+                bottom.append(requiredLabel);
+                if (optionsInput) bottom.append(optionsInput);
+                bottom.append(upButton, downButton, removeButton);
+                row.append(top, bottom);
+                container.appendChild(row);
+            });
+        }
+
+        function addFollowupField() {
+            if (followupDraft.fields.length >= 40) return;
+            followupDraft.fields.push({
+                key: `followup_${followupDraft.fields.length + 1}`,
+                label: '',
+                label_ar: '',
+                type: 'text',
+                required: false,
+                options: []
+            });
+            renderFollowupFields();
+            const inputs = document.querySelectorAll('#followupFieldsEditor input.config-input');
+            if (inputs.length) inputs[inputs.length - 4]?.focus();
+        }
+
+        function collectFollowupConfig() {
+            const requireSubmit = document.getElementById('fuRequireSubmit');
+            const allowSkip = document.getElementById('fuAllowSkip');
+            const skipReason = document.getElementById('fuSkipReason');
+            const editWindow = document.getElementById('fuEditWindow');
+            const seen = new Set();
+            const fields = followupDraft.fields.map((field, index) => {
+                const key = sanitizeFieldKey(field.key, `followup_${index + 1}`);
+                if (seen.has(key)) return null;
+                seen.add(key);
+                let options = [];
+                if (field.type === 'select' || field.type === 'radio') {
+                    options = (field.options || []).filter((option) => option.value && option.label);
+                    if (options.length === 0) return null;
+                }
+                return {
+                    key,
+                    label: sanitizeFieldLabel(field.label, key),
+                    label_ar: sanitizeFieldLabel(field.label_ar, sanitizeFieldLabel(field.label, key)),
+                    type: FOLLOWUP_FIELD_TYPES.includes(field.type) ? field.type : 'text',
+                    required: Boolean(field.required),
+                    options
+                };
+            }).filter(Boolean).slice(0, 40);
+            return {
+                version: 1,
+                settings: {
+                    require_submit: Boolean(requireSubmit && requireSubmit.checked),
+                    allow_skip: Boolean(allowSkip && allowSkip.checked),
+                    skip_requires_reason: Boolean(skipReason && skipReason.checked),
+                    edit_window_minutes: Math.min(1440, Math.max(0, parseInt(editWindow && editWindow.value, 10) || 0)),
+                    dispositions: followupDraft.settings.dispositions.slice(0, 100)
+                },
+                fields
+            };
+        }
+
+        function renderFollowupEditor(raw) {
+            followupDraft = normalizeFollowupDraft(raw);
+            renderFollowupSettings();
+            renderFollowupFields();
+        }
+
+        async function openFollowupsModal(campaignId, campaignName) {
+            document.getElementById('followupsCampaignName').textContent = campaignName || '';
+            const content = document.getElementById('followupsContent');
+            content.innerHTML = `<div class="text-xs text-[var(--text-muted)] italic p-4">${isRtl ? 'جاري التحميل...' : 'Loading...'}</div>`;
+            openModal('followupsModal');
+            try {
+                const res = await fetch('/api/dialer/followups?campaign_id=' + encodeURIComponent(campaignId));
+                const data = await res.json();
+                const rows = Array.isArray(data.followups) ? data.followups : [];
+                if (rows.length === 0) {
+                    content.innerHTML = `<div class="text-xs text-[var(--text-muted)] italic p-4">${isRtl ? 'لا توجد متابعات لهذه الحملة بعد' : 'No follow-ups for this campaign yet'}</div>`;
+                    return;
+                }
+                const body = rows.map((row) => {
+                    let values = row.data;
+                    if (typeof values === 'string') {
+                        try { values = JSON.parse(values); } catch (_) { values = {}; }
+                    }
+                    const summary = row.skipped
+                        ? `<span class="text-amber-400 font-bold">${fuEscape(isRtl ? 'تم التخطي' : 'Skipped')}</span>${row.skip_reason ? ' — ' + fuEscape(row.skip_reason) : ''}`
+                        : Object.entries(values || {}).map(([key, value]) => `<span class="text-[var(--text-secondary)]">${fuEscape(key)}:</span> ${fuEscape(value)}`).join('<br>');
+                    const leadName = [row.first_name, row.last_name].filter(Boolean).join(' ') || row.phone_number || '';
+                    return `<tr class="border-b border-[var(--border-primary)] align-top">
+                        <td class="p-2 text-[11px]">${fuEscape(leadName)}<br><span class="text-[var(--text-muted)] font-mono">${fuEscape(row.phone_number || '')}</span></td>
+                        <td class="p-2 text-[11px]">${fuEscape(row.agent_name || row.agent_extension || '')}</td>
+                        <td class="p-2 text-[11px]">${fuEscape(row.disposition || '')}</td>
+                        <td class="p-2 text-[11px] max-w-[420px]">${summary}</td>
+                        <td class="p-2 text-[11px] text-[var(--text-muted)] whitespace-nowrap">${fuEscape(row.submitted_at ? new Date(row.submitted_at).toLocaleString() : '')}</td>
+                    </tr>`;
+                }).join('');
+                content.innerHTML = `<table class="w-full text-left">
+                    <thead><tr class="text-[10px] uppercase text-[var(--text-secondary)] border-b border-[var(--border-primary)]">
+                        <th class="p-2">${isRtl ? 'العميل' : 'Lead'}</th>
+                        <th class="p-2">${isRtl ? 'الموظف' : 'Agent'}</th>
+                        <th class="p-2">${isRtl ? 'النتيجة' : 'Disposition'}</th>
+                        <th class="p-2">${isRtl ? 'البيانات' : 'Data'}</th>
+                        <th class="p-2">${isRtl ? 'التاريخ' : 'Submitted'}</th>
+                    </tr></thead>
+                    <tbody>${body}</tbody>
+                </table>`;
+            } catch (err) {
+                content.innerHTML = `<div class="text-xs text-red-400 p-4">${fuEscape(err.message)}</div>`;
+            }
         }
 
 
@@ -791,6 +1188,10 @@ const isRtl = activeLang === 'ar';
                                     <svg class="w-3 h-3 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                     <span>${escapeHtml(t.viewLeads || 'Leads')}</span>
                                 </button>
+                                <button onclick="openFollowupsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))})" class="dialer-control dialer-control-neutral py-1 px-2.5 text-[11px]" title="Follow-ups">
+                                    <svg class="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                                    <span>${escapeHtml(isRtl ? 'المتابعات' : 'Follow-ups')}</span>
+                                </button>
                             </div>
                             <div class="flex items-center gap-1">
                                 <button onclick="openImportModal(${c.id})" class="dialer-control dialer-control-neutral py-1 px-2.5 text-[11px]" title="Import Leads">
@@ -841,6 +1242,7 @@ const isRtl = activeLang === 'ar';
             if (fileInput) fileInput.value = '';
             campaignFieldDraft = [];
             renderCampaignFields([]);
+            renderFollowupEditor(null);
             renderDonglesCheckboxes([]);
             renderAgentsCheckboxes([]);
             openModal('createCampaignModal');
@@ -858,6 +1260,7 @@ const isRtl = activeLang === 'ar';
             const fileGroup = document.getElementById('campLeadsFileGroup');
             if (fileGroup) fileGroup.style.display = 'none';
             renderCampaignFields(camp.lead_fields);
+            renderFollowupEditor(camp.followup_fields);
             renderDonglesCheckboxes(Array.isArray(camp.allowed_dongles) ? camp.allowed_dongles : []);
             renderAgentsCheckboxes(Array.isArray(camp.assigned_agents) ? camp.assigned_agents : []);
             openModal('createCampaignModal');
@@ -876,7 +1279,8 @@ const isRtl = activeLang === 'ar';
                 max_concurrent_dials: parseInt(document.getElementById('campMaxDials').value, 10) || 1,
                 wrapup_time_sec: parseInt(document.getElementById('campWrapupSec').value, 10) || 15,
                 mask_phone_numbers: document.getElementById('campMaskPhone')?.checked ? 1 : 0,
-                lead_fields: collectCampaignFields()
+                lead_fields: collectCampaignFields(),
+                followup_fields: collectFollowupConfig()
             };
 
             const url = editId ? `/api/dialer/campaigns/${editId}` : '/api/dialer/campaigns';
@@ -1340,6 +1744,7 @@ const isRtl = activeLang === 'ar';
             loadOutboundRoutes();
             loadDongles();
             loadExtensions();
+            loadDispositionsForFollowups();
             loadDnc();
             loadRecentAttempts();
             // Real-time polling every 5s for live campaign updates
