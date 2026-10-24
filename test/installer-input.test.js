@@ -44,7 +44,7 @@ test('the online installer also reuses the answers', () => {
 
 test('every script uses the same state file', () => {
     const expected = '/var/lib/sokrat/install-inputs.env';
-    for (const rel of [SHARED, 'install.sh']) {
+    for (const rel of [SHARED, 'install.sh', 'bootstrap.sh']) {
         assert.ok(read(rel).includes(expected), `${rel} uses ${expected}`);
     }
 });
@@ -52,6 +52,7 @@ test('every script uses the same state file', () => {
 test('the questions are worded the same everywhere', () => {
     const shared = read(SHARED);
     const online = read('install.sh');
+    const bootstrap = read('bootstrap.sh');
     const prompts = [
         'Enter the client name for this server [default: %s]: ',
         'Enter the number of GSM dongles to activate on this server (1-25) [default: %s]: ',
@@ -60,6 +61,7 @@ test('the questions are worded the same everywhere', () => {
     for (const prompt of prompts) {
         assert.ok(shared.includes(prompt), `the shared file has "${prompt.slice(0, 28)}..."`);
         assert.ok(online.includes(prompt), `install.sh has the same "${prompt.slice(0, 28)}..."`);
+        assert.ok(bootstrap.includes(prompt), `bootstrap.sh has the same "${prompt.slice(0, 28)}..."`);
     }
 });
 

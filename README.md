@@ -27,8 +27,13 @@
 ## 🚀 Installation
 
 ### Option A: Complete 1-Step Setup (Fresh Rocky Linux 8 Server)
-> **Recommended**: Clones once and automatically installs Asterisk 18, Issabel 5 (100% offline bundle), and Sokrat VOIP with zero external mirror dependencies.
+> **Recommended**: Prompts for all setup questions **first** (before downloading git or packages), then automatically installs Asterisk 18, Issabel 5 (100% offline bundle), and Sokrat VOIP completely unattended.
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ahmed-Emad02/sokrat-voip-dev/main/bootstrap.sh | bash
+```
+
+*Or via Git:*
 ```bash
 yum install -y git && \
 git clone https://github.com/Ahmed-Emad02/sokrat-voip-dev.git /opt/sokrat-voip && \
