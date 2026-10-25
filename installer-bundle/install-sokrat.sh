@@ -3042,6 +3042,18 @@ sleep 2
 echo "--- Sokrat VoIP Service ---"
 systemctl status sokrat-voip --no-pager -l | head -12
 echo ""
+echo "--- Multi-Server PBX Federation ---"
+if [ -f "$INSTALL_DIR/lib/federation-proxy.js" ]; then
+    FED_PROXY_HTTP=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8080/peer/__probe__ 2>/dev/null || true)
+    if [ "$FED_PROXY_HTTP" = "302" ] || [ "$FED_PROXY_HTTP" = "401" ]; then
+        echo "  Peer panel reverse proxy: ready (HTTP $FED_PROXY_HTTP)"
+    else
+        echo "  Peer panel reverse proxy: unexpected response (HTTP ${FED_PROXY_HTTP:-none})"
+    fi
+else
+    echo "  Peer panel reverse proxy: module missing"
+fi
+echo ""
 if [ -f /etc/systemd/system/sokrat-softphone.service ]; then
     echo "--- Sokrat VOICE Softphone Service ---"
     systemctl status sokrat-softphone --no-pager -l 2>/dev/null | head -12 || true

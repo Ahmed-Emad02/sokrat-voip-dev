@@ -235,6 +235,27 @@ test('Federation Bootstrap: lib/federation-bootstrap.js exports core functions a
     assert.equal(typeof bootstrap.decideCodeSync, 'function', 'decideCodeSync must be exported');
 });
 
+test('Federation Bootstrap: every federation lib ships in the peer code-sync manifest', () => {
+    const bootstrap = fs.readFileSync(path.join(__dirname, '..', 'lib', 'federation-bootstrap.js'), 'utf8');
+    const libDir = path.join(__dirname, '..', 'lib');
+    const federationLibs = fs.readdirSync(libDir).filter(f => /^federation-.*\.js$/.test(f));
+    assert.ok(federationLibs.length >= 6, 'federation libs must be discoverable');
+    for (const lib of federationLibs) {
+        assert.ok(
+            bootstrap.includes(`'lib/${lib}'`),
+            `${lib} must be listed in CODE_SYNC_FILES or a promoted peer will miss it`
+        );
+    }
+});
+
+test('Federation deployers: fresh install, offline bundle and upgrade all verify the peer proxy', () => {
+    for (const file of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        const script = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        assert.match(script, /lib\/federation-proxy\.js/, `${file} must check the peer proxy module`);
+        assert.match(script, /\/peer\/__probe__/, `${file} must probe the /peer route after install/upgrade`);
+    }
+});
+
 test('Federation Bootstrap: code sync only runs when remote checksums differ', () => {
     const { decideCodeSync } = require('../lib/federation-bootstrap');
     const local = { 'server.js': 'aaa', 'lib/federation-auth.js': 'bbb' };
