@@ -30,7 +30,7 @@ string. Requests older than five minutes are rejected.
 | `GET` | `/unread` | Total and per-conversation unread counts |
 | `POST` | `/session` | Exchange HMAC auth for a 10-minute socket token |
 | `POST` | `/attachments` | Multipart field `file`; returns attachment metadata |
-| `GET` | `/attachments/:id` | Authenticated download / inline image |
+| `GET` | `/attachments/:id` | Authenticated download / inline image or voice note |
 
 ### Send a text message
 
@@ -111,6 +111,7 @@ socket never becomes the only copy of a message.
 | :--- | :--- | :--- |
 | Image | JPEG, PNG, WebP, GIF | 2 MB |
 | Document | PDF, XLS, XLSX | 10 MB |
+| Voice note | WebM/Opus, Ogg, MP3, WAV, M4A | 10 MB |
 
 - Maximum 3 attachments per message.
 - Server validates magic bytes, extension, size and MIME.
@@ -128,6 +129,7 @@ Tables (MariaDB `asterisk` database):
 - `chat_attachments`
 - `chat_admin_audit`
 
+Voice notes recorded by the desktop and Chrome clients use WebM/Opus by default.
 Attachment files default to `/var/lib/sokrat-voip/chat-uploads` and can be
 overridden with `CHAT_UPLOAD_DIR`.
 

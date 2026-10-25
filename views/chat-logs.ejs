@@ -13,7 +13,7 @@ const words = {
         sender: 'Sender', attachments: 'Attachments',
         contact: 'Shared contact', contactExtension: 'Extension', contactPhone: 'Phone',
         loading: 'Loading...', messageCount: 'messages',
-        image: 'Image', document: 'Document', download: 'Download'
+        image: 'Image', document: 'Document', audio: 'Voice note', download: 'Download'
     },
     ar: {
         title: 'سجل', subtitle: 'الدردشة الداخلية',
@@ -28,7 +28,7 @@ const words = {
         sender: 'المرسل', attachments: 'المرفقات',
         contact: 'جهة اتصال مشتركة', contactExtension: 'التحويل', contactPhone: 'الهاتف',
         loading: 'جارٍ التحميل...', messageCount: 'رسالة',
-        image: 'صورة', document: 'مستند', download: 'تحميل'
+        image: 'صورة', document: 'مستند', audio: 'تسجيل صوتي', download: 'تحميل'
     }
 };
 const t = words[currentLang] || words.en;
@@ -181,6 +181,7 @@ const canExportLogs = typeof canExport !== 'undefined' && canExport;
             contactPhone: <%- JSON.stringify(t.contactPhone) %>,
             image: <%- JSON.stringify(t.image) %>,
             document: <%- JSON.stringify(t.document) %>,
+            audio: <%- JSON.stringify(t.audio) %>,
             download: <%- JSON.stringify(t.download) %>
         };
         let conversations = [];
@@ -282,6 +283,12 @@ const canExportLogs = typeof canExport !== 'undefined' && canExport;
                     const url = '/api/chat/admin/attachments/' + a.id;
                     if (a.kind === 'image') {
                         return '<a class="attachment" href="' + url + '" target="_blank" rel="noopener"><img src="' + url + '" alt="" style="max-width: 220px; max-height: 150px; border: 0;"></a>';
+                    }
+                    if (a.kind === 'audio') {
+                        return '<div class="attachment" style="display:block; padding:8px 9px;">' +
+                            '<div style="font-size:10px; color:var(--chat-dim); margin-bottom:5px;">' + escapeHtml(labels.audio) + ' · ' + fmtBytes(a.size_bytes) + '</div>' +
+                            '<audio controls preload="metadata" src="' + url + '" style="width:100%; height:32px;"></audio>' +
+                        '</div>';
                     }
                     return '<a class="attachment" href="' + url + '" target="_blank" rel="noopener">' +
                         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
