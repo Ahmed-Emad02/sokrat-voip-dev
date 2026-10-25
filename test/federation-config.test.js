@@ -133,8 +133,42 @@ test('Dialplan Engine: generateDialplanConfig implements hop limiter, direct dia
     assert.match(dialplan, /Goto\(from-internal-additional,\$\{EXTEN\},1\)/, 'Inbound must dispatch normal extensions to from-internal-additional');
 });
 
-test('Format Helpers: formatRemoteDestination formats external dial destination correctly', () => {
-    assert.equal(formatRemoteDestination('20101'), '20101#', 'Numeric alias must be suffixed with # for FreePBX dial string');
+test('IAX2 Engine: three or more peers each get isolated users, peers and dialplan contexts', () => {
+    const peers = ['20', '30', '40'].map((siteCode, index) => ({
+        id: index + 1,
+        node_name: `Branch ${siteCode}`,
+        host: `192.168.100.${100 + index}`,
+        site_code: siteCode,
+        iax_port: 4569,
+        iax_user_inbound: `fed_in_site${siteCode}`,
+        iax_peer_outbound: `fed_out_site${siteCode}`,
+        iax_secret: `secret-${siteCode}-1234567890abcdef`,
+        allow_internal_dialing: 1,
+        allow_outbound_egress: 1
+    }));
+    const localSettings = { local_site_code: '10', local_node_name: 'Main PBX' };
+
+    const iax = generateIaxConfig(peers, localSettings);
+    const dialplan = generateDialplanConfig(peers, localSettings, []);
+
+    for (const peer of peers) {
+        const code = peer.site_code;
+        assert.match(iax, new RegExp(`\\[fed_in_site${code}\\]`), `peer ${code} needs an inbound user`);
+        assert.match(iax, new RegExp(`\\[fed_out_site${code}\\]`), `peer ${code} needs an outbound peer`);
+        assert.match(iax, new RegExp(`host=${peer.host.replace(/\./g, '\\.')}`), `peer ${code} needs its own host`);
+        assert.match(dialplan, new RegExp(`\\[peer_${code}\\]`), `peer ${code} needs an outbound context`);
+        assert.match(dialplan, new RegExp(`\\[from-federation-site${code}\\]`), `peer ${code} needs an inbound context`);
+        assert.match(dialplan, new RegExp(`Goto\\(peer_${code},\\$\\{EXTEN:2\\},1\\)`), `peer ${code} needs a prefix route`);
+        assert.match(dialplan, new RegExp(`Goto\\(peer_${code},OUT_\\$\\{EXTEN:3\\},1\\)`), `peer ${code} needs an egress route`);
+    }
+
+    // No peer may inherit another peer's outbound trunk.
+    assert.match(dialplan, /Dial\(IAX2\/fed_out_site20\/\$\{EXTEN\},45,Ttr\)/);
+    assert.match(dialplan, /Dial\(IAX2\/fed_out_site30\/\$\{EXTEN\},45,Ttr\)/);
+    assert.match(dialplan, /Dial\(IAX2\/fed_out_site40\/\$\{EXTEN\},45,Ttr\)/);
+});
+
+test('Format Helpers: formatRemoteDestination formats external dial destination correctly', () => {    assert.equal(formatRemoteDestination('20101'), '20101#', 'Numeric alias must be suffixed with # for FreePBX dial string');
     assert.equal(formatRemoteDestination('20101#'), '20101#', 'Existing # suffix must not be duplicated');
     assert.equal(formatRemoteDestination(''), '', 'Empty input must return empty string');
 });
@@ -168,6 +202,7 @@ test('Federation Hub: Multi-Node state engine partitions memory by composite key
     });
 
     await hub.init();
+    hub.stopPolling(); // the test drives aggregateAllNodes manually
     await hub.aggregateAllNodes();
 
     const aggregated = hub.getAggregatedExtensions();

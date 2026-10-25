@@ -929,7 +929,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     </button>
                 </div>
                 <% if (typeof federationCentral !== 'undefined' && federationCentral) { %>
-                <div class="inline-flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1">
+                <div class="inline-flex items-center flex-wrap max-w-full p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1">
                     <button type="button" id="btn-node-all" onclick="filterOperatorByNode('all')" class="op-node-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold transition bg-amber-500/20 text-amber-300 border border-amber-500/40 cursor-pointer">
                         <span><%= isRtl ? 'جميع السيرفرات' : 'All Nodes' %></span>
                     </button>
