@@ -20,6 +20,7 @@ const { issueChatToken } = require('../lib/chat/token');
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_DOC_BYTES = 10 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 
 function sendError(res, err, fallback) {
     const status = Number(err && err.statusCode) || 500;
@@ -61,6 +62,22 @@ function detectAttachment(buffer, originalName, reportedMime) {
     } else if (ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WEBP') {
         mime = 'image/webp';
         kind = 'image';
+    } else if (ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WAVE') {
+        mime = 'audio/wav';
+        kind = 'audio';
+    } else if (hex.startsWith('1a45dfa3')) {
+        // Chromium's MediaRecorder produces WebM/Opus voice notes.
+        mime = 'audio/webm';
+        kind = 'audio';
+    } else if (ascii.startsWith('OggS')) {
+        mime = 'audio/ogg';
+        kind = 'audio';
+    } else if (ascii.startsWith('ID3') || hex.startsWith('fffb') || hex.startsWith('fff3') || hex.startsWith('fff2')) {
+        mime = 'audio/mpeg';
+        kind = 'audio';
+    } else if (ascii.slice(4, 8) === 'ftyp' && ['M4A ', 'M4B ', 'mp42', 'isom'].includes(ascii.slice(8, 12))) {
+        mime = 'audio/mp4';
+        kind = 'audio';
     } else if (ascii.startsWith('%PDF')) {
         mime = 'application/pdf';
         kind = 'pdf';
@@ -75,12 +92,15 @@ function detectAttachment(buffer, originalName, reportedMime) {
     }
 
     if (!kind) {
-        throw chatStore.httpError(400, 'Unsupported file type. Allowed: images, PDF, XLS, XLSX.', 'chat_attachment_type');
+        throw chatStore.httpError(400, 'Unsupported file type. Allowed: images, PDF, XLS, XLSX and audio notes.', 'chat_attachment_type');
     }
     if (kind === 'image' && buffer.length > MAX_IMAGE_BYTES) {
         throw chatStore.httpError(413, 'Images must be 2 MB or smaller.', 'chat_attachment_too_large');
     }
-    if (kind !== 'image' && buffer.length > MAX_DOC_BYTES) {
+    if (kind === 'audio' && buffer.length > MAX_AUDIO_BYTES) {
+        throw chatStore.httpError(413, 'Audio notes must be 10 MB or smaller.', 'chat_attachment_too_large');
+    }
+    if (kind !== 'image' && kind !== 'audio' && buffer.length > MAX_DOC_BYTES) {
         throw chatStore.httpError(413, 'Documents must be 10 MB or smaller.', 'chat_attachment_too_large');
     }
     if (kind === 'image' && ext && !['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
@@ -91,6 +111,19 @@ function detectAttachment(buffer, originalName, reportedMime) {
     }
     if (kind === 'excel' && !['.xls', '.xlsx'].includes(ext)) {
         throw chatStore.httpError(400, 'Excel extension does not match the file content.', 'chat_attachment_type');
+    }
+    if (kind === 'audio') {
+        const validAudioExtensions = {
+            'audio/webm': ['.webm', '.weba'],
+            'audio/ogg': ['.ogg', '.oga'],
+            'audio/mpeg': ['.mp3'],
+            'audio/wav': ['.wav'],
+            'audio/mp4': ['.m4a', '.mp4'],
+        };
+        if (!Object.prototype.hasOwnProperty.call(validAudioExtensions, mime)
+            || !validAudioExtensions[mime].includes(ext)) {
+            throw chatStore.httpError(400, 'Audio extension does not match the file content.', 'chat_attachment_type');
+        }
     }
     // Keep the reported MIME for diagnostics but serve the detected one.
     void reportedMime;
