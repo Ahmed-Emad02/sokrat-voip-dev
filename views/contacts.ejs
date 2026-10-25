@@ -589,11 +589,11 @@ const isRtl = currentLang === 'ar';
             <form id="importCsvForm" onsubmit="submitImportCsv(event)">
                 <div class="space-y-4">
                     <p class="text-xs text-zinc-400 leading-relaxed">
-                        <%= isRtl ? 'يرجى اختيار ملف CSV يحتوي على البيانات بالترتيب التالي: الاسم الأول، اسم العائلة، رقم الهاتف.' : 'Upload a CSV file containing contact records. Format should be: First Name, Last Name, Phone.' %>
+                        <%= isRtl ? 'يدعم الملفات بتنسيق CSV أو Excel (.xlsx). الأعمدة: الاسم الأول، اسم العائلة، رقم الهاتف. يتم منع التكرار وتصحيح الأرقام تلقائياً.' : 'Upload a CSV or Excel (.xlsx) file containing contacts. Format: First Name, Last Name, Phone. Automatic duplicate prevention and phone normalization applied.' %>
                     </p>
                     
                     <div class="flex items-center justify-between p-3 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-lg">
-                        <span class="text-xs text-zinc-500 font-bold"><%= isRtl ? 'قالب CSV القياسي:' : 'Standard CSV Template:' %></span>
+                        <span class="text-xs text-zinc-500 font-bold"><%= isRtl ? 'قالب الاستيراد القياسي:' : 'Standard Import Template:' %></span>
                         <button type="button" onclick="downloadCsvTemplate()" class="text-xs font-bold text-[var(--accent-color)] hover:underline flex items-center gap-1 cursor-pointer">
                             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M7 10l5 5m0 0l5-5m-5 5V3" />
@@ -603,14 +603,21 @@ const isRtl = currentLang === 'ar';
                     </div>
 
                     <div>
-                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="csvFileSelect"><%= isRtl ? 'ملف CSV' : 'CSV File' %></label>
-                        <input type="file" id="csvFileSelect" accept=".csv" required class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)] file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-white hover:file:bg-zinc-700 file:cursor-pointer">
+                        <label class="block text-[10px] font-black uppercase text-zinc-400 mb-1.5 tracking-wider" for="csvFileSelect"><%= isRtl ? 'ملف الاستيراد (CSV أو XLSX)' : 'Import File (CSV or XLSX)' %></label>
+                        <input type="file" id="csvFileSelect" accept=".csv,.xlsx" required class="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent-color)] file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-white hover:file:bg-zinc-700 file:cursor-pointer">
                     </div>
                 </div>
-                <button type="submit" class="btn-primary w-full py-2.5 text-xs uppercase tracking-wider mt-6">
+                <button type="submit" id="btnSubmitImportCsv" class="btn-primary w-full py-2.5 text-xs uppercase tracking-wider mt-6">
                     <%= isRtl ? 'بدء استيراد جهات الاتصال' : 'Import Contacts' %>
                 </button>
             </form>
+            <div id="importCsvResultArea" class="hidden mt-4">
+                <div id="importCsvBadges" class="flex flex-wrap items-center justify-center gap-2 mb-3"></div>
+                <div id="importCsvAuditList" class="max-h-44 overflow-y-auto space-y-1.5 text-xs p-2.5 bg-black/40 border border-[#27272a] rounded-lg hidden"></div>
+                <button type="button" id="btnImportCsvDone" onclick="window.location.reload()" class="hidden btn-primary w-full py-2 text-xs uppercase tracking-wider mt-3">
+                    <%= isRtl ? 'تم وتحديث القائمة' : 'Done & Refresh' %>
+                </button>
+            </div>
             <p id="importCsvModalMsg" class="text-xs text-center mt-3.5 hidden"></p>
         </div>
     </div>
@@ -880,11 +887,20 @@ const isRtl = currentLang === 'ar';
             setTimeout(() => {
                 document.getElementById('importCsvForm').reset();
                 document.getElementById('importCsvModalMsg').classList.add('hidden');
+                const resultArea = document.getElementById('importCsvResultArea');
+                if (resultArea) resultArea.classList.add('hidden');
+                const btnDone = document.getElementById('btnImportCsvDone');
+                if (btnDone) btnDone.classList.add('hidden');
+                const btnSubmit = document.getElementById('btnSubmitImportCsv');
+                if (btnSubmit) {
+                    btnSubmit.classList.remove('hidden');
+                    btnSubmit.disabled = false;
+                }
             }, 300);
         }
 
         function downloadCsvTemplate() {
-            const csvContent = "First Name,Last Name,Phone\nJohn,Doe,=\"01012345678\"\nJane,Smith,=\"01234567890\"\n";
+            const csvContent = "\uFEFFFirst Name,Last Name,Phone\nAhmed,Hassan,=\"01012345671\"\nSara,Ali,=\"+201012345672\"\nKhaled,Ibrahim,=\"0501234567\"\n";
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -900,10 +916,15 @@ const isRtl = currentLang === 'ar';
             e.preventDefault();
             const fileInput = document.getElementById('csvFileSelect');
             const msgEl = document.getElementById('importCsvModalMsg');
+            const resultArea = document.getElementById('importCsvResultArea');
+            const badgesEl = document.getElementById('importCsvBadges');
+            const auditEl = document.getElementById('importCsvAuditList');
+            const btnDone = document.getElementById('btnImportCsvDone');
+            const btnSubmit = document.getElementById('btnSubmitImportCsv');
             
             if (fileInput.files.length === 0) {
                 msgEl.className = 'text-xs text-center mt-3.5 text-red-400';
-                msgEl.textContent = 'Please select a CSV file';
+                msgEl.textContent = '<%= isRtl ? "يرجى اختيار ملف CSV أو XLSX" : "Please select a CSV or XLSX file" %>';
                 msgEl.classList.remove('hidden');
                 return;
             }
@@ -913,7 +934,8 @@ const isRtl = currentLang === 'ar';
 
             msgEl.classList.remove('hidden', 'text-green-400', 'text-red-400');
             msgEl.className = 'text-xs text-center mt-3.5 text-zinc-400';
-            msgEl.textContent = 'Importing...';
+            msgEl.textContent = '<%= isRtl ? "جاري الاستيراد وفحص التكرار..." : "Importing and validating contacts..." %>';
+            btnSubmit.disabled = true;
 
             try {
                 const resp = await fetch('/api/contacts/csv-import', {
@@ -921,19 +943,68 @@ const isRtl = currentLang === 'ar';
                     body: formData
                 });
                 const data = await resp.json();
+                btnSubmit.disabled = false;
+
                 if (data.success) {
-                    msgEl.className = 'text-xs text-center mt-3.5 text-green-400';
-                    msgEl.textContent = data.message || 'Contacts imported successfully!';
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1500);
+                    msgEl.classList.add('hidden');
+                    resultArea.classList.remove('hidden');
+                    badgesEl.innerHTML = '';
+                    auditEl.innerHTML = '';
+
+                    const stats = data.stats || { imported: 0, duplicates: 0, errors: 0 };
+                    
+                    const badgeImp = document.createElement('span');
+                    badgeImp.className = 'px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-500/10 border border-emerald-500/20 text-emerald-400';
+                    badgeImp.textContent = `<%= isRtl ? "تم استيراد" : "Imported" %>: ${stats.imported}`;
+                    badgesEl.appendChild(badgeImp);
+
+                    if (stats.duplicates > 0) {
+                        const badgeDupe = document.createElement('span');
+                        badgeDupe.className = 'px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-500/10 border border-amber-500/20 text-amber-400';
+                        badgeDupe.textContent = `<%= isRtl ? "تخطي مكرر" : "Duplicates Skipped" %>: ${stats.duplicates}`;
+                        badgesEl.appendChild(badgeDupe);
+                    }
+
+                    if (stats.errors > 0) {
+                        const badgeErr = document.createElement('span');
+                        badgeErr.className = 'px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-500/10 border border-rose-500/20 text-rose-400';
+                        badgeErr.textContent = `<%= isRtl ? "أخطاء مستبعدة" : "Errors Ignored" %>: ${stats.errors}`;
+                        badgesEl.appendChild(badgeErr);
+                    }
+
+                    const auditRows = [];
+                    if (Array.isArray(data.duplicates)) {
+                        for (const d of data.duplicates) {
+                            auditRows.push({ type: 'dupe', text: `<%= isRtl ? "صف" : "Row" %> ${d.row}: ${d.name || d.phone} — ${d.reason}` });
+                        }
+                    }
+                    if (Array.isArray(data.errors)) {
+                        for (const errItem of data.errors) {
+                            auditRows.push({ type: 'error', text: `<%= isRtl ? "صف" : "Row" %> ${errItem.row}: ${errItem.name || errItem.phone || ""} — ${errItem.reason}` });
+                        }
+                    }
+
+                    if (auditRows.length > 0) {
+                        auditEl.classList.remove('hidden');
+                        for (const r of auditRows) {
+                            const itemDiv = document.createElement('div');
+                            itemDiv.className = r.type === 'dupe' ? 'text-amber-300/80 font-mono text-[11px]' : 'text-rose-300/80 font-mono text-[11px]';
+                            itemDiv.textContent = (r.type === 'dupe' ? '⚠ ' : '✖ ') + r.text;
+                            auditEl.appendChild(itemDiv);
+                        }
+                        btnDone.classList.remove('hidden');
+                        btnSubmit.classList.add('hidden');
+                    } else {
+                        setTimeout(() => { window.location.reload(); }, 1200);
+                    }
                 } else {
                     msgEl.className = 'text-xs text-center mt-3.5 text-red-400';
-                    msgEl.textContent = data.error || 'Error importing CSV';
+                    msgEl.textContent = data.error || 'Error importing file';
                 }
             } catch (err) {
+                btnSubmit.disabled = false;
                 msgEl.className = 'text-xs text-center mt-3.5 text-red-400';
-                msgEl.textContent = 'Network error importing CSV';
+                msgEl.textContent = 'Network error importing file';
             }
         }
         <% } %>

@@ -13384,7 +13384,11 @@ const {
     runSqlite,
     runSqliteQuery,
     parseSqliteRows,
-    escapeSql
+    escapeSql,
+    createContact,
+    updateContact,
+    deleteContact,
+    importContactsBatch
 } = require('./lib/contacts');
 
 async function syncAllCampaignLeadsToAddressBook(dbConn) {
@@ -13463,24 +13467,11 @@ app.post('/api/contacts/add', requireAuth, async (req, res) => {
     }
     try {
         const { firstName, lastName, phone } = req.body;
-        if (!firstName || !phone) {
-            return res.status(400).json({ success: false, error: 'First name and Phone number are required' });
-        }
-
-        const fEsc = escapeSql(firstName);
-        const lEsc = escapeSql(lastName);
-        const cleanedPhone = phone.replace(/[\s\-\(\)\.]/g, '');
-        let finalPhone = cleanedPhone;
-        if (/^\d+$/.test(cleanedPhone) && !cleanedPhone.startsWith('0') && cleanedPhone.length >= 7) {
-            finalPhone = '0' + cleanedPhone;
-        }
-        const pEsc = escapeSql(finalPhone);
-
-        const sql = `INSERT INTO contact (name, last_name, telefono, iduser, status, directory) VALUES ('${fEsc}', '${lEsc}', '${pEsc}', 1, 'isPublic', 'external');`;
-        await runSqlite(sql);
-        res.json({ success: true, message: 'Contact saved successfully.' });
+        const contact = await createContact({ firstName, lastName, phone });
+        res.json({ success: true, message: 'Contact saved successfully.', contact });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        const statusCode = err.statusCode || 400;
+        res.status(statusCode).json({ success: false, error: err.message, code: err.code || 'contact_error' });
     }
 });
 
@@ -13491,24 +13482,11 @@ app.post('/api/contacts/edit', requireAuth, async (req, res) => {
     }
     try {
         const { id, firstName, lastName, phone } = req.body;
-        if (!id || !firstName || !phone) {
-            return res.status(400).json({ success: false, error: 'ID, First Name and Phone number are required' });
-        }
-        const idEsc = escapeSql(id);
-        const fEsc = escapeSql(firstName);
-        const lEsc = escapeSql(lastName);
-        const cleanedPhone = phone.replace(/[\s\-\(\)\.]/g, '');
-        let finalPhone = cleanedPhone;
-        if (/^\d+$/.test(cleanedPhone) && !cleanedPhone.startsWith('0') && cleanedPhone.length >= 7) {
-            finalPhone = '0' + cleanedPhone;
-        }
-        const pEsc = escapeSql(finalPhone);
-
-        const sql = `UPDATE contact SET name = '${fEsc}', last_name = '${lEsc}', telefono = '${pEsc}' WHERE id = ${idEsc};`;
-        await runSqlite(sql);
-        res.json({ success: true, message: 'Contact updated successfully.' });
+        const contact = await updateContact(id, { firstName, lastName, phone });
+        res.json({ success: true, message: 'Contact updated successfully.', contact });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        const statusCode = err.statusCode || 400;
+        res.status(statusCode).json({ success: false, error: err.message, code: err.code || 'contact_error' });
     }
 });
 
@@ -13522,12 +13500,11 @@ app.post('/api/contacts/delete', requireAuth, async (req, res) => {
         if (!id) {
             return res.status(400).json({ success: false, error: 'ID is required' });
         }
-        const idEsc = escapeSql(id);
-        const sql = `DELETE FROM contact WHERE id = ${idEsc};`;
-        await runSqlite(sql);
+        await deleteContact(id);
         res.json({ success: true, message: 'Contact deleted successfully.' });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        const statusCode = err.statusCode || 500;
+        res.status(statusCode).json({ success: false, error: err.message });
     }
 });
 // --- INBOUND BLACKLIST API ENDPOINTS & ASTDB SYNC ---
@@ -23113,53 +23090,139 @@ app.post('/api/contacts/csv-import', requireAuth, csvUpload.single('file'), asyn
         return res.status(403).json({ success: false, error: 'Unauthorized: Missing contacts-import permission' });
     }
     try {
-        if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+        if (!req.file || !fs.existsSync(req.file.path)) {
+            return res.status(400).json({ success: false, error: 'No file uploaded' });
+        }
 
-        const lines = fs.readFileSync(req.file.path, 'utf8').split(/\r?\n/);
-        const values = [];
-        for (let line of lines) {
-            if (!line.trim()) continue;
-            const cells = line.split(',').map(c => {
-                let cleaned = c.trim();
-                if (cleaned.startsWith('="') && cleaned.endsWith('"')) {
-                    cleaned = cleaned.substring(2, cleaned.length - 1);
+        const filePath = req.file.path;
+        let rows = [];
+
+        try {
+            if (XLSX) {
+                const wb = XLSX.readFile(filePath);
+                const sheetName = wb.SheetNames[0];
+                if (sheetName && wb.Sheets[sheetName]) {
+                    rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '', raw: false });
                 }
-                cleaned = cleaned.replace(/^["']|["']$/g, '');
-                return cleaned.trim();
-            });
-            if (cells.length < 3) continue;
-
-            const first = cells[0];
-            const last = cells[1];
-            let phone = cells[2];
-
-            // Skip headers
-            if (first.toLowerCase() === 'name' || first.toLowerCase() === 'first name' || (phone && phone.toLowerCase() === 'phone')) {
-                continue;
             }
+        } catch (parseErr) {
+            console.warn('[Contacts Import] XLSX parse fallback:', parseErr.message);
+        }
 
-            if (first && phone) {
-                // Clean spaces, dashes, and parentheses
-                phone = phone.replace(/[\s\-\(\)]/g, '');
-
-                // Auto-recover leading zero if stripped by Excel (starts with 1-9, is purely numeric, and is at least 7 digits long)
-                if (/^\d+$/.test(phone) && !phone.startsWith('0') && phone.length >= 7) {
-                    phone = '0' + phone;
-                }
-
-                values.push(`('${escapeSql(first)}', '${escapeSql(last)}', '${escapeSql(phone)}', 1, 'isPublic', 'external')`);
+        if (!Array.isArray(rows) || rows.length === 0) {
+            try {
+                const content = fs.readFileSync(filePath, 'utf8');
+                const lines = content.split(/\r?\n/).filter(l => l.trim().length > 0);
+                rows = lines.map(line => {
+                    const cells = line.match(/(?:^|,)("(?:[^"]|"")*"|[^,]*)/g) || [];
+                    return cells.map(cell => {
+                        let c = cell.replace(/^,/, '').trim();
+                        if (c.startsWith('="') && c.endsWith('"')) {
+                            c = c.substring(2, c.length - 1);
+                        }
+                        return c.replace(/^["']|["']$/g, '').trim();
+                    });
+                });
+            } catch (readErr) {
+                console.warn('[Contacts Import] Raw text fallback error:', readErr.message);
             }
         }
 
-        if (values.length > 0) {
-            const sql = `INSERT INTO contact (name, last_name, telefono, iduser, status, directory) VALUES ${values.join(',')};`;
-            await runSqlite(sql);
-            fs.unlinkSync(req.file.path);
-            res.json({ success: true, message: `${values.length} contacts imported successfully.` });
+        try { fs.unlinkSync(filePath); } catch (_) {}
+
+        if (!Array.isArray(rows) || rows.length === 0) {
+            return res.status(400).json({ success: false, error: 'File is empty or contains no readable rows.' });
+        }
+
+        function findContactHeaderIndex(headers, aliases) {
+            const lowerAliases = aliases.map(a => a.toLowerCase().trim());
+            for (let idx = 0; idx < headers.length; idx++) {
+                const h = String(headers[idx] || '').toLowerCase().trim();
+                if (lowerAliases.includes(h)) return idx;
+            }
+            return -1;
+        }
+
+        const firstRow = Array.isArray(rows[0]) ? rows[0].map(v => String(v ?? '').trim()) : [];
+        let firstNameIdx = findContactHeaderIndex(firstRow, [
+            'first name', 'first_name', 'firstname', 'fname', 'first',
+            'الاسم', 'الاسم الأول', 'الاسم الاول', 'اسم جهة الاتصال', 'اسم العميل'
+        ]);
+        let lastNameIdx = findContactHeaderIndex(firstRow, [
+            'last name', 'last_name', 'lastname', 'lname', 'surname', 'family', 'family_name',
+            'الاسم الأخير', 'الاسم الاخير', 'اسم العائلة', 'العائلة'
+        ]);
+        let phoneIdx = findContactHeaderIndex(firstRow, [
+            'phone', 'phone number', 'phone_number', 'mobile', 'telefono', 'tel', 'cell', 'telephone',
+            'رقم الهاتف', 'الهاتف', 'الموبايل', 'الجوال', 'المحمول'
+        ]);
+
+        let startRow = 0;
+        const hasHeader = firstNameIdx >= 0 || lastNameIdx >= 0 || phoneIdx >= 0;
+
+        if (hasHeader) {
+            startRow = 1;
+            if (firstNameIdx < 0) firstNameIdx = 0;
+            if (lastNameIdx < 0) lastNameIdx = (firstRow.length > 2 ? 1 : -1);
+            if (phoneIdx < 0) phoneIdx = (firstRow.length > 2 ? 2 : 1);
         } else {
-            fs.unlinkSync(req.file.path);
-            res.status(400).json({ success: false, error: 'No valid contacts found in CSV.' });
+            if (firstRow.length >= 3) {
+                firstNameIdx = 0;
+                lastNameIdx = 1;
+                phoneIdx = 2;
+            } else if (firstRow.length === 2) {
+                if (/\d{5,}/.test(firstRow[0])) {
+                    phoneIdx = 0;
+                    firstNameIdx = 1;
+                    lastNameIdx = -1;
+                } else {
+                    firstNameIdx = 0;
+                    phoneIdx = 1;
+                    lastNameIdx = -1;
+                }
+            } else {
+                firstNameIdx = 0;
+                lastNameIdx = -1;
+                phoneIdx = 0;
+            }
         }
+
+        const rawRecords = [];
+        for (let i = startRow; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length === 0) continue;
+            const firstName = firstNameIdx >= 0 ? String(row[firstNameIdx] ?? '').trim() : '';
+            const lastName = lastNameIdx >= 0 ? String(row[lastNameIdx] ?? '').trim() : '';
+            const phone = phoneIdx >= 0 ? String(row[phoneIdx] ?? '').trim() : '';
+
+            if (!firstName && !lastName && !phone) continue;
+
+            rawRecords.push({
+                rowNumber: i + 1,
+                firstName,
+                lastName,
+                phone
+            });
+        }
+
+        if (rawRecords.length === 0) {
+            return res.status(400).json({ success: false, error: 'No contact data rows found in the uploaded file.' });
+        }
+
+        const result = await importContactsBatch(rawRecords);
+
+        return res.json({
+            success: true,
+            message: result.message,
+            stats: {
+                total: result.total,
+                imported: result.imported,
+                duplicates: result.duplicatesCount,
+                errors: result.errorsCount
+            },
+            duplicates: result.duplicates,
+            errors: result.errors
+        });
     } catch (err) {
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         res.status(500).json({ success: false, error: err.message });
