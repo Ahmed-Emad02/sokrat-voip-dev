@@ -365,8 +365,9 @@ const words = {
 };
 const t = words[currentLang] || words['en'];
 const isRtl = currentLang === 'ar';
-const fedNodeCount = (typeof fedDongleNodes !== 'undefined' && Array.isArray(fedDongleNodes)) ? fedDongleNodes.length : 0;
-const deviceLabel = d => (fedNodeCount > 1 ? ((d.nodeName || ('Site ' + d.nodeSite)) + ' · ') : '') + (d.ID || '');
+const isCentralRole = (typeof federationCentral !== 'undefined' && Boolean(federationCentral));
+const fedNodeCount = (isCentralRole && typeof fedDongleNodes !== 'undefined' && Array.isArray(fedDongleNodes)) ? fedDongleNodes.length : 0;
+const deviceLabel = d => ((isCentralRole && fedNodeCount > 1) ? ((d.nodeName || ('Site ' + d.nodeSite)) + ' · ') : '') + (d.ID || '');
 const deviceKey = d => String(d.fedKey || ((d.nodeSite ? d.nodeSite + ':' : '') + (d.ID || '')));
 const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(devices[0]) : '';
 %>
@@ -1741,7 +1742,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                         <div class="flex items-center gap-1.5 shrink-0">
                             <div class="w-full sm:w-fit min-w-0 max-w-[170px] sm:max-w-[220px]">
                                 <select id="sms-reply-dongle" class="text-xs font-semibold font-mono max-w-full" title="<%= t.smsSenderDongle || 'Sender Dongle' %>">
-                                    <option value="ALL"><%= t.allDonglesOption || (isRtl ? 'كل الأجهزة (جميع السنترالات)' : 'All Dongles (Fleet)') %></option>
+                                    <% if (isCentralRole && fedNodeCount > 1) { %>
+                                        <option value="ALL"><%= t.allDonglesOption || (isRtl ? 'كل الأجهزة (جميع السنترالات)' : 'All Dongles (Fleet)') %></option>
+                                    <% } %>
                                     <% if (devices && devices.length > 0) { %>
                                         <% devices.forEach(d => { %>
                                             <option value="<%= deviceKey(d) %>" <%= deviceKey(d) === initialSelectedDongleId ? 'selected' : '' %>><%= deviceLabel(d) %> (<%= d.Number || 'No SIM' %>)</option>
@@ -2968,11 +2971,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
         const FED_LOCAL_NODE_NAME = <%- JSON.stringify(String((typeof fedDongleNodes !== 'undefined' && Array.isArray(fedDongleNodes) && (fedDongleNodes.find(n => n.is_local) || {}).node_name) || 'Main PBX')).replace(/</g, '\\u003c') %>;
         let FED_NODES = <%- JSON.stringify(typeof fedDongleNodes !== 'undefined' && Array.isArray(fedDongleNodes) ? fedDongleNodes : []).replace(/</g, '\\u003c') %>;
         const FED_CAN_RELAY = <%- Boolean(typeof isSuperAdmin !== 'undefined' && isSuperAdmin) %>;
+        const FED_IS_CENTRAL = <%- Boolean(typeof federationCentral !== 'undefined' && federationCentral) %>;
         let fedNodeMap = new Map();
 
         function setFedNodes(nodes) {
             if (!Array.isArray(nodes) || nodes.length === 0) return;
-            FED_NODES = nodes.map(node => ({
+            const filtered = FED_IS_CENTRAL ? nodes : nodes.filter(n => n.is_local);
+            FED_NODES = filtered.map(node => ({
                 site_code: String(node.site_code || ''),
                 node_name: node.node_name || ('Site ' + node.site_code),
                 is_local: Boolean(node.is_local),
@@ -3193,7 +3198,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                 populateHardwareSuccess: "<%= t.populateHardwareSuccess %>",
                 btnEditPorts: "<%= t.btnEditPorts %>",
                 editPortsModalTitle: "<%= t.editPortsModalTitle %>",
-                editPortsSuccess: "<%= t.editPortsSuccess %>"
+                editPortsSuccess: "<%= t.editPortsSuccess %>",
+                allDonglesOption: "<%= t.allDonglesOption %>"
             };
 
             // Socket.io initialization with safety check to prevent halts if blocked/undefined
@@ -3250,7 +3256,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
             let devicesRefreshInFlight = false;
             let isSyncingSelect = false;
             function getDongleStateView(dev) {
-                const rawState = String((dev && dev.State) || 'Not Connected');
+                const rawState = String((dev && (dev.State || dev.state || dev.status || dev['Link State'])) || 'Not Connected');
                 const normalized = rawState.toLowerCase();
                 let color = 'red';
                 let label = rawState;
@@ -3940,6 +3946,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
             if (loadedDevices.length > 0) {
                 selectDevice(devKey(loadedDevices[0]));
             }
+            populateSmsReplyDongle(selectedDongleId);
 
             // Sync detail card and table highlight when select dropdown is changed
             if (ussdTarget) {
@@ -3956,18 +3963,24 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                 const currentVal = selectedKey !== undefined ? selectedKey : (el.value || selectedDongleId || '');
                 el.innerHTML = '';
 
-                const allOpt = document.createElement('option');
-                allOpt.value = 'ALL';
-                allOpt.textContent = (t && t.allDonglesOption) || (words.allDonglesOption) || (isRtl ? 'كل الأجهزة (جميع السنترالات)' : 'All Dongles (Fleet)');
-                if (currentVal === 'ALL') allOpt.selected = true;
-                el.appendChild(allOpt);
+                if (FED_IS_CENTRAL && FED_NODES.length > 1) {
+                    const allOpt = document.createElement('option');
+                    allOpt.value = 'ALL';
+                    allOpt.textContent = (words && words.allDonglesOption) || (isRtl ? 'كل الأجهزة (جميع السنترالات)' : 'All Dongles (Fleet)');
+                    if (currentVal === 'ALL') allOpt.selected = true;
+                    el.appendChild(allOpt);
+                }
 
-                const devs = (Array.isArray(loadedDevices) && loadedDevices.length > 0) ? loadedDevices : [];
+                const devs = (Array.isArray(loadedDevices) && loadedDevices.length > 0)
+                    ? (FED_IS_CENTRAL ? loadedDevices : loadedDevices.filter(d => !d.isRemote && String(d.nodeSite || FED_LOCAL_SITE) === FED_LOCAL_SITE))
+                    : [];
+
                 if (devs.length > 0) {
-                    orderDevicesByNodes(devs).forEach(device => {
+                    const ordered = FED_IS_CENTRAL ? orderDevicesByNodes(devs) : devs;
+                    ordered.forEach(device => {
                         const opt = document.createElement('option');
                         const optionKey = devKey(device);
-                        const nodePrefix = FED_NODES.length > 1
+                        const nodePrefix = (FED_IS_CENTRAL && FED_NODES.length > 1)
                             ? `${device.nodeName || fedNodeName(device.nodeSite)} · `
                             : '';
                         opt.value = optionKey;
@@ -3977,10 +3990,16 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                         }
                         el.appendChild(opt);
                     });
+                } else {
+                    const opt = document.createElement('option');
+                    opt.value = 'dongle0';
+                    opt.textContent = 'dongle0 (No SIM)';
+                    opt.selected = true;
+                    el.appendChild(opt);
                 }
 
-                if (!el.value && el.options.length > 1) {
-                    el.selectedIndex = 1;
+                if (!el.value && el.options.length > 0) {
+                    el.selectedIndex = (FED_IS_CENTRAL && FED_NODES.length > 1 && el.options.length > 1) ? 1 : 0;
                 }
 
                 if (typeof window.syncConfigDropdownTrigger === 'function') {
