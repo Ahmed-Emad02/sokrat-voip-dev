@@ -54,13 +54,14 @@ const canExportLogs = typeof canExport !== 'undefined' && canExport;
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
         :root {
-            --chat-bg: var(--bg-main, #050507);
-            --chat-surface: var(--bg-surface, #101014);
+            --chat-bg: var(--bg-primary, #050507);
+            --chat-surface: var(--bg-card, #101014);
             --chat-card: var(--bg-card, #101014);
-            --chat-border: var(--border-subtle, rgba(255,255,255,.08));
+            --chat-input: var(--bg-secondary, #0a0a0f);
+            --chat-border: var(--border-primary, rgba(255,255,255,.08));
             --chat-text: var(--text-primary, #f4f4f5);
             --chat-muted: var(--text-secondary, #a1a1aa);
-            --chat-dim: var(--text-dim, #85858f);
+            --chat-dim: var(--text-muted, #85858f);
             --chat-accent: var(--accent-color, #ef4444);
         }
         * { box-sizing: border-box; }
@@ -80,13 +81,13 @@ const canExportLogs = typeof canExport !== 'undefined' && canExport;
         .msg-bubble .msg-head { color: var(--chat-dim); font-size: 10px; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
         .msg-bubble .msg-body { font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
         .msg-bubble .msg-attachments { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-        .msg-bubble .attachment { display: flex; align-items: center; gap: 8px; background: var(--bg-input, #0a0a0f); border: 1px solid var(--chat-border); border-radius: 8px; padding: 7px 9px; font-size: 11px; color: var(--chat-muted); text-decoration: none; }
+        .msg-bubble .attachment { display: flex; align-items: center; gap: 8px; background: var(--chat-input); border: 1px solid var(--chat-border); border-radius: 8px; padding: 7px 9px; font-size: 11px; color: var(--chat-muted); text-decoration: none; }
         .msg-bubble .attachment:hover { border-color: var(--chat-accent); color: var(--chat-text); }
         .msg-bubble img { max-width: 260px; max-height: 180px; border-radius: 8px; border: 1px solid var(--chat-border); display: block; }
-        .contact-card { margin-top: 8px; background: var(--bg-input, #0a0a0f); border: 1px solid rgba(239,68,68,.28); border-radius: 10px; padding: 10px; }
+        .contact-card { margin-top: 8px; background: var(--chat-input); border: 1px solid rgba(239,68,68,.28); border-radius: 10px; padding: 10px; }
         .contact-card .contact-name { font-size: 13px; font-weight: 800; }
         .contact-card .contact-meta { color: var(--chat-dim); font-size: 11px; margin-top: 3px; }
-        .filter-input { background: var(--bg-input, #0a0a0f); border: 1px solid var(--chat-border); border-radius: 8px; color: var(--chat-text); padding: 8px 10px; font-size: 11px; outline: none; }
+        .filter-input { background: var(--chat-input); border: 1px solid var(--chat-border); border-radius: 8px; color: var(--chat-text); padding: 8px 10px; font-size: 11px; outline: none; }
         .filter-input:focus { border-color: var(--chat-accent); box-shadow: 0 0 0 2px rgba(239,68,68,.16); }
         .tool-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--chat-card); border: 1px solid var(--chat-border); color: var(--chat-text); border-radius: 8px; padding: 8px 11px; font-size: 11px; font-weight: 700; cursor: pointer; text-decoration: none; transition: background .15s ease, border-color .15s ease; }
         .tool-btn:hover { background: var(--bg-hover, #1c1c24); border-color: var(--chat-accent); }
@@ -170,16 +171,17 @@ const canExportLogs = typeof canExport !== 'undefined' && canExport;
         const isRtl = <%= isRtl ? 'true' : 'false' %>;
         const canExport = <%= canExportLogs ? 'true' : 'false' %>;
         const labels = {
-            empty: <%= JSON.stringify(t.empty) %>,
-            noMessages: <%= JSON.stringify(t.noMessages) %>,
-            messageCount: <%= JSON.stringify(t.messageCount) %>,
-            messages: <%= JSON.stringify(t.messages) %>,
-            sender: <%= JSON.stringify(t.sender) %>,
-            contact: <%= JSON.stringify(t.contact) %>,
-            contactExtension: <%= JSON.stringify(t.contactExtension) %>,
-            image: <%= JSON.stringify(t.image) %>,
-            document: <%= JSON.stringify(t.document) %>,
-            download: <%= JSON.stringify(t.download) %>
+            empty: <%- JSON.stringify(t.empty) %>,
+            noMessages: <%- JSON.stringify(t.noMessages) %>,
+            messageCount: <%- JSON.stringify(t.messageCount) %>,
+            messages: <%- JSON.stringify(t.messages) %>,
+            sender: <%- JSON.stringify(t.sender) %>,
+            contact: <%- JSON.stringify(t.contact) %>,
+            contactExtension: <%- JSON.stringify(t.contactExtension) %>,
+            contactPhone: <%- JSON.stringify(t.contactPhone) %>,
+            image: <%- JSON.stringify(t.image) %>,
+            document: <%- JSON.stringify(t.document) %>,
+            download: <%- JSON.stringify(t.download) %>
         };
         let conversations = [];
         let selectedId = null;
@@ -223,8 +225,8 @@ const canExportLogs = typeof canExport !== 'undefined' && canExport;
                 if (selectedId && !conversations.some((c) => c.id === selectedId)) {
                     selectedId = null;
                     document.getElementById('transcript').innerHTML = '<div class="empty-state">' + escapeHtml(labels.empty) + '</div>';
-                    document.getElementById('transcriptTitle').textContent = <%= JSON.stringify(t.messages) %>;
-                    document.getElementById('transcriptMeta').textContent = <%= JSON.stringify(t.open) %>;
+                    document.getElementById('transcriptTitle').textContent = <%- JSON.stringify(t.messages) %>;
+                    document.getElementById('transcriptMeta').textContent = <%- JSON.stringify(t.open) %>;
                 }
             } catch (err) {
                 document.getElementById('conversationList').innerHTML = '<div class="empty-state">' + escapeHtml(err.message) + '</div>';
