@@ -2307,7 +2307,7 @@ app.use('/api', federationAuthMiddleware({
     pool: () => pool,
     decryptFn: decrypt,
     optional: true,
-    skipPrefixes: ['/federation'],
+    skipPrefixes: ['/federation', '/extension', '/extension-chat', '/extension-policy'],
     // A peer may drive operational APIs but never federation management
     // (that would let a spoke rewire the hub), login, or API keys.
     denyPrefixes: ['/auth', '/admin', '/config/federation']
