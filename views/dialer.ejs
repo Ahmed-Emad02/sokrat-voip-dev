@@ -191,7 +191,7 @@ const isRtl = activeLang === 'ar';
         </div>
 
         <!-- CAMPAIGNS GRID -->
-        <div id="campaignsContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+        <div id="campaignsContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <div class="col-span-full text-center py-8 text-[var(--text-muted)] text-sm font-semibold"><%= isRtl ? 'جاري تحميل الحملات...' : 'Loading campaigns...' %></div>
         </div>
 
@@ -1517,50 +1517,75 @@ const isRtl = activeLang === 'ar';
                     const pending = s.pending_leads || 0;
                     const connected = s.connected_leads || 0;
                     const failed = s.failed_leads || 0;
+                    const dialing = s.dialing_leads || 0;
                     const dialed = total - pending;
                     const progressPct = total > 0 ? Math.round((dialed / total) * 100) : 0;
                     const connectRate = dialed > 0 ? Math.round((connected / dialed) * 100) : 0;
+                    const pendingPct = total > 0 ? Math.round((pending / total) * 100) : 0;
+                    const connectedPct = total > 0 ? Math.round((connected / total) * 100) : 0;
+                    const failedPct = total > 0 ? Math.round((failed / total) * 100) : 0;
 
                     const allowedDongles = Array.isArray(c.allowed_dongles) ? c.allowed_dongles : [];
                     const assignedAgents = Array.isArray(c.assigned_agents) ? c.assigned_agents : [];
 
+                    let followupFieldsList = [];
+                    try {
+                        followupFieldsList = typeof c.followup_fields === 'string' ? JSON.parse(c.followup_fields) : (c.followup_fields || []);
+                    } catch (_) {}
+                    const followupCount = Array.isArray(followupFieldsList) ? followupFieldsList.length : 0;
+                    const leadFieldsCount = Array.isArray(c.lead_fields) ? c.lead_fields.length : 0;
+
                     const dongleBadges = allowedDongles.length > 0
-                        ? allowedDongles.map(d => `<span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">${d}</span>`).join(' ')
-                        : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allDongles) %>}</span>`;
+                        ? allowedDongles.map(d => `<span class="px-2 py-0.5 text-[11px] font-mono font-bold rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">${d}</span>`).join(' ')
+                        : `<span class="text-[11px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allDongles) %>}</span>`;
 
                     const agentBadges = assignedAgents.length > 0
-                        ? assignedAgents.map(a => `<span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">${a}</span>`).join(' ')
-                        : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allAgents) %>}</span>`;
+                        ? assignedAgents.map(a => `<span class="px-2 py-0.5 text-[11px] font-mono font-bold rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">${a}</span>`).join(' ')
+                        : `<span class="text-[11px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allAgents) %>}</span>`;
 
                     const card = document.createElement('div');
-                    card.className = 'campaign-card bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-2xl p-4 flex flex-col justify-between shadow-sm hover:border-[var(--border-accent)] hover:shadow-md transition-all relative group';
+                    card.className = 'campaign-card bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-3xl p-5 sm:p-6 flex flex-col justify-between shadow-md hover:border-[var(--border-accent)] hover:shadow-xl transition-all relative group';
                     card.innerHTML = `
-                        <div class="space-y-3">
-                            <!-- Top: Status, Name, Mask & Menu -->
-                            <div class="flex items-center justify-between gap-2">
-                                <div class="min-w-0 flex items-center gap-2 flex-1">
-                                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                        c.status === 'running' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                        c.status === 'paused' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                                        c.status === 'completed' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                                        'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
-                                    }">
-                                        <span class="w-1.5 h-1.5 rounded-full ${
-                                            c.status === 'running' ? 'bg-emerald-400 animate-pulse' :
-                                            c.status === 'paused' ? 'bg-amber-400' :
-                                            c.status === 'completed' ? 'bg-blue-400' :
-                                            'bg-zinc-400'
-                                        }"></span>
-                                        <span>${escapeHtml(c.status.toUpperCase())}</span>
-                                    </span>
-                                    ${multiNode ? `<span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-zinc-800 text-zinc-300 border border-zinc-700/60 shrink-0">Site ${escapeHtml(site)}</span>` : ''}
-                                    <h4 class="text-sm font-extrabold text-[var(--text-primary)] truncate" title="${escapeHtml(c.name || '')}">${escapeHtml(c.name || 'Untitled')}</h4>
-                                    ${c.mask_phone_numbers ? `<span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-zinc-800 text-zinc-300 border border-zinc-700/60 shrink-0" title="${escapeHtml(t.mask || 'Mask')}">🔒</span>` : ''}
+                        <div class="space-y-4">
+                            <!-- Top: Status, Mode, Name & Menu -->
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0 flex-1 space-y-1.5">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                            c.status === 'running' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                            c.status === 'paused' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                            c.status === 'completed' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                            'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+                                        }">
+                                            <span class="w-1.5 h-1.5 rounded-full ${
+                                                c.status === 'running' ? 'bg-emerald-400 animate-pulse' :
+                                                c.status === 'paused' ? 'bg-amber-400' :
+                                                c.status === 'completed' ? 'bg-blue-400' :
+                                                'bg-zinc-400'
+                                            }"></span>
+                                            <span>${escapeHtml(c.status.toUpperCase())}</span>
+                                        </span>
+                                        <span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full ${c.mode === 'predictive' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}">
+                                            ${c.mode === 'predictive' ? 'PREDICTIVE' : 'PROGRESSIVE 1:1'}
+                                        </span>
+                                        ${multiNode ? `<span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700/60 shrink-0">Site ${escapeHtml(site)}</span>` : ''}
+                                        ${c.mask_phone_numbers ? `<span class="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700/60 shrink-0 flex items-center gap-1" title="${escapeHtml(t.mask || 'Mask')}">🔒 <span>${isRtl ? 'مشفر' : 'Masked'}</span></span>` : ''}
+                                    </div>
+
+                                    <div class="flex items-center gap-2">
+                                        <h4 class="text-base sm:text-lg font-black text-[var(--text-primary)] truncate" title="${escapeHtml(c.name || '')}">${escapeHtml(c.name || 'Untitled')}</h4>
+                                        <span class="text-xs font-mono font-bold text-[var(--text-muted)] shrink-0">#${c.id}</span>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-muted)] font-mono">
+                                        ${c.origination_caller_id ? `<span>${isRtl ? 'المعرف' : 'Caller ID'}: <strong class="text-[var(--text-secondary)] font-bold">${escapeHtml(c.origination_caller_id)}</strong></span>` : ''}
+                                        ${c.created_at ? `<span>${isRtl ? 'أنشئت' : 'Created'}: <strong class="text-[var(--text-secondary)]">${new Date(c.created_at).toLocaleDateString()}</strong></span>` : ''}
+                                    </div>
                                 </div>
 
                                 <!-- 3-Dot Dropdown -->
                                 <div class="relative shrink-0">
-                                    <button type="button" onclick="toggleCampaignMenu(event, ${c.id})" class="w-7 h-7 rounded-xl flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-transparent hover:border-[var(--border-primary)] active:scale-95 transition-all cursor-pointer" title="Options">
+                                    <button type="button" onclick="toggleCampaignMenu(event, ${c.id})" class="w-8 h-8 rounded-xl flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] border border-transparent hover:border-[var(--border-primary)] active:scale-95 transition-all cursor-pointer shadow-xs" title="Options">
                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
                                     </button>
                                     <div id="campaignMenu-${c.id}" class="hidden campaign-dropdown-menu absolute ${isRtl ? 'left-0' : 'right-0'} top-full mt-2 w-64 rounded-2xl bg-[var(--bg-card)]/95 border border-[var(--border-primary)] shadow-2xl z-50 p-1.5 text-xs font-semibold backdrop-blur-2xl ring-1 ring-black/40">
@@ -1622,81 +1647,131 @@ const isRtl = activeLang === 'ar';
                                 </div>
                             </div>
 
-                            <!-- Hardware & Roster Tags -->
-                            <div class="flex items-center gap-2 text-[11px] text-[var(--text-secondary)] font-medium">
-                                <span class="truncate"><span class="text-zinc-500 font-normal">${escapeHtml(t.dongles || 'Trunk')}:</span> ${dongleBadges}</span>
-                                <span class="text-zinc-600 font-bold">•</span>
-                                <span class="truncate"><span class="text-zinc-500 font-normal">${escapeHtml(t.agents || 'Agents')}:</span> ${agentBadges}</span>
+                            <!-- Detailed Specs & Roster Matrix -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-[var(--bg-secondary)]/50 border border-[var(--border-primary)]/70 rounded-2xl text-xs">
+                                <div class="space-y-1.5 min-w-0">
+                                    <span class="text-[11px] font-bold text-[var(--text-muted)] flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                        <span>${escapeHtml(t.dongles || 'Trunks')}:</span>
+                                    </span>
+                                    <div class="flex flex-wrap gap-1 items-center">
+                                        ${dongleBadges}
+                                    </div>
+                                </div>
+
+                                <div class="space-y-1.5 min-w-0">
+                                    <span class="text-[11px] font-bold text-[var(--text-muted)] flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                                        <span>${escapeHtml(t.agents || 'Agents')}:</span>
+                                    </span>
+                                    <div class="flex flex-wrap gap-1 items-center">
+                                        ${agentBadges}
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-y-1.5 gap-x-3 pt-2.5 border-t border-[var(--border-primary)]/40 text-[11px] text-[var(--text-secondary)] font-mono sm:col-span-2">
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[var(--text-muted)]">${isRtl ? 'السرعة' : 'Pacing'}:</span>
+                                        <span class="font-bold text-[var(--text-primary)]">${c.max_concurrent_dials || 1} ${isRtl ? 'خطوط متزامنة' : 'dials'}</span>
+                                        <span class="text-[var(--text-muted)]">(${c.wrapup_time_sec || 15}s ${isRtl ? 'إنهاء' : 'wrap'})</span>
+                                    </div>
+                                    <span class="text-zinc-600 font-bold">•</span>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[var(--text-muted)]">${isRtl ? 'الاستمارة' : 'Form Studio'}:</span>
+                                        ${followupCount > 0
+                                            ? `<span class="text-emerald-400 font-bold">✓ ${followupCount} ${isRtl ? 'حقول متابعة' : 'fields'}</span>`
+                                            : `<span class="text-[var(--text-muted)] italic">${isRtl ? 'بدون استمارة' : 'No Form'}</span>`
+                                        }
+                                    </div>
+                                    ${leadFieldsCount > 0 ? `
+                                        <span class="text-zinc-600 font-bold">•</span>
+                                        <div class="flex items-center gap-1">
+                                            <span class="text-[var(--text-muted)]">${isRtl ? 'أعمدة مخصصة' : 'Custom Schema'}:</span>
+                                            <span class="text-purple-400 font-bold">${leadFieldsCount} ${isRtl ? 'أعمدة' : 'cols'}</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
                             </div>
 
                             <!-- Progress Metric Strip -->
-                            <div class="space-y-1.5">
-                                <div class="flex items-center justify-between text-[11px] font-mono text-[var(--text-secondary)]">
-                                    <span class="flex items-center gap-1">
-                                        <span class="text-zinc-500">${isRtl ? 'التقدم' : 'Progress'}:</span>
-                                        <span class="font-bold text-[var(--text-primary)]">${dialed}/${total}</span>
-                                        <span class="text-[10px] text-zinc-400">(${progressPct}%)</span>
-                                    </span>
-                                    <span class="flex items-center gap-1">
-                                        <span class="text-zinc-500">${isRtl ? 'الرد' : 'Connect'}:</span>
-                                        <span class="font-bold text-emerald-400">${connectRate}%</span>
-                                    </span>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between text-xs font-mono">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-black text-[var(--text-primary)] text-sm">${progressPct}%</span>
+                                        <span class="text-[var(--text-muted)]">(${dialed}/${total} ${isRtl ? 'أرقام معالجة' : 'processed'})</span>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        ${dialing > 0 ? `
+                                            <span class="flex items-center gap-1 text-[11px] text-sky-400 animate-pulse font-bold">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                                                <span>${dialing} ${isRtl ? 'جاري الاتصال' : 'Dialing'}</span>
+                                            </span>
+                                        ` : ''}
+                                        <span class="flex items-center gap-1 text-[11px]">
+                                            <span class="text-[var(--text-muted)]">${isRtl ? 'نسبة الرد' : 'Connect Rate'}:</span>
+                                            <span class="font-black ${connectRate > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${connectRate}%</span>
+                                        </span>
+                                    </div>
                                 </div>
-                                <div class="w-full bg-[var(--bg-primary)] rounded-full h-1.5 overflow-hidden border border-[var(--border-primary)]/40">
-                                    <div class="h-1.5 rounded-full transition-all duration-300 ${c.status === 'running' ? 'bg-emerald-500' : 'bg-emerald-600/70'}" style="width: ${progressPct}%"></div>
+                                <div class="w-full bg-[var(--bg-primary)] rounded-full h-2 overflow-hidden border border-[var(--border-primary)]/50 p-0.5 shadow-inner">
+                                    <div class="h-full rounded-full transition-all duration-300 ${c.status === 'running' ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-emerald-600/70'}" style="width: ${progressPct}%"></div>
                                 </div>
                             </div>
 
                             <!-- 4-Tile Minimal Metrics Counter -->
-                            <div class="grid grid-cols-4 gap-1.5 py-2 px-2.5 bg-[var(--bg-card)] rounded-xl border border-[var(--border-primary)] text-center">
-                                <div>
-                                    <span class="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-0.5">${escapeHtml(t.total || 'Total')}</span>
-                                    <span class="font-bold text-[var(--text-primary)] font-mono text-sm leading-none">${total}</span>
+                            <div class="grid grid-cols-4 gap-2 py-3 px-3.5 bg-[var(--bg-secondary)]/80 rounded-2xl border border-[var(--border-primary)] text-center shadow-xs">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">${escapeHtml(t.total || 'Total')}</span>
+                                    <span class="font-black text-[var(--text-primary)] font-mono text-base sm:text-lg leading-none">${total}</span>
+                                    <span class="text-[10px] text-[var(--text-muted)] font-mono mt-1">${total > 0 ? '100%' : '0%'}</span>
                                 </div>
-                                <div>
-                                    <span class="text-[9px] font-bold text-amber-400/90 uppercase tracking-wider block mb-0.5">${escapeHtml(t.pending || 'Pending')}</span>
-                                    <span class="font-bold text-amber-400 font-mono text-sm leading-none">${pending}</span>
+                                <div class="flex flex-col items-center">
+                                    <span class="text-[10px] font-bold text-amber-400/90 uppercase tracking-wider block mb-1">${escapeHtml(t.pending || 'Pending')}</span>
+                                    <span class="font-black text-amber-400 font-mono text-base sm:text-lg leading-none">${pending}</span>
+                                    <span class="text-[10px] text-amber-400/70 font-mono mt-1">${pendingPct}%</span>
                                 </div>
-                                <div>
-                                    <span class="text-[9px] font-bold text-emerald-400/90 uppercase tracking-wider block mb-0.5">${escapeHtml(t.connected || 'Connected')}</span>
-                                    <span class="font-bold text-emerald-400 font-mono text-sm leading-none">${connected}</span>
+                                <div class="flex flex-col items-center">
+                                    <span class="text-[10px] font-bold text-emerald-400/90 uppercase tracking-wider block mb-1">${escapeHtml(t.connected || 'Connected')}</span>
+                                    <span class="font-black text-emerald-400 font-mono text-base sm:text-lg leading-none">${connected}</span>
+                                    <span class="text-[10px] text-emerald-400/70 font-mono mt-1">${connectedPct}%</span>
                                 </div>
-                                <div>
-                                    <span class="text-[9px] font-bold text-rose-400/90 uppercase tracking-wider block mb-0.5">${escapeHtml(t.failed || 'Failed')}</span>
-                                    <span class="font-bold text-rose-400 font-mono text-sm leading-none">${failed}</span>
+                                <div class="flex flex-col items-center">
+                                    <span class="text-[10px] font-bold text-rose-400/90 uppercase tracking-wider block mb-1">${escapeHtml(t.failed || 'Failed')}</span>
+                                    <span class="font-black text-rose-400 font-mono text-base sm:text-lg leading-none">${failed}</span>
+                                    <span class="text-[10px] text-rose-400/70 font-mono mt-1">${failedPct}%</span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Harmonious Action Toolbar -->
-                        <div class="space-y-1.5 pt-3 border-t border-[var(--border-primary)]/70 mt-3">
+                        <div class="space-y-2 pt-3.5 border-t border-[var(--border-primary)]/70 mt-3.5">
                             <!-- Primary Run/Pause Action -->
                             ${c.status === 'running'
-                                ? `<button onclick="controlCampaign(${c.id}, 'pause')" class="w-full h-8 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-[0.99] group" title="Pause Campaign">
-                                    <svg class="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                                ? `<button onclick="controlCampaign(${c.id}, 'pause')" class="w-full h-9 sm:h-10 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50 text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.99] group" title="Pause Campaign">
+                                    <svg class="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
                                     <span>${escapeHtml(t.pause || 'Pause Campaign')}</span>
                                    </button>`
-                                : `<button onclick="controlCampaign(${c.id}, 'start')" class="w-full h-8 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/50 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-[0.99] group" title="Start Campaign">
-                                    <svg class="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                : `<button onclick="controlCampaign(${c.id}, 'start')" class="w-full h-9 sm:h-10 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/50 text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.99] group" title="Start Campaign">
+                                    <svg class="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                                     <span>${escapeHtml(t.start || 'Start Campaign')}</span>
                                    </button>`
                             }
 
                             <!-- 4-Grid Secondary Actions (Aligned with 4 KPI tiles above) -->
-                            <div class="grid grid-cols-4 gap-1.5">
-                                <button onclick="openViewLeadsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))}, '${site}')" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.viewLeads || 'Leads')}">
+                            <div class="grid grid-cols-4 gap-2">
+                                <button onclick="openViewLeadsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))}, '${site}')" class="h-9 px-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.viewLeads || 'Leads')}">
                                     <svg class="w-3.5 h-3.5 text-purple-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
                                     <span class="truncate">${escapeHtml(t.viewLeads || 'Leads')}</span>
                                 </button>
-                                <button onclick="openFollowupsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, '${site}')" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(isRtl ? 'المتابعات' : 'Follow-ups')}">
+                                <button onclick="openFollowupsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, '${site}')" class="h-9 px-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(isRtl ? 'المتابعات' : 'Follow-ups')}">
                                     <svg class="w-3.5 h-3.5 text-sky-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                     <span class="truncate">${escapeHtml(isRtl ? 'المتابعات' : 'Follow-ups')}</span>
                                 </button>
-                                <button onclick="openImportModal(${c.id}, '${site}')" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.import || 'Import')}">
+                                <button onclick="openImportModal(${c.id}, '${site}')" class="h-9 px-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.import || 'Import')}">
                                     <svg class="w-3.5 h-3.5 text-blue-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                                     <span class="truncate">${escapeHtml(t.import || 'Import')}</span>
                                 </button>
-                                <button onclick="openManualLeadModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))}, '${site}')" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.add || (isRtl ? 'إضافة' : 'Add'))}">
+                                <button onclick="openManualLeadModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))}, '${site}')" class="h-9 px-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.add || (isRtl ? 'إضافة' : 'Add'))}">
                                     <svg class="w-3.5 h-3.5 text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                                     <span class="truncate">${escapeHtml(t.add || (isRtl ? 'إضافة' : 'Add'))}</span>
                                 </button>
