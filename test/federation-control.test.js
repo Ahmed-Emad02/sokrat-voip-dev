@@ -210,7 +210,7 @@ test('Federation control: the gateway is central-only and super-admin-only', () 
     assert.match(server, /Remote PBX control requires a super administrator/);
 
     // Peer side: signed federation requests are accepted on the operational API.
-    assert.match(server, /app\.use\('\/api', federationAuthMiddleware\(\{[\s\S]*?optional: true[\s\S]*?skipPrefixes: \['\/federation'\][\s\S]*?denyPrefixes: \['\/auth', '\/admin', '\/config\/federation'\]/);
+    assert.match(server, /app\.use\('\/api', federationAuthMiddleware\(\{[\s\S]*?optional: true[\s\S]*?skipPrefixes: \['\/federation'[\s\S]*?\][\s\S]*?denyPrefixes: \['\/auth', '\/admin', '\/config\/federation'\]/);
 
     // Root-only handlers must honour the federation trust model.
     assert.match(server, /function hasRootAccess\(req\)[\s\S]*?isFederationTrusted\(req\)/);

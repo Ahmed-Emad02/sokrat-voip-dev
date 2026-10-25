@@ -7021,7 +7021,7 @@ app.get('/api/chat/admin/conversations', requireAuth, requireActionPermission('c
         res.set('Cache-Control', 'no-store');
         res.json({ success: true, conversations });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        res.status(err.statusCode || err.status || 500).json({ success: false, error: err.message });
     }
 });
 
@@ -7035,7 +7035,7 @@ app.get('/api/chat/admin/conversations/:id/messages', requireAuth, requireAction
         res.set('Cache-Control', 'no-store');
         res.json({ success: true, ...result });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        res.status(err.statusCode || err.status || 500).json({ success: false, error: err.message });
     }
 });
 
@@ -7060,7 +7060,7 @@ app.get('/api/chat/admin/attachments/:id', requireAuth, requireActionPermission(
         }
         return res.download(filePath, attachment.original_name);
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        res.status(err.statusCode || err.status || 500).json({ success: false, error: err.message });
     }
 });
 

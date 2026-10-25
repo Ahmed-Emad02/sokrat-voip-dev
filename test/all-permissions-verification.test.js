@@ -89,12 +89,12 @@ function mockResponse() {
 // TEST SUITE: Complete Permissions Catalog and Verification
 // -------------------------------------------------------------
 
-test('1. PERMISSION_CATEGORIES covers all 9 categories and 55 unique permissions', () => {
+test('1. PERMISSION_CATEGORIES covers all 9 categories and 58 unique permissions', () => {
     const expectedCategories = ['pages', 'operator', 'call_history', 'gsm', 'campaigns', 'contacts', 'voicemails', 'storage', 'config'];
     assert.deepEqual(PERMISSION_CATEGORIES.map(c => c.id), expectedCategories, 'All 9 permission categories must exist');
 
     const totalPermissions = PERMISSION_CATEGORIES.reduce((acc, cat) => acc + cat.permissions.length, 0);
-    assert.equal(totalPermissions, 56, 'There must be exactly 56 granular permissions defined');
+    assert.equal(totalPermissions, 58, 'There must be exactly 58 granular permissions defined');
 
     // Every permission key in every category must be present in ALL_TABS
     for (const cat of PERMISSION_CATEGORIES) {
@@ -112,7 +112,7 @@ test('2. Verification of all action permissions with requireActionPermission', (
         .filter(c => actionCategories.includes(c.id))
         .flatMap(c => c.permissions.map(p => p.key));
 
-    assert.equal(actionKeys.length, 29, 'There must be 29 action permission keys across 7 categories');
+    assert.equal(actionKeys.length, 31, 'There must be 31 action permission keys across 7 categories');
 
     for (const key of actionKeys) {
         const middleware = requireActionPermission(key);
