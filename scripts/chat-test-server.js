@@ -11,10 +11,13 @@
  */
 
 require('dotenv').config({ path: '/opt/sokrat-voip/.env' });
+const http = require('http');
 const express = require('express');
 const mysql = require('mysql2/promise');
+const { Server } = require('socket.io');
 const createExtensionChatRouter = require('../routes/extension-chat');
 const { ensureChatSchema } = require('../lib/chat/store');
+const { attachChatSocket } = require('../lib/chat/socket');
 
 const PORT = Number(process.env.CHAT_TEST_PORT) || 18080;
 const uploadDir = process.env.CHAT_TEST_UPLOAD_DIR || '/var/lib/sokrat-voip/chat-test-uploads';
@@ -33,12 +36,15 @@ const uploadDir = process.env.CHAT_TEST_UPLOAD_DIR || '/var/lib/sokrat-voip/chat
     app.disable('x-powered-by');
     app.use(express.json({ limit: '1mb' }));
     app.get('/health', (_req, res) => res.json({ ok: true }));
-    app.use('/api/extension-chat/v1', createExtensionChatRouter(pool, { uploadDir }));
+    const httpServer = http.createServer(app);
+    const io = new Server(httpServer);
+    const chat = attachChatSocket(io, pool);
+    app.use('/api/extension-chat/v1', createExtensionChatRouter(pool, { uploadDir, chat }));
     app.use((err, _req, res, _next) => {
         console.error('[chat-test] unhandled:', err);
         res.status(500).json({ success: false, error: 'Internal test error', code: 'test_error' });
     });
-    app.listen(PORT, '127.0.0.1', () => {
+    httpServer.listen(PORT, '127.0.0.1', () => {
         console.log(`chat test API on http://127.0.0.1:${PORT}`);
         console.log(`upload dir: ${uploadDir}`);
     });

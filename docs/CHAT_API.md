@@ -28,6 +28,7 @@ string. Requests older than five minutes are rejected.
 | `POST` | `/conversations/:id/messages` | Send `text`, `attachment` or `contact` |
 | `POST` | `/conversations/:id/read` | `{ "message_id": 123 }` |
 | `GET` | `/unread` | Total and per-conversation unread counts |
+| `POST` | `/session` | Exchange HMAC auth for a 10-minute socket token |
 | `POST` | `/attachments` | Multipart field `file`; returns attachment metadata |
 | `GET` | `/attachments/:id` | Authenticated download / inline image |
 
@@ -75,6 +76,32 @@ Upload first, then send:
 
 The extension must exist. The card is a snapshot; later address-book changes do
 not alter sent cards.
+
+## Realtime
+
+Exchange the HMAC-authenticated `POST /session` response for a Socket.IO
+connection:
+
+```js
+const socket = io(`${pbxUrl}/chat`, {
+  auth: { token: session.token },
+  transports: ['websocket'],
+});
+```
+
+Events emitted by the server:
+
+- `chat:ready` — `{ extension, online[] }`
+- `chat:message` — `{ conversation_id, message }`
+- `chat:read` — `{ conversation_id, extension, last_read_message_id }`
+- `chat:conversation` — `{ conversation }`
+- `chat:typing` — `{ conversation_id, extension, typing }`
+- `chat:presence` — `{ extension, online }`
+
+Client emits `chat:typing` with `{ conversation_id, typing }`.
+
+Read receipts and message fan-out are also written server-side first, so the
+socket never becomes the only copy of a message.
 
 ## Attachment rules
 

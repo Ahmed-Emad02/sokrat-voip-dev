@@ -16,6 +16,7 @@ const express = require('express');
 const multer = require('multer');
 const { requireExtensionSignature } = require('../lib/extension-auth');
 const chatStore = require('../lib/chat/store');
+const { issueChatToken } = require('../lib/chat/token');
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_DOC_BYTES = 10 * 1024 * 1024;
@@ -98,6 +99,7 @@ function detectAttachment(buffer, originalName, reportedMime) {
 
 module.exports = function createExtensionChatRouter(pool, options) {
     const router = express.Router();
+    const chat = options && options.chat;
     const uploadDir = path.resolve(
         (options && options.uploadDir)
         || process.env.CHAT_UPLOAD_DIR
@@ -132,6 +134,19 @@ module.exports = function createExtensionChatRouter(pool, options) {
     });
     router.use(requireExtensionSignature(pool));
 
+    router.post('/session', (req, res) => {
+        try {
+            const issued = issueChatToken(req.sokratExtension);
+            return res.json({
+                success: true,
+                ...issued,
+                socket_path: '/chat',
+            });
+        } catch (err) {
+            return sendError(res, err, 'Failed to create the chat session.');
+        }
+    });
+
     router.get('/conversations', async (req, res) => {
         try {
             const conversations = await chatStore.listConversations(pool, req.sokratExtension);
@@ -147,6 +162,7 @@ module.exports = function createExtensionChatRouter(pool, options) {
             const other = String((req.body && req.body.extension) || '').trim();
             const id = await chatStore.findOrCreateDirect(pool, req.sokratExtension, other);
             const conversation = await chatStore.getConversationSummary(pool, id);
+            if (chat) chat.notifyConversation(conversation);
             return res.status(201).json({ success: true, conversation });
         } catch (err) {
             return sendError(res, err, 'Failed to create the conversation.');
@@ -177,6 +193,7 @@ module.exports = function createExtensionChatRouter(pool, options) {
                 req.sokratExtension,
                 req.body || {},
             );
+            if (chat) void chat.notifyMessage(Number(req.params.id), message);
             return res.status(201).json({ success: true, message });
         } catch (err) {
             return sendError(res, err, 'Failed to send the message.');
@@ -191,6 +208,7 @@ module.exports = function createExtensionChatRouter(pool, options) {
                 req.sokratExtension,
                 req.body && (req.body.message_id || req.body.last_message_id),
             );
+            if (chat) void chat.notifyRead(Number(req.params.id), req.sokratExtension, result.last_read_message_id);
             return res.json({ success: true, ...result });
         } catch (err) {
             return sendError(res, err, 'Failed to update the read state.');

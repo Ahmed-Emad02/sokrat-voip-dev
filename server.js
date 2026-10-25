@@ -34,6 +34,7 @@ try {
 const createCrmRouter = require('./routes/crm-integration');
 const createExtensionContactsRouter = require('./routes/extension-contacts');
 const createExtensionChatRouter = require('./routes/extension-chat');
+const { attachChatSocket } = require('./lib/chat/socket');
 const registerCrmLiveSocket = require('./socket/crm-live');
 const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
 const dialerFollowup = require('./lib/dialer-followup');
@@ -2529,7 +2530,8 @@ app.use('/api/integrations/crm/v1', createCrmRouter(pool, {
 app.use('/api/extension/v1', createExtensionContactsRouter(pool));
 
 // Internal extension-to-extension chat (HMAC, server-side transcript).
-app.use('/api/extension-chat/v1', createExtensionChatRouter(pool));
+const chatSocket = attachChatSocket(io, pool);
+app.use('/api/extension-chat/v1', createExtensionChatRouter(pool, { chat: chatSocket }));
 
 // Register /crm-live Socket.io namespace
 
