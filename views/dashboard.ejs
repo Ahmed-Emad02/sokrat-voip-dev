@@ -446,7 +446,8 @@ const isRtl = currentLang === 'ar';
             </div>
         </div>
 
-        <!-- Federation node rail: every connected PBX in one strip -->
+        <!-- Federation node rail: every connected PBX in one strip. Central only. -->
+        <% if (typeof federationCentral !== 'undefined' && federationCentral) { %>
         <div id="federationNodeRail" class="hidden mb-4 panel-surface rounded-xl p-3 relative z-20">
             <div class="flex items-center justify-between gap-3 mb-2">
                 <h3 class="text-xs font-extrabold uppercase tracking-wider text-[var(--text-secondary)]"><%= isRtl ? 'السيرفرات المرتبطة' : 'Connected PBXs' %></h3>
@@ -454,6 +455,7 @@ const isRtl = currentLang === 'ar';
             </div>
             <div id="fedRailNodes" class="flex gap-2.5 overflow-x-auto pb-1" style="scrollbar-width:thin"></div>
         </div>
+        <% } %>
 
         <!-- Compact Balanced Filter Form -->
         <form id="dashFilterForm" action="/" method="GET" class="panel-surface p-3 px-3.5 rounded-xl mb-4 flex flex-col relative z-30">
@@ -2282,6 +2284,8 @@ function syncStatusChecklistUI() {
         // central node and degrades each card independently when a peer is down.
         (function() {
             const isRtl = <%= isRtl ? 'true' : 'false' %>;
+            const federationCentral = <%= (typeof federationCentral !== 'undefined' && federationCentral) ? 'true' : 'false' %>;
+            if (!federationCentral) return;
             const rail = document.getElementById('federationNodeRail');
             const nodesEl = document.getElementById('fedRailNodes');
             const totalsEl = document.getElementById('fedRailTotals');

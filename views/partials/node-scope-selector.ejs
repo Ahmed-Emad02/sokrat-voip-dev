@@ -8,7 +8,8 @@
  *
  * Values: "all" | "local" | comma separated site codes.
  */
-const fedScopeEnabled = (typeof federationEnabled !== 'undefined') && federationEnabled;
+const fedScopeEnabled = (typeof federationEnabled !== 'undefined') && federationEnabled
+    && (typeof federationCentral !== 'undefined') && federationCentral;
 if (fedScopeEnabled) {
     const fedNodes = Array.isArray(federationNodes) ? federationNodes : [];
     const fedScope = (typeof federationScope !== 'undefined' && federationScope) ? federationScope : { mode: 'all', sites: [], localSiteCode: '10' };

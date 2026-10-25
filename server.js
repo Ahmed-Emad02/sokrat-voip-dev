@@ -4216,8 +4216,13 @@ app.use(async (req, res, next) => {
             },
             ...peerNodes
         ];
-        const federationEnabled = peerNodes.length > 0;
-        const reportNodes = allFedNodes.filter(n => n.report_read);
+        // Only the central node aggregates other PBXs. Every other server keeps
+        // its original single-PBX behaviour: no scope selector, no remote rows,
+        // no federated operator cards. The role is explicit so two peers that
+        // both know each other can never both act as the aggregation hub.
+        const federationCentral = String((cachedFedSettings && cachedFedSettings.panel_role) || 'local') === 'central';
+        const federationEnabled = federationCentral && peerNodes.length > 0;
+        const reportNodes = federationEnabled ? allFedNodes.filter(n => n.report_read) : allFedNodes.filter(n => n.is_local);
         const rawScopeCookie = String(reqCookies.fed_scope || '').trim();
         let scopeMode = federationEnabled ? 'all' : 'local';
         let scopeSelection = null;
@@ -4237,8 +4242,9 @@ app.use(async (req, res, next) => {
             scopeSelection = [localSiteCode];
         }
         const scopeSites = scopeSelection || reportNodes.map(n => n.site_code);
+        res.locals.federationCentral = federationCentral;
         res.locals.federationEnabled = federationEnabled;
-        res.locals.federationNodes = allFedNodes;
+        res.locals.federationNodes = federationEnabled ? allFedNodes : allFedNodes.filter(n => n.is_local);
         res.locals.federationScope = {
             mode: scopeMode,
             sites: scopeSites,
@@ -19648,6 +19654,9 @@ app.get('/api/federation/overview', requireAuth, async (req, res) => {
         if (!federationHub) {
             return res.status(503).json({ success: false, error: 'Federation hub is not initialized.' });
         }
+        if (federationHub.localSettings?.panel_role !== 'central') {
+            return res.status(403).json({ success: false, error: 'This PBX is not the central federation node.' });
+        }
         const overview = federationHub.getOverview();
         if (!overview || !overview.timestamp) {
             await federationHub.refreshOverview();
@@ -19685,6 +19694,9 @@ app.get('/api/federation/nodes', requireAuth, async (req, res) => {
         if (!federationHub) {
             return res.status(503).json({ success: false, error: 'Federation hub is not initialized.' });
         }
+        if (federationHub.localSettings?.panel_role !== 'central') {
+            return res.status(403).json({ success: false, error: 'This PBX is not the central federation node.' });
+        }
         let overview = federationHub.getOverview();
         if (!overview || !overview.timestamp) {
             overview = await federationHub.refreshOverview();
@@ -19699,6 +19711,9 @@ app.post('/api/federation/nodes/:id/sync', requireAuth, async (req, res) => {
     try {
         if (!federationHub) {
             return res.status(503).json({ success: false, error: 'Federation hub is not initialized.' });
+        }
+        if (federationHub.localSettings?.panel_role !== 'central') {
+            return res.status(403).json({ success: false, error: 'This PBX is not the central federation node.' });
         }
         const peerId = parseInt(req.params.id, 10);
         if (!Number.isFinite(peerId)) {

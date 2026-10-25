@@ -282,3 +282,43 @@ test('Federation contacts: the address book merges remote rows read-only', () =>
     assert.match(server, /getFederationRemoteContacts\(scope\)/, 'the contacts page must merge remote rows');
     assert.match(server, /federationScopeIncludesLocal\(scope\)/, 'the contacts page must honor a remote-only scope');
 });
+
+test('Federation central role: the PBX selector renders on the central hub only', () => {
+    const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    assert.match(server, /const federationCentral = String\(\(cachedFedSettings && cachedFedSettings\.panel_role\) \|\| 'local'\) === 'central'/);
+    assert.match(server, /const federationEnabled = federationCentral && peerNodes\.length > 0/);
+    assert.match(server, /res\.locals\.federationCentral = federationCentral/);
+
+    const selector = fs.readFileSync(path.join(__dirname, '..', 'views', 'partials', 'node-scope-selector.ejs'), 'utf8');
+    assert.match(selector, /federationCentral/, 'the selector must be gated on the central role');
+});
+
+test('Federation central role: local PBXs never render federated operator cards or the node rail', () => {
+    const operator = fs.readFileSync(path.join(__dirname, '..', 'views', 'operator.ejs'), 'utf8');
+    assert.match(operator, /var isCentralRole = \(typeof federationCentral !== 'undefined' && federationCentral\)/);
+    assert.match(operator, /const hasConnectedPbxs = <%= \(typeof federationCentral !== 'undefined' && federationCentral\)/);
+    assert.doesNotMatch(operator, /federationPeers\.length > 0/, 'the operator panel must not aggregate just because a peer exists');
+
+    const dashboard = fs.readFileSync(path.join(__dirname, '..', 'views', 'dashboard.ejs'), 'utf8');
+    assert.match(dashboard, /if \(!federationCentral\) return;/, 'the dashboard rail must stop on a local PBX');
+});
+
+test('Federation central role: the hub polls peers only on the central node', () => {
+    const hub = fs.readFileSync(path.join(__dirname, '..', 'lib', 'federation-hub.js'), 'utf8');
+    assert.match(hub, /applyPollingPolicy\(\)/);
+    assert.match(hub, /panel_role === 'central' && this\.peersMap\.size > 0/, 'polling must require the central role');
+    assert.match(hub, /this\.stopPolling\(\)/, 'a local PBX must stop polling when its role changes');
+
+    const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+    for (const route of [
+        "app.get('/api/federation/overview'",
+        "app.get('/api/federation/nodes'",
+        "app.post('/api/federation/nodes/:id/sync'"
+    ]) {
+        const start = server.indexOf(route);
+        assert.ok(start !== -1, `${route} must exist`);
+        const nextRoute = server.indexOf('\napp.', start + 10);
+        const body = server.slice(start, nextRoute === -1 ? undefined : nextRoute);
+        assert.match(body, /panel_role !== 'central'/, `${route} must reject non-central PBXs`);
+    }
+});

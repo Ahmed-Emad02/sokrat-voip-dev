@@ -5485,9 +5485,14 @@ function isTabAllowed(tabName) {
                 <div>
                     <label class="block text-xs font-bold text-[var(--text-secondary)] uppercase mb-1" for="localPanelRoleSelect"><%= isRtl ? 'دور لوحة المراقبة (Operator Panel Role)' : 'Operator Panel Role' %></label>
                     <select id="localPanelRoleSelect" class="config-input w-full text-xs">
-                        <option value="local" <%= fedLocalRole === 'local' ? 'selected' : '' %>><%= isRtl ? 'سيرفر محلي عادي (Local PBX)' : 'Local PBX (Default)' %></option>
-                        <option value="central" <%= fedLocalRole === 'central' ? 'selected' : '' %>><%= isRtl ? 'لوحة مركزية موحدة لجميع السيرفرات (Central Live Panel Hub)' : 'Central Live Panel Hub (Aggregates All Nodes)' %></option>
+                        <option value="local" <%= fedLocalRole === 'local' ? 'selected' : '' %>><%= isRtl ? 'سيرفر محلي عادي — يعرض بياناته فقط (Local PBX)' : 'Local PBX — shows only its own data' %></option>
+                        <option value="central" <%= fedLocalRole === 'central' ? 'selected' : '' %>><%= isRtl ? 'سيرفر مركزي — يجمع كل السيرفرات (Central Hub)' : 'Central Hub — aggregates every connected PBX' %></option>
                     </select>
+                    <span class="text-[10px] text-[var(--text-muted)] block mt-1 leading-relaxed">
+                        <%= isRtl
+                            ? 'السيرفر المركزي فقط يعرض قائمة اختيار السيرفرات في الشريط العلوي ويدمج التقارير والشرائح وجهات الاتصال واللوحة المباشرة. السيرفرات المحلية تبقى كما هي بدون أي دمج.'
+                            : 'Only the Central Hub shows the PBX multi-select in the top bar and merges reports, dongles, contacts and the live panel from peers. Local PBXs keep their normal single-server view.' %>
+                    </span>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
                     <button type="button" onclick="closeModal('federationSettingsModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
