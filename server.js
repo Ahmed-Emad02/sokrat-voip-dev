@@ -10556,12 +10556,17 @@ app.get('/gsm-dongles', async (req, res) => {
         const includeLocal = federationScopeIncludesLocal(scope);
         // The grid now merges every PBX in scope, so the server render only
         // seeds the local node (instantly) and the first poll fills the peers.
-        const [allowedDongles, enriched, nodeModel] = await Promise.all([
+        const [allowedDongles, enriched, nodeModel, remoteDongleRows] = await Promise.all([
             getUserAllowedDongles(req),
             includeLocal ? getEnrichedDevices() : Promise.resolve([]),
-            getFederationNodeReadModel(req, scope, { readPeers: false })
+            getFederationNodeReadModel(req, scope, { readPeers: false }),
+            pool.query(`
+                SELECT rd.*, p.node_name, p.site_code, p.status AS peer_status
+                FROM \`asterisk\`.\`sokrat_federation_remote_dongles\` rd
+                JOIN \`asterisk\`.\`sokrat_federation_peers\` p ON rd.peer_id = p.id
+            `).then(([rows]) => rows).catch(() => [])
         ]);
-        const filteredDevices = includeLocal
+        const filteredLocal = includeLocal
             ? (allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched)
             : [];
         const localNode = nodeModel.nodes.find(node => node.is_local) || {
@@ -10570,8 +10575,49 @@ app.get('/gsm-dongles', async (req, res) => {
             is_local: true,
             status: 'online'
         };
-        const devices = filteredDevices.map(device => tagFederationDongleDevice(device, localNode));
-        if (localNode.dongle_count === undefined) localNode.dongle_count = devices.length;
+        const localDevices = filteredLocal.map(device => tagFederationDongleDevice(device, localNode));
+        if (localNode.dongle_count === undefined) localNode.dongle_count = localDevices.length;
+
+        const scopeSites = (scope && scope.type === 'site' && Array.isArray(scope.sites)) ? scope.sites.map(String) : null;
+        const remoteDevices = [];
+        (remoteDongleRows || []).forEach(rd => {
+            const sCode = String(rd.site_code || '');
+            if (scopeSites && !scopeSites.includes(sCode)) return;
+            const peerNode = nodeModel.nodes.find(n => String(n.site_code) === sCode) || {
+                site_code: sCode,
+                node_name: rd.node_name || `Site ${sCode}`,
+                is_local: false,
+                status: rd.peer_status || 'online'
+            };
+            const devObj = {
+                ID: rd.dongle_name,
+                dongle_name: rd.dongle_name,
+                Number: rd.phone_number || rd.sim_number || '',
+                'Provider Name': rd.operator_name || rd.provider || '',
+                IMEI: rd.imei || '',
+                IMSI: rd.imsi || '',
+                Group: '0',
+                Model: 'Huawei',
+                Firmware: '-',
+                Mode: '-',
+                Submode: '-',
+                'GSM Registration Status': 'Registered',
+                RSSI: Math.round(((Number(rd.signal_pct) || 0) / 100) * 31),
+                'Link State': rd.state || 'Free',
+                state: rd.state || 'Free',
+                status: rd.status || 'Free'
+            };
+            if (allowedDongles !== null && !isDeviceAllowedForDongles(devObj, allowedDongles)) return;
+            remoteDevices.push(tagFederationDongleDevice(devObj, peerNode));
+        });
+
+        nodeModel.nodes.forEach(node => {
+            if (!node.is_local) {
+                node.dongle_count = remoteDevices.filter(d => String(d.nodeSite) === String(node.site_code)).length;
+            }
+        });
+
+        const devices = [...localDevices, ...remoteDevices];
         res.render('gsm-dongles', {
             devices,
             fedDongleNodes: nodeModel.nodes,

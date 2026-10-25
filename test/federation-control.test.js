@@ -240,6 +240,13 @@ test('Federation control: dongle page aggregates every PBX with per-node control
     assert.match(selector, /fedMultiNodePage/, 'the selector must know about multi-node pages');
     assert.match(view, /fedMultiNodePage: true/, 'the dongle console must disable the single-node shim');
     assert.doesNotMatch(view, /renderFederationRemoteDongles/, 'the read-only remote mirror is replaced by the merged grid');
+
+    // SMS sender dongle dropdown must aggregate across servers and switch active chats
+    assert.match(view, /function populateSmsReplyDongle\(/, 'view must define populateSmsReplyDongle to populate all fleet dongles');
+    assert.match(view, /id="sms-reply-dongle"/, 'view must render sms-reply-dongle select');
+    assert.match(view, /populateSmsReplyDongle\(selectedDongleId/, 'devices poll must refresh sms-reply-dongle');
+    assert.match(view, /replyDongleEl\.addEventListener\('change'[\s\S]*?selectDevice\(newKey/, 'sms-reply-dongle change must switch selected device');
+    assert.match(view, /replyDongleEl\.addEventListener\('change'[\s\S]*?renderSmsThreads\(\)/, 'sms-reply-dongle change must re-render threads');
 });
 
 test('Federation control: auto-dial tab aggregates every PBX with target node and per-node control', () => {

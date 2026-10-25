@@ -173,6 +173,7 @@ const words = {
         smsDeleteThreadConfirm: "Are you sure you want to delete this conversation thread?",
         smsClearAllConfirm: "Are you sure you want to clear all SMS messages?",
         smsSenderDongle: "Sender Dongle",
+        allDonglesOption: "All Dongles (Fleet)",
         smsIncoming: "Incoming",
         smsOutgoing: "Outgoing",
         smsSent: "Sent",
@@ -352,6 +353,7 @@ const words = {
         smsDeleteThreadConfirm: "هل أنت متأكد من حذف هذه المحادثة؟",
         smsClearAllConfirm: "هل أنت متأكد من مسح كافة الرسائل؟",
         smsSenderDongle: "شريحة الإرسال",
+        allDonglesOption: "كل الأجهزة (جميع السنترالات)",
         smsIncoming: "واردة",
         smsOutgoing: "صادرة",
         smsSent: "تم الإرسال",
@@ -1737,6 +1739,18 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                             </div>
                         </div>
                         <div class="flex items-center gap-1.5 shrink-0">
+                            <div class="w-full sm:w-fit min-w-0 max-w-[170px] sm:max-w-[220px]">
+                                <select id="sms-reply-dongle" class="text-xs font-semibold font-mono max-w-full" title="<%= t.smsSenderDongle || 'Sender Dongle' %>">
+                                    <option value="ALL"><%= t.allDonglesOption || (isRtl ? 'كل الأجهزة (جميع السنترالات)' : 'All Dongles (Fleet)') %></option>
+                                    <% if (devices && devices.length > 0) { %>
+                                        <% devices.forEach(d => { %>
+                                            <option value="<%= deviceKey(d) %>" <%= deviceKey(d) === initialSelectedDongleId ? 'selected' : '' %>><%= deviceLabel(d) %> (<%= d.Number || 'No SIM' %>)</option>
+                                        <% }) %>
+                                    <% } else { %>
+                                        <option value="dongle0">dongle0 (No SIM)</option>
+                                    <% } %>
+                                </select>
+                            </div>
                             <div class="flex items-center">
                                 <button type="button" onclick="toggleNewChatField()" id="sms-new-chat-btn" aria-expanded="false" aria-controls="sokrat-new-chat-drop" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--accent-color)] hover:opacity-90 text-white flex items-center gap-1 transition cursor-pointer shadow-sm">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
@@ -1795,19 +1809,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                                     </div>
                                 </div>
 
-                                <!-- Chat Actions (Dongle selector, delete thread) -->
-                                <div class="flex items-center gap-1.5 min-w-0 shrink sm:shrink-0 max-w-[130px] sm:max-w-none">
-                                    <div class="w-full sm:w-fit min-w-0 max-w-full">
-                                        <select id="sms-reply-dongle" class="text-xs font-semibold font-mono max-w-full" title="<%= t.smsSenderDongle || 'Sender Dongle' %>">
-                                            <% if (devices && devices.length > 0) { %>
-                                                <% devices.forEach(d => { %>
-                                                    <option value="<%= deviceKey(d) %>" <%= deviceKey(d) === initialSelectedDongleId ? 'selected' : '' %>><%= deviceLabel(d) %> (<%= d.Number || 'No SIM' %>)</option>
-                                                <% }) %>
-                                            <% } else { %>
-                                                <option value="dongle0">dongle0 (No SIM)</option>
-                                            <% } %>
-                                        </select>
-                                    </div>
+                                <!-- Chat Actions (Delete thread) -->
+                                <div class="flex items-center gap-1.5 shrink-0">
                                     <button type="button" onclick="deleteActiveThread()" class="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-[var(--bg-hover)] transition cursor-pointer" title="<%= t.smsDeleteThreadConfirm || 'Delete thread' %>">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                                     </button>
@@ -3852,7 +3855,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     selectedDongleSite = String(dev.nodeSite || FED_LOCAL_SITE);
                     updateSmsInboxTitle();
                     if (!options || !options.skipSms || previousSelected !== deviceKey) {
-                        if (previousSelected !== deviceKey) {
+                        if (previousSelected !== deviceKey && (!options || !options.preserveChat)) {
                             activeThreadEndpoint = null;
                             activeThreadKey = null;
                             pendingNewChatEndpoint = null;
@@ -3947,10 +3950,86 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     }
                 });
             }
+            function populateSmsReplyDongle(selectedKey) {
+                const el = document.getElementById('sms-reply-dongle');
+                if (!el) return;
+                const currentVal = selectedKey !== undefined ? selectedKey : (el.value || selectedDongleId || '');
+                el.innerHTML = '';
+
+                const allOpt = document.createElement('option');
+                allOpt.value = 'ALL';
+                allOpt.textContent = (t && t.allDonglesOption) || (words.allDonglesOption) || (isRtl ? 'كل الأجهزة (جميع السنترالات)' : 'All Dongles (Fleet)');
+                if (currentVal === 'ALL') allOpt.selected = true;
+                el.appendChild(allOpt);
+
+                const devs = (Array.isArray(loadedDevices) && loadedDevices.length > 0) ? loadedDevices : [];
+                if (devs.length > 0) {
+                    orderDevicesByNodes(devs).forEach(device => {
+                        const opt = document.createElement('option');
+                        const optionKey = devKey(device);
+                        const nodePrefix = FED_NODES.length > 1
+                            ? `${device.nodeName || fedNodeName(device.nodeSite)} · `
+                            : '';
+                        opt.value = optionKey;
+                        opt.textContent = `${nodePrefix}${device.ID || 'dongle0'} (${device.Number && device.Number !== 'Unknown' ? device.Number : 'No SIM'})`;
+                        if (optionKey === currentVal) {
+                            opt.selected = true;
+                        }
+                        el.appendChild(opt);
+                    });
+                }
+
+                if (!el.value && el.options.length > 1) {
+                    el.selectedIndex = 1;
+                }
+
+                if (typeof window.syncConfigDropdownTrigger === 'function') {
+                    window.syncConfigDropdownTrigger(el);
+                }
+            }
+
             const replyDongleEl = document.getElementById('sms-reply-dongle');
             if (replyDongleEl) {
                 replyDongleEl.addEventListener('change', (e) => {
                     if (isSyncingSelect) return;
+                    const newKey = e.target.value;
+                    if (!newKey) return;
+
+                    if (newKey === 'ALL') {
+                        selectedDongleId = 'ALL';
+                        updateSmsInboxTitle();
+                        renderSmsThreads();
+                        renderChatMessages();
+                    } else if (newKey !== selectedDongleId) {
+                        const prevEndpoint = activeThreadEndpoint;
+                        selectDevice(newKey, { preserveChat: Boolean(prevEndpoint) });
+
+                        if (prevEndpoint) {
+                            const targetDev = devByKey(newKey);
+                            if (targetDev) {
+                                const targetSite = String(targetDev.nodeSite || FED_LOCAL_SITE);
+                                const targetDongle = String(targetDev.ID || 'dongle0');
+                                const candidateKey = smsThreadKey(targetSite, targetDongle, prevEndpoint);
+
+                                const threads = groupSmsIntoThreads(allSmsMessages);
+                                const existing = threads.find(t => t.key === candidateKey);
+                                if (existing) {
+                                    selectSmsThread(candidateKey, false);
+                                } else {
+                                    activeThreadKey = candidateKey;
+                                    activeThreadEndpoint = prevEndpoint;
+                                    pendingNewChatKey = candidateKey;
+                                    pendingNewChatEndpoint = prevEndpoint;
+                                    renderChatMessages();
+                                    renderSmsThreads();
+                                }
+                            }
+                        } else {
+                            renderSmsThreads();
+                            renderChatMessages();
+                        }
+                    }
+
                     if (typeof window.syncConfigDropdownTrigger === 'function') {
                         window.syncConfigDropdownTrigger(replyDongleEl);
                     }
@@ -3964,15 +4043,24 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
 
             function updateSmsInboxTitle() {
                 const deviceEl = document.getElementById('sms-inbox-device');
-                const selectedDev = devByKey(selectedDongleId);
-                if (deviceEl) {
-                    deviceEl.textContent = selectedDev
-                        ? `${isRtl ? 'الجهاز المحدد' : 'Selected'}: ${selectedDev.ID}${FED_NODES.length > 1 ? ' · ' + (selectedDev.nodeName || fedNodeName(selectedDev.nodeSite)) : ''}`
-                        : (isRtl ? 'كل الأجهزة' : 'All dongles');
+                if (selectedDongleId === 'ALL') {
+                    if (deviceEl) deviceEl.textContent = isRtl ? 'كل الأجهزة (جميع السنترالات)' : 'All dongles (Fleet)';
+                } else {
+                    const selectedDev = devByKey(selectedDongleId);
+                    if (deviceEl) {
+                        deviceEl.textContent = selectedDev
+                            ? `${isRtl ? 'الجهاز المحدد' : 'Selected'}: ${selectedDev.ID}${FED_NODES.length > 1 ? ' · ' + (selectedDev.nodeName || fedNodeName(selectedDev.nodeSite)) : ''}`
+                            : (isRtl ? 'كل الأجهزة' : 'All dongles');
+                    }
                 }
                 const replyDongle = document.getElementById('sms-reply-dongle');
                 if (replyDongle && selectedDongleId && replyDongle.value !== selectedDongleId) {
+                    isSyncingSelect = true;
                     replyDongle.value = selectedDongleId;
+                    if (typeof window.syncConfigDropdownTrigger === 'function') {
+                        window.syncConfigDropdownTrigger(replyDongle);
+                    }
+                    isSyncingSelect = false;
                 }
             }
 
@@ -4803,7 +4891,18 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                 const listEl = document.getElementById('sms-threads-list');
                 if (!listEl) return;
 
-                const threads = groupSmsIntoThreads(allSmsMessages);
+                const allThreads = groupSmsIntoThreads(allSmsMessages);
+                let threads = allThreads;
+                if (selectedDongleId && selectedDongleId !== 'ALL') {
+                    const selectedDev = devByKey(selectedDongleId);
+                    if (selectedDev) {
+                        const selSite = String(selectedDev.nodeSite || FED_LOCAL_SITE);
+                        const selId = String(selectedDev.ID || '').toLowerCase().trim();
+                        threads = allThreads.filter(t => 
+                            String(t.nodeSite) === selSite && String(t.dongleId).toLowerCase().trim() === selId
+                        );
+                    }
+                }
                 updateSmsInboxCount(threads.length);
 
                 const query = smsSearchQuery.toLowerCase().trim();
@@ -4814,7 +4913,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                 if (filteredThreads.length === 0) {
                     listEl.innerHTML = `
                         <div class="text-center py-12 text-zinc-500 text-xs italic" id="sms-empty-placeholder">
-                            ${query ? (isRtl ? 'لا توجد نتائج بحث' : 'No matches found') : (isRtl ? 'لا توجد محادثات بعد' : 'No conversations yet')}
+                            ${query ? (isRtl ? 'لا توجد نتائج بحث' : 'No matches found') : (isRtl ? 'لا توجد محادثات على هذا الجهاز بعد' : 'No conversations on this dongle yet')}
                         </div>`;
                     // A pending brand-new conversation stays open even when the thread
                     // list is empty - the user still wants to write the first message.
@@ -4932,37 +5031,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     : (selectedDongleId || '');
 
                 if (replyDongleSelect) {
-                    replyDongleSelect.innerHTML = '';
-                    const devs = (loadedDevices && loadedDevices.length > 0) ? loadedDevices : [];
-                    if (devs.length > 0) {
-                        let preferredMatched = false;
-                        devs.forEach(d => {
-                            const opt = document.createElement('option');
-                            const optionKey = devKey(d);
-                            const nodePrefix = FED_NODES.length > 1 ? `${d.nodeName || fedNodeName(d.nodeSite)} · ` : '';
-                            opt.value = optionKey;
-                            opt.textContent = `${nodePrefix}${d.ID || 'dongle0'} (${d.Number && d.Number !== 'Unknown' ? d.Number : 'No SIM'})`;
-                            if (preferredKey && optionKey === preferredKey) {
-                                opt.selected = true;
-                                preferredMatched = true;
-                            }
-                            replyDongleSelect.appendChild(opt);
-                        });
-                        if (!preferredMatched && activeThread) {
-                            const fallback = devs.find(d => String(d.ID || '') === String(activeThread.dongleId || ''));
-                            if (fallback) replyDongleSelect.value = devKey(fallback);
-                        }
-                    } else {
-                        const fallbackKey = preferredKey || `${FED_LOCAL_SITE}:dongle0`;
-                        const opt = document.createElement('option');
-                        opt.value = fallbackKey;
-                        opt.textContent = fallbackKey;
-                        opt.selected = true;
-                        replyDongleSelect.appendChild(opt);
-                    }
-                    isSyncingSelect = true;
-                    replyDongleSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                    isSyncingSelect = false;
+                    populateSmsReplyDongle(preferredKey);
+                }
+                if (selectedDongleId !== 'ALL' && preferredKey && preferredKey !== selectedDongleId) {
+                    selectedDongleId = preferredKey;
+                    selectDevice(preferredKey, { skipSms: true, preserveChat: true });
                 }
 
                 renderSmsThreads();
@@ -5069,8 +5142,17 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                 const message = input.value.trim();
                 if (!message) return;
 
-                const targetKey = (dongleSelect && dongleSelect.value) ? dongleSelect.value : (selectedDongleId || '');
-                const targetDev = devByKey(targetKey);
+                const targetKey = (dongleSelect && dongleSelect.value && dongleSelect.value !== 'ALL') ? dongleSelect.value : (selectedDongleId && selectedDongleId !== 'ALL' ? selectedDongleId : '');
+                let targetDev = devByKey(targetKey);
+                if (!targetDev && activeThreadKey) {
+                    const parts = activeThreadKey.split('|');
+                    if (parts.length >= 2) {
+                        targetDev = devByKey(`${parts[0]}:${parts[1]}`) || devByKey(parts[1]);
+                    }
+                }
+                if (!targetDev) {
+                    targetDev = (loadedDevices && loadedDevices.length > 0) ? loadedDevices[0] : null;
+                }
                 if (!targetDev) {
                     showToast(isRtl ? 'فشل الإرسال' : 'Send Failed', isRtl ? 'اختر مودماً صالحاً للإرسال' : 'Select a valid dongle to send from', 'error');
                     return;
@@ -6285,6 +6367,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                         if (ussdTarget) {
                             populateTargetDropdown(ussdTarget, nextSelected, 'Unknown');
                         }
+                        populateSmsReplyDongle(selectedDongleId || nextSelected);
                         renderDongleCards();
                         if (typeof updateReportDropdowns === 'function') {
                             updateReportDropdowns();
