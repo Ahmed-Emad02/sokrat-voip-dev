@@ -82,10 +82,18 @@ module.exports = function createExtensionVideoRouter(pool) {
             const roomId = parseRoomId(req.params.id);
             const { room, extension } = await rooms.getJoinInfo(pool, roomId, req.sokratExtension);
             const participant = (room.participants || []).find((item) => item.extension === extension);
+            let displayName = extension;
+            try {
+                const [nameRows] = await pool.query(
+                    'SELECT name FROM asterisk.users WHERE extension = ? LIMIT 1',
+                    [extension],
+                );
+                if (nameRows.length && nameRows[0].name) displayName = String(nameRows[0].name);
+            } catch (_) {}
             const issued = tokens.issueToken({
                 roomName: room.livekit_name,
                 extension,
-                name: extension,
+                name: displayName,
                 role: participant ? participant.role : 'member',
             });
             await rooms.markJoined(pool, roomId, extension);
