@@ -136,3 +136,26 @@ HMAC-SHA256 implementation, or a native crypto module, to sign requests. Use
 the existing saved `SavedAccount.password`/`serverHost`; never expose the
 password to the chat UI. The API is REST-only for now; live updates will be
 added through the `/chat` Socket.IO namespace in the next phase.
+
+## Dashboard transcript and permissions
+
+The Sokrat VOIP dashboard exposes the server-side log:
+
+| Surface | Permission |
+| :--- | :--- |
+| `/chat-logs` page and transcript API | `chat-logs` |
+| Chat export API | `chat-logs-export` |
+
+The Call History top bar has an **Internal Chat Logs** button when the signed-in
+user has `chat-logs`. Permissions are managed with the normal dashboard group
+permissions; super admins have both.
+
+Admin API routes:
+
+- `GET /api/chat/admin/conversations`
+- `GET /api/chat/admin/conversations/:id/messages`
+- `GET /api/chat/admin/attachments/:id`
+- `GET /api/chat/admin/export?from=&to=&extension=&format=csv|json`
+
+Every transcript view, attachment download and export writes an audit row to
+`asterisk.chat_admin_audit`.

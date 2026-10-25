@@ -35,6 +35,7 @@ const createCrmRouter = require('./routes/crm-integration');
 const createExtensionContactsRouter = require('./routes/extension-contacts');
 const createExtensionChatRouter = require('./routes/extension-chat');
 const { attachChatSocket } = require('./lib/chat/socket');
+const chatStore = require('./lib/chat/store');
 const registerCrmLiveSocket = require('./socket/crm-live');
 const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
 const dialerFollowup = require('./lib/dialer-followup');
@@ -581,7 +582,9 @@ const PERMISSION_CATEGORIES = [
             { key: 'cdr-export', label: 'Export Call Logs (CSV)', labelAr: 'تصدير السجلات إلى CSV' },
             { key: 'cdr-audio-listen', label: 'Listen to Call Recordings', labelAr: 'الاستماع لتسجيلات المكالمات' },
             { key: 'cdr-audio-download', label: 'Download Recording Audio', labelAr: 'تحميل ملفات الصوت' },
-            { key: 'cdr-delete', label: 'Delete Call Records', labelAr: 'حذف سجلات المكالمات' }
+            { key: 'cdr-delete', label: 'Delete Call Records', labelAr: 'حذف سجلات المكالمات' },
+            { key: 'chat-logs', label: 'View Internal Chat Logs', labelAr: 'عرض سجل الدردشة الداخلية' },
+            { key: 'chat-logs-export', label: 'Export Chat Logs', labelAr: 'تصدير سجل الدردشة الداخلية' }
         ]
     },
     {
@@ -1519,6 +1522,7 @@ contacts: '/contacts',
 voicemails: '/voicemails',
         'gsm-dongles': '/gsm-dongles',
         campaigns: '/dialer',
+        'chat-logs': '/chat-logs',
 dialer: '/dialer',
 storage: '/storage',
 config: '/config'
@@ -2133,6 +2137,7 @@ const TAB_ROUTE_MAP = {
     '/users': 'users',
     '/config': 'config',
     '/dialer': 'campaigns',
+    '/chat-logs': 'chat-logs',
     '/storage': 'storage'
 };
 
@@ -2531,6 +2536,7 @@ app.use('/api/extension/v1', createExtensionContactsRouter(pool));
 
 // Internal extension-to-extension chat (HMAC, server-side transcript).
 const chatSocket = attachChatSocket(io, pool);
+void chatStore.ensureChatSchema(pool).catch((err) => console.error('[chat] schema init:', err.message));
 app.use('/api/extension-chat/v1', createExtensionChatRouter(pool, { chat: chatSocket }));
 
 // Register /crm-live Socket.io namespace
@@ -7001,6 +7007,104 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
 });
 
 // POST /api/cdr/delete — Delete a call history record
+
+// ── Internal chat transcript (dashboard) ─────────────────────────────────
+app.get('/api/chat/admin/conversations', requireAuth, requireActionPermission('chat-logs'), async (req, res) => {
+    try {
+        const conversations = await chatStore.listAdminConversations(pool, {
+            search: req.query.search || '',
+            limit: req.query.limit || 100
+        });
+        await chatStore.recordAdminAudit(pool, req.session && req.session.username, 'view_conversations', {
+            details: req.query.search ? `search:${String(req.query.search).slice(0, 100)}` : ''
+        });
+        res.set('Cache-Control', 'no-store');
+        res.json({ success: true, conversations });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/chat/admin/conversations/:id/messages', requireAuth, requireActionPermission('chat-logs'), async (req, res) => {
+    try {
+        const conversationId = Number(req.params.id);
+        const result = await chatStore.getAdminMessages(pool, conversationId, req.query.before_id, req.query.limit);
+        await chatStore.recordAdminAudit(pool, req.session && req.session.username, 'view_transcript', {
+            conversationId
+        });
+        res.set('Cache-Control', 'no-store');
+        res.json({ success: true, ...result });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/chat/admin/attachments/:id', requireAuth, requireActionPermission('chat-logs'), async (req, res) => {
+    try {
+        const attachment = await chatStore.getAdminAttachment(pool, req.params.id);
+        const uploadDir = path.resolve(process.env.CHAT_UPLOAD_DIR || '/var/lib/sokrat-voip/chat-uploads');
+        const filePath = path.join(uploadDir, path.basename(attachment.stored_name));
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ success: false, error: 'Attachment file is missing.' });
+        }
+        await chatStore.recordAdminAudit(pool, req.session && req.session.username, 'download_attachment', {
+            attachmentId: Number(attachment.id),
+            messageId: attachment.message_id ? Number(attachment.message_id) : null,
+            details: attachment.original_name
+        });
+        res.set('Cache-Control', 'private, max-age=0');
+        res.set('X-Content-Type-Options', 'nosniff');
+        if (attachment.kind === 'image') {
+            res.type(attachment.mime);
+            return res.sendFile(filePath);
+        }
+        return res.download(filePath, attachment.original_name);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/chat/admin/export', requireAuth, requireActionPermission('chat-logs-export'), async (req, res) => {
+    try {
+        const rows = await chatStore.exportAdminMessages(pool, {
+            from: req.query.from ? `${req.query.from} 00:00:00` : undefined,
+            to: req.query.to ? `${req.query.to} 23:59:59` : undefined,
+            extension: req.query.extension || ''
+        });
+        await chatStore.recordAdminAudit(pool, req.session && req.session.username, 'export', {
+            details: `rows:${rows.length} from:${req.query.from || ''} to:${req.query.to || ''} ext:${req.query.extension || ''}`
+        });
+        if (String(req.query.format || '').toLowerCase() === 'json') {
+            return res.json({ success: true, messages: rows });
+        }
+        const cell = (value) => {
+            let text = String(value == null ? '' : value);
+            if (/^[=+\-@]/.test(text)) text = `'${text}`;
+            return `"${text.replace(/"/g, '""')}"`;
+        };
+        const header = ['conversation_id', 'message_id', 'created_at', 'sender_extension', 'type', 'body', 'attachments'];
+        const lines = [header.join(',')];
+        for (const row of rows) {
+            lines.push([
+                row.conversation_id,
+                row.id,
+                row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+                row.sender_extension,
+                row.type,
+                row.body,
+                row.attachment_names || ''
+            ].map(cell).join(','));
+        }
+        const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        res.set('Content-Type', 'text/csv; charset=utf-8');
+        res.set('Content-Disposition', `attachment; filename="chat-logs-${stamp}.csv"`);
+        res.set('Cache-Control', 'no-store');
+        return res.send('\uFEFF' + lines.join('\r\n'));
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.post('/api/cdr/delete', requireAuth, async (req, res) => {
     try {
         const perms = req.session.userPermissions || [];
@@ -13731,6 +13835,27 @@ app.get('/config', requireAuth, (req, res) => {
         isRoot
     });
 });
+
+// GET /chat-logs - internal extension chat transcript (permission: chat-logs)
+app.get('/chat-logs', requireAuth, (req, res) => {
+    const currentLang = res.locals.currentLang || 'en';
+    const perms = (req.session && req.session.userPermissions) || [];
+    const superAdmin = isSuperAdmin(req);
+    const root = hasRootAccess(req);
+    if (!superAdmin && !root && !perms.includes('chat-logs')) {
+        return res.status(403).render('403', { currentLang, isRtl: currentLang === 'ar' });
+    }
+    res.render('chat-logs', {
+        currentLang,
+        isRtl: currentLang === 'ar',
+        isSuperAdmin: superAdmin,
+        isRoot: root,
+        currentPage: '/chat-logs',
+        canExport: superAdmin || root || perms.includes('chat-logs-export'),
+        allowedTabs: res.locals.allowedTabs || perms
+    });
+});
+
 // GET /dialer - render Auto-Dial Center view (Root Only)
 app.get('/dialer', requireAuth, (req, res) => {
     const isRoot = hasRootAccess(req);

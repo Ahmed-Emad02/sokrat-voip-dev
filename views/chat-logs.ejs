@@ -1,0 +1,327 @@
+<%
+const words = {
+    en: {
+        title: 'Internal', subtitle: 'Chat Logs',
+        desc: 'Every extension-to-extension conversation stored by Sokrat VOIP',
+        search: 'Search extension, name or message...',
+        conversations: 'Conversations', messages: 'Transcript',
+        from: 'From', to: 'To', extension: 'Extension',
+        exportCsv: 'Export CSV', exportJson: 'Export JSON', refresh: 'Refresh',
+        empty: 'No conversations match this search.',
+        open: 'Select a conversation to view its transcript.',
+        noMessages: 'No messages in this conversation.',
+        sender: 'Sender', attachments: 'Attachments',
+        contact: 'Shared contact', contactExtension: 'Extension',
+        loading: 'Loading...', messageCount: 'messages',
+        image: 'Image', document: 'Document', download: 'Download'
+    },
+    ar: {
+        title: 'سجل', subtitle: 'الدردشة الداخلية',
+        desc: 'كل محادثة بين التحويلات محفوظة داخل سقراط VOIP',
+        search: 'ابحث بالتحويل أو الاسم أو نص الرسالة...',
+        conversations: 'المحادثات', messages: 'المحادثة',
+        from: 'من', to: 'إلى', extension: 'التحويل',
+        exportCsv: 'تصدير CSV', exportJson: 'تصدير JSON', refresh: 'تحديث',
+        empty: 'لا توجد محادثات مطابقة للبحث.',
+        open: 'اختر محادثة لعرض تفاصيلها.',
+        noMessages: 'لا توجد رسائل في هذه المحادثة.',
+        sender: 'المرسل', attachments: 'المرفقات',
+        contact: 'جهة اتصال مشتركة', contactExtension: 'التحويل',
+        loading: 'جارٍ التحميل...', messageCount: 'رسالة',
+        image: 'صورة', document: 'مستند', download: 'تحميل'
+    }
+};
+const t = words[currentLang] || words.en;
+const isRtl = currentLang === 'ar';
+const canExportLogs = typeof canExport !== 'undefined' && canExport;
+%>
+<!DOCTYPE html>
+<html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<head>
+    <script>
+        (function () {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.classList.toggle('light-theme', theme === 'light');
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sokrat VOIP - <%= t.title %> <%= t.subtitle %></title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        :root {
+            --chat-bg: var(--bg-main, #050507);
+            --chat-surface: var(--bg-surface, #101014);
+            --chat-card: var(--bg-card, #101014);
+            --chat-border: var(--border-subtle, rgba(255,255,255,.08));
+            --chat-text: var(--text-primary, #f4f4f5);
+            --chat-muted: var(--text-secondary, #a1a1aa);
+            --chat-dim: var(--text-dim, #85858f);
+            --chat-accent: var(--accent-color, #ef4444);
+        }
+        * { box-sizing: border-box; }
+        body {
+            background: var(--chat-bg);
+            color: var(--chat-text);
+            font-family: 'Cairo', 'JetBrains Mono', system-ui, sans-serif;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .panel { background: var(--chat-surface); border: 1px solid var(--chat-border); border-radius: 14px; }
+        .conversation-item { cursor: pointer; transition: background .15s ease, border-color .15s ease; border: 1px solid transparent; }
+        .conversation-item:hover { background: var(--bg-hover, #1c1c24); }
+        .conversation-item.active { background: rgba(239,68,68,.10); border-color: rgba(239,68,68,.32); }
+        .msg-bubble { background: var(--chat-card); border: 1px solid var(--chat-border); border-radius: 12px; padding: 10px 12px; max-width: 78%; }
+        .msg-bubble .msg-head { color: var(--chat-dim); font-size: 10px; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
+        .msg-bubble .msg-body { font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .msg-bubble .msg-attachments { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+        .msg-bubble .attachment { display: flex; align-items: center; gap: 8px; background: var(--bg-input, #0a0a0f); border: 1px solid var(--chat-border); border-radius: 8px; padding: 7px 9px; font-size: 11px; color: var(--chat-muted); text-decoration: none; }
+        .msg-bubble .attachment:hover { border-color: var(--chat-accent); color: var(--chat-text); }
+        .msg-bubble img { max-width: 260px; max-height: 180px; border-radius: 8px; border: 1px solid var(--chat-border); display: block; }
+        .contact-card { margin-top: 8px; background: var(--bg-input, #0a0a0f); border: 1px solid rgba(239,68,68,.28); border-radius: 10px; padding: 10px; }
+        .contact-card .contact-name { font-size: 13px; font-weight: 800; }
+        .contact-card .contact-meta { color: var(--chat-dim); font-size: 11px; margin-top: 3px; }
+        .filter-input { background: var(--bg-input, #0a0a0f); border: 1px solid var(--chat-border); border-radius: 8px; color: var(--chat-text); padding: 8px 10px; font-size: 11px; outline: none; }
+        .filter-input:focus { border-color: var(--chat-accent); box-shadow: 0 0 0 2px rgba(239,68,68,.16); }
+        .tool-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--chat-card); border: 1px solid var(--chat-border); color: var(--chat-text); border-radius: 8px; padding: 8px 11px; font-size: 11px; font-weight: 700; cursor: pointer; text-decoration: none; transition: background .15s ease, border-color .15s ease; }
+        .tool-btn:hover { background: var(--bg-hover, #1c1c24); border-color: var(--chat-accent); }
+        .tool-btn.primary { background: var(--chat-accent); border-color: var(--chat-accent); color: #fff; }
+        .empty-state { color: var(--chat-dim); text-align: center; padding: 40px 16px; font-size: 12px; }
+        @media (max-width: 900px) {
+            .chat-grid { grid-template-columns: 1fr !important; }
+            .chat-list { max-height: 320px; }
+            .msg-bubble { max-width: 92%; }
+        }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen">
+    <%- include('sidebar') %>
+    <div class="flex-1 p-5 md:p-6 relative">
+        <%- include('partials/node-scope-selector') %>
+
+        <div class="mb-4 flex items-start justify-between gap-4 flex-wrap">
+            <div>
+                <h2 class="text-2xl font-extrabold tracking-tight m-0"><%= t.title %> <span style="color: var(--chat-accent);"><%= t.subtitle %></span></h2>
+                <p class="text-xs mt-1" style="color: var(--chat-muted);"><%= t.desc %></p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+                <button type="button" class="tool-btn" onclick="loadConversations()" title="<%= t.refresh %>">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    <%= t.refresh %>
+                </button>
+                <% if (canExportLogs) { %>
+                <button type="button" class="tool-btn" onclick="exportLogs('csv')"><%= t.exportCsv %></button>
+                <button type="button" class="tool-btn" onclick="exportLogs('json')"><%= t.exportJson %></button>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="panel p-3 mb-4 flex items-end gap-2 flex-wrap">
+            <div class="flex-1 min-w-[220px]">
+                <label class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.search %></label>
+                <input id="chatSearch" class="filter-input w-full" type="search" placeholder="<%= t.search %>" oninput="debouncedSearch()">
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.from %></label>
+                <input id="chatFrom" class="filter-input" type="date">
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.to %></label>
+                <input id="chatTo" class="filter-input" type="date">
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.extension %></label>
+                <input id="chatExtension" class="filter-input mono" style="width: 100px;" type="text" placeholder="107">
+            </div>
+        </div>
+
+        <div class="chat-grid grid gap-4" style="grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);">
+            <section class="panel p-3 chat-list" style="min-height: 0;">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider" style="color: var(--chat-muted);"><%= t.conversations %></h3>
+                    <span id="conversationCount" class="mono text-[10px]" style="color: var(--chat-dim);"></span>
+                </div>
+                <div id="conversationList" class="flex flex-col gap-1.5" style="overflow-y: auto; max-height: calc(100vh - 300px);">
+                    <div class="empty-state"><%= t.loading %></div>
+                </div>
+            </section>
+
+            <section class="panel p-4" style="min-height: 0;">
+                <div id="transcriptHeader" class="flex items-center justify-between gap-3 mb-3 pb-3" style="border-bottom: 1px solid var(--chat-border);">
+                    <div>
+                        <h3 id="transcriptTitle" class="text-sm font-extrabold m-0"><%= t.messages %></h3>
+                        <p id="transcriptMeta" class="text-[10px] mt-1 mb-0" style="color: var(--chat-dim);"><%= t.open %></p>
+                    </div>
+                    <span id="transcriptCount" class="mono text-[10px]" style="color: var(--chat-dim);"></span>
+                </div>
+                <div id="transcript" class="flex flex-col gap-2.5" style="overflow-y: auto; max-height: calc(100vh - 300px);">
+                    <div class="empty-state"><%= t.open %></div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        const isRtl = <%= isRtl ? 'true' : 'false' %>;
+        const canExport = <%= canExportLogs ? 'true' : 'false' %>;
+        const labels = {
+            empty: <%= JSON.stringify(t.empty) %>,
+            noMessages: <%= JSON.stringify(t.noMessages) %>,
+            messageCount: <%= JSON.stringify(t.messageCount) %>,
+            messages: <%= JSON.stringify(t.messages) %>,
+            sender: <%= JSON.stringify(t.sender) %>,
+            contact: <%= JSON.stringify(t.contact) %>,
+            contactExtension: <%= JSON.stringify(t.contactExtension) %>,
+            image: <%= JSON.stringify(t.image) %>,
+            document: <%= JSON.stringify(t.document) %>,
+            download: <%= JSON.stringify(t.download) %>
+        };
+        let conversations = [];
+        let selectedId = null;
+        let searchTimer = null;
+
+        function escapeHtml(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[ch]));
+        }
+        function fmtTime(value) {
+            if (!value) return '';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return '';
+            return d.toLocaleString(isRtl ? 'ar-EG' : 'en-GB', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        }
+        function fmtBytes(bytes) {
+            const n = Number(bytes) || 0;
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+            return (n / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        function participantText(conversation) {
+            return (conversation.participants || []).map((p) => p.extension).join(' · ');
+        }
+        function lastPreview(conversation) {
+            const last = conversation.last_message;
+            if (!last) return '';
+            if (last.type === 'attachment') return '[' + labels.document + ']';
+            if (last.type === 'contact') return '[' + labels.contact + ']';
+            return last.body || '';
+        }
+        async function loadConversations() {
+            const search = document.getElementById('chatSearch').value.trim();
+            try {
+                const res = await fetch('/api/chat/admin/conversations?search=' + encodeURIComponent(search), { credentials: 'same-origin' });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load conversations');
+                conversations = data.conversations || [];
+                renderConversations();
+                if (selectedId && !conversations.some((c) => c.id === selectedId)) {
+                    selectedId = null;
+                    document.getElementById('transcript').innerHTML = '<div class="empty-state">' + escapeHtml(labels.empty) + '</div>';
+                    document.getElementById('transcriptTitle').textContent = <%= JSON.stringify(t.messages) %>;
+                    document.getElementById('transcriptMeta').textContent = <%= JSON.stringify(t.open) %>;
+                }
+            } catch (err) {
+                document.getElementById('conversationList').innerHTML = '<div class="empty-state">' + escapeHtml(err.message) + '</div>';
+            }
+        }
+        function renderConversations() {
+            const list = document.getElementById('conversationList');
+            document.getElementById('conversationCount').textContent = conversations.length;
+            if (!conversations.length) {
+                list.innerHTML = '<div class="empty-state">' + escapeHtml(labels.empty) + '</div>';
+                return;
+            }
+            list.innerHTML = conversations.map((conversation) => {
+                const active = conversation.id === selectedId ? ' active' : '';
+                const preview = lastPreview(conversation);
+                return '<div class="conversation-item' + active + ' p-2.5 rounded-lg" onclick="openConversation(' + conversation.id + ')">' +
+                    '<div class="flex items-center justify-between gap-2">' +
+                        '<span class="mono text-[11px] font-bold">' + escapeHtml(participantText(conversation)) + '</span>' +
+                        '<span class="text-[9px]" style="color: var(--chat-dim);">' + escapeHtml(fmtTime(conversation.last_message_at || conversation.created_at)) + '</span>' +
+                    '</div>' +
+                    '<div class="flex items-center justify-between gap-2 mt-1">' +
+                        '<span class="text-[10px] truncate" style="color: var(--chat-muted);">' + escapeHtml(preview.slice(0, 80)) + '</span>' +
+                        '<span class="mono text-[9px]" style="color: var(--chat-dim);">' + (conversation.message_count || 0) + '</span>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        }
+        async function openConversation(id) {
+            selectedId = Number(id);
+            renderConversations();
+            const conversation = conversations.find((c) => c.id === selectedId);
+            document.getElementById('transcriptTitle').textContent = conversation ? participantText(conversation) : labels.messages;
+            document.getElementById('transcriptMeta').textContent = conversation ? ((conversation.message_count || 0) + ' ' + labels.messageCount) : '';
+            document.getElementById('transcript').innerHTML = '<div class="empty-state">' + escapeHtml(labels.messageCount) + '…</div>';
+            try {
+                const res = await fetch('/api/chat/admin/conversations/' + encodeURIComponent(id) + '/messages?limit=200', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load transcript');
+                renderMessages(data.messages || []);
+            } catch (err) {
+                document.getElementById('transcript').innerHTML = '<div class="empty-state">' + escapeHtml(err.message) + '</div>';
+            }
+        }
+        function renderMessages(messages) {
+            const box = document.getElementById('transcript');
+            document.getElementById('transcriptCount').textContent = messages.length;
+            if (!messages.length) {
+                box.innerHTML = '<div class="empty-state">' + escapeHtml(labels.noMessages) + '</div>';
+                return;
+            }
+            box.innerHTML = messages.map((message) => {
+                const attachments = (message.attachments || []).map((a) => {
+                    const url = '/api/chat/admin/attachments/' + a.id;
+                    if (a.kind === 'image') {
+                        return '<a class="attachment" href="' + url + '" target="_blank" rel="noopener"><img src="' + url + '" alt="" style="max-width: 220px; max-height: 150px; border: 0;"></a>';
+                    }
+                    return '<a class="attachment" href="' + url + '" target="_blank" rel="noopener">' +
+                        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
+                        '<span>' + escapeHtml(a.original_name) + '</span><span style="margin-inline-start:auto;color:var(--chat-dim);">' + fmtBytes(a.size_bytes) + '</span></a>';
+                }).join('');
+                let contactCard = '';
+                if (message.type === 'contact' && message.metadata) {
+                    const c = message.metadata;
+                    contactCard = '<div class="contact-card">' +
+                        '<div class="contact-name">' + escapeHtml(c.name || c.extension || '') + '</div>' +
+                        '<div class="contact-meta">' + escapeHtml(c.company || '') + '</div>' +
+                        '<div class="contact-meta mono">' + escapeHtml(labels.contactExtension) + ': ' + escapeHtml(c.extension || '') + (c.phone ? ' · ' + escapeHtml(c.phone) : '') + '</div>' +
+                    '</div>';
+                }
+                return '<div class="msg-bubble">' +
+                    '<div class="msg-head"><span class="mono" style="color: var(--chat-accent);">' + escapeHtml(message.sender_extension) + '</span><span>' + escapeHtml(fmtTime(message.created_at)) + '</span></div>' +
+                    (message.body ? '<div class="msg-body">' + escapeHtml(message.body) + '</div>' : '') +
+                    (attachments ? '<div class="msg-attachments">' + attachments + '</div>' : '') +
+                    contactCard +
+                '</div>';
+            }).join('');
+        }
+        function debouncedSearch() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(loadConversations, 350);
+        }
+        function exportLogs(format) {
+            if (!canExport) return;
+            const params = new URLSearchParams();
+            const from = document.getElementById('chatFrom').value;
+            const to = document.getElementById('chatTo').value;
+            const extension = document.getElementById('chatExtension').value.trim();
+            if (from) params.set('from', from);
+            if (to) params.set('to', to);
+            if (extension) params.set('extension', extension);
+            params.set('format', format);
+            window.location.href = '/api/chat/admin/export?' + params.toString();
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            loadConversations();
+            setInterval(loadConversations, 15000);
+        });
+    </script>
+</body>
+</html>
