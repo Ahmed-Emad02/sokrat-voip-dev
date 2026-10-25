@@ -182,7 +182,13 @@ module.exports = function createExtensionChatRouter(pool, options) {
 
     router.get('/extensions', async (req, res) => {
         try {
-            const extensions = await chatStore.listChatExtensions(pool);
+            const online = new Set(chat && typeof chat.onlineExtensions === 'function'
+                ? chat.onlineExtensions()
+                : []);
+            const extensions = (await chatStore.listChatExtensions(pool)).map((item) => ({
+                ...item,
+                online: online.has(String(item.extension)),
+            }));
             res.set('Cache-Control', 'no-store');
             return res.json({ success: true, extensions });
         } catch (err) {
