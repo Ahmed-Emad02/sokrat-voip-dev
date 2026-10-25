@@ -111,10 +111,11 @@ test('Time Conditions Engine: Destination routing handles true/false branch targ
 test('Time Groups: Evaluates Asterisk wrap-around weekdays and clean timespec syntax', () => {
     const serverCode = fs.readFileSync(path.join(rootDir, 'server.js'), 'utf8');
 
-    // Extract formatWeekdaysFromActiveDays from server.js
+    // Extract getContiguousDayRanges and formatWeekdaysFromActiveDays from server.js
+    const helperMatch = serverCode.match(/function getContiguousDayRanges\([\s\S]*?^}/m);
     const match = serverCode.match(/function formatWeekdaysFromActiveDays\([\s\S]*?^}/m);
     assert.ok(match, 'formatWeekdaysFromActiveDays must be defined in server.js');
-    const fn = new Function(`${match[0]}; return formatWeekdaysFromActiveDays;`)();
+    const fn = new Function(`${helperMatch ? helperMatch[0] : ''}; ${match[0]}; return formatWeekdaysFromActiveDays;`)();
 
     // Sat-Thu (Arab/Egypt standard workweek) must produce 'sat-thu'
     assert.strictEqual(fn(['sat', 'sun', 'mon', 'tue', 'wed', 'thu']), 'sat-thu');
@@ -128,6 +129,19 @@ test('Time Groups: Evaluates Asterisk wrap-around weekdays and clean timespec sy
     assert.strictEqual(fn(['fri']), 'fri');
     // All 7 days -> '*'
     assert.strictEqual(fn(['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri']), '*');
+
+    // Multi-segment non-contiguous days decomposition
+    const multiFn = new Function(`${helperMatch[0]}; return getContiguousDayRanges;`)();
+    assert.deepStrictEqual(multiFn(['sun', 'tue', 'thu']), ['tue', 'thu', 'sun']);
+    assert.deepStrictEqual(multiFn(['sat', 'sun', 'mon', 'wed', 'thu']), ['wed-thu', 'sat-mon']);
+});
+
+test('Time Conditions Engine: Syncs FreePBX feature codes and destination hooks', () => {
+    const serverCode = fs.readFileSync(path.join(rootDir, 'server.js'), 'utf8');
+
+    assert.match(serverCode, /syncTimeConditionFeatureCode/, 'server.js must define syncTimeConditionFeatureCode');
+    assert.match(serverCode, /providedest\s*=\s*1/, 'featurecodes sync must provide destination for FreePBX');
+    assert.match(serverCode, /removeTimeConditionFeatureCode/, 'server.js must define removeTimeConditionFeatureCode');
 });
 
 test('Time Groups & Outbound Routes: views/config.ejs supports optional CallerID and Route CID', () => {

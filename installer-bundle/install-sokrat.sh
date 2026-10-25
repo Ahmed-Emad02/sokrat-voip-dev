@@ -2099,6 +2099,22 @@ if old in content:
     print("  Patched queue recording MixMonitor (dropped bridged-only flag)")
 PY_RECQUEUE
 
+# Patch Issabel Time Groups unclosed <select> tag bug in functions.inc.php
+python3 - << 'PY_TC_FIX'
+import os
+path = "/var/www/html/admin/modules/timeconditions/functions.inc.php"
+if os.path.exists(path):
+    try:
+        content = open(path, "r", encoding="utf-8").read()
+        target = '$html = $html."<option value=\\"sun\\" $default>" . __("Sunday");\n\n\t$html = $html.\'</td>\';'
+        replacement = '$html = $html."<option value=\\"sun\\" $default>" . __("Sunday");\n\t$html = $html.\'</select>\';\n\t$html = $html.\'</td>\';'
+        if target in content:
+            open(path, "w", encoding="utf-8").write(content.replace(target, replacement))
+            print("  Patched Issabel Time Groups unclosed select tag in functions.inc.php")
+    except Exception:
+        pass
+PY_TC_FIX
+
 # Strip old [func-apply-sipheaders-custom] before appending
 echo "  Stripping old [func-apply-sipheaders-custom]..."
 python3 -c "import re;f=open('/etc/asterisk/extensions_custom.conf').read();f=re.sub(r'\[func-apply-sipheaders-custom\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('/etc/asterisk/extensions_custom.conf','w').write(f)"
@@ -2387,11 +2403,6 @@ if [ -f /etc/asterisk/dongle.conf ] && grep -q '^\[dongle0\]' /etc/asterisk/dong
         sed -i 's/^;callwaiting=.*/callwaiting=no/' /etc/asterisk/dongle.conf
     elif ! grep -q '^callwaiting=' /etc/asterisk/dongle.conf; then
         sed -i '/^\[defaults\]/a callwaiting=no' /etc/asterisk/dongle.conf
-    fi
-    if grep -q '^;*u2diag=' /etc/asterisk/dongle.conf; then
-        sed -i 's/^;*u2diag=.*/u2diag=0/' /etc/asterisk/dongle.conf
-    elif ! grep -q '^u2diag=' /etc/asterisk/dongle.conf; then
-        sed -i '/^\[defaults\]/a u2diag=0' /etc/asterisk/dongle.conf
     fi
 else
     echo "  Configuring $NUM_DONGLES dongle(s)..."

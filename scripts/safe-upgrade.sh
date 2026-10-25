@@ -259,15 +259,6 @@ fi
 # ---------------------------------------------------------------------------
 # Hardware Dongle Stability & Power Optimization
 # ---------------------------------------------------------------------------
-if [ -f /etc/asterisk/dongle.conf ]; then
-    if grep -q '^;*u2diag=' /etc/asterisk/dongle.conf; then
-        sed -i 's/^;*u2diag=.*/u2diag=0/' /etc/asterisk/dongle.conf
-    elif ! grep -q '^u2diag=' /etc/asterisk/dongle.conf; then
-        sed -i '/^\[defaults\]/a u2diag=0' /etc/asterisk/dongle.conf
-    fi
-    echo "  dongle.conf: u2diag=0 enforced (disables virtual CD-ROM/SD to reduce power draw)"
-fi
-
 # Prevent NetworkManager from managing cellular WWAN interfaces (CDC NCM)
 mkdir -p /etc/NetworkManager/conf.d
 cat > /etc/NetworkManager/conf.d/99-unmanaged-wwan.conf << 'EOF'
@@ -774,6 +765,19 @@ exten => s,n,Return()
             with open(override_conf, "w", encoding="utf-8") as f:
                 f.write(ov_content)
             print("  Patched queue recording MixMonitor (dropped bridged-only flag)")
+
+        # Patch Issabel Time Groups unclosed <select> tag bug in functions.inc.php
+        _tc_php = "/var/www/html/admin/modules/timeconditions/functions.inc.php"
+        if os.path.exists(_tc_php):
+            try:
+                _tc_code = open(_tc_php, "r", encoding="utf-8").read()
+                _tc_old = '$html = $html."<option value=\\"sun\\" $default>" . __("Sunday");\n\n\t$html = $html.\'</td>\';'
+                _tc_new = '$html = $html."<option value=\\"sun\\" $default>" . __("Sunday");\n\t$html = $html.\'</select>\';\n\t$html = $html.\'</td>\';'
+                if _tc_old in _tc_code:
+                    open(_tc_php, "w", encoding="utf-8").write(_tc_code.replace(_tc_old, _tc_new))
+                    print("  Patched Issabel Time Groups unclosed select tag in functions.inc.php")
+            except Exception:
+                pass
 
     # Update [ext-external-failover] with smart alternate dongle selection
     content = re.sub(r'\[ext-external-failover\].*?(?=\n\[|\Z)', '', content, flags=re.DOTALL)

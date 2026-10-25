@@ -11737,7 +11737,59 @@ app.get('/api/storage/info', requireAuth, requireTabPermission('storage'), async
 
         const cpu = getSystemCpuMetrics();
         const memory = getSystemMemoryMetrics();
-        res.json({ success: true, disk, recordings, db, settings, cpu, memory });
+        const localInfo = { success: true, disk, recordings, db, settings, cpu, memory };
+
+        if (isFederationTrusted(req)) {
+            return res.json(localInfo);
+        }
+
+        const scope = res.locals.federationScope;
+        const includeLocal = federationScopeIncludesLocal(scope);
+        const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope, {
+            path: '/api/storage/info'
+        });
+
+        const servers = [];
+        for (const n of nodes) {
+            const site = String(n.site_code);
+            const nodeName = n.node_name || (n.is_local ? 'Main PBX' : `Site ${site}`);
+            if (n.is_local) {
+                if (includeLocal) {
+                    servers.push({
+                        siteCode: site,
+                        nodeName,
+                        status: 'online',
+                        isLocal: true,
+                        ...localInfo
+                    });
+                }
+            } else {
+                const read = readsBySite.get(site);
+                if (read && read.data && read.data.success) {
+                    servers.push({
+                        siteCode: site,
+                        nodeName,
+                        status: 'online',
+                        isLocal: false,
+                        ...read.data
+                    });
+                } else {
+                    servers.push({
+                        siteCode: site,
+                        nodeName,
+                        status: 'offline',
+                        isLocal: false,
+                        error: read ? read.error : 'Unreachable'
+                    });
+                }
+            }
+        }
+
+        res.json({
+            ...localInfo,
+            servers,
+            nodes
+        });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
@@ -12220,7 +12272,7 @@ app.get('/api/system/resources', requireAuth, requireTabPermission('storage'), a
         };
 
         recordTelemetrySample();
-        res.json({
+        const localPayload = {
             success: true,
             cpu,
             memory,
@@ -12231,6 +12283,58 @@ app.get('/api/system/resources', requireAuth, requireTabPermission('storage'), a
             usb,
             systemUptimeSec: Math.round(os.uptime()),
             history: telemetryHistory
+        };
+
+        if (isFederationTrusted(req)) {
+            return res.json(localPayload);
+        }
+
+        const scope = res.locals.federationScope;
+        const includeLocal = federationScopeIncludesLocal(scope);
+        const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope, {
+            path: '/api/system/resources'
+        });
+
+        const servers = [];
+        for (const n of nodes) {
+            const site = String(n.site_code);
+            const nodeName = n.node_name || (n.is_local ? 'Main PBX' : `Site ${site}`);
+            if (n.is_local) {
+                if (includeLocal) {
+                    servers.push({
+                        siteCode: site,
+                        nodeName,
+                        status: 'online',
+                        isLocal: true,
+                        ...localPayload
+                    });
+                }
+            } else {
+                const read = readsBySite.get(site);
+                if (read && read.data && read.data.success) {
+                    servers.push({
+                        siteCode: site,
+                        nodeName,
+                        status: read.error ? 'offline' : 'online',
+                        isLocal: false,
+                        ...read.data
+                    });
+                } else {
+                    servers.push({
+                        siteCode: site,
+                        nodeName,
+                        status: 'offline',
+                        isLocal: false,
+                        error: read ? read.error : 'Unreachable'
+                    });
+                }
+            }
+        }
+
+        res.json({
+            ...localPayload,
+            servers,
+            nodes
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -12280,7 +12384,33 @@ app.get('/api/system/resources/history', requireAuth, requireTabPermission('stor
 app.get('/api/system/services', requireAuth, requireTabPermission('storage'), async (req, res) => {
     try {
         const services = getCoreServicesStatus();
-        res.json({ success: true, services });
+        if (isFederationTrusted(req)) {
+            return res.json({ success: true, services });
+        }
+
+        const scope = res.locals.federationScope;
+        const includeLocal = federationScopeIncludesLocal(scope);
+        const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope, {
+            path: '/api/system/services'
+        });
+
+        const mergedServices = [];
+        for (const node of nodes) {
+            const site = String(node.site_code);
+            const nodeName = node.node_name || (node.is_local ? 'Main PBX' : `Site ${site}`);
+            if (node.is_local) {
+                if (includeLocal) {
+                    services.forEach(s => mergedServices.push({ ...s, nodeSite: site, nodeName, nodeStatus: 'online' }));
+                }
+            } else {
+                const read = readsBySite.get(site);
+                if (read && read.data && Array.isArray(read.data.services)) {
+                    read.data.services.forEach(s => mergedServices.push({ ...s, nodeSite: site, nodeName, nodeStatus: read.error ? 'offline' : 'online' }));
+                }
+            }
+        }
+
+        res.json({ success: true, services: mergedServices, nodes });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -17937,32 +18067,69 @@ app.get('/api/config/diagram', async (req, res) => {
 
 // --- TIME GROUPS API ---
 
-function formatWeekdaysFromActiveDays(days) {
+function getContiguousDayRanges(days) {
     if (!days || !Array.isArray(days) || days.length === 0 || days.includes('*')) {
-        return '*';
+        return ['*'];
     }
-    const circle = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-    const active = days.map(d => String(d).toLowerCase().trim()).filter(d => circle.includes(d));
-    if (active.length === 0 || active.length === 7) return '*';
-    if (active.length === 1) return active[0];
+    const order = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    const active = days.map(d => String(d).toLowerCase().trim()).filter(d => order.includes(d));
+    if (active.length === 0 || active.length === 7) return ['*'];
 
     const activeSet = new Set(active);
+
+    // 1. Single wrap-around contiguous interval check
     for (let s = 0; s < 7; s++) {
         let matches = true;
         for (let step = 0; step < active.length; step++) {
-            const day = circle[(s + step) % 7];
+            const day = order[(s + step) % 7];
             if (!activeSet.has(day)) {
                 matches = false;
                 break;
             }
         }
         if (matches) {
-            const startDay = circle[s];
-            const finishDay = circle[(s + active.length - 1) % 7];
-            return `${startDay}-${finishDay}`;
+            const startDay = order[s];
+            const finishDay = order[(s + active.length - 1) % 7];
+            return [startDay === finishDay ? startDay : `${startDay}-${finishDay}`];
         }
     }
-    return active.join('&');
+
+    // 2. Multi-segment split for non-contiguous days
+    let breakIdx = -1;
+    for (let i = 0; i < 7; i++) {
+        if (!activeSet.has(order[i])) {
+            breakIdx = i;
+            break;
+        }
+    }
+
+    const segments = [];
+    let currentSeg = [];
+    for (let i = 1; i <= 7; i++) {
+        const day = order[(breakIdx + i) % 7];
+        if (activeSet.has(day)) {
+            currentSeg.push(day);
+        } else {
+            if (currentSeg.length > 0) {
+                const s = currentSeg[0];
+                const f = currentSeg[currentSeg.length - 1];
+                segments.push(s === f ? s : `${s}-${f}`);
+                currentSeg = [];
+            }
+        }
+    }
+    if (currentSeg.length > 0) {
+        const s = currentSeg[0];
+        const f = currentSeg[currentSeg.length - 1];
+        segments.push(s === f ? s : `${s}-${f}`);
+    }
+
+    return segments.length > 0 ? segments : ['*'];
+}
+
+function formatWeekdaysFromActiveDays(days) {
+    const ranges = getContiguousDayRanges(days);
+    return ranges[0] || '*';
 }
 
 function normalizeIssabelDestination(dest) {
@@ -18000,9 +18167,11 @@ function formatTimeRange(start, finish) {
 function formatMonthDayRange(start, finish) {
     const s = String(start || '').trim();
     const f = String(finish || '').trim();
-    if ((!s || s === '*' || s === '*-*') && (!f || f === '*' || f === '*-*')) return '*';
-    if (!s || s === '*' || s === '*-*') return f;
-    if (!f || f === '*' || f === '*-*') return s;
+    const sEmpty = !s || s === '*' || s === '*-*';
+    const fEmpty = !f || f === '*' || f === '*-*';
+    if (sEmpty && fEmpty) return '*';
+    if (!sEmpty && fEmpty) return `${s}-31`;
+    if (sEmpty && !fEmpty) return `1-${f}`;
     if (s === f) return s;
     return `${s}-${f}`;
 }
@@ -18010,9 +18179,11 @@ function formatMonthDayRange(start, finish) {
 function formatMonthRange(start, finish) {
     const s = String(start || '').toLowerCase().trim();
     const f = String(finish || '').toLowerCase().trim();
-    if ((!s || s === '*' || s === '*-*') && (!f || f === '*' || f === '*-*')) return '*';
-    if (!s || s === '*' || s === '*-*') return f;
-    if (!f || f === '*' || f === '*-*') return s;
+    const sEmpty = !s || s === '*' || s === '*-*';
+    const fEmpty = !f || f === '*' || f === '*-*';
+    if (sEmpty && fEmpty) return '*';
+    if (!sEmpty && fEmpty) return `${s}-dec`;
+    if (sEmpty && !fEmpty) return `jan-${f}`;
     if (s === f) return s;
     return `${s}-${f}`;
 }
@@ -18076,11 +18247,17 @@ async function insertTimeGroupRules(groupid, rules) {
     if (rules && Array.isArray(rules) && rules.length > 0) {
         for (const rule of rules) {
             const ruleName = String(rule.name || rule.display_name || '').trim();
-            const timeStr = formatIssabelTimeRule(rule);
-            await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, ruleName]);
+            const dayRanges = (rule.active_days && Array.isArray(rule.active_days))
+                ? getContiguousDayRanges(rule.active_days)
+                : [(rule.weekday || '*')];
+
+            for (const wkRange of dayRanges) {
+                const timeStr = formatIssabelTimeRule(rule, wkRange);
+                if (timeStr && timeStr !== '*|*|*|*') {
+                    await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, ruleName]);
+                }
+            }
         }
-    } else {
-        await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, '*|*|*|*', '']);
     }
 }
 
@@ -18194,6 +18371,30 @@ app.delete('/api/config/timegroups/:id', async (req, res) => {
 
 // --- TIME CONDITIONS API ---
 
+async function syncTimeConditionFeatureCode(timeconditionsId, displayName) {
+    const id = parseInt(timeconditionsId, 10);
+    if (isNaN(id) || id <= 0) return;
+    const desc = displayName ? `${id}: ${String(displayName).trim()}` : `${id}: Time Condition Override`;
+    const defaultCode = `*27${id}`;
+    await pool.query(`
+        INSERT INTO \`asterisk\`.\`featurecodes\` (modulename, featurename, description, defaultcode, customcode, enabled, providedest)
+        VALUES ('timeconditions', ?, ?, ?, NULL, 1, 1)
+        ON DUPLICATE KEY UPDATE description = VALUES(description), enabled = 1, providedest = 1
+    `, [`toggle-mode-${id}`, desc, defaultCode]).catch(() => {});
+}
+
+async function removeTimeConditionFeatureCode(timeconditionsId) {
+    const id = parseInt(timeconditionsId, 10);
+    if (isNaN(id) || id <= 0) return;
+    await pool.query(`
+        DELETE FROM \`asterisk\`.\`featurecodes\`
+        WHERE modulename = 'timeconditions' AND featurename = ?
+    `, [`toggle-mode-${id}`]).catch(() => {});
+    try {
+        await execPromise(`${ASTERISK_BIN} -rx "database deltree TC/${id}"`);
+    } catch (_) {}
+}
+
 // GET /api/config/timeconditions - Retrieve all time conditions
 app.get('/api/config/timeconditions', async (req, res) => {
     try {
@@ -18231,8 +18432,11 @@ app.post('/api/config/timeconditions', async (req, res) => {
             VALUES (?, ?, ?, ?, '', 0, NULL)
         `, [displayname.trim(), timegroup_id, normTrue, normFalse]);
 
+        const newId = r.insertId;
+        await syncTimeConditionFeatureCode(newId, displayname);
+
         await reloadPbxConfigPromise();
-        res.json({ success: true, message: 'Time Condition created successfully', id: r.insertId });
+        res.json({ success: true, message: 'Time Condition created successfully', id: newId });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -18262,6 +18466,8 @@ app.put('/api/config/timeconditions/:id', async (req, res) => {
             WHERE timeconditions_id = ?
         `, [displayname.trim(), timegroup_id, normTrue, normFalse, id]);
 
+        await syncTimeConditionFeatureCode(id, displayname);
+
         await reloadPbxConfigPromise();
         res.json({ success: true, message: 'Time Condition updated successfully' });
     } catch (error) {
@@ -18274,6 +18480,7 @@ app.delete('/api/config/timeconditions/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         await pool.query('DELETE FROM `asterisk`.`timeconditions` WHERE timeconditions_id = ?', [id]);
+        await removeTimeConditionFeatureCode(id);
 
         await reloadPbxConfigPromise();
         res.json({ success: true, message: 'Time Condition deleted successfully' });
