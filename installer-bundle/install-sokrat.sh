@@ -2388,6 +2388,11 @@ if [ -f /etc/asterisk/dongle.conf ] && grep -q '^\[dongle0\]' /etc/asterisk/dong
     elif ! grep -q '^callwaiting=' /etc/asterisk/dongle.conf; then
         sed -i '/^\[defaults\]/a callwaiting=no' /etc/asterisk/dongle.conf
     fi
+    if grep -q '^;*u2diag=' /etc/asterisk/dongle.conf; then
+        sed -i 's/^;*u2diag=.*/u2diag=0/' /etc/asterisk/dongle.conf
+    elif ! grep -q '^u2diag=' /etc/asterisk/dongle.conf; then
+        sed -i '/^\[defaults\]/a u2diag=0' /etc/asterisk/dongle.conf
+    fi
 else
     echo "  Configuring $NUM_DONGLES dongle(s)..."
     TEMP_CONF="/tmp/dongle.conf.tmp"
@@ -2472,7 +2477,15 @@ fi
 
 # Disable USB autosuspend via modprobe & udev rules
 echo "options usbcore autosuspend=-1" > /etc/modprobe.d/usbcore.conf
-echo 'ACTION=="add", SUBSYSTEM=="usb", ATTR{power/control}="on"' > /etc/udev/rules.d/99-disable-usb-autosuspend.rules
+echo 'ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{power/control}="on"' > /etc/udev/rules.d/99-disable-usb-autosuspend.rules
+
+# Prevent NetworkManager from managing or probing cellular WWAN interfaces (CDC NCM)
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/99-unmanaged-wwan.conf << 'EOF'
+[keyfile]
+unmanaged-devices=interface-name:ww*
+EOF
+nmcli general reload 2>/dev/null || systemctl reload NetworkManager 2>/dev/null || true
 
 # Live apply USB autosuspend disable immediately
 echo -1 > /sys/module/usbcore/parameters/autosuspend 2>/dev/null || true
@@ -3036,10 +3049,9 @@ Environment=LC_ALL=en_US.UTF-8
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
-# Laya Autonomous Agent is installed but disabled by default until switched on by root in the UI
-systemctl disable sokrat-laya.service 2>/dev/null || true
-systemctl stop sokrat-laya.service 2>/dev/null || true
-echo "  Sokrat Laya GSM maintenance daemon installed (disabled by default until enabled in UI)"
+systemctl enable sokrat-laya.service 2>/dev/null || true
+systemctl start sokrat-laya.service 2>/dev/null || true
+echo "  Sokrat Laya GSM autonomous maintenance daemon enabled and started"
 
 # Decommission Webmin if present
 systemctl stop webmin 2>/dev/null || true

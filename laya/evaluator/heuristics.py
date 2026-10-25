@@ -13,6 +13,7 @@ ANOMALY_UNINITIALIZED_CONNECTED = "UNINITIALIZED_CONNECTED"
 ANOMALY_CARRIER_DROP = "CARRIER_DROP"
 ANOMALY_MODEM_FIRMWARE_DEAD = "MODEM_FIRMWARE_DEAD"
 ANOMALY_HARDWARE_ABSENT = "HARDWARE_ABSENT"
+ANOMALY_SMS_STORAGE_FULL = "SMS_STORAGE_FULL"
 
 # States that indicate the modem is genuinely not usable right now
 BROKEN_STATES = (
@@ -66,6 +67,15 @@ def evaluate_dongle_anomalies(health_data, detail=None):
                 f"Modem AT queue deadlock ({commands} commands, {tasks} tasks in queue)",
                 3  # Level 3: Targeted Dongle Restart
             )
+
+    # 3b. Check for Modem SMS Flash Storage Full / Carrier Retry Storm
+    if health_data.get("sms_fault_confirmed"):
+        return (
+            ANOMALY_SMS_STORAGE_FULL,
+            f"Modem SMS flash storage full or memory error ('{health_data.get('sms_fault_signature')}', "
+            f"{health_data.get('sms_fault_count')} occurrence(s))",
+            1  # Level 1: Soft hygiene purge AT+CMGD=1,4
+        )
 
     # 4. MODEM FIRMWARE DEADLOCK (ground truth from the driver's own error signature).
     #    The chan_dongle driver logs "timedout while waiting 'OK' in response to 'AT'"

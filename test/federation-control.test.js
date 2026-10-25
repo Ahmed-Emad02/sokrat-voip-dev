@@ -241,3 +241,34 @@ test('Federation control: dongle page aggregates every PBX with per-node control
     assert.match(view, /fedMultiNodePage: true/, 'the dongle console must disable the single-node shim');
     assert.doesNotMatch(view, /renderFederationRemoteDongles/, 'the read-only remote mirror is replaced by the merged grid');
 });
+
+test('Federation control: auto-dial tab aggregates every PBX with target node and per-node control', () => {
+    const view = fs.readFileSync(path.join(__dirname, '..', 'views', 'dialer.ejs'), 'utf8');
+    const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+
+    // Scope selector included
+    assert.match(view, /include\('partials\/node-scope-selector',\s*\{\s*fedMultiNodePage:\s*true\s*\}\)/, 'dialer must render the scope selector');
+
+    // Routing and node dividers
+    assert.match(view, /function fedDialerFetch\(/, 'dialer must define fedDialerFetch for remote actions');
+    assert.match(view, /function buildCampaignNodeDivider\(/, 'dialer must divide campaigns per server');
+    assert.match(view, /id="campTargetNode"/, 'modal must include target PBX selector for campaign creation');
+    assert.match(view, /updateTargetPbxDropdown\(/, 'dialer must support updating target PBX dropdown');
+
+    // Server-side campaigns aggregation
+    assert.match(server, /app\.get\('\/api\/dialer\/campaigns'[\s\S]*?getFederationNodeReadModel/, 'campaigns endpoint must aggregate across federation nodes');
+    assert.match(server, /app\.get\('\/api\/dialer\/attempts\/recent'[\s\S]*?getFederationNodeReadModel/, 'attempts endpoint must aggregate across federation nodes');
+    assert.match(server, /req\.body\.fileBase64/, 'lead import must support base64 uploads for remote relay');
+});
+
+test('Federation control: gsm dongles monitor aggregates USB hardware and serial ports across nodes', () => {
+    const view = fs.readFileSync(path.join(__dirname, '..', 'views', 'gsm-dongles.ejs'), 'utf8');
+    const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+
+    // Server-side aggregation
+    assert.match(server, /app\.get\('\/api\/gsm-dongles\/ttyusb-devices'[\s\S]*?getFederationNodeReadModel/, 'ttyusb-devices endpoint must aggregate across federation nodes');
+
+    // View renders dividers and node tags
+    assert.match(view, /function buildUsbNodeDivider\(/, 'view must define buildUsbNodeDivider for multi-server USB hardware');
+    assert.match(view, /getUsbSignature[\s\S]*?nodeSite/, 'USB signature must track nodeSite');
+});

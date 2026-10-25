@@ -489,6 +489,54 @@ def scan_asterisk_log_for_dongle_faults(dongle_id, log_path="/var/log/asterisk/f
 
     return (count > 0), found_sig, count
 
+def scan_asterisk_log_for_sms_faults(dongle_id, log_path="/var/log/asterisk/full", lookback_seconds=300):
+    """
+    Parses the Asterisk log for SMS storage errors and full-memory warnings:
+      - "SMS storage is full"
+      - "+CMS ERROR: 322"
+      - "Error parsing incoming message"
+    """
+    sms_sigs = ["SMS storage is full", "+CMS ERROR: 322", "Error parsing incoming message"]
+    try:
+        if not os.path.isfile(log_path):
+            return False, "", 0
+        size = os.path.getsize(log_path)
+        read_size = min(size, 4 * 1024 * 1024)
+        with open(log_path, "rb") as f:
+            f.seek(size - read_size)
+            raw = f.read().decode(errors="ignore")
+    except Exception:
+        return False, "", 0
+
+    now = datetime.datetime.now()
+    found_sig = ""
+    count = 0
+
+    for line in raw.splitlines():
+        if f"[{dongle_id}]" not in line and f"[{dongle_id.lower()}]" not in line:
+            continue
+        is_sms_fault = any(s in line for s in sms_sigs)
+        if not is_sms_fault:
+            continue
+        ts_match = re.match(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', line)
+        if ts_match:
+            try:
+                line_ts = datetime.datetime.strptime(ts_match.group(1), "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                line_ts = now
+            if (now - line_ts).total_seconds() > lookback_seconds:
+                continue
+        else:
+            continue
+        count += 1
+        if not found_sig:
+            for s in sms_sigs:
+                if s in line:
+                    found_sig = s
+                    break
+
+    return (count > 0), found_sig, count
+
 def get_total_active_calls():
     """
     Returns the total number of active calls across Asterisk.

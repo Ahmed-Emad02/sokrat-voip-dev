@@ -30,7 +30,8 @@ from laya.sensors.cli import (
     parse_active_channels,
     get_total_active_calls,
     is_any_dongle_call_active,
-    scan_asterisk_log_for_dongle_faults
+    scan_asterisk_log_for_dongle_faults,
+    scan_asterisk_log_for_sms_faults
 )
 from laya.sensors.sysfs import scan_usb_modems
 from laya.sensors.db import (
@@ -221,12 +222,18 @@ class LayaEngine:
             at_fault, at_sig, at_count = scan_asterisk_log_for_dongle_faults(
                 dongle_id, lookback_seconds=AT_FAULT_LOOKBACK_SEC
             )
+            sms_fault, sms_sig, sms_count = scan_asterisk_log_for_sms_faults(
+                dongle_id, lookback_seconds=AT_FAULT_LOOKBACK_SEC
+            )
 
             # Update state machine
             health_data = self.state_mgr.update_dongle(dev, detail, active_channels, usb_modems)
             health_data["at_fault_confirmed"] = at_fault
             health_data["at_fault_signature"] = at_sig
             health_data["at_fault_count"] = at_count
+            health_data["sms_fault_confirmed"] = sms_fault
+            health_data["sms_fault_signature"] = sms_sig
+            health_data["sms_fault_count"] = sms_count
             self.last_dongle_cache[dongle_id] = health_data
 
             # Anomaly evaluation

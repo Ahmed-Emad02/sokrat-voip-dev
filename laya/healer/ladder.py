@@ -16,10 +16,12 @@ from laya.evaluator.heuristics import (
     ANOMALY_UNINITIALIZED_CONNECTED,
     ANOMALY_CARRIER_DROP,
     ANOMALY_MODEM_FIRMWARE_DEAD,
-    ANOMALY_HARDWARE_ABSENT
+    ANOMALY_HARDWARE_ABSENT,
+    ANOMALY_SMS_STORAGE_FULL
 )
 from laya.healer.actions import (
     action_soft_at_probe,
+    action_flush_sms_storage,
     action_hangup_channel,
     action_restart_dongle,
     action_sysfs_usb_reset,
@@ -117,11 +119,10 @@ class RecoveryLadder:
         details = ""
 
         if target_level == 1:
-            # Layer 4-A: if the modem is alive but has lost its carrier
-            # registration, a radio stack re-attach (AT+CFUN=1) is the correct
-            # remedy. It restarts ONLY the radio stack, so the USB device never
-            # drops off the bus and the modem never needs a physical replug.
-            if anomaly_type == ANOMALY_CARRIER_DROP and self._cfun_allowed():
+            if anomaly_type == ANOMALY_SMS_STORAGE_FULL:
+                action_name = f"Level 1: Flush SMS Storage ({dongle_id})"
+                success, details = action_flush_sms_storage(dongle_id, reason)
+            elif anomaly_type == ANOMALY_CARRIER_DROP and self._cfun_allowed():
                 action_name = f"Level 1: Baseband Radio Re-attach AT+CFUN=1 ({dongle_id})"
                 success, details = action_cfun_restart(dongle_id, reason)
             else:

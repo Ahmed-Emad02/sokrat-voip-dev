@@ -256,6 +256,50 @@ if [ "$REC_CALLREC_TABLE" != "0" ]; then
     echo "  Inbound routes: call recording enabled by default (callrecording=force)"
 fi
 
+# ---------------------------------------------------------------------------
+# Hardware Dongle Stability & Power Optimization
+# ---------------------------------------------------------------------------
+if [ -f /etc/asterisk/dongle.conf ]; then
+    if grep -q '^;*u2diag=' /etc/asterisk/dongle.conf; then
+        sed -i 's/^;*u2diag=.*/u2diag=0/' /etc/asterisk/dongle.conf
+    elif ! grep -q '^u2diag=' /etc/asterisk/dongle.conf; then
+        sed -i '/^\[defaults\]/a u2diag=0' /etc/asterisk/dongle.conf
+    fi
+    echo "  dongle.conf: u2diag=0 enforced (disables virtual CD-ROM/SD to reduce power draw)"
+fi
+
+# Prevent NetworkManager from managing cellular WWAN interfaces (CDC NCM)
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/99-unmanaged-wwan.conf << 'EOF'
+[keyfile]
+unmanaged-devices=interface-name:ww*
+EOF
+nmcli general reload 2>/dev/null || systemctl reload NetworkManager 2>/dev/null || true
+
+# Fix udev autosuspend rule to prevent permission denied on USB interfaces
+if [ -f /etc/udev/rules.d/99-disable-usb-autosuspend.rules ]; then
+    echo 'ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{power/control}="on"' > /etc/udev/rules.d/99-disable-usb-autosuspend.rules
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger 2>/dev/null || true
+fi
+
+# Enable and start Sokrat Laya Autonomous Maintenance Daemon
+if [ -f /etc/systemd/system/sokrat-laya.service ]; then
+    systemctl daemon-reload
+    systemctl enable sokrat-laya.service 2>/dev/null || true
+    systemctl restart sokrat-laya.service 2>/dev/null || true
+    echo "  Sokrat Laya GSM autonomous maintenance daemon enabled and active"
+fi
+
+# Flush saturated SMS storage on all active dongles
+if command -v asterisk >/dev/null 2>&1; then
+    for d in $(asterisk -rx "dongle show devices" 2>/dev/null | awk 'NR>1 {print $1}'); do
+        [ -n "$d" ] || continue
+        asterisk -rx "dongle cmd $d AT+CMGD=1,4" >/dev/null 2>&1 || true
+    done
+    echo "  Modem SMS storage flushed via AT+CMGD=1,4"
+fi
+
 # Decommission local whisper and migrate STT settings to Cloud AI
 mysql "${MYSQL_AUTH[@]}" asterisk -e "
     UPDATE stt_settings

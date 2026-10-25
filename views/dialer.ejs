@@ -174,6 +174,8 @@ const isRtl = activeLang === 'ar';
     <%- include('sidebar', { activeTab: 'dialer', isRtl, currentLang: activeLang }) %>
 
     <div class="flex-1 p-6 md:p-8 overflow-y-auto">
+        <%- include('partials/node-scope-selector', { fedMultiNodePage: true }) %>
+
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div class="flex items-center gap-2.5">
                 <h1 class="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight"><%= t.title %></h1>
@@ -266,6 +268,13 @@ const isRtl = activeLang === 'ar';
                         <div class="p-3.5 bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-xl space-y-3">
                             <div class="flex items-center gap-2 pb-1.5 border-b border-[var(--border-primary)]">
                                 <span class="text-xs font-black uppercase tracking-wider text-[var(--text-secondary)]"><%= isRtl ? 'بيانات الحملة وتوزيع المكالمات' : 'Campaign Basics & Pacing' %></span>
+                            </div>
+                            <div id="campTargetNodeContainer" class="hidden">
+                                <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campTargetNode">
+                                    <%= isRtl ? 'السيرفر المستهدف (المقسم)' : 'Target PBX Server' %> <span class="text-rose-400">*</span>
+                                </label>
+                                <select id="campTargetNode" onchange="onCampTargetNodeChange()" class="config-input w-full text-xs font-semibold">
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-[11px] font-bold text-[var(--text-secondary)] uppercase mb-1" for="campName"><%= t.campaignName %> <span class="text-rose-400">*</span></label>
@@ -569,6 +578,139 @@ const isRtl = activeLang === 'ar';
     <script>
         const t = <%- JSON.stringify(t) %>;
         const isRtl = Boolean(<%- JSON.stringify(isRtl) %>);
+        const FED_LOCAL_SITE = <%- JSON.stringify(String((typeof fedLocalSite !== 'undefined' && fedLocalSite) || (typeof federationScope !== 'undefined' && federationScope && federationScope.localSiteCode) || '10')).replace(/</g, '\\u003c') %>;
+        let FED_NODES = <%- JSON.stringify(typeof federationNodes !== 'undefined' && Array.isArray(federationNodes) ? federationNodes : []).replace(/</g, '\\u003c') %>;
+        const FED_CAN_RELAY = <%- Boolean(typeof isSuperAdmin !== 'undefined' && isSuperAdmin) %>;
+
+        function fedNode(siteCode) {
+            const site = String(siteCode || FED_LOCAL_SITE);
+            return FED_NODES.find(n => String(n.site_code) === site) || null;
+        }
+
+        function fedNodeName(siteCode) {
+            const node = fedNode(siteCode);
+            return (node && node.node_name) || ('Site ' + String(siteCode || ''));
+        }
+
+        function setFedNodes(nodes) {
+            if (!Array.isArray(nodes) || nodes.length === 0) return;
+            FED_NODES = nodes.map(node => ({
+                site_code: String(node.site_code),
+                node_name: node.node_name || ('Site ' + node.site_code),
+                is_local: Boolean(node.is_local),
+                status: node.status || 'online',
+                error: node.error || null
+            }));
+            updateTargetPbxDropdown();
+        }
+
+        async function fedRelayAction(siteCode, path, options = {}) {
+            const site = String(siteCode || FED_LOCAL_SITE);
+            const method = String(options.method || 'GET').toUpperCase();
+            const headers = options.headers || {};
+            const contentType = headers['Content-Type'] || headers['content-type'] || null;
+
+            let body = options.body;
+            let bodyEncoding = null;
+            if (body && typeof body === 'object' && !(body instanceof FormData)) {
+                body = JSON.stringify(body);
+            }
+
+            const gatewayUrl = '/api/federation/peers/' + encodeURIComponent(site) + '/action';
+            const gatewayRes = await fetch(gatewayUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    method: method,
+                    path: path,
+                    body: body,
+                    bodyEncoding: bodyEncoding,
+                    contentType: contentType
+                })
+            });
+            return gatewayRes;
+        }
+
+        function fedDialerFetch(path, options = {}, nodeSite = null) {
+            const site = String(nodeSite || FED_LOCAL_SITE);
+            if (!site || site === FED_LOCAL_SITE) return fetch(path, options);
+            if (!FED_CAN_RELAY) {
+                return Promise.resolve(new Response(JSON.stringify({
+                    success: false,
+                    error: isRtl ? 'التحكم في سيرفر بعيد يتطلب مديراً أعلى.' : 'Remote PBX control requires a super administrator.'
+                }), { status: 403, headers: { 'Content-Type': 'application/json' } }));
+            }
+            return fedRelayAction(site, path, options);
+        }
+
+        function updateTargetPbxDropdown(selectedSite = null) {
+            const container = document.getElementById('campTargetNodeContainer');
+            const select = document.getElementById('campTargetNode');
+            if (!container || !select) return;
+            if (!FED_NODES || FED_NODES.length <= 1) {
+                container.classList.add('hidden');
+                return;
+            }
+            container.classList.remove('hidden');
+            const current = selectedSite || select.value || FED_LOCAL_SITE;
+            select.innerHTML = FED_NODES.map(node => {
+                const site = String(node.site_code);
+                const isSelected = site === current;
+                return `<option value="${escapeHtml(site)}"${isSelected ? ' selected' : ''}>${escapeHtml(node.node_name || ('Site ' + site))} (Site ${escapeHtml(site)})</option>`;
+            }).join('');
+        }
+
+        function getSelectedTargetPbx() {
+            const select = document.getElementById('campTargetNode');
+            return (select && select.value) ? select.value : FED_LOCAL_SITE;
+        }
+
+        function onCampTargetNodeChange() {
+            const site = getSelectedTargetPbx();
+            loadDongles(site);
+            loadExtensions(site);
+            loadOutboundRoutes(site);
+        }
+
+        window.downloadDialerFile = async function(url, filename, nodeSite = null) {
+            const site = String(nodeSite || FED_LOCAL_SITE);
+            if (!site || site === FED_LOCAL_SITE) {
+                window.location.href = url;
+                return;
+            }
+            showToast(isRtl ? 'جاري التحميل...' : 'Downloading...', 'info');
+            try {
+                const res = await fedDialerFetch(url, { method: 'GET' }, site);
+                if (!res.ok) throw new Error('Download failed (' + res.status + ')');
+                const blob = await res.blob();
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename || 'download.csv';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        };
+
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = String(reader.result || '');
+                    const commaIdx = result.indexOf(',');
+                    resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : result);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
         let cachedDongles = [];
         let cachedExtensions = [];
         let currentLoadedLeads = [];
@@ -1161,13 +1303,16 @@ const isRtl = activeLang === 'ar';
             renderFollowupFields();
         }
 
-        async function openFollowupsModal(campaignId, campaignName) {
-            document.getElementById('followupsCampaignName').textContent = campaignName || '';
+        async function openFollowupsModal(campaignId, campaignName, nodeSite = null) {
+            const site = String(nodeSite || FED_LOCAL_SITE);
+            const nodePrefix = (FED_NODES.length > 1) ? `${fedNodeName(site)} · ` : '';
+            document.getElementById('followupsCampaignName').textContent = `${nodePrefix}${campaignName || ''}`;
             const content = document.getElementById('followupsContent');
             content.innerHTML = `<div class="text-xs text-[var(--text-muted)] italic p-4">${isRtl ? 'جاري التحميل...' : 'Loading...'}</div>`;
             openModal('followupsModal');
             try {
-                const res = await fetch('/api/dialer/followups?campaign_id=' + encodeURIComponent(campaignId));
+                const url = '/api/dialer/followups?campaign_id=' + encodeURIComponent(campaignId);
+                const res = (site === FED_LOCAL_SITE) ? await fetch(url) : await fedDialerFetch(url, {}, site);
                 const data = await res.json();
                 const rows = Array.isArray(data.followups) ? data.followups : [];
                 if (rows.length === 0) {
@@ -1210,21 +1355,27 @@ const isRtl = activeLang === 'ar';
         function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
         function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
-        async function loadDongles() {
+        async function loadDongles(targetNode = null, selectedArray = []) {
             try {
-                const res = await fetch('/api/dialer/dongles');
+                const site = String(targetNode || getSelectedTargetPbx() || FED_LOCAL_SITE);
+                const res = (site === FED_LOCAL_SITE)
+                    ? await fetch('/api/dialer/dongles')
+                    : await fedDialerFetch('/api/dialer/dongles', {}, site);
                 const data = await res.json();
                 cachedDongles = data.dongles || [];
-                renderDonglesCheckboxes();
+                renderDonglesCheckboxes(selectedArray);
             } catch (_) {}
         }
 
-        async function loadExtensions() {
+        async function loadExtensions(targetNode = null, selectedArray = []) {
             try {
-                const res = await fetch('/api/config/extensions');
+                const site = String(targetNode || getSelectedTargetPbx() || FED_LOCAL_SITE);
+                const res = (site === FED_LOCAL_SITE)
+                    ? await fetch('/api/config/extensions')
+                    : await fedDialerFetch('/api/config/extensions', {}, site);
                 const data = await res.json();
                 cachedExtensions = data.extensions || [];
-                renderAgentsCheckboxes();
+                renderAgentsCheckboxes(selectedArray);
             } catch (_) {}
         }
 
@@ -1304,6 +1455,23 @@ const isRtl = activeLang === 'ar';
             activeCampaignMenuId = null;
         }
 
+        function buildCampaignNodeDivider(siteCode, nodeName, nodeStatus) {
+            const site = String(siteCode || FED_LOCAL_SITE);
+            const node = fedNode(site) || {};
+            const status = nodeStatus || node.status || 'online';
+            const dotClass = status === 'online' ? 'bg-emerald-400' : (status === 'offline' ? 'bg-rose-500' : 'bg-amber-400');
+            const statusClass = status === 'online' ? 'text-emerald-400' : (status === 'offline' ? 'text-rose-400' : 'text-amber-400');
+            const div = document.createElement('div');
+            div.className = 'col-span-full flex items-center gap-2 py-2 px-3.5 rounded-xl bg-[var(--bg-card)]/80 border border-[var(--border-primary)] shadow-sm mb-1';
+            div.innerHTML = `
+                <span class="w-2 h-2 rounded-full shrink-0 ${dotClass}"></span>
+                <span class="text-xs font-black text-[var(--text-primary)] truncate">${escapeHtml(nodeName || node.node_name || ('Site ' + site))}</span>
+                <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site ${escapeHtml(site)}</span>
+                <span class="text-[9px] font-extrabold uppercase tracking-wide ms-auto ${statusClass}">${escapeHtml(status)}</span>
+            `;
+            return div;
+        }
+
         async function loadCampaigns(isBackground = false) {
             if (isBackground && activeCampaignMenuId !== null) {
                 // Keep the active dropdown stable and uninterrupted during user interaction
@@ -1314,6 +1482,9 @@ const isRtl = activeLang === 'ar';
                 const data = await res.json();
                 const container = document.getElementById('campaignsContainer');
                 if (!container) return;
+                if (Array.isArray(data.nodes)) {
+                    setFedNodes(data.nodes);
+                }
                 const openId = activeCampaignMenuId;
                 container.innerHTML = '';
                 if (!data.campaigns || data.campaigns.length === 0) {
@@ -1322,7 +1493,25 @@ const isRtl = activeLang === 'ar';
                     return;
                 }
 
-                data.campaigns.forEach(c => {
+                const multiNode = FED_NODES.length > 1 || new Set((data.campaigns || []).map(c => String(c.nodeSite || FED_LOCAL_SITE))).size > 1;
+                const siteOrder = new Map(FED_NODES.map((n, i) => [String(n.site_code), i]));
+                const sortedCampaigns = (data.campaigns || []).slice().sort((a, b) => {
+                    const sa = String(a.nodeSite || FED_LOCAL_SITE);
+                    const sb = String(b.nodeSite || FED_LOCAL_SITE);
+                    const oa = siteOrder.has(sa) ? siteOrder.get(sa) : 99;
+                    const ob = siteOrder.has(sb) ? siteOrder.get(sb) : 99;
+                    return oa - ob || sa.localeCompare(sb) || (b.id - a.id);
+                });
+                lastLoadedCampaigns = sortedCampaigns;
+
+                let renderedSite = null;
+                sortedCampaigns.forEach(c => {
+                    const site = String(c.nodeSite || FED_LOCAL_SITE);
+                    if (multiNode && site !== renderedSite) {
+                        renderedSite = site;
+                        container.appendChild(buildCampaignNodeDivider(c.nodeSite, c.nodeName, c.nodeStatus));
+                    }
+
                     const s = c.stats || {};
                     const total = s.total_leads || 0;
                     const pending = s.pending_leads || 0;
@@ -1343,7 +1532,7 @@ const isRtl = activeLang === 'ar';
                         ? assignedAgents.map(a => `<span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">${a}</span>`).join(' ')
                         : `<span class="text-[10px] text-[var(--text-muted)] italic">${<%- JSON.stringify(t.allAgents) %>}</span>`;
 
-                                        const card = document.createElement('div');
+                    const card = document.createElement('div');
                     card.className = 'campaign-card bg-[var(--bg-card)] border border-[var(--border-primary)] rounded-2xl p-4 flex flex-col justify-between shadow-sm hover:border-[var(--border-accent)] hover:shadow-md transition-all relative group';
                     card.innerHTML = `
                         <div class="space-y-3">
@@ -1364,6 +1553,7 @@ const isRtl = activeLang === 'ar';
                                         }"></span>
                                         <span>${escapeHtml(c.status.toUpperCase())}</span>
                                     </span>
+                                    ${multiNode ? `<span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-zinc-800 text-zinc-300 border border-zinc-700/60 shrink-0">Site ${escapeHtml(site)}</span>` : ''}
                                     <h4 class="text-sm font-extrabold text-[var(--text-primary)] truncate" title="${escapeHtml(c.name || '')}">${escapeHtml(c.name || 'Untitled')}</h4>
                                     ${c.mask_phone_numbers ? `<span class="px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-zinc-800 text-zinc-300 border border-zinc-700/60 shrink-0" title="${escapeHtml(t.mask || 'Mask')}">🔒</span>` : ''}
                                 </div>
@@ -1400,7 +1590,7 @@ const isRtl = activeLang === 'ar';
                                             </span>
                                         </button>
                                         <div class="my-1 border-t border-[var(--border-primary)]/50"></div>
-                                        <a href="/api/dialer/leads/template?campaign_id=${c.id}" class="w-full text-start p-2 rounded-xl hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-3 cursor-pointer transition-all duration-150 group">
+                                        <a href="/api/dialer/leads/template?campaign_id=${c.id}" onclick="if ('${site}' !== FED_LOCAL_SITE) { event.preventDefault(); downloadDialerFile('/api/dialer/leads/template?campaign_id=${c.id}', 'campaign-${c.id}-template.csv', '${site}'); }" class="w-full text-start p-2 rounded-xl hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-3 cursor-pointer transition-all duration-150 group">
                                             <span class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-emerald-500/20 group-hover:border-emerald-500/40 transition-all">
                                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                                             </span>
@@ -1409,7 +1599,7 @@ const isRtl = activeLang === 'ar';
                                                 <span class="text-[10px] text-[var(--text-muted)] font-normal truncate">${isRtl ? 'ملف CSV جاهز بأعمدة النموذج' : 'CSV with custom schema'}</span>
                                             </span>
                                         </a>
-                                        <a href="/api/dialer/campaigns/${c.id}/export" class="w-full text-start p-2 rounded-xl hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-3 cursor-pointer transition-all duration-150 group">
+                                        <a href="/api/dialer/campaigns/${c.id}/export" onclick="if ('${site}' !== FED_LOCAL_SITE) { event.preventDefault(); downloadDialerFile('/api/dialer/campaigns/${c.id}/export', 'campaign-${c.id}-export.csv', '${site}'); }" class="w-full text-start p-2 rounded-xl hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-3 cursor-pointer transition-all duration-150 group">
                                             <span class="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-indigo-500/20 group-hover:border-indigo-500/40 transition-all">
                                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                             </span>
@@ -1494,19 +1684,19 @@ const isRtl = activeLang === 'ar';
 
                             <!-- 4-Grid Secondary Actions (Aligned with 4 KPI tiles above) -->
                             <div class="grid grid-cols-4 gap-1.5">
-                                <button onclick="openViewLeadsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))})" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.viewLeads || 'Leads')}">
+                                <button onclick="openViewLeadsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))}, '${site}')" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.viewLeads || 'Leads')}">
                                     <svg class="w-3.5 h-3.5 text-purple-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
                                     <span class="truncate">${escapeHtml(t.viewLeads || 'Leads')}</span>
                                 </button>
-                                <button onclick="openFollowupsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))})" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(isRtl ? 'المتابعات' : 'Follow-ups')}">
+                                <button onclick="openFollowupsModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, '${site}')" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(isRtl ? 'المتابعات' : 'Follow-ups')}">
                                     <svg class="w-3.5 h-3.5 text-sky-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                     <span class="truncate">${escapeHtml(isRtl ? 'المتابعات' : 'Follow-ups')}</span>
                                 </button>
-                                <button onclick="openImportModal(${c.id})" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.import || 'Import')}">
+                                <button onclick="openImportModal(${c.id}, '${site}')" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.import || 'Import')}">
                                     <svg class="w-3.5 h-3.5 text-blue-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                                     <span class="truncate">${escapeHtml(t.import || 'Import')}</span>
                                 </button>
-                                <button onclick="openManualLeadModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))})" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.add || (isRtl ? 'إضافة' : 'Add'))}">
+                                <button onclick="openManualLeadModal(${c.id}, ${escapeHtml(JSON.stringify(c.name || ''))}, ${escapeHtml(JSON.stringify(c.lead_fields || []))}, '${site}')" class="h-8 px-1.5 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-accent)] text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate shadow-xs active:scale-[0.98] group" title="${escapeHtml(t.add || (isRtl ? 'إضافة' : 'Add'))}">
                                     <svg class="w-3.5 h-3.5 text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                                     <span class="truncate">${escapeHtml(t.add || (isRtl ? 'إضافة' : 'Add'))}</span>
                                 </button>
@@ -1525,9 +1715,12 @@ const isRtl = activeLang === 'ar';
             } catch (renderErr) { console.error("Error rendering campaign cards:", renderErr); }
         }
 
-        async function loadOutboundRoutes() {
+        async function loadOutboundRoutes(targetNode = null, selectedRoute = '') {
             try {
-                const res = await fetch('/api/config/routes/outbound');
+                const site = String(targetNode || getSelectedTargetPbx() || FED_LOCAL_SITE);
+                const res = (site === FED_LOCAL_SITE)
+                    ? await fetch('/api/config/routes/outbound')
+                    : await fedDialerFetch('/api/config/routes/outbound', {}, site);
                 const data = await res.json();
                 const select = document.getElementById('campOutboundRoute');
                 if (data.routes && select) {
@@ -1536,6 +1729,9 @@ const isRtl = activeLang === 'ar';
                         const opt = document.createElement('option');
                         opt.value = r.route_id;
                         opt.textContent = `${r.name} (#${r.route_id})`;
+                        if (selectedRoute && String(selectedRoute) === String(r.route_id)) {
+                            opt.selected = true;
+                        }
                         select.appendChild(opt);
                     });
                 }
@@ -1555,11 +1751,20 @@ const isRtl = activeLang === 'ar';
             if (fileGroup) fileGroup.style.display = 'block';
             const fileInput = document.getElementById('campLeadsFile');
             if (fileInput) fileInput.value = '';
+
+            const targetSelect = document.getElementById('campTargetNode');
+            if (targetSelect) {
+                targetSelect.disabled = false;
+                targetSelect.value = FED_LOCAL_SITE;
+            }
+            updateTargetPbxDropdown(FED_LOCAL_SITE);
+
             campaignFieldDraft = [];
             renderCampaignFields([]);
             renderFollowupEditor(null);
-            renderDonglesCheckboxes([]);
-            renderAgentsCheckboxes([]);
+            loadDongles(FED_LOCAL_SITE, []);
+            loadExtensions(FED_LOCAL_SITE, []);
+            loadOutboundRoutes(FED_LOCAL_SITE);
             openModal('createCampaignModal');
         }
 
@@ -1568,21 +1773,31 @@ const isRtl = activeLang === 'ar';
             document.getElementById('modalCampTitle').textContent = <%- JSON.stringify(t.updateCampaign) %>;
             document.getElementById('saveCampSubmitBtn').textContent = <%- JSON.stringify(t.updateCampaign) %>;
             document.getElementById('campName').value = camp.name || '';
-            document.getElementById('campOutboundRoute').value = camp.outbound_route_id || '';
             document.getElementById('campMaxDials').value = camp.max_concurrent_dials || 1;
             document.getElementById('campWrapupSec').value = camp.wrapup_time_sec || 15;
             if (document.getElementById('campMaskPhone')) document.getElementById('campMaskPhone').checked = Boolean(camp.mask_phone_numbers);
             const fileGroup = document.getElementById('campLeadsFileGroup');
             if (fileGroup) fileGroup.style.display = 'none';
+
+            const targetSite = String(camp.nodeSite || FED_LOCAL_SITE);
+            const targetSelect = document.getElementById('campTargetNode');
+            if (targetSelect) {
+                targetSelect.disabled = true;
+                targetSelect.value = targetSite;
+            }
+            updateTargetPbxDropdown(targetSite);
+
             renderCampaignFields(camp.lead_fields);
             renderFollowupEditor(camp.followup_fields);
-            renderDonglesCheckboxes(Array.isArray(camp.allowed_dongles) ? camp.allowed_dongles : []);
-            renderAgentsCheckboxes(Array.isArray(camp.assigned_agents) ? camp.assigned_agents : []);
+            loadDongles(targetSite, Array.isArray(camp.allowed_dongles) ? camp.allowed_dongles : []);
+            loadExtensions(targetSite, Array.isArray(camp.assigned_agents) ? camp.assigned_agents : []);
+            loadOutboundRoutes(targetSite, camp.outbound_route_id || '');
             openModal('createCampaignModal');
         }
         async function saveCampaign(e) {
             e.preventDefault();
             const editId = document.getElementById('editCampId').value;
+            const targetSite = String(document.getElementById('campTargetNode')?.value || FED_LOCAL_SITE);
             const selectedDongles = Array.from(document.querySelectorAll('input[name="dongleCheckbox"]:checked')).map(cb => cb.value);
             const selectedAgents = Array.from(document.querySelectorAll('input[name="agentCheckbox"]:checked')).map(cb => cb.value);
 
@@ -1601,11 +1816,11 @@ const isRtl = activeLang === 'ar';
             const url = editId ? `/api/dialer/campaigns/${editId}` : '/api/dialer/campaigns';
             const method = editId ? 'PUT' : 'POST';
 
-            const res = await fetch(url, {
+            const res = await fedDialerFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
-            });
+            }, targetSite);
             const data = await res.json();
             if (data.success) {
                 const campaignId = editId || data.id;
@@ -1614,13 +1829,29 @@ const isRtl = activeLang === 'ar';
                     const submitBtn = document.getElementById('saveCampSubmitBtn');
                     submitBtn.disabled = true;
                     submitBtn.textContent = <%- JSON.stringify(isRtl ? 'جاري رفع ومزامنة الأرقام...' : 'Uploading & Syncing Leads...') %>;
-                    const formData = new FormData();
-                    formData.append('campaign_id', campaignId);
-                    formData.append('file', leadsFileInput.files[0]);
+                    const file = leadsFileInput.files[0];
                     try {
-                        const importRes = await fetch('/api/dialer/leads/import', { method: 'POST', body: formData });
-                        const importData = await importRes.json();
-                        if (importData.success) {
+                        let importData;
+                        if (targetSite === FED_LOCAL_SITE) {
+                            const formData = new FormData();
+                            formData.append('campaign_id', campaignId);
+                            formData.append('file', file);
+                            const importRes = await fetch('/api/dialer/leads/import', { method: 'POST', body: formData });
+                            importData = await importRes.json();
+                        } else {
+                            const base64 = await readFileAsBase64(file);
+                            const importRes = await fedDialerFetch('/api/dialer/leads/import', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    campaign_id: campaignId,
+                                    fileBase64: base64,
+                                    fileName: file.name
+                                })
+                            }, targetSite);
+                            importData = await importRes.json();
+                        }
+                        if (importData && importData.success) {
                             showToast(isRtl ? `تم إنشاء الحملة واستيراد ${importData.imported} رقم!` : `Campaign created & ${importData.imported} lead(s) imported!`, 'success');
                         } else {
                             showToast(isRtl ? `تم إنشاء الحملة، ولكن تنبيه الاستيراد: ${importData.error}` : `Campaign created, but import warning: ${importData.error}`, 'error');
@@ -1640,8 +1871,10 @@ const isRtl = activeLang === 'ar';
             }
         }
 
-        function openManualLeadModal(campaignId, campaignName, fields = []) {
+        let manualLeadCampaignNodeSite = null;
+        function openManualLeadModal(campaignId, campaignName, fields = [], nodeSite = null) {
             document.getElementById('manualLeadCampaignId').value = campaignId;
+            manualLeadCampaignNodeSite = String(nodeSite || currentCampaignViewNodeSite || FED_LOCAL_SITE);
             document.getElementById('manualLeadCampaignName').textContent = campaignName || '';
             document.getElementById('manualLeadName').value = '';
             document.getElementById('manualLeadPhone').value = '';
@@ -1680,8 +1913,9 @@ const isRtl = activeLang === 'ar';
             });
             const button = document.getElementById('saveManualLeadBtn');
             button.disabled = true;
+            const site = String(manualLeadCampaignNodeSite || currentCampaignViewNodeSite || FED_LOCAL_SITE);
             try {
-                const res = await fetch('/api/dialer/leads', {
+                const res = await fedDialerFetch('/api/dialer/leads', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1692,11 +1926,14 @@ const isRtl = activeLang === 'ar';
                         company: document.getElementById('manualLeadCompany').value.trim(),
                         custom_data
                     })
-                });
+                }, site);
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || 'Failed to add lead');
                 closeModal('manualLeadModal');
-                showToast(<%- JSON.stringify(t.leadSaved) %>, 'success');
+                showToast(data.dnc
+                    ? (isRtl ? 'تمت إضافة الرقم ولكن تم تمييزه كـ DNC' : 'Lead added but flagged as DNC')
+                    : (isRtl ? 'تمت إضافة الرقم بنجاح' : 'Lead added successfully'),
+                    data.dnc ? 'warning' : 'success');
                 loadCampaigns();
                 if (currentCampaignViewId === Number(document.getElementById('manualLeadCampaignId').value)) fetchAndRenderLeadsPage();
             } catch (err) {
@@ -1738,13 +1975,20 @@ const isRtl = activeLang === 'ar';
             }
         });
 
-        async function controlCampaign(id, action) {
+        let lastLoadedCampaigns = [];
+        async function controlCampaign(id, action, nodeSite = null) {
+            let site = nodeSite;
+            if (!site && Array.isArray(lastLoadedCampaigns)) {
+                const found = lastLoadedCampaigns.find(c => Number(c.id) === Number(id));
+                if (found) site = found.nodeSite;
+            }
+            site = String(site || FED_LOCAL_SITE);
             if (action === 'delete' && !confirm(<%- JSON.stringify(isRtl ? 'هل أنت متأكد من حذف هذه الحملة وجميع أرقامها؟' : 'Are you sure you want to delete this campaign and all its leads?') %>)) return;
-            const res = await fetch(`/api/dialer/campaigns/${id}/control`, {
+            const res = await fedDialerFetch(`/api/dialer/campaigns/${id}/control`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action })
-            });
+            }, site);
             const data = await res.json();
             if (data.success) {
                 showToast(data.message || <%- JSON.stringify(isRtl ? 'تم تحديث الحملة' : 'Campaign updated') %>, 'success');
@@ -1754,8 +1998,10 @@ const isRtl = activeLang === 'ar';
             }
         }
 
-        function openImportModal(id) {
+        let importCampaignNodeSite = null;
+        function openImportModal(id, nodeSite = null) {
             document.getElementById('importCampaignId').value = id;
+            importCampaignNodeSite = String(nodeSite || FED_LOCAL_SITE);
             document.getElementById('leadsFile').value = '';
             openModal('importLeadsModal');
         }
@@ -1769,19 +2015,37 @@ const isRtl = activeLang === 'ar';
             btn.disabled = true;
             btn.textContent = <%- JSON.stringify(isRtl ? 'جاري الرفع والمزامنة...' : 'Uploading & Syncing...') %>;
 
-            const formData = new FormData();
-            formData.append('campaign_id', document.getElementById('importCampaignId').value);
-            formData.append('file', fileInput.files[0]);
+            const file = fileInput.files[0];
+            const campaignId = document.getElementById('importCampaignId').value;
+            const site = String(importCampaignNodeSite || FED_LOCAL_SITE);
 
             try {
-                const res = await fetch('/api/dialer/leads/import', { method: 'POST', body: formData });
-                const data = await res.json();
-                if (data.success) {
+                let data;
+                if (site === FED_LOCAL_SITE) {
+                    const formData = new FormData();
+                    formData.append('campaign_id', campaignId);
+                    formData.append('file', file);
+                    const res = await fetch('/api/dialer/leads/import', { method: 'POST', body: formData });
+                    data = await res.json();
+                } else {
+                    const base64 = await readFileAsBase64(file);
+                    const res = await fedDialerFetch('/api/dialer/leads/import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            campaign_id: campaignId,
+                            fileBase64: base64,
+                            fileName: file.name
+                        })
+                    }, site);
+                    data = await res.json();
+                }
+                if (data && data.success) {
                     closeModal('importLeadsModal');
-                    showToast(data.message, 'success');
+                    showToast(data.message || (isRtl ? `تم استيراد ${data.imported || 0} رقم` : `Imported ${data.imported || 0} leads`), 'success');
                     loadCampaigns();
                 } else {
-                    showToast(data.error || <%- JSON.stringify(isRtl ? 'فشل الاستيراد' : 'Import failed') %>, 'error');
+                    showToast((data && data.error) || <%- JSON.stringify(isRtl ? 'فشل الاستيراد' : 'Import failed') %>, 'error');
                 }
             } catch (err) {
                 showToast(err.message, 'error');
@@ -1793,15 +2057,18 @@ const isRtl = activeLang === 'ar';
 
         let currentCampaignViewId = null;
         let currentCampaignViewName = '';
+        let currentCampaignViewNodeSite = null;
         let currentLeadsPage = 1;
         let currentLeadsTotalPages = 1;
 
-        async function openViewLeadsModal(campaignId, campaignName, fields = []) {
+        async function openViewLeadsModal(campaignId, campaignName, fields = [], nodeSite = null) {
             currentCampaignViewId = campaignId;
             currentCampaignViewName = campaignName;
+            currentCampaignViewNodeSite = String(nodeSite || FED_LOCAL_SITE);
             currentCampaignViewFields = normalizeLeadFields(fields);
             currentLeadsPage = 1;
-            document.getElementById('viewLeadsTitle').textContent = `${campaignName} — ${<%- JSON.stringify(t.leads) %>}`;
+            const nodePrefix = (FED_NODES.length > 1) ? `${fedNodeName(currentCampaignViewNodeSite)} · ` : '';
+            document.getElementById('viewLeadsTitle').textContent = `${nodePrefix}${campaignName} — ${<%- JSON.stringify(t.leads) %>}`;
             renderLeadTableHeader();
             document.getElementById('leadsTableBody').innerHTML = `<tr><td colspan="${6 + currentCampaignViewFields.length}" class="py-6 text-center text-[var(--text-muted)]">${<%- JSON.stringify(isRtl ? 'جاري تحميل الأرقام...' : 'Loading leads...') %>}</td></tr>`;
             openModal('viewLeadsModal');
@@ -1826,8 +2093,12 @@ const isRtl = activeLang === 'ar';
             if (!currentCampaignViewId) return;
             const search = (document.getElementById('leadsSearchInput')?.value || '').trim();
             const status = document.getElementById('leadsStatusFilter')?.value || 'all';
+            const site = String(currentCampaignViewNodeSite || FED_LOCAL_SITE);
             try {
-                const res = await fetch(`/api/dialer/leads/${currentCampaignViewId}?page=${currentLeadsPage}&limit=50&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`);
+                const url = `/api/dialer/leads/${currentCampaignViewId}?page=${currentLeadsPage}&limit=50&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`;
+                const res = (site === FED_LOCAL_SITE)
+                    ? await fetch(url)
+                    : await fedDialerFetch(url, {}, site);
                 const data = await res.json();
                 currentLoadedLeads = data.leads || [];
                 currentLeadsTotalPages = data.totalPages || 1;
@@ -1913,8 +2184,9 @@ const isRtl = activeLang === 'ar';
         }
 
         async function resetSingleLead(id) {
+            const site = String(currentCampaignViewNodeSite || FED_LOCAL_SITE);
             try {
-                const res = await fetch(`/api/dialer/leads/${id}/reset`, { method: 'POST' });
+                const res = await fedDialerFetch(`/api/dialer/leads/${id}/reset`, { method: 'POST' }, site);
                 const data = await res.json();
                 if (data.success) {
                     showToast(<%- JSON.stringify(isRtl ? 'تمت إعادة ضبط الرقم إلى قيد الانتظار' : 'Lead reset to pending') %>, 'success');
@@ -1930,8 +2202,9 @@ const isRtl = activeLang === 'ar';
 
         async function deleteSingleLead(id) {
             if (!confirm(<%- JSON.stringify(isRtl ? 'هل أنت متأكد من حذف هذا الرقم؟' : 'Are you sure you want to delete this lead?') %>)) return;
+            const site = String(currentCampaignViewNodeSite || FED_LOCAL_SITE);
             try {
-                const res = await fetch(`/api/dialer/leads/${id}`, { method: 'DELETE' });
+                const res = await fedDialerFetch(`/api/dialer/leads/${id}`, { method: 'DELETE' }, site);
                 const data = await res.json();
                 if (data.success) {
                     showToast(<%- JSON.stringify(isRtl ? 'تم حذف الرقم بنجاح' : 'Lead deleted') %>, 'success');
@@ -2029,8 +2302,12 @@ const isRtl = activeLang === 'ar';
                         const div = document.createElement('div');
                         div.className = 'p-2 bg-[var(--bg-card)] rounded-lg text-xs flex items-center justify-between border border-[var(--border-primary)]';
                         const displayStatus = attemptStatusMap[a.status] || a.status || '';
+                        const nodeLabel = a.nodeName || (a.nodeSite ? ('Site ' + a.nodeSite) : '');
                         div.innerHTML = `
-                            <span class="font-mono font-bold">${escapeHtml(a.leadPhone || '')}</span>
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="font-mono font-bold">${escapeHtml(a.leadPhone || '')}</span>
+                                ${nodeLabel && FED_NODES.length > 1 ? `<span class="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-zinc-800 text-zinc-300 border border-zinc-700/60">${escapeHtml(nodeLabel)}</span>` : ''}
+                            </div>
                             <span class="text-[10px] text-[var(--text-muted)] font-mono">${escapeHtml(a.dongleId || 'default')}</span>
                             <span class="text-[10px] font-bold uppercase ${a.status === 'connected' ? 'text-emerald-400' : (a.status === 'dialing' ? 'text-blue-400' : 'text-amber-400')}">${escapeHtml(displayStatus)}</span>
                         `;

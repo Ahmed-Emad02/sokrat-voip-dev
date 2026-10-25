@@ -5387,9 +5387,24 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
 
             function getUsbSignature(data) {
                 return JSON.stringify({
-                    modems: (data.physicalModems || []).map(m => `${m.bus}:${m.device}:${m.hardwareId}:${(m.ttyPorts||[]).join(',')}:${(m.boundSlots||[]).join(',')}`),
-                    devices: (data.devices || data.ttyDevices || []).map(d => `${d.name}:${d.dongleId}:${d.portType}`)
+                    modems: (data.physicalModems || []).map(m => `${m.nodeSite || ''}:${m.bus}:${m.device}:${m.hardwareId}:${(m.ttyPorts||[]).join(',')}:${(m.boundSlots||[]).join(',')}`),
+                    devices: (data.devices || data.ttyDevices || []).map(d => `${d.nodeSite || ''}:${d.name}:${d.dongleId}:${d.portType}`)
                 });
+            }
+
+            function buildUsbNodeDivider(siteCode, nodeName, nodeStatus) {
+                const site = String(siteCode || FED_LOCAL_SITE);
+                const node = fedNode(site) || {};
+                const status = nodeStatus || node.status || 'online';
+                const dotClass = status === 'online' ? 'bg-emerald-400' : (status === 'offline' ? 'bg-rose-500' : 'bg-amber-400');
+                const statusClass = status === 'online' ? 'text-emerald-400' : (status === 'offline' ? 'text-rose-400' : 'text-amber-400');
+                return `
+                    <div class="col-span-full flex items-center gap-2 py-1.5 px-3 rounded-xl bg-[var(--bg-card)]/80 border border-[var(--border-primary)] mt-1 mb-0.5">
+                        <span class="w-2 h-2 rounded-full shrink-0 ${dotClass}"></span>
+                        <span class="text-xs font-black text-[var(--text-primary)] truncate">${escapeUsbText(nodeName || node.node_name || ('Site ' + site))}</span>
+                        <span class="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site ${escapeUsbText(site)}</span>
+                        <span class="text-[9px] font-extrabold uppercase tracking-wide ms-auto ${statusClass}">${escapeUsbText(status)}</span>
+                    </div>`;
             }
 
             function renderLsusbDevices(physicalModems) {
@@ -5404,7 +5419,18 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     return;
                 }
 
-                lsusbGrid.innerHTML = physicalModems.map(modem => {
+                const multiNode = new Set(physicalModems.map(m => String(m.nodeSite || FED_LOCAL_SITE))).size > 1;
+                let renderedSite = null;
+                const sorted = multiNode ? orderDevicesByNodes(physicalModems) : physicalModems;
+
+                lsusbGrid.innerHTML = sorted.map(modem => {
+                    const site = String(modem.nodeSite || FED_LOCAL_SITE);
+                    let divider = '';
+                    if (multiNode && site !== renderedSite) {
+                        renderedSite = site;
+                        divider = buildUsbNodeDivider(modem.nodeSite, modem.nodeName, modem.nodeStatus);
+                    }
+
                     const boundSlotsText = (modem.boundSlots && modem.boundSlots.length)
                         ? modem.boundSlots.join(', ')
                         : (words.lsusbUnassigned || 'Unassigned');
@@ -5415,13 +5441,17 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                         : `<span class="text-[10px] text-amber-400 font-mono font-bold">${isRtl ? 'لا توجد منافذ TTY' : 'No TTY ports'}</span>`;
 
                     return `
+                        ${divider}
                         <div class="lsusb-device-card flex flex-col gap-2.5 py-1 px-1 sm:px-2 bg-transparent cursor-default">
                             <div class="flex items-center justify-between gap-2">
                                 <div class="flex items-center gap-2 min-w-0">
                                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 shadow-xs"></span>
                                     <span class="font-black text-xs text-[var(--text-primary)] truncate">${escapeUsbText(modem.vendorName || '')} ${escapeUsbText(modem.modelName || 'GSM Modem')}</span>
                                 </div>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-purple-300 border border-purple-400 shrink-0 text-black">${escapeUsbText(modem.hardwareId)}</span>
+                                <div class="flex items-center gap-1 shrink-0">
+                                    ${multiNode ? `<span class="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site ${escapeUsbText(site)}</span>` : ''}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-purple-300 border border-purple-400 shrink-0 text-black">${escapeUsbText(modem.hardwareId)}</span>
+                                </div>
                             </div>
 
                             <div class="grid grid-cols-2 gap-2 text-[10px] font-mono pt-2 border-t border-purple-500/20">
@@ -5445,7 +5475,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
 
             function renderUsbDevices(devices) {
                 if (!usbGrid) return;
-                if (devices.length === 0) {
+                if (!Array.isArray(devices) || devices.length === 0) {
                     usbGrid.innerHTML = `
                         <div class="col-span-full flex flex-col items-center justify-center py-6 gap-2">
                             <svg class="text-zinc-600" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
@@ -5455,7 +5485,18 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     return;
                 }
 
-                usbGrid.innerHTML = devices.map(device => {
+                const multiNode = new Set(devices.map(d => String(d.nodeSite || FED_LOCAL_SITE))).size > 1;
+                let renderedSite = null;
+                const sorted = multiNode ? orderDevicesByNodes(devices) : devices;
+
+                usbGrid.innerHTML = sorted.map(device => {
+                    const site = String(device.nodeSite || FED_LOCAL_SITE);
+                    let divider = '';
+                    if (multiNode && site !== renderedSite) {
+                        renderedSite = site;
+                        divider = buildUsbNodeDivider(device.nodeSite, device.nodeName, device.nodeStatus);
+                    }
+
                     const mapped = Boolean(device.dongleId);
                     const matchBorder = mapped
                         ? 'border-emerald-500/40 bg-emerald-950/15'
@@ -5468,12 +5509,16 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                         : words.usbUnmapped;
 
                     return `
+                        ${divider}
                         <div class="flex flex-col items-center gap-2 p-3 rounded-xl border ${matchBorder} transition hover:border-[var(--accent-color)]/40 cursor-default">
                             <div class="flex items-center gap-1.5">
                                 ${matchIcon}
                                 <span class="font-mono text-sm font-bold text-[var(--text-primary)]">${escapeUsbText(device.name)}</span>
                             </div>
-                            <span class="text-[9px] font-bold uppercase tracking-wider ${mapped ? 'text-emerald-400' : 'text-zinc-500'}">${escapeUsbText(label)}</span>
+                            <div class="flex items-center gap-1 flex-wrap justify-center">
+                                ${multiNode ? `<span class="text-[9px] font-mono px-1 py-0.2 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site ${escapeUsbText(site)}</span>` : ''}
+                                <span class="text-[9px] font-bold uppercase tracking-wider ${mapped ? 'text-emerald-400' : 'text-zinc-500'}">${escapeUsbText(label)}</span>
+                            </div>
                         </div>`;
                 }).join('');
             }

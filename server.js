@@ -11542,7 +11542,7 @@ function getLiveUsbStatus() {
 }
 
 // API Endpoint to list live USB hardware (lsusb) and /dev/ttyUSB* devices
-app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, (req, res) => {
+app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, async (req, res) => {
     try {
         const dongleId = req.query.dongleId ? String(req.query.dongleId).trim() : null;
         const usbStatus = getLiveUsbStatus();
@@ -11562,15 +11562,114 @@ app.get('/api/gsm-dongles/ttyusb-devices', requireAuth, (req, res) => {
                     };
                 });
             }
+            return res.json({
+                success: true,
+                summary: usbStatus.summary,
+                physicalModems: usbStatus.physicalModems,
+                allUsbDevices: usbStatus.allUsbDevices,
+                devices: enriched,
+                ttyDevices: usbStatus.ttyDevices
+            });
+        }
+
+        // Server-to-server federation read requests return this node's own USB status
+        if (isFederationTrusted(req)) {
+            return res.json({
+                success: true,
+                summary: usbStatus.summary,
+                physicalModems: usbStatus.physicalModems,
+                allUsbDevices: usbStatus.allUsbDevices,
+                devices: enriched,
+                ttyDevices: usbStatus.ttyDevices
+            });
+        }
+
+        const scope = res.locals.federationScope;
+        const includeLocal = federationScopeIncludesLocal(scope);
+        const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope, {
+            path: '/api/gsm-dongles/ttyusb-devices'
+        });
+
+        const mergedSummary = { totalUsbDevices: 0, totalModems: 0, totalTtyPorts: 0, totalConfiguredSlots: 0 };
+        const mergedPhysicalModems = [];
+        const mergedAllUsb = [];
+        const mergedDevices = [];
+        const mergedTtyDevices = [];
+
+        for (const node of nodes) {
+            const site = String(node.site_code);
+            const nodeName = node.node_name || (node.is_local ? 'Main PBX' : `Site ${site}`);
+            const nodeStatus = node.status || 'online';
+
+            let nodeUsb = null;
+            if (node.is_local) {
+                if (includeLocal) {
+                    nodeUsb = usbStatus;
+                }
+            } else {
+                const read = readsBySite.get(site);
+                if (read && read.data && read.data.success) {
+                    nodeUsb = read.data;
+                }
+            }
+
+            if (!nodeUsb) continue;
+
+            const sum = nodeUsb.summary || {};
+            mergedSummary.totalUsbDevices += Number(sum.totalUsbDevices || 0);
+            mergedSummary.totalModems += Number(sum.totalModems || 0);
+            mergedSummary.totalTtyPorts += Number(sum.totalTtyPorts || 0);
+            mergedSummary.totalConfiguredSlots += Number(sum.totalConfiguredSlots || 0);
+
+            (nodeUsb.physicalModems || []).forEach(m => {
+                mergedPhysicalModems.push({
+                    ...m,
+                    nodeSite: site,
+                    nodeName,
+                    nodeStatus,
+                    fedKey: `${site}:${m.bus}-${m.device}`
+                });
+            });
+
+            (nodeUsb.allUsbDevices || []).forEach(u => {
+                mergedAllUsb.push({
+                    ...u,
+                    nodeSite: site,
+                    nodeName,
+                    nodeStatus
+                });
+            });
+
+            const ttyList = nodeUsb.devices || nodeUsb.ttyDevices || [];
+            ttyList.forEach(dev => {
+                mergedDevices.push({
+                    ...dev,
+                    nodeSite: site,
+                    nodeName,
+                    nodeStatus,
+                    fedKey: `${site}:${dev.name}`
+                });
+            });
+
+            (nodeUsb.ttyDevices || []).forEach(t => {
+                mergedTtyDevices.push({
+                    ...t,
+                    nodeSite: site,
+                    nodeName,
+                    nodeStatus,
+                    fedKey: `${site}:${t.name}`
+                });
+            });
         }
 
         res.json({
             success: true,
-            summary: usbStatus.summary,
-            physicalModems: usbStatus.physicalModems,
-            allUsbDevices: usbStatus.allUsbDevices,
-            devices: enriched,
-            ttyDevices: usbStatus.ttyDevices
+            summary: mergedSummary,
+            physicalModems: mergedPhysicalModems,
+            allUsbDevices: mergedAllUsb,
+            devices: mergedDevices,
+            ttyDevices: mergedTtyDevices,
+            nodes
         });
     } catch (e) {
         res.json({ success: true, summary: { totalUsbDevices: 0, totalModems: 0, totalTtyPorts: 0, totalConfiguredSlots: 0 }, physicalModems: [], allUsbDevices: [], devices: [], ttyDevices: [] });
@@ -13466,13 +13565,20 @@ app.get('/dialer', requireAuth, (req, res) => {
         return res.status(403).render('403', { currentLang: res.locals.currentLang || 'en', isRtl: res.locals.isRtl || false });
     }
     const currentLang = res.locals.currentLang || 'en';
+    const scope = res.locals.federationScope;
+    const localSite = String((scope && scope.localSiteCode) || '10');
+    const nodes = (res.locals.federationNodes && Array.isArray(res.locals.federationNodes))
+        ? res.locals.federationNodes
+        : [{ site_code: localSite, node_name: 'Main PBX', is_local: true, status: 'online' }];
     res.render('dialer', {
         moment,
         currentPage: '/dialer',
         currentLang,
         isRtl: currentLang === 'ar',
         isSuperAdmin: true,
-        isRootUser: true
+        isRootUser: true,
+        federationNodes: nodes,
+        fedLocalSite: localSite
     });
 });
 
@@ -21852,20 +21958,54 @@ function requireRootForDialer(req, res, next) {
 // GET /api/dialer/attempts/recent - Recent attempt ledger logs for live monitoring
 app.get('/api/dialer/attempts/recent', requireAuth, requireRootForDialer, async (req, res) => {
     try {
+        let localAttempts = [];
         if (dialerRecentAttempts.length > 0) {
-            return res.json({ success: true, attempts: dialerRecentAttempts.slice(0, 30) });
+            localAttempts = dialerRecentAttempts.slice(0, 30);
+        } else {
+            const [attempts] = await pool.query(`
+                SELECT a.attempt_uuid AS attemptUuid, l.phone_number AS leadPhone,
+                       COALESCE(a.dongle_id, 'default') AS dongleId,
+                       COALESCE(a.agent_extension, '') AS agentExtension,
+                       a.status, a.created_at AS timestamp
+                FROM \`asterisk\`.\`dialer_call_attempts\` a
+                LEFT JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = a.lead_id
+                ORDER BY a.created_at DESC
+                LIMIT 30
+            `);
+            localAttempts = attempts || [];
         }
-        const [attempts] = await pool.query(`
-            SELECT a.attempt_uuid AS attemptUuid, l.phone_number AS leadPhone,
-                   COALESCE(a.dongle_id, 'default') AS dongleId,
-                   COALESCE(a.agent_extension, '') AS agentExtension,
-                   a.status, a.created_at AS timestamp
-            FROM \`asterisk\`.\`dialer_call_attempts\` a
-            LEFT JOIN \`asterisk\`.\`dialer_leads\` l ON l.id = a.lead_id
-            ORDER BY a.created_at DESC
-            LIMIT 30
-        `);
-        res.json({ success: true, attempts });
+
+        if (isFederationTrusted(req)) {
+            return res.json({ success: true, attempts: localAttempts });
+        }
+
+        const scope = res.locals.federationScope;
+        const includeLocal = federationScopeIncludesLocal(scope);
+        const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope, {
+            path: '/api/dialer/attempts/recent'
+        });
+
+        const mergedAttempts = [];
+        for (const node of nodes) {
+            const site = String(node.site_code);
+            const nodeName = node.node_name || (node.is_local ? 'Main PBX' : `Site ${site}`);
+            if (node.is_local) {
+                if (includeLocal) {
+                    localAttempts.forEach(a => {
+                        mergedAttempts.push({ ...a, nodeSite: site, nodeName });
+                    });
+                }
+            } else {
+                const read = readsBySite.get(site);
+                if (read && read.data && Array.isArray(read.data.attempts)) {
+                    read.data.attempts.forEach(a => {
+                        mergedAttempts.push({ ...a, nodeSite: site, nodeName });
+                    });
+                }
+            }
+        }
+
+        res.json({ success: true, attempts: mergedAttempts.slice(0, 50) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message, attempts: [] });
     }
@@ -21940,7 +22080,52 @@ app.get('/api/dialer/campaigns', requireAuth, requireRootForDialer, async (req, 
             c.mask_phone_numbers = c.mask_phone_numbers ? 1 : 0;
             c.lead_fields = normalizeDialerFieldDefinitions(c.lead_fields);
         }
-        res.json({ success: true, campaigns });
+
+        if (isFederationTrusted(req)) {
+            return res.json({ success: true, campaigns });
+        }
+
+        const scope = res.locals.federationScope;
+        const includeLocal = federationScopeIncludesLocal(scope);
+        const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope, {
+            path: '/api/dialer/campaigns'
+        });
+
+        const mergedCampaigns = [];
+        for (const node of nodes) {
+            const site = String(node.site_code);
+            const nodeName = node.node_name || (node.is_local ? 'Main PBX' : `Site ${site}`);
+            const nodeStatus = node.status || 'online';
+
+            if (node.is_local) {
+                if (includeLocal) {
+                    campaigns.forEach(c => {
+                        mergedCampaigns.push({
+                            ...c,
+                            nodeSite: site,
+                            nodeName,
+                            nodeStatus,
+                            fedKey: `${site}:${c.id}`
+                        });
+                    });
+                }
+            } else {
+                const read = readsBySite.get(site);
+                if (read && read.data && Array.isArray(read.data.campaigns)) {
+                    read.data.campaigns.forEach(c => {
+                        mergedCampaigns.push({
+                            ...c,
+                            nodeSite: site,
+                            nodeName,
+                            nodeStatus: read.error ? 'offline' : 'online',
+                            fedKey: `${site}:${c.id}`
+                        });
+                    });
+                }
+            }
+        }
+
+        res.json({ success: true, campaigns: mergedCampaigns, nodes });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -22511,12 +22696,25 @@ app.post('/api/dialer/leads/import', requireAuth, requireRootForDialer, requireA
             return res.status(404).json({ success: false, error: 'Campaign not found' });
         }
         const leadFields = normalizeDialerFieldDefinitions(campaignRows[0].lead_fields);
-        if (!req.file || !fs.existsSync(req.file.path)) {
+
+        let tempFilePath = null;
+        let filePath = req.file && fs.existsSync(req.file.path) ? req.file.path : null;
+        if (!filePath && req.body && req.body.fileBase64) {
+            try {
+                const ext = (req.body.fileName && req.body.fileName.endsWith('.xlsx')) ? '.xlsx' : '.csv';
+                tempFilePath = path.join('/tmp', `dialer-import-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+                fs.writeFileSync(tempFilePath, Buffer.from(req.body.fileBase64, 'base64'));
+                filePath = tempFilePath;
+            } catch (writeErr) {
+                return res.status(500).json({ success: false, error: 'Failed to process base64 file: ' + writeErr.message });
+            }
+        }
+
+        if (!filePath || !fs.existsSync(filePath)) {
             return res.status(400).json({ success: false, error: 'No CSV/XLSX file uploaded' });
         }
 
         let rows = [];
-        const filePath = req.file.path;
         try {
             if (XLSX) {
                 const wb = XLSX.readFile(filePath);

@@ -102,6 +102,13 @@ h4 = {'dongle_name': 'dongle0', 'curr_state': 'Free', 'stuck_state_duration': 0,
 a4, _, lvl4 = evaluate_dongle_anomalies(h4)
 assert a4 == ANOMALY_CARRIER_DROP, f"Expected CARRIER_DROP, got {a4}"
 
+# Scenario 5: SMS Storage Full
+from laya.evaluator.heuristics import ANOMALY_SMS_STORAGE_FULL
+h5 = {'dongle_name': 'dongle0', 'curr_state': 'Free', 'stuck_state_duration': 0, 'matching_channels': [], 'sms_fault_confirmed': True, 'sms_fault_signature': 'SMS storage is full', 'sms_fault_count': 3}
+a5, _, lvl5 = evaluate_dongle_anomalies(h5)
+assert a5 == ANOMALY_SMS_STORAGE_FULL, f"Expected SMS_STORAGE_FULL, got {a5}"
+assert lvl5 == 1, f"Expected Level 1, got {lvl5}"
+
 print("OK")
 `;
     const res = spawnSync('python3', ['-c', pythonScript], { encoding: 'utf8' });

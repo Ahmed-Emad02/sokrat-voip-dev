@@ -97,6 +97,33 @@ def action_soft_at_probe(dongle_id, reason="Soft AT status inquiry"):
     update_maintenance_event_result(event_id, result_str, details)
     return ok, details
 
+def action_flush_sms_storage(dongle_id, reason="Modem SMS storage full"):
+    """
+    Level 1: Clears modem message memory (ME/SM) by issuing AT+CMGD=1,4.
+    Flushes full storage, preventing carrier retry storms and baseband freezes.
+    """
+    target = dongle_id.lower().strip()
+    if not target or not target.startswith("dongle"):
+        return False, "Safety Abort: Invalid dongle identifier"
+
+    if is_call_active_on_dongle(target):
+        return False, f"Skipped SMS flush: Active call on {target}"
+
+    event_id = record_maintenance_event(
+        dongle_name=target,
+        trigger_reason=reason,
+        recovery_level=1,
+        action_taken=f"Flush SMS Storage ({target}: AT+CMGD=1,4)",
+        result="in_progress"
+    )
+
+    success, stdout, stderr = send_dongle_at_command(target, "AT+CMGD=1,4")
+    ok = success or ("OK" in (stdout or "")) or ("queued" in (stdout or "").lower())
+    result_str = "success" if ok else "failed"
+    details = stdout or stderr or ("SMS storage cleared" if ok else "AT+CMGD=1,4 failed")
+    update_maintenance_event_result(event_id, result_str, details)
+    return ok, details
+
 def action_hangup_channel(dongle_id, channel_name, reason="Hangup orphaned channel"):
     """
     Level 2: Target single orphaned channel leg without restarting modem.
