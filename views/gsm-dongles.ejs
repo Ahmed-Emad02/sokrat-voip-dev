@@ -6085,7 +6085,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                 });
 
                 socket.on('dongleNumberUpdated', (data) => {
-                    const btn = document.getElementById('resetBtn-' + data.dongleId);
+                    const localDev = loadedDevices.find(d => String(d.ID || '') === String(data.dongleId || '')
+                        && String(d.nodeSite || FED_LOCAL_SITE) === FED_LOCAL_SITE);
+                    const btn = localDev ? document.getElementById('resetBtn-' + devKey(localDev)) : null;
                     if (btn) {
                         const span = btn.querySelector('span');
                         if (span) span.innerText = words.resetUsbBtn;
