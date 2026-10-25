@@ -123,6 +123,8 @@ CREATE TABLE IF NOT EXISTS `dongle_state_logs` (
 CREATE TABLE IF NOT EXISTS `employee_groups` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(100) NOT NULL UNIQUE,
+  `name_ar` VARCHAR(100) DEFAULT NULL,
+  `name_en` VARCHAR(100) DEFAULT NULL,
   `description` TEXT DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -608,6 +610,7 @@ CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_extensions` (
   `dial_alias` VARCHAR(30) NOT NULL UNIQUE,
   `display_name` VARCHAR(100) NOT NULL,
   `status` ENUM('online', 'offline', 'ringing', 'in_call', 'unknown') NOT NULL DEFAULT 'unknown',
+  `emp_group` VARCHAR(100) DEFAULT NULL,
   `last_seen_at` DATETIME DEFAULT NULL,
   UNIQUE KEY `idx_peer_ext` (`peer_id`, `native_extension`),
   KEY `idx_peer_id` (`peer_id`),
@@ -944,6 +947,72 @@ SET @sokrat_sql := (
                     WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'callrecording_module'),
     'UPDATE `asterisk`.`callrecording_module` SET `callrecording` = ''force''
        WHERE `display` = ''did'' AND (`callrecording` IS NULL OR `callrecording` = '''' OR `callrecording` = ''dontcare'')',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+-- ---------------------------------------------------------------------------
+-- Prevent infinite failover loops & call flooding on offline agents
+-- ---------------------------------------------------------------------------
+-- Break self-referential queue failover loops (dest pointing to itself)
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_config'),
+    'UPDATE `asterisk`.`queues_config` SET `dest` = ''app-blackhole,hangup,1'' WHERE `dest` = CONCAT(''ext-queues,'', `extension`, '',1'') OR `dest` = CONCAT(''from-did-direct,'', `extension`, '',1'') OR `dest` IS NULL OR `dest` = ''''',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_config'),
+    'UPDATE `asterisk`.`queues_config` SET `destcontinue` = ''app-blackhole,hangup,1'' WHERE `destcontinue` = CONCAT(''ext-queues,'', `extension`, '',1'') OR `destcontinue` = CONCAT(''from-did-direct,'', `extension`, '',1'')',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
+    'UPDATE `asterisk`.`queues_details` SET `data` = ''app-blackhole,hangup,1'' WHERE `keyword` = ''goto'' AND (`data` = CONCAT(''ext-queues,'', `id`, '',1'') OR `data` = CONCAT(''from-did-direct,'', `id`, '',1''))',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+-- Break self-referential ring group failover loops (postdest pointing to itself)
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'ringgroups'),
+    'UPDATE `asterisk`.`ringgroups` SET `postdest` = ''app-blackhole,hangup,1'' WHERE `postdest` = CONCAT(''ext-group,'', `grpnum`, '',1'') OR `postdest` = CONCAT(''from-did-direct,'', `grpnum`, '',1'') OR `postdest` IS NULL OR `postdest` = ''''',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+-- Queue empty defaults: callers should not join an empty queue and should leave when empty
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
+    'UPDATE `asterisk`.`queues_details` SET `data` = ''yes'' WHERE `keyword` = ''leavewhenempty'' AND `data` != ''yes''',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
+    'UPDATE `asterisk`.`queues_details` SET `data` = ''no'' WHERE `keyword` = ''joinempty'' AND `data` = ''yes''',
     'DO 0')
 );
 PREPARE sokrat_stmt FROM @sokrat_sql;

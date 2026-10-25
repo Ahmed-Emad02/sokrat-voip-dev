@@ -713,6 +713,14 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
             outline: 2px dashed rgba(245, 158, 11, 0.4);
             outline-offset: 3px;
         }
+        #switchboardGrid.dnd-active section[data-site-code]:not(.dnd-active-site) .extension-group-grid {
+            outline: none;
+            opacity: 0.35;
+        }
+        #switchboardGrid.dnd-active section[data-site-code].dnd-active-site .extension-group-grid {
+            outline: 2px dashed rgba(245, 158, 11, 0.6);
+            opacity: 1;
+        }
         #switchboardGrid .extension-group-grid.dnd-drop-hover {
             outline-color: var(--accent-color);
             background-color: rgba(255, 255, 255, 0.03);
@@ -989,14 +997,14 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 if (isCentralRole) {
                     fedRemote.forEach(function(re) {
                         var p = peerMap[re.peer_id] || {};
-                        var siteCode = p.site_code || '20';
+                        var siteCode = String(p.site_code || '20');
                         var nodeName = p.node_name || ('Site ' + siteCode);
                         allRoster.push({
                             extension: re.native_extension,
                             dialAlias: re.dial_alias,
                             cardId: siteCode + '_' + re.native_extension,
                             name: re.display_name,
-                            emp_group: nodeName,
+                            emp_group: (re.emp_group && String(re.emp_group).trim()) ? String(re.emp_group).trim() : '',
                             siteCode: siteCode,
                             nodeName: nodeName,
                             isRemote: true,
@@ -1035,56 +1043,115 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     return str;
                 }
 
-                var groups = {};
+                var serversMap = {};
                 var definedGroups = Array.isArray(employeeGroups) ? employeeGroups : [];
-                definedGroups.forEach(function(gName) {
-                    if (gName && !groups[gName]) groups[gName] = [];
-                });
+                if (includeLocalSite) {
+                    serversMap[localSiteCode] = {
+                        siteCode: localSiteCode,
+                        nodeName: localNodeName,
+                        isLocal: true,
+                        groups: {}
+                    };
+                    definedGroups.forEach(function(gName) {
+                        if (gName) serversMap[localSiteCode].groups[gName] = [];
+                    });
+                }
+
+                if (isCentralRole) {
+                    fedPeersList.forEach(function(p) {
+                        var siteCode = String(p.site_code || '20');
+                        if (fedScopeSites && fedScopeSites.indexOf(siteCode) === -1) return;
+                        if (!serversMap[siteCode]) {
+                            serversMap[siteCode] = {
+                                siteCode: siteCode,
+                                nodeName: p.node_name || ('Site ' + siteCode),
+                                isLocal: false,
+                                groups: {}
+                            };
+                            definedGroups.forEach(function(gName) {
+                                if (gName) serversMap[siteCode].groups[gName] = [];
+                            });
+                        }
+                    });
+                }
+
                 allRoster.forEach(function(emp) {
+                    var sCode = String(emp.siteCode || localSiteCode);
+                    if (!serversMap[sCode]) {
+                        serversMap[sCode] = {
+                            siteCode: sCode,
+                            nodeName: emp.nodeName || ('Site ' + sCode),
+                            isLocal: !emp.isRemote,
+                            groups: {}
+                        };
+                        definedGroups.forEach(function(gName) {
+                            if (gName) serversMap[sCode].groups[gName] = [];
+                        });
+                    }
                     var g = emp.emp_group || '___ungrouped___';
-                    if (!groups[g]) groups[g] = [];
-                    groups[g].push(emp);
+                    if (!serversMap[sCode].groups[g]) serversMap[sCode].groups[g] = [];
+                    serversMap[sCode].groups[g].push(emp);
                 });
-                var groupNames = Object.keys(groups).sort(function(a, b) {
-                    if (a === '___ungrouped___') return 1;
-                    if (b === '___ungrouped___') return -1;
-                    return a.localeCompare(b);
+
+                var serversList = Object.values(serversMap).sort(function(a, b) {
+                    if (a.isLocal) return -1;
+                    if (b.isLocal) return 1;
+                    return String(a.siteCode).localeCompare(String(b.siteCode));
                 });
+                var multiServer = serversList.length > 1;
                 %>
-                <% groupNames.forEach(function(gName) { %>
-                <section class="mb-5" aria-label="<%= formatGroupName(gName, isRtl) %>" data-group="<%= gName %>">
-                    <div class="employee-group-header mb-2">
-                        <h3 class="text-sm font-extrabold text-[var(--text-primary)] truncate">
-                            <%= formatGroupName(gName, isRtl) %>
-                        </h3>
-                        <span class="employee-group-count"><%= groups[gName].length %></span>
-                        <span class="h-px bg-[var(--border-primary)] flex-1"></span>
+                <% serversList.forEach(function(srv) {
+                    var srvGroupNames = Object.keys(srv.groups).sort(function(a, b) {
+                        if (a === '___ungrouped___') return 1;
+                        if (b === '___ungrouped___') return -1;
+                        return a.localeCompare(b);
+                    });
+                %>
+                    <% if (multiServer) { %>
+                    <div class="server-divider-header col-span-full flex items-center gap-2 py-2 px-3.5 rounded-xl bg-[var(--bg-card)]/80 border border-[var(--border-primary)] shadow-sm mb-3 mt-4 first:mt-0" data-site-code="<%= srv.siteCode %>">
+                        <span class="w-2.5 h-2.5 rounded-full shrink-0 bg-emerald-400"></span>
+                        <span class="text-sm font-black text-white truncate"><%= srv.nodeName %></span>
+                        <span class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site <%= srv.siteCode %></span>
                     </div>
-                    <div class="extension-group-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
-                        <% groups[gName].forEach(function(emp) {
-                            const live = activeCalls[emp.extension] || activeCalls[emp.cardId];
-                            let callState = 'idle';
-                            let partnerNum = '';
-                            let startTimeStamp = '';
-                            if (live) {
-                                callState = live.state === 'In Call' ? 'incall' : 'ringing';
-                                partnerNum = live.partner || '';
-                                startTimeStamp = live.start || '';
-                            }
-                            const isOnline = emp.online;
-                            const groupLabel = emp.emp_group ? formatGroupName(emp.emp_group, isRtl) : t.ungrouped;
-                            let stateClass = 'state-offline';
-                            if (isOnline) {
-                                if (callState === 'incall') stateClass = 'state-incall';
-                                else if (callState === 'ringing') stateClass = 'state-ringing';
-                                else stateClass = 'state-idle';
-                            }
-                        %>
-                        <article id="card-<%= emp.cardId %>"
-                                 data-start="<%= startTimeStamp %>"
-                                 data-emp-group="<%= emp.emp_group || '' %>"
-                                 data-site-code="<%= emp.siteCode %>"
-                                 class="panel-surface rounded-xl p-3 flex flex-col justify-between min-h-[188px] transition-all duration-300 relative border <%= stateClass %>">
+                    <% } %>
+
+                    <% srvGroupNames.forEach(function(gName) {
+                        var groupMembers = srv.groups[gName] || [];
+                    %>
+                    <section class="mb-5" aria-label="<%= formatGroupName(gName, isRtl) %>" data-group="<%= gName %>" data-site-code="<%= srv.siteCode %>">
+                        <div class="employee-group-header mb-2">
+                            <h3 class="text-sm font-extrabold text-[var(--text-primary)] truncate">
+                                <%= formatGroupName(gName, isRtl) %>
+                            </h3>
+                            <span class="employee-group-count"><%= groupMembers.length %></span>
+                            <span class="h-px bg-[var(--border-primary)] flex-1"></span>
+                        </div>
+                        <div class="extension-group-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
+                            <% groupMembers.forEach(function(emp) {
+                                const live = activeCalls[emp.extension] || activeCalls[emp.cardId];
+                                let callState = 'idle';
+                                let partnerNum = '';
+                                let startTimeStamp = '';
+                                if (live) {
+                                    callState = live.state === 'In Call' ? 'incall' : 'ringing';
+                                    partnerNum = live.partner || '';
+                                    startTimeStamp = live.start || '';
+                                }
+                                const isOnline = emp.online;
+                                const groupLabel = emp.emp_group ? formatGroupName(emp.emp_group, isRtl) : t.ungrouped;
+                                let stateClass = 'state-offline';
+                                if (isOnline) {
+                                    if (callState === 'incall') stateClass = 'state-incall';
+                                    else if (callState === 'ringing') stateClass = 'state-ringing';
+                                    else stateClass = 'state-idle';
+                                }
+                            %>
+                            <article id="card-<%= emp.cardId %>"
+                                     data-start="<%= startTimeStamp %>"
+                                     data-emp-group="<%= emp.emp_group || '' %>"
+                                     data-site-code="<%= emp.siteCode %>"
+                                     data-native-ext="<%= emp.extension %>"
+                                     class="panel-surface rounded-xl p-3 flex flex-col justify-between min-h-[188px] transition-all duration-300 relative border <%= stateClass %>">
                             <div class="flex items-start justify-between gap-3 min-w-0">
                                 <div class="min-w-0 flex-1 <%= isRtl ? 'text-right' : 'text-left' %>">
                                     <div class="flex items-center gap-2 min-w-0 flex-wrap">
@@ -1236,7 +1303,8 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     </div>
                 </section>
                 <% }) %>
-                <% if (groupNames.length === 0) { %>
+                <% }) %>
+                <% if (allRoster.length === 0) { %>
                 <div class="text-center py-8 text-[var(--text-muted)] text-sm font-semibold"><%= isRtl ? 'لا توجد تحويلات' : 'No extensions found' %></div>
                 <% } %>
             </div>
@@ -1341,6 +1409,12 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 }
             });
 
+            document.querySelectorAll('#switchboardGrid .server-divider-header').forEach(div => {
+                const divSite = div.getAttribute('data-site-code') || localSite;
+                const isMatch = (siteCode === 'all' || divSite === String(siteCode) || (siteCode === 'local' && divSite === localSite));
+                div.style.display = isMatch ? '' : 'none';
+            });
+
             // Also filter Trunk Monitor panel
             let visibleTrunks = 0;
             document.querySelectorAll('#trunksLiveGrid > div[data-site-code]').forEach(tCard => {
@@ -1356,6 +1430,43 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
             const countEl = document.getElementById('trunksTotalCount');
             if (countEl) countEl.textContent = visibleTrunks;
         };
+
+        const FED_LOCAL_SITE = '<%= (typeof federationSettings !== "undefined" && federationSettings.local_site_code) ? federationSettings.local_site_code : "10" %>';
+
+        function fedNodeName(siteCode) {
+            const site = String(siteCode || FED_LOCAL_SITE);
+            const peers = (typeof federationPeers !== 'undefined' && Array.isArray(federationPeers)) ? federationPeers : [];
+            const peer = peers.find(p => String(p.site_code) === site);
+            return (peer && peer.node_name) || ('Site ' + site);
+        }
+
+        async function fedRelayAction(siteCode, path, options = {}) {
+            const site = String(siteCode || FED_LOCAL_SITE);
+            const method = String(options.method || 'GET').toUpperCase();
+            const headers = options.headers || {};
+            const contentType = headers['Content-Type'] || headers['content-type'] || 'application/json';
+
+            let body = options.body;
+            if (body && typeof body === 'object' && !(body instanceof FormData)) {
+                body = JSON.stringify(body);
+            }
+
+            const gatewayUrl = '/api/federation/peers/' + encodeURIComponent(site) + '/action';
+            return fetch(gatewayUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    method,
+                    path,
+                    body,
+                    contentType
+                })
+            });
+        }
+
         updateOpViewButtons();
             if (typeof window.updateClock === 'function') window.updateClock();
             const socket = io();
@@ -2041,6 +2152,16 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
 
             let draggedCard = null;
 
+            const localSiteCode = (typeof FED_LOCAL_SITE !== 'undefined') ? FED_LOCAL_SITE : '<%= (typeof federationSettings !== "undefined" && federationSettings.local_site_code) ? federationSettings.local_site_code : "10" %>';
+
+            function isSameServer(grid, card) {
+                if (!grid || !card) return false;
+                const section = grid.closest('section[data-group]');
+                const targetSite = section ? (section.dataset.siteCode || localSiteCode) : localSiteCode;
+                const cardSite = card.dataset.siteCode || localSiteCode;
+                return targetSite === cardSite;
+            }
+
             function extOf(card) { return card.id.replace(/^card-/, ''); }
 
             function loadLayout() {
@@ -2055,13 +2176,19 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 // Group membership is authoritative on the server (employee_extras.emp_group).
                 const groups = {};
                 gridRoot.querySelectorAll('section[data-group]').forEach(section => {
-                    groups[section.dataset.group] = Array.from(
+                    const site = section.dataset.siteCode || localSiteCode;
+                    const compoundKey = site + ':::' + section.dataset.group;
+                    const list = Array.from(
                         section.querySelectorAll('.extension-group-grid > article[id^="card-"]')
                     )
                         .filter(card => section.dataset.group === '___ungrouped___'
                             ? !(card.dataset.empGroup || '')
                             : card.dataset.empGroup === section.dataset.group)
                         .map(extOf);
+                    groups[compoundKey] = list;
+                    if (site === localSiteCode && !groups[section.dataset.group]) {
+                        groups[section.dataset.group] = list;
+                    }
                 });
                 try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({ v: 1, groups })); } catch (_) {}
             }
@@ -2082,9 +2209,19 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 gridRoot.querySelectorAll('article[id^="card-"]').forEach(card => {
                     const section = card.closest('section[data-group]');
                     if (!section) return;
+                    const cardSite = card.dataset.siteCode || localSiteCode;
+                    const sectionSite = section.dataset.siteCode || localSiteCode;
+                    if (cardSite !== sectionSite) return;
+
                     const target = section.dataset.group === UNGROUPED_KEY ? '' : section.dataset.group;
                     if ((card.dataset.empGroup || '') === target) return;
-                    jobs.push({ card, target, previous: card.dataset.empGroup || '' });
+                    jobs.push({
+                        card,
+                        target,
+                        previous: card.dataset.empGroup || '',
+                        siteCode: cardSite,
+                        nativeExt: card.dataset.nativeExt || extOf(card)
+                    });
                 });
 
                 if (!jobs.length) { saveLayout(); return; }
@@ -2097,14 +2234,24 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     // Optimistic UI — update card dataset
                     const chip = job.card.querySelector('.employee-group-chip');
                     if (chip) chip.textContent = job.target || ungroupedLabel;
-                    fetch('/api/employee/group-assignment', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ extension: extOf(job.card), group: job.target })
-                    })
+
+                    const isLocal = !job.siteCode || job.siteCode === localSiteCode;
+                    const reqPromise = isLocal
+                        ? fetch('/api/employee/group-assignment', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ extension: job.nativeExt, group: job.target })
+                        })
+                        : fedRelayAction(job.siteCode, '/api/employee/group-assignment', {
+                            method: 'PUT',
+                            body: { extension: job.nativeExt, group: job.target }
+                        });
+
+                    reqPromise
                         .then(response => response.json().then(data => ({ ok: response.ok, data })))
                         .then(({ ok, data }) => {
-                            if (!ok || !data.success) throw new Error(data.error || 'Failed to assign group');
+                            const isOk = ok && (data.success || (data.data && data.data.success));
+                            if (!isOk) throw new Error((data && (data.error || (data.data && data.data.error))) || 'Failed to assign group');
                             job.card.dataset.empGroup = job.target;
                         })
                         .catch(() => {
@@ -2133,26 +2280,29 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 if (!saved || !saved.groups) return;
                 const sections = Array.from(gridRoot.querySelectorAll('section[data-group]'));
                 if (!sections.length) return;
-                const grids = new Map(sections.map(s => [s.dataset.group, s.querySelector('.extension-group-grid')]));
+                const grids = new Map(sections.map(s => [s, s.querySelector('.extension-group-grid')]));
 
                 const originalGridOf = new Map();
                 allCards.forEach(card => {
                     const section = card.closest('section[data-group]');
-                    originalGridOf.set(card, section ? grids.get(section.dataset.group) : null);
+                    originalGridOf.set(card, section ? grids.get(section) : null);
                 });
 
                 allCards.forEach(card => card.remove());
 
                 const placed = new Set();
                 sections.forEach(section => {
-                    const grid = grids.get(section.dataset.group);
+                    const grid = grids.get(section);
                     if (!grid) return;
-                    // Layout storage only orders cards inside their own server-side group
-                    const wanted = saved.groups[section.dataset.group];
+                    const site = section.dataset.siteCode || localSiteCode;
+                    const compoundKey = site + ':::' + section.dataset.group;
+                    const wanted = saved.groups[compoundKey] || saved.groups[section.dataset.group];
                     if (Array.isArray(wanted)) {
                         wanted.forEach(ext => {
                             const card = allCards.find(c => c.id === 'card-' + String(ext));
                             if (!card || placed.has(card)) return;
+                            const cardSite = card.dataset.siteCode || localSiteCode;
+                            if (site !== cardSite) return;
                             const homeKey = (card.dataset.empGroup || '') === '' ? UNGROUPED_KEY : card.dataset.empGroup;
                             if (homeKey !== section.dataset.group) return;
                             grid.appendChild(card);
@@ -2194,6 +2344,14 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 draggedCard = card;
                 card.classList.add('dnd-dragging');
                 gridRoot.classList.add('dnd-active');
+                const cardSite = card.dataset.siteCode || localSiteCode;
+                gridRoot.querySelectorAll('section[data-site-code]').forEach(sec => {
+                    if ((sec.dataset.siteCode || localSiteCode) === cardSite) {
+                        sec.classList.add('dnd-active-site');
+                    } else {
+                        sec.classList.remove('dnd-active-site');
+                    }
+                });
                 if (e.dataTransfer) {
                     e.dataTransfer.effectAllowed = 'move';
                     try { e.dataTransfer.setData('text/plain', extOf(card)); } catch (_) {}
@@ -2314,6 +2472,8 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 pendingDropJob = null;
                 if (!job || !draggedCard) return;
 
+                if (!isSameServer(job.grid, draggedCard)) return;
+
                 const boundary = insertionBoundary(job.grid, job.x, job.y);
                 if (!draggedCard || boundary === draggedCard) return;
 
@@ -2346,6 +2506,10 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
             gridRoot.querySelectorAll('.extension-group-grid').forEach(grid => {
                 grid.addEventListener('dragover', e => {
                     if (!draggedCard) return;
+                    if (!isSameServer(grid, draggedCard)) {
+                        if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+                        return;
+                    }
                     e.preventDefault();
                     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
                     grid.classList.add('dnd-drop-hover');
@@ -2371,6 +2535,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 lastAppliedSlot = { key: '', at: 0, x: 0, y: 0 };
                 gridRoot.classList.remove('dnd-active');
                 gridRoot.querySelectorAll('.dnd-drop-hover').forEach(el => el.classList.remove('dnd-drop-hover'));
+                gridRoot.querySelectorAll('section[data-site-code]').forEach(sec => sec.classList.remove('dnd-active-site'));
                 updateGroupCounts();
                 syncGroupAssignments();
             });

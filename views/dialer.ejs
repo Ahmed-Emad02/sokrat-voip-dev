@@ -880,11 +880,11 @@ const isRtl = activeLang === 'ar';
                 container.innerHTML = `<span class="text-xs text-[var(--text-muted)] italic">${isRtl ? 'لا توجد نتائج معرفة على السنترال' : 'No dispositions defined on the PBX'}</span>`;
                 return;
             }
-            container.innerHTML = cachedDispositions.map((disposition) => {
+            container.innerHTML = cachedDispositions.map((disposition, dIdx) => {
                 const name = String(disposition.name || '');
                 const checked = followupDraft.settings.dispositions.includes(name) ? 'checked' : '';
                 return `<label class="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[11px] cursor-pointer select-none">
-                    <input type="checkbox" class="w-3.5 h-3.5 accent-red-500 cursor-pointer" data-disposition="${fuEscape(name)}" ${checked}>
+                    <input type="checkbox" name="fu_disposition[]" id="fu_disp_${dIdx}" class="w-3.5 h-3.5 accent-red-500 cursor-pointer" data-disposition="${fuEscape(name)}" ${checked}>
                     <span>${fuEscape(name)}</span>
                 </label>`;
             }).join('');
@@ -1032,7 +1032,7 @@ const isRtl = activeLang === 'ar';
                 labelsRow.className = 'grid grid-cols-1 sm:grid-cols-2 gap-2.5';
 
                 const labelCol = document.createElement('div');
-                labelCol.innerHTML = `<label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'التسمية بالإنجليزية' : 'English Label'} <span class="text-rose-400">*</span></label>`;
+                labelCol.innerHTML = `<span class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'التسمية بالإنجليزية' : 'English Label'} <span class="text-rose-400">*</span></span>`;
                 const labelInput = document.createElement('input');
                 labelInput.className = 'config-input w-full text-xs';
                 labelInput.placeholder = 'e.g. Budget or Notes';
@@ -1052,7 +1052,7 @@ const isRtl = activeLang === 'ar';
                 labelCol.appendChild(labelInput);
 
                 const labelArCol = document.createElement('div');
-                labelArCol.innerHTML = `<label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'التسمية بالعربية' : 'Arabic Label'}</label>`;
+                labelArCol.innerHTML = `<span class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'التسمية بالعربية' : 'Arabic Label'}</span>`;
                 const labelArInput = document.createElement('input');
                 labelArInput.className = 'config-input w-full text-xs';
                 labelArInput.placeholder = 'مثال: الميزانية أو الملاحظات';
@@ -1071,7 +1071,7 @@ const isRtl = activeLang === 'ar';
                 // Type (5 cols)
                 const typeCol = document.createElement('div');
                 typeCol.className = 'sm:col-span-5';
-                typeCol.innerHTML = `<label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'نوع الحقل' : 'Field Type'}</label>`;
+                typeCol.innerHTML = `<span class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'نوع الحقل' : 'Field Type'}</span>`;
                 const typeSelect = document.createElement('select');
                 typeSelect.className = 'config-input w-full text-xs';
                 FOLLOWUP_FIELD_TYPES.forEach((type) => {
@@ -1099,7 +1099,7 @@ const isRtl = activeLang === 'ar';
                 // Key (4 cols)
                 const keyCol = document.createElement('div');
                 keyCol.className = 'sm:col-span-4';
-                keyCol.innerHTML = `<label class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'معرّف الحقل (Key)' : 'Field Key'}</label>`;
+                keyCol.innerHTML = `<span class="block text-[10px] font-bold text-[var(--text-secondary)] uppercase mb-0.5">${isRtl ? 'معرّف الحقل (Key)' : 'Field Key'}</span>`;
                 const keyInput = document.createElement('input');
                 keyInput.className = 'config-input w-full text-xs font-mono';
                 keyInput.placeholder = 'key_name';

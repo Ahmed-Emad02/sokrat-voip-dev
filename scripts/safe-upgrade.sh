@@ -133,6 +133,9 @@ ensure_db_index "dashboard_users" "idx_dash_users_extension" "KEY \`idx_dash_use
 ensure_db_index "dashboard_users" "idx_unique_email" "UNIQUE KEY \`idx_unique_email\` (\`email\`)"
 ensure_db_column "dashboard_user_extensions" "peer_id" "INT DEFAULT NULL"
 ensure_db_index "dashboard_user_extensions" "idx_peer_id" "KEY \`idx_peer_id\` (\`peer_id\`)"
+ensure_db_column "sokrat_federation_remote_extensions" "emp_group" "VARCHAR(100) DEFAULT NULL"
+ensure_db_column "employee_groups" "name_ar" "VARCHAR(100) DEFAULT NULL"
+ensure_db_column "employee_groups" "name_en" "VARCHAR(100) DEFAULT NULL"
 ensure_db_column "sokrat_federation_settings" "local_node_uuid" "VARCHAR(36) DEFAULT NULL"
 ensure_db_column "sokrat_federation_peers" "node_uuid" "VARCHAR(36) DEFAULT NULL"
 ensure_db_column "sokrat_federation_peers" "api_version" "SMALLINT UNSIGNED NOT NULL DEFAULT 1"
@@ -221,10 +224,24 @@ if [ "$RECQUEUES_TABLE" != "0" ]; then
         "INSERT INTO \`asterisk\`.\`queues_details\` (id, keyword, data, flags)
          SELECT q.extension, 'monitor-format', 'wav', 0 FROM \`asterisk\`.\`queues_config\` q
          WHERE q.extension NOT IN (SELECT d.id FROM \`asterisk\`.\`queues_details\` d WHERE d.keyword = 'monitor-format')" 2>/dev/null || true
-    echo "  Queues: call recording enabled by default (monitor-format=wav, maxwait normalized)"
+    # Neutralize self-referential queue failover loops
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "UPDATE \`asterisk\`.\`queues_config\` SET \`dest\`='app-blackhole,hangup,1' WHERE \`dest\`=CONCAT('ext-queues,', \`extension\`, ',1') OR \`dest\`=CONCAT('from-did-direct,', \`extension\`, ',1') OR \`dest\` IS NULL OR \`dest\`=''" 2>/dev/null || true
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "UPDATE \`asterisk\`.\`queues_config\` SET \`destcontinue\`='app-blackhole,hangup,1' WHERE \`destcontinue\`=CONCAT('ext-queues,', \`extension\`, ',1') OR \`destcontinue\`=CONCAT('from-did-direct,', \`extension\`, ',1')" 2>/dev/null || true
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "UPDATE \`asterisk\`.\`queues_details\` SET \`data\`='app-blackhole,hangup,1' WHERE \`keyword\`='goto' AND (\`data\`=CONCAT('ext-queues,', \`id\`, ',1') OR \`data\`=CONCAT('from-did-direct,', \`id\`, ',1'))" 2>/dev/null || true
+    # Queue empty defaults: callers should not join an empty queue and should leave when empty
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "UPDATE \`asterisk\`.\`queues_details\` SET \`data\`='yes' WHERE \`keyword\`='leavewhenempty' AND \`data\`!='yes'" 2>/dev/null || true
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "UPDATE \`asterisk\`.\`queues_details\` SET \`data\`='no' WHERE \`keyword\`='joinempty' AND \`data\`='yes'" 2>/dev/null || true
+    echo "  Queues: call recording enabled by default (monitor-format=wav, maxwait normalized, failover loops neutralized)"
 fi
 mysql "${MYSQL_AUTH[@]}" asterisk -e \
     "UPDATE \`asterisk\`.\`ringgroups\` SET \`recording\`='always' WHERE \`recording\` IS NULL OR \`recording\`='' OR \`recording\`='dontcare'" 2>/dev/null || true
+mysql "${MYSQL_AUTH[@]}" asterisk -e \
+    "UPDATE \`asterisk\`.\`ringgroups\` SET \`postdest\`='app-blackhole,hangup,1' WHERE \`postdest\`=CONCAT('ext-group,', \`grpnum\`, ',1') OR \`postdest\`=CONCAT('from-did-direct,', \`grpnum\`, ',1') OR \`postdest\` IS NULL OR \`postdest\`=''" 2>/dev/null || true
 mysql "${MYSQL_AUTH[@]}" asterisk -e \
     "UPDATE \`asterisk\`.\`users\` SET \`recording\`='out=always|in=always' WHERE \`recording\` IS NULL OR \`recording\`='' OR \`recording\`='dontcare'" 2>/dev/null || true
 echo "  Extensions and ring groups: call recording enabled by default"
@@ -771,10 +788,10 @@ exten => s,n,Return()
         if os.path.exists(_tc_php):
             try:
                 _tc_code = open(_tc_php, "r", encoding="utf-8").read()
-                _tc_old = '$html = $html."<option value=\\"sun\\" $default>" . __("Sunday");\n\n\t$html = $html.\'</td>\';'
-                _tc_new = '$html = $html."<option value=\\"sun\\" $default>" . __("Sunday");\n\t$html = $html.\'</select>\';\n\t$html = $html.\'</td>\';'
-                if _tc_old in _tc_code:
-                    open(_tc_php, "w", encoding="utf-8").write(_tc_code.replace(_tc_old, _tc_new))
+                _tc_pat = r'(\$html\s*=\s*\$html\."<option value=\\"sun\\" \$default>" \. __\("Sunday"\);\s*)(?!\$html\s*=\s*\$html\.\'</select>\';)(\$html\s*=\s*\$html\.\'</td>\';)'
+                if re.search(_tc_pat, _tc_code):
+                    _tc_code = re.sub(_tc_pat, r"\1$html = $html.'</select>';\n    \2", _tc_code)
+                    open(_tc_php, "w", encoding="utf-8").write(_tc_code)
                     print("  Patched Issabel Time Groups unclosed select tag in functions.inc.php")
             except Exception:
                 pass

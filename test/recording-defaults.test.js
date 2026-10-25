@@ -263,3 +263,86 @@ test('server.js resolves missing recordingfile from linked legs in CDR', () => {
         'server.js must query linkedid/uniqueid sibling legs for recording'
     );
 });
+
+test('server.js guards ringgroups and queues against self-referential failover loops and empty queues', () => {
+    const content = read('server.js');
+
+    // Ring group loop guard
+    assert.ok(
+        content.includes("postDest === `ext-group,${num},1`") || content.includes("postDest === `ext-group,${num},1`"),
+        'server.js must guard ringgroups against postDest self-loops'
+    );
+    assert.ok(
+        content.includes("postDest = 'app-blackhole,hangup,1'"),
+        'server.js must default ring group postDest to app-blackhole,hangup,1'
+    );
+
+    // Queue loop guard
+    assert.ok(
+        content.includes("failDest === `ext-queues,${num},1`"),
+        'server.js must guard queues against failDest self-loops'
+    );
+    assert.ok(
+        content.includes("continueDest === `ext-queues,${num},1`"),
+        'server.js must guard queues against continueDest self-loops'
+    );
+
+    // Queue joinempty and leavewhenempty safe defaults
+    assert.ok(
+        content.includes("[num, 'joinempty', joinEmptyVal, 0]"),
+        'server.js must use joinEmptyVal in queue details'
+    );
+    assert.ok(
+        content.includes("[num, 'leavewhenempty', leaveWhenEmptyVal, 0]"),
+        'server.js must use leaveWhenEmptyVal in queue details'
+    );
+    assert.ok(
+        content.includes("joinEmptyVal = (req.body.joinempty !== undefined"),
+        'server.js must define joinEmptyVal defaulting to no'
+    );
+    assert.ok(
+        content.includes("leaveWhenEmptyVal = (req.body.leavewhenempty !== undefined"),
+        'server.js must define leaveWhenEmptyVal defaulting to yes'
+    );
+});
+
+test('install_db.sql and safe-upgrade.sh break self-loops and configure safe queue empty defaults', () => {
+    const sql = read('backend/install_db.sql');
+    const upgrader = read('scripts/safe-upgrade.sh');
+
+    // install_db.sql migrations
+    assert.ok(
+        sql.includes("UPDATE `asterisk`.`queues_config` SET `dest` = ''app-blackhole,hangup,1'' WHERE `dest` = CONCAT(''ext-queues,'', `extension`, '',1'')"),
+        'install_db.sql must neutralize queue dest self-loops'
+    );
+    assert.ok(
+        sql.includes("UPDATE `asterisk`.`ringgroups` SET `postdest` = ''app-blackhole,hangup,1'' WHERE `postdest` = CONCAT(''ext-group,'', `grpnum`, '',1'')"),
+        'install_db.sql must neutralize ring group postdest self-loops'
+    );
+    assert.ok(
+        sql.includes("UPDATE `asterisk`.`queues_details` SET `data` = ''yes'' WHERE `keyword` = ''leavewhenempty''"),
+        'install_db.sql must set queue leavewhenempty to yes'
+    );
+    assert.ok(
+        sql.includes("UPDATE `asterisk`.`queues_details` SET `data` = ''no'' WHERE `keyword` = ''joinempty''"),
+        'install_db.sql must set queue joinempty to no'
+    );
+
+    // safe-upgrade.sh migrations
+    assert.ok(
+        /UPDATE.*queues_config.*SET.*dest.*=.*app-blackhole,hangup,1.*WHERE.*dest.*=.*CONCAT\('ext-queues,'.*extension/.test(upgrader),
+        'safe-upgrade.sh must neutralize queue dest self-loops'
+    );
+    assert.ok(
+        /UPDATE.*ringgroups.*SET.*postdest.*=.*app-blackhole,hangup,1.*WHERE.*postdest.*=.*CONCAT\('ext-group,'.*grpnum/.test(upgrader),
+        'safe-upgrade.sh must neutralize ring group postdest self-loops'
+    );
+    assert.ok(
+        /UPDATE.*queues_details.*SET.*data.*=.*'yes'.*WHERE.*keyword.*=.*'leavewhenempty'/.test(upgrader),
+        'safe-upgrade.sh must set queue leavewhenempty to yes'
+    );
+    assert.ok(
+        /UPDATE.*queues_details.*SET.*data.*=.*'no'.*WHERE.*keyword.*=.*'joinempty'/.test(upgrader),
+        'safe-upgrade.sh must set queue joinempty to no'
+    );
+});

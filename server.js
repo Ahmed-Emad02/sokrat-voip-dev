@@ -1021,10 +1021,14 @@ async function initAuthDb() {
         CREATE TABLE IF NOT EXISTS ${tables.employeeGroups} (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL UNIQUE,
+            name_ar VARCHAR(100) DEFAULT NULL,
+            name_en VARCHAR(100) DEFAULT NULL,
             description TEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    await ensureDbColumn(conn, 'employee_groups', 'name_ar', 'VARCHAR(100) DEFAULT NULL');
+    await ensureDbColumn(conn, 'employee_groups', 'name_en', 'VARCHAR(100) DEFAULT NULL');
     // Auto-Dialer Schema Initialization
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dialer_campaigns (
@@ -15167,14 +15171,23 @@ app.put('/api/employee/group-assignment', requireAuth, async (req, res) => {
 
         let targetGroup = null;
         if (groupName) {
-            const [groups] = await pool.query(
+            let [groups] = await pool.query(
                 `SELECT name FROM ${tables.employeeGroups} WHERE name = ?`,
                 [groupName]
             );
             if (!groups.length) {
-                return res.status(400).json({ success: false, error: 'Employee group does not exist' });
+                await pool.query(
+                    `INSERT IGNORE INTO ${tables.employeeGroups} (name, name_ar, name_en) VALUES (?, ?, ?)`,
+                    [groupName, groupName, groupName]
+                );
+                [groups] = await pool.query(
+                    `SELECT name FROM ${tables.employeeGroups} WHERE name = ?`,
+                    [groupName]
+                );
             }
-            targetGroup = groups[0].name;
+            if (groups && groups.length) {
+                targetGroup = groups[0].name;
+            }
         }
 
         if (targetGroup === null) {
@@ -15235,7 +15248,10 @@ app.post('/api/config/ringgroups', async (req, res) => {
         const ringStrategy = strategy || 'ringall';
         const ringTime = parseInt(grptime, 10) || 20;
         const annMsgId = parseInt(annmsg_id, 10) || 0;
-        const postDest = (postdest && postdest.trim()) ? postdest.trim() : `ext-group,${num},1`;
+        let postDest = (postdest && postdest.trim()) ? postdest.trim() : 'app-blackhole,hangup,1';
+        if (postDest === `ext-group,${num},1` || postDest === `from-did-direct,${num},1`) {
+            postDest = 'app-blackhole,hangup,1';
+        }
         const mohRinging = (ringing && String(ringing).trim()) ? String(ringing).trim() : 'Ring';
 
         const collisionError = await checkNumberCollision(num, 'ringgroup');
@@ -15269,7 +15285,10 @@ app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
         const ringStrategy = strategy || 'ringall';
         const ringTime = parseInt(grptime, 10) || 20;
         const annMsgId = parseInt(annmsg_id, 10) || 0;
-        const postDest = (postdest && postdest.trim()) ? postdest.trim() : `ext-group,${num},1`;
+        let postDest = (postdest && postdest.trim()) ? postdest.trim() : 'app-blackhole,hangup,1';
+        if (postDest === `ext-group,${num},1` || postDest === `from-did-direct,${num},1`) {
+            postDest = 'app-blackhole,hangup,1';
+        }
         const mohRinging = (ringing && String(ringing).trim()) ? String(ringing).trim() : 'Ring';
 
         const [existing] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
@@ -15460,8 +15479,16 @@ app.post('/api/config/queues', async (req, res) => {
         const maxWaitVal = (maxwait !== undefined && maxwait !== null && String(maxwait).trim() !== '' && String(maxwait).trim() !== '0') ? String(maxwait).trim() : '';
         const agentTimeoutVal = String(timeout || '15');
         const retryVal = String(retry || '5');
-        const failDest = String(dest || failover || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
-        const continueDest = String(destcontinue || req.body.continue_dest || '').trim() || 'app-blackhole,hangup,1';
+        let failDest = String(dest || failover || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
+        if (failDest === `ext-queues,${num},1` || failDest === `from-did-direct,${num},1`) {
+            failDest = 'app-blackhole,hangup,1';
+        }
+        let continueDest = String(destcontinue || req.body.continue_dest || '').trim() || 'app-blackhole,hangup,1';
+        if (continueDest === `ext-queues,${num},1` || continueDest === `from-did-direct,${num},1`) {
+            continueDest = 'app-blackhole,hangup,1';
+        }
+        const joinEmptyVal = (req.body.joinempty !== undefined && String(req.body.joinempty).trim()) ? String(req.body.joinempty).trim() : 'no';
+        const leaveWhenEmptyVal = (req.body.leavewhenempty !== undefined && String(req.body.leavewhenempty).trim()) ? String(req.body.leavewhenempty).trim() : 'yes';
 
         await pool.query(`
             INSERT INTO \`asterisk\`.\`queues_config\`
@@ -15485,8 +15512,8 @@ app.post('/api/config/queues', async (req, res) => {
             [num, 'queue-thereare', 'silence/1', 0],
             [num, 'queue-callswaiting', 'silence/1', 0],
             [num, 'periodic-announce-frequency', '0', 0],
-            [num, 'joinempty', 'yes', 0],
-            [num, 'leavewhenempty', 'no', 0],
+            [num, 'joinempty', joinEmptyVal, 0],
+            [num, 'leavewhenempty', leaveWhenEmptyVal, 0],
             [num, 'monitor-join', 'yes', 0],
             [num, 'wrapuptime', '0', 0],
             [num, 'maxlen', '0', 0]
@@ -15567,8 +15594,16 @@ app.put('/api/config/queues/:extension', async (req, res) => {
         const maxWaitVal = (maxwait !== undefined && maxwait !== null && String(maxwait).trim() !== '' && String(maxwait).trim() !== '0') ? String(maxwait).trim() : '';
         const agentTimeoutVal = String(timeout || '15');
         const retryVal = String(retry || '5');
-        const failDest = String(dest || failover || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
-        const continueDest = String(destcontinue || req.body.continue_dest || '').trim() || 'app-blackhole,hangup,1';
+        let failDest = String(dest || failover || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
+        if (failDest === `ext-queues,${num},1` || failDest === `from-did-direct,${num},1`) {
+            failDest = 'app-blackhole,hangup,1';
+        }
+        let continueDest = String(destcontinue || req.body.continue_dest || '').trim() || 'app-blackhole,hangup,1';
+        if (continueDest === `ext-queues,${num},1` || continueDest === `from-did-direct,${num},1`) {
+            continueDest = 'app-blackhole,hangup,1';
+        }
+        const joinEmptyVal = (req.body.joinempty !== undefined && String(req.body.joinempty).trim()) ? String(req.body.joinempty).trim() : 'no';
+        const leaveWhenEmptyVal = (req.body.leavewhenempty !== undefined && String(req.body.leavewhenempty).trim()) ? String(req.body.leavewhenempty).trim() : 'yes';
 
         await pool.query(`
             UPDATE \`asterisk\`.\`queues_config\`
@@ -15594,8 +15629,8 @@ app.put('/api/config/queues/:extension', async (req, res) => {
             [num, 'queue-thereare', 'silence/1', 0],
             [num, 'queue-callswaiting', 'silence/1', 0],
             [num, 'periodic-announce-frequency', '0', 0],
-            [num, 'joinempty', 'yes', 0],
-            [num, 'leavewhenempty', 'no', 0],
+            [num, 'joinempty', joinEmptyVal, 0],
+            [num, 'leavewhenempty', leaveWhenEmptyVal, 0],
             [num, 'monitor-join', 'yes', 0],
             [num, 'wrapuptime', '0', 0],
             [num, 'maxlen', '0', 0]
@@ -21010,7 +21045,12 @@ function getFederationActiveCallForDongle(dongleName) {
 }
 
 async function buildFederationExtensions() {
-    const [users] = await pool.query('SELECT extension, name FROM `asterisk`.`users` ORDER BY extension ASC');
+    const [users] = await pool.query(`
+        SELECT u.extension, u.name, ee.emp_group, ee.title, ee.photo, ee.is_group_admin
+        FROM \`asterisk\`.\`users\` u
+        LEFT JOIN \`asterisk\`.\`employee_extras\` ee ON u.extension = ee.extension
+        ORDER BY u.extension ASC
+    `);
     return (users || []).map(u => {
         const ext = String(u.extension);
         const call = activeCalls[ext];
@@ -21022,6 +21062,7 @@ async function buildFederationExtensions() {
         return {
             extension: ext,
             name: u.name || u.extension,
+            emp_group: u.emp_group || null,
             status,
             ip: peerIPs[u.extension] || null
         };
@@ -21459,7 +21500,7 @@ app.get('/api/federation/v1/inventory', async (req, res) => {
             api_version: FEDERATION_API_VERSION,
             server_time: new Date().toISOString(),
             node,
-            extensions: extensions.map(e => ({ extension: e.extension, name: e.name })),
+            extensions: extensions.map(e => ({ extension: e.extension, name: e.name, emp_group: e.emp_group || null })),
             dongles,
             counts
         });

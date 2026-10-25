@@ -1054,6 +1054,7 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_remote_extensions\` (
   \`dial_alias\` VARCHAR(30) NOT NULL UNIQUE,
   \`display_name\` VARCHAR(100) NOT NULL,
   \`status\` ENUM('online', 'offline', 'ringing', 'in_call', 'unknown') NOT NULL DEFAULT 'unknown',
+  \`emp_group\` VARCHAR(100) DEFAULT NULL,
   \`last_seen_at\` DATETIME DEFAULT NULL,
   UNIQUE KEY \`idx_peer_ext\` (\`peer_id\`, \`native_extension\`),
   KEY \`idx_peer_id\` (\`peer_id\`),
@@ -2184,15 +2185,15 @@ PY_RECQUEUE
 
 # Patch Issabel Time Groups unclosed <select> tag bug in functions.inc.php
 python3 - << 'PY_TC_FIX'
-import os
+import os, re
 path = "/var/www/html/admin/modules/timeconditions/functions.inc.php"
 if os.path.exists(path):
     try:
         content = open(path, "r", encoding="utf-8").read()
-        target = '$html = $html."<option value=\\"sun\\" $default>" . __("Sunday");\n\n\t$html = $html.\'</td>\';'
-        replacement = '$html = $html."<option value=\\"sun\\" $default>" . __("Sunday");\n\t$html = $html.\'</select>\';\n\t$html = $html.\'</td>\';'
-        if target in content:
-            open(path, "w", encoding="utf-8").write(content.replace(target, replacement))
+        pattern = r'(\$html\s*=\s*\$html\."<option value=\\"sun\\" \$default>" \. __\("Sunday"\);\s*)(?!\$html\s*=\s*\$html\.\'</select>\';)(\$html\s*=\s*\$html\.\'</td>\';)'
+        if re.search(pattern, content):
+            content = re.sub(pattern, r"\1$html = $html.'</select>';\n    \2", content)
+            open(path, "w", encoding="utf-8").write(content)
             print("  Patched Issabel Time Groups unclosed select tag in functions.inc.php")
     except Exception:
         pass
