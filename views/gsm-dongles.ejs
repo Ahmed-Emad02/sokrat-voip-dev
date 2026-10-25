@@ -3100,6 +3100,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
         function fedDongleFetch(path, options = {}, nodeSite = null) {
             const site = String(nodeSite || selectedDongleSite || FED_LOCAL_SITE);
             if (!site || site === FED_LOCAL_SITE) return fetch(path, options);
+            if (!FED_CAN_RELAY) {
+                // Reads are aggregated by the central server; per-node writes
+                // need the signed action gateway, which is super-admin only.
+                return Promise.resolve(new Response(JSON.stringify({
+                    success: false,
+                    error: isRtl ? 'التحكم في سيرفر بعيد يتطلب مديراً أعلى.' : 'Remote PBX control requires a super administrator.'
+                }), { status: 403, headers: { 'Content-Type': 'application/json' } }));
+            }
             return fedRelayAction(site, path, options);
         }
 

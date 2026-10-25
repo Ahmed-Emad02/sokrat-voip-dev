@@ -10592,10 +10592,15 @@ app.get('/api/gsm-dongles', async (req, res) => {
         const filteredDevices = includeLocal
             ? (allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched)
             : [];
-        const live = await getFederationLiveDongleModel(req, scope, filteredDevices);
+        // A user with no dongle grants must not trigger (or receive) peer reads.
+        const canReadPeers = !(Array.isArray(allowedDongles) && allowedDongles.length === 0);
+        const live = await getFederationLiveDongleModel(req, scope, filteredDevices, { readPeers: canReadPeers });
+        const devices = allowedDongles !== null
+            ? live.devices.filter(device => isDeviceAllowedForDongles(device, allowedDongles))
+            : live.devices;
         res.json({
             success: true,
-            devices: live.devices,
+            devices,
             nodes: live.nodes,
             localSite: live.localSite
         });
@@ -12978,8 +12983,15 @@ app.get('/api/gsm-dongles/sms', async (req, res) => {
                 return allowedDongles.some(d => d.toLowerCase() === msgDongle);
             });
         }
-        const live = await getFederationLiveSms(req, res.locals.federationScope, inbox);
-        res.json({ success: true, sms: live.messages, nodes: live.nodes });
+        const canReadPeers = !(Array.isArray(allowedDongles) && allowedDongles.length === 0);
+        const live = await getFederationLiveSms(req, res.locals.federationScope, inbox, { readPeers: canReadPeers });
+        const messages = allowedDongles !== null
+            ? live.messages.filter(msg => {
+                const msgDongle = String(msg.dongleId || '').toLowerCase().trim();
+                return allowedDongles.some(d => d.toLowerCase() === msgDongle);
+            })
+            : live.messages;
+        res.json({ success: true, sms: messages, nodes: live.nodes });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -20960,8 +20972,10 @@ function tagFederationDongleDevice(device, node) {
     };
 }
 
-async function getFederationLiveDongleModel(req, scope, localDevices) {
-    const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope);
+async function getFederationLiveDongleModel(req, scope, localDevices, options = {}) {
+    const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope, {
+        readPeers: options.readPeers !== false
+    });
     const devices = [];
     let localCount = 0;
     for (const node of nodes) {
@@ -20983,8 +20997,11 @@ async function getFederationLiveDongleModel(req, scope, localDevices) {
     return { localSite, nodes, devices };
 }
 
-async function getFederationLiveSms(req, scope, localMessages) {
-    const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope, { path: '/api/gsm-dongles/sms' });
+async function getFederationLiveSms(req, scope, localMessages, options = {}) {
+    const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope, {
+        path: '/api/gsm-dongles/sms',
+        readPeers: options.readPeers !== false
+    });
     const messages = [];
     for (const node of nodes) {
         if (node.is_local) {

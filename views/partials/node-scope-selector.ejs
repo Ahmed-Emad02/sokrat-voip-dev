@@ -43,7 +43,7 @@ if (fedScopeEnabled) {
     // Pages that aggregate every PBX at once (the dongle console) route each
     // action to the owning node themselves, so the single-node fetch shim must
     // stay off there or it would hijack the merged local reads.
-    const fedAggregatedPage = (typeof fedMultiNodePage !== 'undefined') && Boolean(fedMultiNodePage);
+    const fedAggregatedPage = (typeof locals !== 'undefined' && Boolean(locals.fedMultiNodePage));
     const fedCanControl = Boolean(fedControlNode) && (typeof isSuperAdmin !== 'undefined') && Boolean(isSuperAdmin) && !fedAggregatedPage;
     const fedControlSite = fedControlNode ? String(fedControlNode.site_code) : '';
     const fedControlName = fedControlNode ? String(fedControlNode.node_name || ('Site ' + fedControlSite)) : '';
