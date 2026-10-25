@@ -15574,6 +15574,52 @@ function buildQueueMemberRows(num, staticMembers, dynamicMembers) {
     return members.map((ext, index) => [num, 'member', `Local/${ext}@from-queue/n,0`, index]);
 }
 
+// Issabel cannot remember whether an agent was assigned as static, dynamic or
+// both, so the queue modal used to lose that role on the next edit. Keep the
+// three states in a Sokrat-owned table (never read by retrieve_conf).
+function splitQueueAgentRoles(staticMembers, dynamicMembers) {
+    const statics = cleanQueueAgentList(staticMembers);
+    const dynamics = cleanQueueAgentList(dynamicMembers);
+    const all = [...new Set([...statics, ...dynamics])];
+    return all.map(ext => ({
+        extension: ext,
+        is_static: statics.includes(ext) ? 1 : 0,
+        is_dynamic: dynamics.includes(ext) ? 1 : 0
+    }));
+}
+
+async function readQueueAgentRoles() {
+    const map = {};
+    try {
+        const [rows] = await pool.query(
+            'SELECT `queue`, `extension`, `is_static`, `is_dynamic`, `penalty` FROM `asterisk`.`sokrat_queue_agents`'
+        );
+        for (const row of rows || []) {
+            const queue = String(row.queue);
+            if (!map[queue]) map[queue] = [];
+            map[queue].push({
+                extension: String(row.extension),
+                is_static: Number(row.is_static) ? 1 : 0,
+                is_dynamic: Number(row.is_dynamic) ? 1 : 0,
+                penalty: Number(row.penalty) || 0
+            });
+        }
+    } catch (e) {
+        // Table missing (fresh install before the migration): fall back to Issabel data.
+    }
+    return map;
+}
+
+async function replaceQueueAgentRoles(conn, num, entries) {
+    await conn.query('DELETE FROM `asterisk`.`sokrat_queue_agents` WHERE `queue` = ?', [num]);
+    for (const entry of entries) {
+        await conn.query(
+            'INSERT INTO `asterisk`.`sokrat_queue_agents` (`queue`, `extension`, `is_static`, `is_dynamic`) VALUES (?, ?, ?, ?)',
+            [num, entry.extension, entry.is_static, entry.is_dynamic]
+        );
+    }
+}
+
 // Self-heal pass: agents that only exist in the AstDB QPENALTY family (the old
 // "dynamic only" save) were never real members, so their phones never rang.
 // Materialize them as member rows once, at boot, so existing queues start working.
@@ -15642,7 +15688,37 @@ async function reconcileQueueMembership() {
     }
 
     const removed = ((phantom && phantom.affectedRows) || 0) + astdbCleaned;
-    return { changed: added + removed, added, removed };
+
+    // Seed the role table for queues that predate it: existing member rows were
+    // "static" and AstDB QPENALTY agents were "dynamic" (the old modal always set
+    // both, so an agent present in both places is seeded as static + dynamic).
+    const savedRoles = await readQueueAgentRoles();
+    let seeded = 0;
+    for (const queue of queueIds) {
+        if ((savedRoles[queue] || []).length) continue;
+        const statics = new Set(existing[queue] || []);
+        const dynamics = new Set(dynamicAgents[queue] || []);
+        const all = [...new Set([...statics, ...dynamics])];
+        if (!all.length) continue;
+        const entries = all.map(ext => ({
+            extension: ext,
+            is_static: statics.has(ext) ? 1 : 0,
+            is_dynamic: dynamics.has(ext) ? 1 : 0
+        }));
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            await replaceQueueAgentRoles(conn, queue, entries);
+            await conn.commit();
+            seeded++;
+        } catch (_) {
+            await conn.rollback().catch(() => {});
+        } finally {
+            conn.release();
+        }
+    }
+
+    return { changed: added + removed + seeded, added, removed, seeded };
 }
 
 // --- EXTENSION CONFLICT AUDIT & DETECTION ---
@@ -15704,6 +15780,7 @@ app.get('/api/config/queues', async (req, res) => {
         `);
 
         const dynamicAgents = await readQueueDynamicAgents();
+        const savedRoles = await readQueueAgentRoles();
 
         const detailsMap = {};
         for (const row of detailsRows) {
@@ -15718,9 +15795,18 @@ app.get('/api/config/queues', async (req, res) => {
 
         const queues = configRows.map(q => {
             const d = detailsMap[q.extension] || {};
-            const staticMembers = cleanQueueAgentList(d.members || []);
-            const dynMembers = (dynamicAgents[q.extension] || [])
-                .filter(ext => !staticMembers.includes(ext));
+            const memberAgents = cleanQueueAgentList(d.members || []);
+            const roleRows = savedRoles[q.extension] || [];
+
+            // Prefer the remembered roles so "static + dynamic" survives an edit.
+            // Queues that predate the role table fall back to member rows (static)
+            // plus the AstDB penalty family (dynamic).
+            const staticMembers = roleRows.length
+                ? roleRows.filter(r => r.is_static).map(r => r.extension)
+                : memberAgents;
+            const dynMembers = roleRows.length
+                ? roleRows.filter(r => r.is_dynamic).map(r => r.extension)
+                : cleanQueueAgentList(dynamicAgents[q.extension] || []);
 
             return {
                 extension: q.extension,
@@ -15826,9 +15912,10 @@ app.post('/api/config/queues', async (req, res) => {
             details.push([num, 'monitor-format', 'wav', 0]);
         }
 
-        // Static and dynamic agents both become real queue members; dynamic entries
-        // additionally seed the AstDB penalty family Issabel expects.
+        // Static and dynamic agents both become real queue members; the three
+        // role states are remembered in sokrat_queue_agents.
         details.push(...buildQueueMemberRows(num, static_members, dynmembers));
+        const roleEntries = splitQueueAgentRoles(static_members, dynmembers);
 
         const conn = await pool.getConnection();
         try {
@@ -15836,6 +15923,7 @@ app.post('/api/config/queues', async (req, res) => {
             for (const row of details) {
                 await conn.query('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', row);
             }
+            await replaceQueueAgentRoles(conn, num, roleEntries);
             await conn.commit();
         } catch (rowError) {
             await conn.rollback().catch(() => {});
@@ -15897,34 +15985,27 @@ app.put('/api/config/queues/:extension', async (req, res) => {
         const joinEmptyVal = (req.body.joinempty !== undefined && String(req.body.joinempty).trim()) ? String(req.body.joinempty).trim() : 'yes';
         const leaveWhenEmptyVal = (req.body.leavewhenempty !== undefined && String(req.body.leavewhenempty).trim()) ? String(req.body.leavewhenempty).trim() : 'no';
 
+        // Only rewrite the knobs this modal owns. Everything else in queues_details
+        // (weight, servicelevel, announce-frequency, timeoutpriority, ...) belongs
+        // to Issabel and must survive a Sokrat edit untouched.
+        const managedKeywords = ['strategy', 'autofill', 'ringinuse', 'music', 'timeout', 'retry', 'monitor-format', 'member'];
         const details = [
             [num, 'strategy', ringStrategy, 0],
             [num, 'autofill', isAutofill, 0],
             [num, 'ringinuse', ringInUseVal, 0],
             [num, 'music', mohClass, 0],
             [num, 'timeout', agentTimeoutVal, 0],
-            [num, 'retry', retryVal, 0],
-            [num, 'announce-frequency', '0', 0],
-            [num, 'announce-holdtime', 'no', 0],
-            [num, 'announce-position', 'no', 0],
-            [num, 'queue-youarenext', 'silence/1', 0],
-            [num, 'queue-thereare', 'silence/1', 0],
-            [num, 'queue-callswaiting', 'silence/1', 0],
-            [num, 'periodic-announce-frequency', '0', 0],
-            [num, 'joinempty', joinEmptyVal, 0],
-            [num, 'leavewhenempty', leaveWhenEmptyVal, 0],
-            [num, 'monitor-join', 'yes', 0],
-            [num, 'wrapuptime', '0', 0],
-            [num, 'maxlen', '0', 0]
+            [num, 'retry', retryVal, 0]
         ];
 
         if (isRecording === 'yes') {
             details.push([num, 'monitor-format', 'wav', 0]);
         }
 
-        // Static and dynamic agents both become real queue members; dynamic entries
-        // additionally seed the AstDB penalty family Issabel expects.
+        // Static and dynamic agents both become real queue members; the three
+        // role states are remembered in sokrat_queue_agents.
         details.push(...buildQueueMemberRows(num, static_members, dynmembers));
+        const roleEntries = splitQueueAgentRoles(static_members, dynmembers);
 
         const conn = await pool.getConnection();
         try {
@@ -15934,10 +16015,23 @@ app.put('/api/config/queues/:extension', async (req, res) => {
                 SET descr = ?, joinannounce_id = ?, maxwait = ?, dest = ?, destcontinue = ?, cwignore = ?, monitor_type = ?
                 WHERE extension = ?
             `, [name, annId, maxWaitVal, failDest, continueDest, cwignoreVal, monitorTypeVal, num]);
-            await conn.query('DELETE FROM `asterisk`.`queues_details` WHERE id = ?', [num]);
+            await conn.query(
+                `DELETE FROM \`asterisk\`.\`queues_details\` WHERE id = ? AND keyword IN (${managedKeywords.map(() => '?').join(',')})`,
+                [num, ...managedKeywords]
+            );
+            // Empty settings (join/leave/announce defaults) are only seeded on
+            // create; keep whatever Issabel already has for an existing queue.
             for (const row of details) {
                 await conn.query('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', row);
             }
+            // Seed safe empty-queue defaults only when the queue never had them.
+            for (const [keyword, value] of [['joinempty', joinEmptyVal], ['leavewhenempty', leaveWhenEmptyVal]]) {
+                await conn.query(
+                    'INSERT IGNORE INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, 0)',
+                    [num, keyword, value]
+                );
+            }
+            await replaceQueueAgentRoles(conn, num, roleEntries);
             await conn.commit();
         } catch (rowError) {
             await conn.rollback().catch(() => {});
@@ -15965,6 +16059,9 @@ app.delete('/api/config/queues/:extension', async (req, res) => {
         }
         await pool.query('DELETE FROM `asterisk`.`queues_config` WHERE extension = ?', [num]);
         await pool.query('DELETE FROM `asterisk`.`queues_details` WHERE id = ?', [num]);
+        try {
+            await pool.query('DELETE FROM `asterisk`.`sokrat_queue_agents` WHERE `queue` = ?', [num]);
+        } catch (_) {}
         try {
             await execPromise(`asterisk -rx "database deltree QPENALTY/${num}"`);
         } catch(e) {}

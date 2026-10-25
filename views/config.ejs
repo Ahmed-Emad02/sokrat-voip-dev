@@ -8484,15 +8484,47 @@ function isTabAllowed(tabName) {
             renderQueueAgentChecklist();
         }
 
-        function populateQueueAnnouncementsDropdown() {
+        function populateQueueAnnouncementsDropdown(desiredValue) {
             const sel = document.getElementById('queueAnnMsg');
             if (!sel) return;
+
+            // Repopulating must never silently drop the saved announcement: the
+            // modal sets the value first, then this runs again after the async
+            // recording list arrives.
+            const keep = (desiredValue !== undefined && desiredValue !== null && String(desiredValue).trim() !== '')
+                ? String(desiredValue).trim()
+                : String(sel.value || '0').trim();
+
             sel.innerHTML = '<option value="0">None / No Announcement</option>';
             (loadedRecordingsList || []).forEach(r => {
                 const opt = document.createElement('option');
                 opt.value = r.id;
                 opt.textContent = `${r.displayname} (ID: ${r.id})`;
                 sel.appendChild(opt);
+            });
+
+            // Keep a deleted/missing recording visible instead of resetting to None.
+            if (keep !== '0' && !Array.from(sel.options).some(o => String(o.value) === keep)) {
+                const opt = document.createElement('option');
+                opt.value = keep;
+                opt.textContent = (isRtl ? 'تسجيل محذوف' : 'Missing recording') + ` (ID: ${keep})`;
+                sel.appendChild(opt);
+            }
+
+            sel.value = keep;
+            if (String(sel.value) !== keep) sel.value = '0';
+            if (typeof window.syncConfigDropdownTrigger === 'function') {
+                window.syncConfigDropdownTrigger(sel);
+            }
+        }
+
+        // Native selects are hidden behind the custom dropdown component, so a
+        // programmatic .value change does not refresh the visible label.
+        function syncQueueModalSelects() {
+            if (typeof window.syncConfigDropdownTrigger !== 'function') return;
+            ['queueStrategy', 'queueMoh', 'queueRecording', 'queueAutofill', 'queueSkipBusy', 'queueAnnMsg'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) window.syncConfigDropdownTrigger(el);
             });
         }
 
@@ -8563,8 +8595,9 @@ function isTabAllowed(tabName) {
             document.getElementById('queueStaticList').value = '';
             document.getElementById('queueDynList').value = '';
 
-            populateQueueAnnouncementsDropdown();
+            populateQueueAnnouncementsDropdown(0);
             renderQueueAgentChecklist();
+            syncQueueModalSelects();
 
             const destVal = 'app-blackhole,hangup,1';
             const destContinueVal = 'app-blackhole,hangup,1';
@@ -8576,8 +8609,9 @@ function isTabAllowed(tabName) {
             if (queueContinueDestSelectInstance) queueContinueDestSelectInstance.setDialplan(destContinueVal);
             if (typeof ensureAllConfigListsLoaded === 'function') {
                 ensureAllConfigListsLoaded().then(() => {
-                    populateQueueAnnouncementsDropdown();
+                    populateQueueAnnouncementsDropdown(0);
                     renderQueueAgentChecklist();
+                    syncQueueModalSelects();
                     if (queueDestSelectInstance) queueDestSelectInstance.setDialplan(destVal);
                     if (queueContinueDestSelectInstance) queueContinueDestSelectInstance.setDialplan(destContinueVal);
                 }).catch(() => {});
@@ -8604,7 +8638,7 @@ function isTabAllowed(tabName) {
             document.getElementById('queueAgentTimeout').value = q.timeout || 15;
             document.getElementById('queueRetry').value = q.retry || 5;
             document.getElementById('queueAutofill').value = q.autofill || 'yes';
-            document.getElementById('queueSkipBusy').value = (q.cwignore == 1 || q.cwignore === '1') ? 'yes' : 'no';
+            document.getElementById('queueSkipBusy').value = (Number(q.cwignore) > 0) ? 'yes' : 'no';
 
             const staticArr = cleanQueueAgentsFromApi(q.static_members);
             const dynArr = cleanQueueAgentsFromApi(q.dynmembers);
@@ -8612,9 +8646,11 @@ function isTabAllowed(tabName) {
             document.getElementById('queueStaticList').value = staticArr.join(', ');
             document.getElementById('queueDynList').value = dynArr.join(', ');
 
-            populateQueueAnnouncementsDropdown();
+            const annMsgId = parseInt(q.joinannounce_id, 10) || 0;
+            populateQueueAnnouncementsDropdown(annMsgId);
             renderQueueAgentChecklist();
-            document.getElementById('queueAnnMsg').value = q.joinannounce_id || 0;
+            document.getElementById('queueAnnMsg').value = String(annMsgId);
+            syncQueueModalSelects();
 
             const destVal = q.dest || 'app-blackhole,hangup,1';
             document.getElementById('queueDestination').value = destVal;
@@ -8626,8 +8662,9 @@ function isTabAllowed(tabName) {
             if (queueContinueDestSelectInstance) queueContinueDestSelectInstance.setDialplan(destContinueVal);
             if (typeof ensureAllConfigListsLoaded === 'function') {
                 ensureAllConfigListsLoaded().then(() => {
-                    populateQueueAnnouncementsDropdown();
+                    populateQueueAnnouncementsDropdown(annMsgId);
                     renderQueueAgentChecklist();
+                    syncQueueModalSelects();
                     if (queueDestSelectInstance) queueDestSelectInstance.setDialplan(destVal);
                     if (queueContinueDestSelectInstance) queueContinueDestSelectInstance.setDialplan(destContinueVal);
                 }).catch(() => {});

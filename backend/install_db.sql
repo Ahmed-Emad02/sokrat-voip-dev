@@ -1024,6 +1024,21 @@ DEALLOCATE PREPARE sokrat_stmt;
 -- ---------------------------------------------------------------------------
 -- Queue member integrity
 -- ---------------------------------------------------------------------------
+-- Role bookkeeping for the queue modal. Issabel has no place to remember whether
+-- an agent was added as "static", "dynamic" or both, so editing a queue used to
+-- collapse every agent to a single role. This table is Sokrat-owned and is never
+-- referenced by the FreePBX config generator, so it cannot corrupt
+-- queues_additional.conf.
+CREATE TABLE IF NOT EXISTS `asterisk`.`sokrat_queue_agents` (
+  `queue` VARCHAR(45) NOT NULL,
+  `extension` VARCHAR(45) NOT NULL,
+  `is_static` TINYINT(1) NOT NULL DEFAULT 0,
+  `is_dynamic` TINYINT(1) NOT NULL DEFAULT 0,
+  `penalty` INT NOT NULL DEFAULT 0,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`queue`, `extension`),
+  KEY `idx_queue` (`queue`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- Older dashboards wrote non-FreePBX keywords into queues_details. `dynmembers`
 -- belongs in the AstDB QPENALTY family, while `goto` and `maxwait` belong in
 -- queues_config. Their multi-line values corrupted queues_additional.conf

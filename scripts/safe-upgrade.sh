@@ -369,6 +369,16 @@ CREATE TABLE IF NOT EXISTS \`extension_policies\` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ALTER TABLE \`extension_policies\` ADD COLUMN IF NOT EXISTS \`disable_outbound_ringing_cancel\` TINYINT(1) NOT NULL DEFAULT 0 AFTER \`dnd\`;
 
+CREATE TABLE IF NOT EXISTS \`sokrat_queue_agents\` (
+  \`queue\` VARCHAR(45) NOT NULL,
+  \`extension\` VARCHAR(45) NOT NULL,
+  \`is_static\` TINYINT(1) NOT NULL DEFAULT 0,
+  \`is_dynamic\` TINYINT(1) NOT NULL DEFAULT 0,
+  \`penalty\` INT NOT NULL DEFAULT 0,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`queue\`, \`extension\`),
+  KEY \`idx_queue\` (\`queue\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS \`laya_dongle_health\` (
   \`dongle_name\` VARCHAR(50) NOT NULL PRIMARY KEY,
   \`health_score\` TINYINT NOT NULL DEFAULT 100,
