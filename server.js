@@ -2316,7 +2316,7 @@ app.use((req, res, next) => {
         '/401', '/403', '/404', '/api/telephony/camp-on/dialplan-trigger',
         '/api/federation/v1/ping'
     ];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/extension/v1/')) {
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/extension/v1/') || req.path.startsWith('/api/extension-chat/v1/')) {
         return next();
     }
     requireAuth(req, res, next);
