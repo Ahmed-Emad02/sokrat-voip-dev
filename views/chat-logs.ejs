@@ -124,19 +124,19 @@ const canExportLogs = typeof canExport !== 'undefined' && canExport;
 
         <div class="panel p-3 mb-4 flex items-end gap-2 flex-wrap">
             <div class="flex-1 min-w-[220px]">
-                <label class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.search %></label>
+                <label for="chatSearch" class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.search %></label>
                 <input id="chatSearch" class="filter-input w-full" type="search" placeholder="<%= t.search %>" oninput="debouncedSearch()">
             </div>
             <div>
-                <label class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.from %></label>
+                <label for="chatFrom" class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.from %></label>
                 <input id="chatFrom" class="filter-input" type="date">
             </div>
             <div>
-                <label class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.to %></label>
+                <label for="chatTo" class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.to %></label>
                 <input id="chatTo" class="filter-input" type="date">
             </div>
             <div>
-                <label class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.extension %></label>
+                <label for="chatExtension" class="block text-[10px] font-bold uppercase mb-1" style="color: var(--chat-dim);"><%= t.extension %></label>
                 <input id="chatExtension" class="filter-input mono" style="width: 100px;" type="text" placeholder="107">
             </div>
         </div>
