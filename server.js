@@ -69,6 +69,8 @@ const {
 } = require('./lib/federation-bootstrap');
 const FederationHub = require('./lib/federation-hub');
 const { createFederationProxy } = require('./lib/federation-proxy');
+const { executePeerAction } = require('./lib/federation-control');
+const { federationRequest } = require('./lib/federation-client');
 const { federationAuthMiddleware, normalizeFederationBaseUrl, API_VERSION: FEDERATION_API_VERSION } = require('./lib/federation-auth');
 const APP_VERSION = require('./package.json').version;
 let federationHub = null;
@@ -462,13 +464,19 @@ app.use((req, res, next) => {
     };
     next();
 });
-app.use(express.json({
+const jsonBodyParser = express.json({
     verify: (req, res, buf) => {
         // Required for federation HMAC verification: the signature covers the
         // exact bytes sent by the peer, not a re-serialized object.
         req.rawBody = buf;
     }
-}));
+});
+app.use((req, res, next) => {
+    // The federation action gateway carries base64 file uploads, so it needs a
+    // much larger body limit than ordinary JSON APIs. Parse it at the route.
+    if (/^\/api\/federation\/peers\/[^/]+\/action\/?$/.test(req.path)) return next();
+    return jsonBodyParser(req, res, next);
+});
 app.use(express.urlencoded({ extended: true }));
 
 // --- PRE-SESSION COOKIE SANITIZER ---
@@ -1445,7 +1453,26 @@ async function initAuthDb() {
 initAuthDb().catch(err => console.error('AUTH DB init error:', err));
 
 // --- SESSION HELPERS ---
+function isFederationTrusted(req) {
+    return Boolean(req && req.isFederationAuthenticated);
+}
+
+/**
+ * Root-only routes must also accept a signed federation request. The peer
+ * trusts its configured hub as an administrator, which is what makes remote
+ * control through the central panel possible.
+ */
+function hasRootAccess(req) {
+    if (isFederationTrusted(req)) return true;
+    return Boolean(req && req.session && (
+        req.session.isRoot ||
+        req.session.username === ROOT_USER ||
+        req.session.username === 'root'
+    ));
+}
+
 function isSuperAdmin(req) {
+    if (isFederationTrusted(req)) return true;
     if (req && req.isApiKeyAuthenticated && req.apiKey) {
         const scopes = String(req.apiKey.scopes || '*').split(',').map(s => s.trim().toLowerCase());
         return scopes.includes('*') || scopes.includes('admin') || scopes.includes('superadmin');
@@ -1621,8 +1648,11 @@ function computePresetDateRange(preset) {
 }
 
 async function getUserAllowedDongles(req) {
-    if (!req || !req.session) return [];
+    if (!req) return [];
+    // Federation control requests have no browser session but are trusted as a
+    // super administrator by the signed peer handshake.
     if (isSuperAdmin(req)) return null; // null means unrestricted / all dongles
+    if (!req.session) return [];
     const userId = req.session.userId;
     if (!userId) return [];
     try {
@@ -2257,6 +2287,21 @@ app.use('/api/federation/v1', federationAuthMiddleware({
     publicPaths: ['/ping']
 }));
 
+// --- FEDERATION CONTROL-PLANE AUTHENTICATION ---
+// Signed peer requests are also accepted on the ordinary operational APIs so a
+// central hub can drive a peer exactly like a local operator. Requests without
+// federation proof fall through untouched to the browser/API-key auth below.
+// Federation management, login, and API-key administration stay off-limits.
+app.use('/api', federationAuthMiddleware({
+    pool: () => pool,
+    decryptFn: decrypt,
+    optional: true,
+    skipPrefixes: ['/federation'],
+    // A peer may drive operational APIs but never federation management
+    // (that would let a spoke rewire the hub), login, or API keys.
+    denyPrefixes: ['/auth', '/admin', '/config/federation']
+}));
+
 // --- PROTECT ALL OPERATIONAL ROUTES ---
 app.use((req, res, next) => {
     const publicPaths = [
@@ -2275,7 +2320,7 @@ app.use((req, res, next) => {
 // --- TAB PERMISSION MIDDLEWARE ---
 app.use(async (req, res, next) => {
     res.locals.isSuperAdmin = isSuperAdmin(req);
-    res.locals.isRootUser = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    res.locals.isRootUser = hasRootAccess(req);
     const scopedExts = getUserScopedExtensions(req);
     res.locals.userExtensions = scopedExts;
     res.locals.userExtension = (scopedExts && scopedExts.length > 0) ? scopedExts.join(',') : null;
@@ -6697,6 +6742,39 @@ app.get('/cdr', async (req, res) => {
             rgRows.forEach(r => ringGroupSet.add(String(r.grpnum)));
         } catch (_) {}
 
+        // Sokrat Universal Recording: resolve recordingfile from linked legs for transferred/split calls
+        const rowsMissingRec = rows.filter(r => (!r.recordingfile || !r.recordingfile.trim()) && (r.uniqueid || r.linkedid));
+        if (rowsMissingRec.length > 0) {
+            try {
+                const idsToCheck = [...new Set(rowsMissingRec.flatMap(r => [r.uniqueid, r.linkedid].filter(Boolean)))];
+                if (idsToCheck.length > 0) {
+                    const [recLegs] = await pool.query(
+                        `SELECT uniqueid, linkedid, recordingfile FROM \`asteriskcdrdb\`.\`cdr\`
+                         WHERE (uniqueid IN (?) OR linkedid IN (?))
+                           AND recordingfile IS NOT NULL AND recordingfile != ''
+                         ORDER BY billsec DESC, calldate DESC`,
+                        [idsToCheck, idsToCheck]
+                    );
+                    const recMap = new Map();
+                    recLegs.forEach(rl => {
+                        const rec = rl.recordingfile ? rl.recordingfile.trim() : '';
+                        if (rec) {
+                            if (rl.linkedid && !recMap.has(rl.linkedid)) recMap.set(rl.linkedid, rec);
+                            if (rl.uniqueid && !recMap.has(rl.uniqueid)) recMap.set(rl.uniqueid, rec);
+                        }
+                    });
+                    rows.forEach(r => {
+                        if (!r.recordingfile || !r.recordingfile.trim()) {
+                            const found = (r.linkedid && recMap.get(r.linkedid)) || (r.uniqueid && recMap.get(r.uniqueid));
+                            if (found) {
+                                r.recordingfile = found;
+                            }
+                        }
+                    });
+                }
+            } catch (_) {}
+        }
+
         const formattedRows = rows.map(row => {
             return {
                 ...row,
@@ -10472,17 +10550,29 @@ app.get('/gsm-dongles', async (req, res) => {
     try {
         const scope = res.locals.federationScope;
         const includeLocal = federationScopeIncludesLocal(scope);
-        const [allowedDongles, enriched, remoteNodes] = await Promise.all([
+        // The grid now merges every PBX in scope, so the server render only
+        // seeds the local node (instantly) and the first poll fills the peers.
+        const [allowedDongles, enriched, nodeModel] = await Promise.all([
             getUserAllowedDongles(req),
-            getEnrichedDevices(),
-            getFederationRemoteDongles(scope)
+            includeLocal ? getEnrichedDevices() : Promise.resolve([]),
+            getFederationNodeReadModel(req, scope, { readPeers: false })
         ]);
         const filteredDevices = includeLocal
             ? (allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched)
             : [];
+        const localNode = nodeModel.nodes.find(node => node.is_local) || {
+            site_code: nodeModel.localSite,
+            node_name: 'Main PBX',
+            is_local: true,
+            status: 'online'
+        };
+        const devices = filteredDevices.map(device => tagFederationDongleDevice(device, localNode));
+        if (localNode.dongle_count === undefined) localNode.dongle_count = devices.length;
         res.render('gsm-dongles', {
-            devices: filteredDevices,
-            remoteNodes,
+            devices,
+            fedDongleNodes: nodeModel.nodes,
+            fedLocalSite: nodeModel.localSite,
+            remoteNodes: [],
             moment
         });
     } catch (error) {
@@ -10495,15 +10585,20 @@ app.get('/api/gsm-dongles', async (req, res) => {
     try {
         const scope = res.locals.federationScope;
         const includeLocal = federationScopeIncludesLocal(scope);
-        const [allowedDongles, enriched, remoteNodes] = await Promise.all([
+        const [allowedDongles, enriched] = await Promise.all([
             getUserAllowedDongles(req),
-            getEnrichedDevices(),
-            getFederationRemoteDongles(scope)
+            includeLocal ? getEnrichedDevices() : Promise.resolve([])
         ]);
         const filteredDevices = includeLocal
             ? (allowedDongles !== null ? enriched.filter(d => isDeviceAllowedForDongles(d, allowedDongles)) : enriched)
             : [];
-        res.json({ success: true, devices: filteredDevices, remoteNodes });
+        const live = await getFederationLiveDongleModel(req, scope, filteredDevices);
+        res.json({
+            success: true,
+            devices: live.devices,
+            nodes: live.nodes,
+            localSite: live.localSite
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -10633,7 +10728,7 @@ app.post('/api/gsm-dongles/virtual-replug/:dongleId', async (req, res) => {
 // POST /api/gsm-dongles/at-diagnostic/:dongleId - Root-only AT diagnostic execution & smart explanation
 app.post('/api/gsm-dongles/at-diagnostic/:dongleId', requireAuth, async (req, res) => {
     try {
-        const isRootUser = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+        const isRootUser = hasRootAccess(req);
         if (!isRootUser) {
             return res.status(403).json({ success: false, error: 'Forbidden: AT Diagnostics shortcuts are restricted strictly to root user only.' });
         }
@@ -11105,7 +11200,7 @@ app.post('/api/laya/schedule/run', requireAuth, async (req, res) => {
 // POST /api/laya/kill-switch - Emergency Kill Switch for Laya Agent (root only)
 app.post('/api/laya/kill-switch', requireAuth, async (req, res) => {
     try {
-        const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+        const isRoot = hasRootAccess(req);
         if (!isRoot) {
             return res.status(403).json({
                 success: false,
@@ -12883,7 +12978,8 @@ app.get('/api/gsm-dongles/sms', async (req, res) => {
                 return allowedDongles.some(d => d.toLowerCase() === msgDongle);
             });
         }
-        res.json({ success: true, sms: inbox });
+        const live = await getFederationLiveSms(req, res.locals.federationScope, inbox);
+        res.json({ success: true, sms: live.messages, nodes: live.nodes });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -13341,7 +13437,7 @@ app.post('/api/blacklist/sync', async (req, res) => {
 // GET /config - render Configuration Management page
 app.get('/config', requireAuth, (req, res) => {
     const currentLang = res.locals.currentLang || 'en';
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     res.render('config', {
         moment,
         currentPage: '/config',
@@ -13353,7 +13449,7 @@ app.get('/config', requireAuth, (req, res) => {
 });
 // GET /dialer - render Auto-Dial Center view (Root Only)
 app.get('/dialer', requireAuth, (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).render('403', { currentLang: res.locals.currentLang || 'en', isRtl: res.locals.isRtl || false });
     }
@@ -13370,10 +13466,10 @@ app.get('/dialer', requireAuth, (req, res) => {
 
 // Helper function to reload PBX config via retrieve_conf & core reload
 function reloadPbxConfig(callback) {
-    const cmd = '/var/lib/asterisk/bin/retrieve_conf && asterisk -rx "core reload"';
+    const cmd = '/var/lib/asterisk/bin/retrieve_conf && asterisk -rx "core reload" && asterisk -rx "queue reload all"';
     exec(cmd, (error) => {
         if (error) {
-            exec('sudo -u asterisk /var/lib/asterisk/bin/retrieve_conf && /usr/sbin/asterisk -rx "core reload"', (fallbackError) => {
+            exec('sudo -u asterisk /var/lib/asterisk/bin/retrieve_conf && /usr/sbin/asterisk -rx "core reload" && /usr/sbin/asterisk -rx "queue reload all"', (fallbackError) => {
                 if (fallbackError) {
                     console.error('PBX Reload error:', fallbackError.message);
                     return callback ? callback({ success: false, error: fallbackError.message }) : null;
@@ -14180,7 +14276,7 @@ app.post('/api/config/extensions', async (req, res) => {
 
         io.emit('extensionPolicyUpdate', { extension: extNum, auto_answer: autoAnswerVal, dnd: dndVal, disable_outbound_ringing_cancel: disableCancelVal });
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         syncExtensionCallPickupGroups().catch(() => {});
 
         res.json({
@@ -14347,7 +14443,7 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             io.emit('extensionPolicyUpdate', { extension: extNum, auto_answer: finalAuto, dnd: finalDnd, disable_outbound_ringing_cancel: finalCancel });
         }
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         syncExtensionCallPickupGroups().catch(() => {});
         res.json({ success: true, message: `Extension ${extNum} updated successfully.` });
     } catch (error) {
@@ -14384,7 +14480,7 @@ app.delete('/api/config/extensions/:extension', async (req, res) => {
             if (err) console.error(`AstDB DEVICE deltree error for ${extNum}:`, err.message);
         });
         updateVoicemailConf(extNum, '', 'novm');
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         syncExtensionCallPickupGroups().catch(() => {});
 
         res.json({ success: true, message: `Extension ${extNum} deleted successfully.` });
@@ -14906,7 +15002,7 @@ app.post('/api/config/ringgroups', async (req, res) => {
             VALUES (?, ?, ?, '', ?, ?, ?, ?, '', 0, '', 0, ?, 'CHECKED', '', '', 'always')
         `, [num, ringStrategy, ringTime, extListFormatted, annMsgId, postDest, desc, mohRinging]);
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         cachedBaseRoster = null;
         res.json({ success: true, message: `Ring Group ${num} created with Skip Busy=Yes & Record=Always successfully.` });
     } catch (error) {
@@ -14939,7 +15035,7 @@ app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
             WHERE grpnum = ?
         `, [desc, extListFormatted, ringStrategy, ringTime, annMsgId, postDest, mohRinging, num]);
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         cachedBaseRoster = null;
         res.json({ success: true, message: `Ring Group ${num} updated successfully.` });
     } catch (error) {
@@ -14952,7 +15048,7 @@ app.delete('/api/config/ringgroups/:grpnum', async (req, res) => {
     try {
         const num = String(req.params.grpnum).trim();
         await pool.query('DELETE FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         cachedBaseRoster = null;
         res.json({ success: true, message: `Ring Group ${num} deleted successfully.` });
     } catch (error) {
@@ -15058,7 +15154,7 @@ app.get('/api/config/queues', async (req, res) => {
             return {
                 extension: q.extension,
                 descr: q.descr,
-                maxwait: q.maxwait || d.maxwait || '0',
+                maxwait: (q.maxwait !== undefined && q.maxwait !== null && q.maxwait !== '' && q.maxwait !== '0') ? q.maxwait : (d.maxwait && d.maxwait !== '0' ? d.maxwait : ''),
                 cwignore: q.cwignore,
                 joinannounce_id: q.joinannounce_id || 0,
                 dest: q.dest || d.goto || 'app-blackhole,hangup,1',
@@ -15113,7 +15209,7 @@ app.post('/api/config/queues', async (req, res) => {
         const monitorTypeVal = isRecording === 'yes' ? 'bgrnd' : '';
         const mohClass = musicclass || 'default';
         const annId = parseInt(joinannounce_id, 10) || 0;
-        const maxWaitVal = String(maxwait !== undefined && maxwait !== null ? maxwait : '0');
+        const maxWaitVal = (maxwait !== undefined && maxwait !== null && String(maxwait).trim() !== '' && String(maxwait).trim() !== '0') ? String(maxwait).trim() : '';
         const agentTimeoutVal = String(timeout || '15');
         const retryVal = String(retry || '5');
         const failDest = String(dest || failover || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
@@ -15182,7 +15278,7 @@ app.post('/api/config/queues', async (req, res) => {
         }
 
         await syncAstDbQueueAgents(num, dynmembers);
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
 
         res.json({ success: true, message: `Queue ${num} created successfully.` });
     } catch (error) {
@@ -15220,7 +15316,7 @@ app.put('/api/config/queues/:extension', async (req, res) => {
         const monitorTypeVal = isRecording === 'yes' ? 'bgrnd' : '';
         const mohClass = musicclass || 'default';
         const annId = parseInt(joinannounce_id, 10) || 0;
-        const maxWaitVal = String(maxwait !== undefined && maxwait !== null ? maxwait : '0');
+        const maxWaitVal = (maxwait !== undefined && maxwait !== null && String(maxwait).trim() !== '' && String(maxwait).trim() !== '0') ? String(maxwait).trim() : '';
         const agentTimeoutVal = String(timeout || '15');
         const retryVal = String(retry || '5');
         const failDest = String(dest || failover || req.body.goto || '').trim() || 'app-blackhole,hangup,1';
@@ -15292,7 +15388,7 @@ app.put('/api/config/queues/:extension', async (req, res) => {
         }
 
         await syncAstDbQueueAgents(num, dynmembers);
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
 
         res.json({ success: true, message: `Queue ${num} updated successfully.` });
     } catch (error) {
@@ -15313,7 +15409,7 @@ app.delete('/api/config/queues/:extension', async (req, res) => {
         try {
             await execPromise(`asterisk -rx "database deltree QPENALTY/${num}"`);
         } catch(e) {}
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: `Queue ${num} deleted successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -16852,7 +16948,17 @@ app.post('/api/config/routes/inbound', async (req, res) => {
             `, [cid, ext, dest, alertInfoVal, ringingVal, desc, grpPreVal, delayAnswerVal, priCidVal]);
         }
 
-        reloadPbxConfig();
+        // Enable call recording by default for this Inbound Route
+        await pool.query(`
+            DELETE FROM \`asterisk\`.\`callrecording_module\`
+            WHERE extension = ? AND cidnum = ? AND display = 'did'
+        `, [ext, cid]).catch(() => {});
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`callrecording_module\` (\`extension\`, \`cidnum\`, \`callrecording\`, \`display\`)
+            VALUES (?, ?, 'force', 'did')
+        `, [ext, cid]).catch(() => {});
+
+        await reloadPbxConfigPromise();
         res.json({
             success: true,
             warningMessage: warningMessage || undefined,
@@ -16922,10 +17028,9 @@ app.put('/api/config/routes/inbound', async (req, res) => {
         // Sync auxiliary tables if key changed
         if (ext !== origExt || cid !== origCid) {
             await pool.query(`
-                UPDATE \`asterisk\`.\`callrecording_module\`
-                SET extension = ?, cidnum = ?
-                WHERE (extension = ? OR extension = ?) AND (cidnum = ? OR cidnum = ?) AND display = 'did'
-            `, [ext, cid, origExt, rawOrigExt, origCid, rawOrigCid]).catch(() => {});
+                DELETE FROM \`asterisk\`.\`callrecording_module\`
+                WHERE (extension = ? OR extension = ? OR extension = ?) AND (cidnum = ? OR cidnum = ? OR cidnum = ?) AND display = 'did'
+            `, [origExt, rawOrigExt, ext, origCid, rawOrigCid, cid]).catch(() => {});
 
             await pool.query(`
                 UPDATE \`asterisk\`.\`cidlookup_incoming\`
@@ -16934,7 +17039,17 @@ app.put('/api/config/routes/inbound', async (req, res) => {
             `, [ext, cid, origExt, rawOrigExt, origCid, rawOrigCid]).catch(() => {});
         }
 
-        reloadPbxConfig();
+        // Ensure call recording is set to 'force' for this route
+        await pool.query(`
+            DELETE FROM \`asterisk\`.\`callrecording_module\`
+            WHERE extension = ? AND cidnum = ? AND display = 'did'
+        `, [ext, cid]).catch(() => {});
+        await pool.query(`
+            INSERT INTO \`asterisk\`.\`callrecording_module\` (\`extension\`, \`cidnum\`, \`callrecording\`, \`display\`)
+            VALUES (?, ?, 'force', 'did')
+        `, [ext, cid]).catch(() => {});
+
+        await reloadPbxConfigPromise();
         res.json({
             success: true,
             message: `Inbound Route '${desc || ext || 'Route'}' updated successfully.`
@@ -16970,7 +17085,7 @@ app.delete('/api/config/routes/inbound', async (req, res) => {
             WHERE (extension = ? OR extension = ?) AND (cidnum = ? OR cidnum = ?)
         `, [rawExt, normExt, rawCid, normCid]).catch(() => {});
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: 'Inbound Route deleted successfully.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -17069,7 +17184,7 @@ app.post('/api/config/ivrs', async (req, res) => {
             }
         }
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, id: newIvrId, message: `IVR '${ivrName}' created successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -17134,7 +17249,7 @@ app.put('/api/config/ivrs/:id', async (req, res) => {
             }
         }
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: `IVR '${ivrName}' updated successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -17147,7 +17262,7 @@ app.delete('/api/config/ivrs/:id', async (req, res) => {
         const ivrId = parseInt(req.params.id, 10);
         await pool.query('DELETE FROM `asterisk`.`ivr_details` WHERE id = ?', [ivrId]);
         await pool.query('DELETE FROM `asterisk`.`ivr_entries` WHERE ivr_id = ?', [ivrId]);
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: `IVR #${ivrId} deleted successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -17231,7 +17346,7 @@ app.post('/api/config/routes/outbound/reorder', async (req, res) => {
             `, [routeId, seq]);
         }
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: 'Outbound routes priority reordered successfully.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -17290,7 +17405,7 @@ app.post('/api/config/routes/outbound', async (req, res) => {
             VALUES (?, ?)
         `, [routeId, nextSeq]);
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: `Outbound Route '${routeName}' created successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -17341,7 +17456,7 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
             `, [routeId, parseInt(trunks[i], 10), i]);
         }
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: `Outbound Route '${routeName}' updated successfully.` });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -17357,7 +17472,7 @@ app.delete('/api/config/routes/outbound/:route_id', async (req, res) => {
         await pool.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE route_id = ?', [routeId]);
         await pool.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE route_id = ?', [routeId]);
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: 'Outbound Route deleted successfully.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -17998,7 +18113,7 @@ app.post('/api/config/timeconditions', async (req, res) => {
             VALUES (?, ?, ?, ?, '', 0, NULL)
         `, [displayname.trim(), timegroup_id, normTrue, normFalse]);
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: 'Time Condition created successfully', id: r.insertId });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -18029,7 +18144,7 @@ app.put('/api/config/timeconditions/:id', async (req, res) => {
             WHERE timeconditions_id = ?
         `, [displayname.trim(), timegroup_id, normTrue, normFalse, id]);
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: 'Time Condition updated successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -18042,7 +18157,7 @@ app.delete('/api/config/timeconditions/:id', async (req, res) => {
         const id = parseInt(req.params.id, 10);
         await pool.query('DELETE FROM `asterisk`.`timeconditions` WHERE timeconditions_id = ?', [id]);
 
-        reloadPbxConfig();
+        await reloadPbxConfigPromise();
         res.json({ success: true, message: 'Time Condition deleted successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -18923,7 +19038,7 @@ app.post('/api/config/modem/reset', async (req, res) => {
 // POST /api/config/modem/dongle-slot - Add dongle slot(s) to dongle.conf (ROOT USER ONLY)
 app.post('/api/config/modem/dongle-slot', requireAuth, async (req, res) => {
     try {
-        if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+        if (!hasRootAccess(req)) {
             return res.status(403).json({ success: false, error: 'Access denied. Only the root superuser can modify dongle slots in dongle.conf.' });
         }
 
@@ -19017,7 +19132,7 @@ app.post('/api/config/modem/dongle-slot', requireAuth, async (req, res) => {
 // DELETE /api/config/modem/dongle-slot - Remove dongle slot(s) from dongle.conf (ROOT USER ONLY)
 app.delete('/api/config/modem/dongle-slot/:dongleName?', requireAuth, async (req, res) => {
     try {
-        if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+        if (!hasRootAccess(req)) {
             return res.status(403).json({ success: false, error: 'Access denied. Only the root superuser can modify dongle slots in dongle.conf.' });
         }
 
@@ -19884,6 +19999,92 @@ const federationPanelProxy = createFederationProxy({
 app.all(['/peer/:siteCode', '/peer/:siteCode/*'], requireAuth, federationPanelProxy);
 
 // ============================================================================
+// FEDERATION CONTROL PLANE
+//
+// Relays one mutating (or dongle read) API call to a single remote PBX. The
+// central panel uses this to make every peer behave like the local node.
+// Only the central hub serves it, only super admins may call it, and every
+// action is policy-checked and written to sokrat_federation_action_log.
+// ============================================================================
+const federationActionBodyParser = express.json({ limit: '24mb' });
+app.post('/api/federation/peers/:siteCode/action', federationActionBodyParser, requireAuth, async (req, res) => {
+    try {
+        if (!federationHub) {
+            return res.status(503).json({ success: false, error: 'Federation hub is not initialized.' });
+        }
+        if (federationHub.localSettings?.panel_role !== 'central') {
+            return res.status(403).json({ success: false, error: 'This PBX is not the central federation node.' });
+        }
+        if (!isSuperAdmin(req)) {
+            return res.status(403).json({ success: false, error: 'Remote PBX control requires a super administrator.' });
+        }
+
+        const siteCode = String(req.params.siteCode || '').trim();
+        if (!/^[A-Za-z0-9_-]{1,10}$/.test(siteCode)) {
+            return res.status(400).json({ success: false, error: 'Invalid PBX site code.' });
+        }
+
+        const [rows] = await pool.query(
+            'SELECT * FROM `asterisk`.`sokrat_federation_peers` WHERE site_code = ? LIMIT 1',
+            [siteCode]
+        );
+        const peer = rows && rows[0];
+        if (!peer) {
+            return res.status(404).json({ success: false, error: `Unknown PBX site ${siteCode}.` });
+        }
+
+        const payload = req.body && typeof req.body === 'object' ? req.body : {};
+        const method = String(payload.method || 'POST').toUpperCase();
+        const actionPath = payload.path;
+        const contentType = payload.contentType ? String(payload.contentType) : null;
+        let body = payload.body;
+        let rawBody = null;
+
+        if (payload.bodyEncoding === 'base64' && typeof body === 'string') {
+            rawBody = Buffer.from(body, 'base64');
+            body = null;
+        }
+
+        const result = await executePeerAction({
+            pool,
+            peer,
+            localSiteCode: federationHub.localSettings?.local_site_code || '10',
+            actor: (req.session && (req.session.username || req.session.userId)) || 'central-admin',
+            method,
+            path: actionPath,
+            body,
+            rawBody,
+            contentType,
+            decryptFn: decrypt,
+            requestFn: federationRequest,
+            // Config writes and dongle restarts on a real PBX routinely take
+            // longer than the 4s default read timeout.
+            timeout: method === 'GET' ? 10000 : 25000
+        });
+
+        if (!result.ok) {
+            return res.status(result.status || 502).json({
+                success: false,
+                error: result.error || 'Remote action failed.',
+                policy: result.policy || null
+            });
+        }
+
+        const status = result.status || 200;
+        const data = result.data;
+        if (status === 204 || data === undefined || data === null) {
+            return res.status(status).end();
+        }
+        if (typeof data === 'string' || Buffer.isBuffer(data)) {
+            return res.status(status).send(data);
+        }
+        return res.status(status).json(data);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ============================================================================
 // FEDERATION CONFIGURATION API
 // ============================================================================
 
@@ -19972,7 +20173,8 @@ app.post('/api/config/federation/peers', requireAuth, async (req, res) => {
             node_name, host, site_code, iax_port, iax_secret,
             allow_internal_dialing, allow_outbound_egress,
             api_base_url,
-            allow_report_read, allow_contact_write, allow_dongle_control, allow_campaign_control
+            allow_report_read, allow_contact_write, allow_dongle_control, allow_campaign_control,
+            allow_config_write
         } = req.body;
         if (!host || !site_code) {
             return res.status(400).json({ success: false, error: 'Host and Site Code are required.' });
@@ -19994,8 +20196,9 @@ app.post('/api/config/federation/peers', requireAuth, async (req, res) => {
                 iax_secret_enc, api_base_url, api_key_enc, api_version,
                 allow_internal_dialing, allow_outbound_egress,
                 allow_report_read, allow_contact_write, allow_dongle_control, allow_campaign_control,
+                allow_config_write,
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'offline')
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 'offline')
         `, [
             cleanNodeName,
             host.trim(),
@@ -20011,7 +20214,8 @@ app.post('/api/config/federation/peers', requireAuth, async (req, res) => {
             allow_report_read !== 0 ? 1 : 0,
             allow_contact_write ? 1 : 0,
             allow_dongle_control ? 1 : 0,
-            allow_campaign_control ? 1 : 0
+            allow_campaign_control ? 1 : 0,
+            allow_config_write ? 1 : 0
         ]);
 
         await syncFederationAsteriskConfig(pool, decrypt);
@@ -20036,7 +20240,8 @@ app.put('/api/config/federation/peers/:id', requireAuth, async (req, res) => {
 
         const {
             node_name, host, api_base_url, allow_internal_dialing, allow_outbound_egress, status,
-            allow_report_read, allow_contact_write, allow_dongle_control, allow_campaign_control
+            allow_report_read, allow_contact_write, allow_dongle_control, allow_campaign_control,
+            allow_config_write
         } = req.body;
         const updates = [];
         const params = [];
@@ -20076,6 +20281,10 @@ app.put('/api/config/federation/peers/:id', requireAuth, async (req, res) => {
         if (allow_campaign_control !== undefined) {
             updates.push('allow_campaign_control = ?');
             params.push(allow_campaign_control ? 1 : 0);
+        }
+        if (allow_config_write !== undefined) {
+            updates.push('allow_config_write = ?');
+            params.push(allow_config_write ? 1 : 0);
         }
         if (status !== undefined) {
             updates.push('status = ?');
@@ -20579,6 +20788,230 @@ async function getFederationRemoteDongles(scope) {
     } catch (_) {
         return [];
     }
+}
+
+// ---------------------------------------------------------------------------
+// FEDERATED LIVE DONGLE / SMS READ MODEL
+//
+// The central dongle console shows every PBX in one grid, split by server. The
+// inventory mirror (`sokrat_federation_remote_dongles`) is only refreshed once a
+// minute and does not carry the full device payload, so the panel reads the
+// peer's own /api/gsm-dongles and /api/gsm-dongles/sms. Reads are cached for a
+// few seconds and refreshed in the background so a dead peer can never slow
+// down the three second device poll.
+// ---------------------------------------------------------------------------
+const FEDERATION_READ_CACHE_TTL_MS = 5000;
+const federationReadCache = new Map();
+const federationReadInFlight = new Map();
+
+function getFederationScopeNodeList(req, scope) {
+    const nodes = (req && req.res && req.res.locals && Array.isArray(req.res.locals.federationNodes))
+        ? req.res.locals.federationNodes
+        : [];
+    const selected = new Set((scope && Array.isArray(scope.sites) ? scope.sites : []).map(String));
+    const scoped = nodes.filter(node => selected.size === 0 || selected.has(String(node.site_code)));
+    if (scoped.length > 0) return scoped;
+    return [{
+        site_code: String((scope && scope.localSiteCode) || '10'),
+        node_name: 'Main PBX',
+        is_local: true,
+        status: 'online',
+        report_read: true
+    }];
+}
+
+async function getFederationScopePeerRows(scope) {
+    if (!scope || !scope.includeRemote) return [];
+    const localSite = String(scope.localSiteCode || '10');
+    const remoteSites = (Array.isArray(scope.sites) ? scope.sites : [])
+        .map(String)
+        .filter(site => site && site !== localSite);
+    if (remoteSites.length === 0) return [];
+    try {
+        const [rows] = await pool.query(
+            'SELECT * FROM `asterisk`.`sokrat_federation_peers` WHERE site_code IN (?)',
+            [remoteSites]
+        );
+        return (rows || []).filter(row => Number(row.allow_report_read) !== 0);
+    } catch (_) {
+        return [];
+    }
+}
+
+function federationReadCacheKey(peer, path) {
+    return `${String(peer && peer.site_code)}:${path}`;
+}
+
+async function refreshFederationPeerRead(peer, path, localSiteCode) {
+    const key = federationReadCacheKey(peer, path);
+    if (federationReadInFlight.has(key)) return federationReadInFlight.get(key);
+    const previous = federationReadCache.get(key);
+    const promise = (async () => {
+        try {
+            const result = await federationRequest(peer, path, {
+                method: 'GET',
+                localSiteCode,
+                decryptFn: decrypt,
+                retries: 1,
+                timeout: 3000,
+                withMeta: true
+            });
+            const entry = {
+                at: Date.now(),
+                data: result && result.data !== undefined ? result.data : null,
+                error: null
+            };
+            federationReadCache.set(key, entry);
+            return entry;
+        } catch (error) {
+            // Keep the last good payload: an operator should still see the
+            // fleet while a peer is unreachable, marked offline in the divider.
+            const entry = {
+                at: Date.now(),
+                data: previous ? previous.data : null,
+                error: (error && error.message) || 'Peer request failed'
+            };
+            federationReadCache.set(key, entry);
+            return entry;
+        } finally {
+            federationReadInFlight.delete(key);
+        }
+    })();
+    federationReadInFlight.set(key, promise);
+    return promise;
+}
+
+function getFederationPeerRead(peer, path, localSiteCode) {
+    const key = federationReadCacheKey(peer, path);
+    const cached = federationReadCache.get(key);
+    if (cached) {
+        if (Date.now() - cached.at >= FEDERATION_READ_CACHE_TTL_MS) {
+            refreshFederationPeerRead(peer, path, localSiteCode).catch(() => {});
+        }
+        return cached;
+    }
+    return refreshFederationPeerRead(peer, path, localSiteCode);
+}
+
+/**
+ * Resolve the node list + live reads for the current PBX scope.
+ *
+ * @returns {Promise<{localSite: string, nodes: Array, readsBySite: Map}>}
+ */
+async function getFederationNodeReadModel(req, scope, options = {}) {
+    const readPeers = options.readPeers !== false;
+    const readPath = options.path || '/api/gsm-dongles';
+    const localSite = String((scope && scope.localSiteCode) || '10');
+    const meta = getFederationScopeNodeList(req, scope);
+    const localMeta = meta.find(node => node.is_local) || {
+        site_code: localSite,
+        node_name: 'Main PBX',
+        is_local: true,
+        status: 'online'
+    };
+    const peers = await getFederationScopePeerRows(scope);
+    const order = new Map(meta.map((node, index) => [String(node.site_code), index]));
+    peers.sort((a, b) => {
+        const ai = order.has(String(a.site_code)) ? order.get(String(a.site_code)) : 99;
+        const bi = order.has(String(b.site_code)) ? order.get(String(b.site_code)) : 99;
+        return ai - bi || String(a.site_code).localeCompare(String(b.site_code));
+    });
+    const reads = readPeers
+        ? await Promise.all(peers.map(peer => getFederationPeerRead(peer, readPath, localSite)))
+        : [];
+    const readsBySite = new Map();
+    peers.forEach((peer, index) => {
+        readsBySite.set(String(peer.site_code), reads[index]);
+    });
+
+    const nodes = [];
+    if (federationScopeIncludesLocal(scope)) {
+        nodes.push({
+            site_code: localSite,
+            node_name: localMeta.node_name || 'Main PBX',
+            is_local: true,
+            status: 'online',
+            error: null
+        });
+    }
+    peers.forEach(peer => {
+        const read = readsBySite.get(String(peer.site_code));
+        nodes.push({
+            site_code: String(peer.site_code),
+            node_name: peer.node_name || `Site ${peer.site_code}`,
+            is_local: false,
+            status: read && read.error ? 'offline' : 'online',
+            error: read && read.error ? read.error : null
+        });
+    });
+
+    return { localSite, nodes, readsBySite, peers };
+}
+
+function tagFederationDongleDevice(device, node) {
+    const rawId = String((device && device.ID) || '');
+    return {
+        ...device,
+        nodeSite: String(node.site_code),
+        nodeName: node.node_name || `Site ${node.site_code}`,
+        nodeStatus: node.status || 'online',
+        isRemote: !node.is_local,
+        fedKey: `${node.site_code}:${rawId}`
+    };
+}
+
+async function getFederationLiveDongleModel(req, scope, localDevices) {
+    const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope);
+    const devices = [];
+    let localCount = 0;
+    for (const node of nodes) {
+        if (node.is_local) {
+            const tagged = (localDevices || []).map(device => tagFederationDongleDevice(device, node));
+            localCount = tagged.length;
+            devices.push(...tagged);
+            node.dongle_count = localCount;
+            continue;
+        }
+        const read = readsBySite.get(String(node.site_code));
+        const remoteDevices = read && read.data && Array.isArray(read.data.devices)
+            ? read.data.devices
+            : [];
+        const tagged = remoteDevices.map(device => tagFederationDongleDevice(device, node));
+        node.dongle_count = tagged.length;
+        devices.push(...tagged);
+    }
+    return { localSite, nodes, devices };
+}
+
+async function getFederationLiveSms(req, scope, localMessages) {
+    const { localSite, nodes, readsBySite } = await getFederationNodeReadModel(req, scope, { path: '/api/gsm-dongles/sms' });
+    const messages = [];
+    for (const node of nodes) {
+        if (node.is_local) {
+            (localMessages || []).forEach(message => {
+                messages.push({
+                    ...message,
+                    nodeSite: String(node.site_code),
+                    nodeName: node.node_name,
+                    isRemote: false
+                });
+            });
+            continue;
+        }
+        const read = readsBySite.get(String(node.site_code));
+        const remoteMessages = read && read.data && Array.isArray(read.data.sms)
+            ? read.data.sms
+            : [];
+        remoteMessages.forEach(message => {
+            messages.push({
+                ...message,
+                nodeSite: String(node.site_code),
+                nodeName: node.node_name,
+                isRemote: true
+            });
+        });
+    }
+    return { localSite, nodes, messages };
 }
 
 async function getFederationRemoteContacts(scope) {
@@ -21392,7 +21825,7 @@ async function finalizeAttempt(attemptUuid, terminalStatus, causeCode = 0) {
 
 // Middleware: Restrict Auto-Dial Campaign Management APIs to Root User Only
 function requireRootForDialer(req, res, next) {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Access denied. Auto-dial campaigns are restricted to the root user only.' });
     }
@@ -22747,7 +23180,7 @@ let isSystemUpdateInProgress = false;
 
 // POST /api/system/update - Trigger dashboard safe system upgrade (Root Only)
 app.post('/api/system/update', requireAuth, (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Access denied. Root user authorization required.' });
     }
@@ -22778,7 +23211,7 @@ app.post('/api/system/update', requireAuth, (req, res) => {
 
 // POST /api/system/restore-backup - Restore pre-upgrade backup snapshot (Root Only)
 app.post('/api/system/restore-backup', requireAuth, (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Access denied. Root user authorization required.' });
     }
@@ -22901,7 +23334,7 @@ app.post('/log_error', (req, res) => {
 });
 // --- SOKRAT SUPER ADMIN CRM INTEGRATION MANAGEMENT ROUTES ---
 app.get('/integrations/crm', requireAuth, async (req, res) => {
-    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+    if (!hasRootAccess(req)) {
         const currentLang = (req.session && req.session.lang) || 'en';
         return res.status(403).render('403', {
             currentLang,
@@ -22920,7 +23353,7 @@ app.get('/integrations/crm', requireAuth, async (req, res) => {
 });
 
 app.post('/integrations/crm/pairing-code', requireAuth, async (req, res) => {
-    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+    if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can generate pairing codes.' });
     }
     try {
@@ -22936,7 +23369,7 @@ app.post('/integrations/crm/pairing-code', requireAuth, async (req, res) => {
 });
 
 app.post('/integrations/crm/clients/:id/revoke', requireAuth, async (req, res) => {
-    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+    if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can revoke integration clients.' });
     }
     try {
@@ -22971,7 +23404,7 @@ app.post('/integrations/crm/clients/:id/revoke', requireAuth, async (req, res) =
 });
 
 app.post('/integrations/crm/clients/:id/rotate', requireAuth, async (req, res) => {
-    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+    if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can rotate client secrets.' });
     }
     try {
@@ -23010,7 +23443,7 @@ app.post('/integrations/crm/clients/:id/rotate', requireAuth, async (req, res) =
 });
 
 app.post('/integrations/crm/clients/:id/update', requireAuth, async (req, res) => {
-    if (!req.session || (!req.session.isRoot && req.session.username !== ROOT_USER)) {
+    if (!hasRootAccess(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can update integration configuration.' });
     }
     try {
@@ -23098,7 +23531,7 @@ app.get('/embed/crm/live', async (req, res) => {
 // --- SOKRAT ROOT-ONLY API KEY MANAGER ROUTES ---
 
 app.get(['/admin/api-keys', '/api-keys'], requireAuth, async (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).render('403', { currentLang: (req.session && req.session.lang) || 'en' });
     }
@@ -23120,7 +23553,7 @@ app.get(['/admin/api-keys', '/api-keys'], requireAuth, async (req, res) => {
 });
 
 app.get('/api/admin/api-keys', requireAuth, async (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can manage API keys.' });
     }
@@ -23133,7 +23566,7 @@ app.get('/api/admin/api-keys', requireAuth, async (req, res) => {
 });
 
 app.post('/api/admin/api-keys', requireAuth, async (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can manage API keys.' });
     }
@@ -23156,7 +23589,7 @@ app.post('/api/admin/api-keys', requireAuth, async (req, res) => {
 });
 
 app.get('/api/admin/api-keys/:id/reveal', requireAuth, async (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can reveal API keys.' });
     }
@@ -23173,7 +23606,7 @@ app.get('/api/admin/api-keys/:id/reveal', requireAuth, async (req, res) => {
 });
 
 app.post('/api/admin/api-keys/:id/status', requireAuth, async (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can manage API keys.' });
     }
@@ -23191,7 +23624,7 @@ app.post('/api/admin/api-keys/:id/status', requireAuth, async (req, res) => {
 });
 
 app.delete('/api/admin/api-keys/:id', requireAuth, async (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can delete API keys.' });
     }
@@ -23213,7 +23646,7 @@ app.delete('/api/admin/api-keys/:id', requireAuth, async (req, res) => {
 
 // Page View: GET /admin/git-history
 app.get('/admin/git-history', requireAuth, async (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).render('403', { currentLang: (req.session && req.session.lang) || 'en' });
     }
@@ -23236,7 +23669,7 @@ app.get('/admin/git-history', requireAuth, async (req, res) => {
 
 // API: GET /api/admin/git-history/overview
 app.get('/api/admin/git-history/overview', requireAuth, async (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can view Git history.' });
     }
@@ -23250,7 +23683,7 @@ app.get('/api/admin/git-history/overview', requireAuth, async (req, res) => {
 
 // API: GET /api/admin/git-history/commits
 app.get('/api/admin/git-history/commits', requireAuth, async (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can view Git history.' });
     }
@@ -23265,7 +23698,7 @@ app.get('/api/admin/git-history/commits', requireAuth, async (req, res) => {
 
 // API: GET /api/admin/git-history/commit/:hash
 app.get('/api/admin/git-history/commit/:hash', requireAuth, async (req, res) => {
-    const isRoot = Boolean(req.session && (req.session.isRoot || req.session.username === ROOT_USER || req.session.username === 'root'));
+    const isRoot = hasRootAccess(req);
     if (!isRoot) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Only the root user can view Git history.' });
     }

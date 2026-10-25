@@ -5456,6 +5456,10 @@ function isTabAllowed(tabName) {
                         <input type="checkbox" id="editPeerAllowCampaignControl" class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
                         <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'السماح بالتحكم في الحملات' : 'Allow campaign control' %></span>
                     </label>
+                    <label for="editPeerAllowConfigWrite" class="flex items-center gap-2 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl cursor-pointer hover:border-[var(--border-accent)] transition">
+                        <input type="checkbox" id="editPeerAllowConfigWrite" class="rounded border-zinc-700 text-amber-500 focus:ring-amber-500 bg-zinc-900">
+                        <span class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'السماح بتعديل الإعدادات عن بُعد' : 'Allow remote configuration writes' %></span>
+                    </label>
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border-primary)]">
                     <button type="button" onclick="closeModal('editPeerModal')" class="config-btn-secondary px-4 py-2 text-xs"><%= isRtl ? 'إلغاء' : 'Cancel' %></button>
@@ -16898,6 +16902,8 @@ function isTabAllowed(tabName) {
             if (dongleControl) dongleControl.checked = Number(peer.allow_dongle_control) !== 0;
             const campaignControl = document.getElementById('editPeerAllowCampaignControl');
             if (campaignControl) campaignControl.checked = Number(peer.allow_campaign_control) !== 0;
+            const configWrite = document.getElementById('editPeerAllowConfigWrite');
+            if (configWrite) configWrite.checked = Number(peer.allow_config_write) !== 0;
             openModal('editPeerModal');
         }
 
@@ -16912,13 +16918,15 @@ function isTabAllowed(tabName) {
             const allow_contact_write = document.getElementById('editPeerAllowContactWrite')?.checked ? 1 : 0;
             const allow_dongle_control = document.getElementById('editPeerAllowDongleControl')?.checked ? 1 : 0;
             const allow_campaign_control = document.getElementById('editPeerAllowCampaignControl')?.checked ? 1 : 0;
+            const allow_config_write = document.getElementById('editPeerAllowConfigWrite')?.checked ? 1 : 0;
 
             fetch(`/api/config/federation/peers/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     node_name, host, allow_internal_dialing, allow_outbound_egress,
-                    allow_report_read, allow_contact_write, allow_dongle_control, allow_campaign_control
+                    allow_report_read, allow_contact_write, allow_dongle_control, allow_campaign_control,
+                    allow_config_write
                 })
             })
             .then(res => res.json())

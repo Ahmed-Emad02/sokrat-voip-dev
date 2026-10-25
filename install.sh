@@ -993,6 +993,7 @@ CREATE TABLE IF NOT EXISTS \`sokrat_federation_peers\` (
   \`allow_contact_write\` TINYINT(1) NOT NULL DEFAULT 0,
   \`allow_dongle_control\` TINYINT(1) NOT NULL DEFAULT 0,
   \`allow_campaign_control\` TINYINT(1) NOT NULL DEFAULT 0,
+  \`allow_config_write\` TINYINT(1) NOT NULL DEFAULT 0,
   \`status\` ENUM('online', 'offline', 'error', 'unreachable') NOT NULL DEFAULT 'offline',
   \`last_sync_at\` DATETIME DEFAULT NULL,
   \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1104,6 +1105,7 @@ ensure_db_column "sokrat_federation_peers" "allow_report_read" "TINYINT(1) NOT N
 ensure_db_column "sokrat_federation_peers" "allow_contact_write" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "sokrat_federation_peers" "allow_dongle_control" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "sokrat_federation_peers" "allow_campaign_control" "TINYINT(1) NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_peers" "allow_config_write" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "sokrat_federation_node_status" "asterisk_version" "VARCHAR(64) DEFAULT NULL"
 ensure_db_column "sokrat_federation_node_status" "uptime_sec" "BIGINT DEFAULT NULL"
 ensure_db_column "sokrat_federation_node_status" "load1" "DECIMAL(6,2) DEFAULT NULL"
@@ -1585,7 +1587,7 @@ same => n,Playback(cancelled)
 same => n,Wait(1)
 same => n,Hangup()
 
-; === Solution B: All-Available Extensions Mass Intercom Code (*800 or 800) ===
+; === Solution B: All-Available Extensions Mass Intercom Code (*800) ===
 exten => *800,1,NoOp(--- Keypad Mass Intercom to All Available Extensions ---)
 same => n,Set(HOST_EXT=${CALLERID(num)})
 same => n,Set(ROOM_ID=88${RAND(100000,999999)})
@@ -1593,8 +1595,6 @@ same => n,System(/usr/bin/node /opt/sokrat-voip/scripts/trigger-intercom-code.js
 same => n,Answer()
 same => n,ConfBridge(${ROOM_ID})
 same => n,Hangup()
-
-exten => 800,1,Goto(*800,1)
 
 exten => _222X.,1,NoOp(Spying on extension ${EXTEN:3} in Listen-only mode)
 exten => _222X.,n,Answer()
@@ -1796,7 +1796,23 @@ same => n,Set(FOUND_NAME=${SHELL(sqlite3 /var/www/db/address_book.db "SELECT nam
 same => n,GotoIf($["${FOUND_NAME}" = ""]?skip_cid)
 same => n,NoOp(Found Contact Name: ${FOUND_NAME})
 same => n,Set(CALLERID(name)=${FOUND_NAME})
-same => n(skip_cid),GotoIf($["${MY_SIM_NUMBER}" != "" & "${MY_SIM_NUMBER}" != "s" & "${MY_SIM_NUMBER}" != "+1234567890"]?goto_did:goto_s)
+same => n(skip_cid),NoOp(--- Sokrat Universal Trunk Recording (Option B) ---)
+same => n,Set(NOW=${EPOCH})
+same => n,Set(__DAY=${STRFTIME(${NOW},,%d)})
+same => n,Set(__MONTH=${STRFTIME(${NOW},,%m)})
+same => n,Set(__YEAR=${STRFTIME(${NOW},,%Y)})
+same => n,Set(__TIMESTR=${YEAR}${MONTH}${DAY}-${STRFTIME(${NOW},,%H%M%S)})
+same => n,Set(__FROMEXTEN=${IF($[${LEN(${CALLERID(num)})}]?${CALLERID(num)}:unknown)})
+same => n,Set(__CALLFILENAME=in-${DONGLENAME}-${FROMEXTEN}-${TIMESTR}-${UNIQUEID})
+same => n,Set(__MON_FMT=wav)
+same => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)
+same => n,Set(MIXMON_OPTS=v(3)V(-1))
+same => n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MON_FMT},a${MIXMON_OPTS})
+same => n,Set(__REC_STATUS=RECORDING)
+same => n,Set(__REC_POLICY_MODE=always)
+same => n,Set(__SOKRAT_REC_FILE=${CALLFILENAME}.${MON_FMT})
+same => n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
+same => n,GotoIf($["${MY_SIM_NUMBER}" != "" & "${MY_SIM_NUMBER}" != "s" & "${MY_SIM_NUMBER}" != "+1234567890"]?goto_did:goto_s)
 same => n(goto_did),Goto(from-trunk,${MY_SIM_NUMBER},1)
 same => n(goto_s),Goto(from-trunk,s,1)
 same => n(blacklisted),NoOp(--- INBOUND CALL REJECTED BY BLACKLIST RULE: ${CALLER_NUMBER} ---)
@@ -1815,6 +1831,7 @@ DONGLE
 
 # Sanitize dialplans: remove any legacy dongle restart commands that cause call disconnects on transfer
 sed -i '/dongle restart now/d' /etc/asterisk/extensions*.conf 2>/dev/null || true
+sed -i '/exten => 800,1,Goto(\*800,1)/d' /etc/asterisk/extensions_custom.conf 2>/dev/null || true
 
 # Strip old [macro-dialout-trunk-predial-hook] and [dongle-hangup-cleanup] before appending
 echo "  Stripping old [macro-dialout-trunk-predial-hook] and [dongle-hangup-cleanup]..."
@@ -1873,6 +1890,8 @@ append_context '[cdr-cause-capture]' '[cdr-cause-capture]' << 'CAUSECAP'
 ; Persist the Q.850 hangup cause on monitored channels so Call History can
 ; distinguish busy / no-answer / congestion instead of relying on driver defaults.
 exten => s,1,Set(CDR(userfield)=${HANGUPCAUSE})
+same => n,ExecIf($["${CDR(recordingfile)}"="" & "${CALLFILENAME}"!=""]?Set(CDR(recordingfile)=${CALLFILENAME}.wav))
+same => n,ExecIf($["${CDR(recordingfile)}"="" & "${SOKRAT_REC_FILE}"!=""]?Set(CDR(recordingfile)=${SOKRAT_REC_FILE}))
 same => n,Return()
 
 CAUSECAP
@@ -2026,9 +2045,9 @@ exten => exit,n,MacroExit()
 EXTENVM_OVERRIDE
     fi
 
-    if ! grep -q '\[sub-record-check\]' "$OVERRIDE_CONF"; then
-        echo "  Adding [sub-record-check] recording balance override to $OVERRIDE_CONF..."
-        cat >> "$OVERRIDE_CONF" << 'SUBRECORD_OVERRIDE'
+    echo "  Updating [sub-record-check] and [sub-record-cancel] universal recording override in $OVERRIDE_CONF..."
+    python3 -c "import re;f=open('$OVERRIDE_CONF').read();f=re.sub(r'\[sub-record-check\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);f=re.sub(r'\[sub-record-cancel\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('$OVERRIDE_CONF','w').write(f.rstrip() + '\n\n')"
+    cat >> "$OVERRIDE_CONF" << 'SUBRECORD_OVERRIDE'
 
 ; === Sokrat VoIP: Recording Volume Balance Override (MixMonitor v(3)V(-1)) ===
 ; Boosts the heard audio (remote customer) by ~+9 dB and gently tames the
@@ -2048,6 +2067,8 @@ exten => s,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
 exten => s,n,Return()
 exten => s,n(next),ExecIf($[!${LEN(${ARG1})}]?Return())
 exten => s,n,ExecIf($["${REC_POLICY_MODE}"="" & "${ARG3}"!=""]?Set(__REC_POLICY_MODE=${ARG3}))
+; Sokrat Universal Recording: Default to 'always' unless explicitly 'never'
+exten => s,n,ExecIf($["${REC_POLICY_MODE}"="" | "${REC_POLICY_MODE}"="dontcare"]?Set(__REC_POLICY_MODE=always))
 exten => s,n,GotoIf($["${REC_STATUS}"!=""]?${ARG1},1)
 exten => s,n,Set(__REC_STATUS=INITIALIZED)
 exten => s,n,Set(NOW=${EPOCH})
@@ -2057,18 +2078,22 @@ exten => s,n,Set(__YEAR=${STRFTIME(${NOW},,%Y)})
 exten => s,n,Set(__TIMESTR=${YEAR}${MONTH}${DAY}-${STRFTIME(${NOW},,%H%M%S)})
 exten => s,n,Set(__FROMEXTEN=${IF($[${LEN(${AMPUSER})}]?${AMPUSER}:${IF($[${LEN(${REALCALLERIDNUM})}]?${REALCALLERIDNUM}:${CALLERID(num)})})})
 exten => s,n,Set(__CALLFILENAME=${ARG1}-${ARG2}-${FROMEXTEN}-${TIMESTR}-${UNIQUEID})
+exten => s,n,Set(__SOKRAT_REC_FILE=${CALLFILENAME}.${MON_FMT})
 exten => s,n,Goto(${ARG1},1)
 
-exten => rg,1,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${REC_POLICY_MODE},${FROMEXTEN}))
+exten => rg,1,ExecIf($["${REC_POLICY_MODE}"!="never"]?Set(__REC_POLICY_MODE=always))
+exten => rg,n,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${REC_POLICY_MODE},${FROMEXTEN}))
 exten => rg,n,Return()
 
 exten => force,1,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${REC_POLICY_MODE},${FROMEXTEN}))
 exten => force,n,Return()
 
-exten => q,1,GosubIf($["${REC_POLICY_MODE}"="always"]?recq,1(${EXTEN},${ARG2},${FROMEXTEN}))
+exten => q,1,ExecIf($["${REC_POLICY_MODE}"!="never"]?Set(__REC_POLICY_MODE=always))
+exten => q,n,GosubIf($["${REC_POLICY_MODE}"="always"]?recq,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => q,n,Return()
 
 exten => out,1,ExecIf($["${REC_POLICY_MODE}"=""]?Set(__REC_POLICY_MODE=${DB(AMPUSER/${FROMEXTEN}/recording/out/external)}))
+exten => out,n,ExecIf($["${REC_POLICY_MODE}"!="never"]?Set(__REC_POLICY_MODE=always))
 exten => out,n,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(exten,${ARG2},${FROMEXTEN}))
 exten => out,n,Return()
 
@@ -2079,9 +2104,11 @@ exten => exten,n,GotoIf($["${DB(AMPUSER/${FROMEXTEN}/recording/out/internal)}"="
 exten => exten,n,ExecIf($[${LEN(${DB(AMPUSER/${FROMEXTEN}/recording/priority)})}]?Set(CALLER_PRI=${DB(AMPUSER/${FROMEXTEN}/recording/priority)}):Set(CALLER_PRI=0))
 exten => exten,n,ExecIf($[${LEN(${DB(AMPUSER/${ARG2}/recording/priority)})}]?Set(CALLEE_PRI=${DB(AMPUSER/${ARG2}/recording/priority)}):Set(CALLEE_PRI=0))
 exten => exten,n,GotoIf($["${CALLER_PRI}"="${CALLEE_PRI}"]?${REC_POLICY}:${IF($[${CALLER_PRI}>${CALLEE_PRI}]?caller:callee)})
-exten => exten,n(callee),GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${ARG2},${FROMEXTEN}))
+exten => exten,n(callee),ExecIf($["${REC_POLICY_MODE}"!="never"]?Set(__REC_POLICY_MODE=always))
+exten => exten,n,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => exten,n,Return()
 exten => exten,n(caller),Set(__REC_POLICY_MODE=${DB(AMPUSER/${FROMEXTEN}/recording/out/internal)})
+exten => exten,n,ExecIf($["${REC_POLICY_MODE}"!="never"]?Set(__REC_POLICY_MODE=always))
 exten => exten,n,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => exten,n,Return()
 
@@ -2133,7 +2160,6 @@ exten => s,n,Return()
 
 ;--== end of [sub-record-check] ==--;
 SUBRECORD_OVERRIDE
-    fi
 fi
 
 

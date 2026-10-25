@@ -138,8 +138,7 @@ test('Health Check: Telephony, GSM Dongles, Dialer, and System APIs return HTTP 
             '/api/settings/alerts/watchdog-status',
             '/api/settings/client',
             '/api/settings/smtp',
-            '/api/settings/time',
-            '/api/federation/v1/health'
+            '/api/settings/time'
         ];
 
         for (const endpoint of systemApis) {
@@ -155,6 +154,14 @@ test('Health Check: Telephony, GSM Dongles, Dialer, and System APIs return HTTP 
             const data = await res.json();
             assert.ok(data !== null && typeof data === 'object', `${endpoint} must return valid JSON object`);
         }
+
+        // Peer-to-peer endpoints are HMAC-only: a browser session must not be
+        // able to read another node's health without a signed federation proof.
+        const healthRes = await fetch(`${baseUrl}/api/federation/v1/health`, {
+            headers: { Cookie: cookie },
+            redirect: 'manual'
+        });
+        assert.equal(healthRes.status, 401, '/api/federation/v1/health must require a signed federation request');
     } finally {
         server.close();
     }

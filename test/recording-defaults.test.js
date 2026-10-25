@@ -113,6 +113,18 @@ test('backend/install_db.sql records every call by default', () => {
         content.includes("d.keyword = ''monitor-format''"),
         'install_db.sql must only add monitor-format where it is missing'
     );
+    assert.ok(
+        content.includes("callrecording_module"),
+        'install_db.sql must update callrecording_module for inbound routes'
+    );
+    assert.ok(
+        content.includes("`callrecording` = ''force''"),
+        'install_db.sql must set inbound route callrecording to force'
+    );
+    assert.ok(
+        content.includes("`maxwait` = '''' WHERE `maxwait` = ''0''"),
+        'install_db.sql must normalize queue maxwait 0 to empty string'
+    );
 });
 
 test('scripts/safe-upgrade.sh maps the same recording-default migrations', () => {
@@ -138,9 +150,21 @@ test('scripts/safe-upgrade.sh maps the same recording-default migrations', () =>
         /'monitor-format', 'wav', 0/.test(content),
         'safe-upgrade.sh must add the monitor-format key to every queue'
     );
+    assert.ok(
+        content.includes("TABLE_NAME='callrecording_module'"),
+        'safe-upgrade.sh must guard callrecording_module migration'
+    );
+    assert.ok(
+        /callrecording.{0,4}force/.test(content),
+        'safe-upgrade.sh must set inbound routes callrecording to force'
+    );
+    assert.ok(
+        /maxwait.*?=''.*?WHERE.*?maxwait.*?='0'/.test(content),
+        'safe-upgrade.sh must normalize queue maxwait 0 to empty string'
+    );
 });
 
-test('new queues are created with recording enabled', () => {
+test('new queues are created with recording enabled and unlimited maxwait', () => {
     const content = read('server.js');
 
     assert.ok(
@@ -151,6 +175,38 @@ test('new queues are created with recording enabled', () => {
         content.includes("const isRecording = recording === 'no' ? 'no' : 'yes';"),
         'server.js must treat recording as enabled unless explicitly disabled'
     );
+    assert.ok(
+        content.includes("String(maxwait).trim() !== '0'") && content.includes(": ''"),
+        'server.js must normalize queue maxwait 0 or empty to empty string'
+    );
+});
+
+test('inbound routes are provisioned with callrecording force by default', () => {
+    const content = read('server.js');
+
+    assert.ok(
+        /callrecording_module[\s\S]*?callrecording[\s\S]*?force/.test(content),
+        'server.js must provision inbound routes into callrecording_module'
+    );
+    assert.ok(
+        content.includes("'force', 'did'"),
+        'server.js must set inbound route callrecording to force'
+    );
+});
+
+test('extension 800 alias collision is completely removed from dialplans and installers', () => {
+    for (const file of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        const content = read(file);
+        assert.ok(
+            !content.includes('exten => 800,1,Goto(*800,1)'),
+            `${file} must not contain exten => 800,1,Goto(*800,1)`
+        );
+    }
+    const customConf = fs.readFileSync('/etc/asterisk/extensions_custom.conf', 'utf8');
+    assert.ok(
+        !customConf.includes('exten => 800,1,Goto(*800,1)'),
+        '/etc/asterisk/extensions_custom.conf must not contain exten => 800,1,Goto(*800,1)'
+    );
 });
 
 test('new extensions are provisioned with recording always', () => {
@@ -160,4 +216,50 @@ test('new extensions are provisioned with recording always', () => {
                        'recording/out/external always', 'recording/out/internal always']) {
         assert.ok(content.includes(key), `server.js must provision extensions with ${key}`);
     }
+});
+
+test('every installer enables Option B inbound trunk recording in [from-dongle-custom]', () => {
+    for (const installer of INSTALLERS) {
+        const content = read(installer);
+        assert.ok(
+            content.includes('Option B'),
+            `${installer} must contain Option B universal trunk recording`
+        );
+        assert.ok(
+            content.includes('__CALLFILENAME=in-${DONGLENAME}-'),
+            `${installer} must define trunk recording filename`
+        );
+    }
+});
+
+test('every installer enforces universal always-record in [sub-record-check]', () => {
+    for (const installer of INSTALLERS) {
+        const content = read(installer);
+        assert.ok(
+            content.includes('__REC_POLICY_MODE=always'),
+            `${installer} must default REC_POLICY_MODE to always`
+        );
+    }
+});
+
+test('every installer preserves recordingfile on hangup in [cdr-cause-capture]', () => {
+    for (const installer of INSTALLERS) {
+        const content = read(installer);
+        assert.ok(
+            content.includes('SOKRAT_REC_FILE'),
+            `${installer} must retain recordingfile via SOKRAT_REC_FILE in cdr-cause-capture`
+        );
+    }
+});
+
+test('server.js resolves missing recordingfile from linked legs in CDR', () => {
+    const content = read('server.js');
+    assert.ok(
+        content.includes('rowsMissingRec'),
+        'server.js must detect rows missing recordingfile'
+    );
+    assert.ok(
+        content.includes('recLegs'),
+        'server.js must query linkedid/uniqueid sibling legs for recording'
+    );
 });

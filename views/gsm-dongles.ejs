@@ -363,7 +363,10 @@ const words = {
 };
 const t = words[currentLang] || words['en'];
 const isRtl = currentLang === 'ar';
-const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : '';
+const fedNodeCount = (typeof fedDongleNodes !== 'undefined' && Array.isArray(fedDongleNodes)) ? fedDongleNodes.length : 0;
+const deviceLabel = d => (fedNodeCount > 1 ? ((d.nodeName || ('Site ' + d.nodeSite)) + ' · ') : '') + (d.ID || '');
+const deviceKey = d => String(d.fedKey || ((d.nodeSite ? d.nodeSite + ':' : '') + (d.ID || '')));
+const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(devices[0]) : '';
 %>
 <!DOCTYPE html>
 <html lang="<%= currentLang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
@@ -1647,7 +1650,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
     <%- include('sidebar') %>
     
     <div class="flex-1 p-4 sm:p-6 xl:p-8 relative flex flex-col min-w-0 min-h-screen">
-        <%- include('partials/node-scope-selector') %>
+        <%- include('partials/node-scope-selector', { fedMultiNodePage: true }) %>
         
         <!-- Header Section -->
         <div class="mb-6 shrink-0 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
@@ -1719,99 +1722,6 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 </div>
             </section>
 
-            <% if (typeof federationScope !== 'undefined' && federationScope && federationScope.includeRemote) { %>
-            <!-- Remote PBX dongles (read-only, from federation inventory) -->
-            <section id="fedRemoteDonglesSection" class="rounded-2xl overflow-hidden shrink-0 bg-transparent border-0 border-none shadow-none">
-                <div class="flex items-center justify-between gap-3 mb-2.5 px-0.5">
-                    <div class="flex items-center gap-2 min-w-0">
-                        <span class="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-[var(--text-muted)]">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <rect x="2" y="3" width="20" height="6" rx="2"></rect>
-                                <rect x="2" y="15" width="20" height="6" rx="2"></rect>
-                                <path d="M6 6h.01M6 18h.01"></path>
-                            </svg>
-                            <%= isRtl ? 'مودمات السيرفرات المرتبطة' : 'Remote PBX dongles' %>
-                        </span>
-                        <span class="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]"><%= isRtl ? 'قراءة فقط' : 'read-only' %></span>
-                    </div>
-                    <span id="fedRemoteDonglesSummary" class="text-[10px] font-bold text-[var(--text-muted)] font-mono"></span>
-                </div>
-                <div id="fedRemoteDonglesList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start gap-3.5 p-0"></div>
-            </section>
-            <script>
-                const fedIsRtl = <%= isRtl ? 'true' : 'false' %>;
-                window.__fedRemoteDongles = <%- JSON.stringify(typeof remoteNodes !== 'undefined' && Array.isArray(remoteNodes) ? remoteNodes : []).replace(/</g, '\\u003c') %>;
-                window.renderFederationRemoteDongles = function (nodes) {
-                    const list = document.getElementById('fedRemoteDonglesList');
-                    const summary = document.getElementById('fedRemoteDonglesSummary');
-                    if (!list) return;
-                    const groups = Array.isArray(nodes) ? nodes : [];
-                    const total = groups.reduce((sum, g) => sum + (Array.isArray(g.dongles) ? g.dongles.length : 0), 0);
-                    if (summary) {
-                        summary.textContent = total + ' ' + (fedIsRtl ? 'مودم' : (total === 1 ? 'dongle' : 'dongles')) + ' · ' + groups.length + ' ' + (fedIsRtl ? 'سيرفر' : (groups.length === 1 ? 'PBX' : 'PBXs'));
-                    }
-                    list.innerHTML = '';
-                    if (!total) {
-                        const empty = document.createElement('div');
-                        empty.className = 'col-span-full py-6 text-center text-xs text-[var(--text-muted)]';
-                        empty.textContent = fedIsRtl ? 'لا توجد مودمات من السيرفرات المرتبطة ضمن النطاق المحدد.' : 'No remote dongles in the selected PBX scope.';
-                        list.appendChild(empty);
-                        return;
-                    }
-                    const esc = (v) => (v === null || v === undefined || v === '') ? '—' : String(v);
-                    groups.forEach(group => {
-                        if (!group || !Array.isArray(group.dongles) || group.dongles.length === 0) return;
-                        const header = document.createElement('div');
-                        header.className = 'col-span-full flex items-center gap-2 mt-1 mb-0.5';
-                        const dot = document.createElement('span');
-                        dot.className = 'w-2 h-2 rounded-full shrink-0';
-                        dot.style.background = group.status === 'online' ? '#10b981' : (group.status === 'offline' ? '#ef4444' : '#f59e0b');
-                        const name = document.createElement('span');
-                        name.className = 'text-[11px] font-extrabold text-[var(--text-primary)] truncate';
-                        name.textContent = group.node_name || ('Site ' + group.site_code);
-                        const site = document.createElement('span');
-                        site.className = 'text-[9px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]';
-                        site.textContent = 'Site ' + esc(group.site_code);
-                        const status = document.createElement('span');
-                        status.className = 'text-[9px] font-extrabold uppercase tracking-wide ' + (group.status === 'online' ? 'text-emerald-400' : (group.status === 'offline' ? 'text-red-400' : 'text-amber-400'));
-                        status.textContent = esc(group.status);
-                        header.append(dot, name, site, status);
-                        list.appendChild(header);
-
-                        group.dongles.forEach(d => {
-                            const card = document.createElement('div');
-                            card.className = 'panel-surface rounded-xl p-3 border border-[var(--border-primary)] flex flex-col gap-2';
-                            const signal = (d.signal_pct === null || d.signal_pct === undefined) ? null : Math.max(0, Math.min(100, Number(d.signal_pct) || 0));
-                            const signalColor = signal === null ? '#71717a' : (signal >= 60 ? '#10b981' : (signal >= 30 ? '#f59e0b' : '#ef4444'));
-                            const stateText = esc(d.state || d.status);
-                            const isBusy = /busy|call|active/i.test(String(d.active_call || d.state || ''));
-                            card.innerHTML = `
-                                <div class="flex items-start justify-between gap-2">
-                                    <div class="min-w-0">
-                                        <div class="text-sm font-black font-mono text-[var(--text-primary)] truncate">${esc(d.dongle_name)}</div>
-                                        <div class="text-[10px] font-mono text-[var(--text-muted)] truncate">${esc(d.phone_number || d.sim_number)}</div>
-                                    </div>
-                                    <span class="text-[9px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${isBusy ? 'text-amber-400 border-amber-500/30 bg-amber-500/10' : 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'}">${stateText}</span>
-                                </div>
-                                <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono">
-                                    <span class="text-[var(--text-muted)]">${fedIsRtl ? 'المشغل' : 'Operator'}</span><span class="text-[var(--text-primary)] truncate text-end">${esc(d.operator_name || d.provider)}</span>
-                                    <span class="text-[var(--text-muted)]">${fedIsRtl ? 'الشريحة' : 'SIM'}</span><span class="text-[var(--text-primary)] truncate text-end">${esc(d.sim_number || d.phone_number)}</span>
-                                    <span class="text-[var(--text-muted)]">${fedIsRtl ? 'المكالمة' : 'Call'}</span><span class="text-[var(--text-primary)] truncate text-end">${esc(d.active_call)}</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <div class="flex-1 h-1.5 rounded-full bg-[var(--bg-primary)] overflow-hidden border border-[var(--border-primary)]">
-                                        <div class="h-full rounded-full" style="width:${signal === null ? 0 : signal}%;background:${signalColor}"></div>
-                                    </div>
-                                    <span class="text-[9px] font-bold font-mono text-[var(--text-muted)]">${signal === null ? '—' : signal + '%'}</span>
-                                </div>
-                            `;
-                            list.appendChild(card);
-                        });
-                    });
-                };
-                window.renderFederationRemoteDongles(window.__fedRemoteDongles);
-            </script>
-            <% } %>
 
 
             <!-- Middle Row: SMS Inbox & USSD Console Side-by-Side (Expanded SMS Messenger & Reduced USSD Console) -->
@@ -1891,7 +1801,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                         <select id="sms-reply-dongle" class="text-xs font-semibold font-mono max-w-full" title="<%= t.smsSenderDongle || 'Sender Dongle' %>">
                                             <% if (devices && devices.length > 0) { %>
                                                 <% devices.forEach(d => { %>
-                                                    <option value="<%= d.ID %>" <%= d.ID === initialSelectedDongleId ? 'selected' : '' %>><%= d.ID %> (<%= d.Number || 'No SIM' %>)</option>
+                                                    <option value="<%= deviceKey(d) %>" <%= deviceKey(d) === initialSelectedDongleId ? 'selected' : '' %>><%= deviceLabel(d) %> (<%= d.Number || 'No SIM' %>)</option>
                                                 <% }) %>
                                             <% } else { %>
                                                 <option value="dongle0">dongle0 (No SIM)</option>
@@ -1943,7 +1853,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                         <option value="" disabled <%= initialSelectedDongleId ? '' : 'selected' %> hidden><%= t.selectPlaceholder %></option>
                                         <% if (devices && devices.length > 0) { %>
                                             <% devices.forEach(d => { %>
-                                                <option value="<%= d.ID %>" <%= d.ID === initialSelectedDongleId ? 'selected' : '' %>><%= d.ID %> (<%= d.Number || 'Unknown SIM' %>)</option>
+                                                <option value="<%= deviceKey(d) %>" <%= deviceKey(d) === initialSelectedDongleId ? 'selected' : '' %>><%= deviceLabel(d) %> (<%= d.Number || 'Unknown SIM' %>)</option>
                                             <% }) %>
                                         <% } %>
                                     </select>
@@ -3043,6 +2953,158 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
         }
         window.escapeHtml = escapeHtml;
 
+        // -----------------------------------------------------------------
+        // Federated dongle routing
+        //
+        // Every device carries the site code of the PBX that owns it. The grid
+        // shows all of them at once, split by server, and every action is sent
+        // to the owning peer through the signed federation gateway. On a
+        // single-PBX install all of this collapses to plain local fetches.
+        // -----------------------------------------------------------------
+        const FED_LOCAL_SITE = <%- JSON.stringify(String((typeof fedLocalSite !== 'undefined' && fedLocalSite) || (typeof federationScope !== 'undefined' && federationScope && federationScope.localSiteCode) || '10')).replace(/</g, '\\u003c') %>;
+        const FED_LOCAL_NODE_NAME = <%- JSON.stringify(String((typeof fedDongleNodes !== 'undefined' && Array.isArray(fedDongleNodes) && (fedDongleNodes.find(n => n.is_local) || {}).node_name) || 'Main PBX')).replace(/</g, '\\u003c') %>;
+        let FED_NODES = <%- JSON.stringify(typeof fedDongleNodes !== 'undefined' && Array.isArray(fedDongleNodes) ? fedDongleNodes : []).replace(/</g, '\\u003c') %>;
+        const FED_CAN_RELAY = <%- Boolean(typeof isSuperAdmin !== 'undefined' && isSuperAdmin) %>;
+        let fedNodeMap = new Map();
+
+        function setFedNodes(nodes) {
+            if (!Array.isArray(nodes) || nodes.length === 0) return;
+            FED_NODES = nodes.map(node => ({
+                site_code: String(node.site_code || ''),
+                node_name: node.node_name || ('Site ' + node.site_code),
+                is_local: Boolean(node.is_local),
+                status: node.status || 'online',
+                dongle_count: node.dongle_count
+            }));
+            fedNodeMap = new Map(FED_NODES.map(node => [String(node.site_code), node]));
+        }
+        setFedNodes(FED_NODES);
+        if (fedNodeMap.size === 0) {
+            fedNodeMap.set(FED_LOCAL_SITE, {
+                site_code: FED_LOCAL_SITE,
+                node_name: FED_LOCAL_NODE_NAME,
+                is_local: true,
+                status: 'online'
+            });
+        }
+
+        function fedNode(siteCode) {
+            return fedNodeMap.get(String(siteCode || '')) || null;
+        }
+
+        function fedNodeName(siteCode) {
+            const node = fedNode(siteCode);
+            return node ? node.node_name : ('Site ' + siteCode);
+        }
+
+        function devKey(device) {
+            return String((device && device.nodeSite) || FED_LOCAL_SITE) + ':' + String((device && device.ID) || '');
+        }
+
+        function devByKey(key) {
+            const wanted = String(key || '');
+            if (!wanted) return null;
+            return loadedDevices.find(device => devKey(device) === wanted)
+                || loadedDevices.find(device => String(device.ID || '') === wanted)
+                || null;
+        }
+
+        function deviceContext(key) {
+            const dev = devByKey(key);
+            return {
+                dev: dev,
+                key: dev ? devKey(dev) : String(key || ''),
+                rawId: dev ? String(dev.ID || '') : String(key || ''),
+                site: dev ? String(dev.nodeSite || FED_LOCAL_SITE) : FED_LOCAL_SITE
+            };
+        }
+
+        function orderDevicesByNodes(devices) {
+            const order = new Map(FED_NODES.map((node, index) => [String(node.site_code), index]));
+            return [...devices].sort((a, b) => {
+                const aSite = String(a.nodeSite || FED_LOCAL_SITE);
+                const bSite = String(b.nodeSite || FED_LOCAL_SITE);
+                if (aSite !== bSite) {
+                    const ai = order.has(aSite) ? order.get(aSite) : 99;
+                    const bi = order.has(bSite) ? order.get(bSite) : 99;
+                    return ai - bi || aSite.localeCompare(bSite);
+                }
+                return String(a.ID || '').localeCompare(String(b.ID || ''), undefined, { numeric: true });
+            });
+        }
+
+        function buildDongleNodeDivider(siteCode) {
+            const site = String(siteCode);
+            const node = fedNode(site) || {};
+            const status = node.status || 'online';
+            const count = loadedDevices.filter(device => String(device.nodeSite || FED_LOCAL_SITE) === site).length;
+            const dotClass = status === 'online' ? 'bg-emerald-400' : (status === 'offline' ? 'bg-rose-500' : 'bg-amber-400');
+            const statusClass = status === 'online' ? 'text-emerald-400' : (status === 'offline' ? 'text-rose-400' : 'text-amber-400');
+            const statusLabel = status === 'online'
+                ? (isRtl ? 'متصل' : 'online')
+                : (status === 'offline' ? (isRtl ? 'غير متصل' : 'offline') : status);
+            return `
+                <div class="fed-dongle-node-divider col-span-full w-full flex items-center gap-2 pt-1 pb-0.5 border-b border-[var(--border-primary)]/70">
+                    <span class="w-2 h-2 rounded-full shrink-0 ${dotClass}"></span>
+                    <span class="text-[11px] font-extrabold text-[var(--text-primary)] truncate">${escapeHtml(node.node_name || ('Site ' + site))}</span>
+                    <span class="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site ${escapeHtml(site)}</span>
+                    <span class="text-[9px] font-extrabold uppercase tracking-wide ${statusClass}">${escapeHtml(statusLabel)}</span>
+                    <span class="ms-auto text-[9px] font-bold font-mono text-[var(--text-muted)]">${count} ${isRtl ? 'مودم' : (count === 1 ? 'dongle' : 'dongles')}</span>
+                </div>`;
+        }
+
+        function encodeRelayBody(body, contentType) {
+            if (body === undefined || body === null) return null;
+            if (typeof body === 'string') {
+                if (/json/i.test(contentType || '')) {
+                    try { return { body: JSON.parse(body) }; } catch (_) {}
+                }
+                return {
+                    body: btoa(unescape(encodeURIComponent(body))),
+                    bodyEncoding: 'base64',
+                    contentType: contentType || 'text/plain;charset=UTF-8'
+                };
+            }
+            return { body };
+        }
+
+        function fedRelayAction(siteCode, path, options = {}) {
+            const method = String(options.method || 'GET').toUpperCase();
+            const payload = { method, path: String(path || '') };
+            const headers = options.headers || {};
+            let contentType = '';
+            try {
+                if (typeof headers.get === 'function') contentType = headers.get('content-type') || '';
+                else {
+                    for (const name in headers) {
+                        if (Object.prototype.hasOwnProperty.call(headers, name) && name.toLowerCase() === 'content-type') {
+                            contentType = String(headers[name] || '');
+                        }
+                    }
+                }
+            } catch (_) {}
+            const encoded = encodeRelayBody(options.body, contentType);
+            if (encoded) {
+                if (encoded.body !== undefined) payload.body = encoded.body;
+                if (encoded.bodyEncoding) payload.bodyEncoding = encoded.bodyEncoding;
+                if (encoded.contentType) payload.contentType = encoded.contentType;
+            }
+            return fetch('/api/federation/peers/' + encodeURIComponent(siteCode) + '/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify(payload),
+                credentials: 'same-origin'
+            });
+        }
+
+        function fedDongleFetch(path, options = {}, nodeSite = null) {
+            const site = String(nodeSite || selectedDongleSite || FED_LOCAL_SITE);
+            if (!site || site === FED_LOCAL_SITE) return fetch(path, options);
+            return fedRelayAction(site, path, options);
+        }
+
+        let selectedDongleSite = FED_LOCAL_SITE;
+
         function initDonglesPage() {
             let currentViewMode = localStorage.getItem('dongle_view_mode') || 'grid';
             window.currentViewMode = currentViewMode;
@@ -3166,9 +3228,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             let selectedDongleId = null;
             let allSmsMessages = [];
             let activeThreadEndpoint = null;
+            let activeThreadKey = null;
             // Endpoint of a brand-new conversation opened with the "New Chat" button.
             // It has no thread entry yet, so the thread list re-render must not drop it.
             let pendingNewChatEndpoint = null;
+            let pendingNewChatKey = null;
             let smsSearchQuery = '';
             let lastUssdText = "";
             let lastUssdTime = 0;
@@ -3358,8 +3422,21 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     return;
                 }
 
-                loadedDevices.forEach((dev, index) => {
-                    const id = String(dev.ID || '');
+                const orderedDevices = orderDevicesByNodes(loadedDevices);
+                const nodeCount = new Set(orderedDevices.map(device => String(device.nodeSite || FED_LOCAL_SITE))).size;
+                const showNodeDividers = nodeCount > 1;
+                let renderedNodeSite = null;
+
+                orderedDevices.forEach((dev) => {
+                    const index = loadedDevices.indexOf(dev);
+                    const nodeSite = String(dev.nodeSite || FED_LOCAL_SITE);
+                    if (showNodeDividers && nodeSite !== renderedNodeSite) {
+                        renderedNodeSite = nodeSite;
+                        donglesGrid.insertAdjacentHTML('beforeend', buildDongleNodeDivider(nodeSite));
+                    }
+                    const key = devKey(dev);
+                    const id = key;
+                    const rawId = String(dev.ID || '');
                     const phoneNumber = String(dev.Number || 'Unknown');
                     const imsi = String(dev.IMSI || '-');
                     const imei = String(dev.IMEI || '-');
@@ -3374,6 +3451,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                     card.id = 'row-' + id;
                     card.dataset.dongleId = id;
+                    card.dataset.rawId = rawId;
+                    card.dataset.nodeSite = nodeSite;
                     card.dataset.number = phoneNumber === 'Unknown' ? '' : phoneNumber;
                     card.dataset.imsi = imsi;
                     card.dataset.imei = imei;
@@ -3391,7 +3470,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 18h6M9 6h.01M12 6h.01M15 6h.01"/></svg>
                                 </div>
                                 <div class="min-w-0">
-                                    <h4 class="text-sm font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(id)}</h4>
+                                    <h4 class="text-sm font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(rawId)}</h4>
                                     <span class="text-[10px] text-[var(--text-muted)] font-bold truncate block">${escapeHtml(provider)}</span>
                                 </div>
                             </div>
@@ -3450,7 +3529,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 18h6M9 6h.01M12 6h.01M15 6h.01"/></svg>
                                         </div>
                                         <div class="min-w-0">
-                                            <h4 class="text-base font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(id)}</h4>
+                                            <h4 class="text-base font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(rawId)}</h4>
                                             <p class="text-[10px] text-[var(--text-muted)] truncate">${escapeHtml(provider)}</p>
                                         </div>
                                     </div>
@@ -3562,7 +3641,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 18h6M9 6h.01M12 6h.01M15 6h.01"/></svg>
                                         </div>
                                         <div class="min-w-0">
-                                            <h4 class="text-base sm:text-lg font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(id)}</h4>
+                                            <h4 class="text-base sm:text-lg font-black text-[var(--text-primary)] font-mono truncate tracking-tight">${escapeHtml(rawId)}</h4>
                                             <p class="text-[10px] text-[var(--text-muted)] truncate">${escapeHtml(provider)}</p>
                                         </div>
                                     </div>
@@ -3620,7 +3699,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
                                             <span>${isRtl ? 'فحص وتشخيص AT (خاص بـ root)' : 'AT Diagnostics (Root Only)'}</span>
                                         </span>
-                                        <span class="text-[9px] font-mono text-[var(--text-muted)] font-bold">${escapeHtml(id)}</span>
+                                        <span class="text-[9px] font-mono text-[var(--text-muted)] font-bold">${escapeHtml(rawId)}</span>
                                     </div>
                                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full">
                                         <button type="button" onclick="runAtDiag('${escapeHtml(id)}', 'AT^CARDLOCK?')" class="w-full text-center py-1.5 px-1 rounded-lg text-[10px] font-mono font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] border border-[var(--border-primary)] hover:border-zinc-500 text-zinc-300 hover:text-white transition cursor-pointer truncate" title="Check SIM Lock & remaining attempts counter">^CARDLOCK?</button>
@@ -3731,17 +3810,19 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             window.selectDevice = function(id, options) {
                 try {
                     const normalizedId = String(id || '');
-                    const dev = loadedDevices.find(device => String(device.ID || '') === normalizedId);
+                    const dev = devByKey(normalizedId);
                     if (!dev) return;
+                    const deviceKey = devKey(dev);
+                    const rawId = String(dev.ID || '');
 
                     document.querySelectorAll('.dongle-device-card').forEach(card => {
                         card.classList.remove('selected-row');
                     });
-                    const selectedRow = document.getElementById('row-' + normalizedId);
+                    const selectedRow = document.getElementById('row-' + deviceKey);
                     if (selectedRow) selectedRow.classList.add('selected-row');
                     
                     // Fill metadata cards
-                    elId.textContent = dev.ID || '-';
+                    elId.textContent = rawId || '-';
                     elNum.textContent = dev.Number || 'Unknown';
                     elProv.textContent = dev['Provider Name'] || 'NONE';
                     elImei.textContent = dev.IMEI || '-';
@@ -3753,12 +3834,15 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     elSub.textContent = dev.Submode || '-';
 
                     const previousSelected = selectedDongleId;
-                    selectedDongleId = normalizedId;
+                    selectedDongleId = deviceKey;
+                    selectedDongleSite = String(dev.nodeSite || FED_LOCAL_SITE);
                     updateSmsInboxTitle();
-                    if (!options || !options.skipSms || previousSelected !== normalizedId) {
-                        if (previousSelected !== normalizedId) {
+                    if (!options || !options.skipSms || previousSelected !== deviceKey) {
+                        if (previousSelected !== deviceKey) {
                             activeThreadEndpoint = null;
+                            activeThreadKey = null;
                             pendingNewChatEndpoint = null;
+                            pendingNewChatKey = null;
                         }
                         filterAndRenderSms();
                     }
@@ -3767,13 +3851,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                     // Sync select dropdowns
                     isSyncingSelect = true;
-                    if (ussdTarget && ussdTarget.value !== id) {
-                        ussdTarget.value = id;
+                    if (ussdTarget && ussdTarget.value !== deviceKey) {
+                        ussdTarget.value = deviceKey;
                         ussdTarget.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                     const replyDongle = document.getElementById('sms-reply-dongle');
-                    if (replyDongle && replyDongle.value.toLowerCase() !== normalizedId.toLowerCase()) {
-                        replyDongle.value = normalizedId;
+                    if (replyDongle && replyDongle.value !== deviceKey) {
+                        replyDongle.value = deviceKey;
                     }
                     isSyncingSelect = false;
                 } catch (err) {
@@ -3830,7 +3914,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             renderDongleCards();
             if (loadedDevices.length > 0) {
-                selectDevice(loadedDevices[0].ID);
+                selectDevice(devKey(loadedDevices[0]));
             }
 
             // Sync detail card and table highlight when select dropdown is changed
@@ -3860,13 +3944,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             function updateSmsInboxTitle() {
                 const deviceEl = document.getElementById('sms-inbox-device');
+                const selectedDev = devByKey(selectedDongleId);
                 if (deviceEl) {
-                    deviceEl.textContent = selectedDongleId
-                        ? `${isRtl ? 'الجهاز المحدد' : 'Selected'}: ${selectedDongleId}`
-                        : (isRtl ? 'اختر جهازاً' : 'Select a dongle');
+                    deviceEl.textContent = selectedDev
+                        ? `${isRtl ? 'الجهاز المحدد' : 'Selected'}: ${selectedDev.ID}${FED_NODES.length > 1 ? ' · ' + (selectedDev.nodeName || fedNodeName(selectedDev.nodeSite)) : ''}`
+                        : (isRtl ? 'كل الأجهزة' : 'All dongles');
                 }
                 const replyDongle = document.getElementById('sms-reply-dongle');
-                if (replyDongle && selectedDongleId && replyDongle.value.toLowerCase() !== selectedDongleId.toLowerCase()) {
+                if (replyDongle && selectedDongleId && replyDongle.value !== selectedDongleId) {
                     replyDongle.value = selectedDongleId;
                 }
             }
@@ -3896,11 +3981,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 `;
                 
                 toast.onclick = function() {
-                    if (selectedDongleId && selectedDongleId.toLowerCase() !== sms.dongleId.toLowerCase()) {
-                        selectDevice(sms.dongleId);
+                    const toastNode = smsMessageNode(sms);
+                    const toastDevKey = `${toastNode}:${String(sms.dongleId || '')}`;
+                    if (devByKey(toastDevKey)) {
+                        selectDevice(toastDevKey);
                     }
                     if (typeof selectSmsThread === 'function') {
-                        selectSmsThread(sms.endpoint || sms.sender);
+                        selectSmsThread(smsThreadKey(toastNode, sms.dongleId, sms.endpoint || sms.sender), true);
                     } else if (typeof showSmsModal === 'function') {
                         showSmsModal(sms.dongleId, sms.sender, sms.content, sms.timestamp);
                     }
@@ -3981,7 +4068,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const devs = Array.isArray(window.loadedDevices) && window.loadedDevices.length > 0 ? window.loadedDevices : (typeof loadedDevices !== 'undefined' && Array.isArray(loadedDevices) ? loadedDevices : []);
                 if (devs.length === 0) {
                     const opt = document.createElement('option');
-                    opt.value = selectedDongleId || 'dongle0';
+                    opt.value = selectedDongleId || `${FED_LOCAL_SITE}:dongle0`;
                     opt.textContent = selectedDongleId || 'dongle0';
                     smsSenderSelect.appendChild(opt);
                 } else {
@@ -3990,12 +4077,14 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         const dongleId = d.ID || d.id || d.dongle_name || 'dongle0';
                         const simNum = d.Number || d.simNumber || d.phone_number || '';
                         const provider = d.ProviderName || d.provider || '';
-                        opt.value = dongleId;
+                        const optionKey = devKey(d);
+                        const nodePrefix = FED_NODES.length > 1 ? `${d.nodeName || fedNodeName(d.nodeSite)} · ` : '';
+                        opt.value = optionKey;
                         const numText = simNum ? ` (${simNum})` : '';
-                        opt.textContent = `${dongleId}${numText}${provider ? ' - ' + provider : ''}`;
-                        if (prefillDongle && (dongleId === prefillDongle || (simNum && simNum === prefillDongle))) {
+                        opt.textContent = `${nodePrefix}${dongleId}${numText}${provider ? ' - ' + provider : ''}`;
+                        if (prefillDongle && (optionKey === prefillDongle || dongleId === prefillDongle || (simNum && simNum === prefillDongle))) {
                             opt.selected = true;
-                        } else if (!prefillDongle && selectedDongleId && dongleId === selectedDongleId) {
+                        } else if (!prefillDongle && selectedDongleId && optionKey === selectedDongleId) {
                             opt.selected = true;
                         }
                         smsSenderSelect.appendChild(opt);
@@ -4041,7 +4130,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const btnText = document.getElementById('sendSmsSubmitText');
                 const origText = btnText ? btnText.textContent : 'Send';
 
-                const dongleOrSim = smsSenderSelect.value;
+                const senderKey = smsSenderSelect.value;
+                const senderDev = devByKey(senderKey);
+                const targetDongle = senderDev ? String(senderDev.ID || '') : String(senderKey || '');
+                const targetSite = senderDev ? String(senderDev.nodeSite || FED_LOCAL_SITE) : FED_LOCAL_SITE;
                 const to = smsRecipientInput.value.trim();
                 const message = smsMessageInput.value.trim();
 
@@ -4051,19 +4143,20 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 if (btnText) btnText.textContent = isRtl ? 'جاري الإرسال...' : 'Sending...';
 
                 try {
-                    const res = await fetch('/api/gsm-dongles/send-sms', {
+                    const res = await fedDongleFetch('/api/gsm-dongles/send-sms', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            dongleId: dongleOrSim,
+                            dongleId: targetDongle,
                             to: to,
                             message: message
                         })
-                    });
+                    }, targetSite);
                     const data = await res.json();
                     if (data.success) {
                         showToast(isRtl ? 'تم إرسال الرسالة بنجاح!' : 'SMS dispatched successfully!', 'success');
                         closeSendSmsModal();
+                        setTimeout(() => { if (typeof window.loadSmsInbox === 'function') window.loadSmsInbox(); }, 1200);
                     } else {
                         showToast(data.error || (isRtl ? 'فشل إرسال الرسالة' : 'Failed to send SMS'), 'error');
                     }
@@ -4105,6 +4198,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             const savePortsSubmitBtn = document.getElementById('save-ports-submit-btn');
 
             let detectedDevicesList = [];
+            let editPortsSite = FED_LOCAL_SITE;
 
             window.validatePortsForm = function() {
                 const audio = editPortsAudioInput ? editPortsAudioInput.value.trim().toLowerCase() : '';
@@ -4192,7 +4286,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const dongleId = editPortsDongleId ? editPortsDongleId.value.trim() : '';
                 detectedPortsChips.innerHTML = `<span class="text-xs text-[var(--text-muted)] py-2 text-center">${isRtl ? 'جاري فحص المنافذ...' : 'Scanning detected ports...'}</span>`;
                 const url = dongleId ? `/api/gsm-dongles/ttyusb-devices?dongleId=${encodeURIComponent(dongleId)}` : '/api/gsm-dongles/ttyusb-devices';
-                fetch(url)
+                fedDongleFetch(url, {}, editPortsSite)
                     .then(res => res.json())
                     .then(data => {
                         if (data.success && Array.isArray(data.devices)) {
@@ -4209,8 +4303,12 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             window.openEditPortsModal = function(dongleId, currentAudio, currentData) {
                 if (!dongleId) return;
-                if (editPortsDongleId) editPortsDongleId.value = dongleId;
-                if (editPortsDongleBadge) editPortsDongleBadge.textContent = dongleId;
+                const ctx = deviceContext(dongleId);
+                editPortsSite = ctx.site;
+                if (editPortsDongleId) editPortsDongleId.value = ctx.rawId;
+                if (editPortsDongleBadge) editPortsDongleBadge.textContent = FED_NODES.length > 1
+                    ? `${ctx.rawId} · ${fedNodeName(ctx.site)}`
+                    : ctx.rawId;
                 if (editPortsAudioInput) editPortsAudioInput.value = currentAudio || '';
                 if (editPortsDataInput) editPortsDataInput.value = currentData || '';
 
@@ -4262,11 +4360,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 if (savePortsSubmitBtn) savePortsSubmitBtn.disabled = true;
                 showToast(isRtl ? 'تحديث المنافذ' : 'Updating Ports', (isRtl ? 'جاري تحديث منافذ TTY لـ ' : 'Updating TTY ports for ') + dongleId + '...', 'info');
 
-                fetch('/api/gsm-dongles/update-ports/' + encodeURIComponent(dongleId), {
+                fedDongleFetch('/api/gsm-dongles/update-ports/' + encodeURIComponent(dongleId), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ audio, data })
-                })
+                }, editPortsSite)
                     .then(res => res.json())
                     .then(resData => {
                         if (resData.success) {
@@ -4328,7 +4426,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 }
             });
 
-            window.runDongleAudit = function() {
+            function auditNodeList() {
+                return (FED_NODES && FED_NODES.length > 0)
+                    ? FED_NODES
+                    : [{ site_code: FED_LOCAL_SITE, node_name: FED_LOCAL_NODE_NAME, is_local: true, status: 'online' }];
+            }
+
+            window.runDongleAudit = async function() {
                 if (!auditSlotsTableBody) return;
                 auditSlotsTableBody.innerHTML = `
                     <tr>
@@ -4345,38 +4449,64 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     if (icon) icon.classList.add('animate-spin');
                 }
 
-                fetch('/api/gsm-dongles/audit')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success && data.audit) {
-                            currentAuditData = data.audit;
-                            renderAuditReport(data.audit);
-                        } else {
-                            auditSlotsTableBody.innerHTML = `
-                                <tr>
-                                    <td colspan="5" class="px-4 py-6 text-center text-xs text-rose-400 font-mono">
-                                        ${escapeHtml(data.error || 'Failed to load audit data')}
-                                    </td>
-                                </tr>`;
+                try {
+                    const nodes = auditNodeList();
+                    const results = await Promise.all(nodes.map(async node => {
+                        try {
+                            const res = await fedDongleFetch('/api/gsm-dongles/audit', {}, node.site_code);
+                            const data = await res.json();
+                            if (!data || !data.success || !data.audit) {
+                                return { node, error: (data && data.error) || 'Audit failed' };
+                            }
+                            return { node, audit: data.audit };
+                        } catch (error) {
+                            return { node, error: error.message || 'Audit failed' };
                         }
-                    })
-                    .catch(err => {
-                        auditSlotsTableBody.innerHTML = `
-                            <tr>
-                                <td colspan="5" class="px-4 py-6 text-center text-xs text-rose-400 font-mono">
-                                    ${escapeHtml(err.message || 'Network Error during audit')}
-                                </td>
-                            </tr>`;
-                    })
-                    .finally(() => {
-                        if (auditRefreshBtn) {
-                            const icon = auditRefreshBtn.querySelector('svg');
-                            if (icon) icon.classList.remove('animate-spin');
+                    }));
+
+                    const merged = { summary: { totalSlots: 0, syncedCount: 0, issuesCount: 0, unpinnedCount: 0, disconnectedCount: 0 }, slots: [], timestamp: Date.now() };
+                    const failed = [];
+                    results.forEach(result => {
+                        if (!result.audit) {
+                            failed.push(result);
+                            return;
                         }
+                        const audit = result.audit;
+                        const summary = audit.summary || {};
+                        merged.summary.totalSlots += Number(summary.totalSlots || 0);
+                        merged.summary.syncedCount += Number(summary.syncedCount || 0);
+                        merged.summary.issuesCount += Number(summary.issuesCount || 0);
+                        merged.summary.unpinnedCount += Number(summary.unpinnedCount || 0);
+                        merged.summary.disconnectedCount += Number(summary.disconnectedCount || 0);
+                        (audit.slots || []).forEach(slot => {
+                            merged.slots.push({
+                                ...slot,
+                                nodeSite: String(result.node.site_code),
+                                nodeName: result.node.node_name || fedNodeName(result.node.site_code),
+                                nodeStatus: result.node.status || 'online',
+                                fedKey: `${result.node.site_code}:${slot.slotId}`
+                            });
+                        });
                     });
+
+                    currentAuditData = merged;
+                    renderAuditReport(merged, failed);
+                } catch (error) {
+                    auditSlotsTableBody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="px-4 py-6 text-center text-xs text-rose-400 font-mono">
+                                ${escapeHtml(error.message || 'Failed to load audit data')}
+                            </td>
+                        </tr>`;
+                } finally {
+                    if (auditRefreshBtn) {
+                        const icon = auditRefreshBtn.querySelector('svg');
+                        if (icon) icon.classList.remove('animate-spin');
+                    }
+                }
             };
 
-            function renderAuditReport(audit) {
+            function renderAuditReport(audit, failedNodes = []) {
                 if (!audit) return;
                 const { summary, slots, timestamp } = audit;
 
@@ -4401,7 +4531,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     }
                 }
 
-                if (!slots || slots.length === 0) {
+                if ((!slots || slots.length === 0) && failedNodes.length === 0) {
                     auditSlotsTableBody.innerHTML = `
                         <tr>
                             <td colspan="5" class="px-4 py-8 text-center text-xs text-[var(--text-muted)] font-mono">
@@ -4411,8 +4541,17 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     return;
                 }
 
+                const showNodeDividers = new Set((slots || []).map(slot => String(slot.nodeSite || FED_LOCAL_SITE))).size > 1
+                    || failedNodes.length > 0;
                 let html = '';
-                slots.forEach(slot => {
+                let renderedNodeSite = null;
+
+                (slots || []).forEach(slot => {
+                    const nodeSite = String(slot.nodeSite || FED_LOCAL_SITE);
+                    if (showNodeDividers && nodeSite !== renderedNodeSite) {
+                        renderedNodeSite = nodeSite;
+                        html += buildAuditNodeDivider(slot.nodeSite, slot.nodeName, slot.nodeStatus);
+                    }
                     const cfg = slot.config || {};
                     const liv = slot.live || {};
                     const isConnected = liv.state && !['not connected', 'not initialized', 'unknown'].includes(String(liv.state).toLowerCase());
@@ -4476,7 +4615,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             </td>
                             <td class="px-3.5 py-3 align-middle text-end">
                                 ${canSync && slot.status !== 'synced' ? `
-                                    <button type="button" onclick="reconcileSlot('${escapeHtml(slot.slotId)}')" class="bg-[var(--accent-color)]/20 hover:bg-[var(--accent-color)] text-[var(--accent-color)] hover:text-white font-mono font-bold px-2.5 py-1 rounded-lg text-xs transition cursor-pointer border border-[var(--accent-color)]/40 shrink-0">
+                                    <button type="button" onclick="reconcileSlot('${escapeHtml(slot.fedKey || slot.slotId)}')" class="bg-[var(--accent-color)]/20 hover:bg-[var(--accent-color)] text-[var(--accent-color)] hover:text-white font-mono font-bold px-2.5 py-1 rounded-lg text-xs transition cursor-pointer border border-[var(--accent-color)]/40 shrink-0">
                                         ${isRtl ? 'مطابقة' : 'Sync'}
                                     </button>
                                 ` : ''}
@@ -4484,28 +4623,55 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         </tr>`;
                 });
 
+                failedNodes.forEach(result => {
+                    html += `
+                        <tr>
+                            <td colspan="5" class="px-4 py-3 text-center text-[11px] font-mono text-rose-400 bg-rose-500/5">
+                                ${escapeHtml((result.node && result.node.node_name) || ('Site ' + (result.node && result.node.site_code)))} — ${escapeHtml(result.error || 'unreachable')}
+                            </td>
+                        </tr>`;
+                });
+
                 auditSlotsTableBody.innerHTML = html;
             }
 
-            window.reconcileSlot = function(slotId) {
-                if (!slotId) return;
+            function buildAuditNodeDivider(siteCode, nodeName, nodeStatus) {
+                const site = String(siteCode || FED_LOCAL_SITE);
+                const node = fedNode(site) || {};
+                const status = nodeStatus || node.status || 'online';
+                const dotClass = status === 'online' ? 'bg-emerald-400' : (status === 'offline' ? 'bg-rose-500' : 'bg-amber-400');
+                const statusClass = status === 'online' ? 'text-emerald-400' : (status === 'offline' ? 'text-rose-400' : 'text-amber-400');
+                return `
+                    <tr class="bg-[var(--bg-card)]/70">
+                        <td colspan="5" class="px-3.5 py-2">
+                            <div class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}"></span>
+                                <span class="text-[11px] font-extrabold text-[var(--text-primary)] truncate">${escapeHtml(nodeName || node.node_name || ('Site ' + site))}</span>
+                                <span class="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site ${escapeHtml(site)}</span>
+                                <span class="text-[9px] font-extrabold uppercase tracking-wide ${statusClass}">${escapeHtml(status)}</span>
+                            </div>
+                        </td>
+                    </tr>`;
+            }
+
+            window.reconcileSlot = function(fedKey) {
+                if (!fedKey) return;
+                const key = String(fedKey);
+                const sep = key.indexOf(':');
+                const site = sep > 0 ? key.slice(0, sep) : FED_LOCAL_SITE;
+                const slotId = sep > 0 ? key.slice(sep + 1) : key;
                 showToast(isRtl ? 'جاري المطابقة' : 'Reconciling', (isRtl ? 'جاري مطابقة إعدادات ' : 'Reconciling config for ') + slotId + '...', 'info');
 
-                fetch('/api/gsm-dongles/reconcile-conf', {
+                fedDongleFetch('/api/gsm-dongles/reconcile-conf', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ slots: [slotId] })
-                })
+                }, site)
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
                             showToast(isRtl ? 'نجاح' : 'Success', data.message || 'Slot reconciled successfully', 'success');
-                            if (data.audit) {
-                                currentAuditData = data.audit;
-                                renderAuditReport(data.audit);
-                            } else {
-                                runDongleAudit();
-                            }
+                            runDongleAudit();
                             refreshDevicesList();
                         } else {
                             showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Reconciliation failed', 'error');
@@ -4518,27 +4684,23 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 if (auditReconcileAllBtn) auditReconcileAllBtn.disabled = true;
                 showToast(isRtl ? 'جاري المطابقة الشاملة' : 'Reconciling All Slots', isRtl ? 'جاري تحديث dongle.conf لكافة الأجهزة المتصلة...' : 'Updating dongle.conf for all live devices...', 'info');
 
-                fetch('/api/gsm-dongles/reconcile-conf', {
+                Promise.all(auditNodeList().map(node => fedDongleFetch('/api/gsm-dongles/reconcile-conf', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ syncAll: true })
-                })
+                }, node.site_code)
                     .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            showToast(isRtl ? 'نجاح' : 'Success', data.message || 'All dongles reconciled successfully', 'success');
-                            if (data.audit) {
-                                currentAuditData = data.audit;
-                                renderAuditReport(data.audit);
-                            } else {
-                                runDongleAudit();
-                            }
-                            refreshDevicesList();
+                    .catch(err => ({ success: false, error: err.message }))))
+                    .then(results => {
+                        const failed = results.filter(r => !r || !r.success);
+                        if (failed.length === 0) {
+                            showToast(isRtl ? 'نجاح' : 'Success', 'All dongles reconciled successfully', 'success');
                         } else {
-                            showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Reconciliation failed', 'error');
+                            showToast(isRtl ? 'تحذير' : 'Warning', failed[0].error || 'Some PBXs failed to reconcile', 'error');
                         }
+                        runDongleAudit();
+                        refreshDevicesList();
                     })
-                    .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
                     .finally(() => {
                         if (auditReconcileAllBtn) auditReconcileAllBtn.disabled = false;
                     });
@@ -4567,80 +4729,107 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 }
             }
 
-            function groupSmsIntoThreads(messages, filterDongleId = null) {
+            function smsMessageNode(msg) {
+                return String((msg && msg.nodeSite) || FED_LOCAL_SITE);
+            }
+
+            function smsThreadKey(nodeSite, dongleId, endpoint) {
+                return `${String(nodeSite || FED_LOCAL_SITE)}|${String(dongleId || '').toLowerCase().trim()}|${normalizePhoneEndpoint(endpoint)}`;
+            }
+
+            function groupSmsIntoThreads(messages) {
                 const threadMap = new Map();
                 const sorted = [...messages].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 
                 sorted.forEach(msg => {
                     const dId = String(msg.dongleId || '').toLowerCase().trim();
-                    if (filterDongleId && dId !== filterDongleId.toLowerCase().trim()) {
-                        return;
-                    }
-
+                    const nodeSite = smsMessageNode(msg);
                     const rawEndpoint = msg.endpoint || (msg.direction === 'outgoing' ? msg.recipient : msg.sender) || 'Unknown';
                     const endpoint = normalizePhoneEndpoint(rawEndpoint);
                     if (!endpoint) return;
+                    const key = smsThreadKey(nodeSite, dId, endpoint);
 
-                    if (!threadMap.has(endpoint)) {
-                        threadMap.set(endpoint, {
+                    if (!threadMap.has(key)) {
+                        threadMap.set(key, {
+                            key: key,
                             endpoint: endpoint,
                             displayNumber: rawEndpoint,
                             contactName: msg.contactName || '',
                             dongleId: msg.dongleId || 'dongle0',
+                            nodeSite: nodeSite,
+                            nodeName: msg.nodeName || fedNodeName(nodeSite),
                             lastMessage: msg,
                             messages: []
                         });
                     }
 
-                    const thread = threadMap.get(endpoint);
+                    const thread = threadMap.get(key);
                     thread.lastMessage = msg;
                     thread.dongleId = msg.dongleId || thread.dongleId;
                     if (msg.contactName && !thread.contactName) thread.contactName = msg.contactName;
                     thread.messages.push(msg);
                 });
 
-                return Array.from(threadMap.values()).sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
+                const nodeOrder = new Map(FED_NODES.map((node, index) => [String(node.site_code), index]));
+                return Array.from(threadMap.values()).sort((a, b) => {
+                    const ai = nodeOrder.has(String(a.nodeSite)) ? nodeOrder.get(String(a.nodeSite)) : 99;
+                    const bi = nodeOrder.has(String(b.nodeSite)) ? nodeOrder.get(String(b.nodeSite)) : 99;
+                    if (ai !== bi) return ai - bi;
+                    return (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0);
+                });
             }
 
             function renderSmsThreads() {
                 const listEl = document.getElementById('sms-threads-list');
                 if (!listEl) return;
 
-                const threads = groupSmsIntoThreads(allSmsMessages, selectedDongleId);
+                const threads = groupSmsIntoThreads(allSmsMessages);
                 updateSmsInboxCount(threads.length);
 
                 const query = smsSearchQuery.toLowerCase().trim();
-                const filteredThreads = query 
+                const filteredThreads = query
                     ? threads.filter(t => t.endpoint.toLowerCase().includes(query) || (t.contactName && t.contactName.toLowerCase().includes(query)) || (t.lastMessage?.content && t.lastMessage.content.toLowerCase().includes(query)))
                     : threads;
 
                 if (filteredThreads.length === 0) {
                     listEl.innerHTML = `
                         <div class="text-center py-12 text-zinc-500 text-xs italic" id="sms-empty-placeholder">
-                            ${query ? (isRtl ? 'لا توجد نتائج بحث' : 'No matches found') : (isRtl ? 'لا توجد محادثات لهذه الشريحة' : 'No conversations found for this dongle')}
+                            ${query ? (isRtl ? 'لا توجد نتائج بحث' : 'No matches found') : (isRtl ? 'لا توجد محادثات بعد' : 'No conversations yet')}
                         </div>`;
                     // A pending brand-new conversation stays open even when the thread
                     // list is empty - the user still wants to write the first message.
-                    if (activeThreadEndpoint !== pendingNewChatEndpoint) {
+                    if (activeThreadKey !== pendingNewChatKey) {
+                        activeThreadKey = null;
                         activeThreadEndpoint = null;
                     }
                     renderChatMessages();
                     return;
                 }
 
-                // If activeThreadEndpoint is no longer valid for this dongle, reset it.
-                // A brand-new conversation (started with the "New Chat" button) has no
-                // thread entry yet, so it must be kept - otherwise the re-render below
-                // would drop the number the user just typed and re-open the previous chat.
-                if (activeThreadEndpoint && !filteredThreads.some(t => t.endpoint === activeThreadEndpoint)) {
-                    if (activeThreadEndpoint !== pendingNewChatEndpoint) {
-                        activeThreadEndpoint = null;
-                    }
+                // A brand-new conversation (started with the "New Chat" button) has
+                // no thread entry yet, so it must be kept across re-renders.
+                if (activeThreadKey && activeThreadKey !== pendingNewChatKey && !filteredThreads.some(t => t.key === activeThreadKey)) {
+                    activeThreadKey = null;
+                    activeThreadEndpoint = null;
                 }
 
+                const showNodeDividers = new Set(filteredThreads.map(t => String(t.nodeSite))).size > 1;
                 let html = '';
+                let lastNodeSite = null;
                 filteredThreads.forEach(t => {
-                    const isActive = activeThreadEndpoint && normalizePhoneEndpoint(activeThreadEndpoint) === t.endpoint;
+                    if (showNodeDividers && t.nodeSite !== lastNodeSite) {
+                        lastNodeSite = t.nodeSite;
+                        const node = fedNode(t.nodeSite) || {};
+                        const nodeStatus = node.status || 'online';
+                        const dotClass = nodeStatus === 'online' ? 'bg-emerald-400' : (nodeStatus === 'offline' ? 'bg-rose-500' : 'bg-amber-400');
+                        html += `
+                            <div class="fed-sms-node-divider flex items-center gap-2 px-3 pt-2.5 pb-1.5 bg-[var(--bg-card)]/60 border-b border-[var(--border-primary)]/60">
+                                <span class="w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}"></span>
+                                <span class="text-[10px] font-extrabold text-[var(--text-primary)] truncate">${escapeHtml(t.nodeName)}</span>
+                                <span class="text-[8px] font-bold font-mono px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site ${escapeHtml(t.nodeSite)}</span>
+                            </div>`;
+                    }
+                    const isActive = activeThreadKey === t.key;
                     const lastMsg = t.lastMessage || {};
                     const isOutgoing = lastMsg.direction === 'outgoing';
                     const prefix = isOutgoing ? (isRtl ? 'أنت: ' : 'You: ') : '';
@@ -4649,7 +4838,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     const avatarLetter = (t.contactName ? t.contactName.trim()[0] : (t.displayNumber ? t.displayNumber.replace(/^\+/, '')[0] : '#')).toUpperCase();
 
                     html += `
-                        <div class="p-3 flex items-start gap-2.5 cursor-pointer transition select-none hover:bg-[var(--bg-hover)] text-start ${isActive ? 'bg-[var(--bg-hover)] border-s-2 border-[var(--accent-color)]' : ''}" onclick="selectSmsThread('${escapeHtml(t.endpoint)}', true)">
+                        <div class="p-3 flex items-start gap-2.5 cursor-pointer transition select-none hover:bg-[var(--bg-hover)] text-start ${isActive ? 'bg-[var(--bg-hover)] border-s-2 border-[var(--accent-color)]' : ''}" onclick="selectSmsThread('${escapeHtml(t.key)}', true)">
                             <div class="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs font-mono shrink-0 mt-0.5">
                                 ${escapeHtml(avatarLetter)}
                             </div>
@@ -4670,21 +4859,22 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                 listEl.innerHTML = html;
 
-                if (!activeThreadEndpoint && filteredThreads.length > 0 && window.innerWidth >= 640) {
-                    selectSmsThread(filteredThreads[0].endpoint, false);
-                } else if (!activeThreadEndpoint) {
+                if (!activeThreadKey && filteredThreads.length > 0 && window.innerWidth >= 640) {
+                    selectSmsThread(filteredThreads[0].key, false);
+                } else if (!activeThreadKey) {
                     renderChatMessages();
                 }
             }
 
-            window.selectSmsThread = function(endpoint, shouldFocus = false) {
-                const cleanEndpoint = normalizePhoneEndpoint(endpoint);
+            window.selectSmsThread = function(threadKey, shouldFocus = false) {
+                const key = String(threadKey || '');
                 // Selecting a thread that is not the pending brand-new conversation
                 // means the user picked an existing one - drop the pending marker.
-                if (cleanEndpoint !== pendingNewChatEndpoint) {
+                if (key !== pendingNewChatKey) {
+                    pendingNewChatKey = null;
                     pendingNewChatEndpoint = null;
                 }
-                activeThreadEndpoint = cleanEndpoint;
+                activeThreadKey = key;
 
                 const chatPane = document.getElementById('sms-chat-pane');
                 const threadsPane = document.getElementById('sms-threads-pane');
@@ -4701,37 +4891,52 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const avatarEl = document.getElementById('sms-active-avatar');
                 const replyDongleSelect = document.getElementById('sms-reply-dongle');
 
-                const threads = groupSmsIntoThreads(allSmsMessages, selectedDongleId);
-                const activeThread = threads.find(t => t.endpoint === activeThreadEndpoint);
+                const threads = groupSmsIntoThreads(allSmsMessages);
+                const activeThread = threads.find(t => t.key === key) || null;
+                const endpoint = activeThread ? activeThread.endpoint : normalizePhoneEndpoint(key.split('|').pop());
+                activeThreadEndpoint = endpoint;
 
                 if (numberEl) numberEl.textContent = activeThread ? activeThread.displayNumber : endpoint;
-                if (nameEl) nameEl.textContent = activeThread?.contactName || '';
+                if (nameEl) {
+                    nameEl.textContent = activeThread
+                        ? [activeThread.contactName, FED_NODES.length > 1 ? activeThread.nodeName : ''].filter(Boolean).join(' · ')
+                        : '';
+                }
                 if (avatarEl) {
                     const letter = (activeThread?.contactName ? activeThread.contactName.trim()[0] : endpoint.replace(/^\+/, '')[0] || '#').toUpperCase();
                     avatarEl.textContent = letter;
                 }
 
+                const preferredKey = activeThread
+                    ? `${activeThread.nodeSite}:${activeThread.dongleId}`
+                    : (selectedDongleId || '');
+
                 if (replyDongleSelect) {
                     replyDongleSelect.innerHTML = '';
                     const devs = (loadedDevices && loadedDevices.length > 0) ? loadedDevices : [];
                     if (devs.length > 0) {
+                        let preferredMatched = false;
                         devs.forEach(d => {
                             const opt = document.createElement('option');
-                            const id = d.ID || 'dongle0';
-                            opt.value = id;
-                            opt.textContent = `${id} (${d.Number && d.Number !== 'Unknown' ? d.Number : 'No SIM'})`;
-                            if (selectedDongleId && selectedDongleId.toLowerCase() === id.toLowerCase()) {
+                            const optionKey = devKey(d);
+                            const nodePrefix = FED_NODES.length > 1 ? `${d.nodeName || fedNodeName(d.nodeSite)} · ` : '';
+                            opt.value = optionKey;
+                            opt.textContent = `${nodePrefix}${d.ID || 'dongle0'} (${d.Number && d.Number !== 'Unknown' ? d.Number : 'No SIM'})`;
+                            if (preferredKey && optionKey === preferredKey) {
                                 opt.selected = true;
-                            } else if (activeThread && activeThread.dongleId && activeThread.dongleId.toLowerCase() === id.toLowerCase()) {
-                                opt.selected = true;
+                                preferredMatched = true;
                             }
                             replyDongleSelect.appendChild(opt);
                         });
+                        if (!preferredMatched && activeThread) {
+                            const fallback = devs.find(d => String(d.ID || '') === String(activeThread.dongleId || ''));
+                            if (fallback) replyDongleSelect.value = devKey(fallback);
+                        }
                     } else {
-                        const fallbackId = (activeThread && activeThread.dongleId) || selectedDongleId || 'dongle0';
+                        const fallbackKey = preferredKey || `${FED_LOCAL_SITE}:dongle0`;
                         const opt = document.createElement('option');
-                        opt.value = fallbackId;
-                        opt.textContent = fallbackId;
+                        opt.value = fallbackKey;
+                        opt.textContent = fallbackKey;
                         opt.selected = true;
                         replyDongleSelect.appendChild(opt);
                     }
@@ -4769,7 +4974,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const nameEl = document.getElementById('sms-active-contact-name');
                 const avatarEl = document.getElementById('sms-active-avatar');
 
-                if (!activeThreadEndpoint) {
+                if (!activeThreadKey) {
                     stream.innerHTML = `<div class="text-center py-16 text-zinc-500 text-xs italic" id="sms-no-thread-selected">${isRtl ? 'اختر محادثة لعرض سجل الرسائل' : 'Select a conversation to view chat history'}</div>`;
                     if (numberEl) numberEl.textContent = '-';
                     if (nameEl) nameEl.textContent = '';
@@ -4777,8 +4982,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     return;
                 }
 
-                const threads = groupSmsIntoThreads(allSmsMessages, selectedDongleId);
-                const activeThread = threads.find(t => t.endpoint === activeThreadEndpoint);
+                const threads = groupSmsIntoThreads(allSmsMessages);
+                const activeThread = threads.find(t => t.key === activeThreadKey);
                 const messages = activeThread ? activeThread.messages : [];
                 if (messages.length === 0) {
                     stream.innerHTML = `<div class="text-center py-16 text-zinc-500 text-xs italic">${isRtl ? 'لا توجد رسائل سابقة في هذه المحادثة. يمكنك إرسال رسالة الآن.' : 'No messages in this thread yet. Send a message to start chatting.'}</div>`;
@@ -4844,25 +5049,31 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const message = input.value.trim();
                 if (!message) return;
 
-                const targetDongle = (dongleSelect && dongleSelect.value) ? dongleSelect.value : (selectedDongleId || 'dongle0');
+                const targetKey = (dongleSelect && dongleSelect.value) ? dongleSelect.value : (selectedDongleId || '');
+                const targetDev = devByKey(targetKey);
+                if (!targetDev) {
+                    showToast(isRtl ? 'فشل الإرسال' : 'Send Failed', isRtl ? 'اختر مودماً صالحاً للإرسال' : 'Select a valid dongle to send from', 'error');
+                    return;
+                }
                 if (sendBtn) sendBtn.disabled = true;
 
                 try {
-                    const res = await fetch('/api/gsm-dongles/send-sms', {
+                    const res = await fedDongleFetch('/api/gsm-dongles/send-sms', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            dongleId: targetDongle,
+                            dongleId: targetDev.ID,
                             to: activeThreadEndpoint,
                             message: message
                         })
-                    });
+                    }, targetDev.nodeSite);
                     const data = await res.json();
                     if (data.success) {
                         input.value = '';
                         const counter = document.getElementById('sms-composer-counter');
                         if (counter) counter.textContent = '0/160';
                         showToast(isRtl ? 'تم الإرسال' : 'Sent', isRtl ? 'تم إرسال الرسالة بنجاح' : 'SMS sent successfully', 'success');
+                        setTimeout(() => { if (typeof window.loadSmsInbox === 'function') window.loadSmsInbox(); }, 1200);
                     } else {
                         showToast(isRtl ? 'فشل الإرسال' : 'Send Failed', data.error || 'Failed to send SMS', 'error');
                     }
@@ -4945,8 +5156,12 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 // Keep the new endpoint alive across the thread-list re-render: it
                 // has no history yet, so renderSmsThreads() would otherwise clear
                 // it and re-open the previous conversation.
+                const sourceDev = devByKey(selectedDongleId) || loadedDevices[0] || null;
+                const sourceSite = sourceDev ? String(sourceDev.nodeSite || FED_LOCAL_SITE) : FED_LOCAL_SITE;
+                const sourceDongle = sourceDev ? String(sourceDev.ID || 'dongle0') : 'dongle0';
                 pendingNewChatEndpoint = clean;
-                selectSmsThread(clean, true);
+                pendingNewChatKey = smsThreadKey(sourceSite, sourceDongle, clean);
+                selectSmsThread(pendingNewChatKey, true);
                 if (input) input.value = '';
                 window.closeNewChatField();
             };
@@ -4991,19 +5206,31 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 });
                 if (!ok) return;
 
+                const keyParts = String(activeThreadKey || '').split('|');
+                const threadSite = keyParts[0] || FED_LOCAL_SITE;
+                const threadDongle = keyParts[1] || 'all';
+                const threadEndpoint = activeThreadEndpoint;
+
                 try {
-                    const res = await fetch('/api/gsm-dongles/delete-thread', {
+                    const res = await fedDongleFetch('/api/gsm-dongles/delete-thread', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            endpoint: activeThreadEndpoint,
-                            dongleId: selectedDongleId || 'all'
+                            endpoint: threadEndpoint,
+                            dongleId: threadDongle
                         })
-                    });
+                    }, threadSite);
                     const data = await res.json();
                     if (data.success) {
-                        allSmsMessages = allSmsMessages.filter(m => normalizePhoneEndpoint(m.endpoint || m.sender || m.recipient) !== activeThreadEndpoint);
+                        allSmsMessages = allSmsMessages.filter(m => !(
+                            smsMessageNode(m) === String(threadSite)
+                            && String(m.dongleId || '').toLowerCase() === String(threadDongle).toLowerCase()
+                            && normalizePhoneEndpoint(m.endpoint || m.sender || m.recipient) === threadEndpoint
+                        ));
                         activeThreadEndpoint = null;
+                        activeThreadKey = null;
+                        pendingNewChatEndpoint = null;
+                        pendingNewChatKey = null;
                         renderSmsThreads();
                         renderChatMessages();
                         showToast(isRtl ? 'تم الحذف' : 'Deleted', isRtl ? 'تم حذف المحادثة بنجاح' : 'Thread deleted successfully', 'success');
@@ -5057,6 +5284,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     } else {
                         allSmsMessages = [];
                     }
+                    if (Array.isArray(data.nodes)) setFedNodes(data.nodes);
                     renderSmsThreads();
                     renderChatMessages();
                 } catch (e) {
@@ -5073,35 +5301,53 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 });
                 if (!ok) return;
                 try {
-                    await fetch('/api/gsm-dongles/clear-sms', { method: 'POST' });
+                    await Promise.all(FED_NODES.map(node => fedDongleFetch('/api/gsm-dongles/clear-sms', { method: 'POST' }, node.site_code).catch(() => null)));
+                    allSmsMessages = [];
+                    activeThreadEndpoint = null;
+                    activeThreadKey = null;
+                    renderSmsThreads();
+                    renderChatMessages();
                 } catch (e) {
                     console.error("Failed to clear SMS inbox:", e);
                 }
             };
 
-            // Real-time SMS receivers
+            // Real-time SMS receivers (this PBX only; peers arrive via the poll)
             if (socket) {
                 socket.on('newSms', (sms) => {
-                    allSmsMessages.unshift(sms);
-                    showSmsToast(sms);
+                    const tagged = {
+                        ...sms,
+                        nodeSite: FED_LOCAL_SITE,
+                        nodeName: fedNodeName(FED_LOCAL_SITE),
+                        isRemote: false
+                    };
+                    allSmsMessages.unshift(tagged);
+                    showSmsToast(tagged);
                     renderSmsThreads();
-                    const msgEndpoint = normalizePhoneEndpoint(sms.endpoint || sms.sender || sms.recipient);
-                    if (activeThreadEndpoint && msgEndpoint === activeThreadEndpoint) {
+                    const msgKey = smsThreadKey(FED_LOCAL_SITE, tagged.dongleId, tagged.endpoint || tagged.sender || tagged.recipient);
+                    if (activeThreadKey === msgKey) {
                         renderChatMessages();
                     }
                 });
 
                 socket.on('smsCleared', () => {
-                    allSmsMessages = [];
+                    allSmsMessages = allSmsMessages.filter(m => smsMessageNode(m) !== FED_LOCAL_SITE);
                     activeThreadEndpoint = null;
+                    activeThreadKey = null;
                     renderSmsThreads();
                     renderChatMessages();
                 });
 
                 socket.on('smsThreadDeleted', (data) => {
                     const ep = normalizePhoneEndpoint(data.endpoint);
-                    allSmsMessages = allSmsMessages.filter(m => normalizePhoneEndpoint(m.endpoint || m.sender || m.recipient) !== ep);
-                    if (activeThreadEndpoint === ep) activeThreadEndpoint = null;
+                    allSmsMessages = allSmsMessages.filter(m => !(
+                        smsMessageNode(m) === FED_LOCAL_SITE
+                        && normalizePhoneEndpoint(m.endpoint || m.sender || m.recipient) === ep
+                    ));
+                    if (activeThreadEndpoint === ep && String(activeThreadKey || '').startsWith(FED_LOCAL_SITE + '|')) {
+                        activeThreadEndpoint = null;
+                        activeThreadKey = null;
+                    }
                     renderSmsThreads();
                     renderChatMessages();
                 });
@@ -5372,8 +5618,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             window.openAtDiagConsole = function(dongleId) {
                 if (!isRootUser) return;
-                activeAtDiagDongleId = String(dongleId || '').toLowerCase().trim();
-                if (atDiagTargetBadge) atDiagTargetBadge.textContent = activeAtDiagDongleId;
+                const ctx = deviceContext(dongleId);
+                activeAtDiagDongleId = ctx.key;
+                if (atDiagTargetBadge) atDiagTargetBadge.textContent = FED_NODES.length > 1
+                    ? `${ctx.rawId} · ${fedNodeName(ctx.site)}`
+                    : ctx.rawId;
                 if (atDiagModal && atDiagModalCard) {
                     atDiagModal.classList.remove('opacity-0', 'pointer-events-none');
                     atDiagModalCard.classList.remove('scale-95', 'opacity-0');
@@ -5407,7 +5656,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             window.runAtDiag = function(dongleId, command) {
                 if (!isRootUser) return;
-                activeAtDiagDongleId = String(dongleId || '').toLowerCase().trim();
+                const ctx = deviceContext(dongleId);
+                activeAtDiagDongleId = ctx.key;
                 openAtDiagConsole(activeAtDiagDongleId);
                 executeAtDiag(command);
             };
@@ -5416,17 +5666,18 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 if (!isRootUser || !activeAtDiagDongleId) return;
                 const cmd = String(command || '').trim();
                 if (!cmd) return;
+                const ctx = deviceContext(activeAtDiagDongleId);
 
                 if (atDiagInput) atDiagInput.value = cmd;
                 if (atDiagLoading) atDiagLoading.classList.remove('hidden');
                 if (atDiagResultSection) atDiagResultSection.classList.add('hidden');
                 if (atDiagSubmitBtn) atDiagSubmitBtn.disabled = true;
 
-                fetch(`/api/gsm-dongles/at-diagnostic/${encodeURIComponent(activeAtDiagDongleId)}`, {
+                fedDongleFetch(`/api/gsm-dongles/at-diagnostic/${encodeURIComponent(ctx.rawId)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ command: cmd })
-                })
+                }, ctx.site)
                 .then(res => res.json())
                 .then(data => {
                     if (atDiagLoading) atDiagLoading.classList.add('hidden');
@@ -5535,8 +5786,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             // Edit SIM phone number mapping action
             window.editSimNumber = function(dongleId, imsi, currentVal) {
+                const ctx = deviceContext(dongleId);
+                const rawId = ctx.rawId;
                 if ((!currentVal || currentVal === 'Unknown' || currentVal === '-') && dongleId) {
-                    const el = document.getElementById('display-num-' + dongleId);
+                    const el = document.getElementById('display-num-' + ctx.key);
                     if (el && el.textContent && !el.textContent.includes('Unknown') && !el.textContent.includes('-')) {
                         currentVal = el.textContent.trim();
                     }
@@ -5552,16 +5805,16 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                 // Removed 11-digit restriction to accept any entered SIM phone number string verbatim
                 
-                const displaySpan = document.getElementById('display-num-' + dongleId);
+                const displaySpan = document.getElementById('display-num-' + ctx.key);
                 if (displaySpan) displaySpan.innerHTML = '<span class="text-zinc-500 italic">Saving...</span>';
                 
-                showToast(dongleId, isRtl ? 'جاري حفظ الرقم...' : 'Saving number and sending AT commands...', 'info');
+                showToast(rawId, isRtl ? 'جاري حفظ الرقم...' : 'Saving number and sending AT commands...', 'info');
                 
-                fetch('/api/gsm-dongles/save-number', {
+                fedDongleFetch('/api/gsm-dongles/save-number', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ imsi, number: trimmed, dongleId })
-                })
+                    body: JSON.stringify({ imsi, number: trimmed, dongleId: rawId })
+                }, ctx.site)
                 .then(res => res.json())
                 .then(data => {
                     if (data.results) {
@@ -5570,20 +5823,20 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             return status + ' ' + r.step + (r.error ? ': ' + r.error : '');
                         }).join('\n');
                         const isAtSuccess = data.atSuccess !== false && !data.results.some(r => r.error);
-                        const toastTitle = dongleId + ' - ' + (isAtSuccess
+                        const toastTitle = rawId + ' - ' + (isAtSuccess
                             ? (isRtl ? 'تم الحفظ في الشريحة واللوحة' : 'Saved to SIM Card & Dashboard')
                             : (isRtl ? 'تم الحفظ في اللوحة (تحذير أستريسك)' : 'Saved to Dashboard (Asterisk Warning)'));
                         showToast(toastTitle, details, isAtSuccess ? 'success' : 'warning');
                     } else if (data.success) {
-                        showToast(dongleId, isRtl ? 'تم الحفظ في اللوحة' : 'Saved to Dashboard', 'success');
+                        showToast(rawId, isRtl ? 'تم الحفظ في اللوحة' : 'Saved to Dashboard', 'success');
                     } else {
-                        showToast(dongleId, (isRtl ? 'فشل الحفظ: ' : 'Failed: ') + (data.error || 'Unknown error'), 'error');
+                        showToast(rawId, (isRtl ? 'فشل الحفظ: ' : 'Failed: ') + (data.error || 'Unknown error'), 'error');
                     }
                     refreshDevicesList();
                 })
                 .catch(err => {
                     console.error("Error saving SIM number:", err);
-                    showToast(dongleId, isRtl ? 'خطأ في الاتصال' : 'Connection error', 'error');
+                    showToast(rawId, isRtl ? 'خطأ في الاتصال' : 'Connection error', 'error');
                     refreshDevicesList();
                 });
             };
@@ -5591,22 +5844,24 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             // Reload single dongle action
             // 1. Reload / Restart single dongle action
             window.reloadDongle = async function(id) {
+                const ctx = deviceContext(id);
+                const rawId = ctx.rawId;
                 const ok = await window.sokratConfirm({
                     title: isRtl ? 'إعادة تشغيل الشريحة' : 'Restart Dongle',
-                    message: (isRtl ? 'هل أنت متأكد من إعادة تشغيل الشريحة ' : 'Are you sure you want to restart ') + id + '?',
+                    message: (isRtl ? 'هل أنت متأكد من إعادة تشغيل الشريحة ' : 'Are you sure you want to restart ') + rawId + '?',
                     confirmText: isRtl ? 'إعادة تشغيل' : 'Restart',
                     type: 'warning'
                 });
                 if (!ok) return;
                 const btn = document.getElementById('reloadBtn-' + id);
                 if (btn) btn.disabled = true;
-                showToast(isRtl ? 'إعادة تشغيل' : 'Restarting', (isRtl ? 'جاري إعادة تشغيل الشريحة ' : 'Restarting dongle ') + id + '...', 'info');
+                showToast(isRtl ? 'إعادة تشغيل' : 'Restarting', (isRtl ? 'جاري إعادة تشغيل الشريحة ' : 'Restarting dongle ') + rawId + '...', 'info');
 
-                fetch('/api/gsm-dongles/reload/' + id, { method: 'POST' })
+                fedDongleFetch('/api/gsm-dongles/reload/' + encodeURIComponent(rawId), { method: 'POST' }, ctx.site)
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
-                            showToast(isRtl ? 'نجاح' : 'Success', words.reloadedSuccess + ' (' + id + ')', 'success');
+                            showToast(isRtl ? 'نجاح' : 'Success', words.reloadedSuccess + ' (' + rawId + ')', 'success');
                             refreshDevicesList();
                         } else {
                             showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Unknown server error', 'error');
@@ -5618,22 +5873,24 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             // 2. Reboot modem firmware via AT command (AT+CFUN=1,1)
             window.rebootModem = async function(id) {
+                const ctx = deviceContext(id);
+                const rawId = ctx.rawId;
                 const ok = await window.sokratConfirm({
                     title: isRtl ? 'إعادة تشغيل مودم الجهاز' : 'Reboot Modem Firmware',
-                    message: (isRtl ? 'هل أنت متأكد من إعادة تشغيل مودم الجهاز ' : 'Are you sure you want to reboot modem ') + id + '?',
+                    message: (isRtl ? 'هل أنت متأكد من إعادة تشغيل مودم الجهاز ' : 'Are you sure you want to reboot modem ') + rawId + '?',
                     confirmText: isRtl ? 'إعادة تشغيل' : 'Reboot',
                     type: 'warning'
                 });
                 if (!ok) return;
                 const btn = document.getElementById('rebootBtn-' + id);
                 if (btn) btn.disabled = true;
-                showToast(isRtl ? 'إعادة تشغيل المودم' : 'Modem Reboot', (isRtl ? 'جاري إرسال أمر إعادة تشغيل المودم ' : 'Sending modem reboot command to ') + id + '...', 'warning');
+                showToast(isRtl ? 'إعادة تشغيل المودم' : 'Modem Reboot', (isRtl ? 'جاري إرسال أمر إعادة تشغيل المودم ' : 'Sending modem reboot command to ') + rawId + '...', 'warning');
 
-                fetch('/api/gsm-dongles/reboot-modem/' + id, { method: 'POST' })
+                fedDongleFetch('/api/gsm-dongles/reboot-modem/' + encodeURIComponent(rawId), { method: 'POST' }, ctx.site)
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
-                            showToast(isRtl ? 'نجاح' : 'Success', (isRtl ? 'تم إرسال أمر إعادة تشغيل المودم لـ ' : 'Modem reboot command sent to ') + id, 'success');
+                            showToast(isRtl ? 'نجاح' : 'Success', (isRtl ? 'تم إرسال أمر إعادة تشغيل المودم لـ ' : 'Modem reboot command sent to ') + rawId, 'success');
                             setTimeout(refreshDevicesList, 3000);
                         } else {
                             showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Modem reboot failed', 'error');
@@ -5645,22 +5902,24 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
             // 3. Virtual USB Unplug & Re-plug (Kernel sysfs unbind/bind)
             window.virtualReplug = async function(id) {
+                const ctx = deviceContext(id);
+                const rawId = ctx.rawId;
                 const ok = await window.sokratConfirm({
                     title: isRtl ? 'محاكاة إعادة توصيل USB' : 'Virtual USB Re-plug',
-                    message: (isRtl ? 'هل أنت متأكد من محاكاة إعادة توصيل USB لـ ' : 'Are you sure you want to simulate virtual USB re-plug for ') + id + '?',
+                    message: (isRtl ? 'هل أنت متأكد من محاكاة إعادة توصيل USB لـ ' : 'Are you sure you want to simulate virtual USB re-plug for ') + rawId + '?',
                     confirmText: isRtl ? 'إعادة توصيل' : 'Re-plug',
                     type: 'danger'
                 });
                 if (!ok) return;
                 const btn = document.getElementById('virtualReplugBtn-' + id);
                 if (btn) btn.disabled = true;
-                showToast(isRtl ? 'إعادة توصيل USB' : 'Virtual USB Re-plug', (isRtl ? 'جاري فصل وإعادة توصيل USB لـ ' : 'Simulating virtual USB re-plug for ') + id + '...', 'warning');
+                showToast(isRtl ? 'إعادة توصيل USB' : 'Virtual USB Re-plug', (isRtl ? 'جاري فصل وإعادة توصيل USB لـ ' : 'Simulating virtual USB re-plug for ') + rawId + '...', 'warning');
 
-                fetch('/api/gsm-dongles/virtual-replug/' + id, { method: 'POST' })
+                fedDongleFetch('/api/gsm-dongles/virtual-replug/' + encodeURIComponent(rawId), { method: 'POST' }, ctx.site)
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
-                            showToast(isRtl ? 'نجاح' : 'Success', (isRtl ? 'تمت محاكاة إعادة توصيل USB بنجاح لـ ' : 'Virtual USB re-plug executed for ') + id, 'success');
+                            showToast(isRtl ? 'نجاح' : 'Success', (isRtl ? 'تمت محاكاة إعادة توصيل USB بنجاح لـ ' : 'Virtual USB re-plug executed for ') + rawId, 'success');
                             setTimeout(refreshDevicesList, 4000);
                         } else {
                             showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Virtual re-plug failed', 'error');
@@ -5673,6 +5932,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             // 4. Populate IMEI & IMSI in /etc/asterisk/dongle.conf
             window.populateDongleHardware = function(id, imei, imsi) {
                 return (async () => {
+                const ctx = deviceContext(id);
+                const rawId = ctx.rawId;
                 const cleanImei = String(imei || '').trim();
                 const cleanImsi = String(imsi || '').trim();
                 if (!cleanImei || cleanImei === '-' || cleanImei === 'Unknown' || !cleanImsi || cleanImsi === '-' || cleanImsi === 'Unknown') {
@@ -5680,7 +5941,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     return;
                 }
 
-                const confirmMsg = `${words.populateHardwareConfirm || (isRtl ? 'هل تريد حفظ كود IMEI و IMSI في ملف dongle.conf للشريحة ' : 'Do you want to populate IMEI and IMSI in dongle.conf for ')}${id}?\n\nIMEI: ${cleanImei}\nIMSI: ${cleanImsi}`;
+                const confirmMsg = `${words.populateHardwareConfirm || (isRtl ? 'هل تريد حفظ كود IMEI و IMSI في ملف dongle.conf للشريحة ' : 'Do you want to populate IMEI and IMSI in dongle.conf for ')}${rawId}${FED_NODES.length > 1 ? ' · ' + fedNodeName(ctx.site) : ''}?\n\nIMEI: ${cleanImei}\nIMSI: ${cleanImsi}`;
                 const ok = await window.sokratConfirm({
                     title: isRtl ? 'حفظ معرفات المودم' : 'Populate Hardware Identifiers',
                     message: confirmMsg,
@@ -5691,17 +5952,17 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                 const btn = document.getElementById('populateBtn-' + id);
                 if (btn) btn.disabled = true;
-                showToast(isRtl ? 'تثبيت المعرفات' : 'Populating Hardware IDs', (isRtl ? 'جاري حفظ IMEI و IMSI في dongle.conf لـ ' : 'Writing IMEI & IMSI to dongle.conf for ') + id + '...', 'info');
+                showToast(isRtl ? 'تثبيت المعرفات' : 'Populating Hardware IDs', (isRtl ? 'جاري حفظ IMEI و IMSI في dongle.conf لـ ' : 'Writing IMEI & IMSI to dongle.conf for ') + rawId + '...', 'info');
 
-                fetch('/api/gsm-dongles/populate-hardware/' + encodeURIComponent(id), {
+                fedDongleFetch('/api/gsm-dongles/populate-hardware/' + encodeURIComponent(rawId), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ imei: cleanImei, imsi: cleanImsi })
-                })
+                }, ctx.site)
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
-                            showToast(isRtl ? 'نجاح' : 'Success', (words.populateHardwareSuccess || (isRtl ? 'تم حفظ كود IMEI و IMSI بنجاح' : 'Populated IMEI and IMSI in dongle.conf successfully')) + ' (' + id + ')', 'success');
+                            showToast(isRtl ? 'نجاح' : 'Success', (words.populateHardwareSuccess || (isRtl ? 'تم حفظ كود IMEI و IMSI بنجاح' : 'Populated IMEI and IMSI in dongle.conf successfully')) + ' (' + rawId + ')', 'success');
                             refreshDevicesList();
                         } else {
                             showToast(isRtl ? 'خطأ' : 'Error', data.error || 'Failed to populate hardware IDs', 'error');
@@ -5756,10 +6017,12 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             // Send USSD request action
             ussdForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                const target = ussdTarget.value;
+                const targetKey = ussdTarget.value;
                 const code = ussdInput.value;
                 
-                if (!target || !code) return;
+                if (!targetKey || !code) return;
+                const targetCtx = deviceContext(targetKey);
+                const target = targetCtx.rawId;
                 
                 btnLabel.textContent = words.sending;
                 btnSpinner.classList.remove('hidden');
@@ -5771,11 +6034,11 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 terminalScreen.appendChild(cmdLine);
                 terminalScreen.scrollTop = terminalScreen.scrollHeight;
 
-                fetch('/api/gsm-dongles/ussd', {
+                fedDongleFetch('/api/gsm-dongles/ussd', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ dongle: target, code: code })
-                })
+                }, targetCtx.site)
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
@@ -5785,6 +6048,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         const respLine = document.createElement('div');
                         respLine.className = 'ussd-err-box font-bold p-2.5 rounded-lg border mt-1';
                         respLine.textContent = `[System Error] ${data.error || words.sendUssdError}`;
+                        terminalScreen.appendChild(respLine);
                         terminalScreen.scrollTop = terminalScreen.scrollHeight;
                         showToast(target + ' (Error)', data.error || words.sendUssdError, 'error');
                     }
@@ -5806,7 +6070,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             // WebSocket live USSD responses capture
             if (socket) {
                 socket.on('ussdResponse', (data) => {
-                    if (ussdTarget.value.toLowerCase() === data.dongleId.toLowerCase()) {
+                    const ctx = deviceContext(ussdTarget.value);
+                    if (ctx.site === FED_LOCAL_SITE && ctx.rawId.toLowerCase() === String(data.dongleId || '').toLowerCase()) {
                         appendUssdResponse(data.logTime, data.text, true);
                     }
                 });
@@ -5902,8 +6167,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                     .then(data => {
                         if (!data || !data.success || !Array.isArray(data.devices)) return;
 
-                        if (Array.isArray(data.remoteNodes) && typeof window.renderFederationRemoteDongles === 'function') {
-                            window.renderFederationRemoteDongles(data.remoteNodes);
+                        if (Array.isArray(data.nodes)) {
+                            setFedNodes(data.nodes);
                         }
 
                         const newSignature = JSON.stringify(data.devices);
@@ -5916,9 +6181,9 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                         loadedDevices = data.devices;
                         window.loadedDevices = loadedDevices;
                         const currentSelected = selectedDongleId || (ussdTarget ? ussdTarget.value : '');
-                        const nextSelected = loadedDevices.some(device => String(device.ID || '') === String(currentSelected || ''))
-                            ? String(currentSelected)
-                            : (loadedDevices[0] ? String(loadedDevices[0].ID || '') : '');
+                        const nextSelected = devByKey(currentSelected)
+                            ? devKey(devByKey(currentSelected))
+                            : (loadedDevices[0] ? devKey(loadedDevices[0]) : '');
 
                         function populateTargetDropdown(el, selectedVal, fallbackNumber) {
                             if (!el) return;
@@ -5933,9 +6198,13 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                             loadedDevices.forEach(device => {
                                 const option = document.createElement('option');
-                                option.value = String(device.ID || '');
-                                option.textContent = `${device.ID || ''} (${device.Number || fallbackNumber})`;
-                                option.selected = option.value === selectedVal;
+                                const optionKey = devKey(device);
+                                const nodePrefix = FED_NODES.length > 1
+                                    ? `${device.nodeName || fedNodeName(device.nodeSite)} · `
+                                    : '';
+                                option.value = optionKey;
+                                option.textContent = `${nodePrefix}${device.ID || ''} (${device.Number || fallbackNumber})`;
+                                option.selected = optionKey === selectedVal;
                                 el.appendChild(option);
                             });
                             if (selectedVal) {
@@ -5957,6 +6226,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                             selectDevice(nextSelected, { skipSms: (previousSelected === nextSelected) });
                         } else {
                             selectedDongleId = null;
+                            selectedDongleSite = FED_LOCAL_SITE;
                             updateSmsInboxTitle();
                             showEmptySmsInbox();
                         }
@@ -5968,32 +6238,39 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
             }
 
             window.resetServerUsbPorts = async function(btn) {
+                const nodes = auditNodeList();
+                const scopeLabel = nodes.length > 1
+                    ? nodes.map(node => node.node_name || ('Site ' + node.site_code)).join(', ')
+                    : '';
                 const ok = await window.sokratConfirm({
                     title: isRtl ? 'إعادة تعيين منافذ USB' : 'Reset All USB Ports',
-                    message: isRtl ? 'هل أنت متأكد من إعادة تعيين كافة منافذ USB في السيرفر؟ قد يؤدي هذا لفصل مؤقت للمودمات.' : 'Are you sure you want to reset all USB ports on the server? This may temporarily disconnect attached cellular modems.',
+                    message: isRtl
+                        ? ('هل أنت متأكد من إعادة تعيين كافة منافذ USB' + (scopeLabel ? ' على: ' + scopeLabel : ' في السيرفر') + '؟ قد يؤدي هذا لفصل مؤقت للمودمات.')
+                        : ('Are you sure you want to reset all USB ports' + (scopeLabel ? ' on: ' + scopeLabel : ' on the server') + '? This may temporarily disconnect attached cellular modems.'),
                     confirmText: isRtl ? 'إعادة تعيين' : 'Reset USB',
                     type: 'danger'
                 });
                 if (!ok) return;
                 if (btn) btn.disabled = true;
-                showToast(isRtl ? 'إعادة تعيين USB' : 'Resetting USB', isRtl ? 'جاري إعادة تعيين كافة منافذ USB في السيرفر...' : 'Resetting all USB ports on the server...', 'warning');
+                showToast(isRtl ? 'إعادة تعيين USB' : 'Resetting USB', isRtl ? 'جاري إعادة تعيين كافة منافذ USB...' : 'Resetting all USB ports...', 'warning');
 
-                fetch('/api/gsm-dongles/reset-usb-port', {
+                Promise.all(nodes.map(node => fedDongleFetch('/api/gsm-dongles/reset-usb-port', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ dongleId: 'all' })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast(isRtl ? 'نجاح' : 'Success', isRtl ? 'تمت إعادة تعيين كافة منافذ USB بنجاح.' : 'All USB ports reset successfully.', 'success');
+                }, node.site_code)
+                    .then(res => res.json())
+                    .catch(err => ({ success: false, error: err.message }))))
+                    .then(results => {
+                        const failed = results.filter(r => !r || !r.success);
+                        if (failed.length === 0) {
+                            showToast(isRtl ? 'نجاح' : 'Success', isRtl ? 'تمت إعادة تعيين كافة منافذ USB بنجاح.' : 'All USB ports reset successfully.', 'success');
+                        } else {
+                            showToast(isRtl ? 'تحذير' : 'Warning', failed[0].error || 'USB reset failed on some PBXs', 'error');
+                        }
                         refreshDevicesList();
-                    } else {
-                        showToast(isRtl ? 'خطأ' : 'Error', data.error || 'USB reset failed', 'error');
-                    }
-                })
-                .catch(err => showToast(isRtl ? 'خطأ شبكة' : 'Network Error', err.message, 'error'))
-                .finally(() => { if (btn) btn.disabled = false; });
+                    })
+                    .finally(() => { if (btn) btn.disabled = false; });
             };
 
             if (globalResetUsbBtn) {
@@ -6002,6 +6279,19 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 });
             }
             setInterval(refreshDevicesList, 3000);
+
+            // Remote SMS arrives through the central poll (the socket only
+            // carries this PBX's events), so refresh the merged inbox on a
+            // timer whenever more than one PBX is in scope.
+            if (FED_NODES.some(node => !node.is_local)) {
+                // Seed the peer rows immediately instead of waiting for the
+                // first three second poll, then keep the unified inbox fresh.
+                refreshDevicesList(true);
+                if (typeof window.loadSmsInbox === 'function') window.loadSmsInbox();
+                setInterval(function () {
+                    if (typeof window.loadSmsInbox === 'function') window.loadSmsInbox();
+                }, 8000);
+            }
 
             // -----------------------------------------------------------------
             // Dongle & SIM State Duration Analytics Controller
@@ -6019,6 +6309,37 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 return `${y}-${m}-${d}T${h}:${min}`;
             }
 
+            function formatReportDuration(sec) {
+                const value = Number(sec) || 0;
+                if (value <= 0) return '0s';
+                const h = Math.floor(value / 3600);
+                const m = Math.floor((value % 3600) / 60);
+                const secs = value % 60;
+                const parts = [];
+                if (h > 0) parts.push(`${h}h`);
+                if (m > 0 || h > 0) parts.push(`${m}m`);
+                parts.push(`${secs}s`);
+                return parts.join(' ');
+            }
+
+            function reportNodeList() {
+                return (FED_NODES && FED_NODES.length > 0)
+                    ? FED_NODES
+                    : [{ site_code: FED_LOCAL_SITE, node_name: FED_LOCAL_NODE_NAME, is_local: true, status: 'online' }];
+            }
+
+            function reportCompositeKey(siteCode, value) {
+                return `${String(siteCode)}|${String(value)}`;
+            }
+
+            function splitReportCompositeKey(key) {
+                const raw = String(key || '');
+                if (raw === 'ALL' || raw === '') return { site: '', value: 'ALL' };
+                const sep = raw.indexOf('|');
+                if (sep < 0) return { site: '', value: raw };
+                return { site: raw.slice(0, sep), value: raw.slice(sep + 1) };
+            }
+
             function updateReportDropdowns() {
                 const dSelect = document.getElementById('reportDongleSelect');
                 const sSelect = document.getElementById('reportSimSelect');
@@ -6030,16 +6351,23 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const dOptions = ['<option value="ALL">' + (isRtl ? 'جميع الأجهزة (الكل)' : 'All Dongles (ALL)') + '</option>'];
                 const sOptions = ['<option value="ALL">' + (isRtl ? 'جميع الشرائح (الكل)' : 'All SIM Numbers (ALL)') + '</option>'];
                 const addedSims = new Set();
+                const multiNode = reportNodeList().length > 1;
 
-                loadedDevices.forEach(dev => {
+                orderDevicesByNodes(loadedDevices).forEach(dev => {
+                    const site = String(dev.nodeSite || FED_LOCAL_SITE);
+                    const nodePrefix = multiNode ? `${dev.nodeName || fedNodeName(site)} · ` : '';
                     const dId = String(dev.ID || '').trim();
                     if (dId) {
-                        dOptions.push(`<option value="${escapeHtml(dId)}"${curD.toLowerCase() === dId.toLowerCase() ? ' selected' : ''}>${escapeHtml(dId)}</option>`);
+                        const optionKey = devKey(dev);
+                        dOptions.push(`<option value="${escapeHtml(optionKey)}"${curD === optionKey ? ' selected' : ''}>${escapeHtml(nodePrefix + dId)}</option>`);
                     }
                     const sNum = String(dev.Number || '').trim();
-                    if (sNum && sNum !== 'Unknown' && sNum !== '-' && !addedSims.has(sNum)) {
-                        addedSims.add(sNum);
-                        sOptions.push(`<option value="${escapeHtml(sNum)}"${curS === sNum ? ' selected' : ''}>${escapeHtml(sNum)}</option>`);
+                    if (sNum && sNum !== 'Unknown' && sNum !== '-') {
+                        const simKey = reportCompositeKey(site, sNum);
+                        if (!addedSims.has(simKey)) {
+                            addedSims.add(simKey);
+                            sOptions.push(`<option value="${escapeHtml(simKey)}"${curS === simKey ? ' selected' : ''}>${escapeHtml(nodePrefix + sNum)}</option>`);
+                        }
                     }
                 });
 
@@ -6211,7 +6539,26 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 }
 
                 let html = '';
+                const reportNodeCount = new Set(items.map(item => String(item.nodeSite || FED_LOCAL_SITE))).size;
+                let renderedReportNode = null;
                 items.forEach(item => {
+                    const itemSite = String(item.nodeSite || FED_LOCAL_SITE);
+                    if (reportNodeCount > 1 && itemSite !== renderedReportNode) {
+                        renderedReportNode = itemSite;
+                        const node = fedNode(itemSite) || {};
+                        const status = item.nodeStatus || node.status || 'online';
+                        const dotClass = status === 'online' ? 'bg-emerald-400' : (status === 'offline' ? 'bg-rose-500' : 'bg-amber-400');
+                        html += `
+                            <tr class="bg-[var(--bg-card)]/70">
+                                <td colspan="9" class="py-2 px-4">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}"></span>
+                                        <span class="text-[11px] font-extrabold text-[var(--text-primary)] truncate">${escapeHtml(item.nodeName || node.node_name || ('Site ' + itemSite))}</span>
+                                        <span class="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site ${escapeHtml(itemSite)}</span>
+                                    </div>
+                                </td>
+                            </tr>`;
+                    }
                     const name = currentReportTab === 'dongles' ? (item.dongle_name || '-') : (item.sim_number || '-');
                     const secondary = currentReportTab === 'dongles' ? (item.sim_number || '-') : (item.dongle_name || '-');
                     const free = item.states?.Free || { formatted: '0s', pct: 0 };
@@ -6315,8 +6662,10 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
 
                 const startDate = startInput.value;
                 const endDate = endInput.value;
-                const dongleId = dSelect ? dSelect.value : 'ALL';
-                const simNumber = sSelect ? sSelect.value : 'ALL';
+                const dongleSelection = dSelect ? dSelect.value : 'ALL';
+                const simSelection = sSelect ? sSelect.value : 'ALL';
+                const dongleParts = splitReportCompositeKey(dongleSelection);
+                const simParts = splitReportCompositeKey(simSelection);
 
                 const workHoursCheckbox = document.getElementById('reportWorkHoursEnabled');
                 const workHoursEnabled = workHoursCheckbox ? workHoursCheckbox.checked : false;
@@ -6329,14 +6678,120 @@ const initialSelectedDongleId = devices && devices.length > 0 ? devices[0].ID : 
                 const workDaysParam = selectedWorkDays.join(',');
 
                 try {
-                    const url = `/api/config/modem/reports?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&dongleId=${encodeURIComponent(dongleId)}&simNumber=${encodeURIComponent(simNumber)}&workHoursEnabled=${workHoursEnabled}&shiftStart=${encodeURIComponent(shiftStart)}&shiftEnd=${encodeURIComponent(shiftEnd)}&workDays=${encodeURIComponent(workDaysParam)}`;
-                    const res = await fetch(url);
-                    const data = await res.json();
+                    // Only query the PBXs that can own the selection. A specific
+                    // dongle or SIM belongs to exactly one node, so the other
+                    // peers are not polled at all.
+                    let targetNodes = reportNodeList();
+                    if (dongleParts.site) {
+                        targetNodes = targetNodes.filter(node => String(node.site_code) === dongleParts.site);
+                    } else if (simParts.site) {
+                        targetNodes = targetNodes.filter(node => String(node.site_code) === simParts.site);
+                    }
+                    if (targetNodes.length === 0) targetNodes = reportNodeList();
 
-                    if (!data.success) {
-                        showToast(isRtl ? 'خطأ في التقرير' : 'Report Error', data.error || 'Failed to fetch report', 'error');
+                    const results = await Promise.all(targetNodes.map(async node => {
+                        const site = String(node.site_code);
+                        const nodeDongle = dongleParts.site === site ? dongleParts.value : 'ALL';
+                        const nodeSim = simParts.site === site ? simParts.value : 'ALL';
+                        const url = `/api/config/modem/reports?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&dongleId=${encodeURIComponent(nodeDongle)}&simNumber=${encodeURIComponent(nodeSim)}&workHoursEnabled=${workHoursEnabled}&shiftStart=${encodeURIComponent(shiftStart)}&shiftEnd=${encodeURIComponent(shiftEnd)}&workDays=${encodeURIComponent(workDaysParam)}`;
+                        try {
+                            const res = await fedDongleFetch(url, {}, site);
+                            const data = await res.json();
+                            if (!data || !data.success) {
+                                return { node, error: (data && data.error) || 'Failed to fetch report' };
+                            }
+                            return { node, data };
+                        } catch (error) {
+                            return { node, error: error.message || 'Failed to fetch report' };
+                        }
+                    }));
+
+                    const successful = results.filter(result => result.data);
+                    if (successful.length === 0) {
+                        showToast(isRtl ? 'خطأ في التقرير' : 'Report Error', (results[0] && results[0].error) || 'Failed to fetch report', 'error');
                         return;
                     }
+                    const failedReports = results.filter(result => !result.data);
+                    if (failedReports.length > 0) {
+                        showToast(
+                            isRtl ? 'تقرير جزئي' : 'Partial Report',
+                            (isRtl ? 'تعذر جلب تقرير: ' : 'Could not load report for: ') + failedReports.map(r => r.node.node_name || ('Site ' + r.node.site_code)).join(', '),
+                            'warning'
+                        );
+                    }
+
+                    const mergedDongleReports = [];
+                    const mergedSimReports = [];
+                    const mergedGlobal = {
+                        Free: { sec: 0 },
+                        Busy: { sec: 0, inbound: { calls: 0, answered: 0, sec: 0, talkSec: 0 }, outbound: { calls: 0, answered: 0, sec: 0, talkSec: 0 } },
+                        'Not Initialized': { sec: 0 },
+                        'Not connected': { sec: 0 }
+                    };
+                    successful.forEach(result => {
+                        const site = String(result.node.site_code);
+                        const nodeName = result.node.node_name || fedNodeName(site);
+                        const nodeStatus = result.node.status || 'online';
+                        (result.data.dongleReports || []).forEach(row => {
+                            mergedDongleReports.push({ ...row, nodeSite: site, nodeName, nodeStatus });
+                        });
+                        (result.data.simReports || []).forEach(row => {
+                            mergedSimReports.push({ ...row, nodeSite: site, nodeName, nodeStatus });
+                        });
+                        const g = result.data.globalSummary || {};
+                        ['Free', 'Not Initialized', 'Not connected'].forEach(stateKey => {
+                            mergedGlobal[stateKey].sec += Number(g[stateKey]?.sec || 0);
+                        });
+                        mergedGlobal.Busy.sec += Number(g.Busy?.sec || 0);
+                        ['inbound', 'outbound'].forEach(direction => {
+                            const src = g.Busy?.[direction] || {};
+                            const dst = mergedGlobal.Busy[direction];
+                            dst.calls += Number(src.calls || 0);
+                            dst.answered += Number(src.answered || 0);
+                            dst.sec += Number(src.sec || 0);
+                            dst.talkSec += Number(src.talkSec || 0);
+                        });
+                    });
+
+                    const totalGlobalSec = mergedGlobal.Free.sec + mergedGlobal.Busy.sec
+                        + mergedGlobal['Not Initialized'].sec + mergedGlobal['Not connected'].sec;
+                    const pctOf = sec => totalGlobalSec > 0 ? Math.round((sec / totalGlobalSec) * 1000) / 10 : 0;
+                    const globalSummary = {
+                        Free: { sec: mergedGlobal.Free.sec, formatted: formatReportDuration(mergedGlobal.Free.sec), pct: pctOf(mergedGlobal.Free.sec) },
+                        Busy: {
+                            sec: mergedGlobal.Busy.sec,
+                            formatted: formatReportDuration(mergedGlobal.Busy.sec),
+                            pct: pctOf(mergedGlobal.Busy.sec),
+                            inbound: {
+                                calls: mergedGlobal.Busy.inbound.calls,
+                                answered: mergedGlobal.Busy.inbound.answered,
+                                sec: mergedGlobal.Busy.inbound.sec,
+                                talkSec: mergedGlobal.Busy.inbound.talkSec,
+                                formatted: formatReportDuration(mergedGlobal.Busy.inbound.sec),
+                                pct: pctOf(mergedGlobal.Busy.inbound.sec),
+                                talkFormatted: formatReportDuration(mergedGlobal.Busy.inbound.talkSec)
+                            },
+                            outbound: {
+                                calls: mergedGlobal.Busy.outbound.calls,
+                                answered: mergedGlobal.Busy.outbound.answered,
+                                sec: mergedGlobal.Busy.outbound.sec,
+                                talkSec: mergedGlobal.Busy.outbound.talkSec,
+                                formatted: formatReportDuration(mergedGlobal.Busy.outbound.sec),
+                                pct: pctOf(mergedGlobal.Busy.outbound.sec),
+                                talkFormatted: formatReportDuration(mergedGlobal.Busy.outbound.talkSec)
+                            }
+                        },
+                        'Not Initialized': { sec: mergedGlobal['Not Initialized'].sec, formatted: formatReportDuration(mergedGlobal['Not Initialized'].sec), pct: pctOf(mergedGlobal['Not Initialized'].sec) },
+                        'Not connected': { sec: mergedGlobal['Not connected'].sec, formatted: formatReportDuration(mergedGlobal['Not connected'].sec), pct: pctOf(mergedGlobal['Not connected'].sec) }
+                    };
+
+                    const data = {
+                        success: true,
+                        timeframe: successful[0].data.timeframe,
+                        globalSummary,
+                        dongleReports: mergedDongleReports,
+                        simReports: mergedSimReports
+                    };
 
                     cachedReportData = data;
 

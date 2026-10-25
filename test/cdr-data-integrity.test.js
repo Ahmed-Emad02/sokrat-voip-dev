@@ -37,13 +37,17 @@ test('persisted hangup cause (userfield) drives authoritative dispositions', () 
 
 test('call history and dashboard collapse multi-segment rows and hide harness noise', () => {
     const filtersCount = (serverJs.match(/CDR_HISTORY_FILTERS_SQL/g) || []).length;
-    assert.ok(filtersCount >= 4, 'History filters must be defined and used by dashboard, history + export queries');
+    assert.ok(filtersCount >= 2, 'History filters must be defined and wired into the CDR source builder');
+    const appliedFilters = (serverJs.match(/(?:cdrSource|detailSource|extOverviewSource|extStatsSource)\.filtersSql/g) || []).length;
+    assert.ok(appliedFilters >= 4, 'Dashboard, history, export and extension stats queries must apply the shared filters');
 
     // One entry per call: keep the primary segment per shared uniqueid
     assert.ok(serverJs.includes('cx.uniqueid = c.uniqueid'), 'Dedupe must key on the shared uniqueid');
     assert.ok(serverJs.includes('cx.sequence > c.sequence'), 'Ties must keep the latest segment');
-    assert.ok((serverJs.match(/NOT EXISTS \(\s*\n?\s*SELECT 1 FROM \$\{tables\.cdr\} cx/g) || []).length >= 1,
+    assert.ok((serverJs.match(/NOT EXISTS \(\s*\n?\s*SELECT 1 FROM \$\{(?:tables\.cdr|table)\} cx/g) || []).length >= 1,
         'NOT EXISTS dedupe clause must be present');
+    assert.ok(serverJs.includes('cx.node_site_code = c.node_site_code'),
+        'Federated dedupe must not merge identical uniqueids from different PBXs');
 
     // Synthetic calls stay out of history
     assert.ok(serverJs.includes("AND c.dcontext NOT LIKE 'test-%'"), 'test-* contexts filtered');

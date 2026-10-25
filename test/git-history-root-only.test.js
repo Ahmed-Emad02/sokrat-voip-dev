@@ -76,7 +76,8 @@ test('Server & Security: /admin/git-history and API routes strictly enforce root
 
     // 1. Page view route defined with requireAuth and isRoot check
     assert.match(serverCode, /app\.get\('\/admin\/git-history',\s*requireAuth/, 'GET /admin/git-history must use requireAuth');
-    assert.match(serverCode, /isRoot\s*=\s*Boolean\(req\.session\s*&&/, 'must calculate isRoot authorization');
+    assert.match(serverCode, /const isRoot = hasRootAccess\(req\);/, 'must calculate isRoot authorization');
+    assert.match(serverCode, /function hasRootAccess\(req\)[\s\S]*?isFederationTrusted\(req\)/, 'root checks must honour signed federation requests');
 
     // 2. API routes defined and protected
     assert.match(serverCode, /app\.get\('\/api\/admin\/git-history\/overview',\s*requireAuth/, 'overview API must be protected');

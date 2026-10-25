@@ -141,6 +141,7 @@ ensure_db_column "sokrat_federation_peers" "allow_report_read" "TINYINT(1) NOT N
 ensure_db_column "sokrat_federation_peers" "allow_contact_write" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "sokrat_federation_peers" "allow_dongle_control" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "sokrat_federation_peers" "allow_campaign_control" "TINYINT(1) NOT NULL DEFAULT 0"
+ensure_db_column "sokrat_federation_peers" "allow_config_write" "TINYINT(1) NOT NULL DEFAULT 0"
 ensure_db_column "sokrat_federation_node_status" "asterisk_version" "VARCHAR(64) DEFAULT NULL"
 ensure_db_column "sokrat_federation_node_status" "uptime_sec" "BIGINT DEFAULT NULL"
 ensure_db_column "sokrat_federation_node_status" "load1" "DECIMAL(6,2) DEFAULT NULL"
@@ -210,19 +211,50 @@ RECQUEUES_TABLE=$(mysql "${MYSQL_AUTH[@]}" asterisk -Nse \
 if [ "$RECQUEUES_TABLE" != "0" ]; then
     mysql "${MYSQL_AUTH[@]}" asterisk -e \
         "UPDATE \`asterisk\`.\`queues_config\` SET \`monitor_type\`='bgrnd' WHERE \`monitor_type\` IS NULL OR \`monitor_type\`=''" 2>/dev/null || true
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "UPDATE \`asterisk\`.\`queues_config\` SET \`maxwait\`='' WHERE \`maxwait\`='0'" 2>/dev/null || true
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "UPDATE \`asterisk\`.\`queues_details\` SET \`data\`='' WHERE \`keyword\`='maxwait' AND \`data\`='0'" 2>/dev/null || true
     # The recording gate itself is Issabel's `monitor-format` key: without it
     # Issabel emits dontcare and the queue is silently never recorded.
     mysql "${MYSQL_AUTH[@]}" asterisk -e \
         "INSERT INTO \`asterisk\`.\`queues_details\` (id, keyword, data, flags)
          SELECT q.extension, 'monitor-format', 'wav', 0 FROM \`asterisk\`.\`queues_config\` q
          WHERE q.extension NOT IN (SELECT d.id FROM \`asterisk\`.\`queues_details\` d WHERE d.keyword = 'monitor-format')" 2>/dev/null || true
-    echo "  Queues: call recording enabled by default (monitor-format=wav)"
+    echo "  Queues: call recording enabled by default (monitor-format=wav, maxwait normalized)"
 fi
 mysql "${MYSQL_AUTH[@]}" asterisk -e \
     "UPDATE \`asterisk\`.\`ringgroups\` SET \`recording\`='always' WHERE \`recording\` IS NULL OR \`recording\`='' OR \`recording\`='dontcare'" 2>/dev/null || true
 mysql "${MYSQL_AUTH[@]}" asterisk -e \
     "UPDATE \`asterisk\`.\`users\` SET \`recording\`='out=always|in=always' WHERE \`recording\` IS NULL OR \`recording\`='' OR \`recording\`='dontcare'" 2>/dev/null || true
 echo "  Extensions and ring groups: call recording enabled by default"
+
+if command -v asterisk >/dev/null 2>&1; then
+    for ext in $(mysql "${MYSQL_AUTH[@]}" asterisk -Nse "SELECT extension FROM users" 2>/dev/null || true); do
+        [ -n "$ext" ] || continue
+        asterisk -rx "database put AMPUSER $ext/recording/in/external always" >/dev/null 2>&1 || true
+        asterisk -rx "database put AMPUSER $ext/recording/out/external always" >/dev/null 2>&1 || true
+        asterisk -rx "database put AMPUSER $ext/recording/in/internal always" >/dev/null 2>&1 || true
+        asterisk -rx "database put AMPUSER $ext/recording/out/internal always" >/dev/null 2>&1 || true
+    done
+fi
+
+# Inbound routes: call recording enabled by default ('force' in callrecording_module)
+REC_CALLREC_TABLE=$(mysql "${MYSQL_AUTH[@]}" -sN -e \
+    "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='asterisk' AND TABLE_NAME='callrecording_module'" 2>/dev/null || echo "0")
+if [ "$REC_CALLREC_TABLE" != "0" ]; then
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "INSERT INTO \`asterisk\`.\`callrecording_module\` (\`display\`, \`extension\`, \`cidnum\`, \`callrecording\`)
+         SELECT 'did', i.\`extension\`, COALESCE(i.\`cidnum\`, ''), 'force'
+         FROM \`asterisk\`.\`incoming\` i
+         LEFT JOIN \`asterisk\`.\`callrecording_module\` c
+           ON c.\`display\` = 'did' AND c.\`extension\` = i.\`extension\` AND c.\`cidnum\` = COALESCE(i.\`cidnum\`, '')
+         WHERE c.\`extension\` IS NULL" 2>/dev/null || true
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "UPDATE \`asterisk\`.\`callrecording_module\` SET \`callrecording\`='force'
+         WHERE \`display\`='did' AND (\`callrecording\` IS NULL OR \`callrecording\`='' OR \`callrecording\`='dontcare')" 2>/dev/null || true
+    echo "  Inbound routes: call recording enabled by default (callrecording=force)"
+fi
 
 # Decommission local whisper and migrate STT settings to Cloud AI
 mysql "${MYSQL_AUTH[@]}" asterisk -e "
@@ -344,8 +376,9 @@ fi
 
 echo "[5/7] Sanitizing dialplan contexts and hangup handlers..."
 if [ -f /etc/asterisk/extensions_custom.conf ]; then
-    # Remove any rogue automated restart triggers
+    # Remove any rogue automated restart triggers and conflicting 800 extension alias
     sed -i '/dongle restart now/d' /etc/asterisk/extensions*.conf 2>/dev/null || true
+    sed -i '/exten => 800,1,Goto(\*800,1)/d' /etc/asterisk/extensions_custom.conf 2>/dev/null || true
 
     python3 - << 'PYEOF'
 import re, os
@@ -357,6 +390,9 @@ try:
 
     # Remove all legacy [dongle-hangup-cleanup] contexts
     content = re.sub(r'\[dongle-hangup-cleanup\].*?(?=\n\[|\Z)', '', content, flags=re.DOTALL)
+
+    # Remove legacy 800 alias that collides with queue/extension 800
+    content = re.sub(r'exten\s*=>\s*800\s*,\s*1\s*,\s*Goto\(\*800\s*,\s*1\)\r?\n?', '', content)
 
     # The RNNoise continuous echo test moved from *87 (Issabel owns *87 as its
     # conference-status feature code) to *86, which is free.
@@ -561,8 +597,7 @@ exten => exit,n,MacroExit()
             with open(override_conf, "w", encoding="utf-8") as f:
                 f.write(ov_content)
 
-        if "[sub-record-check]" not in ov_content:
-            subrecord_override = """
+        subrecord_override = """
 ; === Sokrat VoIP: Recording Volume Balance Override (MixMonitor v(3)V(-1)) ===
 ; Boosts the heard audio (remote customer) by ~+9 dB and gently tames the
 ; spoken audio (local agent microphone) by ~-3 dB in the recorded audio file on disk,
@@ -581,6 +616,8 @@ exten => s,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
 exten => s,n,Return()
 exten => s,n(next),ExecIf($[!${LEN(${ARG1})}]?Return())
 exten => s,n,ExecIf($["${REC_POLICY_MODE}"="" & "${ARG3}"!=""]?Set(__REC_POLICY_MODE=${ARG3}))
+; Sokrat Universal Recording: Default to 'always' unless explicitly 'never'
+exten => s,n,ExecIf($["${REC_POLICY_MODE}"="" | "${REC_POLICY_MODE}"="dontcare"]?Set(__REC_POLICY_MODE=always))
 exten => s,n,GotoIf($["${REC_STATUS}"!=""]?${ARG1},1)
 exten => s,n,Set(__REC_STATUS=INITIALIZED)
 exten => s,n,Set(NOW=${EPOCH})
@@ -590,18 +627,22 @@ exten => s,n,Set(__YEAR=${STRFTIME(${NOW},,%Y)})
 exten => s,n,Set(__TIMESTR=${YEAR}${MONTH}${DAY}-${STRFTIME(${NOW},,%H%M%S)})
 exten => s,n,Set(__FROMEXTEN=${IF($[${LEN(${AMPUSER})}]?${AMPUSER}:${IF($[${LEN(${REALCALLERIDNUM})}]?${REALCALLERIDNUM}:${CALLERID(num)})})})
 exten => s,n,Set(__CALLFILENAME=${ARG1}-${ARG2}-${FROMEXTEN}-${TIMESTR}-${UNIQUEID})
+exten => s,n,Set(__SOKRAT_REC_FILE=${CALLFILENAME}.${MON_FMT})
 exten => s,n,Goto(${ARG1},1)
 
-exten => rg,1,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${REC_POLICY_MODE},${FROMEXTEN}))
+exten => rg,1,ExecIf($["${REC_POLICY_MODE}"!="never"]?Set(__REC_POLICY_MODE=always))
+exten => rg,n,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${REC_POLICY_MODE},${FROMEXTEN}))
 exten => rg,n,Return()
 
 exten => force,1,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${REC_POLICY_MODE},${FROMEXTEN}))
 exten => force,n,Return()
 
-exten => q,1,GosubIf($["${REC_POLICY_MODE}"="always"]?recq,1(${EXTEN},${ARG2},${FROMEXTEN}))
+exten => q,1,ExecIf($["${REC_POLICY_MODE}"!="never"]?Set(__REC_POLICY_MODE=always))
+exten => q,n,GosubIf($["${REC_POLICY_MODE}"="always"]?recq,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => q,n,Return()
 
 exten => out,1,ExecIf($["${REC_POLICY_MODE}"=""]?Set(__REC_POLICY_MODE=${DB(AMPUSER/${FROMEXTEN}/recording/out/external)}))
+exten => out,n,ExecIf($["${REC_POLICY_MODE}"!="never"]?Set(__REC_POLICY_MODE=always))
 exten => out,n,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(exten,${ARG2},${FROMEXTEN}))
 exten => out,n,Return()
 
@@ -612,9 +653,11 @@ exten => exten,n,GotoIf($["${DB(AMPUSER/${FROMEXTEN}/recording/out/internal)}"="
 exten => exten,n,ExecIf($[${LEN(${DB(AMPUSER/${FROMEXTEN}/recording/priority)})}]?Set(CALLER_PRI=${DB(AMPUSER/${FROMEXTEN}/recording/priority)}):Set(CALLER_PRI=0))
 exten => exten,n,ExecIf($[${LEN(${DB(AMPUSER/${ARG2}/recording/priority)})}]?Set(CALLEE_PRI=${DB(AMPUSER/${ARG2}/recording/priority)}):Set(CALLEE_PRI=0))
 exten => exten,n,GotoIf($["${CALLER_PRI}"="${CALLEE_PRI}"]?${REC_POLICY}:${IF($[${CALLER_PRI}>${CALLEE_PRI}]?caller:callee)})
-exten => exten,n(callee),GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${ARG2},${FROMEXTEN}))
+exten => exten,n(callee),ExecIf($["${REC_POLICY_MODE}"!="never"]?Set(__REC_POLICY_MODE=always))
+exten => exten,n,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => exten,n,Return()
 exten => exten,n(caller),Set(__REC_POLICY_MODE=${DB(AMPUSER/${FROMEXTEN}/recording/out/internal)})
+exten => exten,n,ExecIf($["${REC_POLICY_MODE}"!="never"]?Set(__REC_POLICY_MODE=always))
 exten => exten,n,GosubIf($["${REC_POLICY_MODE}"="always"]?record,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => exten,n,Return()
 
@@ -653,9 +696,8 @@ exten => recconf,n,Return()
 
 ;--== end of [sub-record-check] ==--;
 """
-            ov_content = ov_content.rstrip() + "\n\n" + subrecord_override.strip() + "\n"
-            with open(override_conf, "w", encoding="utf-8") as f:
-                f.write(ov_content)
+        ov_content = re.sub(r'\[sub-record-check\].*?(?=\n\[|\Z)', '', ov_content, flags=re.DOTALL)
+        ov_content = ov_content.rstrip() + "\n\n" + subrecord_override.strip() + "\n"
 
         # Recording continuity across queue hops (see the [sub-record-cancel]
         # block written below). Idempotent: replaces an existing block.
@@ -673,10 +715,10 @@ include => sub-record-cancel-custom
 exten => s,1,Set(__REC_POLICY_MODE=${REC_POLICY_MODE_SAVE})
 exten => s,n,Return()
 """
-        content = re.sub(r'\[sub-record-cancel\].*?(?=\n\[|\Z)', '', content, flags=re.DOTALL)
-        content = content.rstrip() + "\n\n" + cancel_override.strip() + "\n"
+        ov_content = re.sub(r'\[sub-record-cancel\].*?(?=\n\[|\Z)', '', ov_content, flags=re.DOTALL)
+        ov_content = ov_content.rstrip() + "\n\n" + cancel_override.strip() + "\n"
         with open(override_conf, "w", encoding="utf-8") as f:
-            f.write(content)
+            f.write(ov_content)
 
         # Drop the "bridged only" MixMonitor flag (${MONITOR_OPTIONS}) from the
         # queue recording path - it produced 44-byte (header-only) recordings.
@@ -760,6 +802,44 @@ same => n(done),Hangup()
         content,
         flags=re.DOTALL
     )
+
+    # Ensure Sokrat Universal Trunk Recording (Option B) in [from-dongle-custom]
+    if 'Option B' not in content:
+        content = re.sub(
+            r'same => n\(skip_cid\),\s*GotoIf\(\$\["\$\{MY_SIM_NUMBER\}" != "" & "\$\{MY_SIM_NUMBER\}" != "s" & "\$\{MY_SIM_NUMBER\}" != "\+1234567890"\]\?goto_did:goto_s\)',
+            'same => n(skip_cid),NoOp(--- Sokrat Universal Trunk Recording (Option B) ---)\n'
+            'same => n,Set(NOW=${EPOCH})\n'
+            'same => n,Set(__DAY=${STRFTIME(${NOW},,%d)})\n'
+            'same => n,Set(__MONTH=${STRFTIME(${NOW},,%m)})'
+            '\nsame => n,Set(__YEAR=${STRFTIME(${NOW},,%Y)})'
+            '\nsame => n,Set(__TIMESTR=${YEAR}${MONTH}${DAY}-${STRFTIME(${NOW},,%H%M%S)})'
+            '\nsame => n,Set(__FROMEXTEN=${IF($[${LEN(${CALLERID(num)})}]?${CALLERID(num)}:unknown)})'
+            '\nsame => n,Set(__CALLFILENAME=in-${DONGLENAME}-${FROMEXTEN}-${TIMESTR}-${UNIQUEID})'
+            '\nsame => n,Set(__MON_FMT=wav)'
+            '\nsame => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)'
+            '\nsame => n,Set(MIXMON_OPTS=v(3)V(-1))'
+            '\nsame => n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MON_FMT},a${MIXMON_OPTS})'
+            '\nsame => n,Set(__REC_STATUS=RECORDING)'
+            '\nsame => n,Set(__REC_POLICY_MODE=always)'
+            '\nsame => n,Set(__SOKRAT_REC_FILE=${CALLFILENAME}.${MON_FMT})'
+            '\nsame => n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})'
+            '\nsame => n,GotoIf($["${MY_SIM_NUMBER}" != "" & "${MY_SIM_NUMBER}" != "s" & "${MY_SIM_NUMBER}" != "+1234567890"]?goto_did:goto_s)',
+            content
+        )
+
+    # Ensure recording file retention in cdr-cause-capture
+    if 'SOKRAT_REC_FILE' not in content:
+        content = re.sub(
+            r'\[cdr-cause-capture\]\s*\n\s*;[^\n]*\s*\n\s*;[^\n]*\s*\n\s*exten => s,1,Set\(CDR\(userfield\)=\$\{HANGUPCAUSE\}\)\s*\n\s*same => n,Return\(\)',
+            '[cdr-cause-capture]\n'
+            '; Persist the Q.850 hangup cause on monitored channels so Call History can\n'
+            '; distinguish busy / no-answer / congestion instead of relying on driver defaults.\n'
+            'exten => s,1,Set(CDR(userfield)=${HANGUPCAUSE})\n'
+            'same => n,ExecIf($["${CDR(recordingfile)}"="" & "${CALLFILENAME}"!=""]?Set(CDR(recordingfile)=${CALLFILENAME}.wav))\n'
+            'same => n,ExecIf($["${CDR(recordingfile)}"="" & "${SOKRAT_REC_FILE}"!=""]?Set(CDR(recordingfile)=${SOKRAT_REC_FILE}))\n'
+            'same => n,Return()',
+            content
+        )
 
     # Ensure ChanSpy volume boost for supervisor listening (qv(2))
     content = re.sub(r'ChanSpy\(([^,)]+),q\)', r'ChanSpy(\1,qv(2))', content)

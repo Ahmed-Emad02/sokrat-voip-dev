@@ -33,6 +33,7 @@ test('Schema & Migration Parity: backend/install_db.sql and install.sh include f
     assert.match(sql, /`allow_contact_write` TINYINT\(1\) NOT NULL DEFAULT 0/, 'sokrat_federation_peers must define allow_contact_write');
     assert.match(sql, /`allow_dongle_control` TINYINT\(1\) NOT NULL DEFAULT 0/, 'sokrat_federation_peers must define allow_dongle_control');
     assert.match(sql, /`allow_campaign_control` TINYINT\(1\) NOT NULL DEFAULT 0/, 'sokrat_federation_peers must define allow_campaign_control');
+    assert.match(sql, /`allow_config_write` TINYINT\(1\) NOT NULL DEFAULT 0/, 'sokrat_federation_peers must define allow_config_write');
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `sokrat_federation_node_status`/, 'install_db.sql must create sokrat_federation_node_status');
 
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `sokrat_federation_remote_extensions`/, 'install_db.sql must create sokrat_federation_remote_extensions');

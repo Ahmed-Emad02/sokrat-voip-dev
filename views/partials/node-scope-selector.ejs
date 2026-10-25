@@ -33,6 +33,22 @@ if (fedScopeEnabled) {
     const fedNodeNamesJson = JSON.stringify(
         Object.fromEntries(fedNodes.map(n => [String(n.site_code), n.node_name]))
     ).replace(/</g, '\\u003c');
+
+    // When exactly one remote PBX is selected the central panel becomes that
+    // PBX's control surface: writes (and, on the dongle page, device reads)
+    // are relayed through the signed action gateway.
+    const fedControlNode = (fedScope.mode === 'selected' && Array.isArray(fedScope.sites) && fedScope.sites.length === 1)
+        ? fedNodes.find(n => String(n.site_code) === String(fedScope.sites[0]) && !n.is_local)
+        : null;
+    // Pages that aggregate every PBX at once (the dongle console) route each
+    // action to the owning node themselves, so the single-node fetch shim must
+    // stay off there or it would hijack the merged local reads.
+    const fedAggregatedPage = (typeof fedMultiNodePage !== 'undefined') && Boolean(fedMultiNodePage);
+    const fedCanControl = Boolean(fedControlNode) && (typeof isSuperAdmin !== 'undefined') && Boolean(isSuperAdmin) && !fedAggregatedPage;
+    const fedControlSite = fedControlNode ? String(fedControlNode.site_code) : '';
+    const fedControlName = fedControlNode ? String(fedControlNode.node_name || ('Site ' + fedControlSite)) : '';
+    const fedControlSiteJson = JSON.stringify(fedControlSite).replace(/</g, '\\u003c');
+    const fedControlNameJson = JSON.stringify(fedControlName).replace(/</g, '\\u003c');
 %>
 <style>
     #fedScopeBar .fed-scope-menu { scrollbar-width: thin; }
@@ -141,6 +157,27 @@ if (fedScopeEnabled) {
         <%= onlineCount %>/<%= fedNodes.length %> <%= isRtl ? 'متصل' : 'online' %>
     </span>
 </div>
+<% if (fedCanControl) { %>
+<div id="fedControlBanner"
+     class="mb-3 flex items-center gap-2 flex-wrap rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-bold text-amber-300"
+     role="status">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        <path d="M9 12l2 2 4-4"></path>
+    </svg>
+    <span class="min-w-0">
+        <%= isRtl ? 'وضع التحكم:' : 'Control mode:' %>
+        <b class="text-amber-200"><%= fedControlName %></b>
+        —
+        <span class="fed-control-note-devices hidden"><%= isRtl ? 'قائمة الأجهزة وكل الأوامر في هذه الصفحة تُنفَّذ على هذا السيرفر.' : 'the device list and every command on this page run on that PBX.' %></span>
+        <span class="fed-control-note-config"><%= isRtl ? 'التغييرات في هذه الصفحة تُطبَّق على هذا السيرفر، بينما القيم المعروضة تأتي من السيرفر الحالي. استخدم زر «فتح اللوحة» لرؤية قيم السيرفر البعيد قبل تعديلها.' : 'changes on this page are applied to that PBX, while the values shown come from this server. Use the "open panel" button to see that PBX\'s own values before editing.' %></span>
+    </span>
+    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30">Site <%= fedControlSite %></span>
+    <% if (fedControlNode && fedControlNode.status !== 'online') { %>
+    <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-300"><%= isRtl ? 'غير متصل' : 'offline' %></span>
+    <% } %>
+</div>
+<% } %>
 <script>
     (function () {
         const bar = document.getElementById('fedScopeBar');
@@ -241,4 +278,224 @@ if (fedScopeEnabled) {
         });
     })();
 </script>
+<% if (fedCanControl) { %>
+<script>
+    /**
+     * Federation control shim.
+     *
+     * Selecting one remote PBX turns the central panel into that PBX's control
+     * surface. Mutating /api/* calls are rewritten to the signed action gateway
+     * so the peer executes them locally. Federation management, login and API
+     * key endpoints are never relayed. On the GSM page the device poll is
+     * relayed too, so the whole page shows the remote dongles with full
+     * controls instead of the read-only remote cards.
+     */
+    (function () {
+        var cfg = {
+            enabled: true,
+            siteCode: <%- fedControlSiteJson %>,
+            siteName: <%- fedControlNameJson %>,
+            gateway: '/api/federation/peers/' + encodeURIComponent(<%- fedControlSiteJson %>) + '/action',
+            dongleMode: false
+        };
+        window.__sokratFedControl = cfg;
+        try {
+            document.querySelectorAll('.fed-control-note-devices').forEach(function (el) {
+                el.classList.toggle('hidden', !cfg.dongleMode);
+            });
+            document.querySelectorAll('.fed-control-note-config').forEach(function (el) {
+                el.classList.toggle('hidden', cfg.dongleMode);
+            });
+        } catch (_) {}
+        if (window.__sokratFedShimInstalled) return;
+        window.__sokratFedShimInstalled = true;
+
+        var GATEWAY = cfg.gateway;
+        var DENY = [
+            /^\/api\/federation(?:\/|$)/,
+            /^\/api\/config\/federation(?:\/|$)/,
+            /^\/api\/auth(?:\/|$)/,
+            /^\/api\/admin(?:\/|$)/,
+            /^\/api\/peer(?:\/|$)/
+        ];
+
+        function isDenied(pathname) {
+            for (var i = 0; i < DENY.length; i += 1) {
+                if (DENY[i].test(pathname)) return true;
+            }
+            return false;
+        }
+
+        function parseUrl(value) {
+            try { return new URL(String(value || ''), window.location.origin); } catch (_) { return null; }
+        }
+
+        function shouldRelay(method, url) {
+            if (!url || url.origin !== window.location.origin) return false;
+            if (url.pathname.indexOf('/api/') !== 0) return false;
+            if (isDenied(url.pathname)) return false;
+            var verb = String(method || 'GET').toUpperCase();
+            // Reads always stay local: the control pages show this PBX's own
+            // state, and the dongle console merges every PBX server-side.
+            if (verb === 'GET' || verb === 'HEAD') return false;
+            return true;
+        }
+
+        function base64FromArrayBuffer(buffer) {
+            var bytes = new Uint8Array(buffer);
+            var binary = '';
+            var chunk = 0x8000;
+            for (var i = 0; i < bytes.length; i += chunk) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+            }
+            return btoa(binary);
+        }
+
+        function base64FromText(text) {
+            return base64FromArrayBuffer(new TextEncoder().encode(String(text)).buffer);
+        }
+
+        function headersContentType(headers) {
+            if (!headers) return '';
+            try {
+                if (typeof headers.get === 'function') return headers.get('content-type') || '';
+                for (var key in headers) {
+                    if (Object.prototype.hasOwnProperty.call(headers, key) && key.toLowerCase() === 'content-type') {
+                        return String(headers[key] || '');
+                    }
+                }
+            } catch (_) {}
+            return '';
+        }
+
+        function buildPayload(method, url, body, contentType) {
+            var payload = {
+                method: String(method || 'POST').toUpperCase(),
+                path: url.pathname + url.search
+            };
+            if (body === undefined || body === null) return Promise.resolve(payload);
+
+            if (typeof body === 'string') {
+                if (/json/i.test(contentType)) {
+                    try {
+                        payload.body = JSON.parse(body);
+                        return Promise.resolve(payload);
+                    } catch (_) {}
+                }
+                payload.body = base64FromText(body);
+                payload.bodyEncoding = 'base64';
+                payload.contentType = contentType || 'text/plain;charset=UTF-8';
+                return Promise.resolve(payload);
+            }
+            if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+                payload.body = base64FromText(body.toString());
+                payload.bodyEncoding = 'base64';
+                payload.contentType = 'application/x-www-form-urlencoded;charset=UTF-8';
+                return Promise.resolve(payload);
+            }
+            if (typeof FormData !== 'undefined' && body instanceof FormData) {
+                var formResponse = new Response(body);
+                var formType = formResponse.headers.get('content-type') || 'multipart/form-data';
+                return formResponse.arrayBuffer().then(function (buffer) {
+                    payload.body = base64FromArrayBuffer(buffer);
+                    payload.bodyEncoding = 'base64';
+                    payload.contentType = formType;
+                    return payload;
+                });
+            }
+            if (typeof Blob !== 'undefined' && body instanceof Blob) {
+                return body.arrayBuffer().then(function (buffer) {
+                    payload.body = base64FromArrayBuffer(buffer);
+                    payload.bodyEncoding = 'base64';
+                    payload.contentType = body.type || contentType || 'application/octet-stream';
+                    return payload;
+                });
+            }
+            if (typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer) {
+                payload.body = base64FromArrayBuffer(body);
+                payload.bodyEncoding = 'base64';
+                payload.contentType = contentType || 'application/octet-stream';
+                return Promise.resolve(payload);
+            }
+            if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(body)) {
+                payload.body = base64FromArrayBuffer(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength));
+                payload.bodyEncoding = 'base64';
+                payload.contentType = contentType || 'application/octet-stream';
+                return Promise.resolve(payload);
+            }
+            payload.body = body;
+            return Promise.resolve(payload);
+        }
+
+        function relay(payload, signal) {
+            return window.__sokratOrigFetch(GATEWAY, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify(payload),
+                credentials: 'same-origin',
+                signal: signal
+            });
+        }
+
+        if (window.fetch) {
+            window.__sokratOrigFetch = window.fetch.bind(window);
+            window.fetch = function (input, init) {
+                var isRequest = (typeof Request !== 'undefined' && input instanceof Request);
+                var method = (init && init.method) || (isRequest ? input.method : 'GET');
+                var url = parseUrl(isRequest ? input.url : input);
+                if (!shouldRelay(method, url)) return window.__sokratOrigFetch(input, init);
+
+                var headers = (init && init.headers) || (isRequest ? input.headers : null);
+                var contentType = headersContentType(headers);
+                var bodyPromise = isRequest
+                    ? input.clone().text().then(function (text) { return buildPayload(method, url, text || null, contentType); })
+                    : buildPayload(method, url, init ? init.body : null, contentType);
+
+                return bodyPromise.then(function (payload) {
+                    return relay(payload, init && init.signal);
+                });
+            };
+        }
+
+        if (window.XMLHttpRequest) {
+            var origOpen = XMLHttpRequest.prototype.open;
+            var origSend = XMLHttpRequest.prototype.send;
+            var origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+
+            XMLHttpRequest.prototype.open = function (method, url) {
+                var parsed = parseUrl(url);
+                if (shouldRelay(method, parsed)) {
+                    this.__sokratFed = { method: method, url: parsed, contentType: '' };
+                    var args = Array.prototype.slice.call(arguments);
+                    args[0] = 'POST';
+                    args[1] = GATEWAY;
+                    return origOpen.apply(this, args);
+                }
+                this.__sokratFed = null;
+                return origOpen.apply(this, arguments);
+            };
+            XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+                if (this.__sokratFed) {
+                    if (String(name).toLowerCase() === 'content-type') {
+                        this.__sokratFed.contentType = String(value || '');
+                    }
+                    return;
+                }
+                return origSetHeader.apply(this, arguments);
+            };
+            XMLHttpRequest.prototype.send = function (body) {
+                var meta = this.__sokratFed;
+                if (!meta) return origSend.apply(this, arguments);
+                var xhr = this;
+                buildPayload(meta.method, meta.url, body, meta.contentType).then(function (payload) {
+                    origSetHeader.call(xhr, 'Content-Type', 'application/json');
+                    origSend.call(xhr, JSON.stringify(payload));
+                }).catch(function () {
+                    try { xhr.dispatchEvent(new ProgressEvent('error')); } catch (_) {}
+                });
+            };
+        }
+    })();
+</script>
+<% } %>
 <% } %>

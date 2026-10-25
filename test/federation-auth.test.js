@@ -179,3 +179,108 @@ test('Federation Auth: write rate limit is lower than read rate limit', () => {
     assert.equal(writeOverflow.allowed, false);
     assert.ok(writeOverflow.retryAfterSec >= 1);
 });
+
+function mockFederationRequest(headers, path = '/gsm-dongles', method = 'GET') {
+    const normalized = {};
+    for (const [key, value] of Object.entries(headers || {})) {
+        normalized[String(key).toLowerCase()] = value;
+    }
+    return {
+        path,
+        originalUrl: `/api${path}`,
+        method,
+        ip: '127.0.0.1',
+        headers: normalized,
+        rawBody: Buffer.from(''),
+        isFederationAuthenticated: false
+    };
+}
+
+function mockResponse() {
+    const res = {
+        statusCode: 200,
+        body: null,
+        headers: {},
+        status(code) { this.statusCode = code; return this; },
+        json(payload) { this.body = payload; return this; },
+        set(name, value) { this.headers[name] = value; return this; }
+    };
+    return res;
+}
+
+test('Federation Auth: optional mount elevates signed peer requests and ignores browser traffic', async () => {
+    const { federationAuthMiddleware } = require('../lib/federation-auth');
+    const pool = {
+        async query(sql) {
+            if (/FROM .*sokrat_federation_peers/i.test(sql)) {
+                return [[{ id: 3, site_code: SITE, api_key_enc: 'enc' }]];
+            }
+            return [{}];
+        }
+    };
+    const middleware = federationAuthMiddleware({
+        pool,
+        decryptFn: () => API_KEY,
+        optional: true,
+        skipPrefixes: ['/federation'],
+        denyPrefixes: ['/auth', '/admin', '/config/federation'],
+        logger: { warn() {}, error() {} }
+    });
+
+    // Browser traffic without federation proof must fall through untouched.
+    const plainReq = mockFederationRequest({});
+    let plainNext = 0;
+    await middleware(plainReq, mockResponse(), () => { plainNext += 1; });
+    assert.equal(plainNext, 1);
+    assert.equal(plainReq.isFederationAuthenticated, false);
+
+    // A valid signature on an ordinary API path is elevated to a trusted peer.
+    const signedReq = mockFederationRequest(signed({ method: 'GET', url: `/api${'/gsm-dongles'}` }));
+    signedReq.originalUrl = '/api/gsm-dongles';
+    let signedNext = 0;
+    await middleware(signedReq, mockResponse(), () => { signedNext += 1; });
+    assert.equal(signedNext, 1);
+    assert.equal(signedReq.isFederationAuthenticated, true);
+    assert.equal(signedReq.federationSiteCode, SITE);
+
+    // Signed peers must not reach API-key administration.
+    const deniedReq = mockFederationRequest(signed({ method: 'GET', url: '/api/admin/api-keys' }), '/admin/api-keys');
+    deniedReq.originalUrl = '/api/admin/api-keys';
+    const deniedRes = mockResponse();
+    let deniedNext = 0;
+    await middleware(deniedReq, deniedRes, () => { deniedNext += 1; });
+    assert.equal(deniedNext, 0);
+    assert.equal(deniedRes.statusCode, 403);
+
+    // ...nor federation management: a spoke must never rewire the hub.
+    const fedReq = mockFederationRequest(signed({ method: 'POST', url: '/api/config/federation/peers' }), '/config/federation/peers', 'POST');
+    fedReq.originalUrl = '/api/config/federation/peers';
+    const fedRes = mockResponse();
+    let fedNext = 0;
+    await middleware(fedReq, fedRes, () => { fedNext += 1; });
+    assert.equal(fedNext, 0);
+    assert.equal(fedRes.statusCode, 403);
+
+    // Federation management has its own strict mount; the optional mount must
+    // skip it entirely so a signed ping is not rejected as a replayed nonce.
+    const skippedReq = mockFederationRequest(signed({ method: 'GET', url: '/api/federation/v1/ping' }), '/federation/v1/ping');
+    skippedReq.originalUrl = '/api/federation/v1/ping';
+    let skippedNext = 0;
+    await middleware(skippedReq, mockResponse(), () => { skippedNext += 1; });
+    assert.equal(skippedNext, 1);
+    assert.equal(skippedReq.isFederationAuthenticated, false);
+});
+
+test('Federation Auth: strict mode still rejects unsigned requests', async () => {
+    const { federationAuthMiddleware } = require('../lib/federation-auth');
+    const middleware = federationAuthMiddleware({
+        pool: { async query() { return [[]]; } },
+        decryptFn: () => API_KEY,
+        logger: { warn() {}, error() {} }
+    });
+    const res = mockResponse();
+    let next = 0;
+    await middleware(mockFederationRequest({}), res, () => { next += 1; });
+    assert.equal(next, 0);
+    assert.equal(res.statusCode, 401);
+});

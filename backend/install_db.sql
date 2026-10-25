@@ -504,6 +504,7 @@ CREATE TABLE IF NOT EXISTS `sokrat_federation_peers` (
   `allow_contact_write` TINYINT(1) NOT NULL DEFAULT 0,
   `allow_dongle_control` TINYINT(1) NOT NULL DEFAULT 0,
   `allow_campaign_control` TINYINT(1) NOT NULL DEFAULT 0,
+  `allow_config_write` TINYINT(1) NOT NULL DEFAULT 0,
   `status` ENUM('online', 'offline', 'error', 'unreachable') NOT NULL DEFAULT 'offline',
   `last_sync_at` DATETIME DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -874,6 +875,27 @@ PREPARE sokrat_stmt FROM @sokrat_sql;
 EXECUTE sokrat_stmt;
 DEALLOCATE PREPARE sokrat_stmt;
 
+-- Normalize queue maxwait: 0 means immediate timeout in Asterisk Queue, empty means unlimited
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_config'),
+    'UPDATE `asterisk`.`queues_config` SET `maxwait` = '''' WHERE `maxwait` = ''0''',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
+    'UPDATE `asterisk`.`queues_details` SET `data` = '''' WHERE `keyword` = ''maxwait'' AND `data` = ''0''',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
 -- The queue recording gate is Issabel's `monitor-format` key in
 -- queues_details: without it Issabel emits `Gosub(sub-record-check,s,1(q,<ext>,dontcare))`
 -- and the queue is silently NEVER recorded. Add it to every queue that is
@@ -898,3 +920,32 @@ UPDATE `asterisk`.`ringgroups` SET `recording` = 'always'
 
 UPDATE `asterisk`.`users` SET `recording` = 'out=always|in=always'
   WHERE `recording` IS NULL OR `recording` = '' OR `recording` = 'dontcare';
+
+-- Inbound routes: call recording enabled by default ('force' in callrecording_module)
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'incoming')
+         AND EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'callrecording_module'),
+    'INSERT INTO `asterisk`.`callrecording_module` (`display`, `extension`, `cidnum`, `callrecording`)
+       SELECT ''did'', i.`extension`, COALESCE(i.`cidnum`, ''''), ''force''
+       FROM `asterisk`.`incoming` i
+       LEFT JOIN `asterisk`.`callrecording_module` c
+         ON c.`display` = ''did'' AND c.`extension` = i.`extension` AND c.`cidnum` = COALESCE(i.`cidnum`, '''')
+       WHERE c.`extension` IS NULL',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'callrecording_module'),
+    'UPDATE `asterisk`.`callrecording_module` SET `callrecording` = ''force''
+       WHERE `display` = ''did'' AND (`callrecording` IS NULL OR `callrecording` = '''' OR `callrecording` = ''dontcare'')',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
