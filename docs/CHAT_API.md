@@ -74,8 +74,10 @@ Upload first, then send:
 }
 ```
 
-The extension must exist. The card is a snapshot; later address-book changes do
-not alter sent cards.
+A contact needs a name and either an existing extension or a phone number.
+Address-book contacts can be shared with `name` and `phone` only (leave
+`extension` empty). When `extension` is provided it must exist. The card is a
+snapshot; later address-book changes do not alter sent cards.
 
 ## Realtime
 
