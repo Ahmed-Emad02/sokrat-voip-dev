@@ -227,7 +227,7 @@ test('views/gsm-dongles.ejs includes populate-hardware button in Card View only 
 
     // Client handler defined
     assert.match(viewContent, /window\.populateDongleHardware = function/, 'View must define window.populateDongleHardware function');
-    assert.match(viewContent, /fetch\('\/api\/gsm-dongles\/populate-hardware\/'/, 'populateDongleHardware must call /api/gsm-dongles/populate-hardware endpoint');
+    assert.match(viewContent, /(?:fedDongleFetch|fetch)\('\/api\/gsm-dongles\/populate-hardware\/'/, 'populateDongleHardware must call /api/gsm-dongles/populate-hardware endpoint');
 });
 
 test('updateDonglePorts updates audio and data ports in targeted section while preserving other configurations', () => {
@@ -309,7 +309,7 @@ test('views/gsm-dongles.ejs includes edit-ports button in Card View only and def
     assert.match(viewContent, /window\.openEditPortsModal = function/, 'View must define openEditPortsModal function');
     assert.match(viewContent, /window\.closeEditPortsModal = function/, 'View must define closeEditPortsModal function');
     assert.match(viewContent, /window\.saveDonglePorts = function/, 'View must define saveDonglePorts function');
-    assert.match(viewContent, /fetch\('\/api\/gsm-dongles\/update-ports\/'/, 'saveDonglePorts must call /api/gsm-dongles/update-ports endpoint');
+    assert.match(viewContent, /(?:fedDongleFetch|fetch)\('\/api\/gsm-dongles\/update-ports\/'/, 'saveDonglePorts must call /api/gsm-dongles/update-ports endpoint');
 });
 
 test('server.js defines getDongleSiblingPorts and filters ports per dongle in /api/gsm-dongles/ttyusb-devices', () => {

@@ -203,7 +203,7 @@ test('views/gsm-dongles.ejs includes global audit header button, audit modal, an
     // Client handlers
     assert.match(viewContent, /window\.openDongleAuditModal = function/, 'View must define openDongleAuditModal');
     assert.match(viewContent, /window\.closeDongleAuditModal = function/, 'View must define closeDongleAuditModal');
-    assert.match(viewContent, /window\.runDongleAudit = function/, 'View must define runDongleAudit');
+    assert.match(viewContent, /window\.runDongleAudit = (?:async )?function/, 'View must define runDongleAudit');
     assert.match(viewContent, /window\.reconcileSlot = function/, 'View must define reconcileSlot');
     assert.match(viewContent, /window\.reconcileAllDongles = function/, 'View must define reconcileAllDongles');
 
