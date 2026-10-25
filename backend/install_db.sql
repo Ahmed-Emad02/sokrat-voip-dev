@@ -998,11 +998,13 @@ PREPARE sokrat_stmt FROM @sokrat_sql;
 EXECUTE sokrat_stmt;
 DEALLOCATE PREPARE sokrat_stmt;
 
--- Queue empty defaults: callers should not join an empty queue and should leave when empty
+-- Queue empty defaults: match Issabel/Asterisk defaults so a call is never
+-- rejected just because an agent's device state looks unavailable. The old
+-- "joinempty=no" made calls skip the queue entirely and never reach the phones.
 SET @sokrat_sql := (
   SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
                     WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
-    'UPDATE `asterisk`.`queues_details` SET `data` = ''yes'' WHERE `keyword` = ''leavewhenempty'' AND `data` != ''yes''',
+    'UPDATE `asterisk`.`queues_details` SET `data` = ''no'' WHERE `keyword` = ''leavewhenempty'' AND `data` != ''no''',
     'DO 0')
 );
 PREPARE sokrat_stmt FROM @sokrat_sql;
@@ -1012,7 +1014,36 @@ DEALLOCATE PREPARE sokrat_stmt;
 SET @sokrat_sql := (
   SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
                     WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
-    'UPDATE `asterisk`.`queues_details` SET `data` = ''no'' WHERE `keyword` = ''joinempty'' AND `data` = ''yes''',
+    'UPDATE `asterisk`.`queues_details` SET `data` = ''yes'' WHERE `keyword` = ''joinempty'' AND `data` != ''yes''',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+-- ---------------------------------------------------------------------------
+-- Queue member integrity
+-- ---------------------------------------------------------------------------
+-- Older dashboards wrote non-FreePBX keywords into queues_details. `dynmembers`
+-- belongs in the AstDB QPENALTY family, while `goto` and `maxwait` belong in
+-- queues_config. Their multi-line values corrupted queues_additional.conf
+-- ("No '=' (equal sign)") and made Asterisk log unknown keywords on reload.
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
+    'DELETE FROM `asterisk`.`queues_details` WHERE `keyword` IN (''dynmembers'', ''goto'', ''maxwait'')',
+    'DO 0')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+-- Phantom members produced by reading a penalty ("110,0") as an extension
+-- ("Local/0@from-queue/n") never ring and keep the queue looking staffed.
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
+    'DELETE FROM `asterisk`.`queues_details` WHERE `keyword` = ''member'' AND `data` NOT REGEXP ''^[A-Za-z]+/[0-9]+@''',
     'DO 0')
 );
 PREPARE sokrat_stmt FROM @sokrat_sql;

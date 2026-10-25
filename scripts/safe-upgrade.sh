@@ -231,11 +231,18 @@ if [ "$RECQUEUES_TABLE" != "0" ]; then
         "UPDATE \`asterisk\`.\`queues_config\` SET \`destcontinue\`='app-blackhole,hangup,1' WHERE \`destcontinue\`=CONCAT('ext-queues,', \`extension\`, ',1') OR \`destcontinue\`=CONCAT('from-did-direct,', \`extension\`, ',1')" 2>/dev/null || true
     mysql "${MYSQL_AUTH[@]}" asterisk -e \
         "UPDATE \`asterisk\`.\`queues_details\` SET \`data\`='app-blackhole,hangup,1' WHERE \`keyword\`='goto' AND (\`data\`=CONCAT('ext-queues,', \`id\`, ',1') OR \`data\`=CONCAT('from-did-direct,', \`id\`, ',1'))" 2>/dev/null || true
-    # Queue empty defaults: callers should not join an empty queue and should leave when empty
+    # Queue empty defaults: keep Issabel/Asterisk defaults so a call is never
+    # rejected just because an agent's device state looks unavailable.
     mysql "${MYSQL_AUTH[@]}" asterisk -e \
-        "UPDATE \`asterisk\`.\`queues_details\` SET \`data\`='yes' WHERE \`keyword\`='leavewhenempty' AND \`data\`!='yes'" 2>/dev/null || true
+        "UPDATE \`asterisk\`.\`queues_details\` SET \`data\`='no' WHERE \`keyword\`='leavewhenempty' AND \`data\`!='no'" 2>/dev/null || true
     mysql "${MYSQL_AUTH[@]}" asterisk -e \
-        "UPDATE \`asterisk\`.\`queues_details\` SET \`data\`='no' WHERE \`keyword\`='joinempty' AND \`data\`='yes'" 2>/dev/null || true
+        "UPDATE \`asterisk\`.\`queues_details\` SET \`data\`='yes' WHERE \`keyword\`='joinempty' AND \`data\`!='yes'" 2>/dev/null || true
+    # Drop non-FreePBX keywords written by older dashboards (multi-line values
+    # corrupted queues_additional.conf) and phantom "Local/0" members.
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "DELETE FROM \`asterisk\`.\`queues_details\` WHERE \`keyword\` IN ('dynmembers','goto','maxwait')" 2>/dev/null || true
+    mysql "${MYSQL_AUTH[@]}" asterisk -e \
+        "DELETE FROM \`asterisk\`.\`queues_details\` WHERE \`keyword\`='member' AND \`data\` NOT REGEXP '^[A-Za-z]+/[0-9]+@'" 2>/dev/null || true
     echo "  Queues: call recording enabled by default (monitor-format=wav, maxwait normalized, failover loops neutralized)"
 fi
 mysql "${MYSQL_AUTH[@]}" asterisk -e \

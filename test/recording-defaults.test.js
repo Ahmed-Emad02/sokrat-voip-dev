@@ -306,7 +306,7 @@ test('server.js guards ringgroups and queues against self-referential failover l
     );
 });
 
-test('install_db.sql and safe-upgrade.sh break self-loops and configure safe queue empty defaults', () => {
+test('install_db.sql and safe-upgrade.sh break self-loops and keep queue members reachable', () => {
     const sql = read('backend/install_db.sql');
     const upgrader = read('scripts/safe-upgrade.sh');
 
@@ -319,13 +319,24 @@ test('install_db.sql and safe-upgrade.sh break self-loops and configure safe que
         sql.includes("UPDATE `asterisk`.`ringgroups` SET `postdest` = ''app-blackhole,hangup,1'' WHERE `postdest` = CONCAT(''ext-group,'', `grpnum`, '',1'')"),
         'install_db.sql must neutralize ring group postdest self-loops'
     );
+    // Asterisk defaults: a call must never be rejected because an agent looks
+    // unavailable, otherwise it never reaches the assigned extensions.
     assert.ok(
-        sql.includes("UPDATE `asterisk`.`queues_details` SET `data` = ''yes'' WHERE `keyword` = ''leavewhenempty''"),
-        'install_db.sql must set queue leavewhenempty to yes'
+        sql.includes("UPDATE `asterisk`.`queues_details` SET `data` = ''no'' WHERE `keyword` = ''leavewhenempty''"),
+        'install_db.sql must restore queues_details.leavewhenempty=no'
     );
     assert.ok(
-        sql.includes("UPDATE `asterisk`.`queues_details` SET `data` = ''no'' WHERE `keyword` = ''joinempty''"),
-        'install_db.sql must set queue joinempty to no'
+        sql.includes("UPDATE `asterisk`.`queues_details` SET `data` = ''yes'' WHERE `keyword` = ''joinempty''"),
+        'install_db.sql must restore queues_details.joinempty=yes'
+    );
+    // Non-FreePBX keywords and phantom members must be purged.
+    assert.ok(
+        sql.includes("DELETE FROM `asterisk`.`queues_details` WHERE `keyword` IN (''dynmembers'', ''goto'', ''maxwait'')"),
+        'install_db.sql must drop dynmembers/goto/maxwait queue keywords'
+    );
+    assert.ok(
+        sql.includes("DELETE FROM `asterisk`.`queues_details` WHERE `keyword` = ''member'' AND `data` NOT REGEXP ''^[A-Za-z]+/[0-9]+@''"),
+        'install_db.sql must delete phantom queue members'
     );
 
     // safe-upgrade.sh migrations
@@ -338,11 +349,19 @@ test('install_db.sql and safe-upgrade.sh break self-loops and configure safe que
         'safe-upgrade.sh must neutralize ring group postdest self-loops'
     );
     assert.ok(
-        /UPDATE.*queues_details.*SET.*data.*=.*'yes'.*WHERE.*keyword.*=.*'leavewhenempty'/.test(upgrader),
-        'safe-upgrade.sh must set queue leavewhenempty to yes'
+        /UPDATE.*queues_details.*SET.*data.*=.*'no'.*WHERE.*keyword.*=.*'leavewhenempty'/.test(upgrader),
+        'safe-upgrade.sh must restore queues_details.leavewhenempty=no'
     );
     assert.ok(
-        /UPDATE.*queues_details.*SET.*data.*=.*'no'.*WHERE.*keyword.*=.*'joinempty'/.test(upgrader),
-        'safe-upgrade.sh must set queue joinempty to no'
+        /UPDATE.*queues_details.*SET.*data.*=.*'yes'.*WHERE.*keyword.*=.*'joinempty'/.test(upgrader),
+        'safe-upgrade.sh must restore queues_details.joinempty=yes'
+    );
+    assert.ok(
+        /DELETE FROM.*queues_details.*keyword.*IN.*'dynmembers','goto','maxwait'/.test(upgrader),
+        'safe-upgrade.sh must drop dynmembers/goto/maxwait queue keywords'
+    );
+    assert.ok(
+        /DELETE FROM.*queues_details.*keyword.*=.*'member'.*NOT REGEXP/.test(upgrader),
+        'safe-upgrade.sh must delete phantom queue members'
     );
 });

@@ -8450,6 +8450,23 @@ function isTabAllowed(tabName) {
             renderQueueAgentChecklist();
         }
 
+        // Queue agent helpers: the API returns plain extension numbers, but older
+        // rows may still contain "110,0" penalties or "Local/110@..." interfaces.
+        function cleanQueueAgentsFromApi(value) {
+            const raw = Array.isArray(value) ? value : String(value || '').split(/[\r\n,;]+/);
+            const out = [];
+            raw.forEach(item => {
+                const token = String(item || '')
+                    .trim()
+                    .replace(/^[A-Za-z]+\//, '')
+                    .replace(/@.*$/, '')
+                    .replace(/,\s*\d+$/, '')
+                    .trim();
+                if (/^\d{2,}$/.test(token) && !out.includes(token)) out.push(token);
+            });
+            return out;
+        }
+
         function parseQueueExtArray(inputId) {
             const el = document.getElementById(inputId);
             if (!el) return [];
@@ -8589,13 +8606,11 @@ function isTabAllowed(tabName) {
             document.getElementById('queueAutofill').value = q.autofill || 'yes';
             document.getElementById('queueSkipBusy').value = (q.cwignore == 1 || q.cwignore === '1') ? 'yes' : 'no';
 
-            const staticArr = Array.isArray(q.static_members) ? q.static_members : (q.static_members ? String(q.static_members).split(/[\r\n, ]+/) : []);
-            const dynArr = Array.isArray(q.dynmembers) ? q.dynmembers : (q.dynmembers ? String(q.dynmembers).split(/[\r\n, ]+/) : []);
-            const allAgents = Array.from(new Set([...staticArr, ...dynArr].map(e => String(e).trim()).filter(Boolean)));
-            const agentsStr = allAgents.join(', ');
+            const staticArr = cleanQueueAgentsFromApi(q.static_members);
+            const dynArr = cleanQueueAgentsFromApi(q.dynmembers);
 
-            document.getElementById('queueStaticList').value = agentsStr;
-            document.getElementById('queueDynList').value = agentsStr;
+            document.getElementById('queueStaticList').value = staticArr.join(', ');
+            document.getElementById('queueDynList').value = dynArr.join(', ');
 
             populateQueueAnnouncementsDropdown();
             renderQueueAgentChecklist();

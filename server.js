@@ -1458,6 +1458,19 @@ async function initAuthDb() {
     } catch (fedSyncErr) {
         console.error('Federation config boot sync error:', fedSyncErr.message);
     }
+    try {
+        const queueFix = await reconcileQueueMembership();
+        if (queueFix && queueFix.changed) {
+            console.log(`QUEUES: repaired ${queueFix.added} missing member(s) and removed ${queueFix.removed} invalid entry(ies)`);
+            try {
+                await reloadPbxConfigPromise();
+            } catch (reloadErr) {
+                console.error('QUEUES: reload after membership repair failed:', reloadErr.message);
+            }
+        }
+    } catch (queueFixErr) {
+        console.error('QUEUES: membership repair error:', queueFixErr.message);
+    }
 }
 initAuthDb().catch(err => console.error('AUTH DB init error:', err));
 
@@ -15490,22 +15503,146 @@ app.delete('/api/config/ringgroups/:grpnum', async (req, res) => {
 // --- 2.5 QUEUES MANAGEMENT APIs ---
 
 
-async function syncAstDbQueueAgents(num, dynmembers) {
-    try {
-        let dynArr = [];
-        if (Array.isArray(dynmembers)) dynArr = dynmembers;
-        else if (typeof dynmembers === 'string') dynArr = dynmembers.split(/[\r\n, ]+/).filter(Boolean);
+// Normalize a queue agent list coming from the UI or the database.
+//
+// The modal historically accepted free text ("101, 102", "Local/110@from-queue/n,0").
+// Penalty notation ("110,0") and interface prefixes are stripped here so a penalty,
+// a bare "0" or an interface name can never become a queue extension again. Only
+// real numeric extensions survive; the result is de-duplicated and order preserved.
+function cleanQueueAgentList(value) {
+    const raw = Array.isArray(value)
+        ? value
+        : String(value === undefined || value === null ? '' : value).split(/[\r\n,;]+/);
 
-        await execPromise(`asterisk -rx "database deltree QPENALTY/${num}"`);
-        for (const ext of dynArr) {
-            const cleanExt = String(ext).trim();
-            if (cleanExt) {
-                await execPromise(`asterisk -rx "database put QPENALTY/${num}/agents ${cleanExt} 0"`);
-            }
+    const seen = new Set();
+    const cleaned = [];
+    for (const item of raw) {
+        const token = String(item === undefined || item === null ? '' : item)
+            .trim()
+            .replace(/^[A-Za-z]+\//, '')   // Local/110@from-queue/n -> 110@from-queue/n
+            .replace(/@.*$/, '')           // 110@from-queue/n    -> 110
+            .replace(/,\s*\d+$/, '')       // 110,0 (penalty)     -> 110
+            .trim();
+        if (!/^\d{2,}$/.test(token)) continue; // drop "0", empty, and interface junk
+        if (seen.has(token)) continue;
+        seen.add(token);
+        cleaned.push(token);
+    }
+    return cleaned;
+}
+
+// Dynamic queue agents live in the Asterisk database (QPENALTY/<queue>/agents),
+// which is where Issabel keeps them; they are NOT a queues_details keyword.
+async function readQueueDynamicAgents() {
+    const map = {};
+    try {
+        const { stdout } = await execPromise(`${ASTERISK_BIN} -rx "database show QPENALTY"`, { timeout: 15000 });
+        for (const line of String(stdout || '').split('\n')) {
+            const match = line.match(/^\/QPENALTY\/(\d+)\/agents\/(\d+)\s*:/);
+            if (!match) continue;
+            const queue = match[1];
+            const agent = match[2];
+            if (!map[queue]) map[queue] = [];
+            if (!map[queue].includes(agent)) map[queue].push(agent);
+        }
+    } catch (e) {
+        console.error('AstDB QPENALTY read error:', e.message);
+    }
+    return map;
+}
+
+async function syncAstDbQueueAgents(num, agents) {
+    try {
+        const list = cleanQueueAgentList(agents);
+        await execPromise(`${ASTERISK_BIN} -rx "database deltree QPENALTY/${num}"`);
+        for (const ext of list) {
+            await execPromise(`${ASTERISK_BIN} -rx "database put QPENALTY/${num}/agents ${ext} 0"`);
         }
     } catch (e) {
         console.error(`AstDB QPENALTY sync error for queue ${num}:`, e.message);
     }
+}
+
+// Every agent assigned in the modal must be a real queue member, otherwise Asterisk
+// reports "No Members" and the call goes straight to the failover destination.
+// Static and dynamic entries are therefore merged into one membership list.
+function buildQueueMemberRows(num, staticMembers, dynamicMembers) {
+    const members = cleanQueueAgentList([
+        ...cleanQueueAgentList(staticMembers),
+        ...cleanQueueAgentList(dynamicMembers)
+    ]);
+    return members.map((ext, index) => [num, 'member', `Local/${ext}@from-queue/n,0`, index]);
+}
+
+// Self-heal pass: agents that only exist in the AstDB QPENALTY family (the old
+// "dynamic only" save) were never real members, so their phones never rang.
+// Materialize them as member rows once, at boot, so existing queues start working.
+async function reconcileQueueMembership() {
+    let queueIds = [];
+    try {
+        const [rows] = await pool.query('SELECT extension FROM `asterisk`.`queues_config`');
+        queueIds = (rows || []).map(r => String(r.extension));
+    } catch (e) {
+        return { changed: 0 };
+    }
+    if (!queueIds.length) return { changed: 0 };
+
+    const dynamicAgents = await readQueueDynamicAgents();
+    const [memberRows] = await pool.query(`
+        SELECT id, data FROM \`asterisk\`.\`queues_details\`
+        WHERE keyword = 'member'
+        ORDER BY id ASC, flags ASC
+    `);
+
+    const existing = {};
+    for (const row of memberRows || []) {
+        const id = String(row.id);
+        if (!existing[id]) existing[id] = [];
+        const [ext] = cleanQueueAgentList([row.data]);
+        if (ext) existing[id].push(ext);
+    }
+
+    let added = 0;
+    for (const queue of queueIds) {
+        const known = existing[queue] || [];
+        const missing = (dynamicAgents[queue] || []).filter(ext => !known.includes(ext));
+        for (let i = 0; i < missing.length; i++) {
+            await pool.query(
+                'INSERT IGNORE INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)',
+                [queue, 'member', `Local/${missing[i]}@from-queue/n,0`, known.length + i]
+            );
+            added++;
+        }
+    }
+
+    // Drop phantom members ("Local/0@from-queue/n") and any malformed interface
+    // left behind by the old penalty-as-extension bug.
+    const [phantom] = await pool.query(`
+        DELETE FROM \`asterisk\`.\`queues_details\`
+        WHERE keyword = 'member'
+          AND (data NOT REGEXP '^[A-Za-z]+/[0-9]+@' OR data REGEXP '^[A-Za-z]+/0+@')
+    `);
+
+    // Purge AstDB penalty families for queues that no longer exist and agents
+    // that are not valid extension numbers.
+    const knownQueues = new Set(queueIds);
+    let astdbCleaned = 0;
+    for (const queue of Object.keys(dynamicAgents)) {
+        const agents = dynamicAgents[queue] || [];
+        const invalid = agents.filter(ext => !/^\d{2,}$/.test(ext));
+        if (!knownQueues.has(queue)) {
+            await execPromise(`${ASTERISK_BIN} -rx "database deltree QPENALTY/${queue}"`).catch(() => {});
+            astdbCleaned++;
+            continue;
+        }
+        for (const ext of invalid) {
+            await execPromise(`${ASTERISK_BIN} -rx "database del QPENALTY/${queue}/agents ${ext}"`).catch(() => {});
+            astdbCleaned++;
+        }
+    }
+
+    const removed = ((phantom && phantom.affectedRows) || 0) + astdbCleaned;
+    return { changed: added + removed, added, removed };
 }
 
 // --- EXTENSION CONFLICT AUDIT & DETECTION ---
@@ -15562,7 +15699,11 @@ app.get('/api/config/queues', async (req, res) => {
         const [detailsRows] = await pool.query(`
             SELECT id, keyword, data
             FROM \`asterisk\`.\`queues_details\`
+            WHERE keyword IN ('member', 'strategy', 'autofill', 'music', 'musicclass', 'timeout', 'retry', 'joinempty', 'leavewhenempty')
+            ORDER BY id ASC, flags ASC
         `);
+
+        const dynamicAgents = await readQueueDynamicAgents();
 
         const detailsMap = {};
         for (const row of detailsRows) {
@@ -15577,18 +15718,17 @@ app.get('/api/config/queues', async (req, res) => {
 
         const queues = configRows.map(q => {
             const d = detailsMap[q.extension] || {};
-            const staticMembers = (d.members || []).map(m => {
-                const match = String(m).match(/(\d+)/);
-                return match ? match[1] : String(m).trim();
-            });
+            const staticMembers = cleanQueueAgentList(d.members || []);
+            const dynMembers = (dynamicAgents[q.extension] || [])
+                .filter(ext => !staticMembers.includes(ext));
 
             return {
                 extension: q.extension,
                 descr: q.descr,
-                maxwait: (q.maxwait !== undefined && q.maxwait !== null && q.maxwait !== '' && q.maxwait !== '0') ? q.maxwait : (d.maxwait && d.maxwait !== '0' ? d.maxwait : ''),
+                maxwait: (q.maxwait !== undefined && q.maxwait !== null && q.maxwait !== '' && q.maxwait !== '0') ? q.maxwait : '',
                 cwignore: q.cwignore,
                 joinannounce_id: q.joinannounce_id || 0,
-                dest: q.dest || d.goto || 'app-blackhole,hangup,1',
+                dest: q.dest || 'app-blackhole,hangup,1',
                 destcontinue: q.destcontinue || 'app-blackhole,hangup,1',
                 monitor_type: q.monitor_type,
                 strategy: d.strategy || 'rrmemory',
@@ -15596,8 +15736,10 @@ app.get('/api/config/queues', async (req, res) => {
                 musicclass: d.musicclass || d.music || 'default',
                 timeout: d.timeout || '15',
                 retry: d.retry || '5',
+                joinempty: d.joinempty || 'yes',
+                leavewhenempty: d.leavewhenempty || 'no',
                 static_members: staticMembers,
-                dynmembers: (d.dynmembers || '').split(/[\r\n, ]+/).filter(Boolean).join(', ')
+                dynmembers: dynMembers.join(', ')
             };
         });
 
@@ -15651,8 +15793,8 @@ app.post('/api/config/queues', async (req, res) => {
         if (continueDest === `ext-queues,${num},1` || continueDest === `from-did-direct,${num},1`) {
             continueDest = 'app-blackhole,hangup,1';
         }
-        const joinEmptyVal = (req.body.joinempty !== undefined && String(req.body.joinempty).trim()) ? String(req.body.joinempty).trim() : 'no';
-        const leaveWhenEmptyVal = (req.body.leavewhenempty !== undefined && String(req.body.leavewhenempty).trim()) ? String(req.body.leavewhenempty).trim() : 'yes';
+        const joinEmptyVal = (req.body.joinempty !== undefined && String(req.body.joinempty).trim()) ? String(req.body.joinempty).trim() : 'yes';
+        const leaveWhenEmptyVal = (req.body.leavewhenempty !== undefined && String(req.body.leavewhenempty).trim()) ? String(req.body.leavewhenempty).trim() : 'no';
 
         await pool.query(`
             INSERT INTO \`asterisk\`.\`queues_config\`
@@ -15663,12 +15805,9 @@ app.post('/api/config/queues', async (req, res) => {
             [num, 'strategy', ringStrategy, 0],
             [num, 'autofill', isAutofill, 0],
             [num, 'ringinuse', ringInUseVal, 0],
-            [num, 'musicclass', mohClass, 0],
             [num, 'music', mohClass, 0],
             [num, 'timeout', agentTimeoutVal, 0],
             [num, 'retry', retryVal, 0],
-            [num, 'maxwait', maxWaitVal, 0],
-            [num, 'goto', failDest, 0],
             [num, 'announce-frequency', '0', 0],
             [num, 'announce-holdtime', 'no', 0],
             [num, 'announce-position', 'no', 0],
@@ -15687,33 +15826,22 @@ app.post('/api/config/queues', async (req, res) => {
             details.push([num, 'monitor-format', 'wav', 0]);
         }
 
-        let staticArr = [];
-        if (Array.isArray(static_members)) staticArr = static_members;
-        else if (typeof static_members === 'string') staticArr = static_members.split(/[\r\n, ]+/).filter(Boolean);
+        // Static and dynamic agents both become real queue members; dynamic entries
+        // additionally seed the AstDB penalty family Issabel expects.
+        details.push(...buildQueueMemberRows(num, static_members, dynmembers));
 
-        for (let idx = 0; idx < staticArr.length; idx++) {
-            const rawExt = String(staticArr[idx]).trim().replace(/^[A-Za-z]+\//, '').replace(/@.*/, '');
-            const match = rawExt.match(/(\d+)/);
-            const extNum = match ? match[1] : rawExt;
-            if (!extNum) continue;
-            details.push([num, 'member', `Local/${extNum}@from-queue/n,0`, idx]);
-        }
-
-        let dynArr = [];
-        if (Array.isArray(dynmembers)) dynArr = dynmembers;
-        else if (typeof dynmembers === 'string') dynArr = dynmembers.split(/[\r\n, ]+/).filter(Boolean);
-
-        const cleanDynArr = dynArr.map(s => {
-            const clean = String(s).trim().replace(/^[A-Za-z]+\//, '').replace(/@.*/, '');
-            const match = clean.match(/(\d+)/);
-            return match ? `${match[1]},0` : clean;
-        }).filter(Boolean);
-
-        if (cleanDynArr.length > 0) {
-            details.push([num, 'dynmembers', cleanDynArr.join('\n'), 0]);
-        }
-        for (const row of details) {
-            await pool.query('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', row);
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            for (const row of details) {
+                await conn.query('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', row);
+            }
+            await conn.commit();
+        } catch (rowError) {
+            await conn.rollback().catch(() => {});
+            throw rowError;
+        } finally {
+            conn.release();
         }
 
         await syncAstDbQueueAgents(num, dynmembers);
@@ -15766,26 +15894,16 @@ app.put('/api/config/queues/:extension', async (req, res) => {
         if (continueDest === `ext-queues,${num},1` || continueDest === `from-did-direct,${num},1`) {
             continueDest = 'app-blackhole,hangup,1';
         }
-        const joinEmptyVal = (req.body.joinempty !== undefined && String(req.body.joinempty).trim()) ? String(req.body.joinempty).trim() : 'no';
-        const leaveWhenEmptyVal = (req.body.leavewhenempty !== undefined && String(req.body.leavewhenempty).trim()) ? String(req.body.leavewhenempty).trim() : 'yes';
-
-        await pool.query(`
-            UPDATE \`asterisk\`.\`queues_config\`
-            SET descr = ?, joinannounce_id = ?, maxwait = ?, dest = ?, destcontinue = ?, cwignore = ?, monitor_type = ?
-            WHERE extension = ?
-        `, [name, annId, maxWaitVal, failDest, continueDest, cwignoreVal, monitorTypeVal, num]);
-        await pool.query('DELETE FROM `asterisk`.`queues_details` WHERE id = ?', [num]);
+        const joinEmptyVal = (req.body.joinempty !== undefined && String(req.body.joinempty).trim()) ? String(req.body.joinempty).trim() : 'yes';
+        const leaveWhenEmptyVal = (req.body.leavewhenempty !== undefined && String(req.body.leavewhenempty).trim()) ? String(req.body.leavewhenempty).trim() : 'no';
 
         const details = [
             [num, 'strategy', ringStrategy, 0],
             [num, 'autofill', isAutofill, 0],
             [num, 'ringinuse', ringInUseVal, 0],
-            [num, 'musicclass', mohClass, 0],
             [num, 'music', mohClass, 0],
             [num, 'timeout', agentTimeoutVal, 0],
             [num, 'retry', retryVal, 0],
-            [num, 'maxwait', maxWaitVal, 0],
-            [num, 'goto', failDest, 0],
             [num, 'announce-frequency', '0', 0],
             [num, 'announce-holdtime', 'no', 0],
             [num, 'announce-position', 'no', 0],
@@ -15804,34 +15922,28 @@ app.put('/api/config/queues/:extension', async (req, res) => {
             details.push([num, 'monitor-format', 'wav', 0]);
         }
 
-        let staticArr = [];
-        if (Array.isArray(static_members)) staticArr = static_members;
-        else if (typeof static_members === 'string') staticArr = static_members.split(/[\r\n, ]+/).filter(Boolean);
+        // Static and dynamic agents both become real queue members; dynamic entries
+        // additionally seed the AstDB penalty family Issabel expects.
+        details.push(...buildQueueMemberRows(num, static_members, dynmembers));
 
-        for (let idx = 0; idx < staticArr.length; idx++) {
-            const rawExt = String(staticArr[idx]).trim().replace(/^[A-Za-z]+\//, '').replace(/@.*/, '');
-            const match = rawExt.match(/(\d+)/);
-            const extNum = match ? match[1] : rawExt;
-            if (!extNum) continue;
-            details.push([num, 'member', `Local/${extNum}@from-queue/n,0`, idx]);
-        }
-
-        let dynArr = [];
-        if (Array.isArray(dynmembers)) dynArr = dynmembers;
-        else if (typeof dynmembers === 'string') dynArr = dynmembers.split(/[\r\n, ]+/).filter(Boolean);
-
-        const cleanDynArr = dynArr.map(s => {
-            const clean = String(s).trim().replace(/^[A-Za-z]+\//, '').replace(/@.*/, '');
-            const match = clean.match(/(\d+)/);
-            return match ? `${match[1]},0` : clean;
-        }).filter(Boolean);
-
-        if (cleanDynArr.length > 0) {
-            details.push([num, 'dynmembers', cleanDynArr.join('\n'), 0]);
-        }
-
-        for (const row of details) {
-            await pool.query('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', row);
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            await conn.query(`
+                UPDATE \`asterisk\`.\`queues_config\`
+                SET descr = ?, joinannounce_id = ?, maxwait = ?, dest = ?, destcontinue = ?, cwignore = ?, monitor_type = ?
+                WHERE extension = ?
+            `, [name, annId, maxWaitVal, failDest, continueDest, cwignoreVal, monitorTypeVal, num]);
+            await conn.query('DELETE FROM `asterisk`.`queues_details` WHERE id = ?', [num]);
+            for (const row of details) {
+                await conn.query('INSERT INTO `asterisk`.`queues_details` (id, keyword, data, flags) VALUES (?, ?, ?, ?)', row);
+            }
+            await conn.commit();
+        } catch (rowError) {
+            await conn.rollback().catch(() => {});
+            throw rowError;
+        } finally {
+            conn.release();
         }
 
         await syncAstDbQueueAgents(num, dynmembers);
