@@ -857,6 +857,191 @@ const isRtl = currentLang === 'ar';
 
     <!-- Telemetry & Storage Management Client Script -->
     <script>
+        const isRtl = <%= Boolean(isRtl) %>;
+        const FED_LOCAL_SITE = <%- JSON.stringify(String((typeof federationScope !== 'undefined' && federationScope && federationScope.localSiteCode) || '10')).replace(/</g, '\\u003c') %>;
+        let FED_NODES = <%- JSON.stringify(typeof federationNodes !== 'undefined' && Array.isArray(federationNodes) ? federationNodes : []).replace(/</g, '\\u003c') %>;
+        const FED_CAN_RELAY = <%- Boolean(typeof isSuperAdmin !== 'undefined' && isSuperAdmin) %>;
+
+        function fedNode(siteCode) {
+            const site = String(siteCode || FED_LOCAL_SITE);
+            return FED_NODES.find(n => String(n.site_code) === site) || null;
+        }
+
+        function fedNodeName(siteCode) {
+            const node = fedNode(siteCode);
+            return (node && node.node_name) || ('Site ' + String(siteCode || ''));
+        }
+
+        function setFedNodes(nodes) {
+            if (!Array.isArray(nodes) || nodes.length === 0) return;
+            FED_NODES = nodes.map(node => ({
+                site_code: String(node.site_code),
+                node_name: node.node_name || ('Site ' + node.site_code),
+                is_local: Boolean(node.is_local),
+                status: node.status || 'online',
+                error: node.error || null
+            }));
+        }
+
+        async function fedSysmonFetch(path, options = {}, nodeSite = null) {
+            const site = String(nodeSite || FED_LOCAL_SITE);
+            if (!site || site === FED_LOCAL_SITE) return fetch(path, options);
+            if (!FED_CAN_RELAY) {
+                return Promise.resolve(new Response(JSON.stringify({
+                    success: false,
+                    error: isRtl ? 'التحكم في سيرفر بعيد يتطلب مديراً أعلى.' : 'Remote PBX control requires a super administrator.'
+                }), { status: 403, headers: { 'Content-Type': 'application/json' } }));
+            }
+            const method = String(options.method || 'GET').toUpperCase();
+            const headers = options.headers || {};
+            const contentType = headers['Content-Type'] || headers['content-type'] || null;
+
+            let body = options.body;
+            if (body && typeof body === 'object' && !(body instanceof FormData)) {
+                body = JSON.stringify(body);
+            }
+
+            const gatewayUrl = '/api/federation/peers/' + encodeURIComponent(site) + '/action';
+            return fetch(gatewayUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    method,
+                    path,
+                    body,
+                    contentType
+                })
+            });
+        }
+
+        function renderFleetServers(servers) {
+            const section = document.getElementById('fleet-servers-section');
+            const grid = document.getElementById('fleet-servers-grid');
+            const countEl = document.getElementById('fleet-servers-count');
+            if (!section || !grid || !Array.isArray(servers) || servers.length <= 1) {
+                if (section) section.classList.add('hidden');
+                return;
+            }
+            section.classList.remove('hidden');
+            if (countEl) countEl.textContent = `${servers.length} ${isRtl ? 'سيرفرات متصلة' : 'PBX Nodes'}`;
+
+            grid.innerHTML = servers.map(s => {
+                const isOnline = s.status === 'online';
+                const dotClass = isOnline ? 'bg-emerald-400' : 'bg-rose-500';
+                const statusText = isOnline ? (isRtl ? 'متصل' : 'Online') : (isRtl ? 'غير متصل' : 'Offline');
+                const cpuPct = s.cpu ? (s.cpu.usagePct || 0) : 0;
+                const ramPct = s.memory ? (s.memory.usedPct || 0) : 0;
+                const diskPct = s.disk ? (s.disk.usedPct || 0) : 0;
+                const astOnline = s.asterisk && s.asterisk.status === 'online';
+                const channels = s.asterisk ? (s.asterisk.activeChannels || 0) : 0;
+                const calls = s.asterisk ? (s.asterisk.activeCalls || 0) : 0;
+
+                return `
+                    <div class="panel-surface rounded-2xl p-4 flex flex-col justify-between border border-[var(--border-primary)] shadow-sm">
+                        <div class="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-[var(--border-primary)]">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="w-2 h-2 rounded-full shrink-0 ${dotClass}"></span>
+                                <h4 class="text-xs font-black text-white truncate">${escapeHtml(s.nodeName || ('Site ' + s.siteCode))}</h4>
+                                <span class="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site ${escapeHtml(s.siteCode)}</span>
+                            </div>
+                            <span class="text-[10px] font-bold font-mono ${isOnline ? 'text-emerald-400' : 'text-rose-400'}">${escapeHtml(statusText)}</span>
+                        </div>
+
+                        ${isOnline ? `
+                        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                            <div class="p-2 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col gap-0.5">
+                                <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+                                    <span>CPU</span>
+                                    <span>${cpuPct}%</span>
+                                </div>
+                                <div class="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                                    <div class="h-full bg-purple-500" style="width: ${Math.min(100, Math.max(0, cpuPct))}%"></div>
+                                </div>
+                            </div>
+
+                            <div class="p-2 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col gap-0.5">
+                                <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+                                    <span>RAM</span>
+                                    <span>${ramPct}%</span>
+                                </div>
+                                <div class="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                                    <div class="h-full bg-emerald-500" style="width: ${Math.min(100, Math.max(0, ramPct))}%"></div>
+                                </div>
+                            </div>
+
+                            <div class="p-2 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col gap-0.5">
+                                <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+                                    <span>Disk</span>
+                                    <span>${diskPct}%</span>
+                                </div>
+                                <div class="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                                    <div class="h-full bg-blue-500" style="width: ${diskPct}%"></div>
+                                </div>
+                            </div>
+
+                            <div class="p-2 rounded-xl bg-black/20 border border-[var(--border-primary)] flex flex-col justify-between">
+                                <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+                                    <span>Asterisk</span>
+                                    <span class="${astOnline ? 'text-emerald-400 font-bold' : 'text-rose-400'}">${astOnline ? 'Online' : 'Off'}</span>
+                                </div>
+                                <span class="text-[10px] text-[var(--text-secondary)] truncate">${channels} chan / ${calls} call</span>
+                            </div>
+                        </div>
+                        ` : `
+                        <div class="p-4 text-center text-xs text-rose-400 font-mono bg-rose-500/5 rounded-xl border border-rose-500/20">
+                            ${escapeHtml(s.error || (isRtl ? 'تعذر الاتصال بالسيرفر' : 'Host unreachable'))}
+                        </div>
+                        `}
+                    </div>`;
+            }).join('');
+        }
+
+        function renderFleetStorageTable(servers) {
+            const section = document.getElementById('fleet-storage-section');
+            const tbody = document.getElementById('fleet-storage-table-body');
+            if (!section || !tbody || !Array.isArray(servers) || servers.length <= 1) {
+                if (section) section.classList.add('hidden');
+                return;
+            }
+            section.classList.remove('hidden');
+
+            tbody.innerHTML = servers.map(s => {
+                const isOnline = s.status === 'online';
+                const dotClass = isOnline ? 'bg-emerald-400' : 'bg-rose-500';
+                const statusText = isOnline ? (isRtl ? 'متصل' : 'Online') : (isRtl ? 'غير متصل' : 'Offline');
+                const disk = s.disk || {};
+                const rec = s.recordings || {};
+                const db = s.db || {};
+
+                return `
+                    <tr class="hover:bg-zinc-900/40 transition">
+                        <td class="py-2.5 px-3">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full shrink-0 ${dotClass}"></span>
+                                <span class="font-bold text-white">${escapeHtml(s.nodeName || ('Site ' + s.siteCode))}</span>
+                                <span class="text-[9px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">Site ${escapeHtml(s.siteCode)}</span>
+                            </div>
+                        </td>
+                        <td class="py-2.5 px-3">
+                            <span class="${isOnline ? 'text-emerald-400' : 'text-rose-400'} font-bold">${escapeHtml(statusText)}</span>
+                        </td>
+                        <td class="py-2.5 px-3">
+                            ${isOnline ? `<span class="text-white">${disk.usedGb || 0} GB used</span> <span class="text-[var(--text-muted)]">(${disk.freeGb || 0} GB free · ${disk.usedPct || 0}%)</span>` : '—'}
+                        </td>
+                        <td class="py-2.5 px-3">
+                            ${isOnline ? `<span class="text-white">${rec.count || 0} files</span> <span class="text-[var(--text-muted)]">(${rec.sizeMb || 0} MB)</span>` : '—'}
+                        </td>
+                        <td class="py-2.5 px-3">
+                            ${isOnline ? `<span class="text-white">${db.totalRows || 0} rows</span> <span class="text-[var(--text-muted)]">(${db.dbSizeMb || 0} MB)</span>` : '—'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
         // State & Polling Variables
         let telemetryPollTimer = null;
         let currentPollInterval = 5000;
@@ -1147,6 +1332,9 @@ const isRtl = currentLang === 'ar';
                 const data = await res.json();
                 if (!data.success) return;
 
+                if (Array.isArray(data.nodes)) setFedNodes(data.nodes);
+                if (Array.isArray(data.servers)) renderFleetServers(data.servers);
+
                 // 1. CPU & Load
                 const cpuPct = data.cpu ? data.cpu.usagePct : 0;
                 const cpuLoad = (data.cpu && data.cpu.loadAvg) ? data.cpu.loadAvg.join(', ') : '-';
@@ -1336,7 +1524,26 @@ const isRtl = currentLang === 'ar';
             if (!container) return;
 
             let html = '';
-            services.forEach(s => {
+            const multiNode = new Set((services || []).map(s => String(s.nodeSite || FED_LOCAL_SITE))).size > 1;
+            let renderedSite = null;
+
+            (services || []).forEach(s => {
+                const site = String(s.nodeSite || FED_LOCAL_SITE);
+                if (multiNode && site !== renderedSite) {
+                    renderedSite = site;
+                    const node = fedNode(site) || {};
+                    const status = s.nodeStatus || node.status || 'online';
+                    const dotClass = status === 'online' ? 'bg-emerald-400' : (status === 'offline' ? 'bg-rose-500' : 'bg-amber-400');
+                    const statusClass = status === 'online' ? 'text-emerald-400' : (status === 'offline' ? 'text-rose-400' : 'text-amber-400');
+                    html += `
+                        <div class="col-span-full flex items-center gap-2 py-2 px-3.5 rounded-xl bg-[var(--bg-card)]/80 border border-[var(--border-primary)] shadow-sm mb-1 mt-2">
+                            <span class="w-2 h-2 rounded-full shrink-0 ${dotClass}"></span>
+                            <span class="text-xs font-black text-white truncate">${escapeHtml(s.nodeName || node.node_name || ('Site ' + site))}</span>
+                            <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] border border-[var(--border-primary)]">Site ${escapeHtml(site)}</span>
+                            <span class="text-[9px] font-extrabold uppercase tracking-wide ms-auto ${statusClass}">${escapeHtml(status)}</span>
+                        </div>`;
+                }
+
                 const isActive = s.activeState === 'active';
                 const isRunning = s.subState === 'running';
 
@@ -1391,28 +1598,28 @@ const isRtl = currentLang === 'ar';
 
                     <div class="flex items-center gap-2 pt-3 border-t border-[var(--border-primary)]">
                         ${s.id === 'asterisk' ? `
-                            <button type="button" onclick="handleServiceAction('asterisk', 'reload')" class="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                            <button type="button" onclick="handleServiceAction('asterisk', 'reload', '${site}')" class="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                                 <span><%= t.reloadBtn %></span>
                             </button>
-                            <button type="button" onclick="confirmServiceAction('asterisk', 'restart', 'Asterisk PBX Core')" class="flex-1 bg-red-600/80 hover:bg-red-500 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                            <button type="button" onclick="confirmServiceAction('asterisk', 'restart', 'Asterisk PBX Core', '${site}')" class="flex-1 bg-red-600/80 hover:bg-red-500 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                                 <span><%= t.restartBtn %></span>
                             </button>
                         ` : s.id === 'database' ? `
-                            <button type="button" onclick="confirmServiceAction('database', 'restart', 'MariaDB / MySQL')" class="w-full bg-amber-600/80 hover:bg-amber-500 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                            <button type="button" onclick="confirmServiceAction('database', 'restart', 'MariaDB / MySQL', '${site}')" class="w-full bg-amber-600/80 hover:bg-amber-500 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                                 <span><%= t.restartBtn %></span>
                             </button>
                         ` : s.id === 'stt-worker' ? `
                             ${isActive ? `
-                                <button type="button" onclick="handleServiceAction('stt-worker', 'restart')" class="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2 px-3 text-xs cursor-pointer transition"><%= t.restartBtn %></button>
-                                <button type="button" onclick="handleServiceAction('stt-worker', 'stop')" class="flex-1 bg-red-600/80 hover:bg-red-500 text-white font-bold rounded-xl py-2 px-3 text-xs cursor-pointer transition"><%= t.stopBtn %></button>
+                                <button type="button" onclick="handleServiceAction('stt-worker', 'restart', '${site}')" class="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2 px-3 text-xs cursor-pointer transition"><%= t.restartBtn %></button>
+                                <button type="button" onclick="handleServiceAction('stt-worker', 'stop', '${site}')" class="flex-1 bg-red-600/80 hover:bg-red-500 text-white font-bold rounded-xl py-2 px-3 text-xs cursor-pointer transition"><%= t.stopBtn %></button>
                             ` : `
-                                <button type="button" onclick="handleServiceAction('stt-worker', 'start')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl py-2 px-3 text-xs cursor-pointer transition"><%= t.startBtn %></button>
+                                <button type="button" onclick="handleServiceAction('stt-worker', 'start', '${site}')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl py-2 px-3 text-xs cursor-pointer transition"><%= t.startBtn %></button>
                             `}
                         ` : `
-                            <button type="button" onclick="handleServiceAction('${s.id}', 'restart')" class="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+                            <button type="button" onclick="handleServiceAction('${s.id}', 'restart', '${site}')" class="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                                 <span><%= t.restartBtn %></span>
                             </button>
@@ -1531,16 +1738,18 @@ const isRtl = currentLang === 'ar';
         }
 
         // Confirm Modal for Critical Actions
-        function confirmServiceAction(serviceId, action, serviceName) {
-            pendingServiceAction = { serviceId, action };
+        function confirmServiceAction(serviceId, action, serviceName, nodeSite = null) {
+            const site = String(nodeSite || FED_LOCAL_SITE);
+            pendingServiceAction = { serviceId, action, site };
             const modal = document.getElementById('serviceConfirmModal');
-            document.getElementById('serviceConfirmModalTitle').textContent = '<%= t.confirmRestartTitle %>: ' + serviceName;
+            const nodeSuffix = (site !== FED_LOCAL_SITE) ? ` (${fedNodeName(site)})` : '';
+            document.getElementById('serviceConfirmModalTitle').textContent = '<%= t.confirmRestartTitle %>: ' + serviceName + nodeSuffix;
             modal.classList.remove('opacity-0', 'invisible');
             modal.style.pointerEvents = 'auto';
 
             document.getElementById('confirmServiceActionBtn').onclick = () => {
                 closeServiceConfirmModal();
-                handleServiceAction(serviceId, action);
+                handleServiceAction(serviceId, action, site);
             };
         }
 
@@ -1552,14 +1761,16 @@ const isRtl = currentLang === 'ar';
         }
 
         // Execute Service Action API call
-        async function handleServiceAction(serviceId, action) {
+        async function handleServiceAction(serviceId, action, nodeSite = null) {
+            const site = String(nodeSite || FED_LOCAL_SITE);
+            const nodeSuffix = (site !== FED_LOCAL_SITE) ? ` on ${fedNodeName(site)}` : '';
             try {
-                showToast(`Executing ${action} on ${serviceId}...`, 'info');
-                const res = await fetch('/api/system/service-action', {
+                showToast(`Executing ${action} on ${serviceId}${nodeSuffix}...`, 'info');
+                const res = await fedSysmonFetch('/api/system/service-action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ serviceId, action })
-                });
+                }, site);
                 const data = await res.json();
                 if (data.success) {
                     showToast(data.message || 'Action executed successfully', 'success');
@@ -1658,6 +1869,10 @@ const isRtl = currentLang === 'ar';
                 .then(data => {
                     if (!data.success) return;
                     
+                    if (Array.isArray(data.servers)) {
+                        renderFleetStorageTable(data.servers);
+                    }
+
                     // 1. Disk usage
                     const usedPct = data.disk ? data.disk.usedPct : 0;
                     const freeGb = data.disk ? data.disk.freeGb : 0;

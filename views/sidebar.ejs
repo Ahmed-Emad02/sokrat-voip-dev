@@ -6712,6 +6712,8 @@ function enhanceSelectElements() {
             trigger.classList.remove('border-red-500', 'ring-2', 'ring-red-500/50');
             syncState();
         });
+        select._customSync = syncState;
+        select._customBuildOptions = buildOptions;
 
         const selectObserver = new MutationObserver(() => {
             syncState();
@@ -6769,6 +6771,10 @@ window.closeConfigDropdownMenu = closeConfigDropdownMenu;
 window.closeConfigDropdowns = closeConfigDropdowns;
 window.positionConfigDropdown = positionConfigDropdown;
 window.enhanceSelectElements = enhanceSelectElements;
+window.syncConfigDropdownTrigger = function(el) {
+    if (el && typeof el._customSync === 'function') el._customSync();
+    if (el && typeof el._customBuildOptions === 'function') el._customBuildOptions();
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     scheduleSelectEnhancement();

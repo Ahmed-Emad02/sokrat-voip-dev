@@ -3827,10 +3827,16 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                         card.classList.remove('selected-row');
                     });
                     const selectedRow = document.getElementById('row-' + deviceKey);
-                    if (selectedRow) selectedRow.classList.add('selected-row');
+                    if (selectedRow) {
+                        selectedRow.classList.add('selected-row');
+                        if (!options || !options.noScroll) {
+                            try { selectedRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) {}
+                        }
+                    }
                     
                     // Fill metadata cards
-                    elId.textContent = rawId || '-';
+                    const nodePrefix = (FED_NODES.length > 1) ? `${dev.nodeName || ('Site ' + dev.nodeSite)} · ` : '';
+                    elId.textContent = `${nodePrefix}${rawId}`;
                     elNum.textContent = dev.Number || 'Unknown';
                     elProv.textContent = dev['Provider Name'] || 'NONE';
                     elImei.textContent = dev.IMEI || '-';
@@ -3859,13 +3865,20 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
 
                     // Sync select dropdowns
                     isSyncingSelect = true;
-                    if (ussdTarget && ussdTarget.value !== deviceKey) {
-                        ussdTarget.value = deviceKey;
-                        ussdTarget.dispatchEvent(new Event('change', { bubbles: true }));
+                    if (ussdTarget) {
+                        if (ussdTarget.value !== deviceKey) ussdTarget.value = deviceKey;
+                        if (typeof window.syncConfigDropdownTrigger === 'function') {
+                            window.syncConfigDropdownTrigger(ussdTarget);
+                        } else {
+                            ussdTarget.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
                     }
                     const replyDongle = document.getElementById('sms-reply-dongle');
-                    if (replyDongle && replyDongle.value !== deviceKey) {
-                        replyDongle.value = deviceKey;
+                    if (replyDongle) {
+                        if (replyDongle.value !== deviceKey) replyDongle.value = deviceKey;
+                        if (typeof window.syncConfigDropdownTrigger === 'function') {
+                            window.syncConfigDropdownTrigger(replyDongle);
+                        }
                     }
                     isSyncingSelect = false;
                 } catch (err) {
@@ -3938,9 +3951,8 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
             if (replyDongleEl) {
                 replyDongleEl.addEventListener('change', (e) => {
                     if (isSyncingSelect) return;
-                    const val = e.target.value;
-                    if (val && val.toLowerCase() !== (selectedDongleId || '').toLowerCase()) {
-                        selectDevice(val);
+                    if (typeof window.syncConfigDropdownTrigger === 'function') {
+                        window.syncConfigDropdownTrigger(replyDongleEl);
                     }
                 });
             }
