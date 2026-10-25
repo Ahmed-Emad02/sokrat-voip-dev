@@ -8091,15 +8091,44 @@ function isTabAllowed(tabName) {
             renderQuickPickPills();
         }
 
-        function populateAnnouncementsDropdown() {
+        function populateAnnouncementsDropdown(desiredValue) {
             const sel = document.getElementById('rgAnnMsg');
             if (!sel) return;
+
+            // Same trap as the queue dialog: this runs again after the async
+            // recording list arrives, so the saved id must be restored instead of
+            // falling back to "None".
+            const keep = (desiredValue !== undefined && desiredValue !== null && String(desiredValue).trim() !== '')
+                ? String(desiredValue).trim()
+                : String(sel.value || '0').trim();
+
             sel.innerHTML = '<option value="0">None / No Announcement</option>';
             (loadedRecordingsList || []).forEach(r => {
                 const opt = document.createElement('option');
                 opt.value = r.id;
                 opt.textContent = `${r.displayname} (ID: ${r.id})`;
                 sel.appendChild(opt);
+            });
+
+            if (keep !== '0' && !Array.from(sel.options).some(o => String(o.value) === keep)) {
+                const opt = document.createElement('option');
+                opt.value = keep;
+                opt.textContent = (isRtl ? 'تسجيل محذوف' : 'Missing recording') + ` (ID: ${keep})`;
+                sel.appendChild(opt);
+            }
+
+            sel.value = keep;
+            if (String(sel.value) !== keep) sel.value = '0';
+            if (typeof window.syncConfigDropdownTrigger === 'function') {
+                window.syncConfigDropdownTrigger(sel);
+            }
+        }
+
+        function syncRingGroupModalSelects() {
+            if (typeof window.syncConfigDropdownTrigger !== 'function') return;
+            ['rgStrategy', 'rgRinging', 'rgAnnMsg'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) window.syncConfigDropdownTrigger(el);
             });
         }
 
@@ -8186,9 +8215,10 @@ function isTabAllowed(tabName) {
             const num = getNextAvailableRingGroupNum();
             document.getElementById('rgNum').value = num;
 
-            populateAnnouncementsDropdown();
+            populateAnnouncementsDropdown(0);
             populateMohRingGroupDropdown();
             document.getElementById('rgRinging').value = 'Ring';
+            syncRingGroupModalSelects();
             renderQuickPickPills();
 
             const destVal = `ext-group,${num},1`;
@@ -8200,8 +8230,9 @@ function isTabAllowed(tabName) {
             if (rgPostDestSelectInstance) rgPostDestSelectInstance.setDialplan(destVal);
             if (typeof ensureAllConfigListsLoaded === 'function') {
                 ensureAllConfigListsLoaded().then(() => {
-                    populateAnnouncementsDropdown();
+                    populateAnnouncementsDropdown(0);
                     populateMohRingGroupDropdown();
+                    syncRingGroupModalSelects();
                     renderQuickPickPills();
                     if (rgPostDestSelectInstance) rgPostDestSelectInstance.setDialplan(destVal);
                 }).catch(() => {});
@@ -8224,10 +8255,12 @@ function isTabAllowed(tabName) {
             document.getElementById('rgStrategy').value = rg.strategy || 'ringall';
             document.getElementById('rgTime').value = rg.grptime || 20;
             document.getElementById('rgList').value = rg.grplist || '';
-            populateAnnouncementsDropdown();
+            const rgAnnMsgId = parseInt(rg.annmsg_id, 10) || 0;
+            populateAnnouncementsDropdown(rgAnnMsgId);
             populateMohRingGroupDropdown();
-            document.getElementById('rgAnnMsg').value = rg.annmsg_id || 0;
+            document.getElementById('rgAnnMsg').value = String(rgAnnMsgId);
             document.getElementById('rgRinging').value = rg.ringing || 'Ring';
+            syncRingGroupModalSelects();
             renderQuickPickPills();
 
             const destVal = rg.postdest || `ext-group,${grpnum},1`;
@@ -8237,8 +8270,9 @@ function isTabAllowed(tabName) {
             if (rgPostDestSelectInstance) rgPostDestSelectInstance.setDialplan(destVal);
             if (typeof ensureAllConfigListsLoaded === 'function') {
                 ensureAllConfigListsLoaded().then(() => {
-                    populateAnnouncementsDropdown();
+                    populateAnnouncementsDropdown(rgAnnMsgId);
                     populateMohRingGroupDropdown();
+                    syncRingGroupModalSelects();
                     renderQuickPickPills();
                     if (rgPostDestSelectInstance) rgPostDestSelectInstance.setDialplan(destVal);
                 }).catch(() => {});
@@ -8527,6 +8561,18 @@ function isTabAllowed(tabName) {
                 if (el) window.syncConfigDropdownTrigger(el);
             });
         }
+
+        // Any modal that assigns values to dropdown fields must refresh the
+        // custom dropdown labels, otherwise the dialog shows the previous value
+        // and the operator re-saves stale data.
+        function syncModalSelects(root) {
+            if (typeof window.syncConfigDropdownTrigger !== 'function') return;
+            const scope = root || document;
+            scope.querySelectorAll('select.enhanced-select, select.config-input').forEach(sel => {
+                if (sel && !sel.multiple) window.syncConfigDropdownTrigger(sel);
+            });
+        }
+        window.syncModalSelects = syncModalSelects;
 
         function fetchQueues() {
             const tbody = document.getElementById('queues-table-body');
@@ -9947,6 +9993,7 @@ function isTabAllowed(tabName) {
                 addIvrEntryRow('2', '');
             }
 
+            syncModalSelects(document.getElementById('ivrModal'));
             if (typeof ensureAllConfigListsLoaded === 'function') {
                 ensureAllConfigListsLoaded().then(() => {
                     if (id) {
@@ -9959,6 +10006,7 @@ function isTabAllowed(tabName) {
                     } else {
                         populateIvrAnnouncementSelect(0);
                     }
+                    syncModalSelects(document.getElementById('ivrModal'));
                 }).catch(() => {});
             }
         }

@@ -14731,6 +14731,22 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         const [devRows] = await pool.query('SELECT tech FROM `asterisk`.`devices` WHERE id = ?', [extNum]);
         const currentTech = devRows[0]?.tech || 'sip';
 
+        const [userRows] = await pool.query(
+            'SELECT voicemail, recording FROM `asterisk`.`users` WHERE extension = ?',
+            [extNum]
+        );
+        if (!userRows.length) {
+            return res.status(404).json({ success: false, error: `Extension ${extNum} not found.` });
+        }
+        const currentUser = userRows[0];
+
+        // Never disable voicemail or reset the recording mode just because the
+        // request omitted the field: fall back to the stored value.
+        let effectiveVm = currentUser.voicemail || 'novm';
+        if (voicemail !== undefined && voicemail !== null && voicemail !== '') {
+            effectiveVm = (voicemail === 'default' || voicemail === 'enabled' || voicemail === true) ? 'default' : 'novm';
+        }
+
         const targetTech = tech ? (tech === 'webrtc' || tech === 'pjsip' ? 'pjsip' : 'sip') : (currentTech === 'pjsip' ? 'pjsip' : 'sip');
         const isWebRTC = targetTech === 'pjsip';
         const devTech = isWebRTC ? 'pjsip' : 'sip';
@@ -14741,10 +14757,10 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             await pool.query('UPDATE `asterisk`.`devices` SET description = ? WHERE id = ?', [displayName, extNum]);
             await pool.query('UPDATE `asterisk`.`users` SET name = ? WHERE extension = ?', [displayName, extNum]);
         }
-        await pool.query('UPDATE `asterisk`.`users` SET voicemail = ?, recording = "out=always|in=always" WHERE extension = ?', [vmVal, extNum]);
+        await pool.query('UPDATE `asterisk`.`users` SET voicemail = ?, recording = "out=always|in=always" WHERE extension = ?', [effectiveVm, extNum]);
         // Provision the live PBX too, otherwise the new state only exists in
         // the database until the service is restarted.
-        applyVoicemailState(extNum, displayName || extNum, vmVal);
+        applyVoicemailState(extNum, displayName || extNum, effectiveVm);
 
         const sipUpdates = [
             ['dial', devDial, 27],
@@ -15457,21 +15473,39 @@ app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
         const num = String(req.params.grpnum).trim();
         const { description, grplist, strategy, grptime, annmsg_id, ringing, postdest } = req.body;
 
-        const desc = String(description || '').trim();
-        const extListFormatted = String(grplist || '').replace(/[\r\n, ]+/g, '-').replace(/^-+|-+$/g, '');
-        const ringStrategy = strategy || 'ringall';
-        const ringTime = parseInt(grptime, 10) || 20;
-        const annMsgId = parseInt(annmsg_id, 10) || 0;
-        let postDest = (postdest && postdest.trim()) ? postdest.trim() : 'app-blackhole,hangup,1';
-        if (postDest === `ext-group,${num},1` || postDest === `from-did-direct,${num},1`) {
-            postDest = 'app-blackhole,hangup,1';
-        }
-        const mohRinging = (ringing && String(ringing).trim()) ? String(ringing).trim() : 'Ring';
-
-        const [existing] = await pool.query('SELECT grpnum FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
+        const [existing] = await pool.query(
+            'SELECT grpnum, description, grplist, strategy, grptime, annmsg_id, ringing, postdest FROM `asterisk`.`ringgroups` WHERE grpnum = ?',
+            [num]
+        );
         if (existing.length === 0) {
             return res.status(404).json({ success: false, error: `Ring Group ${num} not found.` });
         }
+        const current = existing[0];
+
+        // A partial update must never wipe a field the caller did not send.
+        const desc = (description !== undefined && String(description).trim())
+            ? String(description).trim()
+            : String(current.description || '');
+        if (!desc) {
+            return res.status(400).json({ success: false, error: 'Description is required.' });
+        }
+        const extListFormatted = (grplist !== undefined)
+            ? String(grplist || '').replace(/[\r\n, ]+/g, '-').replace(/^-+|-+$/g, '')
+            : String(current.grplist || '');
+        const ringStrategy = (strategy !== undefined && String(strategy).trim()) ? String(strategy).trim() : (current.strategy || 'ringall');
+        const ringTime = (grptime !== undefined && String(grptime).trim() !== '' && Number.isFinite(parseInt(grptime, 10)))
+            ? parseInt(grptime, 10)
+            : (parseInt(current.grptime, 10) || 20);
+        const annMsgId = (annmsg_id !== undefined && annmsg_id !== null && String(annmsg_id).trim() !== '')
+            ? (parseInt(annmsg_id, 10) || 0)
+            : (parseInt(current.annmsg_id, 10) || 0);
+        let postDest = (postdest !== undefined && String(postdest).trim())
+            ? String(postdest).trim()
+            : String(current.postdest || 'app-blackhole,hangup,1');
+        if (postDest === `ext-group,${num},1` || postDest === `from-did-direct,${num},1`) {
+            postDest = 'app-blackhole,hangup,1';
+        }
+        const mohRinging = (ringing !== undefined && String(ringing).trim()) ? String(ringing).trim() : (current.ringing || 'Ring');
 
         await pool.query(`
             UPDATE \`asterisk\`.\`ringgroups\`
@@ -16759,9 +16793,11 @@ app.post('/api/config/announcements', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Announcement Description/Name is required.' });
         }
         const recId = parseInt(recording_id, 10) || 0;
-        const allowSkipVal = recId === 0 ? 0 : (allow_skip ? 1 : 0);
-        const returnIvrVal = return_ivr ? 1 : 0;
-        const noAnswerVal = noanswer ? 1 : 0;
+        // "0"/"false" must not be coerced to 1: the modal sends string values.
+        const truthy = (v) => v === true || v === 1 || v === '1' || v === 'true' || v === 'on';
+        const allowSkipVal = recId === 0 ? 0 : (truthy(allow_skip) ? 1 : 0);
+        const returnIvrVal = truthy(return_ivr) ? 1 : 0;
+        const noAnswerVal = truthy(noanswer) ? 1 : 0;
         const repeatMsgVal = String(repeat_msg || '').trim();
         const postDestVal = String(post_dest || '').trim() || 'app-blackhole,hangup,1';
         const SUPPORTED_TTS_LANGS = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'it-IT', 'de-DE'];
@@ -16806,9 +16842,11 @@ app.put('/api/config/announcements/:id', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Announcement Description/Name is required.' });
         }
         const recId = parseInt(recording_id, 10) || 0;
-        const allowSkipVal = recId === 0 ? 0 : (allow_skip ? 1 : 0);
-        const returnIvrVal = return_ivr ? 1 : 0;
-        const noAnswerVal = noanswer ? 1 : 0;
+        // "0"/"false" must not be coerced to 1: the modal sends string values.
+        const truthy = (v) => v === true || v === 1 || v === '1' || v === 'true' || v === 'on';
+        const allowSkipVal = recId === 0 ? 0 : (truthy(allow_skip) ? 1 : 0);
+        const returnIvrVal = truthy(return_ivr) ? 1 : 0;
+        const noAnswerVal = truthy(noanswer) ? 1 : 0;
         const repeatMsgVal = String(repeat_msg || '').trim();
         const postDestVal = String(post_dest || '').trim() || 'app-blackhole,hangup,1';
         const SUPPORTED_TTS_LANGS = ['en-US', 'en-GB', 'es-ES', 'fr-FR', 'it-IT', 'de-DE'];
@@ -17593,7 +17631,7 @@ app.post('/api/config/routes/inbound', async (req, res) => {
         if (existing.length > 0) {
             await pool.query(`
                 UPDATE \`asterisk\`.\`incoming\`
-                SET destination = ?, description = ?, alertinfo = ?, ringing = ?, grppre = ?, pricid = ?, delay_answer = ?, mohclass = 'default'
+                SET destination = ?, description = ?, alertinfo = ?, ringing = ?, grppre = ?, pricid = ?, delay_answer = ?
                 WHERE extension = ? AND cidnum = ?
             `, [dest, desc, alertInfoVal, ringingVal, grpPreVal, priCidVal, delayAnswerVal, ext, cid]);
         } else {
@@ -17604,7 +17642,7 @@ app.post('/api/config/routes/inbound', async (req, res) => {
             `, [cid, ext, dest, alertInfoVal, ringingVal, desc, grpPreVal, delayAnswerVal, priCidVal]);
         }
 
-        // Enable call recording by default for this Inbound Route
+        // Universal call recording: this route always records (product policy).
         await pool.query(`
             DELETE FROM \`asterisk\`.\`callrecording_module\`
             WHERE extension = ? AND cidnum = ? AND display = 'did'
@@ -17670,23 +17708,26 @@ app.put('/api/config/routes/inbound', async (req, res) => {
         await pool.query(`
             UPDATE \`asterisk\`.\`incoming\`
             SET description = ?, extension = ?, cidnum = ?, destination = ?,
-                alertinfo = ?, ringing = ?, grppre = ?, pricid = ?, delay_answer = ?, mohclass = 'default'
+                alertinfo = ?, ringing = ?, grppre = ?, pricid = ?,
+                delay_answer = COALESCE(?, delay_answer)
             WHERE (extension = ? OR extension = ? OR (extension IS NULL AND ? = ''))
               AND (cidnum = ? OR cidnum = ? OR (cidnum IS NULL AND ? = ''))
             LIMIT 1
         `, [
             desc, ext, cid, dest,
-            alertInfoVal, ringingVal, grpPreVal, priCidVal, delayAnswerVal,
+            alertInfoVal, ringingVal, grpPreVal, priCidVal,
+            (delay_answer !== undefined && delay_answer !== null && String(delay_answer).trim() !== '') ? delayAnswerVal : null,
             origExt, rawOrigExt, origExt,
             origCid, rawOrigCid, origCid
         ]);
 
-        // Sync auxiliary tables if key changed
+        // Sync auxiliary tables if key changed. Only the OLD key is cleaned up;
+        // deleting the new key here would race with the insert below.
         if (ext !== origExt || cid !== origCid) {
             await pool.query(`
                 DELETE FROM \`asterisk\`.\`callrecording_module\`
-                WHERE (extension = ? OR extension = ? OR extension = ?) AND (cidnum = ? OR cidnum = ? OR cidnum = ?) AND display = 'did'
-            `, [origExt, rawOrigExt, ext, origCid, rawOrigCid, cid]).catch(() => {});
+                WHERE (extension = ? OR extension = ?) AND (cidnum = ? OR cidnum = ?) AND display = 'did'
+            `, [origExt, rawOrigExt, origCid, rawOrigCid]).catch(() => {});
 
             await pool.query(`
                 UPDATE \`asterisk\`.\`cidlookup_incoming\`
@@ -17695,7 +17736,7 @@ app.put('/api/config/routes/inbound', async (req, res) => {
             `, [ext, cid, origExt, rawOrigExt, origCid, rawOrigCid]).catch(() => {});
         }
 
-        // Ensure call recording is set to 'force' for this route
+        // Universal call recording: this route always records (product policy).
         await pool.query(`
             DELETE FROM \`asterisk\`.\`callrecording_module\`
             WHERE extension = ? AND cidnum = ? AND display = 'did'
@@ -17878,31 +17919,57 @@ app.put('/api/config/ivrs/:id', async (req, res) => {
         const invalidRetry = invalid_loops ? String(invalid_loops) : '3';
         const invalidRec = invalid_retry_recording !== undefined ? invalid_retry_recording : (existingIvr.invalid_retry_recording || 'default');
         const invalidDest = invalid_destination || 'app-blackhole,hangup,1';
-        await pool.query(`
-            UPDATE \`asterisk\`.\`ivr_details\`
-            SET name = ?, description = ?, announcement = ?, directdial = ?,
-                timeout_time = ?, timeout_loops = ?, timeout_retry_recording = ?, timeout_destination = ?,
-                invalid_loops = ?, invalid_retry_recording = ?, invalid_destination = ?
-            WHERE id = ?
-        `, [
-            ivrName, ivrDesc, announceId, dirDial,
-            timeoutSec, timeoutRetry, timeoutRec, timeoutDest,
-            invalidRetry, invalidRec, invalidDest,
-            ivrId
-        ]);
 
-        // Re-insert IVR entries
-        await pool.query('DELETE FROM `asterisk`.`ivr_entries` WHERE ivr_id = ?', [ivrId]);
-        if (Array.isArray(entries) && entries.length) {
-            for (const entry of entries) {
-                const targetDest = String(entry.dest || entry.destination || '').trim();
-                if (entry.selection && targetDest) {
-                    await pool.query(`
-                        INSERT INTO \`asterisk\`.\`ivr_entries\` (ivr_id, selection, dest, ivr_ret)
-                        VALUES (?, ?, ?, 0)
-                    `, [ivrId, String(entry.selection).trim(), targetDest]);
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            await conn.query(`
+                UPDATE \`asterisk\`.\`ivr_details\`
+                SET name = ?, description = ?, announcement = ?, directdial = ?,
+                    timeout_time = ?, timeout_loops = ?, timeout_retry_recording = ?, timeout_destination = ?,
+                    invalid_loops = ?, invalid_retry_recording = ?, invalid_destination = ?
+                WHERE id = ?
+            `, [
+                ivrName, ivrDesc, announceId, dirDial,
+                timeoutSec, timeoutRetry, timeoutRec, timeoutDest,
+                invalidRetry, invalidRec, invalidDest,
+                ivrId
+            ]);
+
+            // Replace the digit map atomically: a failure must not leave the IVR
+            // with its options deleted and nothing inserted.
+            const [priorEntries] = await conn.query(
+                'SELECT selection, ivr_ret FROM `asterisk`.`ivr_entries` WHERE ivr_id = ?',
+                [ivrId]
+            );
+            const priorRet = {};
+            for (const row of priorEntries || []) priorRet[String(row.selection)] = Number(row.ivr_ret) ? 1 : 0;
+
+            await conn.query('DELETE FROM `asterisk`.`ivr_entries` WHERE ivr_id = ?', [ivrId]);
+            if (Array.isArray(entries) && entries.length) {
+                for (const entry of entries) {
+                    const targetDest = String(entry.dest || entry.destination || '').trim();
+                    if (entry.selection && targetDest) {
+                        const selection = String(entry.selection).trim();
+                        // "Return to IVR" (ivr_ret) is owned by Issabel and has no
+                        // control in this modal: keep the stored flag when the
+                        // payload omits it instead of silently clearing it.
+                        const ret = entry.ivr_ret !== undefined
+                            ? ((entry.ivr_ret === 1 || entry.ivr_ret === '1' || entry.ivr_ret === true) ? 1 : 0)
+                            : (priorRet[selection] || 0);
+                        await conn.query(`
+                            INSERT INTO \`asterisk\`.\`ivr_entries\` (ivr_id, selection, dest, ivr_ret)
+                            VALUES (?, ?, ?, ?)
+                        `, [ivrId, selection, targetDest, ret]);
+                    }
                 }
             }
+            await conn.commit();
+        } catch (ivrError) {
+            await conn.rollback().catch(() => {});
+            throw ivrError;
+        } finally {
+            conn.release();
         }
 
         await reloadPbxConfigPromise();
@@ -17993,13 +18060,26 @@ app.post('/api/config/routes/outbound/reorder', async (req, res) => {
             return res.status(400).json({ success: false, error: 'No valid route IDs provided.' });
         }
 
-        await pool.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE 1');
-        for (let seq = 0; seq < validIds.length; seq++) {
-            const routeId = validIds[seq];
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`outbound_route_sequence\` (route_id, seq)
-                VALUES (?, ?)
-            `, [routeId, seq]);
+        // Upsert only the routes the client sent. A global DELETE used to drop the
+        // sequence row of every route omitted from the payload, pushing it to
+        // seq 9999 so it effectively never matched again. The primary key is
+        // (route_id, seq), so each route row must be replaced, not upserted.
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            for (let seq = 0; seq < validIds.length; seq++) {
+                await conn.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE route_id = ?', [validIds[seq]]);
+                await conn.query(`
+                    INSERT INTO \`asterisk\`.\`outbound_route_sequence\` (route_id, seq)
+                    VALUES (?, ?)
+                `, [validIds[seq], seq]);
+            }
+            await conn.commit();
+        } catch (seqError) {
+            await conn.rollback().catch(() => {});
+            throw seqError;
+        } finally {
+            conn.release();
         }
 
         await reloadPbxConfigPromise();
@@ -18088,28 +18168,41 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
         const routeCid = String(outcid || '').trim();
         const routeCidMode = routeCid ? String(outcid_mode || '').trim() : '';
 
-        // 1. Update outbound_routes name, outcid, outcid_mode
-        await pool.query(`
-            UPDATE \`asterisk\`.\`outbound_routes\`
-            SET name = ?, outcid = ?, outcid_mode = ?
-            WHERE route_id = ?
-        `, [routeName, routeCid, routeCidMode, routeId]);
-        // 2. Refresh patterns
-        await pool.query('DELETE FROM `asterisk`.`outbound_route_patterns` WHERE route_id = ?', [routeId]);
-        for (const p of patterns) {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`outbound_route_patterns\` (route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits)
-                VALUES (?, ?, ?, ?, ?)
-            `, [routeId, String(p.prefix || '').trim(), String(p.pattern || '').trim(), String(p.cid || '').trim(), String(p.prepend || '').trim()]);
-        }
+        // Patterns and trunks are replaced atomically: a failure mid-write used to
+        // leave the route with no patterns or no trunks, silently killing outbound
+        // calls that matched it.
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            await conn.query(`
+                UPDATE \`asterisk\`.\`outbound_routes\`
+                SET name = ?, outcid = ?, outcid_mode = ?
+                WHERE route_id = ?
+            `, [routeName, routeCid, routeCidMode, routeId]);
 
-        // 3. Refresh trunks in order
-        await pool.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE route_id = ?', [routeId]);
-        for (let i = 0; i < trunks.length; i++) {
-            await pool.query(`
-                INSERT INTO \`asterisk\`.\`outbound_route_trunks\` (route_id, trunk_id, seq)
-                VALUES (?, ?, ?)
-            `, [routeId, parseInt(trunks[i], 10), i]);
+            await conn.query('DELETE FROM `asterisk`.`outbound_route_patterns` WHERE route_id = ?', [routeId]);
+            for (const p of patterns) {
+                await conn.query(`
+                    INSERT INTO \`asterisk\`.\`outbound_route_patterns\` (route_id, match_pattern_prefix, match_pattern_pass, match_cid, prepend_digits)
+                    VALUES (?, ?, ?, ?, ?)
+                `, [routeId, String(p.prefix || '').trim(), String(p.pattern || '').trim(), String(p.cid || '').trim(), String(p.prepend || '').trim()]);
+            }
+
+            await conn.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE route_id = ?', [routeId]);
+            for (let i = 0; i < trunks.length; i++) {
+                const trunkId = parseInt(trunks[i], 10);
+                if (!Number.isFinite(trunkId)) continue;
+                await conn.query(`
+                    INSERT INTO \`asterisk\`.\`outbound_route_trunks\` (route_id, trunk_id, seq)
+                    VALUES (?, ?, ?)
+                `, [routeId, trunkId, i]);
+            }
+            await conn.commit();
+        } catch (routeError) {
+            await conn.rollback().catch(() => {});
+            throw routeError;
+        } finally {
+            conn.release();
         }
 
         await reloadPbxConfigPromise();
@@ -18651,7 +18744,8 @@ function formatIssabelTimeRule(rule, overrideWkday = null) {
     return `${cleanTime}|${cleanWkday}|${cleanMthday}|${cleanMonth}`;
 }
 
-async function insertTimeGroupRules(groupid, rules) {
+async function insertTimeGroupRules(groupid, rules, runner = pool) {
+    const db = runner || pool;
     if (rules && Array.isArray(rules) && rules.length > 0) {
         for (const rule of rules) {
             const ruleName = String(rule.name || rule.display_name || '').trim();
@@ -18662,7 +18756,7 @@ async function insertTimeGroupRules(groupid, rules) {
             for (const wkRange of dayRanges) {
                 const timeStr = formatIssabelTimeRule(rule, wkRange);
                 if (timeStr && timeStr !== '*|*|*|*') {
-                    await pool.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, ruleName]);
+                    await db.query('INSERT INTO `asterisk`.`timegroups_details` (timegroupid, time, name) VALUES (?, ?, ?)', [groupid, timeStr, ruleName]);
                 }
             }
         }
@@ -18718,7 +18812,13 @@ app.post('/api/config/timegroups', async (req, res) => {
         const [r] = await pool.query('INSERT INTO `asterisk`.`timegroups_groups` (description) VALUES (?)', [description.trim()]);
         const groupid = r.insertId;
 
-        await insertTimeGroupRules(groupid, rules);
+        try {
+            await insertTimeGroupRules(groupid, rules);
+        } catch (ruleError) {
+            await pool.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [groupid]).catch(() => {});
+            await pool.query('DELETE FROM `asterisk`.`timegroups_groups` WHERE id = ?', [groupid]).catch(() => {});
+            throw ruleError;
+        }
 
         const reloadRes = await reloadPbxConfigPromise();
         if (reloadRes && reloadRes.success === false) {
@@ -18739,10 +18839,21 @@ app.put('/api/config/timegroups/:id', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Description is required' });
         }
 
-        await pool.query('UPDATE `asterisk`.`timegroups_groups` SET description = ? WHERE id = ?', [description.trim(), id]);
-        await pool.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [id]);
-
-        await insertTimeGroupRules(id, rules);
+        // Replace the rule set atomically: a failure after the DELETE would leave
+        // the time group empty, flipping every linked time condition.
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            await conn.query('UPDATE `asterisk`.`timegroups_groups` SET description = ? WHERE id = ?', [description.trim(), id]);
+            await conn.query('DELETE FROM `asterisk`.`timegroups_details` WHERE timegroupid = ?', [id]);
+            await insertTimeGroupRules(id, rules, conn);
+            await conn.commit();
+        } catch (ruleError) {
+            await conn.rollback().catch(() => {});
+            throw ruleError;
+        } finally {
+            conn.release();
+        }
 
         const reloadRes = await reloadPbxConfigPromise();
         if (reloadRes && reloadRes.success === false) {

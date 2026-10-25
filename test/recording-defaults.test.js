@@ -335,7 +335,7 @@ test('install_db.sql and safe-upgrade.sh break self-loops and keep queue members
         'install_db.sql must drop dynmembers/goto/maxwait queue keywords'
     );
     assert.ok(
-        sql.includes("DELETE FROM `asterisk`.`queues_details` WHERE `keyword` = ''member'' AND `data` NOT REGEXP ''^[A-Za-z]+/[0-9]+@''"),
+        sql.includes("DELETE FROM `asterisk`.`queues_details` WHERE `keyword` = ''member'' AND (data NOT REGEXP ''^[A-Za-z]+/[0-9]+@'' OR data REGEXP ''^[A-Za-z]+/0+@'')"),
         'install_db.sql must delete phantom queue members'
     );
 
@@ -363,5 +363,9 @@ test('install_db.sql and safe-upgrade.sh break self-loops and keep queue members
     assert.ok(
         /DELETE FROM.*queues_details.*keyword.*=.*'member'.*NOT REGEXP/.test(upgrader),
         'safe-upgrade.sh must delete phantom queue members'
+    );
+    assert.ok(
+        /queues_details.*REGEXP.*\^\[A-Za-z\]\+\/0\+@/.test(upgrader),
+        'safe-upgrade.sh must also delete Local/0 phantom members'
     );
 });

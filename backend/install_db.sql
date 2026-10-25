@@ -1058,7 +1058,7 @@ DEALLOCATE PREPARE sokrat_stmt;
 SET @sokrat_sql := (
   SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
                     WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'),
-    'DELETE FROM `asterisk`.`queues_details` WHERE `keyword` = ''member'' AND `data` NOT REGEXP ''^[A-Za-z]+/[0-9]+@''',
+    'DELETE FROM `asterisk`.`queues_details` WHERE `keyword` = ''member'' AND (data NOT REGEXP ''^[A-Za-z]+/[0-9]+@'' OR data REGEXP ''^[A-Za-z]+/0+@'')',
     'DO 0')
 );
 PREPARE sokrat_stmt FROM @sokrat_sql;

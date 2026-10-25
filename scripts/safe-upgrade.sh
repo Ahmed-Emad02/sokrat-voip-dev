@@ -96,7 +96,11 @@ fi
 # 3. Database Schema Migrations (Preserving PBX Data)
 echo "[3/7] Provisioning new database tables and schema migrations..."
 if [ -f "$INSTALL_DIR/backend/install_db.sql" ]; then
-    mysql "${MYSQL_AUTH[@]}" asterisk < "$INSTALL_DIR/backend/install_db.sql" 2>/dev/null || true
+    # mysql stops at the first SQL error in batch mode, so keep the failure
+    # visible instead of silently skipping later migrations (the inline CREATE
+    # TABLE block below remains the safety net for the critical tables).
+    mysql "${MYSQL_AUTH[@]}" asterisk < "$INSTALL_DIR/backend/install_db.sql" \
+        || echo "  WARNING: backend/install_db.sql reported an error; continuing with the inline migrations" >&2
     echo "  Applied database schema definitions (CREATE TABLE IF NOT EXISTS)"
 fi
 
@@ -242,7 +246,7 @@ if [ "$RECQUEUES_TABLE" != "0" ]; then
     mysql "${MYSQL_AUTH[@]}" asterisk -e \
         "DELETE FROM \`asterisk\`.\`queues_details\` WHERE \`keyword\` IN ('dynmembers','goto','maxwait')" 2>/dev/null || true
     mysql "${MYSQL_AUTH[@]}" asterisk -e \
-        "DELETE FROM \`asterisk\`.\`queues_details\` WHERE \`keyword\`='member' AND \`data\` NOT REGEXP '^[A-Za-z]+/[0-9]+@'" 2>/dev/null || true
+        "DELETE FROM \`asterisk\`.\`queues_details\` WHERE \`keyword\`='member' AND (\`data\` NOT REGEXP '^[A-Za-z]+/[0-9]+@' OR \`data\` REGEXP '^[A-Za-z]+/0+@')" 2>/dev/null || true
     echo "  Queues: call recording enabled by default (monitor-format=wav, maxwait normalized, failover loops neutralized)"
 fi
 mysql "${MYSQL_AUTH[@]}" asterisk -e \
