@@ -92,20 +92,37 @@ if (fedScopeEnabled) {
                         ? reportRead
                         : (scopeIsLocal ? String(node.site_code) === localSite : scopeSites.has(String(node.site_code)));
                     const dotColor = node.status === 'online' ? '#10b981' : (node.status === 'offline' ? '#ef4444' : '#f59e0b');
+                    const peerPanelUrl = '/peer/' + encodeURIComponent(String(node.site_code)) + '/';
                 %>
-                <label class="fed-scope-node flex items-center gap-2 px-2 py-2 rounded-lg select-none text-xs <%= reportRead ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed' %>">
-                    <input type="checkbox"
-                           class="fed-scope-check rounded"
-                           data-fed-site="<%= node.site_code %>"
-                           <%= checked ? 'checked' : '' %>
-                           <%= reportRead ? '' : 'disabled' %>>
-                    <span class="fed-scope-dot" style="background:<%= dotColor %>"></span>
-                    <span class="min-w-0 flex-1">
-                        <span class="block truncate font-bold text-[var(--text-primary)]"><%= node.node_name %></span>
-                        <span class="block truncate text-[10px] text-[var(--text-muted)] font-mono">Site <%= node.site_code %><%= node.is_local ? (isRtl ? ' · محلي' : ' · local') : '' %></span>
-                    </span>
-                    <span class="text-[9px] font-extrabold uppercase tracking-wide <%= reportRead ? (node.status === 'online' ? 'text-emerald-400' : (node.status === 'offline' ? 'text-red-400' : 'text-amber-400')) : 'text-[var(--text-muted)]' %>"><%= reportRead ? node.status : (isRtl ? 'لا تقارير' : 'no reports') %></span>
-                </label>
+                <div class="fed-scope-node flex items-center gap-1 px-1 rounded-lg">
+                    <label class="flex items-center gap-2 flex-1 min-w-0 px-1 py-2 rounded-lg select-none text-xs <%= reportRead ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed' %>">
+                        <input type="checkbox"
+                               class="fed-scope-check rounded"
+                               data-fed-site="<%= node.site_code %>"
+                               <%= checked ? 'checked' : '' %>
+                               <%= reportRead ? '' : 'disabled' %>>
+                        <span class="fed-scope-dot" style="background:<%= dotColor %>"></span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block truncate font-bold text-[var(--text-primary)]"><%= node.node_name %></span>
+                            <span class="block truncate text-[10px] text-[var(--text-muted)] font-mono">Site <%= node.site_code %><%= node.is_local ? (isRtl ? ' · محلي' : ' · local') : '' %></span>
+                        </span>
+                        <span class="text-[9px] font-extrabold uppercase tracking-wide <%= reportRead ? (node.status === 'online' ? 'text-emerald-400' : (node.status === 'offline' ? 'text-red-400' : 'text-amber-400')) : 'text-[var(--text-muted)]' %>"><%= reportRead ? node.status : (isRtl ? 'لا تقارير' : 'no reports') %></span>
+                    </label>
+                    <% if (!node.is_local) { %>
+                    <a href="<%= peerPanelUrl %>"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       title="<%= isRtl ? `فتح لوحة ${node.node_name} في تبويب جديد (عبر هذا السيرفر)` : `Open ${node.node_name} panel in a new tab (proxied by this server)` %>"
+                       aria-label="<%= isRtl ? `فتح لوحة ${node.node_name}` : `Open ${node.node_name} panel` %>"
+                       class="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center border border-[var(--border-primary)] bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-[var(--accent-color)] hover:border-[var(--accent-color)]/50 transition cursor-pointer <%= node.status === 'online' ? '' : 'opacity-50' %>">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                            <path d="M15 3h6v6"></path>
+                            <path d="M10 14 21 3"></path>
+                        </svg>
+                    </a>
+                    <% } %>
+                </div>
                 <% }); %>
             </div>
             <div class="my-1 border-t border-[var(--border-primary)]"></div>

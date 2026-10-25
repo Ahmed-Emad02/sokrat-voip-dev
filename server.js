@@ -68,6 +68,7 @@ const {
     removeRemoteFederationSetup
 } = require('./lib/federation-bootstrap');
 const FederationHub = require('./lib/federation-hub');
+const { createFederationProxy } = require('./lib/federation-proxy');
 const { federationAuthMiddleware, normalizeFederationBaseUrl, API_VERSION: FEDERATION_API_VERSION } = require('./lib/federation-auth');
 const APP_VERSION = require('./package.json').version;
 let federationHub = null;
@@ -665,6 +666,142 @@ const ALL_TABS = Array.from(new Set([
     'cdr', 'dialer', 'softphone', 'users'
 ]));
 
+// Helper to safely add column if it does not already exist
+async function ensureDbColumn(conn, table, column, definition) {
+    try {
+        let dbName = 'asterisk';
+        let tableName = table;
+        if (table.includes('.')) {
+            const parts = table.split('.');
+            dbName = parts[0].replace(/[`']/g, '');
+            tableName = parts[1].replace(/[`']/g, '');
+        }
+        const [rows] = await conn.query(
+            `SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1`,
+            [dbName, tableName, column]
+        );
+        if (!rows || rows.length === 0) {
+            await conn.execute(`ALTER TABLE \`${dbName}\`.\`${tableName}\` ADD COLUMN \`${column}\` ${definition}`);
+        }
+    } catch (_) {}
+}
+
+// Helper to safely repair 0-byte or corrupted table definitions on startup
+async function ensureTableIntegrity(conn) {
+    const criticalTables = [
+        {
+            db: 'asteriskcdrdb',
+            table: 'cdr_transcriptions',
+            createSql: `CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`cdr_transcriptions\` (
+                \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY,
+                \`uniqueid\` VARCHAR(32) NOT NULL,
+                \`recordingfile\` VARCHAR(255) NOT NULL,
+                \`language\` VARCHAR(10) DEFAULT 'auto',
+                \`transcript\` LONGTEXT NOT NULL,
+                \`status\` ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+                \`error_message\` VARCHAR(500) DEFAULT NULL,
+                \`duration_sec\` INT DEFAULT 0,
+                \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                \`completed_at\` DATETIME DEFAULT NULL,
+                \`attempt_count\` INT NOT NULL DEFAULT 0,
+                \`processing_started_at\` DATETIME DEFAULT NULL,
+                \`processing_ms\` BIGINT DEFAULT NULL,
+                \`engine\` VARCHAR(32) DEFAULT NULL,
+                \`model_used\` VARCHAR(128) DEFAULT NULL,
+                UNIQUE KEY \`uniqueid\` (\`uniqueid\`),
+                KEY \`idx_stt_status\` (\`status\`),
+                FULLTEXT KEY \`ft_transcript\` (\`transcript\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
+        },
+        {
+            db: 'asteriskcdrdb',
+            table: 'voicemail_transcriptions',
+            createSql: `CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`voicemail_transcriptions\` (
+                \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+                \`mailbox\` VARCHAR(20) NOT NULL,
+                \`msg_file\` VARCHAR(100) NOT NULL,
+                \`callerid\` VARCHAR(80) DEFAULT NULL,
+                \`transcript\` LONGTEXT NOT NULL,
+                \`status\` ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+                \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                \`attempt_count\` INT NOT NULL DEFAULT 0,
+                \`processing_started_at\` DATETIME DEFAULT NULL,
+                \`processing_ms\` BIGINT DEFAULT NULL,
+                \`error_message\` VARCHAR(500) DEFAULT NULL,
+                \`engine\` VARCHAR(32) DEFAULT NULL,
+                \`model_used\` VARCHAR(128) DEFAULT NULL,
+                PRIMARY KEY (\`id\`),
+                UNIQUE KEY \`uniq_vm_file\` (\`mailbox\`, \`msg_file\`),
+                KEY \`idx_vm_stt_status\` (\`status\`),
+                FULLTEXT KEY \`ft_vm_transcript\` (\`transcript\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
+        },
+        {
+            db: 'asterisk',
+            table: 'gsm_dongles',
+            createSql: `CREATE TABLE IF NOT EXISTS \`asterisk\`.\`gsm_dongles\` (
+                \`dongle_name\` VARCHAR(50) NOT NULL,
+                \`imsi\` VARCHAR(30) DEFAULT NULL,
+                \`imei\` VARCHAR(30) DEFAULT NULL,
+                \`phone_number\` VARCHAR(30) DEFAULT NULL,
+                \`dynamic_enabled\` TINYINT(1) NOT NULL DEFAULT 0,
+                \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (\`dongle_name\`),
+                KEY \`idx_imsi\` (\`imsi\`),
+                KEY \`idx_imei\` (\`imei\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
+        },
+        {
+            db: 'asterisk',
+            table: 'dashboard_api_keys',
+            createSql: `CREATE TABLE IF NOT EXISTS \`asterisk\`.\`dashboard_api_keys\` (
+                \`id\` INT NOT NULL AUTO_INCREMENT,
+                \`name\` VARCHAR(100) NOT NULL,
+                \`key_prefix\` VARCHAR(64) NOT NULL,
+                \`key_hash\` VARCHAR(64) NOT NULL,
+                \`encrypted_key\` TEXT NOT NULL,
+                \`scopes\` VARCHAR(255) DEFAULT '*',
+                \`allowed_ips\` VARCHAR(255) DEFAULT NULL,
+                \`status\` ENUM('active','revoked') DEFAULT 'active',
+                \`created_by\` VARCHAR(64) DEFAULT 'root',
+                \`last_used_at\` DATETIME DEFAULT NULL,
+                \`last_used_ip\` VARCHAR(64) DEFAULT NULL,
+                \`expires_at\` DATETIME DEFAULT NULL,
+                \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                \`updated_at\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (\`id\`),
+                UNIQUE KEY \`key_hash\` (\`key_hash\`),
+                KEY \`idx_api_key_hash\` (\`key_hash\`),
+                KEY \`idx_api_key_status\` (\`status\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
+        }
+    ];
+
+    for (const item of criticalTables) {
+        try {
+            const [check] = await conn.query(`CHECK TABLE \`${item.db}\`.\`${item.table}\``);
+            const statusMsg = check && check[0] ? (check[0].Msg_text || '') : '';
+            if (statusMsg.includes('Corrupt') || statusMsg.includes('Incorrect information') || statusMsg.includes("doesn't exist in engine")) {
+                console.warn(`[DB-REPAIR] Table \`${item.db}\`.\`${item.table}\` is corrupted (${statusMsg}). Auto-recovering...`);
+                await conn.query(`DROP TABLE IF EXISTS \`${item.db}\`.\`${item.table}\``);
+                await conn.query(item.createSql);
+                console.log(`[DB-REPAIR] Table \`${item.db}\`.\`${item.table}\` successfully recovered.`);
+            }
+        } catch (err) {
+            if (err.message && (err.message.includes('Incorrect information') || err.message.includes('Corrupt') || err.message.includes("doesn't exist in engine"))) {
+                console.warn(`[DB-REPAIR] Caught corrupted table \`${item.db}\`.\`${item.table}\`: ${err.message}. Auto-recovering...`);
+                try {
+                    await conn.query(`DROP TABLE IF EXISTS \`${item.db}\`.\`${item.table}\``);
+                    await conn.query(item.createSql);
+                    console.log(`[DB-REPAIR] Table \`${item.db}\`.\`${item.table}\` successfully recovered.`);
+                } catch (recreateErr) {
+                    console.error(`[DB-REPAIR] Failed to auto-recover \`${item.db}\`.\`${item.table}\`:`, recreateErr.message);
+                }
+            }
+        }
+    }
+}
+
 async function initAuthDb() {
     const conn = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
@@ -685,10 +822,13 @@ async function initAuthDb() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    // Ensure critical table structures are intact before DDL operations
+    await ensureTableIntegrity(conn);
+
     // Add group_id and extension columns if they don't exist (for existing installs)
-    try { await conn.execute('ALTER TABLE dashboard_users ADD COLUMN group_id INT DEFAULT NULL'); } catch (_) {}
-    try { await conn.execute('ALTER TABLE dashboard_users ADD COLUMN reset_token_expires DATETIME DEFAULT NULL'); } catch (_) {}
-    try { await conn.execute('ALTER TABLE dashboard_users ADD COLUMN extension VARCHAR(20) DEFAULT NULL'); } catch (_) {}
+    await ensureDbColumn(conn, 'dashboard_users', 'group_id', 'INT DEFAULT NULL');
+    await ensureDbColumn(conn, 'dashboard_users', 'reset_token_expires', 'DATETIME DEFAULT NULL');
+    await ensureDbColumn(conn, 'dashboard_users', 'extension', 'VARCHAR(20) DEFAULT NULL');
     try { await conn.execute('ALTER TABLE dashboard_users ADD UNIQUE KEY idx_unique_email (email)'); } catch (_) {}
     try { await conn.execute('ALTER TABLE dashboard_users ADD KEY idx_dash_users_extension (extension)'); } catch (_) {}
     await conn.execute(`
@@ -807,9 +947,8 @@ async function initAuthDb() {
             KEY idx_state (state)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    try { await conn.execute('ALTER TABLE gsm_dongles ADD COLUMN dynamic_enabled TINYINT(1) NOT NULL DEFAULT 0'); } catch (_) {}
+    await ensureDbColumn(conn, 'gsm_dongles', 'dynamic_enabled', 'TINYINT(1) NOT NULL DEFAULT 0');
     try { await conn.execute('UPDATE gsm_dongles SET dynamic_enabled = 0 WHERE dynamic_enabled IS NULL'); } catch (_) {}
-    try { await conn.execute('ALTER TABLE gsm_dongles MODIFY dynamic_enabled TINYINT(1) NOT NULL DEFAULT 0'); } catch (_) {}
     try {
         const [dRows] = await conn.execute('SELECT dongle_name, dynamic_enabled FROM gsm_dongles');
         const { execFile: execFileCb } = require('child_process');
@@ -869,7 +1008,7 @@ async function initAuthDb() {
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    try { await conn.execute('ALTER TABLE employee_extras ADD COLUMN is_group_admin TINYINT(1) NOT NULL DEFAULT 0'); } catch (_) {}
+    await ensureDbColumn(conn, 'employee_extras', 'is_group_admin', 'TINYINT(1) NOT NULL DEFAULT 0');
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS ${tables.employeeGroups} (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -902,11 +1041,11 @@ async function initAuthDb() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `allowed_dongles` TEXT DEFAULT NULL AFTER `outbound_route_id`"); } catch (_) {}
-    try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `assigned_agents` TEXT DEFAULT NULL AFTER `allowed_dongles`"); } catch (_) {}
-    try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `mask_phone_numbers` TINYINT(1) DEFAULT 0 AFTER `auto_answer`"); } catch (_) {}
-    try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `lead_fields` TEXT DEFAULT NULL AFTER `mask_phone_numbers`"); } catch (_) {}
-    try { await conn.execute("ALTER TABLE `dialer_campaigns` ADD COLUMN `followup_fields` LONGTEXT DEFAULT NULL AFTER `lead_fields`"); } catch (_) {}
+    await ensureDbColumn(conn, 'dialer_campaigns', 'allowed_dongles', 'TEXT DEFAULT NULL');
+    await ensureDbColumn(conn, 'dialer_campaigns', 'assigned_agents', 'TEXT DEFAULT NULL');
+    await ensureDbColumn(conn, 'dialer_campaigns', 'mask_phone_numbers', 'TINYINT(1) DEFAULT 0');
+    await ensureDbColumn(conn, 'dialer_campaigns', 'lead_fields', 'TEXT DEFAULT NULL');
+    await ensureDbColumn(conn, 'dialer_campaigns', 'followup_fields', 'LONGTEXT DEFAULT NULL');
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dialer_leads (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1024,15 +1163,15 @@ async function initAuthDb() {
             last_backup_status VARCHAR(50) DEFAULT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    // Migrate columns for existing partial tables
-    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN auto_purge_days INT DEFAULT 90'); } catch (_) {}
-    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN gdrive_enabled TINYINT(1) DEFAULT 0'); } catch (_) {}
-    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN gdrive_folder_name VARCHAR(255) DEFAULT \'Sokrat-VoIP-Backups\''); } catch (_) {}
-    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN gdrive_credentials TEXT DEFAULT NULL'); } catch (_) {}
-    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN auto_backup_schedule VARCHAR(50) DEFAULT \'daily\''); } catch (_) {}
-    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN last_backup_at DATETIME DEFAULT NULL'); } catch (_) {}
-    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN last_backup_status VARCHAR(50) DEFAULT NULL'); } catch (_) {}
-    try { await conn.execute('ALTER TABLE storage_settings ADD COLUMN queue_provisioned TINYINT(1) DEFAULT 0'); } catch (_) {}
+    // Migrate columns for existing partial tables safely without re-creating .frm files
+    await ensureDbColumn(conn, 'storage_settings', 'auto_purge_days', 'INT DEFAULT 90');
+    await ensureDbColumn(conn, 'storage_settings', 'gdrive_enabled', 'TINYINT(1) DEFAULT 0');
+    await ensureDbColumn(conn, 'storage_settings', 'gdrive_folder_name', "VARCHAR(255) DEFAULT 'Sokrat-VoIP-Backups'");
+    await ensureDbColumn(conn, 'storage_settings', 'gdrive_credentials', 'TEXT DEFAULT NULL');
+    await ensureDbColumn(conn, 'storage_settings', 'auto_backup_schedule', "VARCHAR(50) DEFAULT 'daily'");
+    await ensureDbColumn(conn, 'storage_settings', 'last_backup_at', 'DATETIME DEFAULT NULL');
+    await ensureDbColumn(conn, 'storage_settings', 'last_backup_status', 'VARCHAR(50) DEFAULT NULL');
+    await ensureDbColumn(conn, 'storage_settings', 'queue_provisioned', 'TINYINT(1) DEFAULT 0');
     await conn.execute('INSERT IGNORE INTO storage_settings (id) VALUES (1)');
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS voicemail_storage_settings (
@@ -1116,23 +1255,22 @@ async function initAuthDb() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     // Existing cloud installations predate the engine discriminator. Preserve
-    // their provider behavior; fresh installations use the local table default.
-    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `engine` VARCHAR(32) DEFAULT \'cloud_api\''); } catch (_) {}
-    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `provider` VARCHAR(32) DEFAULT \'groq\''); } catch (_) {}
-    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `api_key` TEXT DEFAULT NULL'); } catch (_) {}
-    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `api_url` VARCHAR(255) DEFAULT \'https://api.groq.com/openai/v1/audio/transcriptions\''); } catch (_) {}
-    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `prompt` TEXT DEFAULT NULL'); } catch (_) {}
-    try { await conn.execute('ALTER TABLE `asterisk`.`stt_settings` ADD COLUMN `pause_during_calls` TINYINT(1) DEFAULT 1'); } catch (_) {}
+    // their provider behavior safely without re-writing .frm files.
+    await ensureDbColumn(conn, 'asterisk.stt_settings', 'engine', "VARCHAR(32) DEFAULT 'cloud_api'");
+    await ensureDbColumn(conn, 'asterisk.stt_settings', 'provider', "VARCHAR(32) DEFAULT 'groq'");
+    await ensureDbColumn(conn, 'asterisk.stt_settings', 'api_key', 'TEXT DEFAULT NULL');
+    await ensureDbColumn(conn, 'asterisk.stt_settings', 'api_url', "VARCHAR(255) DEFAULT 'https://api.groq.com/openai/v1/audio/transcriptions'");
+    await ensureDbColumn(conn, 'asterisk.stt_settings', 'prompt', 'TEXT DEFAULT NULL');
+    await ensureDbColumn(conn, 'asterisk.stt_settings', 'pause_during_calls', 'TINYINT(1) DEFAULT 1');
     for (const table of ['cdr_transcriptions', 'voicemail_transcriptions']) {
-        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`attempt_count\` INT NOT NULL DEFAULT 0`); } catch (_) {}
-        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`processing_started_at\` DATETIME DEFAULT NULL`); } catch (_) {}
-        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`completed_at\` DATETIME DEFAULT NULL`); } catch (_) {}
-        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`processing_ms\` BIGINT DEFAULT NULL`); } catch (_) {}
-        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`engine\` VARCHAR(32) DEFAULT NULL`); } catch (_) {}
-        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`model_used\` VARCHAR(128) DEFAULT NULL`); } catch (_) {}
-        try { await conn.execute(`ALTER TABLE \`asteriskcdrdb\`.\`${table}\` ADD COLUMN \`error_message\` VARCHAR(500) DEFAULT NULL`); } catch (_) {}
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'attempt_count', 'INT NOT NULL DEFAULT 0');
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'processing_started_at', 'DATETIME DEFAULT NULL');
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'completed_at', 'DATETIME DEFAULT NULL');
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'processing_ms', 'BIGINT DEFAULT NULL');
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'engine', 'VARCHAR(32) DEFAULT NULL');
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'model_used', 'VARCHAR(128) DEFAULT NULL');
+        await ensureDbColumn(conn, `asteriskcdrdb.${table}`, 'error_message', 'VARCHAR(500) DEFAULT NULL');
     }
-    try { await conn.execute('ALTER TABLE `asteriskcdrdb`.`cdr_transcriptions` MODIFY COLUMN `error_message` VARCHAR(500) DEFAULT NULL'); } catch (_) {}
     await conn.execute('INSERT IGNORE INTO `asterisk`.`stt_settings` (id) VALUES (1)');
     // Default dispositions
     const defaultDispositions = [
@@ -19731,6 +19869,21 @@ app.post('/api/federation/nodes/:id/sync', requireAuth, async (req, res) => {
 });
 
 // ============================================================================
+// PEER PANEL REVERSE PROXY (central node only)
+//
+// Exposes every configured peer at /peer/<site_code>/ so an operator can open
+// a branch PBX panel from the PBX scope menu. Cookies are namespaced per peer
+// and the peer's HTML/CSS is rewritten to live under the prefix, so no Apache
+// or DNS change is required on any install path.
+// ============================================================================
+const federationPanelProxy = createFederationProxy({
+    pool,
+    isCentral: () => Boolean(federationHub && federationHub.localSettings && federationHub.localSettings.panel_role === 'central')
+});
+
+app.all(['/peer/:siteCode', '/peer/:siteCode/*'], requireAuth, federationPanelProxy);
+
+// ============================================================================
 // FEDERATION CONFIGURATION API
 // ============================================================================
 
@@ -23143,6 +23296,29 @@ app.use((req, res, next) => {
 });
 
 // 404 handler for unmatched routes
+// Escaped navigation fallback for the peer reverse proxy.
+//
+// A proxied peer panel can still emit a root-relative redirect that the HTML
+// bridge cannot catch (for example `window.location.href='/cdr/export?...'`).
+// When such a request reaches the 404 handler and the referer points at a
+// proxied peer, replay it through that peer instead of showing a 404.
+app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const referer = req.headers.referer || req.headers.referrer || '';
+    if (!referer) return next();
+    let refererPath = '';
+    try {
+        refererPath = new URL(referer).pathname || '';
+    } catch (_) {
+        return next();
+    }
+    const match = refererPath.match(/^\/peer\/([A-Za-z0-9_-]{1,10})(?:\/|$)/);
+    if (!match) return next();
+    if (req.path === '/peer' || req.path.startsWith('/peer/')) return next();
+    req.params = { ...(req.params || {}), siteCode: match[1], 0: req.path.replace(/^\//, '') };
+    return federationPanelProxy(req, res);
+});
+
 app.use((req, res) => {
     const isApi = req.path.startsWith('/api/') || req.path.startsWith('/integrations/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
     if (isApi) {

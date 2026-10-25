@@ -223,7 +223,7 @@ async function checkServiceHealth(serviceId) {
                 logs: getServiceRecentLogs(s.activeUnit)
             };
         }
-        // Test query responsiveness
+        // Test query responsiveness and verify critical table health
         try {
             const conn = await mysql.createConnection({
                 host: DB_CONFIG.host,
@@ -233,6 +233,58 @@ async function checkServiceHealth(serviceId) {
                 connectTimeout: 4000
             });
             await conn.query('SELECT 1');
+
+            // Proactively detect and self-heal any .frm corruption on critical tables
+            const criticalTables = [
+                { db: 'asteriskcdrdb', table: 'cdr_transcriptions' },
+                { db: 'asteriskcdrdb', table: 'voicemail_transcriptions' },
+                { db: 'asterisk', table: 'gsm_dongles' },
+                { db: 'asterisk', table: 'dashboard_api_keys' }
+            ];
+            for (const item of criticalTables) {
+                try {
+                    const [res] = await conn.query(`CHECK TABLE \`${item.db}\`.\`${item.table}\``);
+                    const msg = (res && res[0]) ? (res[0].Msg_text || '') : '';
+                    if (msg.includes('Corrupt') || msg.includes('Incorrect information') || msg.includes("doesn't exist in engine")) {
+                        console.warn(`[Watchdog] Table ${item.db}.${item.table} corrupted (${msg}). Auto-repairing...`);
+                        await conn.query(`DROP TABLE IF EXISTS \`${item.db}\`.\`${item.table}\``);
+                        if (item.table === 'cdr_transcriptions') {
+                            await conn.query(`CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`cdr_transcriptions\` (
+                                \`id\` BIGINT AUTO_INCREMENT PRIMARY KEY, \`uniqueid\` VARCHAR(32) NOT NULL, \`recordingfile\` VARCHAR(255) NOT NULL,
+                                \`language\` VARCHAR(10) DEFAULT 'auto', \`transcript\` LONGTEXT NOT NULL, \`status\` ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+                                \`error_message\` VARCHAR(500) DEFAULT NULL, \`duration_sec\` INT DEFAULT 0, \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                \`completed_at\` DATETIME DEFAULT NULL, \`attempt_count\` INT NOT NULL DEFAULT 0, \`processing_started_at\` DATETIME DEFAULT NULL,
+                                \`processing_ms\` BIGINT DEFAULT NULL, \`engine\` VARCHAR(32) DEFAULT NULL, \`model_used\` VARCHAR(128) DEFAULT NULL,
+                                UNIQUE KEY \`uniqueid\` (\`uniqueid\`), KEY \`idx_stt_status\` (\`status\`), FULLTEXT KEY \`ft_transcript\` (\`transcript\`)
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
+                        } else if (item.table === 'voicemail_transcriptions') {
+                            await conn.query(`CREATE TABLE IF NOT EXISTS \`asteriskcdrdb\`.\`voicemail_transcriptions\` (
+                                \`id\` INT AUTO_INCREMENT PRIMARY KEY, \`mailbox\` VARCHAR(20) NOT NULL, \`msg_file\` VARCHAR(100) NOT NULL, \`callerid\` VARCHAR(80) DEFAULT NULL,
+                                \`transcript\` LONGTEXT NOT NULL, \`status\` ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending', \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                \`attempt_count\` INT NOT NULL DEFAULT 0, \`processing_started_at\` DATETIME DEFAULT NULL, \`processing_ms\` BIGINT DEFAULT NULL,
+                                \`error_message\` VARCHAR(500) DEFAULT NULL, \`engine\` VARCHAR(32) DEFAULT NULL, \`model_used\` VARCHAR(128) DEFAULT NULL,
+                                PRIMARY KEY (\`id\`), UNIQUE KEY \`uniq_vm_file\` (\`mailbox\`, \`msg_file\`), KEY \`idx_vm_stt_status\` (\`status\`), FULLTEXT KEY \`ft_vm_transcript\` (\`transcript\`)
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
+                        } else if (item.table === 'gsm_dongles') {
+                            await conn.query(`CREATE TABLE IF NOT EXISTS \`asterisk\`.\`gsm_dongles\` (
+                                \`dongle_name\` VARCHAR(50) NOT NULL, \`imsi\` VARCHAR(30) DEFAULT NULL, \`imei\` VARCHAR(30) DEFAULT NULL, \`phone_number\` VARCHAR(30) DEFAULT NULL,
+                                \`dynamic_enabled\` TINYINT(1) NOT NULL DEFAULT 0, \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                PRIMARY KEY (\`dongle_name\`), KEY \`idx_imsi\` (\`imsi\`), KEY \`idx_imei\` (\`imei\`)
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
+                        } else if (item.table === 'dashboard_api_keys') {
+                            await conn.query(`CREATE TABLE IF NOT EXISTS \`asterisk\`.\`dashboard_api_keys\` (
+                                \`id\` INT NOT NULL AUTO_INCREMENT, \`name\` VARCHAR(100) NOT NULL, \`key_prefix\` VARCHAR(64) NOT NULL, \`key_hash\` VARCHAR(64) NOT NULL,
+                                \`encrypted_key\` TEXT NOT NULL, \`scopes\` VARCHAR(255) DEFAULT '*', \`allowed_ips\` VARCHAR(255) DEFAULT NULL,
+                                \`status\` ENUM('active','revoked') DEFAULT 'active', \`created_by\` VARCHAR(64) DEFAULT 'root', \`last_used_at\` DATETIME DEFAULT NULL,
+                                \`last_used_ip\` VARCHAR(64) DEFAULT NULL, \`expires_at\` DATETIME DEFAULT NULL, \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                \`updated_at\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (\`id\`), UNIQUE KEY \`key_hash\` (\`key_hash\`),
+                                KEY \`idx_api_key_hash\` (\`key_hash\`), KEY \`idx_api_key_status\` (\`status\`)
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
+                        }
+                    }
+                } catch (_) {}
+            }
+
             await conn.end();
         } catch (dbErr) {
             return {

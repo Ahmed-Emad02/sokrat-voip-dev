@@ -2299,6 +2299,7 @@ function syncStatusChecklistUI() {
                 ext: isRtl ? 'تحويلة' : 'ext',
                 dongles: isRtl ? 'شرائح' : 'SIMs',
                 calls: isRtl ? 'مكالمات' : 'calls',
+                openPanel: isRtl ? 'فتح لوحة السيرفر في تبويب جديد' : 'Open PBX panel in a new tab',
                 ms: 'ms'
             };
 
@@ -2342,8 +2343,21 @@ function syncStatusChecklistUI() {
                                     ${latency ? ' · ' + esc(latency) : ''}
                                 </div>
                             </div>
-                            <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
-                                  style="color:${color};background:${color}1a">${esc(statusLabel)}</span>
+                            <span class="flex items-center gap-1 shrink-0">
+                                <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
+                                      style="color:${color};background:${color}1a">${esc(statusLabel)}</span>
+                                ${isLocal ? '' : `
+                                <a href="/peer/${encodeURIComponent(String(node.siteCode || ''))}/"
+                                   target="_blank" rel="noopener noreferrer"
+                                   title="${esc(labels.openPanel)}"
+                                   aria-label="${esc(labels.openPanel)}"
+                                   class="w-6 h-6 rounded-md flex items-center justify-center border border-[var(--border-primary)] text-[var(--text-secondary)] hover:text-[var(--accent-color)] hover:border-[var(--accent-color)]/50 transition">
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        <path d="M15 3h6v6"></path><path d="M10 14 21 3"></path>
+                                    </svg>
+                                </a>`}
+                            </span>
                         </div>
                         <div class="mt-1.5 grid grid-cols-3 gap-1 text-center">
                             <div>
