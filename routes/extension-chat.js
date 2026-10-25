@@ -147,6 +147,16 @@ module.exports = function createExtensionChatRouter(pool, options) {
         }
     });
 
+    router.get('/extensions', async (req, res) => {
+        try {
+            const extensions = await chatStore.listChatExtensions(pool);
+            res.set('Cache-Control', 'no-store');
+            return res.json({ success: true, extensions });
+        } catch (err) {
+            return sendError(res, err, 'Failed to load extensions.');
+        }
+    });
+
     router.get('/conversations', async (req, res) => {
         try {
             const conversations = await chatStore.listConversations(pool, req.sokratExtension);
