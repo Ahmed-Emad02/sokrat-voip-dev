@@ -35,6 +35,8 @@ const createCrmRouter = require('./routes/crm-integration');
 const createExtensionContactsRouter = require('./routes/extension-contacts');
 const createExtensionChatRouter = require('./routes/extension-chat');
 const createExtensionVideoRouter = require('./routes/extension-video');
+const createExtensionAgentStatusRouter = require('./routes/extension-agent-status');
+const agentStatusService = require('./lib/agent-status');
 const { attachChatSocket } = require('./lib/chat/socket');
 const chatStore = require('./lib/chat/store');
 const registerCrmLiveSocket = require('./socket/crm-live');
@@ -2321,7 +2323,7 @@ app.use('/api', federationAuthMiddleware({
     pool: () => pool,
     decryptFn: decrypt,
     optional: true,
-    skipPrefixes: ['/federation', '/extension', '/extension-chat', '/extension-video', '/extension-policy'],
+    skipPrefixes: ['/federation', '/extension', '/extension-chat', '/extension-video', '/extension-agent-status', '/extension-policy'],
     // A peer may drive operational APIs but never federation management
     // (that would let a spoke rewire the hub), login, or API keys.
     denyPrefixes: ['/auth', '/admin', '/config/federation']
@@ -2336,7 +2338,7 @@ app.use((req, res, next) => {
         '/401', '/403', '/404', '/api/telephony/camp-on/dialplan-trigger',
         '/api/federation/v1/ping'
     ];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/extension/v1/') || req.path.startsWith('/api/extension-chat/v1/') || req.path.startsWith('/api/extension-video/v1/')) {
+    if (publicPaths.includes(req.path) || req.path.startsWith('/public/') || req.path.startsWith('/api/extension-policy/') || req.path.startsWith('/api/integrations/crm/v1/') || req.path.startsWith('/api/extension/v1/') || req.path.startsWith('/api/extension-chat/v1/') || req.path.startsWith('/api/extension-video/v1/') || req.path.startsWith('/api/extension-agent-status/v1/')) {
         return next();
     }
     requireAuth(req, res, next);
@@ -2553,6 +2555,13 @@ const chatSocket = attachChatSocket(io, pool);
 void chatStore.ensureChatSchema(pool).catch((err) => console.error('[chat] schema init:', err.message));
 app.use('/api/extension-chat/v1', createExtensionChatRouter(pool, { chat: chatSocket }));
 app.use('/api/extension-video/v1', createExtensionVideoRouter(pool));
+app.use('/api/extension-agent-status/v1', createExtensionAgentStatusRouter(pool, {
+    getPresence: (extension) => Boolean(peerStatus && peerStatus[extension]),
+    onStatusChanged: (payload) => {
+        try { io.emit('agentStatus:changed', payload); } catch (_) {}
+        try { notifyCrmLiveBroadcaster(); } catch (_) {}
+    }
+}));
 
 // Register /crm-live Socket.io namespace
 
@@ -15117,74 +15126,45 @@ app.delete('/api/employee/groups/:id', requireAuth, async (req, res) => {
 app.post('/api/employee/agent-status', requireAuth, async (req, res) => {
     const { extension, status, display_name } = req.body || {};
     const ext = String(extension || '').trim();
-    if (!ext || !/^[0-9A-Za-z_-]+$/.test(ext)) {
+    if (!ext || !/^[0-9A-Za-z*#._-]+$/.test(ext)) {
         return res.status(400).json({ success: false, error: 'Valid extension is required' });
     }
-    const newStatus = String(status || 'available').toLowerCase().trim();
-    const name = String(display_name || ext).trim();
 
     try {
-        const [currentRows] = await pool.query(
-            'SELECT status, last_update FROM asterisk.synq_agent_status WHERE extension = ? LIMIT 1',
-            [ext]
-        );
-        const current = currentRows && currentRows[0];
-
-        if (current && current.status !== newStatus) {
-            const startTime = current.last_update;
-            await pool.query(
-                'INSERT INTO asterisk.synq_agent_status_log (extension, status, start_time, end_time, duration_seconds) VALUES (?, ?, ?, NOW(), TIMESTAMPDIFF(SECOND, ?, NOW()))',
-                [ext, current.status, startTime, startTime]
-            );
-        }
-
-        await pool.query(
-            'INSERT INTO asterisk.synq_agent_status (extension, display_name, status, last_update) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE status = ?, display_name = ?, last_update = NOW()',
-            [ext, name, newStatus, newStatus, name]
+        const result = await agentStatusService.setAgentStatus(
+            pool,
+            ext,
+            status || 'available',
+            {
+                displayName: display_name,
+                getPresence: (value) => Boolean(peerStatus && peerStatus[value]),
+            },
         );
 
-        // Asterisk DND and Queue Pause Control
-        if (newStatus === 'available') {
-            await execFileAsync(ASTERISK_BIN, ['-rx', 'database del DND ' + ext]).catch(() => {});
-            await execFileAsync(ASTERISK_BIN, ['-rx', 'queue unpause member PJSIP/' + ext]).catch(() => {});
-            await pool.query(
-                "INSERT INTO asterisk.extension_policies (extension, dnd) VALUES (?, 'user_choice') ON DUPLICATE KEY UPDATE dnd = 'user_choice'",
-                [ext]
-            ).catch(() => {});
-        } else {
-            await execFileAsync(ASTERISK_BIN, ['-rx', 'database put DND ' + ext + ' YES']).catch(() => {});
-            await execFileAsync(ASTERISK_BIN, ['-rx', 'queue pause member PJSIP/' + ext + ' reason ' + newStatus]).catch(() => {});
-            await pool.query(
-                "INSERT INTO asterisk.extension_policies (extension, dnd) VALUES (?, 'enabled') ON DUPLICATE KEY UPDATE dnd = 'enabled'",
-                [ext]
-            ).catch(() => {});
-        }
-
-        if (typeof notifyCrmLiveBroadcaster === 'function') {
-            try { notifyCrmLiveBroadcaster(); } catch (_) {}
-        }
         try {
             io.emit('agentStatus:changed', {
-                extension: ext,
-                status: newStatus,
-                display_name: name,
-                startTime: new Date().toISOString()
+                extension: result.extension,
+                status: result.status,
+                display_name: result.display_name,
+                startTime: result.last_update,
+                source: 'operator',
             });
         } catch (_) {}
 
-        const hasTimer = (newStatus !== 'available' && newStatus !== 'offline');
+        try { notifyCrmLiveBroadcaster(); } catch (_) {}
 
-        res.json({
-            success: true,
-            extension: ext,
-            status: newStatus,
-            display_name: name,
-            has_timer: hasTimer,
-            updated_at: new Date().toISOString()
+        return res.json({
+            ...result,
+            updated_at: result.updated_at || result.last_update,
         });
     } catch (err) {
-        console.error('Operator Agent status update error:', err.message);
-        res.status(500).json({ success: false, error: err.message });
+        const statusCode = Number(err && err.statusCode) || 500;
+        if (statusCode >= 500) console.error('Operator Agent status update error:', err.message);
+        return res.status(statusCode).json({
+            success: false,
+            error: err.message,
+            code: err.code || 'agent_status_error',
+        });
     }
 });
 
