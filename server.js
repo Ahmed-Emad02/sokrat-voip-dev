@@ -81,6 +81,7 @@ const { federationAuthMiddleware, normalizeFederationBaseUrl, API_VERSION: FEDER
 const APP_VERSION = require('./package.json').version;
 let federationHub = null;
 const { syncFeatureCodeHandOff } = require('./lib/feature-code-hand-off');
+const { STATUS_PALETTE, STATUS_ORDER, getStatusStyle, statusTextClass, statusChipClass } = require('./lib/status-palette');
 const {
     DEFAULT_CALL_CODES,
     initSokratCallCodes,
@@ -6417,7 +6418,11 @@ app.get('/', async (req, res) => {
             hourlyByDay: JSON.stringify(hourlyByDay),
             topTalkers: JSON.stringify(topTalkers),
             durationData: JSON.stringify(durationData),
-            scopeData: JSON.stringify(scopeData)
+            scopeData: JSON.stringify(scopeData),
+            statusPalette: STATUS_PALETTE,
+            statusOrder: STATUS_ORDER,
+            statusTextClass,
+            statusChipClass
         });
     } catch (error) { res.status(500).send("Dashboard Error: " + error.message); }
 });
@@ -6827,6 +6832,10 @@ app.get('/cdr', async (req, res) => {
             availableTrunks,
             filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, trunkFilter: trunkFilterList, page, perPage },
             pagination: { total, totalPages, page, perPage },
+            statusPalette: STATUS_PALETTE,
+            statusOrder: STATUS_ORDER,
+            statusTextClass,
+            statusChipClass,
             moment
         });
     } catch (error) { res.status(500).send("CDR System Error: " + error.message); }

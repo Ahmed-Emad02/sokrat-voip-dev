@@ -555,22 +555,15 @@ const isRtl = currentLang === 'ar';
                             <input type="checkbox" id="dash_status_chk_all" name="dash_status_chk_all" value="ALL" <%= isAllSt ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
                             <span class="font-bold text-[var(--text-primary)]"><%= t.allDisp %></span>
                         </label>
-                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_status_chk_ans">
-                            <input type="checkbox" id="dash_status_chk_ans" name="dash_status_chk" value="ANSWERED" <%= (!isAllSt && selectedSt.includes('ANSWERED')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
-                            <span class="font-mono text-emerald-400 font-bold">ANSWERED</span>
+                        <% const dashStatusIds = { 'ANSWERED': 'ans', 'NO ANSWER': 'noans', 'BUSY': 'busy', 'FAILED': 'failed', 'CONGESTION': 'cong' }; %>
+                        <% const dashStatusOrder = (typeof statusOrder !== 'undefined' && Array.isArray(statusOrder)) ? statusOrder : ['ANSWERED','NO ANSWER','BUSY','FAILED','CONGESTION']; %>
+                        <% const dashText = (typeof statusTextClass === 'function') ? statusTextClass : () => 'text-zinc-400'; %>
+                        <% dashStatusOrder.forEach(st => { %>
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_status_chk_<%= dashStatusIds[st] || st.toLowerCase().replace(/\s+/g,'') %>">
+                            <input type="checkbox" id="dash_status_chk_<%= dashStatusIds[st] || st.toLowerCase().replace(/\s+/g,'') %>" name="dash_status_chk" value="<%= st %>" <%= (!isAllSt && selectedSt.includes(st)) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-mono <%= dashText(st) %> font-bold"><%= st %></span>
                         </label>
-                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_status_chk_noans">
-                            <input type="checkbox" id="dash_status_chk_noans" name="dash_status_chk" value="NO ANSWER" <%= (!isAllSt && selectedSt.includes('NO ANSWER')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
-                            <span class="font-mono text-teal-400 font-bold">NO ANSWER</span>
-                        </label>
-                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_status_chk_busy">
-                            <input type="checkbox" id="dash_status_chk_busy" name="dash_status_chk" value="BUSY" <%= (!isAllSt && selectedSt.includes('BUSY')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
-                            <span class="font-mono text-amber-400 font-bold">BUSY</span>
-                        </label>
-                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="dash_status_chk_failed">
-                            <input type="checkbox" id="dash_status_chk_failed" name="dash_status_chk" value="FAILED" <%= (!isAllSt && selectedSt.includes('FAILED')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="dash-status-chk rounded accent-[var(--accent-color)] cursor-pointer">
-                            <span class="font-mono text-purple-400 font-bold">FAILED</span>
-                        </label>
+                        <% }) %>
                     </div>
                 </div>
             </div>
@@ -1234,14 +1227,16 @@ const isRtl = currentLang === 'ar';
 
             // -- Disposition Breakdown --
             const accentColor = accent;
-            const dispPalette = {
-                'ANSWERED': accentColor,
-                'BUSY': '#fbbf24',
-                'NO ANSWER': '#2dd4bf',
-                'FAILED': '#a855f7',
-                'CONGESTION': '#f97316',
-                'UNKNOWN': '#71717a'
-            };
+            const dispPalette = (typeof statusPalette !== 'undefined' && statusPalette)
+                ? Object.fromEntries(Object.values(statusPalette).map(s => [s.key, s.hex]))
+                : {
+                    'ANSWERED': '#34d399',
+                    'BUSY': '#fbbf24',
+                    'NO ANSWER': '#f87171',
+                    'FAILED': '#a855f7',
+                    'CONGESTION': '#cbd5e1'
+                };
+            dispPalette['UNKNOWN'] = '#71717a';
             const dispChart = echarts.init(document.getElementById('dispositionChart'), isLight ? null : 'dark');
             dispChart.setOption({
                 textStyle: {

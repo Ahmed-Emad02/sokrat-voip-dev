@@ -37,13 +37,17 @@ const canDeleteCdr = isSuper || userAllowedTabs.includes('cdr-delete');
 const canExportCdr = isSuper || userAllowedTabs.includes('cdr-export');
 const canDownloadAudio = isSuper || userAllowedTabs.includes('cdr-audio-download');
 const canViewChatLogs = isSuper || userAllowedTabs.includes('chat-logs');
-const dispColors = {
-    'ANSWERED': 'text-[var(--accent-color)]',
-    'BUSY': 'text-amber-400',
-    'NO ANSWER': 'text-teal-400',
-    'FAILED': 'text-purple-400',
-    'CONGESTION': 'text-slate-300'
-};
+// Status colours come from lib/status-palette.js so the filter checklist and the
+// table badges can never disagree. `dispColors` is kept for the CSV/print paths
+// that still reference it.
+const dispText = (typeof statusTextClass === 'function') ? statusTextClass : () => 'text-zinc-400';
+const dispChip = (typeof statusChipClass === 'function') ? statusChipClass : () => 'text-zinc-400';
+const dispColors = (typeof statusPalette !== 'undefined' && statusPalette)
+    ? Object.fromEntries(Object.keys(statusPalette).map(k => [k, statusPalette[k].text]))
+    : {};
+const statusFilterOptions = (typeof statusOrder !== 'undefined' && Array.isArray(statusOrder))
+    ? statusOrder
+    : ['ANSWERED', 'NO ANSWER', 'BUSY', 'FAILED', 'CONGESTION'];
 function fmtDur(s) {
     s = parseInt(s) || 0;
     const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const sec = s % 60;
@@ -487,10 +491,9 @@ function fmtDur(s) {
                           let isAllSt = selectedSt.includes('ALL') || selectedSt.length === 0;
                         %>
                         <option value="ALL" <%= isAllSt ? 'selected' : '' %>><%= t.allDisp %></option>
-                        <option value="ANSWERED" <%= (!isAllSt && selectedSt.includes('ANSWERED')) ? 'selected' : '' %>>ANSWERED</option>
-                        <option value="NO ANSWER" <%= (!isAllSt && selectedSt.includes('NO ANSWER')) ? 'selected' : '' %>>NO ANSWER</option>
-                        <option value="BUSY" <%= (!isAllSt && selectedSt.includes('BUSY')) ? 'selected' : '' %>>BUSY</option>
-                        <option value="FAILED" <%= (!isAllSt && selectedSt.includes('FAILED')) ? 'selected' : '' %>>FAILED</option>
+                        <% statusFilterOptions.forEach(st => { %>
+                        <option value="<%= st %>" <%= (!isAllSt && selectedSt.includes(st)) ? 'selected' : '' %>><%= st %></option>
+                        <% }) %>
                     </select>
 
                     <button type="button" id="statusChecklistBtn" onclick="toggleChecklistMenu('statusChecklistMenu', event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] flex items-center justify-between gap-2 cursor-pointer text-start">
@@ -503,22 +506,13 @@ function fmtDur(s) {
                             <input type="checkbox" id="status_chk_all" name="status_chk_all" value="ALL" <%= isAllSt ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
                             <span class="font-bold text-[var(--text-primary)]"><%= t.allDisp %></span>
                         </label>
-                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="status_chk_ans">
-                            <input type="checkbox" id="status_chk_ans" name="status_chk" value="ANSWERED" <%= (!isAllSt && selectedSt.includes('ANSWERED')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
-                            <span class="font-mono text-emerald-400 font-bold">ANSWERED</span>
+                        <% const statusCheckIds = { 'ANSWERED': 'ans', 'NO ANSWER': 'noans', 'BUSY': 'busy', 'FAILED': 'failed', 'CONGESTION': 'cong' }; %>
+                        <% statusFilterOptions.forEach(st => { %>
+                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="status_chk_<%= statusCheckIds[st] || st.toLowerCase().replace(/\s+/g,'') %>">
+                            <input type="checkbox" id="status_chk_<%= statusCheckIds[st] || st.toLowerCase().replace(/\s+/g,'') %>" name="status_chk" value="<%= st %>" <%= (!isAllSt && selectedSt.includes(st)) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
+                            <span class="font-mono <%= dispText(st) %> font-bold"><%= st %></span>
                         </label>
-                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="status_chk_noans">
-                            <input type="checkbox" id="status_chk_noans" name="status_chk" value="NO ANSWER" <%= (!isAllSt && selectedSt.includes('NO ANSWER')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
-                            <span class="font-mono text-teal-400 font-bold">NO ANSWER</span>
-                        </label>
-                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="status_chk_busy">
-                            <input type="checkbox" id="status_chk_busy" name="status_chk" value="BUSY" <%= (!isAllSt && selectedSt.includes('BUSY')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
-                            <span class="font-mono text-amber-400 font-bold">BUSY</span>
-                        </label>
-                        <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer text-xs select-none" for="status_chk_failed">
-                            <input type="checkbox" id="status_chk_failed" name="status_chk" value="FAILED" <%= (!isAllSt && selectedSt.includes('FAILED')) ? 'checked' : '' %> onchange="onStatusChecklistChange(this)" class="status-chk rounded accent-[var(--accent-color)] cursor-pointer">
-                            <span class="font-mono text-purple-400 font-bold">FAILED</span>
-                        </label>
+                        <% }) %>
                     </div>
                 </div>
             </div>
@@ -758,7 +752,7 @@ function fmtDur(s) {
                                     </td>
                                     <td data-col="airtime" class="p-4 text-zinc-400 whitespace-nowrap"><%= fmtDur(call.billsec) %></td>
                                     <td data-col="state" class="p-4 whitespace-nowrap">
-                                        <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded text-[10px] font-mono font-black tracking-wider uppercase whitespace-nowrap <%= dispColors[call.disposition] || 'text-zinc-400' %>">
+                                        <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded border text-[10px] font-mono font-black tracking-wider uppercase whitespace-nowrap <%= dispChip(call.disposition) %>">
                                             <%= call.disposition %>
                                         </span>
                                     </td>
