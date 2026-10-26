@@ -60,9 +60,12 @@ test('CDR filter and CDR table use the same status colours', async () => {
         assert.ok(html.includes(`font-mono ${palette.STATUS_PALETTE[status].text} font-bold`),
             `filter label for ${status} must use ${palette.STATUS_PALETTE[status].text}`);
     }
-    // Table badge for the rendered ANSWERED row uses the same colour + chip.
-    assert.ok(html.includes('text-emerald-400 bg-emerald-500/10 border-emerald-500/30'),
-        'ANSWERED badge must use the shared chip classes');
+    // Table badge is text-only: no background, no border, same colour as the filter.
+    const badge = html.match(/<span class="([^"]*uppercase whitespace-nowrap[^"]*)">\s*ANSWERED/);
+    assert.ok(badge, 'ANSWERED badge must render');
+    assert.match(badge[1], /text-emerald-400/, 'ANSWERED badge keeps the green text colour');
+    assert.ok(!/\bbg-/.test(badge[1]), 'status badge must not paint a background');
+    assert.ok(!/\bborder(-|\s|$)/.test(badge[1]), 'status badge must not paint a border');
     assert.ok(html.includes('font-mono text-red-400 font-bold'), 'NO ANSWER filter label must be red');
     assert.ok(!/font-mono text-teal-400 font-bold/.test(html), 'NO ANSWER filter label must not stay teal');
 

@@ -41,7 +41,6 @@ const canViewChatLogs = isSuper || userAllowedTabs.includes('chat-logs');
 // table badges can never disagree. `dispColors` is kept for the CSV/print paths
 // that still reference it.
 const dispText = (typeof statusTextClass === 'function') ? statusTextClass : () => 'text-zinc-400';
-const dispChip = (typeof statusChipClass === 'function') ? statusChipClass : () => 'text-zinc-400';
 const dispColors = (typeof statusPalette !== 'undefined' && statusPalette)
     ? Object.fromEntries(Object.keys(statusPalette).map(k => [k, statusPalette[k].text]))
     : {};
@@ -752,7 +751,7 @@ function fmtDur(s) {
                                     </td>
                                     <td data-col="airtime" class="p-4 text-zinc-400 whitespace-nowrap"><%= fmtDur(call.billsec) %></td>
                                     <td data-col="state" class="p-4 whitespace-nowrap">
-                                        <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded border text-[10px] font-mono font-black tracking-wider uppercase whitespace-nowrap <%= dispChip(call.disposition) %>">
+                                        <span class="inline-flex items-center justify-center text-[10px] font-mono font-black tracking-wider uppercase whitespace-nowrap <%= dispText(call.disposition) %>">
                                             <%= call.disposition %>
                                         </span>
                                     </td>
