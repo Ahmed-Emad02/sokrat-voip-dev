@@ -447,7 +447,7 @@ const isRtl = currentLang === 'ar';
         </div>
 
         <!-- Federation node rail: every connected PBX in one strip. Central only. -->
-        <% if (typeof federationCentral !== 'undefined' && federationCentral) { %>
+        <% if (typeof federationEnabled !== 'undefined' && federationEnabled) { %>
         <div id="federationNodeRail" class="hidden mb-4 panel-surface rounded-xl p-3 relative z-20">
             <div class="flex items-center justify-between gap-3 mb-2">
                 <h3 class="text-xs font-extrabold uppercase tracking-wider text-[var(--text-secondary)]"><%= isRtl ? 'السيرفرات المرتبطة' : 'Connected PBXs' %></h3>
@@ -2374,7 +2374,8 @@ function syncStatusChecklistUI() {
 
             function render(overview) {
                 const nodes = Array.isArray(overview && overview.nodes) ? overview.nodes : [];
-                if (!nodes.length) {
+                const remoteNodes = nodes.filter(n => !n.isLocal);
+                if (!remoteNodes.length) {
                     rail.classList.add('hidden');
                     return;
                 }

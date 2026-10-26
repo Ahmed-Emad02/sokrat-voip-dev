@@ -21148,16 +21148,40 @@ app.delete('/api/config/federation/peers/:id', requireAuth, async (req, res) => 
         const peerId = parseInt(req.params.id, 10);
         if (!peerId) return res.status(400).json({ success: false, error: 'Invalid peer ID.' });
 
-        const [peerRows] = await pool.query('SELECT site_code FROM `asterisk`.`sokrat_federation_peers` WHERE id = ?', [peerId]);
-        if (peerRows && peerRows[0]) {
-            const siteCode = peerRows[0].site_code;
+        const [peerRows] = await pool.query('SELECT * FROM `asterisk`.`sokrat_federation_peers` WHERE id = ?', [peerId]);
+        const peer = peerRows && peerRows[0];
+        if (peer) {
+            const siteCode = peer.site_code;
             const { execFile: execFileCb } = require('child_process');
             execFileCb(ASTERISK_BIN, ['-rx', `database del FEDERATION PEER_${siteCode}_EGRESS_ALLOWED`], () => {});
+
+            // Best-effort remote cleanup if remote host is reachable
+            try {
+                const { removeRemoteFederationSetup } = require('./lib/federation-bootstrap');
+                await removeRemoteFederationSetup(peer.host, peer.ssh_port || 22, 'root', req.body.sshPassword || 'Admin@123');
+            } catch (_) {}
         }
 
         await pool.query('DELETE FROM `asterisk`.`sokrat_federation_remote_extensions` WHERE peer_id = ?', [peerId]);
         await pool.query('DELETE FROM `asterisk`.`sokrat_federation_remote_dongles` WHERE peer_id = ?', [peerId]);
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_node_status` WHERE peer_id = ?', [peerId]);
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_sync_state` WHERE peer_id = ?', [peerId]);
+        await pool.query('DELETE FROM `asterisk`.`sokrat_federation_remote_contacts` WHERE peer_id = ?', [peerId]);
+        try {
+            await pool.query('DELETE FROM `asteriskcdrdb`.`sokrat_federation_remote_cdr` WHERE peer_id = ?', [peerId]);
+        } catch (_) {}
         await pool.query('DELETE FROM `asterisk`.`sokrat_federation_peers` WHERE id = ?', [peerId]);
+
+        // Auto-revert panel_role to 'local' if no peers remain
+        const [remainingPeers] = await pool.query('SELECT COUNT(*) as c FROM `asterisk`.`sokrat_federation_peers`');
+        if (!remainingPeers[0] || remainingPeers[0].c === 0) {
+            await pool.query("UPDATE `asterisk`.`sokrat_federation_settings` SET panel_role = 'local' WHERE id = 1");
+        }
+
+        // Invalidate in-memory caches immediately
+        cachedFedTimestamp = 0;
+        cachedFedPeers = [];
+        cachedFedRemoteExts = [];
 
         await syncFederationAsteriskConfig(pool, decrypt);
         if (federationHub) await federationHub.reloadSettingsAndPeers();

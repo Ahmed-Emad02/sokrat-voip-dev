@@ -936,7 +936,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                     </button>
                 </div>
-                <% if (typeof federationCentral !== 'undefined' && federationCentral) { %>
+                <% if (typeof federationEnabled !== 'undefined' && federationEnabled) { %>
                 <div class="inline-flex items-center flex-wrap max-w-full p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] gap-1">
                     <button type="button" id="btn-node-all" onclick="filterOperatorByNode('all')" class="op-node-filter-btn px-2.5 py-1 rounded-lg text-xs font-bold transition bg-amber-500/20 text-amber-300 border border-amber-500/40 cursor-pointer">
                         <span><%= isRtl ? 'جميع السيرفرات' : 'All Nodes' %></span>
