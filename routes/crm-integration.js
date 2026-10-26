@@ -1356,6 +1356,73 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
         res.json({ success: true, ext, results });
     });
 
+    // POST /gateway/contact — ensure a static AOR contact pointing at the CRM gateway.
+    // This is the simple gateway model: the PBX routes calls for the extension to
+    // the gateway without requiring a REGISTER or the extension password.
+    function updateGatewayAorContact(extension, contact) {
+        const confPath = '/etc/asterisk/pjsip_additional.conf';
+        const lines = fs.readFileSync(confPath, 'utf8').split(/\r?\n/);
+        let start = -1;
+        let end = -1;
+
+        for (let i = 0; i < lines.length; i += 1) {
+            if (lines[i].trim() !== `[${extension}]`) continue;
+            let j = i + 1;
+            let isAor = false;
+            while (j < lines.length && !/^\s*\[/.test(lines[j])) {
+                if (/^\s*type\s*=\s*aor\s*$/i.test(lines[j])) isAor = true;
+                j += 1;
+            }
+            if (isAor) {
+                start = i;
+                end = j;
+                break;
+            }
+        }
+
+        if (start < 0) throw new Error(`AOR ${extension} not found`);
+
+        const section = lines
+            .slice(start, end)
+            .filter((line) => !/^\s*contact\s*=/i.test(line));
+        if (contact) section.push(`contact=${contact}`);
+        lines.splice(start, end - start, ...section);
+        fs.writeFileSync(confPath, lines.join('\n'), 'utf8');
+    }
+
+    router.post('/gateway/contact', requireCrmScope('extensions:read'), async (req, res) => {
+        const ext = String(req.body.extension || '').trim();
+        const host = String(req.body.host || '').trim();
+        const port = Number(req.body.port || 0);
+
+        if (!/^[0-9]{2,6}$/.test(ext) || !/^[A-Za-z0-9.:-]+$/.test(host) || !Number.isInteger(port) || port < 1 || port > 65535) {
+            return res.status(422).json({ success: false, error: 'A valid extension, host and port are required.' });
+        }
+
+        try {
+            const contact = `sip:${ext}@${host}:${port}`;
+            updateGatewayAorContact(ext, contact);
+            await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
+            res.json({ success: true, extension: ext, contact });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    router.delete('/gateway/contact/:extension', requireCrmScope('extensions:read'), async (req, res) => {
+        const ext = String(req.params.extension || '').trim();
+        if (!/^[0-9]{2,6}$/.test(ext)) {
+            return res.status(422).json({ success: false, error: 'Invalid extension.' });
+        }
+        try {
+            updateGatewayAorContact(ext, null);
+            await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
+            res.json({ success: true, extension: ext });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
     router.get('/desktop-session', requireCrmScope(['live:read', 'softphone:use', 'extensions:read']), async (req, res) => {
         const ext = String(req.query.extension || '').trim();
         try {
