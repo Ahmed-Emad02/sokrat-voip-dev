@@ -831,6 +831,22 @@ EOF
 fi
 
 # ──────────────────────────────────────────────
+# Step 5b — Install the LiveKit video SFU
+# ──────────────────────────────────────────────
+echo "[5b/14] Installing LiveKit video SFU..."
+if [ -f "$INSTALL_DIR/install-livekit.sh" ]; then
+    if ! bash "$INSTALL_DIR/install-livekit.sh"; then
+        echo "  WARNING: LiveKit setup did not complete; video rooms will be unavailable until it is installed."
+    fi
+elif [ -f "$SCRIPT_DIR/../install-livekit.sh" ]; then
+    if ! bash "$SCRIPT_DIR/../install-livekit.sh"; then
+        echo "  WARNING: LiveKit setup did not complete; video rooms will be unavailable until it is installed."
+    fi
+else
+    echo "  WARNING: install-livekit.sh was not found; video rooms will be unavailable."
+fi
+
+# ──────────────────────────────────────────────
 # Step 6 — Initialize Database Tables
 # ──────────────────────────────────────────────
 echo "[6/14] Initializing database tables..."
