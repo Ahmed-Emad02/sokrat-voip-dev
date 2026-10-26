@@ -13587,7 +13587,8 @@ const {
     createContact,
     updateContact,
     deleteContact,
-    importContactsBatch
+    importContactsBatch,
+    MAX_IMPORT_ROWS
 } = require('./lib/contacts');
 
 async function syncAllCampaignLeadsToAddressBook(dbConn) {
@@ -23384,6 +23385,44 @@ const csvUpload = multer({
     limits: { fileSize: 10 * 1024 * 1024 }
 });
 
+// Contact import only accepts spreadsheet/text files. Keeping it separate from
+// csvUpload avoids changing the dialer-lead and blacklist importers.
+const CONTACT_IMPORT_EXTENSIONS = new Set(['.csv', '.txt', '.xlsx', '.xls']);
+const contactsUpload = multer({
+    dest: '/tmp/',
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(String(file.originalname || '')).toLowerCase();
+        if (!CONTACT_IMPORT_EXTENSIONS.has(ext)) {
+            const error = new Error('Unsupported file type. Upload a .csv, .txt, .xlsx or .xls file.');
+            error.statusCode = 400;
+            return cb(error);
+        }
+        cb(null, true);
+    }
+});
+
+// xlsx/xls are zip/OLE containers: verify the magic bytes so a renamed binary
+// file is rejected before any parser (or the SQL writer) sees it.
+function assertSpreadsheetMagic(filePath, originalName) {
+    const ext = path.extname(String(originalName || '')).toLowerCase();
+    if (ext !== '.xlsx' && ext !== '.xls') return null;
+    let head;
+    try {
+        const fd = fs.openSync(filePath, 'r');
+        head = Buffer.alloc(8);
+        fs.readSync(fd, head, 0, 8, 0);
+        fs.closeSync(fd);
+    } catch (_) {
+        return 'Uploaded file could not be read.';
+    }
+    const isZip = head[0] === 0x50 && head[1] === 0x4b;
+    const isOle = head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0;
+    if (ext === '.xlsx' && !isZip) return 'File is not a valid .xlsx workbook.';
+    if (ext === '.xls' && !isOle && !isZip) return 'File is not a valid .xls workbook.';
+    return null;
+}
+
 // POST /api/dialer/leads - Create a single lead without a file upload
 app.post('/api/dialer/leads', requireAuth, requireRootForDialer, async (req, res) => {
     try {
@@ -23605,7 +23644,16 @@ app.post('/api/dialer/leads/import', requireAuth, requireRootForDialer, requireA
 });
 
 
-app.post('/api/contacts/csv-import', requireAuth, csvUpload.single('file'), async (req, res) => {
+app.post('/api/contacts/csv-import', requireAuth, (req, res, next) => {
+    contactsUpload.single('file')(req, res, (err) => {
+        if (!err) return next();
+        const status = Number(err.statusCode) || (err.code === 'LIMIT_FILE_SIZE' ? 413 : 400);
+        const message = err.code === 'LIMIT_FILE_SIZE'
+            ? 'File is too large. The maximum contact import size is 10 MB.'
+            : String(err.message || 'Upload failed.');
+        return res.status(status).json({ success: false, error: message });
+    });
+}, async (req, res) => {
     const perms = req.session.userPermissions || [];
     if (!isSuperAdmin(req) && !perms.includes('contacts-import') && !perms.includes('contacts')) {
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
@@ -23617,6 +23665,11 @@ app.post('/api/contacts/csv-import', requireAuth, csvUpload.single('file'), asyn
         }
 
         const filePath = req.file.path;
+        const magicError = assertSpreadsheetMagic(filePath, req.file.originalname);
+        if (magicError) {
+            try { fs.unlinkSync(filePath); } catch (_) {}
+            return res.status(400).json({ success: false, error: magicError });
+        }
         let rows = [];
 
         try {
@@ -23731,6 +23784,13 @@ app.post('/api/contacts/csv-import', requireAuth, csvUpload.single('file'), asyn
             return res.status(400).json({ success: false, error: 'No contact data rows found in the uploaded file.' });
         }
 
+        if (rawRecords.length > MAX_IMPORT_ROWS) {
+            return res.status(400).json({
+                success: false,
+                error: `Too many rows (${rawRecords.length}). Split the file into batches of ${MAX_IMPORT_ROWS} rows or fewer.`
+            });
+        }
+
         const result = await importContactsBatch(rawRecords);
 
         return res.json({
@@ -23747,7 +23807,17 @@ app.post('/api/contacts/csv-import', requireAuth, csvUpload.single('file'), asyn
         });
     } catch (err) {
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        res.status(500).json({ success: false, error: err.message });
+        // Validation-style errors keep their message; storage/parse failures are
+        // logged server-side and never echoed (they can contain raw SQL text).
+        const status = Number(err && err.statusCode);
+        if (status >= 400 && status < 500) {
+            return res.status(status).json({ success: false, error: err.message });
+        }
+        console.error('[Contacts Import] failed:', err && (err.stack || err.message));
+        res.status(500).json({
+            success: false,
+            error: 'Import failed while writing contacts. Nothing was imported.'
+        });
     }
 });
 // POST /api/blacklist/import — CSV upload for importing multiple blocked numbers
