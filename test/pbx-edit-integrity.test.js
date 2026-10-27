@@ -6,7 +6,7 @@ const path = require('node:path');
 const rootDir = path.join(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(rootDir, relative), 'utf8');
 const server = read('server.js');
-const view = read('views/config.ejs');
+const view = read('views/config.ejs') + read('views/scripts/config-page.ejs');
 
 test('ring group edit keeps unsent fields and the announcement', () => {
     const put = server.match(/app\.put\('\/api\/config\/ringgroups\/:grpnum',[\s\S]*?\n\}\);/);

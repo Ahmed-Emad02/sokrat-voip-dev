@@ -124,7 +124,7 @@ test('Live Panel UI: views/operator.ejs defines dynamic guide modal, edit dialog
 });
 
 test('PBX Configurations Subtab: views/config.ejs renders Call Control Codes as a dedicated subtab', () => {
-    const configView = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8');
+    const configView = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     assert.match(configView, /id="tab-btn-callcodes"/, 'config.ejs must define tab-btn-callcodes in subsidebar');
     assert.match(configView, /data-tab-target="callcodes"/, 'config.ejs must define callcodes pill button in top bar');

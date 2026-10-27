@@ -145,7 +145,9 @@ test('Time Conditions Engine: Syncs FreePBX feature codes and destination hooks'
 });
 
 test('Time Groups & Outbound Routes: views/config.ejs supports optional CallerID and Route CID', () => {
-    const configView = fs.readFileSync(path.join(rootDir, 'views/config.ejs'), 'utf8');
+    const configView = fs.readFileSync(path.join(rootDir, 'views/config.ejs'), 'utf8')
+        + (fs.existsSync(path.join(rootDir, 'views', 'scripts', 'config-page.ejs'))
+            ? fs.readFileSync(path.join(rootDir, 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Outbound Route CID input and Override Extension checkbox
     assert.match(configView, /id="outCid"/, 'Must contain Route CID input in Outbound Routes modal');

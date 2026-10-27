@@ -27,7 +27,7 @@ test('views/config.ejs renders successfully in both English and Arabic without c
 });
 
 test('views/config.ejs has safe delete button markup and deleteRecording implementation', () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Verify template string does not have JSON.stringify inside double-quoted onclick
     assert.equal(

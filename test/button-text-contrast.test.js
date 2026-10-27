@@ -38,7 +38,9 @@ test('Global Button Contrast: views/sidebar.ejs enforces black text in light mod
 });
 
 test('Toast Contrast: Toast notifications have high-contrast styling and do not use black text on black background', () => {
-    const configHtml = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8');
+    const configHtml = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8')
+        + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'))
+            ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // showToast in config.ejs must not use bg-slate-800 with text-white
     assert.strictEqual(

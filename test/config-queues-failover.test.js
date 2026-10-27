@@ -404,7 +404,9 @@ test('server.js registers extension conflicts audit API and does not auto-provis
 });
 
 test('views/config.ejs renders global extension conflict banner', () => {
-    const configCode = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
+    const configCode = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8')
+        + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'))
+            ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '')
     assert.ok(configCode.includes('id="extensionConflictBanner"'), 'Must render extensionConflictBanner container');
     assert.ok(configCode.includes('id="extensionConflictDesc"'), 'Must render extensionConflictDesc text element');
     assert.ok(configCode.includes('checkExtensionConflicts'), 'Must include checkExtensionConflicts client function');
@@ -417,7 +419,9 @@ test('server.js and views/config.ejs strictly restrict duplicate number creation
     assert.ok(serverCode.includes("checkNumberCollision(num, 'ringgroup')"), 'Must guard ring group creation');
     assert.ok(serverCode.includes("checkNumberCollision(num, 'queue')"), 'Must guard queue creation');
 
-    const configCode = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
+    const configCode = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8')
+        + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'))
+            ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '')
     assert.ok(configCode.includes("loadedQueuesList || []).find(q => String(q.extension) === extNum"), 'saveExtension must block numbers used by queues');
     assert.ok(configCode.includes("loadedRingGroupsList || []).find(rg => String(rg.grpnum) === extNum"), 'saveExtension must block numbers used by ring groups');
     assert.ok(configCode.includes("loadedExtensionsList || []).find(ext => String(ext.extension) === String(grpnum)"), 'saveRingGroup must block numbers used by extensions');

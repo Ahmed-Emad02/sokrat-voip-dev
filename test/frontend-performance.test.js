@@ -35,7 +35,7 @@ test('vendored libraries are present locally', () => {
 });
 
 test('the font stylesheet is requested once per page', () => {
-    const config = read(path.join('views', 'config.ejs'));
+    const config = read(path.join('views', 'config.ejs')) + read(path.join('views', 'scripts', 'config-page.ejs'));
     const sidebar = read(path.join('views', 'sidebar.ejs'));
 
     // Sidebar is included inside <body>; the page <head> already loads the font.
@@ -62,7 +62,7 @@ test('background tabs stop polling', () => {
     assert.match(sidebar, /visibilitychange/);
     assert.match(sidebar, /if \(document\.hidden\)/);
 
-    const config = read(path.join('views', 'config.ejs'));
+    const config = read(path.join('views', 'config.ejs')) + read(path.join('views', 'scripts', 'config-page.ejs'));
     assert.match(config, /window\.sokratPoll\(fetchIpscanStatus, 1500\)/);
     assert.match(config, /window\.sokratPoll\(fetchRtcpDiagnostics, 3000\)/);
     assert.match(config, /\.stop\(\)/, 'config must stop the wrapped poll, not clearInterval an object');

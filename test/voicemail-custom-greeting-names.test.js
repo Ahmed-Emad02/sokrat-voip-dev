@@ -19,7 +19,9 @@ test('server.js voicemail APIs persist and resolve custom greeting names for mai
 });
 
 test('views/config.ejs renders custom greeting name next to voicemail-enabled mailboxes', () => {
-    const configContent = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
+    const configContent = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8')
+        + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'))
+            ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Checklist rendering must display greetingName
     assert.match(configContent, /ext\.greetingName/, 'views/config.ejs must reference ext.greetingName in mailbox checklist');

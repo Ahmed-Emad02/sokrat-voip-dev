@@ -70,7 +70,7 @@ test('views/gsm-dongles.ejs renders redesigned duration stats with incoming/outg
 
 test('views/config.ejs renders navigation notice pointing to GSM Dongles analytics', async () => {
     const configEjsPath = path.join(__dirname, '../views/config.ejs');
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     assert.ok(content.includes('/gsm-dongles#dongle-duration-stats-section'), 'config.ejs should link to gsm-dongles duration section');
 

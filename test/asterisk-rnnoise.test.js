@@ -104,7 +104,9 @@ test('server and UI no longer expose per-dongle noise settings', () => {
     assert.equal(serverJs.includes('saveDongleAudioSettingsInAstdb'), false, 'Server must not persist dongle audio keys');
     assert.equal(/DONGLE_SETTINGS[^"]*\/(ai_denoise|vad_)/.test(serverJs), false, 'Server must not read/write per-dongle audio keys');
 
-    const configHtml = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
+    const configHtml = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8')
+        + (fs.existsSync(path.join(__dirname, '../views/scripts/config-page.ejs'))
+            ? fs.readFileSync(path.join(__dirname, '../views/scripts/config-page.ejs'), 'utf8') : '');
     assert.equal(configHtml.includes("denoiseSelect_${id}"), false, 'Dongle card must not render an AI denoise select');
     assert.equal(configHtml.includes("vadGateSelect_${id}"), false, 'Dongle card must not render a VAD gate select');
 
@@ -138,7 +140,9 @@ test('server exposes and validates /api/config/audio-globals; modem tab renders 
     assert.ok(serverJs.includes("app.put('/api/config/audio-globals'"), 'PUT endpoint must exist');
     assert.ok(serverJs.includes("database put AUDIO_GLOBALS vad_threshold"), 'PUT must persist to AstDB');
 
-    const configHtml = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
+    const configHtml = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8')
+        + (fs.existsSync(path.join(__dirname, '../views/scripts/config-page.ejs'))
+            ? fs.readFileSync(path.join(__dirname, '../views/scripts/config-page.ejs'), 'utf8') : '')
     assert.ok(configHtml.includes("id=\"globalVadThreshold\""), 'Modem tab must render universal threshold select');
     assert.ok(configHtml.includes("id=\"globalVadHangover\""), 'Modem tab must render universal hangover select');
     assert.ok(configHtml.includes("id=\"globalVadDbThreshold\""), 'Modem tab must render universal dB threshold select');

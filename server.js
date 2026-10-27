@@ -394,6 +394,7 @@ function buildCdrSource(scope) {
     };
 }
 app.set('view engine', 'ejs');
+app.use((req, res, next) => { res.locals.assetVersion = ASSET_VERSION; next(); });
 const staticCacheOptions = { maxAge: '7d', etag: true };
 app.use(express.static(path.join(__dirname, 'public'), staticCacheOptions));
 app.use('/public', express.static(path.join(__dirname, 'public'), staticCacheOptions));
@@ -2532,6 +2533,10 @@ app.use((req, res, next) => {
     }
     next();
 });
+
+// Cache-busting token for server-rendered client bundles (see /js/*.js routes).
+// A restart regenerates it, so an upgrade never serves a stale cached script.
+const ASSET_VERSION = Date.now().toString(36);
 
 // --- DATABASE CONNECTION POOL SETUP ---
 // Two pools on purpose: heavy CDR/reporting work must not starve PBX configuration
@@ -13770,6 +13775,23 @@ app.post('/api/blacklist/sync', async (req, res) => {
 // --- PBX CONFIGURATION TAB VIEW & REST APIS ---
 
 // GET /config - render Configuration Management page
+// Server-rendered client bundle for the PBX configuration page. Rendering it
+// once per language keeps 700 KB of JavaScript out of the HTML and lets the
+// browser cache it across navigations.
+app.get('/js/config-page.js', requireAuth, (req, res) => {
+    const lang = String(req.query.lang || '').toLowerCase() === 'ar' ? 'ar' : 'en';
+    res.type('application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'private, max-age=86400, must-revalidate');
+    res.setHeader('Vary', 'Accept-Encoding');
+    res.render('scripts/config-page', { isRtl: lang === 'ar' }, (err, js) => {
+        if (err) {
+            console.error('config-page bundle render error:', err.message);
+            return res.status(500).send('// bundle error');
+        }
+        res.send(js);
+    });
+});
+
 app.get('/config', requireAuth, (req, res) => {
     const currentLang = res.locals.currentLang || 'en';
     const isRoot = hasRootAccess(req);

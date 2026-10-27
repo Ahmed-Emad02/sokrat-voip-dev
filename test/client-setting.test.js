@@ -95,7 +95,9 @@ test('views/sidebar.ejs renders Client Modal markup with form and input controls
 });
 
 test('views/config.ejs registers clientModal in PBX_CONFIG_MODAL_IDS', () => {
-    const configContent = fs.readFileSync(configViewPath, 'utf8');
+    const configContent = fs.readFileSync(configViewPath, 'utf8')
+        + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'))
+            ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
     assert.ok(configContent.includes("'clientModal'"), 'config.ejs PBX_CONFIG_MODAL_IDS must include clientModal');
 });
 

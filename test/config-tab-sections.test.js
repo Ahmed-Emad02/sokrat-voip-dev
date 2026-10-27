@@ -7,7 +7,7 @@ const ejs = require('ejs');
 const configEjsPath = path.join(__dirname, '../views/config.ejs');
 
 test('views/config.ejs renders all PBX tab sections as direct siblings at equal DOM depth', async () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // NOTE: config.ejs defines its own isTabAllowed() helper which gates each
     // section against the `allowedTabs` array, so the array must list every
@@ -80,7 +80,7 @@ test('views/config.ejs renders all PBX tab sections as direct siblings at equal 
 });
 
 test('views/config.ejs and server.js provide drag and drop reordering for outbound routes', () => {
-    const configContent = fs.readFileSync(configEjsPath, 'utf8');
+    const configContent = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
     const serverPath = path.join(__dirname, '../server.js');
     const serverContent = fs.readFileSync(serverPath, 'utf8');
 

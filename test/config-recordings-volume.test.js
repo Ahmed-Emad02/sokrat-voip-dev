@@ -32,7 +32,7 @@ test('views/config.ejs renders Volume / Headroom column and upload headroom sele
 });
 
 test('views/config.ejs defines saveRecordingVolume and setRecordingGainQuick functions', () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     assert.ok(content.includes('async function saveRecordingVolume(id) {'), 'Must define saveRecordingVolume');
     assert.ok(content.includes('function setRecordingGainQuick(id, gainDb) {'), 'Must define setRecordingGainQuick');
@@ -89,7 +89,7 @@ test('AstDB RECORDINGS family persists and parses gain values correctly', () => 
 });
 
 test('views/config.ejs renders recordingStudioModal with full DSP control suite', async () => {
-    const html = await ejs.renderFile(configEjsPath, {
+    const pageHtml = await ejs.renderFile(configEjsPath, {
         currentPage: '/config',
         currentLang: 'en',
         isRtl: false,
@@ -97,6 +97,8 @@ test('views/config.ejs renders recordingStudioModal with full DSP control suite'
         allowedTabs: ['recordings'],
         isTabAllowed: (t) => t === 'recordings'
     });
+    const bundlePath = path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs');
+    const html = pageHtml + (fs.existsSync(bundlePath) ? await ejs.renderFile(bundlePath, { isRtl: false }) : '');
 
     assert.ok(html.includes('id="recordingStudioModal"'), 'Must render recordingStudioModal backdrop');
     assert.ok(html.includes('id="dspNormDb"'), 'Must render Peak Normalizer selector');
@@ -158,7 +160,7 @@ test('SoX combined DSP pipeline successfully applies normalization, companding, 
     }
 });
 test('Recording studio supports controllable pre-roll and post-roll silence padding with SoX', () => {
-    const configContent = fs.readFileSync(configEjsPath, 'utf8');
+    const configContent = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
     const serverContent = fs.readFileSync(serverJsPath, 'utf8');
 
     // UI assertions

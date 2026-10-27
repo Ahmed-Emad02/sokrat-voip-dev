@@ -34,7 +34,7 @@ test('queue edit preserves settings the modal does not own', () => {
 });
 
 test('queue join announcement survives the modal repopulation', () => {
-    const view = read('views/config.ejs');
+    const view = read('views/config.ejs') + read('views/scripts/config-page.ejs');
 
     const populate = view.match(/function populateQueueAnnouncementsDropdown\(([^)]*)\)\s*\{[\s\S]*?\n        \}/);
     assert.ok(populate, 'populateQueueAnnouncementsDropdown must exist');

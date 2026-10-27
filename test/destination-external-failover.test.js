@@ -4,7 +4,9 @@ const fs = require('fs');
 const path = require('path');
 
 test('views/config.ejs DestinationSelect supports External Mobile Number destination category', () => {
-    const configContent = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
+    const configContent = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8')
+        + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'))
+            ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Category definition
     assert.match(configContent, /id:\s*'external'/, 'getCategories must include external category');
@@ -47,7 +49,9 @@ test('install.sh contains ext-external-failover dialplan migrations', () => {
 });
 
 test('views/config.ejs IVR Entries support External Number / Mobile destination', () => {
-    const configContent = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
+    const configContent = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8')
+        + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'))
+            ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Check ivr_entry_type includes external option
     assert.match(configContent, /<option value="external">/, 'ivr_entry_type must include external option');

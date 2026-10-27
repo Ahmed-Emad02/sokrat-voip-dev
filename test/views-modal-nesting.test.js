@@ -68,7 +68,7 @@ function analyzeDivNesting(html) {
 
 test('config.ejs renders fully balanced markup with no unclosed wrapper divs (en + ar)', () => {
     for (const lang of ['en', 'ar']) {
-        const content = fs.readFileSync(configEjsPath, 'utf8');
+        const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
         const html = ejs.render(content, {
             currentPage: '/config',
             currentLang: lang,
@@ -89,7 +89,7 @@ test('config.ejs renders fully balanced markup with no unclosed wrapper divs (en
 
 test('no PBX modal in config.ejs is nested inside another modal (they must be body-level siblings)', () => {
     for (const lang of ['en', 'ar']) {
-        const content = fs.readFileSync(configEjsPath, 'utf8');
+        const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
         const html = ejs.render(content, {
             currentPage: '/config',
             currentLang: lang,

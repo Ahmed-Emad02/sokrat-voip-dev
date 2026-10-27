@@ -5,7 +5,9 @@ const path = require('path');
 
 test('dongles default to rx/tx gain of 3 across add-slot UI, server API, and installer', () => {
     // Add-slot modal prefills 3 dB for both gains
-    const configHtml = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8');
+    const configHtml = fs.readFileSync(path.join(__dirname, '../views/config.ejs'), 'utf8')
+        + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'))
+            ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
     assert.ok(configHtml.match(/id="newSlotRxGain" value="3"/), 'Add-slot modal must prefill Rx gain with 3');
     assert.ok(configHtml.match(/id="newSlotTxGain" value="3"/), 'Add-slot modal must prefill Tx gain with 3');
 

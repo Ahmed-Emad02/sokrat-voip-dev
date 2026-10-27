@@ -105,7 +105,7 @@ test('HTTP/HTTPS Web Server Name Discovery: Accurately probes and detects web se
 });
 
 test('UI Template Integration: views/config.ejs renders IP scan subtab and Web Server column', () => {
-    const configHtml = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8');
+    const configHtml = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Sub-sidebar button
     assert.match(configHtml, /id="tab-btn-ipscan"/, 'Subtab button must exist in sidebar');
@@ -242,7 +242,7 @@ test('Proxy POST Forwarding: Serializes and sends parsed req.body to prevent gat
 });
 
 test('UI Template Integration: views/config.ejs removes iframe sandbox to prevent permissions policy warnings', () => {
-    const configHtml = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8');
+    const configHtml = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
     assert.strictEqual(
         configHtml.includes('sandbox="allow-same-origin'),
         false,

@@ -22,7 +22,7 @@ async function renderDiagramTab() {
 
 test('config diagram uses graph-derived layered layout instead of fixed category columns', async () => {
     const html = await renderDiagramTab();
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     assert.ok(content.includes('computeDiagramLayout'), 'Layered layout engine must exist');
     assert.ok(content.includes('Longest-path layering'), 'Layout must derive layers from the link graph');
@@ -32,7 +32,7 @@ test('config diagram uses graph-derived layered layout instead of fixed category
 });
 
 test('config diagram cards are draggable with persisted positions and auto-arrange reset', async () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     assert.ok(content.includes('initDiagramNodeDragging'), 'Node drag initializer must exist');
     assert.ok(content.includes("addEventListener('pointerdown'"), 'Drag must start from card pointer events');
@@ -43,7 +43,7 @@ test('config diagram cards are draggable with persisted positions and auto-arran
 });
 
 test('config diagram wires render arrowheads, dashed failure paths and a faint global mesh', async () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     assert.ok(content.includes('marker-end'), 'Wires must carry directional arrows');
     assert.ok(content.includes('auto-start-reverse'), 'Arrow markers must be defined');
@@ -53,7 +53,7 @@ test('config diagram wires render arrowheads, dashed failure paths and a faint g
 });
 
 test('diagram cards stay attached to their wires while dragging (no arrow split)', () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Drag session must freeze wire transitions, otherwise the path morphs
     // 200ms behind the card and the arrowhead separates from the line
@@ -80,7 +80,7 @@ test('diagram cards stay attached to their wires while dragging (no arrow split)
 
 test('light theme diagram cards are high-visibility and canvas fills the viewport', async () => {
     const html = await renderDiagramTab();
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Cards expose their node type so light-theme CSS can apply strong accent borders
     assert.ok(html.includes('data-node-type='), 'Cards must carry their node type');
@@ -96,7 +96,7 @@ test('light theme diagram cards are high-visibility and canvas fills the viewpor
 });
 test('config diagram renders view switcher and supports 4-quadrant radial topology map', async () => {
     const html = await renderDiagramTab();
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // View Switcher controls in toolbar
     assert.ok(html.includes('id="btnDiagramViewRadial"'), 'Must render Radial Topology view toggle button');

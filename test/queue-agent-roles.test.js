@@ -72,7 +72,7 @@ test('queue agent roles: every assigned agent still becomes a real member', () =
 });
 
 test('queue agent roles: modal hydrates each field from its own value', () => {
-    const view = read('views/config.ejs');
+    const view = read('views/config.ejs') + read('views/scripts/config-page.ejs');
     assert.match(view, /function cleanQueueAgentsFromApi\(value\)/);
     assert.match(view, /const staticArr = cleanQueueAgentsFromApi\(q\.static_members\)/);
     assert.match(view, /const dynArr = cleanQueueAgentsFromApi\(q\.dynmembers\)/);

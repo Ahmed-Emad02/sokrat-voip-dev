@@ -65,7 +65,7 @@ test('Softphone UI: softphone-core.js and softphone-ui.js handle callBusyInterna
 });
 
 test('PBX Configurations: views/config.ejs defines call codes section and modal for feature discovery', () => {
-    const configView = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8');
+    const configView = fs.readFileSync(path.join(rootDir, 'views', 'config.ejs'), 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
     assert.match(configView, /section-callcodes/, 'config.ejs must define section-callcodes');
     assert.match(configView, /callCodeModal/, 'config.ejs must define callCodeModal');
     assert.match(configView, /openConfigCallCodeModal/, 'config.ejs must define openConfigCallCodeModal function');

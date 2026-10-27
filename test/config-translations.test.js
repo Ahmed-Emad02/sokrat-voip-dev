@@ -7,7 +7,7 @@ const ejs = require('ejs');
 const configEjsPath = path.join(__dirname, '../views/config.ejs');
 
 test('views/config.ejs does not contain any hardcoded untranslated action buttons', () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Ensure no bare '>Edit<' or '>Delete<' in buttons
     assert.equal(/>Edit<\/button>/.test(content), false, 'Should not contain bare >Edit</button>');
@@ -18,7 +18,7 @@ test('views/config.ejs does not contain any hardcoded untranslated action button
 });
 
 test('views/config.ejs includes Arabic translations for all table action buttons', () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Check presence of bilingual button templates across all sub-tab tables
     assert.ok(content.includes("${isRtl ? 'تعديل' : 'Edit'}"), 'Should contain bilingual Edit button template');
@@ -27,7 +27,7 @@ test('views/config.ejs includes Arabic translations for all table action buttons
 });
 
 test('views/config.ejs confirmation dialogs and empty table states are fully translated in Arabic', async () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Ring group delete confirm
     assert.ok(content.includes("ring group ${grpnum}?"));

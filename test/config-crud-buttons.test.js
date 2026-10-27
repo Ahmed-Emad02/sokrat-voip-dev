@@ -7,7 +7,7 @@ const ejs = require('ejs');
 const configEjsPath = path.join(__dirname, '../views/config.ejs');
 
 test('views/config.ejs exports all CRUD and modal functions to window for all PBX modules', () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     const expectedWindowExports = [
         // Extensions
@@ -113,7 +113,7 @@ test('views/config.ejs exports all CRUD and modal functions to window for all PB
 });
 
 test('views/config.ejs modal opener functions do not block on await before openModal', () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     const modalOpeners = [
         'openExtensionModal',

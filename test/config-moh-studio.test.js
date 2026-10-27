@@ -7,11 +7,11 @@ const ejs = require('ejs');
 const configEjsPath = path.join(__dirname, '../views/config.ejs');
 const serverJsPath = path.join(__dirname, '../server.js');
 
-const configSrc = fs.readFileSync(configEjsPath, 'utf8');
+const configSrc = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 const serverSrc = fs.readFileSync(serverJsPath, 'utf8');
 
 test('Music-on-Hold tracks expose the audio studio', async () => {
-    const html = await ejs.renderFile(configEjsPath, {
+    const pageHtml = await ejs.renderFile(configEjsPath, {
         currentPage: '/config',
         currentLang: 'en',
         isRtl: false,
@@ -19,6 +19,10 @@ test('Music-on-Hold tracks expose the audio studio', async () => {
         allowedTabs: ['recordings'],
         isTabAllowed: (t) => t === 'recordings'
     });
+    // The MoH studio code lives in the external client bundle now.
+    const bundlePath = path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs');
+    const bundleHtml = fs.existsSync(bundlePath) ? await ejs.renderFile(bundlePath, { isRtl: false }) : '';
+    const html = pageHtml + bundleHtml;
     assert.ok(html.includes('openMohStudioModal('), 'MoH rows must expose a Studio action');
     assert.ok(html.includes('window.openMohStudioModal = openMohStudioModal;'), 'openMohStudioModal must be exported to window');
     assert.ok(html.includes('studioEndpoints'), 'The studio must resolve its endpoints per target');

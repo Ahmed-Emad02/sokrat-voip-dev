@@ -7,7 +7,7 @@ const ejs = require('ejs');
 const configEjsPath = path.join(__dirname, '../views/config.ejs');
 
 test('views/config.ejs defines non-blocking openInboundModal and editInboundRoute handlers with window bindings', () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // Ensure openInboundModal and editInboundRoute exist
     assert.ok(content.includes('function openInboundModal('), 'Should define openInboundModal');
@@ -54,7 +54,7 @@ test('views/config.ejs renders inboundModal form with all required fields', asyn
 });
 
 test('views/config.ejs ensures DestinationSelect updates dialplan on category change and inbound modal triggers list loading', () => {
-    const content = fs.readFileSync(configEjsPath, 'utf8');
+    const content = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 
     // DestinationSelect updates dialplanString when switching categories
     assert.ok(content.includes('this.dialplanString = category.targets[0].dialplanString;'), 'DestinationSelect category change must update dialplanString to first target');

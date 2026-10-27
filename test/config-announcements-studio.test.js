@@ -7,7 +7,7 @@ const ejs = require('ejs');
 const configEjsPath = path.join(__dirname, '../views/config.ejs');
 const serverJsPath = path.join(__dirname, '../server.js');
 
-const configSrc = fs.readFileSync(configEjsPath, 'utf8');
+const configSrc = fs.readFileSync(configEjsPath, 'utf8') + (fs.existsSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs')) ? fs.readFileSync(path.join(__dirname, '..', 'views', 'scripts', 'config-page.ejs'), 'utf8') : '');
 const serverSrc = fs.readFileSync(serverJsPath, 'utf8');
 
 test('Announcements modal exposes the audio studio, preview and upload actions', async () => {
