@@ -413,12 +413,18 @@ app.get('/favicon.png', (req, res) => {
     });
 });
 
-// --- NATIVE ZERO-DEPENDENCY GZIP/DEFLATE COMPRESSION MIDDLEWARE ---
+// --- NATIVE ZERO-DEPENDENCY COMPRESSION MIDDLEWARE ---
+// Prefer brotli when the client supports it (~15% smaller than gzip for HTML/JS).
+// `Vary: Accept-Encoding` is mandatory so proxies/caches do not mix encodings.
 app.use((req, res, next) => {
     const acceptEncoding = req.headers['accept-encoding'] || '';
-    if (!acceptEncoding.includes('gzip') && !acceptEncoding.includes('deflate')) {
+    const wantsBrotli = /\bbr\b/.test(acceptEncoding);
+    const wantsGzip = acceptEncoding.includes('gzip') || acceptEncoding.includes('deflate');
+    if (!wantsBrotli && !wantsGzip) {
         return next();
     }
+
+    res.setHeader('Vary', 'Accept-Encoding');
 
     const originalSend = res.send;
     res.send = function(body) {
@@ -444,7 +450,8 @@ app.use((req, res, next) => {
             contentType.includes('application/json') ||
             contentType.includes('text/css') ||
             contentType.includes('application/javascript') ||
-            contentType.includes('text/javascript')
+            contentType.includes('text/javascript') ||
+            contentType.includes('image/svg+xml')
         );
 
         if (!isCompressible || res.getHeader('Content-Encoding')) {
@@ -457,6 +464,20 @@ app.use((req, res, next) => {
         }
 
         try {
+            if (wantsBrotli) {
+                const compressed = zlib.brotliCompressSync(buf, {
+                    params: {
+                        [zlib.constants.BROTLI_PARAM_QUALITY]: 4,
+                        [zlib.constants.BROTLI_PARAM_SIZE_HINT]: buf.length
+                    }
+                });
+                if (compressed && compressed.length < buf.length) {
+                    res.setHeader('Content-Encoding', 'br');
+                    res.setHeader('Content-Length', compressed.length);
+                    res.removeHeader('ETag');
+                    return originalSend.call(this, compressed);
+                }
+            }
             const useGzip = acceptEncoding.includes('gzip');
             const compressed = useGzip ? zlib.gzipSync(buf, { level: 6 }) : zlib.deflateSync(buf, { level: 6 });
             if (compressed && compressed.length < buf.length) {

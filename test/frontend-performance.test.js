@@ -92,3 +92,13 @@ test('Apache tuning ships in all deployment paths', () => {
     assert.match(upgrader, /Protocols h2 http\/1\.1/);
     assert.match(upgrader, /BROTLI_COMPRESS/);
 });
+
+test('responses negotiate brotli and declare Vary', () => {
+    const server = read('server.js');
+    assert.match(server, /const wantsBrotli = \/\\bbr\\b\/\.test\(acceptEncoding\)/);
+    assert.match(server, /zlib\.brotliCompressSync\(buf/);
+    assert.match(server, /BROTLI_PARAM_QUALITY\]: 4/);
+    assert.match(server, /res\.setHeader\('Vary', 'Accept-Encoding'\)/,
+        'compressed responses must be marked Vary: Accept-Encoding');
+    assert.match(server, /res\.setHeader\('Content-Encoding', 'br'\)/);
+});
