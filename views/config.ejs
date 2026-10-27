@@ -64,12 +64,12 @@ function isTabAllowed(tabName) {
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
-    <script src="/js/tailwindcss-browser.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4'"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <script src="/js/tailwindcss-browser.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <link rel="stylesheet" href="/css/xterm.css" />
+    <script src="/js/xterm.js"></script>
+    <script src="/js/xterm-addon-fit.js"></script>
     <style>
         :root {
             --bg-primary: #09090b;
@@ -16441,11 +16441,12 @@ function isTabAllowed(tabName) {
         rtcpTimer = null;
         function startRtcpTimer() {
             stopRtcpTimer();
-            rtcpTimer = setInterval(fetchRtcpDiagnostics, 3000);
+            rtcpTimer = window.sokratPoll(fetchRtcpDiagnostics, 3000);
         }
         function stopRtcpTimer() {
             if (rtcpTimer) {
-                clearInterval(rtcpTimer);
+                if (typeof rtcpTimer.stop === 'function') rtcpTimer.stop();
+                else clearInterval(rtcpTimer);
                 rtcpTimer = null;
             }
         }
@@ -17215,8 +17216,11 @@ function isTabAllowed(tabName) {
         }
 
         function startIpscanPolling() {
-            if (ipscanPollInterval) clearInterval(ipscanPollInterval);
-            ipscanPollInterval = setInterval(fetchIpscanStatus, 1500);
+            if (ipscanPollInterval) {
+                if (typeof ipscanPollInterval.stop === 'function') ipscanPollInterval.stop();
+                else clearInterval(ipscanPollInterval);
+            }
+            ipscanPollInterval = window.sokratPoll(fetchIpscanStatus, 1500);
         }
 
         async function fetchIpscanStatus() {
@@ -17238,7 +17242,8 @@ function isTabAllowed(tabName) {
 
                 // Scan is complete or stopped
                 if (ipscanPollInterval) {
-                    clearInterval(ipscanPollInterval);
+                    if (ipscanPollInterval && typeof ipscanPollInterval.stop === 'function') ipscanPollInterval.stop();
+                    else clearInterval(ipscanPollInterval);
                     ipscanPollInterval = null;
                 }
                 if (ipscanTimerInterval) {

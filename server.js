@@ -2652,7 +2652,7 @@ federationHub = new FederationHub({
         }
     },
     getLocalMetricsFn: async () => {
-        const metrics = getFederationNodeMetrics();
+        const metrics = await getFederationNodeMetrics();
         return {
             ...metrics,
             calls_today: await getFederationCallsToday(),
@@ -21376,45 +21376,54 @@ app.get('/api/federation/v1/live-state', async (req, res) => {
 let federationMetricsCache = { at: 0, value: null };
 const FEDERATION_METRICS_TTL_MS = 30000;
 
-function getFederationNodeMetrics() {
+// Async: execSync here blocked the whole event loop for up to 7 s on a cache
+// miss (this endpoint is polled by the central hub).
+let federationMetricsInFlight = null;
+
+async function getFederationNodeMetrics() {
     const now = Date.now();
     if (federationMetricsCache.value && (now - federationMetricsCache.at) < FEDERATION_METRICS_TTL_MS) {
         return federationMetricsCache.value;
     }
+    if (federationMetricsInFlight) return federationMetricsInFlight;
 
-    let asteriskVersion = null;
-    try {
-        const out = execSync('asterisk -rx "core show version" 2>/dev/null', { encoding: 'utf8', timeout: 4000 });
-        const match = out.match(/Asterisk\s+([0-9][0-9A-Za-z.\-_]*)/i);
-        if (match) asteriskVersion = match[1];
-    } catch (_) {}
+    federationMetricsInFlight = (async () => {
+        let asteriskVersion = null;
+        try {
+            const { stdout } = await execFileAsync(ASTERISK_BIN, ['-rx', 'core show version'], { timeout: 4000 });
+            const match = String(stdout || '').match(/Asterisk\s+([0-9][0-9A-Za-z.\-_]*)/i);
+            if (match) asteriskVersion = match[1];
+        } catch (_) {}
 
-    let diskPct = null;
-    try {
-        const dfOut = execSync('df -k / 2>/dev/null | tail -n 1', { encoding: 'utf8', timeout: 3000 }).trim();
-        const cols = dfOut.split(/\s+/);
-        const used = parseInt(cols[2], 10);
-        const available = parseInt(cols[3], 10);
-        if (Number.isFinite(used) && Number.isFinite(available) && (used + available) > 0) {
-            diskPct = Math.round((used / (used + available)) * 100);
-        }
-    } catch (_) {}
+        let diskPct = null;
+        try {
+            const { stdout } = await execFileAsync('df', ['-k', '/'], { timeout: 3000 });
+            const line = String(stdout || '').trim().split('\n').pop() || '';
+            const cols = line.split(/\s+/);
+            const used = parseInt(cols[2], 10);
+            const available = parseInt(cols[3], 10);
+            if (Number.isFinite(used) && Number.isFinite(available) && (used + available) > 0) {
+                diskPct = Math.round((used / (used + available)) * 100);
+            }
+        } catch (_) {}
 
-    let load1 = null;
-    try {
-        load1 = Number(os.loadavg()[0].toFixed(2));
-    } catch (_) {}
+        let load1 = null;
+        try {
+            load1 = Number(os.loadavg()[0].toFixed(2));
+        } catch (_) {}
 
-    let callsToday = 0;
-    const value = {
-        asterisk_version: asteriskVersion,
-        uptime_sec: Math.round(os.uptime()),
-        load1,
-        disk_pct: diskPct,
-        calls_today: callsToday
-    };
-    federationMetricsCache = { at: now, value };
-    return value;
+        const value = {
+            asterisk_version: asteriskVersion,
+            uptime_sec: Math.round(os.uptime()),
+            load1,
+            disk_pct: diskPct,
+            calls_today: 0
+        };
+        federationMetricsCache = { at: Date.now(), value };
+        return value;
+    })().finally(() => { federationMetricsInFlight = null; });
+
+    return federationMetricsInFlight;
 }
 
 async function getFederationCallsToday() {
@@ -21865,7 +21874,7 @@ app.get('/api/federation/v1/live', async (req, res) => {
             getFederationNodeIdentity(),
             buildFederationExtensions(),
             buildFederationDongles(),
-            Promise.resolve(getFederationNodeMetrics()),
+            getFederationNodeMetrics(),
             getFederationCallsToday()
         ]);
 

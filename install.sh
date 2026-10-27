@@ -2856,6 +2856,11 @@ echo "  Issabel HTTPS redirect removed"
 
 # Create dashboard reverse proxy vhost for port 80 with WebSocket support and softphone HTTPS redirect
 cat > /etc/httpd/conf.d/dashboard.conf << 'DASHBOARD'
+<IfModule mod_brotli.c>
+    AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/css text/xml application/javascript application/json application/xml image/svg+xml
+    BrotliCompressionQuality 5
+</IfModule>
+
 <VirtualHost *:80>
     ProxyPreserveHost On
 
@@ -2878,7 +2883,7 @@ echo "  dashboard.conf created (port 80 -> :8080 with WebSocket support)"
 
 # Add ProxyPass & WebSocket rewrite to SSL vhost (port 443 -> :8080 & :8090)
 sed -i '/ProxyPreserveHost On/d; /RequestHeader set X-Forwarded-Proto/d; /RewriteEngine On/d; /RewriteCond %{HTTP:Upgrade}/d; /RewriteCond %{REQUEST_URI}/d; /RewriteRule.*ws:\/\/127\.0\.0\.1:8080/d; /RewriteRule.*ws:\/\/127\.0\.0\.1:8088/d; /ProxyPass.*8080/d; /ProxyPassReverse.*8080/d; /ProxyPass.*8090/d; /ProxyPassReverse.*8090/d; /ProxyPass.*8088/d; /ProxyPassReverse.*8088/d' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
-sed -i '/^SSLEngine on$/a\    ProxyPreserveHost On\n    RequestHeader set X-Forwarded-Proto "https"\n    RewriteEngine On\n    RewriteCond %{HTTP:Upgrade} =websocket [NC]\n    RewriteCond %{REQUEST_URI} ^/ws [NC]\n    RewriteRule /(.*) ws://127.0.0.1:8088/\$1 [P,L]\n    RewriteCond %{HTTP:Upgrade} =websocket [NC]\n    RewriteCond %{REQUEST_URI} ^/socket.io [NC]\n    RewriteRule /(.*) ws://127.0.0.1:8080/\$1 [P,L]\n    ProxyPass /phone/ http://127.0.0.1:8090/\n    ProxyPassReverse /phone/ http://127.0.0.1:8090/\n    ProxyPass /phone http://127.0.0.1:8090/\n    ProxyPassReverse /phone http://127.0.0.1:8090/\n    ProxyPass /standalone-softphone/ http://127.0.0.1:8090/\n    ProxyPassReverse /standalone-softphone/ http://127.0.0.1:8090/\n    ProxyPass /standalone-softphone http://127.0.0.1:8090/\n    ProxyPassReverse /standalone-softphone http://127.0.0.1:8090/\n    ProxyPass /ws ws://127.0.0.1:8088/ws\n    ProxyPassReverse /ws ws://127.0.0.1:8088/ws\n    ProxyPass /socket.io http://127.0.0.1:8080/socket.io\n    ProxyPassReverse /socket.io http://127.0.0.1:8080/socket.io\n    ProxyPass / http://127.0.0.1:8080/\n    ProxyPassReverse / http://127.0.0.1:8080/' /etc/httpd/conf.d/ssl.conf
+sed -i '/^SSLEngine on$/a\    Protocols h2 http/1.1\n    <IfModule mod_brotli.c>\n    AddOutputFilterByType BROTLI_COMPRESS text/html text/css application/javascript application/json image/svg+xml\n    BrotliCompressionQuality 5\n    </IfModule>\n    ProxyPreserveHost On\n    RequestHeader set X-Forwarded-Proto "https"\n    RewriteEngine On\n    RewriteCond %{HTTP:Upgrade} =websocket [NC]\n    RewriteCond %{REQUEST_URI} ^/ws [NC]\n    RewriteRule /(.*) ws://127.0.0.1:8088/\$1 [P,L]\n    RewriteCond %{HTTP:Upgrade} =websocket [NC]\n    RewriteCond %{REQUEST_URI} ^/socket.io [NC]\n    RewriteRule /(.*) ws://127.0.0.1:8080/\$1 [P,L]\n    ProxyPass /phone/ http://127.0.0.1:8090/\n    ProxyPassReverse /phone/ http://127.0.0.1:8090/\n    ProxyPass /phone http://127.0.0.1:8090/\n    ProxyPassReverse /phone http://127.0.0.1:8090/\n    ProxyPass /standalone-softphone/ http://127.0.0.1:8090/\n    ProxyPassReverse /standalone-softphone/ http://127.0.0.1:8090/\n    ProxyPass /standalone-softphone http://127.0.0.1:8090/\n    ProxyPassReverse /standalone-softphone http://127.0.0.1:8090/\n    ProxyPass /ws ws://127.0.0.1:8088/ws\n    ProxyPassReverse /ws ws://127.0.0.1:8088/ws\n    ProxyPass /socket.io http://127.0.0.1:8080/socket.io\n    ProxyPassReverse /socket.io http://127.0.0.1:8080/socket.io\n    ProxyPass / http://127.0.0.1:8080/\n    ProxyPassReverse / http://127.0.0.1:8080/' /etc/httpd/conf.d/ssl.conf
 echo "  SSL vhost proxied (port 443 -> :8080 dashboard & :8090 softphone)"
 # Restart Apache
 httpd -t 2>&1 | grep -v 'Could not reliably' | grep -v 'AH00558' || true

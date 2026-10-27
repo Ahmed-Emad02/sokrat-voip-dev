@@ -255,11 +255,10 @@ function can(tab) {
 <!-- Google Fonts Import for Cairo and JetBrains Mono -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
 <!-- Flatpickr Datepicker -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
+<link rel="stylesheet" href="/css/flatpickr.min.css">
+<script src="/js/flatpickr.min.js"></script>
+<script src="/js/anime.min.js"></script>
 <script src="/js/jssip.min.js"></script>
 <!-- Global Theme Override Styles -->
 <style>
@@ -6771,6 +6770,29 @@ window.closeConfigDropdownMenu = closeConfigDropdownMenu;
 window.closeConfigDropdowns = closeConfigDropdowns;
 window.positionConfigDropdown = positionConfigDropdown;
 window.enhanceSelectElements = enhanceSelectElements;
+// Background tabs must not keep polling the PBX. Wraps a periodic refresh so it
+// stops while the tab is hidden and runs once immediately on return.
+window.sokratPoll = function(fn, ms, options) {
+    const runWhenHidden = Boolean(options && options.runWhenHidden);
+    let timer = null;
+    const tick = () => { try { fn(); } catch (_) {} };
+    const stop = () => { if (timer !== null) { clearInterval(timer); timer = null; } };
+    const start = () => {
+        if (timer !== null) return;
+        timer = setInterval(() => { if (runWhenHidden || !document.hidden) tick(); }, ms);
+    };
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stop();
+        } else {
+            start();
+            tick();
+        }
+    });
+    start();
+    return { stop, start, trigger: tick };
+};
+
 window.syncConfigDropdownTrigger = function(el) {
     if (el && typeof el._customSync === 'function') el._customSync();
     if (el && typeof el._customBuildOptions === 'function') el._customBuildOptions();

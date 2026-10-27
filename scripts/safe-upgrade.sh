@@ -1155,6 +1155,23 @@ rm -f /etc/systemd/system/webmin.service /usr/lib/systemd/system/webmin.service 
 rm -f /etc/yum.repos.d/webmin.repo /etc/yum.repos.d/sokrat-webmin.repo 2>/dev/null || true
 
 systemctl daemon-reload 2>/dev/null || true
+
+# --- Apache: HTTP/2 + Brotli for the dashboard vhosts (idempotent) ---
+if [ -f /etc/httpd/conf.d/ssl.conf ] && ! grep -q 'Protocols h2 http/1.1' /etc/httpd/conf.d/ssl.conf 2>/dev/null; then
+    sed -i 's/^SSLEngine on$/SSLEngine on\n    Protocols h2 http\/1.1/' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
+    echo "  Apache: HTTP/2 enabled on the HTTPS vhost"
+fi
+if [ -f /etc/httpd/conf.d/dashboard.conf ] && ! grep -q 'BROTLI_COMPRESS' /etc/httpd/conf.d/dashboard.conf 2>/dev/null; then
+    sed -i '1i <IfModule mod_brotli.c>\n    AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/css application\/javascript application\/json image\/svg+xml\n    BrotliCompressionQuality 5\n</IfModule>\n' /etc/httpd/conf.d/dashboard.conf 2>/dev/null || true
+    echo "  Apache: Brotli compression enabled"
+fi
+if ! grep -q 'BROTLI_COMPRESS' /etc/httpd/conf.d/ssl.conf 2>/dev/null; then
+    sed -i 's/^SSLEngine on$/SSLEngine on\n    <IfModule mod_brotli.c>\n    AddOutputFilterByType BROTLI_COMPRESS text\/html text\/css application\/javascript application\/json image\/svg+xml\n    BrotliCompressionQuality 5\n    <\/IfModule>/' /etc/httpd/conf.d/ssl.conf 2>/dev/null || true
+fi
+if command -v httpd >/dev/null 2>&1; then
+    httpd -t >/dev/null 2>&1 && systemctl reload httpd 2>/dev/null || true
+fi
+
 systemctl restart sokrat-voip.service 2>/dev/null || true
 systemctl restart sokrat-watchdog.service 2>/dev/null || true
 systemctl restart sokrat-stt.service 2>/dev/null || true

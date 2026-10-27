@@ -147,7 +147,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
-    <script src="/js/tailwindcss-browser.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4'"></script>
+    <script src="/js/tailwindcss-browser.js"></script>
     <style>
         :root {
             --bg-primary: #09090b;
@@ -1932,7 +1932,9 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     const startMsStr = badge.getAttribute('data-start');
 
                     if (window.dynamicStatusTimers[cardId]) {
-                        clearInterval(window.dynamicStatusTimers[cardId]);
+                        const __prevTimer = window.dynamicStatusTimers[cardId];
+                        if (__prevTimer && typeof __prevTimer.stop === 'function') __prevTimer.stop();
+                        else clearInterval(__prevTimer);
                     }
 
                     const isDynamic = (statusSlug !== 'available' && statusSlug !== 'offline');
@@ -1944,7 +1946,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                             timerEl.textContent = formatStatusTimer(elapsed);
                         };
                         update();
-                        window.dynamicStatusTimers[cardId] = setInterval(update, 1000);
+                        window.dynamicStatusTimers[cardId] = window.sokratPoll(update, 1000);
                     } else if (timerEl) {
                         timerEl.classList.add('hidden');
                     }
