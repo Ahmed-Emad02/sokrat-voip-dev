@@ -1912,10 +1912,16 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
             // Initialize & run presence duration timers for employee agent status cards
             window.dynamicStatusTimers = window.dynamicStatusTimers || {};
 
+            // Presence duration: past one hour the badge is useless as "917:50",
+            // so switch to H:MM:SS exactly like the call-duration timer.
             function formatStatusTimer(totalSeconds) {
-                const m = Math.floor(totalSeconds / 60);
-                const s = totalSeconds % 60;
-                return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+                const total = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+                const h = Math.floor(total / 3600);
+                const m = Math.floor((total % 3600) / 60);
+                const s = total % 60;
+                const mm = String(m).padStart(2, '0');
+                const ss = String(s).padStart(2, '0');
+                return h > 0 ? h + ':' + mm + ':' + ss : mm + ':' + ss;
             }
 
             function initDynamicStatusTimers() {
