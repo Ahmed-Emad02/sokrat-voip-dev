@@ -625,16 +625,22 @@ function getDetectedNetworkInterfaces() {
 
             const liveControls = (client.scopes || []).filter(s => s.startsWith('live:') && s !== 'live:read').map(s => s.substring(5));
 
+            const pbxSipHost = String(process.env.PBX_SIP_HOST || req.hostname || '').trim();
+            const pbxSipPort = Number(process.env.PBX_SIP_PORT || 5066);
+
             return res.json({
                 client_id: client.clientId,
                 client_secret: client.bearerToken,
-                api_version: '1.0',
+                api_version: '1.1',
+                sip_host: pbxSipHost,
+                sip_port: Number.isInteger(pbxSipPort) && pbxSipPort > 0 && pbxSipPort <= 65535 ? pbxSipPort : 5066,
                 capabilities: {
                     call_history: true,
                     recordings: true,
                     extension_stats: true,
                     live_panel: true,
-                    live_controls: liveControls
+                    live_controls: liveControls,
+                    gateway_contacts: true
                 }
             });
         } catch (err) {
@@ -711,9 +717,14 @@ function getDetectedNetworkInterfaces() {
         const clientScopes = req.crmClient.scopes || [];
         const liveControls = clientScopes.filter(s => s.startsWith('live:') && s !== 'live:read').map(s => s.substring(5));
 
+        const pbxSipHost = String(process.env.PBX_SIP_HOST || req.hostname || '').trim();
+        const pbxSipPort = Number(process.env.PBX_SIP_PORT || 5066);
+
         res.json({
-            api_version: '1.0',
+            api_version: '1.1',
             application_version: pkg.version || '1.0.0',
+            sip_host: pbxSipHost,
+            sip_port: Number.isInteger(pbxSipPort) && pbxSipPort > 0 && pbxSipPort <= 65535 ? pbxSipPort : 5066,
             supported: {
                 call_history: true,
                 recordings: true,
@@ -721,6 +732,7 @@ function getDetectedNetworkInterfaces() {
                 live_panel: true,
                 voicemails: true,
                 reports_summary: true,
+                gateway_contacts: true,
                 live_controls: ['listen', 'whisper', 'barge', 'hangup', 'hijack']
             },
             granted_scopes: clientScopes,
@@ -1356,12 +1368,83 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
         res.json({ success: true, ext, results });
     });
 
-    // POST /gateway/contact — ensure a static AOR contact pointing at the CRM gateway.
-    // This is the simple gateway model: the PBX routes calls for the extension to
-    // the gateway without requiring a REGISTER or the extension password.
-    function updateGatewayAorContact(extension, contact) {
-        const confPath = '/etc/asterisk/pjsip_additional.conf';
-        const lines = fs.readFileSync(confPath, 'utf8').split(/\r?\n/);
+    // ---- CRM gateway static AOR contacts ----
+    //
+    // The gateway contact is a static contact on the extension's existing AOR.
+    // IssabelPBX regenerates pjsip_additional.conf on Apply Config, so the
+    // authenticated endpoint writes both the live contact and a small state
+    // file.  A retrieve_conf post-hook re-applies the state after regeneration;
+    // desktop REGISTER contacts and all other AOR options are preserved.
+    const PJSIP_ADDITIONAL_CONF = '/etc/asterisk/pjsip_additional.conf';
+    const GATEWAY_STATE_FILE = '/etc/asterisk/sokrat_gateway_contacts.json';
+    const GATEWAY_HOOK_SOURCE = path.join(__dirname, '..', 'scripts', 'sokrat_gateway_contacts_hook.php');
+    const GATEWAY_HOOK_TARGET = '/var/lib/asterisk/bin/sokrat_gateway_contacts_hook.php';
+    const RETRIEVE_CONF_CUSTOM = '/var/lib/asterisk/bin/retrieve_conf_post_custom';
+
+    function readGatewayState() {
+        try {
+            const parsed = JSON.parse(fs.readFileSync(GATEWAY_STATE_FILE, 'utf8'));
+            if (parsed && typeof parsed === 'object' && parsed.contacts && typeof parsed.contacts === 'object') {
+                return { contacts: parsed.contacts };
+            }
+        } catch (_) {}
+        return { contacts: {} };
+    }
+
+    function writeGatewayState(state) {
+        const payload = { contacts: state.contacts || {} };
+        fs.writeFileSync(GATEWAY_STATE_FILE, JSON.stringify(payload, null, 2) + '\n', { mode: 0o644 });
+    }
+
+    async function ensureGatewayHook() {
+        const warnings = [];
+
+        try {
+            const source = fs.readFileSync(GATEWAY_HOOK_SOURCE, 'utf8');
+            let current = '';
+            try { current = fs.readFileSync(GATEWAY_HOOK_TARGET, 'utf8'); } catch (_) {}
+            if (current !== source) {
+                fs.writeFileSync(GATEWAY_HOOK_TARGET, source, { mode: 0o644 });
+            }
+        } catch (err) {
+            warnings.push(`gateway hook: ${err.message}`);
+        }
+
+        try {
+            let custom = '';
+            try { custom = fs.readFileSync(RETRIEVE_CONF_CUSTOM, 'utf8'); } catch (_) {}
+            if (!custom.includes('SOKRAT GATEWAY CONTACTS')) {
+                if (custom.trim() === '') {
+                    custom = '<?php\n';
+                } else if (!custom.includes('<?php')) {
+                    custom = '<?php\n' + custom;
+                }
+                custom = custom.replace(/\s+$/g, '') + '\n\n'
+                    + '// BEGIN SOKRAT GATEWAY CONTACTS\n'
+                    + "$sokratGatewayHook = '/var/lib/asterisk/bin/sokrat_gateway_contacts_hook.php';\n"
+                    + "if (file_exists($sokratGatewayHook)) {\n"
+                    + "    include $sokratGatewayHook;\n"
+                    + "}\n"
+                    + '// END SOKRAT GATEWAY CONTACTS\n';
+                fs.writeFileSync(RETRIEVE_CONF_CUSTOM, custom, { mode: 0o644 });
+            }
+        } catch (err) {
+            warnings.push(`retrieve hook: ${err.message}`);
+        }
+
+        if (fs.existsSync('/var/lib/asterisk/bin/issabelpbx_setting')) {
+            try {
+                await execFileAsync('/var/lib/asterisk/bin/issabelpbx_setting', ['AMPLOCALBIN', '/var/lib/asterisk/bin'], { timeout: 15000 });
+            } catch (err) {
+                warnings.push(`AMPLOCALBIN: ${err.message}`);
+            }
+        }
+
+        return warnings;
+    }
+
+    function updateGatewayAorContact(extension, contact, previousContact = null) {
+        const lines = fs.readFileSync(PJSIP_ADDITIONAL_CONF, 'utf8').split(/\r?\n/);
         let start = -1;
         let end = -1;
 
@@ -1380,46 +1463,152 @@ results['pjsip_reload_out'] = (stdout || '') + (stderr || '');
             }
         }
 
-        if (start < 0) throw new Error(`AOR ${extension} not found`);
+        if (start < 0) {
+            throw new Error(`AOR ${extension} not found`);
+        }
 
-        const section = lines
-            .slice(start, end)
-            .filter((line) => !/^\s*contact\s*=/i.test(line));
-        if (contact) section.push(`contact=${contact}`);
+        const before = lines.slice(start, end).join('\n');
+        const section = lines.slice(start, end).filter((line) => {
+            const match = line.match(/^\s*contact\s*=\s*(.+?)\s*$/i);
+            if (!match) return true;
+            const uri = match[1].trim();
+            return uri !== contact && (!previousContact || uri !== previousContact);
+        });
+
+        if (contact) {
+            section.push(`contact=${contact}`);
+        }
+
+        const after = section.join('\n');
+        if (after === before) return false;
+
         lines.splice(start, end - start, ...section);
-        fs.writeFileSync(confPath, lines.join('\n'), 'utf8');
+        fs.writeFileSync(PJSIP_ADDITIONAL_CONF, lines.join('\n'), 'utf8');
+        return true;
+    }
+
+    function normalizeGatewayContact(extension, host, port) {
+        const ext = String(extension || '').trim();
+        const sipHost = String(host || '').trim();
+        const sipPort = Number(port || 0);
+        if (!/^[0-9]{2,6}$/.test(ext) || !/^[A-Za-z0-9.:-]+$/.test(sipHost) || !Number.isInteger(sipPort) || sipPort < 1 || sipPort > 65535) {
+            const error = new Error('A valid extension, host and port are required.');
+            error.statusCode = 422;
+            throw error;
+        }
+        return { extension: ext, host: sipHost, port: sipPort, contact: `sip:${ext}@${sipHost}:${sipPort}` };
+    }
+
+    function normalizeGatewayContacts(input) {
+        if (!Array.isArray(input)) {
+            const error = new Error('contacts must be an array.');
+            error.statusCode = 422;
+            throw error;
+        }
+        if (input.length > 500) {
+            const error = new Error('Too many contacts.');
+            error.statusCode = 422;
+            throw error;
+        }
+        const byExtension = new Map();
+        for (const item of input) {
+            const contact = normalizeGatewayContact(item?.extension, item?.host, item?.port);
+            byExtension.set(contact.extension, contact);
+        }
+        return Array.from(byExtension.values());
+    }
+
+    async function reloadPjsip() {
+        await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
     }
 
     router.post('/gateway/contact', requireCrmScope('extensions:read'), async (req, res) => {
-        const ext = String(req.body.extension || '').trim();
-        const host = String(req.body.host || '').trim();
-        const port = Number(req.body.port || 0);
-
-        if (!/^[0-9]{2,6}$/.test(ext) || !/^[A-Za-z0-9.:-]+$/.test(host) || !Number.isInteger(port) || port < 1 || port > 65535) {
-            return res.status(422).json({ success: false, error: 'A valid extension, host and port are required.' });
-        }
-
         try {
-            const contact = `sip:${ext}@${host}:${port}`;
-            updateGatewayAorContact(ext, contact);
-            await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
-            res.json({ success: true, extension: ext, contact });
+            const contact = normalizeGatewayContact(req.body.extension, req.body.host, req.body.port);
+            const hookWarnings = await ensureGatewayHook();
+            const state = readGatewayState();
+            const previous = state.contacts[contact.extension]?.contact || null;
+            const changed = updateGatewayAorContact(contact.extension, contact.contact, previous);
+            state.contacts[contact.extension] = { host: contact.host, port: contact.port, contact: contact.contact };
+            writeGatewayState(state);
+            if (changed) await reloadPjsip();
+            res.json({ success: true, extension: contact.extension, contact: contact.contact, changed, hook_warnings: hookWarnings });
         } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
+            res.status(err.statusCode || 500).json({ success: false, error: err.message });
+        }
+    });
+
+    router.post('/gateway/contacts', requireCrmScope('extensions:read'), async (req, res) => {
+        try {
+            const contacts = normalizeGatewayContacts(req.body.contacts);
+            const hookWarnings = await ensureGatewayHook();
+            const state = readGatewayState();
+            const next = {};
+            let changed = false;
+            const skipped = [];
+
+            for (const [extension, entry] of Object.entries(state.contacts)) {
+                if (contacts.some((contact) => contact.extension === extension)) continue;
+                try {
+                    if (updateGatewayAorContact(extension, null, entry?.contact || null)) changed = true;
+                } catch (err) {
+                    skipped.push({ extension, error: err.message });
+                }
+            }
+
+            for (const contact of contacts) {
+                const previous = state.contacts[contact.extension]?.contact || null;
+                try {
+                    if (updateGatewayAorContact(contact.extension, contact.contact, previous)) changed = true;
+                    next[contact.extension] = { host: contact.host, port: contact.port, contact: contact.contact };
+                } catch (err) {
+                    skipped.push({ extension: contact.extension, error: err.message });
+                }
+            }
+
+            writeGatewayState({ contacts: next });
+            if (changed) await reloadPjsip();
+            res.json({ success: true, count: Object.keys(next).length, contacts: Object.values(next), skipped, changed, hook_warnings: hookWarnings });
+        } catch (err) {
+            res.status(err.statusCode || 500).json({ success: false, error: err.message });
         }
     });
 
     router.delete('/gateway/contact/:extension', requireCrmScope('extensions:read'), async (req, res) => {
-        const ext = String(req.params.extension || '').trim();
-        if (!/^[0-9]{2,6}$/.test(ext)) {
-            return res.status(422).json({ success: false, error: 'Invalid extension.' });
-        }
         try {
-            updateGatewayAorContact(ext, null);
-            await execFileAsync(ASTERISK_BIN, ['-rx', 'pjsip reload']);
-            res.json({ success: true, extension: ext });
+            const extension = String(req.params.extension || '').trim();
+            if (!/^[0-9]{2,6}$/.test(extension)) {
+                return res.status(422).json({ success: false, error: 'Invalid extension.' });
+            }
+            const state = readGatewayState();
+            const previous = state.contacts[extension]?.contact || null;
+            const changed = updateGatewayAorContact(extension, null, previous);
+            delete state.contacts[extension];
+            writeGatewayState(state);
+            if (changed) await reloadPjsip();
+            res.json({ success: true, extension, changed });
         } catch (err) {
-            res.status(500).json({ success: false, error: err.message });
+            res.status(err.statusCode || 500).json({ success: false, error: err.message });
+        }
+    });
+
+    router.delete('/gateway/contacts', requireCrmScope('extensions:read'), async (req, res) => {
+        try {
+            const state = readGatewayState();
+            let changed = false;
+            const skipped = [];
+            for (const [extension, entry] of Object.entries(state.contacts)) {
+                try {
+                    if (updateGatewayAorContact(extension, null, entry?.contact || null)) changed = true;
+                } catch (err) {
+                    skipped.push({ extension, error: err.message });
+                }
+            }
+            writeGatewayState({ contacts: {} });
+            if (changed) await reloadPjsip();
+            res.json({ success: true, removed: Object.keys(state.contacts).length, skipped, changed });
+        } catch (err) {
+            res.status(err.statusCode || 500).json({ success: false, error: err.message });
         }
     });
 
