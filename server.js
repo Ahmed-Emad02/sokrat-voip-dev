@@ -22155,29 +22155,34 @@ async function acquireDialerLeaderLock() {
 
 async function reconcileStaleAttempts() {
     try {
-        console.log('DIALER ENGINE: Reconciling stale attempt ledger...');
         const [expiredAttempts] = await pool.query(`
             SELECT attempt_uuid, campaign_id, lead_id
             FROM \`asterisk\`.\`dialer_call_attempts\`
             WHERE active_flag = 1 AND lease_expires_at < NOW()
         `);
 
-        for (const att of expiredAttempts) {
-            await pool.query(`
-                UPDATE \`asterisk\`.\`dialer_call_attempts\`
-                SET active_flag = NULL, status = 'stale', cause_code = 999
-                WHERE attempt_uuid = ? AND active_flag = 1
-            `, [att.attempt_uuid]);
+        // Idle PBXs have nothing to reconcile; only log when work is actually done
+        // so the 30s cycle does not spam the journal 2,880 lines per day.
+        if (expiredAttempts && expiredAttempts.length > 0) {
+            console.log(`DIALER ENGINE: Reconciling ${expiredAttempts.length} stale attempt(s)...`);
 
-            const [attCountRow] = await pool.query('SELECT COUNT(*) AS cnt FROM `asterisk`.`dialer_call_attempts` WHERE lead_id = ?', [att.lead_id]);
-            const totalAttempts = attCountRow[0]?.cnt || 1;
-            const newStatus = totalAttempts >= 3 ? 'failed' : 'pending';
+            for (const att of expiredAttempts) {
+                await pool.query(`
+                    UPDATE \`asterisk\`.\`dialer_call_attempts\`
+                    SET active_flag = NULL, status = 'stale', cause_code = 999
+                    WHERE attempt_uuid = ? AND active_flag = 1
+                `, [att.attempt_uuid]);
 
-            await pool.query('UPDATE `asterisk`.`dialer_leads` SET status = ?, attempts = ? WHERE id = ?', [newStatus, totalAttempts, att.lead_id]);
+                const [attCountRow] = await pool.query('SELECT COUNT(*) AS cnt FROM `asterisk`.`dialer_call_attempts` WHERE lead_id = ?', [att.lead_id]);
+                const totalAttempts = attCountRow[0]?.cnt || 1;
+                const newStatus = totalAttempts >= 3 ? 'failed' : 'pending';
+
+                await pool.query('UPDATE `asterisk`.`dialer_leads` SET status = ?, attempts = ? WHERE id = ?', [newStatus, totalAttempts, att.lead_id]);
+            }
+
+            await pool.query("UPDATE `asterisk`.`dialer_agent_states` SET state = 'idle', current_lead_id = NULL, current_attempt_uuid = NULL WHERE state = 'reserved' AND updated_at < NOW() - INTERVAL 1 MINUTE");
+            console.log(`DIALER ENGINE: Reconciliation complete. Reset ${expiredAttempts.length} stale attempt(s).`);
         }
-
-        await pool.query("UPDATE `asterisk`.`dialer_agent_states` SET state = 'idle', current_lead_id = NULL, current_attempt_uuid = NULL WHERE state = 'reserved' AND updated_at < NOW() - INTERVAL 1 MINUTE");
-        console.log(`DIALER ENGINE: Reconciliation complete. Reset ${expiredAttempts.length} stale attempt(s).`);
     } catch (err) {
         console.error('DIALER ENGINE: Reconciliation error:', err.message);
     }
