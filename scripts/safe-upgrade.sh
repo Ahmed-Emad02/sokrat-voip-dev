@@ -257,6 +257,12 @@ mysql "${MYSQL_AUTH[@]}" asterisk -e \
     "UPDATE \`asterisk\`.\`users\` SET \`recording\`='out=always|in=always' WHERE \`recording\` IS NULL OR \`recording\`='' OR \`recording\`='dontcare'" 2>/dev/null || true
 echo "  Extensions and ring groups: call recording enabled by default"
 
+# Indexes for the dashboard/CDR hot paths (idempotent)
+mysql "${MYSQL_AUTH[@]}" -e "ALTER TABLE \`asteriskcdrdb\`.\`cdr\` ADD INDEX \`idx_calldate_disp\` (\`calldate\`, \`disposition\`)" 2>/dev/null || true
+mysql "${MYSQL_AUTH[@]}" asterisk -e "ALTER TABLE \`asterisk\`.\`queues_details\` ADD INDEX \`idx_keyword\` (\`keyword\`)" 2>/dev/null || true
+mysql "${MYSQL_AUTH[@]}" asterisk -e "ALTER TABLE \`asterisk\`.\`users\` ADD INDEX \`idx_voicemail\` (\`voicemail\`)" 2>/dev/null || true
+echo "  Indexes: CDR/dashboard hot paths ensured"
+
 if command -v asterisk >/dev/null 2>&1; then
     for ext in $(mysql "${MYSQL_AUTH[@]}" asterisk -Nse "SELECT extension FROM users" 2>/dev/null || true); do
         [ -n "$ext" ] || continue

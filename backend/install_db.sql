@@ -1064,3 +1064,39 @@ SET @sokrat_sql := (
 PREPARE sokrat_stmt FROM @sokrat_sql;
 EXECUTE sokrat_stmt;
 DEALLOCATE PREPARE sokrat_stmt;
+
+-- ---------------------------------------------------------------------------
+-- Indexes for the dashboard/CDR hot paths (idempotent)
+-- ---------------------------------------------------------------------------
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS
+                    WHERE TABLE_SCHEMA = 'asteriskcdrdb' AND TABLE_NAME = 'cdr'
+                      AND INDEX_NAME = 'idx_calldate_disp'),
+    'DO 0',
+    'ALTER TABLE `asteriskcdrdb`.`cdr` ADD INDEX `idx_calldate_disp` (`calldate`, `disposition`)')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'queues_details'
+                      AND INDEX_NAME = 'idx_keyword'),
+    'DO 0',
+    'ALTER TABLE `asterisk`.`queues_details` ADD INDEX `idx_keyword` (`keyword`)')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.STATISTICS
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'users'
+                      AND INDEX_NAME = 'idx_voicemail'),
+    'DO 0',
+    'ALTER TABLE `asterisk`.`users` ADD INDEX `idx_voicemail` (`voicemail`)')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;

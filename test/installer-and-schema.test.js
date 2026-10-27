@@ -182,15 +182,17 @@ test('inbound call webhook is wired to the asterisk database and fires on dongle
     const safeUpgrade = fs.readFileSync(path.join(rootDir, 'scripts', 'safe-upgrade.sh'), 'utf8');
     assert.match(safeUpgrade, /webhook_incoming_call_enabled/, 'safe-upgrade.sh must seed webhook settings idempotently');
 
-    // The shared pool points at the CDR database, so webhook reads/writes must use a
-    // dedicated connection qualified to ASTERISK_DB or they will hit the wrong schema.
+    // The reporting pool points at the CDR database, so webhook reads/writes must use
+    // a PBX-schema connection (`asteriskPool`) or they would hit the wrong schema.
     const loader = server.match(/async function loadWebhookConfigFromDb\(\)\s*\{[\s\S]*?\n\}/);
     assert.ok(loader, 'server.js must define loadWebhookConfigFromDb');
-    assert.match(loader[0], /database:\s*ASTERISK_DB/, 'loadWebhookConfigFromDb must connect to ASTERISK_DB (dashboard_settings lives in the asterisk schema)');
+    assert.match(loader[0], /asteriskPool|database:\s*ASTERISK_DB/,
+        'loadWebhookConfigFromDb must use the asterisk-schema pool (dashboard_settings lives in the asterisk schema)');
 
     const saveHandler = server.match(/app\.post\('\/api\/settings\/webhook',[\s\S]*?\n\}\);/);
     assert.ok(saveHandler, 'server.js must define POST /api/settings/webhook');
-    assert.match(saveHandler[0], /database:\s*ASTERISK_DB/, 'POST /api/settings/webhook must write to ASTERISK_DB');
+    assert.match(saveHandler[0], /asteriskPool|database:\s*ASTERISK_DB/,
+        'POST /api/settings/webhook must write through the asterisk-schema pool');
 
     // API surface
     assert.match(server, /app\.get\('\/api\/settings\/webhook', requireAuth/, 'server.js must expose GET /api/settings/webhook');

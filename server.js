@@ -820,6 +820,8 @@ async function ensureTableIntegrity(conn) {
 }
 
 async function initAuthDb() {
+    // Boot-time DDL keeps its own short-lived connection: initAuthDb() runs before
+    // the pool constants below are initialised.
     const conn = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
         user: process.env.DB_USER || 'admin',
@@ -2511,14 +2513,62 @@ app.use((req, res, next) => {
 });
 
 // --- DATABASE CONNECTION POOL SETUP ---
-const pool = mysql.createPool({
+// Two pools on purpose: heavy CDR/reporting work must not starve PBX configuration
+// pages. MariaDB allows 151 connections and Issabel/Asterisk also connect, so 20
+// per pool keeps plenty of headroom.
+const DB_BASE_CONFIG = {
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'admin',
     password: process.env.DB_PASS || 'admin',
-    database: CDR_DB,
     waitForConnections: true,
-    connectionLimit: 10
-});
+    connectionLimit: Number(process.env.DB_POOL_LIMIT || 20),
+    maxIdle: Number(process.env.DB_POOL_MAX_IDLE || 10),
+    idleTimeout: Number(process.env.DB_POOL_IDLE_TIMEOUT || 60000),
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
+    charset: 'utf8mb4',
+    connectTimeout: 10000
+};
+
+// Reporting pool (CDR, dashboard, exports). Also the pool every legacy query uses.
+const pool = mysql.createPool({ ...DB_BASE_CONFIG, database: CDR_DB });
+
+// PBX configuration pool (users, queues, ringgroups, IVRs, trunks...).
+const asteriskPool = mysql.createPool({ ...DB_BASE_CONFIG, database: ASTERISK_DB });
+
+// Slow-query visibility: anything above this budget is logged with its SQL so
+// pool saturation can be traced to a specific endpoint.
+const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS || 1500);
+function instrumentPool(dbPool, label) {
+    if (typeof dbPool.on !== 'function') return;
+    const originalQuery = dbPool.query.bind(dbPool);
+    dbPool.query = function instrumentedQuery(sql, params, callback) {
+        const started = Date.now();
+        const isCallback = typeof params === 'function';
+        const cb = isCallback ? params : callback;
+        if (typeof cb === 'function') {
+            const wrapped = function (error, results, fields) {
+                const elapsed = Date.now() - started;
+                if (elapsed >= SLOW_QUERY_MS) {
+                    console.warn(`[DB slow] ${label} ${elapsed}ms :: ${String(sql).replace(/\s+/g, ' ').slice(0, 180)}`);
+                }
+                return cb(error, results, fields);
+            };
+            return isCallback ? originalQuery(sql, wrapped) : originalQuery(sql, params, wrapped);
+        }
+        return originalQuery(sql, params).then((result) => {
+            const elapsed = Date.now() - started;
+            if (elapsed >= SLOW_QUERY_MS) {
+                console.warn(`[DB slow] ${label} ${elapsed}ms :: ${String(sql).replace(/\s+/g, ' ').slice(0, 180)}`);
+            }
+            return result;
+        });
+    };
+}
+instrumentPool(pool, 'cdr');
+instrumentPool(asteriskPool, 'pbx');
+
 
 let activeCalls = {};
 // Extensions that currently have a live Asterisk channel. Maintained by the
@@ -4600,12 +4650,7 @@ app.post('/login', async (req, res) => {
                 res.redirect(buildRedirectUrl(req.body.redirect || '/', currentLang));
             });
         }
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         const [rows] = await conn.execute(`
             SELECT u.*, g.name AS group_name
             FROM dashboard_users u
@@ -4613,14 +4658,12 @@ app.post('/login', async (req, res) => {
             WHERE u.username = ?
         `, [username]);
         if (rows.length === 0) {
-            await conn.end();
             const errorMsg = currentLang === 'ar' ? 'بيانات الاعتماد غير صالحة' : 'Invalid credentials';
             return res.render('login', { redirect: req.body.redirect || '/', error: errorMsg, currentLang, currentTheme, username: username || '' });
         }
         const user = rows[0];
         const match = await bcrypt.compare(password, user.password_hash);
         if (!match) {
-            await conn.end();
             const errorMsg = currentLang === 'ar' ? 'بيانات الاعتماد غير صالحة' : 'Invalid credentials';
             return res.render('login', { redirect: req.body.redirect || '/', error: errorMsg, currentLang, currentTheme, username: username || '' });
         }
@@ -4633,7 +4676,6 @@ app.post('/login', async (req, res) => {
         if (userExtensions.length === 0 && user.extension) {
             userExtensions = String(user.extension).split(',').map(e => e.trim()).filter(Boolean);
         }
-        await conn.end();
 
         req.session.userId = user.id;
         req.session.username = user.username;
@@ -4865,12 +4907,7 @@ app.post('/api/user/theme-lang', requireAuth, async (req, res) => {
 // GET /users - user management page
 app.get('/users', async (req, res) => {
     try {
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         const [userRows] = await conn.execute(`
             SELECT u.id, u.username, u.email, u.group_id, u.extension, u.created_at, g.name AS group_name
             FROM dashboard_users u
@@ -4894,7 +4931,6 @@ app.get('/users', async (req, res) => {
             const [emRows] = await conn.execute('SELECT user_id, extension FROM dashboard_user_extensions');
             extMappings = emRows;
         } catch (_) {}
-        await conn.end();
 
         const userDonglesMap = new Map();
         for (const m of dongleMappings) {
@@ -4968,20 +5004,13 @@ app.post('/users/add', async (req, res) => {
             allowedDonglesList = allowedDonglesList.map(d => d.toLowerCase());
         }
 
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         if (cleanEmail) {
             if (!cleanEmail.includes('@')) {
-                await conn.end();
                 return res.redirect('/users?error=' + encodeURIComponent('If provided, email must be valid'));
             }
             const [existingEmail] = await conn.execute('SELECT id FROM dashboard_users WHERE email = ? AND email IS NOT NULL AND email != ""', [cleanEmail]);
             if (existingEmail.length > 0) {
-                await conn.end();
                 return res.redirect('/users?error=' + encodeURIComponent('Email is already in use by another user'));
             }
         }
@@ -4998,7 +5027,6 @@ app.post('/users/add', async (req, res) => {
                 await conn.execute('INSERT IGNORE INTO dashboard_user_dongles (user_id, dongle_name) VALUES (?, ?)', [newUserId, d]);
             } catch (_) {}
         }
-        await conn.end();
         res.redirect('/users?success=' + encodeURIComponent('User added successfully'));
     } catch (err) {
         res.redirect('/users?error=' + encodeURIComponent(err.message));
@@ -5041,20 +5069,13 @@ app.post('/users/edit', async (req, res) => {
             allowedDonglesList = allowedDonglesList.map(d => d.toLowerCase());
         }
 
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         if (cleanEmail) {
             if (!cleanEmail.includes('@')) {
-                await conn.end();
                 return res.redirect('/users?error=' + encodeURIComponent('If provided, email must be valid'));
             }
             const [existingEmail] = await conn.execute('SELECT id FROM dashboard_users WHERE email = ? AND email IS NOT NULL AND email != "" AND id != ?', [cleanEmail, id]);
             if (existingEmail.length > 0) {
-                await conn.end();
                 return res.redirect('/users?error=' + encodeURIComponent('Email is already in use by another user'));
             }
         }
@@ -5071,7 +5092,6 @@ app.post('/users/edit', async (req, res) => {
                 await conn.execute('INSERT IGNORE INTO dashboard_user_dongles (user_id, dongle_name) VALUES (?, ?)', [id, d]);
             }
         } catch (_) {}
-        await conn.end();
         res.redirect('/users?success=' + encodeURIComponent('User updated successfully'));
     } catch (err) {
         res.redirect('/users?error=' + encodeURIComponent(err.message));
@@ -5083,16 +5103,10 @@ app.post('/users/delete', async (req, res) => {
     try {
         const { id } = req.body;
         if (!id) return res.redirect('/users?error=User ID required');
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         // Prevent deleting yourself
         const [rows] = await conn.execute('SELECT username FROM dashboard_users WHERE id = ?', [id]);
         if (rows.length && rows[0].username === req.session.username) {
-            await conn.end();
             return res.redirect('/users?error=Cannot delete your own account');
         }
         try {
@@ -5102,7 +5116,6 @@ app.post('/users/delete', async (req, res) => {
             await conn.execute('DELETE FROM dashboard_user_extensions WHERE user_id = ?', [id]);
         } catch (_) {}
         await conn.execute('DELETE FROM dashboard_users WHERE id = ?', [id]);
-        await conn.end();
         res.redirect('/users?success=User deleted');
     } catch (err) {
         res.redirect('/users?error=' + encodeURIComponent(err.message));
@@ -5117,14 +5130,8 @@ app.post('/users/change-password', async (req, res) => {
             return res.redirect('/users?error=Password must be at least 3 characters');
         }
         const hash = await bcrypt.hash(new_password, 10);
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         await conn.execute('UPDATE dashboard_users SET password_hash = ? WHERE id = ?', [hash, id]);
-        await conn.end();
         res.redirect('/users?success=Password changed');
     } catch (err) {
         res.redirect('/users?error=' + encodeURIComponent(err.message));
@@ -5137,14 +5144,8 @@ app.get('/api/settings/smtp', async (req, res) => {
         if (!isSuperAdmin(req)) {
             return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
         }
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         const [rows] = await conn.execute('SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key IN (?, ?)', ['smtp_email', 'smtp_password']);
-        await conn.end();
 
         let email = '';
         let hasPassword = false;
@@ -5168,12 +5169,7 @@ app.post('/api/settings/smtp', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Email is required' });
         }
 
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
 
         // Upsert smtp_email
         await conn.execute(
@@ -5191,12 +5187,10 @@ app.post('/api/settings/smtp', async (req, res) => {
             // Check if password exists
             const [rows] = await conn.execute('SELECT setting_value FROM dashboard_settings WHERE setting_key = ?', ['smtp_password']);
             if (rows.length === 0 || !rows[0].setting_value) {
-                await conn.end();
                 return res.status(400).json({ success: false, error: 'Password is required' });
             }
         }
 
-        await conn.end();
         res.json({ success: true, message: 'SMTP settings updated successfully' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -5209,16 +5203,10 @@ app.get('/api/settings/alerts', requireAuth, async (req, res) => {
         if (!isSuperAdmin(req)) {
             return res.status(403).json({ success: false, error: 'Forbidden: Super Admin access required' });
         }
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         const [rows] = await conn.execute(
             "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key LIKE 'alert_%' OR setting_key IN ('smtp_email', 'smtp_password')"
         );
-        await conn.end();
 
         const map = {};
         rows.forEach(r => { map[r.setting_key] = r.setting_value; });
@@ -5290,12 +5278,7 @@ app.post('/api/settings/alerts', requireAuth, async (req, res) => {
             ['alert_monitored_services', JSON.stringify(validServices)]
         ];
 
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
 
         for (const [key, val] of settingsToSave) {
             await conn.execute(
@@ -5303,7 +5286,6 @@ app.post('/api/settings/alerts', requireAuth, async (req, res) => {
                 [key, val, val]
             );
         }
-        await conn.end();
 
         res.json({ success: true, message: 'System alert settings saved successfully' });
     } catch (err) {
@@ -5319,16 +5301,10 @@ app.post('/api/settings/alerts/test-telegram', requireAuth, async (req, res) => 
         let { bot_token, chat_id } = req.body || {};
 
         if (!bot_token || !chat_id) {
-            const conn = await mysql.createConnection({
-                host: process.env.DB_HOST || 'localhost',
-                user: process.env.DB_USER || 'admin',
-                password: process.env.DB_PASS || 'admin',
-                database: ASTERISK_DB
-            });
+            const conn = asteriskPool;
             const [rows] = await conn.execute(
                 "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key IN ('alert_telegram_bot_token', 'alert_telegram_chat_id', 'client_name')"
             );
-            await conn.end();
             let clientName = '';
             rows.forEach(r => {
                 if (r.setting_key === 'alert_telegram_bot_token' && !bot_token) bot_token = r.setting_value;
@@ -5369,16 +5345,10 @@ app.post('/api/settings/alerts/test-email', requireAuth, async (req, res) => {
         }
         let { recipients } = req.body || {};
 
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         const [rows] = await conn.execute(
             "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key IN ('alert_email_recipients', 'smtp_email', 'smtp_password', 'client_name')"
         );
-        await conn.end();
 
         let smtpEmail = '';
         let smtpEncPassword = '';
@@ -5443,14 +5413,8 @@ app.post('/api/settings/alerts/test-heartbeat', requireAuth, async (req, res) =>
         let { url } = req.body || {};
 
         if (!url) {
-            const conn = await mysql.createConnection({
-                host: process.env.DB_HOST || 'localhost',
-                user: process.env.DB_USER || 'admin',
-                password: process.env.DB_PASS || 'admin',
-                database: ASTERISK_DB
-            });
+            const conn = asteriskPool;
             const [rows] = await conn.execute("SELECT setting_value FROM dashboard_settings WHERE setting_key = 'alert_healthchecks_url'");
-            await conn.end();
             if (rows.length > 0 && rows[0].setting_value) {
                 url = rows[0].setting_value;
             }
@@ -5507,14 +5471,8 @@ async function loadClientNameFromDb() {
         }
     } catch (err) {
         try {
-            const conn = await mysql.createConnection({
-                host: process.env.DB_HOST || 'localhost',
-                user: process.env.DB_USER || 'admin',
-                password: process.env.DB_PASS || 'admin',
-                database: ASTERISK_DB
-            });
+            const conn = asteriskPool;
             const [rows] = await conn.execute("SELECT setting_value FROM dashboard_settings WHERE setting_key = 'client_name'");
-            await conn.end();
             if (rows && rows.length > 0 && rows[0].setting_value !== null && rows[0].setting_value !== undefined) {
                 cachedClientName = String(rows[0].setting_value).trim();
             } else {
@@ -5552,17 +5510,11 @@ const handleClientSettingsUpdate = async (req, res) => {
                 [clientName, clientName]
             );
         } catch (poolErr) {
-            const conn = await mysql.createConnection({
-                host: process.env.DB_HOST || 'localhost',
-                user: process.env.DB_USER || 'admin',
-                password: process.env.DB_PASS || 'admin',
-                database: ASTERISK_DB
-            });
+            const conn = asteriskPool;
             await conn.execute(
                 "INSERT INTO dashboard_settings (setting_key, setting_value) VALUES ('client_name', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
                 [clientName, clientName]
             );
-            await conn.end();
         }
 
         cachedClientName = clientName;
@@ -5607,16 +5559,10 @@ let cachedWebhookConfig = { enabled: false, url: '', secret: '' };
 
 async function loadWebhookConfigFromDb() {
     try {
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         const [rows] = await conn.execute(
             "SELECT setting_key, setting_value FROM dashboard_settings WHERE setting_key LIKE 'webhook_incoming_call_%'"
         );
-        await conn.end();
         const map = {};
         rows.forEach(r => { map[r.setting_key] = r.setting_value; });
         cachedWebhookConfig = {
@@ -5720,12 +5666,7 @@ app.post('/api/settings/webhook', requireAuth, async (req, res) => {
             ['webhook_incoming_call_secret', String(secret || '').trim()]
         ];
 
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
 
         for (const [key, val] of settingsToSave) {
             await conn.execute(
@@ -5733,7 +5674,6 @@ app.post('/api/settings/webhook', requireAuth, async (req, res) => {
                 [key, val, val]
             );
         }
-        await conn.end();
 
         cachedWebhookConfig = {
             enabled: enabled ? true : false,
@@ -5817,16 +5757,10 @@ const forgotPasswordHandler = async (req, res) => {
         const { username, email } = req.body;
         if (!username || !email) return res.status(400).json({ success: false, error: 'Username and email are required' });
 
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
 
         const [rows] = await conn.execute('SELECT * FROM dashboard_users WHERE username = ? AND email = ?', [username, email]);
         if (rows.length === 0) {
-            await conn.end();
             return res.status(400).json({ success: false, error: 'Invalid username or email combination' });
         }
 
@@ -5840,13 +5774,11 @@ const forgotPasswordHandler = async (req, res) => {
         });
 
         if (!smtpEmail || !smtpEncryptedPassword) {
-            await conn.end();
             return res.status(500).json({ success: false, error: 'Password reset email system is not configured. Please contact Super Admin.' });
         }
 
         const smtpPassword = decrypt(smtpEncryptedPassword);
         if (!smtpPassword) {
-            await conn.end();
             return res.status(500).json({ success: false, error: 'Failed to decrypt SMTP credentials' });
         }
 
@@ -5857,7 +5789,6 @@ const forgotPasswordHandler = async (req, res) => {
             'UPDATE dashboard_users SET reset_token = ?, reset_token_expires = ?, reset_expires = ? WHERE username = ? AND email = ?',
             [token, expires, expires, username, email]
         );
-        await conn.end();
 
         // Nodemailer Setup
         let transporterConfig;
@@ -5918,17 +5849,11 @@ app.get('/reset-password', async (req, res) => {
     const { token } = req.query;
     if (!token) return res.send('Missing reset token');
     try {
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         const [rows] = await conn.execute(
             'SELECT id FROM dashboard_users WHERE reset_token = ? AND (reset_token_expires > NOW() OR reset_expires > NOW())',
             [token]
         );
-        await conn.end();
         if (rows.length === 0) return res.send('Invalid or expired reset token');
         res.render('reset-password', { token, error: null, currentLang: req.query.lang || 'en' });
     } catch (err) {
@@ -5943,18 +5868,12 @@ app.post('/api/auth/reset-password', async (req, res) => {
         if (!token || !password || password.length < 3) {
             return res.status(400).json({ success: false, error: 'Password must be at least 3 characters' });
         }
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         const [rows] = await conn.execute(
             'SELECT id FROM dashboard_users WHERE reset_token = ? AND (reset_token_expires > NOW() OR reset_expires > NOW())',
             [token]
         );
         if (rows.length === 0) {
-            await conn.end();
             return res.status(400).json({ success: false, error: 'Invalid or expired reset token' });
         }
         const hash = await bcrypt.hash(password, 10);
@@ -5962,7 +5881,6 @@ app.post('/api/auth/reset-password', async (req, res) => {
             'UPDATE dashboard_users SET password_hash = ?, reset_token = NULL, reset_expires = NULL, reset_token_expires = NULL WHERE id = ?',
             [hash, rows[0].id]
         );
-        await conn.end();
         res.json({ success: true, message: 'Password reset successful' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -5976,18 +5894,12 @@ app.post('/reset-password', async (req, res) => {
         if (!token || !password || password.length < 3) {
             return res.render('reset-password', { token, error: 'Password must be at least 3 characters', currentLang: req.query.lang || 'en' });
         }
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         const [rows] = await conn.execute(
             'SELECT id FROM dashboard_users WHERE reset_token = ? AND (reset_token_expires > NOW() OR reset_expires > NOW())',
             [token]
         );
         if (rows.length === 0) {
-            await conn.end();
             return res.render('reset-password', { token, error: 'Invalid or expired reset token', currentLang: req.query.lang || 'en' });
         }
         const hash = await bcrypt.hash(password, 10);
@@ -5995,7 +5907,6 @@ app.post('/reset-password', async (req, res) => {
             'UPDATE dashboard_users SET password_hash = ?, reset_token = NULL, reset_expires = NULL, reset_token_expires = NULL WHERE id = ?',
             [hash, rows[0].id]
         );
-        await conn.end();
         res.redirect('/login?reset=success');
     } catch (err) {
         res.status(500).send('Error: ' + err.message);
@@ -6017,14 +5928,8 @@ app.post('/groups/add', async (req, res) => {
         const lang = req.body.lang || req.session.lang || 'en';
         const langQuery = lang === 'ar' ? '&lang=ar' : '';
         if (!name || name.trim().length < 2) return res.redirect('/users?error=Group name must be at least 2 characters' + langQuery);
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         await conn.execute('INSERT INTO dashboard_groups (name) VALUES (?)', [name.trim()]);
-        await conn.end();
         res.redirect('/users?success=Group created' + langQuery);
     } catch (err) {
         const langQuery = (req.body.lang || req.session.lang) === 'ar' ? '&lang=ar' : '';
@@ -6041,22 +5946,15 @@ app.post('/groups/delete', async (req, res) => {
         const langQuery = currentLanguage === 'ar' ? '&lang=ar' : '';
 
         if (!id) return res.redirect('/users?error=Group ID required' + langQuery);
-        const conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        const conn = asteriskPool;
         // Prevent deleting super admins group
         const [grp] = await conn.execute('SELECT name FROM dashboard_groups WHERE id = ?', [id]);
         if (grp.length && grp[0].name === 'super admins') {
-            await conn.end();
             return res.redirect('/users?error=Cannot delete the super admins group' + langQuery);
         }
         await conn.execute('DELETE FROM dashboard_group_permissions WHERE group_id = ?', [id]);
         await conn.execute('UPDATE dashboard_users SET group_id = NULL WHERE group_id = ?', [id]);
         await conn.execute('DELETE FROM dashboard_groups WHERE id = ?', [id]);
-        await conn.end();
         res.redirect('/users?success=Group deleted' + langQuery);
     } catch (err) {
         const langQuery = (req.body.lang || req.session.lang) === 'ar' ? '&lang=ar' : '';
@@ -6074,15 +5972,9 @@ app.post('/groups/permissions', async (req, res) => {
         const langQuery = currentLanguage === 'ar' ? '&lang=ar' : '';
 
         if (!group_id) return res.redirect('/users?error=Group ID required' + langQuery);
-        conn = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'admin',
-            password: process.env.DB_PASS || 'admin',
-            database: ASTERISK_DB
-        });
+        conn = asteriskPool;
         const [grp] = await conn.execute('SELECT name FROM dashboard_groups WHERE id = ?', [group_id]);
         if (grp.length && grp[0].name === 'super admins') {
-            await conn.end();
             return res.redirect('/users?error=Super admins permissions cannot be modified' + langQuery);
         }
         // Clear existing permissions
@@ -6114,11 +6006,11 @@ app.post('/groups/permissions', async (req, res) => {
         for (const tab of filteredTabs) {
             await conn.execute('INSERT INTO dashboard_group_permissions (group_id, tab) VALUES (?, ?)', [group_id, tab]);
         }
-        await conn.end();
         conn = null;
         res.redirect('/users?success=Permissions updated' + langQuery);
     } catch (err) {
-        if (conn) {
+        // conn is the shared pool here: closing it would take down every request.
+        if (conn && typeof conn.end === 'function' && conn !== asteriskPool) {
             try { await conn.end(); } catch (_) {}
         }
         const langQuery = (req.body.lang || req.session.lang) === 'ar' ? '&lang=ar' : '';
@@ -15181,7 +15073,7 @@ app.post('/api/employee/agent-status', requireAuth, async (req, res) => {
 // --- PJSIP / AGENT STATUS DEFINITIONS CRUD (CONNECTED TO GROUPS) ---
 app.get('/api/employee/statuses', async (req, res) => {
     try {
-        const [rows] = await pool.query(
+        const [rows] = await pool.execute(
             `SELECT id, status_key, label_ar, label_en, desc_ar, desc_en, color, target_group, is_active, sort_order, created_at
              FROM asterisk.synq_agent_status_definitions
              ORDER BY sort_order ASC, id ASC`
@@ -15400,7 +15292,7 @@ app.put('/api/employee/group-assignment', requireAuth, async (req, res) => {
 // GET /api/config/ringgroups - List all Ring Groups
 app.get('/api/config/ringgroups', async (req, res) => {
     try {
-        const [ringgroups] = await pool.query(`
+        const [ringgroups] = await pool.execute(`
             SELECT grpnum, strategy, grptime, grplist, description, annmsg_id, postdest, cwignore, recording, ringing
             FROM \`asterisk\`.\`ringgroups\`
             ORDER BY CAST(grpnum AS UNSIGNED) ASC
@@ -15792,13 +15684,13 @@ app.get('/api/config/extension-conflicts', requireAuth, async (req, res) => {
 // GET /api/config/queues - List all Queues
 app.get('/api/config/queues', async (req, res) => {
     try {
-        const [configRows] = await pool.query(`
+        const [configRows] = await pool.execute(`
             SELECT extension, descr, maxwait, cwignore, joinannounce_id, dest, destcontinue, monitor_type
             FROM \`asterisk\`.\`queues_config\`
             ORDER BY CAST(extension AS UNSIGNED) ASC
         `);
 
-        const [detailsRows] = await pool.query(`
+        const [detailsRows] = await pool.execute(`
             SELECT id, keyword, data
             FROM \`asterisk\`.\`queues_details\`
             WHERE keyword IN ('member', 'strategy', 'autofill', 'music', 'musicclass', 'timeout', 'retry', 'joinempty', 'leavewhenempty')
@@ -17171,11 +17063,28 @@ app.get('/api/config/trunks', async (req, res) => {
         } catch (_) {}
 
 
+        // One query for every trunk instead of one per trunk (N+1).
+        const dialPatternsByTrunk = new Map();
+        if (trunks.length > 0) {
+            const trunkIds = trunks.map(t => Number(t.trunkid)).filter(Number.isFinite);
+            if (trunkIds.length > 0) {
+                const [allRuleRows] = await pool.execute(
+                    `SELECT trunkid, match_pattern_prefix, match_pattern_pass, prepend_digits
+                     FROM \`asterisk\`.\`trunk_dialpatterns\`
+                     WHERE trunkid IN (${trunkIds.map(() => '?').join(',')})
+                     ORDER BY trunkid ASC, seq ASC`,
+                    trunkIds
+                );
+                for (const row of allRuleRows || []) {
+                    const key = String(row.trunkid);
+                    if (!dialPatternsByTrunk.has(key)) dialPatternsByTrunk.set(key, []);
+                    dialPatternsByTrunk.get(key).push(row);
+                }
+            }
+        }
+
         for (const trunk of trunks) {
-            const [ruleRows] = await pool.query(
-                'SELECT match_pattern_prefix, match_pattern_pass, prepend_digits FROM `asterisk`.`trunk_dialpatterns` WHERE trunkid = ? ORDER BY seq ASC',
-                [trunk.trunkid]
-            );
+            const ruleRows = dialPatternsByTrunk.get(String(trunk.trunkid)) || [];
             trunk.dialpatterns = ruleRows.map(row => ({
                 prepend: row.prepend_digits || '',
                 prefix: row.match_pattern_prefix || '',
@@ -23979,19 +23888,13 @@ async function saveRecordingToFS(wavPath, recordingName, initialGainDb = 0) {
     } catch (_) {}
 
     // Insert into recordings table
-    const conn = await mysql.createConnection({
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASS || 'admin',
-        database: ASTERISK_DB
-    });
+    const conn = asteriskPool;
     const displayName = recordingName.replace(/[_]/g, ' ');
     const [res] = await conn.execute(
         'INSERT INTO recordings (displayname, filename) VALUES (?, ?)',
         [displayName, 'custom/' + safeName]
     );
     const newId = res.insertId;
-    await conn.end();
 
     const gainVal = parseInt(initialGainDb, 10);
     if (newId && Number.isFinite(gainVal) && gainVal !== 0) {
