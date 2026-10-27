@@ -13506,7 +13506,8 @@ const {
     updateContact,
     deleteContact,
     importContactsBatch,
-    MAX_IMPORT_ROWS
+    MAX_IMPORT_ROWS,
+    loadContactsCached
 } = require('./lib/contacts');
 
 async function syncAllCampaignLeadsToAddressBook(dbConn) {
@@ -13556,6 +13557,50 @@ app.get('/contacts', requireAuth, async (req, res) => {
         });
     } catch (err) {
         res.status(500).send("Database Error: " + err.message);
+    }
+});
+
+// GET /api/contacts/export - Download the whole address book as .xlsx.
+// Column headers match the CSV importer (first name / last name / phone) so an
+// exported file can be re-imported without editing.
+app.get('/api/contacts/export', requireAuth, requireTabPermission('contacts'), async (req, res) => {
+    try {
+        if (!XLSX) {
+            return res.status(503).json({ success: false, error: 'Spreadsheet support is unavailable on this server.' });
+        }
+
+        const contacts = (await loadContactsCached())
+            .slice()
+            .sort((a, b) => String(a.first_name || '').localeCompare(String(b.first_name || ''), undefined, { sensitivity: 'base' })
+                || String(a.last_name || '').localeCompare(String(b.last_name || ''), undefined, { sensitivity: 'base' }));
+
+        if (contacts.length === 0) {
+            return res.status(404).json({ success: false, error: 'There are no contacts to export.' });
+        }
+
+        const dataRows = [['First Name', 'Last Name', 'Phone']];
+        for (const contact of contacts) {
+            dataRows.push([
+                String(contact.first_name || ''),
+                String(contact.last_name || ''),
+                String(contact.phone || '')
+            ]);
+        }
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(dataRows);
+        ws['!cols'] = [{ wch: 28 }, { wch: 28 }, { wch: 22 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
+
+        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        const filename = `contacts_${moment().format('YYYYMMDD_HHmmss')}.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Cache-Control', 'no-store');
+        return res.send(buffer);
+    } catch (err) {
+        console.error('[Contacts Export] failed:', err && err.message);
+        return res.status(500).json({ success: false, error: 'Failed to export contacts.' });
     }
 });
 
