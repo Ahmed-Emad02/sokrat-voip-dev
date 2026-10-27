@@ -48,6 +48,13 @@ test('the contacts toolbar offers a bilingual export button', async () => {
     const exportBtn = view.indexOf('contactsExportBtn');
     assert.ok(exportBtn > 0 && exportBtn < superAdminBlock, 'export button must render for all contacts viewers');
 
+    // Toolbar spacing is uniform: the export button is a direct child of the
+    // gap-3 row (not nested in the gap-less search group), and the teardrop uses
+    // the same 0.75rem rhythm.
+    const toolbar = view.slice(view.indexOf('<div class="flex items-center gap-3 h-10 shrink-0">'), exportBtn);
+    assert.ok(!/gap-3 h-10 shrink-0">[\s\S]*contactsExportBtn/.test(toolbar.replace('<div class="flex items-center gap-3 h-10 shrink-0">', '')), 'export button must not sit inside another wrapper');
+    assert.match(view, /\.contacts-search-drop\.is-open \{[\s\S]*?margin-inline-start: 0\.75rem/);
+
     for (const lang of ['en', 'ar']) {
         const html = await ejs.renderFile(path.join(rootDir, 'views', 'contacts.ejs'), {
             currentPage: '/contacts', currentLang: lang, lang, isRtl: lang === 'ar', theme: 'dark',

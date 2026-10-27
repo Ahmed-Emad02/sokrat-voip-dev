@@ -177,7 +177,7 @@ const isRtl = currentLang === 'ar';
             box-sizing: border-box !important;
             opacity: 1;
             padding: 0 0.85rem;
-            margin-inline-start: 0.5rem;
+            margin-inline-start: 0.75rem;
             border-width: 1px;
             pointer-events: auto;
             animation: contactsSearchDropSpawn 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -216,7 +216,7 @@ const isRtl = currentLang === 'ar';
                 opacity: 1;
                 border-radius: 0.75rem;
                 border-width: 1px;
-                margin-inline-start: 0.5rem;
+                margin-inline-start: 0.75rem;
                 transform: scaleX(1) scaleY(1);
             }
         }
@@ -227,7 +227,7 @@ const isRtl = currentLang === 'ar';
                 opacity: 1;
                 border-radius: 0.75rem;
                 border-width: 1px;
-                margin-inline-start: 0.5rem;
+                margin-inline-start: 0.75rem;
                 transform: scaleX(1) scaleY(1);
             }
             100% {
@@ -420,12 +420,12 @@ const isRtl = currentLang === 'ar';
                     <div id="contactsSearchDrop" class="contacts-search-drop">
                         <input type="text" id="contactsSearchInput" oninput="filterContacts()" placeholder="<%= t.searchPlaceholder %>" autocomplete="off">
                     </div>
-                    <button onclick="exportContactsXlsx()" id="contactsExportBtn" class="icon-tool-btn" title="<%= isRtl ? 'تصدير كل جهات الاتصال (Excel)' : 'Export all contacts (Excel)' %>" aria-label="<%= isRtl ? 'تصدير كل جهات الاتصال (Excel)' : 'Export all contacts (Excel)' %>">
-                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                    </button>
                 </div>
+                <button onclick="exportContactsXlsx()" id="contactsExportBtn" class="icon-tool-btn" title="<%= isRtl ? 'تصدير كل جهات الاتصال (Excel)' : 'Export all contacts (Excel)' %>" aria-label="<%= isRtl ? 'تصدير كل جهات الاتصال (Excel)' : 'Export all contacts (Excel)' %>">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                </button>
                 <% if (isSuperAdmin) { %>
                 <div class="flex items-center gap-3 h-10 shrink-0">
                     <button onclick="openBlacklistModal()" class="icon-tool-btn" title="<%= isRtl ? 'القائمة السوداء (الحظر الوارد)' : 'Inbound Blacklist' %>" aria-label="<%= isRtl ? 'القائمة السوداء (الحظر الوارد)' : 'Inbound Blacklist' %>">
