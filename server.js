@@ -15192,6 +15192,11 @@ app.post('/api/employee/groups', requireAuth, async (req, res) => {
             `INSERT INTO ${tables.employeeGroups} (name, name_ar, name_en, description) VALUES (?, ?, ?, ?)`,
             [name, nameAr || null, nameEn || null, description || null]
         );
+        cachedEmployeeGroupNames = [];
+        cachedEmployeeGroupTimestamp = 0;
+        cachedBaseRoster = null;
+        cachedBaseRosterTimestamp = 0;
+        try { io.emit('employeeGroups:updated', { action: 'created', group: { id: result.insertId, name, name_ar: nameAr, name_en: nameEn, description } }); } catch (_) {}
         syncExtensionCallPickupGroups().catch(() => {});
         res.json({
             success: true,
@@ -15252,6 +15257,11 @@ app.put('/api/employee/groups/:id', requireAuth, async (req, res) => {
             );
         }
         await connection.commit();
+        cachedEmployeeGroupNames = [];
+        cachedEmployeeGroupTimestamp = 0;
+        cachedBaseRoster = null;
+        cachedBaseRosterTimestamp = 0;
+        try { io.emit('employeeGroups:updated', { action: 'updated', id, group: { id, name, name_ar: nameAr, name_en: nameEn, description } }); } catch (_) {}
         syncExtensionCallPickupGroups().catch(() => {});
         res.json({ success: true, group: { id, name, name_ar: nameAr, name_en: nameEn, description } });
     } catch (error) {
@@ -15288,6 +15298,11 @@ app.delete('/api/employee/groups/:id', requireAuth, async (req, res) => {
         );
         await connection.query(`DELETE FROM ${tables.employeeGroups} WHERE id = ?`, [id]);
         await connection.commit();
+        cachedEmployeeGroupNames = [];
+        cachedEmployeeGroupTimestamp = 0;
+        cachedBaseRoster = null;
+        cachedBaseRosterTimestamp = 0;
+        try { io.emit('employeeGroups:updated', { action: 'deleted', id, name: rows[0].name }); } catch (_) {}
         syncExtensionCallPickupGroups().catch(() => {});
         res.json({ success: true });
     } catch (error) {
@@ -15554,6 +15569,8 @@ app.put('/api/employee/group-assignment', requireAuth, async (req, res) => {
             `, [extension, targetGroup]);
         }
 
+        cachedBaseRoster = null;
+        cachedBaseRosterTimestamp = 0;
         syncExtensionCallPickupGroups().catch(() => {});
         res.json({ success: true, extension, emp_group: targetGroup });
     } catch (error) {

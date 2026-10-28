@@ -1909,6 +1909,12 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 }
             });
 
+            socket.on('employeeGroups:updated', function() {
+                if (typeof loadGroupsList === 'function' && document.getElementById('groupManagerModal') && !document.getElementById('groupManagerModal').classList.contains('hidden')) {
+                    loadGroupsList();
+                }
+            });
+
             // Initialize & run presence duration timers for employee agent status cards
             window.dynamicStatusTimers = window.dynamicStatusTimers || {};
 
@@ -2855,6 +2861,37 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     if (inputEn) inputEn.value = '';
                     if (inputLegacy) inputLegacy.value = '';
                     loadGroupsList();
+
+                    // Instantly insert group section into Live Panel grid without page reload
+                    const gridRoot = document.getElementById('switchboardGrid');
+                    if (gridRoot && data.group && data.group.name) {
+                        const gName = data.group.name;
+                        const existing = gridRoot.querySelector(`section[data-group="${CSS.escape(gName)}"]`);
+                        if (!existing) {
+                            const localSite = (typeof FED_LOCAL_SITE !== 'undefined') ? FED_LOCAL_SITE : '10';
+                            const ungroupedSection = gridRoot.querySelector('section[data-group="___ungrouped___"]');
+                            const newSection = document.createElement('section');
+                            newSection.className = 'mb-5';
+                            newSection.setAttribute('aria-label', formatGroupName(gName, isRtl));
+                            newSection.dataset.group = gName;
+                            newSection.dataset.siteCode = localSite;
+                            newSection.innerHTML = `
+                                <div class="employee-group-header mb-2">
+                                    <h3 class="text-sm font-extrabold text-[var(--text-primary)] truncate">
+                                        ${escapeHtml(formatGroupName(gName, isRtl))}
+                                    </h3>
+                                    <span class="employee-group-count">0</span>
+                                    <span class="h-px bg-[var(--border-primary)] flex-1"></span>
+                                </div>
+                                <div class="extension-group-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2"></div>
+                            `;
+                            if (ungroupedSection) {
+                                gridRoot.insertBefore(newSection, ungroupedSection);
+                            } else {
+                                gridRoot.appendChild(newSection);
+                            }
+                        }
+                    }
                 })
                 .catch(error => alert(error.message))
                 .finally(() => { button.disabled = false; });
@@ -2866,7 +2903,30 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 .then(response => response.json().then(data => ({ response, data })))
                 .then(({ response, data }) => {
                     if (!response.ok || !data.success) throw new Error(data.error || 'Failed to delete group');
-                    window.location.reload();
+                    loadGroupsList();
+
+                    // Instantly remove group section from Live Panel grid without page reload
+                    const gridRoot = document.getElementById('switchboardGrid');
+                    if (gridRoot) {
+                        const section = gridRoot.querySelector(`section[data-group="${CSS.escape(name)}"]`);
+                        if (section) {
+                            const ungroupedSection = gridRoot.querySelector('section[data-group="___ungrouped___"]');
+                            const ungroupedGrid = ungroupedSection ? ungroupedSection.querySelector('.extension-group-grid') : null;
+                            const cards = section.querySelectorAll('.extension-group-grid > article[id^="card-"]');
+                            cards.forEach(card => {
+                                card.dataset.empGroup = '';
+                                const chip = card.querySelector('.employee-group-chip');
+                                if (chip) chip.textContent = isRtl ? 'غير مصنف' : 'Ungrouped';
+                                if (ungroupedGrid) ungroupedGrid.appendChild(card);
+                            });
+                            section.remove();
+                            // Update group counts
+                            gridRoot.querySelectorAll('section[data-group]').forEach(sec => {
+                                const count = sec.querySelectorAll('.extension-group-grid > article[id^="card-"]').length;
+                                sec.querySelectorAll('.employee-group-count').forEach(el => { el.textContent = count; });
+                            });
+                        }
+                    }
                 })
                 .catch(error => alert(error.message));
         }
