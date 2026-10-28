@@ -1117,6 +1117,23 @@ async function initAuthDb() {
     `);
     await ensureDbColumn(conn, 'employee_groups', 'name_ar', 'VARCHAR(100) DEFAULT NULL');
     await ensureDbColumn(conn, 'employee_groups', 'name_en', 'VARCHAR(100) DEFAULT NULL');
+    await conn.execute(`
+        CREATE TABLE IF NOT EXISTS synq_agent_status_definitions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            status_key VARCHAR(50) NOT NULL UNIQUE,
+            label_ar VARCHAR(100) NOT NULL,
+            label_en VARCHAR(100) NOT NULL,
+            desc_ar VARCHAR(255) DEFAULT NULL,
+            desc_en VARCHAR(255) DEFAULT NULL,
+            color VARCHAR(20) NOT NULL DEFAULT '#f59e0b',
+            target_group VARCHAR(100) DEFAULT NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            sort_order INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    await ensureDbColumn(conn, 'synq_agent_status_definitions', 'target_group', 'VARCHAR(100) DEFAULT NULL');
     // Auto-Dialer Schema Initialization
     await conn.execute(`
         CREATE TABLE IF NOT EXISTS dialer_campaigns (
@@ -15360,21 +15377,65 @@ app.post('/api/employee/agent-status', requireAuth, async (req, res) => {
 });
 
 // --- PJSIP / AGENT STATUS DEFINITIONS CRUD (CONNECTED TO GROUPS) ---
+async function ensureAgentStatusDefinitionsTable() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS asterisk.synq_agent_status_definitions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            status_key VARCHAR(50) NOT NULL UNIQUE,
+            label_ar VARCHAR(100) NOT NULL,
+            label_en VARCHAR(100) NOT NULL,
+            desc_ar VARCHAR(255) DEFAULT NULL,
+            desc_en VARCHAR(255) DEFAULT NULL,
+            color VARCHAR(20) NOT NULL DEFAULT '#f59e0b',
+            target_group VARCHAR(100) DEFAULT NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            sort_order INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    await pool.query(`
+        INSERT IGNORE INTO asterisk.synq_agent_status_definitions (status_key, label_ar, label_en, desc_ar, desc_en, color, sort_order) VALUES
+          ('meeting', 'اجتماع', 'Meeting', 'اجتماع داخلي أو مقابلة عميل', 'Internal meeting or client call', '#8b5cf6', 1),
+          ('training', 'تدريب', 'Training', 'جلسة تدريب أو ورشة عمل', 'Training session', '#3b82f6', 2)
+    `).catch(() => {});
+}
+
 app.get('/api/employee/statuses', async (req, res) => {
     try {
-        const [rows] = await pool.execute(
-            `SELECT id, status_key, label_ar, label_en, desc_ar, desc_en, color, target_group, is_active, sort_order, created_at
-             FROM asterisk.synq_agent_status_definitions
-             ORDER BY sort_order ASC, id ASC`
-        );
-        res.json({
-            success: true,
-            static: [
-                { key: 'available', label_ar: 'متاح', label_en: 'Available', color: '#10b981', type: 'static', has_timer: false },
-                { key: 'offline', label_ar: 'غير متاح', label_en: 'Offline', color: '#94a3b8', type: 'static', has_timer: false }
-            ],
-            statuses: rows
-        });
+        try {
+            const [rows] = await pool.execute(
+                `SELECT id, status_key, label_ar, label_en, desc_ar, desc_en, color, target_group, is_active, sort_order, created_at
+                 FROM asterisk.synq_agent_status_definitions
+                 ORDER BY sort_order ASC, id ASC`
+            );
+            return res.json({
+                success: true,
+                static: [
+                    { key: 'available', label_ar: 'متاح', label_en: 'Available', color: '#10b981', type: 'static', has_timer: false },
+                    { key: 'offline', label_ar: 'غير متاح', label_en: 'Offline', color: '#94a3b8', type: 'static', has_timer: false }
+                ],
+                statuses: rows
+            });
+        } catch (dbErr) {
+            if (dbErr.code === 'ER_NO_SUCH_TABLE') {
+                await ensureAgentStatusDefinitionsTable();
+                const [rows] = await pool.execute(
+                    `SELECT id, status_key, label_ar, label_en, desc_ar, desc_en, color, target_group, is_active, sort_order, created_at
+                     FROM asterisk.synq_agent_status_definitions
+                     ORDER BY sort_order ASC, id ASC`
+                );
+                return res.json({
+                    success: true,
+                    static: [
+                        { key: 'available', label_ar: 'متاح', label_en: 'Available', color: '#10b981', type: 'static', has_timer: false },
+                        { key: 'offline', label_ar: 'غير متاح', label_en: 'Offline', color: '#94a3b8', type: 'static', has_timer: false }
+                    ],
+                    statuses: rows
+                });
+            }
+            throw dbErr;
+        }
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -15393,12 +15454,22 @@ app.post('/api/employee/statuses', async (req, res) => {
         const group = (target_group && target_group !== 'all' && target_group !== '') ? String(target_group).trim() : null;
         const col = String(color || '#f59e0b').trim();
 
-        const [result] = await pool.query(
-            `INSERT INTO asterisk.synq_agent_status_definitions (status_key, label_ar, label_en, desc_ar, color, target_group, is_active, sort_order)
+        const insertQuery = `INSERT INTO asterisk.synq_agent_status_definitions (status_key, label_ar, label_en, desc_ar, color, target_group, is_active, sort_order)
              VALUES (?, ?, ?, ?, ?, ?, 1, 10)
-             ON DUPLICATE KEY UPDATE label_ar = VALUES(label_ar), label_en = VALUES(label_en), desc_ar = VALUES(desc_ar), color = VALUES(color), target_group = VALUES(target_group), is_active = 1`,
-            [key, nameAr, nameEn, desc_ar || null, col, group]
-        );
+             ON DUPLICATE KEY UPDATE label_ar = VALUES(label_ar), label_en = VALUES(label_en), desc_ar = VALUES(desc_ar), color = VALUES(color), target_group = VALUES(target_group), is_active = 1`;
+        const insertParams = [key, nameAr, nameEn, desc_ar || null, col, group];
+
+        let result;
+        try {
+            [result] = await pool.query(insertQuery, insertParams);
+        } catch (dbErr) {
+            if (dbErr.code === 'ER_NO_SUCH_TABLE') {
+                await ensureAgentStatusDefinitionsTable();
+                [result] = await pool.query(insertQuery, insertParams);
+            } else {
+                throw dbErr;
+            }
+        }
         res.json({ success: true, id: result.insertId || null, key, label_ar: nameAr, label_en: nameEn, target_group: group, color: col });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -15411,10 +15482,18 @@ app.delete('/api/employee/statuses/:id', async (req, res) => {
         if (!Number.isInteger(id) || id < 1) {
             return res.status(400).json({ success: false, error: 'Valid status ID is required' });
         }
-        await pool.query(
-            `DELETE FROM asterisk.synq_agent_status_definitions WHERE id = ?`,
-            [id]
-        );
+        try {
+            await pool.query(
+                `DELETE FROM asterisk.synq_agent_status_definitions WHERE id = ?`,
+                [id]
+            );
+        } catch (dbErr) {
+            if (dbErr.code === 'ER_NO_SUCH_TABLE') {
+                await ensureAgentStatusDefinitionsTable();
+            } else {
+                throw dbErr;
+            }
+        }
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

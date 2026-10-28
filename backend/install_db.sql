@@ -155,6 +155,25 @@ CREATE TABLE IF NOT EXISTS `synq_agent_status_log` (
   `end_time` TIMESTAMP NULL DEFAULT NULL,
   `duration_seconds` INT DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `synq_agent_status_definitions` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `status_key` VARCHAR(50) NOT NULL UNIQUE,
+  `label_ar` VARCHAR(100) NOT NULL,
+  `label_en` VARCHAR(100) NOT NULL,
+  `desc_ar` VARCHAR(255) DEFAULT NULL,
+  `desc_en` VARCHAR(255) DEFAULT NULL,
+  `color` VARCHAR(20) NOT NULL DEFAULT '#f59e0b',
+  `target_group` VARCHAR(100) DEFAULT NULL,
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+  `sort_order` INT NOT NULL DEFAULT 0,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO `synq_agent_status_definitions` (`status_key`, `label_ar`, `label_en`, `desc_ar`, `desc_en`, `color`, `sort_order`) VALUES
+  ('meeting', 'اجتماع', 'Meeting', 'اجتماع داخلي أو مقابلة عميل', 'Internal meeting or client call', '#8b5cf6', 1),
+  ('training', 'تدريب', 'Training', 'جلسة تدريب أو ورشة عمل', 'Training session', '#3b82f6', 2);
 CREATE TABLE IF NOT EXISTS `dialer_campaigns` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(100) NOT NULL,

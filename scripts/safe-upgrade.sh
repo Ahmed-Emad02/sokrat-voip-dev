@@ -448,7 +448,28 @@ CREATE TABLE IF NOT EXISTS \`laya_maintenance_events\` (
   INDEX \`idx_laya_dongle_time\` (\`dongle_name\`, \`created_at\`),
   INDEX \`idx_laya_result\` (\`result\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS \`synq_agent_status_definitions\` (
+  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+  \`status_key\` VARCHAR(50) NOT NULL UNIQUE,
+  \`label_ar\` VARCHAR(100) NOT NULL,
+  \`label_en\` VARCHAR(100) NOT NULL,
+  \`desc_ar\` VARCHAR(255) DEFAULT NULL,
+  \`desc_en\` VARCHAR(255) DEFAULT NULL,
+  \`color\` VARCHAR(20) NOT NULL DEFAULT '#f59e0b',
+  \`target_group\` VARCHAR(100) DEFAULT NULL,
+  \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+  \`sort_order\` INT NOT NULL DEFAULT 0,
+  \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO \`synq_agent_status_definitions\` (\`status_key\`, \`label_ar\`, \`label_en\`, \`desc_ar\`, \`desc_en\`, \`color\`, \`sort_order\`) VALUES
+  ('meeting', 'اجتماع', 'Meeting', 'اجتماع داخلي أو مقابلة عميل', 'Internal meeting or client call', '#8b5cf6', 1),
+  ('training', 'تدريب', 'Training', 'جلسة تدريب أو ورشة عمل', 'Training session', '#3b82f6', 2);
 " 2>/dev/null || true
+
+ensure_db_column "synq_agent_status_definitions" "target_group" "VARCHAR(100) DEFAULT NULL"
 
 echo "  Database schema migrations complete. All PBX and CDR data preserved."
 
