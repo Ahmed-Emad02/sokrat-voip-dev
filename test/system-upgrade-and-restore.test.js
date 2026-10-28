@@ -19,6 +19,16 @@ test('1. Sidebar CSS: Settings popup box-shadow is explicitly removed', () => {
         /\.settings-menu\s*\{[^}]*box-shadow:\s*0\s+24px/,
         '.settings-menu must not contain previous 24px drop shadow'
     );
+    assert.match(
+        sidebarContent,
+        /\.settings-menu\s*\{[^}]*z-index:\s*150\s*!important;/,
+        '.settings-menu must have z-index: 150 !important'
+    );
+    assert.match(
+        sidebarContent,
+        /id="settingsMenu"[\s\S]*?z-\[150\]/,
+        '#settingsMenu must have class z-[150]'
+    );
 });
 
 test('2. Sidebar UI: Update Sokrat and Restore Backup buttons are strictly root-only', async () => {

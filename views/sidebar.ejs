@@ -1830,6 +1830,7 @@ function can(tab) {
         transform: rotate(180deg);
     }
     .settings-menu {
+        z-index: 150 !important;
         background: var(--bg-secondary) !important;
         border: 1px solid var(--border-accent) !important;
         border-radius: 1rem !important;
@@ -3442,7 +3443,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 
 <!-- Settings Dropdown Menu (Open above) -->
 <% const isWideSettings = isSuper || isRoot; %>
-<div id="settingsMenu" class="settings-menu <%= isWideSettings ? 'settings-menu-wide' : '' %> fixed opacity-0 invisible scale-95 transition-all duration-150 z-50" style="pointer-events:none" role="dialog" aria-label="<%= sbT.settingsTitle %>">
+<div id="settingsMenu" class="settings-menu <%= isWideSettings ? 'settings-menu-wide' : '' %> fixed opacity-0 invisible scale-95 transition-all duration-150 z-[150]" style="pointer-events:none" role="dialog" aria-label="<%= sbT.settingsTitle %>">
     <div class="settings-menu-header">
         <span class="settings-menu-mark">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
