@@ -760,7 +760,9 @@ CREATE TABLE IF NOT EXISTS `sokrat_call_codes` (
   INDEX `idx_scc_sort` (`sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `sokrat_call_codes`
+-- Seeded once. IGNORE keeps operator edits and, more importantly, stops a
+-- duplicate-key error from aborting the rest of this batch on upgrades.
+INSERT IGNORE INTO `sokrat_call_codes`
   (`id`, `cat`, `code`, `default_code`, `name_en`, `name_ar`, `desc_en`, `desc_ar`, `example_en`, `example_ar`, `timing`, `dial`, `enabled`, `sort_order`, `backend_type`, `backend_module`, `backend_feature`, `backend_feature_secondary`)
 VALUES
   ('incall_blindxfer', 'incall', '##', '##', 'In-Call Blind Transfer', 'تحويل أعمى مباشر (Blind Transfer)', 'Transfers active call immediately to another extension without announcing.', 'تحويل المكالمة الجارية فوراً إلى رقم داخلي أو خارجي دون انتظار رده.', '## + [Target Extension]', '## + [رقم التحويلة]', 'incall', 0, 1, 1, 'featurecode', 'core', 'blindxfer', NULL),

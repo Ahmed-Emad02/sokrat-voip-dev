@@ -110,3 +110,22 @@ test('the upgrader re-executes itself when the pull replaces its own file', () =
     const reexec = script.indexOf('exec env SOKRAT_UPGRADE_REEXEC=1');
     assert.ok(pull > 0 && reexec > pull, 're-exec must happen after the pull');
 });
+
+test('schema seeds are idempotent so a re-run cannot abort mid-batch', () => {
+    const sql = fs.readFileSync(path.join(__dirname, '..', 'backend', 'install_db.sql'), 'utf8');
+    const lines = sql.split('\n');
+    const offenders = [];
+
+    lines.forEach((line, idx) => {
+        const trimmed = line.trim();
+        if (!/^INSERT INTO /i.test(trimmed)) return;
+        // Allow ON DUPLICATE KEY UPDATE further down the same statement.
+        const tail = lines.slice(idx, idx + 40).join('\n');
+        const statement = tail.split(';')[0] || '';
+        if (/ON DUPLICATE KEY UPDATE/i.test(statement)) return;
+        offenders.push(`${idx + 1}: ${trimmed.slice(0, 80)}`);
+    });
+
+    assert.deepEqual(offenders, [], 'seeds must use INSERT IGNORE or ON DUPLICATE KEY UPDATE');
+    assert.match(sql, /INSERT IGNORE INTO `sokrat_call_codes`/);
+});
