@@ -1599,7 +1599,6 @@ function can(tab) {
             transition: width 260ms cubic-bezier(0.4, 0, 0.2, 1),
                         padding 260ms cubic-bezier(0.4, 0, 0.2, 1) !important;
             will-change: width, padding;
-            contain: layout paint;
         }
         #appSidebar .sidebar-text,
         #appSidebar .sidebar-brand-title,
@@ -1648,7 +1647,7 @@ function can(tab) {
             position: absolute !important;
             top: 50% !important;
             transform: translateY(-50%) !important;
-            z-index: 60 !important;
+            z-index: 100 !important;
             width: 18px !important;
             height: 48px !important;
             padding: 0 !important;
@@ -3234,9 +3233,9 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
 </script>
 
 <!-- Vertical Sidebar -->
-<aside id="appSidebar" class="app-sidebar fixed md:sticky top-0 bottom-0 z-50 w-[260px] md:w-[224px] h-screen bg-[var(--bg-secondary)] flex flex-col justify-between p-5 md:p-4 shrink-0 transition-transform duration-300 transform md:translate-x-0 <%= isRtl ? 'right-0 translate-x-full border-l border-[var(--border-primary)] md:border-l md:border-r-0' : 'left-0 -translate-x-full border-r border-[var(--border-primary)] md:border-r md:border-l-0' %>">
+<aside id="appSidebar" class="app-sidebar fixed md:sticky top-0 bottom-0 z-[60] w-[260px] md:w-[224px] h-screen bg-[var(--bg-secondary)] flex flex-col justify-between p-5 md:p-4 shrink-0 transition-transform duration-300 transform md:translate-x-0 <%= isRtl ? 'right-0 translate-x-full border-l border-[var(--border-primary)] md:border-l md:border-r-0' : 'left-0 -translate-x-full border-r border-[var(--border-primary)] md:border-r md:border-l-0' %>">
     <!-- Small Collapse / Expand Button at the edge in vertical middle (Desktop only) -->
-    <button id="toggleSidebarCollapseBtn" type="button" onclick="toggleSidebarCollapse()" class="hidden md:flex cursor-pointer" title="<%= isRtl ? sbT.collapseLink : 'Collapse Sidebar' %>">
+    <button id="toggleSidebarCollapseBtn" type="button" onclick="toggleSidebarCollapse()" class="hidden md:flex cursor-pointer z-[100]" title="<%= isRtl ? sbT.collapseLink : 'Collapse Sidebar' %>">
         <svg id="collapseIcon" class="w-3 h-3 shrink-0 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="<%= isRtl ? 'M9 5l7 7-7 7' : 'M15 19l-7-7 7-7' %>" />
         </svg>
