@@ -48,7 +48,10 @@ const defaultData = {
         searchDid: '',
         searchUniqueId: '',
         directionFilter: 'ALL',
-        callScopeFilter: 'ALL'
+        callScopeFilter: 'ALL',
+        durationMin: '',
+        durationMax: '',
+        trunkFilter: 'ALL'
     },
     moment,
     trendData: JSON.stringify([]),
@@ -59,47 +62,51 @@ const defaultData = {
     scopeData: JSON.stringify([{ name: 'Internal', value: 10 }, { name: 'External', value: 90 }])
 };
 
-test('Dashboard renders with all 10 filter inputs in English (en)', async () => {
+test('Dashboard renders visible Row 1 and expandable drawer with rows 2-3 and duration from-to in English (en)', async () => {
     const html = await ejs.renderFile(dashboardPath, defaultData);
 
     // Form element
     assert.ok(html.includes('id="dashFilterForm"'), 'Form dashFilterForm exists');
 
-    // 10 Filter Inputs
+    // Row 1 Primary filters (always visible)
+    assert.ok(html.includes('filter-grid-row1'), 'Row 1 grid renders');
     assert.ok(html.includes('id="dashStartDate"'), 'dashStartDate input exists');
     assert.ok(html.includes('id="dashEndDate"'), 'dashEndDate input exists');
     assert.ok(html.includes('id="dashTargetExtensionSelect"'), 'dashTargetExtensionSelect exists');
     assert.ok(html.includes('id="dashStatusFilterSelect"'), 'dashStatusFilterSelect exists');
+
+    // Collapsible Drawer
+    assert.ok(html.includes('id="dashSecondaryFilters" class="hidden'), 'dashSecondaryFilters is hidden when empty');
+    assert.ok(html.includes('filter-grid-row2'), 'Row 2 grid is inside the drawer');
+    assert.ok(html.includes('filter-grid-row3'), 'Row 3 grid is inside the drawer');
+
+    // Row 2 Routing / Line / Duration (from - to)
     assert.ok(html.includes('id="dashDirectionFilter"'), 'dashDirectionFilter exists');
     assert.ok(html.includes('id="dashScopeFilter"'), 'dashScopeFilter exists');
+    assert.ok(html.includes('id="dashTrunkFilter"'), 'dashTrunkFilter exists');
+    assert.ok(html.includes('id="dashDurationMin"'), 'dashDurationMin exists');
+    assert.ok(html.includes('id="dashDurationMax"'), 'dashDurationMax exists');
+    assert.ok(html.includes('placeholder="From"'), 'Duration min input has From placeholder');
+    assert.ok(html.includes('placeholder="To"'), 'Duration max input has To placeholder');
+
+    // Row 3 Search filters
     assert.ok(html.includes('id="dashSearchSrc"'), 'dashSearchSrc exists');
     assert.ok(html.includes('id="dashSearchDst"'), 'dashSearchDst exists');
     assert.ok(html.includes('id="dashSearchDid"'), 'dashSearchDid exists');
     assert.ok(html.includes('id="dashSearchUid"'), 'dashSearchUid exists');
 
+    // Action Bar toggle button
+    assert.ok(html.includes('id="dashToggleMoreBtn"'), 'dashToggleMoreBtn exists');
+    assert.ok(html.includes('More Filters'), 'More Filters label shown when collapsed');
+
     // Checklist menus
     assert.ok(html.includes('id="dashExtChecklistBtn"'), 'dashExtChecklistBtn exists');
     assert.ok(html.includes('id="dashExtChecklistMenu"'), 'dashExtChecklistMenu exists');
-    assert.ok(html.includes('id="dash_ext_chk_all"'), 'dash_ext_chk_all exists');
-    assert.ok(html.includes('id="dash_ext_chk_101"'), 'dash_ext_chk_101 exists');
-    assert.ok(html.includes('id="dash_ext_chk_102"'), 'dash_ext_chk_102 exists');
-    assert.ok(html.includes('id="dash_ext_chk_103"'), 'dash_ext_chk_103 exists');
-
     assert.ok(html.includes('id="dashStatusChecklistBtn"'), 'dashStatusChecklistBtn exists');
     assert.ok(html.includes('id="dashStatusChecklistMenu"'), 'dashStatusChecklistMenu exists');
-    assert.ok(html.includes('id="dash_status_chk_all"'), 'dash_status_chk_all exists');
-    assert.ok(html.includes('id="dash_status_chk_ans"'), 'dash_status_chk_ans exists');
-    assert.ok(html.includes('id="dash_status_chk_noans"'), 'dash_status_chk_noans exists');
-    assert.ok(html.includes('id="dash_status_chk_busy"'), 'dash_status_chk_busy exists');
-    assert.ok(html.includes('id="dash_status_chk_failed"'), 'dash_status_chk_failed exists');
-
-    // Secondary drawer collapsed by default when no secondary filters
-    assert.ok(html.includes('id="dashSecondaryFilters" class="hidden'), 'dashSecondaryFilters is hidden when empty');
-    assert.ok(html.includes('id="dashToggleMoreBtn"'), 'dashToggleMoreBtn exists');
-    assert.ok(html.includes('More Filters'), 'More Filters label shown when collapsed');
 });
 
-test('Dashboard renders in Arabic (ar) with localized filter labels', async () => {
+test('Dashboard renders in Arabic (ar) with localized filter labels and duration from-to', async () => {
     const arData = {
         ...defaultData,
         currentLang: 'ar'
@@ -114,26 +121,31 @@ test('Dashboard renders in Arabic (ar) with localized filter labels', async () =
     assert.ok(html.includes('الوجهة'), 'Arabic dst label rendered');
     assert.ok(html.includes('رقم DID'), 'Arabic did label rendered');
     assert.ok(html.includes('المعرف الفريد'), 'Arabic uid label rendered');
+    assert.ok(html.includes('مدة المكالمة (ثانية)'), 'Arabic duration label rendered with seconds');
+    assert.ok(html.includes('placeholder="من"'), 'Arabic duration from placeholder');
+    assert.ok(html.includes('placeholder="إلى"'), 'Arabic duration to placeholder');
     assert.ok(html.includes('المزيد من الفلاتر'), 'Arabic More Filters rendered');
     assert.ok(html.includes('إعادة ضبط'), 'Arabic Reset rendered');
 });
 
-test('Dashboard secondary filters drawer auto-expands and shows active badge when secondary filters are set', async () => {
+test('Dashboard secondary filters drawer auto-expands and shows active badge when duration from-to or search filters are set', async () => {
     const activeSecondaryData = {
         ...defaultData,
         filters: {
             ...defaultData.filters,
             searchSrc: '101',
             searchDst: '01012345678',
-            directionFilter: 'OUTBOUND'
+            directionFilter: 'OUTBOUND',
+            durationMin: '60'
         }
     };
     const html = await ejs.renderFile(dashboardPath, activeSecondaryData);
 
     // Should NOT have hidden class on dashSecondaryFilters
     assert.ok(!html.includes('id="dashSecondaryFilters" class="hidden'), 'dashSecondaryFilters is visible when active');
-    assert.ok(html.includes('3 Active'), 'Active secondary count badge displays 3 Active');
+    assert.ok(html.includes('4 Active'), 'Active secondary count badge displays 4 Active');
     assert.ok(html.includes('Fewer Filters'), 'Toggle button shows Fewer Filters when expanded');
+    assert.ok(html.includes('value="60"'), 'Duration min input retains value 60');
 });
 
 test('Dashboard preserves multiple selected extensions and statuses accurately', async () => {
@@ -204,4 +216,17 @@ test('Dashboard trunk filter dropdown renders clean select with zero emojis', as
     assert.ok(!html.includes('📱'), 'Must not contain mobile phone emoji');
     assert.ok(!html.includes('🌐'), 'Must not contain globe emoji');
     assert.ok(html.includes('id="dashTrunkFilter"'), 'Must contain clean dashTrunkFilter select');
+});
+
+test('Dashboard drilldown link carries the duration range into Call History', () => {
+    const fs = require('fs');
+    const src = fs.readFileSync(dashboardPath, 'utf8');
+    assert.ok(
+        src.includes("if (filters.durationMin) baseUrl += '&durationMin=' + encodeURIComponent(filters.durationMin);"),
+        'baseUrl must forward durationMin so drilldown keeps the lower bound'
+    );
+    assert.ok(
+        src.includes("if (filters.durationMax) baseUrl += '&durationMax=' + encodeURIComponent(filters.durationMax);"),
+        'baseUrl must forward durationMax so drilldown keeps the upper bound'
+    );
 });

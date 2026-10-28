@@ -20,6 +20,7 @@ const words = {
         failed: "Failed / Congestion", totalAirtime: "Total Talk Time",
         avgDuration: "Avg Call Duration",
         trunk: "Trunk / Line", allTrunks: "All Trunks", trunkInternal: "Internal Only (No Trunk)",
+        duration: "Duration", seconds: "sec", durFrom: "From", durTo: "To",
         chartTrend: "Call Volume Trend",
         chartDisposition: "Call Disposition",
         chartDuration: "Call Duration",
@@ -48,6 +49,7 @@ const words = {
         scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط", scopeFailover: "تحويل خارجي فقط",
         src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
         trunk: "خط الربط / الشريحة", allTrunks: "جميع خطوط الربط", trunkInternal: "داخلي فقط (بدون خط)",
+        duration: "مدة المكالمة", seconds: "ثانية", durFrom: "من", durTo: "إلى",
         moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر",
         reset: "إعادة ضبط",
         btn: "تحديث مؤشرات الأداء",
@@ -463,7 +465,7 @@ const isRtl = currentLang === 'ar';
             
             
             <!-- Row 1: Primary Filters (4-column responsive grid) -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5 filter-grid-row1">
                 <div>
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="dashStartDate"><%= t.startTime %></label>
                     <input type="datetime-local" id="dashStartDate" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -568,23 +570,28 @@ const isRtl = currentLang === 'ar';
                 </div>
             </div>
 
-            <!-- Row 2: Secondary / Advanced Filters (7-column responsive grid) -->
+            <!-- Row 2 & 3: Secondary / Advanced Filters in Collapsible Drawer -->
             <% 
                 let selectedTrk = Array.isArray(filters.trunkFilter) ? filters.trunkFilter : (filters.trunkFilter && filters.trunkFilter !== 'ALL' ? [filters.trunkFilter] : ['ALL']);
                 let isAllTrk = selectedTrk.includes('ALL') || selectedTrk.length === 0;
                 let isTrunkActive = !isAllTrk;
 
+                let isDurationActive = Boolean((filters.durationMin && String(filters.durationMin).trim() !== '') || (filters.durationMax && String(filters.durationMax).trim() !== ''));
+
                 let hasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
                                          (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') ||
                                          isTrunkActive ||
+                                         isDurationActive ||
                                          (filters.searchSrc && filters.searchSrc.trim() !== '') ||
                                          (filters.searchDst && filters.searchDst.trim() !== '') ||
                                          (filters.searchDid && filters.searchDid.trim() !== '') ||
                                          (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
+
                 let activeSecondaryCount = 0;
                 if (filters.directionFilter && filters.directionFilter !== 'ALL') activeSecondaryCount++;
                 if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') activeSecondaryCount++;
                 if (isTrunkActive) activeSecondaryCount++;
+                if (isDurationActive) activeSecondaryCount++;
                 if (filters.searchSrc && filters.searchSrc.trim() !== '') activeSecondaryCount++;
                 if (filters.searchDst && filters.searchDst.trim() !== '') activeSecondaryCount++;
                 if (filters.searchDid && filters.searchDid.trim() !== '') activeSecondaryCount++;
@@ -592,25 +599,26 @@ const isRtl = currentLang === 'ar';
             %>
             <div id="dashSecondaryFilters" class="<%= hasActiveSecondary ? '' : 'hidden' %> overflow-hidden">
                 <div class="pb-2.5">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5 filter-grid-row2">
+                    <!-- Row 2: Routing, Line & Duration Filters (4-column responsive grid) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5 filter-grid-row2">
                         <div>
-                        <label for="dashDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
-                        <select id="dashDirectionFilter" name="directionFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                            <option value="ALL" <%= filters.directionFilter === 'ALL' ? 'selected' : '' %>><%= t.allDir %></option>
-                            <option value="OUTBOUND" <%= filters.directionFilter === 'OUTBOUND' ? 'selected' : '' %>><%= t.dirOut %></option>
-                            <option value="INBOUND" <%= filters.directionFilter === 'INBOUND' ? 'selected' : '' %>><%= t.dirIn %></option>
-                            <option value="INTERNAL" <%= filters.directionFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.dirInternal %></option>
-                        </select>
-                    </div>
+                            <label for="dashDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
+                            <select id="dashDirectionFilter" name="directionFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                                <option value="ALL" <%= filters.directionFilter === 'ALL' ? 'selected' : '' %>><%= t.allDir %></option>
+                                <option value="OUTBOUND" <%= filters.directionFilter === 'OUTBOUND' ? 'selected' : '' %>><%= t.dirOut %></option>
+                                <option value="INBOUND" <%= filters.directionFilter === 'INBOUND' ? 'selected' : '' %>><%= t.dirIn %></option>
+                                <option value="INTERNAL" <%= filters.directionFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.dirInternal %></option>
+                            </select>
+                        </div>
                         <div>
-                    <label for="dashScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
-                    <select id="dashScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
-                        <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
-                        <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
-                        <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
-                    </select>
-                </div>
+                            <label for="dashScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
+                            <select id="dashScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                                <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
+                                <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
+                                <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
+                                <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
+                            </select>
+                        </div>
                         <div class="relative">
                             <label for="dashTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.trunk %></label>
                             <select name="trunkFilter" id="dashTrunkFilter" multiple class="hidden no-enhance">
@@ -648,21 +656,33 @@ const isRtl = currentLang === 'ar';
                             </div>
                         </div>
                         <div>
-                        <label for="dashSearchSrc" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.src %></label>
-                        <input type="text" id="dashSearchSrc" name="searchSrc" value="<%= filters.searchSrc || '' %>" placeholder="e.g., 101" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                            <label for="dashDurationMin" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.duration %> (<%= t.seconds %>)</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="dashDurationMin" name="durationMin" min="0" step="1" placeholder="<%= t.durFrom %>" value="<%= filters.durationMin || '' %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                                <span class="text-zinc-500 text-xs shrink-0">-</span>
+                                <input type="number" id="dashDurationMax" name="durationMax" min="0" step="1" placeholder="<%= t.durTo %>" value="<%= filters.durationMax || '' %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- Row 3: Search Filters (4-column responsive grid) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 filter-grid-row3">
                         <div>
-                        <label for="dashSearchDst" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.dst %></label>
-                        <input type="text" id="dashSearchDst" name="searchDst" value="<%= filters.searchDst || '' %>" placeholder="e.g., 010..." class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                    </div>
+                            <label for="dashSearchSrc" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.src %></label>
+                            <input type="text" id="dashSearchSrc" name="searchSrc" value="<%= filters.searchSrc || '' %>" placeholder="e.g., 101" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                        </div>
                         <div>
-                        <label for="dashSearchDid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.did %></label>
-                        <input type="text" id="dashSearchDid" name="searchDid" value="<%= filters.searchDid || '' %>" placeholder="e.g., 01234567" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                    </div>
+                            <label for="dashSearchDst" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.dst %></label>
+                            <input type="text" id="dashSearchDst" name="searchDst" value="<%= filters.searchDst || '' %>" placeholder="e.g., 010..." class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                        </div>
                         <div>
-                        <label for="dashSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
-                        <input type="text" id="dashSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                    </div>
+                            <label for="dashSearchDid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.did %></label>
+                            <input type="text" id="dashSearchDid" name="searchDid" value="<%= filters.searchDid || '' %>" placeholder="e.g., 01234567" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                        </div>
+                        <div>
+                            <label for="dashSearchUid" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.uid %></label>
+                            <input type="text" id="dashSearchUid" name="searchUniqueId" value="<%= filters.searchUniqueId || '' %>" placeholder="e.g., 1234567890" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -711,6 +731,8 @@ const isRtl = currentLang === 'ar';
                 }
             }
             if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') baseUrl += '&callScopeFilter=' + encodeURIComponent(filters.callScopeFilter);
+            if (filters.durationMin) baseUrl += '&durationMin=' + encodeURIComponent(filters.durationMin);
+            if (filters.durationMax) baseUrl += '&durationMax=' + encodeURIComponent(filters.durationMax);
             if (filters.targetExtension && filters.targetExtension !== 'ALL') {
                 if (Array.isArray(filters.targetExtension)) {
                     filters.targetExtension.forEach(ext => {
@@ -2124,6 +2146,8 @@ function syncStatusChecklistUI() {
             syncDashTrunkChecklistUI();
         }
 
+
+        // Expandable Filters Mechanism for Dashboard
         function toggleDashboardMoreFilters(forcedState, immediate) {
             const drawer = document.getElementById('dashSecondaryFilters');
             const label = document.getElementById('dashToggleMoreLabel');
@@ -2159,10 +2183,7 @@ function syncStatusChecklistUI() {
                 drawer.style.maxHeight = '0px';
                 drawer.style.opacity = '0';
 
-                // Measure real target height with contents rendered
                 const targetHeight = drawer.scrollHeight;
-
-                // Force layout reflow before starting transition
                 void drawer.offsetHeight;
 
                 drawer.style.transition = 'max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out';
@@ -2214,16 +2235,13 @@ function syncStatusChecklistUI() {
                 drawer.dataset.animating = 'true';
                 drawer.style.overflow = 'hidden';
 
-                // 1. Lock current computed pixel height without transition to eliminate jumps from 'none'
                 const startHeight = drawer.offsetHeight || drawer.scrollHeight;
                 drawer.style.transition = 'none';
                 drawer.style.maxHeight = startHeight + 'px';
                 drawer.style.opacity = '1';
 
-                // 2. Force layout reflow so the browser commits the start height
                 void drawer.offsetHeight;
 
-                // 3. Apply smooth collapse transition and animate to 0
                 drawer.style.transition = 'max-height 0.26s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease-in';
 
                 requestAnimationFrame(() => {
@@ -2257,6 +2275,7 @@ function syncStatusChecklistUI() {
                 try { localStorage.setItem('dash_filters_expanded', 'false'); } catch (e) {}
             }
         }
+        window.toggleDashboardMoreFilters = toggleDashboardMoreFilters;
 
         document.addEventListener('DOMContentLoaded', () => {
             syncExtChecklistUI();

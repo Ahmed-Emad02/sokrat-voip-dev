@@ -320,6 +320,36 @@ const CDR_DISPOSITION_SQL = `
     END
 `;
 
+// Call-duration range filtering shared by Call History and Dashboard.
+// Filtering on CDR `duration` (ring + talk in seconds), which matches reports.
+function buildDurationRangeFilterSql(minVal, maxVal, column = 'c.duration') {
+    const rawMin = minVal !== undefined && minVal !== null ? String(minVal).trim() : '';
+    const rawMax = maxVal !== undefined && maxVal !== null ? String(maxVal).trim() : '';
+    const minSec = rawMin !== '' ? parseInt(rawMin, 10) : NaN;
+    const maxSec = rawMax !== '' ? parseInt(rawMax, 10) : NaN;
+    const hasMin = !isNaN(minSec) && minSec >= 0;
+    const hasMax = !isNaN(maxSec) && maxSec >= 0;
+
+    if (hasMin && hasMax) {
+        const fromSec = Math.min(minSec, maxSec);
+        const toSec = Math.max(minSec, maxSec);
+        return { clause: ` AND (${column} >= ? AND ${column} <= ?)`, params: [fromSec, toSec] };
+    } else if (hasMin) {
+        return { clause: ` AND (${column} >= ?)`, params: [minSec] };
+    } else if (hasMax) {
+        return { clause: ` AND (${column} <= ?)`, params: [maxSec] };
+    }
+    return { clause: '', params: [] };
+}
+
+// Backwards-compatible alias for any callers passing presets or duration object
+function buildDurationFilterSql(value, column = 'c.duration') {
+    if (value && typeof value === 'object') {
+        return buildDurationRangeFilterSql(value.min, value.max, column);
+    }
+    return { clause: '', params: [] };
+}
+
 // Call History hygiene:
 //  - hide synthetic harness calls (test contexts, echo tests)
 //  - one entry per call: Asterisk writes multiple channel segments sharing a
@@ -6057,7 +6087,7 @@ app.get('/', async (req, res) => {
         }
         const dashDefaults = userPrefs?.defaultFilters?.dashboard || null;
 
-        const hasExplicitFilters = Boolean(req.query.startDate || req.query.endDate || req.query.targetExtension || req.query.statusFilter || req.query.directionFilter || req.query.callScopeFilter || req.query.searchSrc || req.query.searchDst || req.query.searchDid || req.query.searchUniqueId);
+        const hasExplicitFilters = Boolean(req.query.startDate || req.query.endDate || req.query.targetExtension || req.query.statusFilter || req.query.directionFilter || req.query.callScopeFilter || req.query.durationMin || req.query.durationMax || req.query.durationFrom || req.query.durationTo || req.query.searchSrc || req.query.searchDst || req.query.searchDid || req.query.searchUniqueId);
 
         let startDate, endDate;
         if (hasExplicitFilters) {
@@ -6101,6 +6131,8 @@ app.get('/', async (req, res) => {
 
         const directionFilter = hasExplicitFilters ? (req.query.directionFilter || 'ALL') : (dashDefaults?.directionFilter || 'ALL');
         const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (dashDefaults?.callScopeFilter || 'ALL');
+        const durationMin = (req.query.durationMin !== undefined ? req.query.durationMin : (req.query.durationFrom || '')).toString().trim();
+        const durationMax = (req.query.durationMax !== undefined ? req.query.durationMax : (req.query.durationTo || '')).toString().trim();
         
         let selectedTrunks = hasExplicitFilters ? req.query.trunkFilter : (dashDefaults?.trunkFilter || req.query.trunkFilter);
         if (!selectedTrunks) selectedTrunks = ['ALL'];
@@ -6173,6 +6205,13 @@ app.get('/', async (req, res) => {
             if (tf.clause) {
                 query += tf.clause;
                 queryParams.push(...tf.params);
+            }
+        }
+        {
+            const df = buildDurationRangeFilterSql(durationMin, durationMax);
+            if (df.clause) {
+                query += df.clause;
+                queryParams.push(...df.params);
             }
         }
 
@@ -6327,6 +6366,8 @@ app.get('/', async (req, res) => {
                 searchUniqueId,
                 directionFilter,
                 callScopeFilter,
+                durationMin,
+                durationMax,
                 trunkFilter: trunkFilterList
             },
             moment,
@@ -6528,7 +6569,7 @@ app.get('/cdr', async (req, res) => {
         }
         const cdrDefaults = userPrefs?.defaultFilters?.cdr || null;
 
-        const hasExplicitFilters = Boolean(req.query.startDate || req.query.endDate || req.query.targetExtension || req.query.statusFilter || req.query.directionFilter || req.query.callScopeFilter || req.query.searchSrc || req.query.searchDst || req.query.searchDid || req.query.searchUniqueId || req.query.perPage || req.query.page);
+        const hasExplicitFilters = Boolean(req.query.startDate || req.query.endDate || req.query.targetExtension || req.query.statusFilter || req.query.directionFilter || req.query.callScopeFilter || req.query.durationMin || req.query.durationMax || req.query.durationFrom || req.query.durationTo || req.query.searchSrc || req.query.searchDst || req.query.searchDid || req.query.searchUniqueId || req.query.perPage || req.query.page);
 
         let startDate, endDate;
         if (hasExplicitFilters) {
@@ -6572,6 +6613,8 @@ app.get('/cdr', async (req, res) => {
 
         const directionFilter = hasExplicitFilters ? (req.query.directionFilter || 'ALL') : (cdrDefaults?.directionFilter || 'ALL');
         const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (cdrDefaults?.callScopeFilter || 'ALL');
+        const durationMin = (req.query.durationMin !== undefined ? req.query.durationMin : (req.query.durationFrom || '')).toString().trim();
+        const durationMax = (req.query.durationMax !== undefined ? req.query.durationMax : (req.query.durationTo || '')).toString().trim();
         
         let selectedTrunks = hasExplicitFilters ? req.query.trunkFilter : (cdrDefaults?.trunkFilter || req.query.trunkFilter);
         if (!selectedTrunks) selectedTrunks = ['ALL'];
@@ -6691,6 +6734,14 @@ app.get('/cdr', async (req, res) => {
                 countParams.push(...tf.params);
             }
         }
+        {
+            const df = buildDurationRangeFilterSql(durationMin, durationMax);
+            if (df.clause) {
+                query += df.clause; countQuery += df.clause;
+                queryParams.push(...df.params);
+                countParams.push(...df.params);
+            }
+        }
 
         query += " ORDER BY c.calldate DESC LIMIT ? OFFSET ?";
         queryParams.push(perPage, offset);
@@ -6748,7 +6799,7 @@ app.get('/cdr', async (req, res) => {
         res.render('cdr', {
             calls: formattedRows,
             availableTrunks,
-            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, trunkFilter: trunkFilterList, page, perPage },
+            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, durationMin, durationMax, trunkFilter: trunkFilterList, page, perPage },
             pagination: { total, totalPages, page, perPage },
             statusPalette: STATUS_PALETTE,
             statusOrder: STATUS_ORDER,
@@ -6799,6 +6850,8 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         const statusFilterList = selectedStatuses.includes('ALL') ? 'ALL' : selectedStatuses;
         const directionFilter = req.query.directionFilter || 'ALL';
         const callScopeFilter = req.query.callScopeFilter || 'ALL';
+        const durationMin = (req.query.durationMin !== undefined ? req.query.durationMin : (req.query.durationFrom || '')).toString().trim();
+        const durationMax = (req.query.durationMax !== undefined ? req.query.durationMax : (req.query.durationTo || '')).toString().trim();
         
         let selectedTrunks = req.query.trunkFilter;
         if (!selectedTrunks) selectedTrunks = ['ALL'];
@@ -6876,6 +6929,13 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
             if (tf.clause) {
                 query += tf.clause;
                 queryParams.push(...tf.params);
+            }
+        }
+        {
+            const df = buildDurationRangeFilterSql(durationMin, durationMax);
+            if (df.clause) {
+                query += df.clause;
+                queryParams.push(...df.params);
             }
         }
 

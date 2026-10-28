@@ -7,6 +7,7 @@ const words = {
         scope: "Call Scope", allScope: "All Scopes", scopeInternal: "Internal Only", scopeExternal: "External Only", scopeFailover: "Failover Only",
         src: "Source", dst: "Destination", did: "DID Number", uid: "Unique ID",
         trunk: "Trunk / Line", allTrunks: "All Trunks", trunkInternal: "Internal Only (No Trunk)",
+        duration: "Duration", seconds: "sec", durFrom: "From", durTo: "To",
         moreFilters: "More Filters", lessFilters: "Fewer Filters", reset: "Reset Filters",
         btn: "Apply Filters", thTime: "Timestamp", thId: "UniqueID", thSrc: "Source", thDst: "Destination", thDid: "DID",
         thName: "Name", thAir: "Airtime", thState: "State", thDir: "Dir", thScope: "Scope", thRec: "Recording", thActions: "Actions", noData: "No matching call records.",
@@ -21,6 +22,7 @@ const words = {
         scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط", scopeFailover: "تحويل خارجي فقط",
         src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
         trunk: "خط الربط / الشريحة", allTrunks: "جميع خطوط الربط", trunkInternal: "داخلي فقط (بدون خط)",
+        duration: "مدة المكالمة", seconds: "ثانية", durFrom: "من", durTo: "إلى",
         moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر", reset: "إعادة ضبط",
         btn: "تطبيق فلاتر البحث", thTime: "التوقيت", thId: "المعرف", thSrc: "المصدر", thDst: "الوجهة", thDid: "DID",
         thName: "الاسم", thAir: "مدة المكالمة", thState: "الحالة", thDir: "اتجاه", thScope: "النطاق", thRec: "التسجيل", thActions: "الإجراءات", noData: "لم يتم العثور على سجلات مكالمات مطابقة.",
@@ -414,7 +416,7 @@ function fmtDur(s) {
             
             
             <!-- Row 1: Primary Filters (4-column responsive grid) -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5 filter-grid-row1">
                 <div>
                     <label class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider" for="cdrStartDate"><%= t.startTime %></label>
                     <input type="datetime-local" id="cdrStartDate" name="startDate" value="<%= moment(filters.startDate).format('YYYY-MM-DDTHH:mm') %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -516,23 +518,28 @@ function fmtDur(s) {
                 </div>
             </div>
 
-            <!-- Row 2: Secondary / Advanced Filters (7-column responsive grid) -->
+            <!-- Row 2 & 3: Secondary / Advanced Filters in Collapsible Drawer -->
             <% 
                 let selectedTrk = Array.isArray(filters.trunkFilter) ? filters.trunkFilter : (filters.trunkFilter && filters.trunkFilter !== 'ALL' ? [filters.trunkFilter] : ['ALL']);
                 let isAllTrk = selectedTrk.includes('ALL') || selectedTrk.length === 0;
                 let isTrunkActive = !isAllTrk;
 
+                let isDurationActive = Boolean((filters.durationMin && String(filters.durationMin).trim() !== '') || (filters.durationMax && String(filters.durationMax).trim() !== ''));
+
                 let cdrHasActiveSecondary = (filters.directionFilter && filters.directionFilter !== 'ALL') ||
                                            (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') ||
                                            isTrunkActive ||
+                                           isDurationActive ||
                                            (filters.searchSrc && filters.searchSrc.trim() !== '') ||
                                            (filters.searchDst && filters.searchDst.trim() !== '') ||
                                            (filters.searchDid && filters.searchDid.trim() !== '') ||
                                            (filters.searchUniqueId && filters.searchUniqueId.trim() !== '');
+
                 let cdrActiveSecondaryCount = 0;
                 if (filters.directionFilter && filters.directionFilter !== 'ALL') cdrActiveSecondaryCount++;
                 if (filters.callScopeFilter && filters.callScopeFilter !== 'ALL') cdrActiveSecondaryCount++;
                 if (isTrunkActive) cdrActiveSecondaryCount++;
+                if (isDurationActive) cdrActiveSecondaryCount++;
                 if (filters.searchSrc && filters.searchSrc.trim() !== '') cdrActiveSecondaryCount++;
                 if (filters.searchDst && filters.searchDst.trim() !== '') cdrActiveSecondaryCount++;
                 if (filters.searchDid && filters.searchDid.trim() !== '') cdrActiveSecondaryCount++;
@@ -540,7 +547,8 @@ function fmtDur(s) {
             %>
             <div id="cdrSecondaryFilters" class="<%= cdrHasActiveSecondary ? '' : 'hidden' %> overflow-hidden">
                 <div class="pb-2.5">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5 filter-grid-row2">
+                    <!-- Row 2: Routing, Line & Duration Filters (4-column responsive grid) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-2.5 filter-grid-row2">
                         <div>
                             <label for="cdrDirectionFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.direction %></label>
                             <select id="cdrDirectionFilter" name="directionFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -551,14 +559,14 @@ function fmtDur(s) {
                             </select>
                         </div>
                         <div>
-                    <label for="cdrScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
-                    <select id="cdrScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
-                        <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
-                        <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
-                        <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
-                        <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
-                    </select>
-                </div>
+                            <label for="cdrScopeFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.scope %></label>
+                            <select id="cdrScopeFilter" name="callScopeFilter" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)]">
+                                <option value="ALL" <%= (filters.callScopeFilter || 'ALL') === 'ALL' ? 'selected' : '' %>><%= t.allScope %></option>
+                                <option value="INTERNAL" <%= filters.callScopeFilter === 'INTERNAL' ? 'selected' : '' %>><%= t.scopeInternal %></option>
+                                <option value="EXTERNAL" <%= filters.callScopeFilter === 'EXTERNAL' ? 'selected' : '' %>><%= t.scopeExternal %></option>
+                                <option value="FAILOVER" <%= filters.callScopeFilter === 'FAILOVER' ? 'selected' : '' %>><%= t.scopeFailover %></option>
+                            </select>
+                        </div>
                         <div class="relative">
                             <label for="cdrTrunkFilter" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.trunk %></label>
                             <select name="trunkFilter" id="cdrTrunkFilter" multiple class="hidden no-enhance">
@@ -595,6 +603,18 @@ function fmtDur(s) {
                                 <% } %>
                             </div>
                         </div>
+                        <div>
+                            <label for="cdrDurationMin" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.duration %> (<%= t.seconds %>)</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" id="cdrDurationMin" name="durationMin" min="0" step="1" placeholder="<%= t.durFrom %>" value="<%= filters.durationMin || '' %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                                <span class="text-zinc-500 text-xs shrink-0">-</span>
+                                <input type="number" id="cdrDurationMax" name="durationMax" min="0" step="1" placeholder="<%= t.durTo %>" value="<%= filters.durationMax || '' %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Search Filters (4-column responsive grid) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 filter-grid-row3">
                         <div>
                             <label for="cdrSearchSrc" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.src %></label>
                             <input type="text" id="cdrSearchSrc" name="searchSrc" value="<%= filters.searchSrc || '' %>" placeholder="e.g., 101" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
@@ -1815,7 +1835,7 @@ function syncStatusChecklistUI() {
                 .catch(() => {});
         })();
 
-                // Expandable Filters Mechanism for Call History
+        // Expandable Filters Mechanism for Call History
         function toggleCdrMoreFilters(forcedState, immediate) {
             const drawer = document.getElementById('cdrSecondaryFilters');
             const label = document.getElementById('cdrToggleMoreLabel');
@@ -1851,10 +1871,7 @@ function syncStatusChecklistUI() {
                 drawer.style.maxHeight = '0px';
                 drawer.style.opacity = '0';
 
-                // Measure real target height with contents rendered
                 const targetHeight = drawer.scrollHeight;
-
-                // Force layout reflow before starting transition
                 void drawer.offsetHeight;
 
                 drawer.style.transition = 'max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out';
@@ -1906,16 +1923,13 @@ function syncStatusChecklistUI() {
                 drawer.dataset.animating = 'true';
                 drawer.style.overflow = 'hidden';
 
-                // 1. Lock current computed pixel height without transition to eliminate jumps from 'none'
                 const startHeight = drawer.offsetHeight || drawer.scrollHeight;
                 drawer.style.transition = 'none';
                 drawer.style.maxHeight = startHeight + 'px';
                 drawer.style.opacity = '1';
 
-                // 2. Force layout reflow so the browser commits the start height
                 void drawer.offsetHeight;
 
-                // 3. Apply smooth collapse transition and animate to 0
                 drawer.style.transition = 'max-height 0.26s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease-in';
 
                 requestAnimationFrame(() => {
