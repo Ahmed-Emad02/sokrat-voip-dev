@@ -41,6 +41,7 @@ const { attachChatSocket } = require('./lib/chat/socket');
 const chatStore = require('./lib/chat/store');
 const registerCrmLiveSocket = require('./socket/crm-live');
 const { getPhoneVariants, cleanPhoneString } = require('./lib/phone-normalization');
+const { loadContactsCached } = require('./lib/contacts');
 const dialerFollowup = require('./lib/dialer-followup');
 const { resolveRecordingPath, streamRecordingFile, createMediaId } = require('./lib/recordings');
 const gitHistoryService = require('./backend/git-history-service');
@@ -6532,22 +6533,70 @@ function buildTrunkFilterSql(trunkFilter, donglesList = [], trunksList = []) {
     };
 }
 
-function formatSource(row, extMap = new Map()) {
+async function getContactPhoneMap() {
+    const contactMap = new Map();
+    try {
+        const contacts = await loadContactsCached();
+        for (const c of contacts) {
+            const fullName = [c.first_name, c.last_name].filter(Boolean).join(' ').trim();
+            if (!fullName || !c.phone) continue;
+            const variants = getPhoneVariants(c.phone);
+            for (const v of variants) {
+                if (!contactMap.has(v)) contactMap.set(v, fullName);
+            }
+            const raw = String(c.phone).trim();
+            if (!contactMap.has(raw)) contactMap.set(raw, fullName);
+            const digits = raw.replace(/\D/g, '');
+            if (digits && !contactMap.has(digits)) contactMap.set(digits, fullName);
+        }
+    } catch (_) {}
+    return contactMap;
+}
+
+function resolvePhoneName(phone, extMap = new Map(), contactMap = new Map(), fallbackName = '') {
+    const raw = String(phone || '').trim();
+    if (!raw) return '';
+
+    // 1. Check if internal extension
+    if (extMap && typeof extMap.get === 'function') {
+        const extName = extMap.get(raw);
+        if (extName && extName !== 'No Name' && extName !== raw) {
+            return String(extName).trim();
+        }
+    }
+
+    // 2. Check if contact in address book
+    if (contactMap && typeof contactMap.get === 'function') {
+        if (contactMap.has(raw)) return contactMap.get(raw);
+        const digits = raw.replace(/\D/g, '');
+        if (digits && contactMap.has(digits)) return contactMap.get(digits);
+        const variants = getPhoneVariants(raw);
+        for (const v of variants) {
+            if (contactMap.has(v)) return contactMap.get(v);
+        }
+    }
+
+    // 3. Fallback caller-ID name
+    if (fallbackName && fallbackName !== 'No Name' && fallbackName !== raw) {
+        return String(fallbackName).trim();
+    }
+
+    return '';
+}
+
+function formatSource(row, extMap = new Map(), contactMap = new Map()) {
     const src = String(row.src || '').trim();
     if (!src) return '';
-    let srcName = (row.src_name && row.src_name !== 'No Name') ? String(row.src_name).trim() : '';
-    if (!srcName && extMap && typeof extMap.get === 'function') {
-        const mapped = extMap.get(src);
-        if (mapped && mapped !== 'No Name') srcName = String(mapped).trim();
-    }
-    if (srcName && srcName !== 'No Name' && srcName !== src) {
-        return `${src} (${srcName})`;
+    const name = resolvePhoneName(src, extMap, contactMap, row.src_name);
+    if (name) {
+        return `${src} (${name})`;
     }
     return src;
 }
 
-function formatDestination(row, ringGroupSet = new Set(), forExport = false, extMap = new Map()) {
+function formatDestination(row, ringGroupSet = new Set(), forExport = false, extMap = new Map(), contactMap = new Map()) {
     if (forExport && typeof forExport === 'object' && typeof forExport.get === 'function') {
+        contactMap = extMap;
         extMap = forExport;
         forExport = false;
     }
@@ -6594,25 +6643,17 @@ function formatDestination(row, ringGroupSet = new Set(), forExport = false, ext
             if (m) pickedUpExt = m[1];
         }
         if (pickedUpExt && pickedUpExt !== dst) {
-            let extName = '';
-            if (extMap && typeof extMap.get === 'function') {
-                const mapped = extMap.get(pickedUpExt);
-                if (mapped && mapped !== 'No Name') extName = String(mapped).trim();
-            }
-            if (extName && extName !== 'No Name' && extName !== pickedUpExt) {
+            const extName = resolvePhoneName(pickedUpExt, extMap, contactMap);
+            if (extName) {
                 return `${dst} (${pickedUpExt} - ${extName})`;
             }
             return `${dst} (${pickedUpExt})`;
         }
     }
 
-    let dstName = (row.dst_name && row.dst_name !== 'No Name') ? String(row.dst_name).trim() : '';
-    if (!dstName && extMap && typeof extMap.get === 'function') {
-        const mapped = extMap.get(dst);
-        if (mapped && mapped !== 'No Name') dstName = String(mapped).trim();
-    }
-    if (dstName && dstName !== 'No Name' && dstName !== dst) {
-        return `${dst} (${dstName})`;
+    const name = resolvePhoneName(dst, extMap, contactMap, row.dst_name);
+    if (name) {
+        return `${dst} (${name})`;
     }
 
     return dst;
@@ -6861,13 +6902,15 @@ app.get('/cdr', async (req, res) => {
             uRows.forEach(u => extMap.set(String(u.extension), String(u.name || '')));
         } catch (_) {}
 
+        const contactMap = await getContactPhoneMap();
+
         const formattedRows = rows.map(row => {
             return {
                 ...row,
                 src_raw: row.src,
                 dst_raw: row.dst,
-                src: formatSource(row, extMap),
-                dst: formatDestination(row, ringGroupSet, false, extMap),
+                src: formatSource(row, extMap, contactMap),
+                dst: formatDestination(row, ringGroupSet, false, extMap, contactMap),
                 trunk: resolveTrunkForCdr(row, cdrTrunksList, cdrDonglesList)
             };
         });
@@ -7031,12 +7074,14 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
             uRows.forEach(u => extMap.set(String(u.extension), String(u.name || '')));
         } catch (_) {}
 
+        const contactMap = await getContactPhoneMap();
+
         if (XLSX) {
             const headers = ["Date/Time", "Source", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID", ...(cdrSource.isUnion ? ["PBX"] : [])];
             const dataRows = [headers];
             for (const row of rows) {
-                const formattedSrc = formatSource(row, extMap);
-                const formattedDst = formatDestination(row, ringGroupSet, true, extMap);
+                const formattedSrc = formatSource(row, extMap, contactMap);
+                const formattedDst = formatDestination(row, ringGroupSet, true, extMap, contactMap);
                 const trk = resolveTrunkForCdr(row, expTrunksList, expDonglesList);
                 dataRows.push([
                     moment(row.calldate).format('YYYY-MM-DD HH:mm:ss'),
@@ -7070,8 +7115,8 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         let csvContent = "\ufeff";
         csvContent += csvHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n";
         for (const row of rows) {
-            const formattedSrc = formatSource(row, extMap);
-            const formattedDst = formatDestination(row, ringGroupSet, true, extMap);
+            const formattedSrc = formatSource(row, extMap, contactMap);
+            const formattedDst = formatDestination(row, ringGroupSet, true, extMap, contactMap);
             const trk = resolveTrunkForCdr(row, expTrunksList, expDonglesList);
             const rowData = [
                 `"${moment(row.calldate).format('YYYY-MM-DD HH:mm:ss')}"`,
@@ -13648,8 +13693,7 @@ const {
     updateContact,
     deleteContact,
     importContactsBatch,
-    MAX_IMPORT_ROWS,
-    loadContactsCached
+    MAX_IMPORT_ROWS
 } = require('./lib/contacts');
 
 async function syncAllCampaignLeadsToAddressBook(dbConn) {

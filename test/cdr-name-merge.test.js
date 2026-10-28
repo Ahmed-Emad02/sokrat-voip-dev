@@ -13,12 +13,13 @@ function loadServerHelpers() {
     const f1_end = serverSrc.indexOf('\nfunction getEndpointExtensionFromChannel(');
     const f1 = serverSrc.slice(f1_start, f1_end);
 
-    const f2_start = serverSrc.indexOf('function formatSource(');
+    const f2_start = serverSrc.indexOf('function resolvePhoneName(');
     const f2_end = serverSrc.indexOf('\n// --- ROUTE 2: CDR DETAILS VIEW');
     const f2 = serverSrc.slice(f2_start, f2_end);
 
-    const factory = new Function(f1 + '\n' + f2 + '\nreturn { getExtensionFromChannel, formatSource, formatDestination };');
-    return factory();
+    const { getPhoneVariants } = require('../lib/phone-normalization');
+    const factory = new Function('getPhoneVariants', f1 + '\n' + f2 + '\nreturn { getExtensionFromChannel, resolvePhoneName, formatSource, formatDestination };');
+    return factory(getPhoneVariants);
 }
 
 const { formatSource, formatDestination } = loadServerHelpers();
@@ -169,6 +170,34 @@ test('Call History view renders source(name) and destination(name) without stand
 
     // 3. Destination renders Ring Group + answered extension + display name
     assert.ok(html.includes('600 (102 - WebRTC 102)'), 'Destination must render ring group, extension id and display name');
+});
+
+test('formatSource and formatDestination resolve saved address book contacts across phone variants', () => {
+    const extMap = new Map([['101', 'Agent 101']]);
+    const contactMap = new Map([
+        ['01012345678', 'Hany Adel'],
+        ['+201012345678', 'Hany Adel'],
+        ['201012345678', 'Hany Adel'],
+        ['1012345678', 'Hany Adel']
+    ]);
+
+    // Source is an external number saved in contacts
+    assert.equal(
+        formatSource({ src: '01012345678' }, extMap, contactMap),
+        '01012345678 (Hany Adel)'
+    );
+
+    // Source variant (+20...) matches contact
+    assert.equal(
+        formatSource({ src: '+201012345678' }, extMap, contactMap),
+        '+201012345678 (Hany Adel)'
+    );
+
+    // Destination is an external number saved in contacts
+    assert.equal(
+        formatDestination({ dst: '01012345678' }, new Set(), false, extMap, contactMap),
+        '01012345678 (Hany Adel)'
+    );
 });
 
 test('CDR Export headers remove separate Source Name column', () => {
