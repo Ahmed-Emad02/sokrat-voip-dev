@@ -342,7 +342,7 @@ fi
 
 # Flush saturated SMS storage on all active dongles
 if command -v asterisk >/dev/null 2>&1; then
-    for d in $(asterisk -rx "dongle show devices" 2>/dev/null | awk 'NR>1 {print $1}'); do
+    for d in $(asterisk -rx "dongle show devices" 2>/dev/null | awk 'NR>1 && ($3=="Free" || $3=="Active") {print $1}'); do
         [ -n "$d" ] || continue
         asterisk -rx "dongle cmd $d AT+CMGD=1,4" >/dev/null 2>&1 || true
     done
@@ -477,9 +477,14 @@ echo "  Database schema migrations complete. All PBX and CDR data preserved."
 echo "[4/7] Applying Asterisk / chan_dongle stability patches (Call Waiting UDUB, CRING detection, and Master audio recovery)..."
 if [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
     mkdir -p "$MODULES_DIR"
-    cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" "$MODULES_DIR/chan_dongle.so"
-    chmod 644 "$MODULES_DIR/chan_dongle.so"
-    echo "  Hardened chan_dongle.so installed from bundle binary into $MODULES_DIR"
+    if [ ! -f "$MODULES_DIR/chan_dongle.so" ] || ! cmp -s "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" "$MODULES_DIR/chan_dongle.so"; then
+        cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" "$MODULES_DIR/chan_dongle.so.tmp"
+        chmod 644 "$MODULES_DIR/chan_dongle.so.tmp"
+        mv -f "$MODULES_DIR/chan_dongle.so.tmp" "$MODULES_DIR/chan_dongle.so"
+        echo "  Hardened chan_dongle.so installed from bundle binary into $MODULES_DIR (atomic update)"
+    else
+        echo "  Hardened chan_dongle.so already matches bundle binary in $MODULES_DIR (preserved live inode)"
+    fi
 elif [ -d "$SRC_CHAN_DONGLE" ] && [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch" ]; then
     cd "$SRC_CHAN_DONGLE"
     git reset --hard HEAD >/dev/null 2>&1 || true
@@ -489,8 +494,16 @@ elif [ -d "$SRC_CHAN_DONGLE" ] && [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch"
     ./configure --with-astversion=18.19.0 >/dev/null 2>&1 || ./configure >/dev/null 2>&1
     make clean >/dev/null 2>&1
     make -j"$(nproc 2>/dev/null || echo 1)" >/dev/null 2>&1
-    make install >/dev/null 2>&1
-    echo "  Patched chan_dongle.so built and installed into $MODULES_DIR"
+    if [ -f chan_dongle.so ]; then
+        if [ ! -f "$MODULES_DIR/chan_dongle.so" ] || ! cmp -s chan_dongle.so "$MODULES_DIR/chan_dongle.so"; then
+            cp chan_dongle.so "$MODULES_DIR/chan_dongle.so.tmp"
+            chmod 644 "$MODULES_DIR/chan_dongle.so.tmp"
+            mv -f "$MODULES_DIR/chan_dongle.so.tmp" "$MODULES_DIR/chan_dongle.so"
+            echo "  Patched chan_dongle.so built and installed into $MODULES_DIR (atomic update)"
+        else
+            echo "  Patched chan_dongle.so already matches built binary in $MODULES_DIR (preserved live inode)"
+        fi
+    fi
 fi
 
 # 5. Sanitize Dialplans & Protect Call Transfers

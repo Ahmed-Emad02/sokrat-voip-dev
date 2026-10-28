@@ -2394,19 +2394,34 @@ fi
 echo "  [10c] Installing chan_dongle..."
 if [ -f "$SCRIPT_DIR/binaries/chan_dongle.so" ]; then
     mkdir -p /usr/lib64/asterisk/modules
-    cp "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so
-    chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so
-    echo "  chan_dongle.so installed from bundle"
+    if [ ! -f /usr/lib64/asterisk/modules/chan_dongle.so ] || ! cmp -s "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so; then
+        cp "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so.tmp
+        chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so.tmp
+        mv -f /usr/lib64/asterisk/modules/chan_dongle.so.tmp /usr/lib64/asterisk/modules/chan_dongle.so
+        echo "  chan_dongle.so installed from bundle"
+    else
+        echo "  chan_dongle.so already matches bundle binary"
+    fi
 elif [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
     mkdir -p /usr/lib64/asterisk/modules
-    cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so
-    chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so
-    echo "  chan_dongle.so installed from bundle"
+    if [ ! -f /usr/lib64/asterisk/modules/chan_dongle.so ] || ! cmp -s "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so; then
+        cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so.tmp
+        chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so.tmp
+        mv -f /usr/lib64/asterisk/modules/chan_dongle.so.tmp /usr/lib64/asterisk/modules/chan_dongle.so
+        echo "  chan_dongle.so installed from bundle"
+    else
+        echo "  chan_dongle.so already matches bundle binary"
+    fi
 elif [ -f "/tmp/sokrat-repo/installer-bundle/binaries/chan_dongle.so" ]; then
     mkdir -p /usr/lib64/asterisk/modules
-    cp "/tmp/sokrat-repo/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so
-    chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so
-    echo "  chan_dongle.so installed from bundle"
+    if [ ! -f /usr/lib64/asterisk/modules/chan_dongle.so ] || ! cmp -s "/tmp/sokrat-repo/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so; then
+        cp "/tmp/sokrat-repo/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so.tmp
+        chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so.tmp
+        mv -f /usr/lib64/asterisk/modules/chan_dongle.so.tmp /usr/lib64/asterisk/modules/chan_dongle.so
+        echo "  chan_dongle.so installed from bundle"
+    else
+        echo "  chan_dongle.so already matches bundle binary"
+    fi
 elif [ -f /usr/lib64/asterisk/modules/chan_dongle.so ]; then
     echo "  chan_dongle.so already installed"
 else

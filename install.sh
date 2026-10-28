@@ -2460,9 +2460,14 @@ fi
 echo "  [10c] Installing chan_dongle..."
 if [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
     mkdir -p /usr/lib64/asterisk/modules
-    cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so
-    chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so
-    echo "  chan_dongle.so installed from bundle"
+    if [ ! -f /usr/lib64/asterisk/modules/chan_dongle.so ] || ! cmp -s "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so; then
+        cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so.tmp
+        chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so.tmp
+        mv -f /usr/lib64/asterisk/modules/chan_dongle.so.tmp /usr/lib64/asterisk/modules/chan_dongle.so
+        echo "  chan_dongle.so installed from bundle"
+    else
+        echo "  chan_dongle.so already matches bundle binary (preserved live inode)"
+    fi
 else
     cd /usr/src
     if [ ! -d asterisk-chan-dongle ]; then
