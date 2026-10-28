@@ -1565,14 +1565,8 @@ function can(tab) {
         }
     }
 
-    /* Sidebar Custom Styles */
-    .app-sidebar {
-        transition: width 200ms ease-in-out, padding 200ms ease-in-out !important;
-    }
-    [dir="rtl"] .app-sidebar {
-    }
     /* Toast Notification Positioning: Bottom Right (LTR/English) & Bottom Left (RTL/Arabic) */
-    #toastContainer, #toast-container {
+    #toast-container, #toastContainer {
         position: fixed !important;
         top: auto !important;
         bottom: 1.25rem !important;
@@ -1582,29 +1576,30 @@ function can(tab) {
         gap: 0.5rem !important;
         pointer-events: none !important;
     }
-    [dir="ltr"] #toastContainer, [dir="ltr"] #toast-container,
-    html:not([dir="rtl"]) #toastContainer, html:not([dir="rtl"]) #toast-container {
+    [dir="ltr"] #toast-container, [dir="ltr"] #toastContainer,
+    html:not([dir="rtl"]) #toast-container, html:not([dir="rtl"]) #toastContainer {
         right: 1.25rem !important;
         left: auto !important;
     }
-    [dir="rtl"] #toastContainer, [dir="rtl"] #toast-container,
-    html[dir="rtl"] #toastContainer, html[dir="rtl"] #toast-container {
+    [dir="rtl"] #toast-container, [dir="rtl"] #toastContainer,
+    html[dir="rtl"] #toast-container, html[dir="rtl"] #toastContainer {
         left: 1.25rem !important;
         right: auto !important;
     }
-    #toastContainer .text-white,
     #toast-container .text-white,
-    .light-theme #toastContainer .text-white,
-    .light-theme #toast-container .text-white {
+    #toastContainer .text-white,
+    .light-theme #toast-container .text-white,
+    .light-theme #toastContainer .text-white {
         color: #ffffff !important;
     }
+
     /* Premium smooth collapse transition */
     @media (min-width: 768px) {
         #appSidebar {
-            transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                        padding 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                        transform 300ms ease;
+            transition: width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+                        padding 260ms cubic-bezier(0.4, 0, 0.2, 1) !important;
             will-change: width, padding;
+            contain: layout paint;
         }
         #appSidebar .sidebar-text,
         #appSidebar .sidebar-brand-title,
@@ -1615,22 +1610,22 @@ function can(tab) {
             max-width: 180px;
             opacity: 1;
             transform: translateX(0);
-            transition: opacity 220ms ease, transform 240ms ease, max-width 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            transition: opacity 180ms ease, transform 200ms cubic-bezier(0.4, 0, 0.2, 1), max-width 260ms cubic-bezier(0.4, 0, 0.2, 1);
             white-space: nowrap;
             overflow: hidden;
             vertical-align: middle;
         }
         #brandLogo {
-            transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                        height 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                        transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
-            will-change: width, height, transform;
+            transition: width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+                        height 260ms cubic-bezier(0.4, 0, 0.2, 1),
+                        margin 260ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+            will-change: width, height;
         }
         #appSidebar .nav-item {
-            transition: background-color 150ms ease, color 150ms ease, padding 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            transition: background-color 150ms ease, color 150ms ease, padding 260ms cubic-bezier(0.4, 0, 0.2, 1);
         }
         #appSidebar .nav-item svg {
-            transition: margin 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            transition: margin 260ms cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         /* Collapsed state rules */
@@ -3057,10 +3052,23 @@ function can(tab) {
             document.documentElement.classList.toggle('sidebar-collapsed', isCollapsed);
             localStorage.setItem('sidebar_collapsed', String(isCollapsed));
             updateCollapseButtonIcon(isCollapsed);
-            // Trigger smooth chart and layout reflows during and after width transition
-            window.dispatchEvent(new Event('resize'));
-            setTimeout(() => window.dispatchEvent(new Event('resize')), 160);
-            setTimeout(() => window.dispatchEvent(new Event('resize')), 340);
+
+            // Defer chart and layout reflow until after the CSS transition finishes
+            // so the 60fps animation runs without main-thread chart redraw stutter.
+            let resized = false;
+            const triggerResize = () => {
+                if (resized) return;
+                resized = true;
+                sidebar.removeEventListener('transitionend', onTransitionEnd);
+                window.dispatchEvent(new Event('resize'));
+            };
+            const onTransitionEnd = (e) => {
+                if (e && e.target === sidebar && e.propertyName === 'width') {
+                    triggerResize();
+                }
+            };
+            sidebar.addEventListener('transitionend', onTransitionEnd);
+            setTimeout(triggerResize, 280);
         };
 
         if (localStorage.getItem('sidebar_collapsed') === 'true') {
