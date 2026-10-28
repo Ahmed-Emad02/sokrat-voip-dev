@@ -139,3 +139,20 @@ test('the schema import retries once instead of skipping later migrations', () =
         'a successful retry must be reported');
     assert.ok(script.includes('still failing after retry'), 'a second failure must stay visible');
 });
+
+test('install_db.sql never references a column before creating it', () => {
+    const sql = read('backend/install_db.sql');
+
+    // Seeds that name columns only present on newer installs must be preceded by
+    // an information_schema guard, otherwise ERROR 1054 aborts the whole batch.
+    for (const column of ['local_node_uuid', 'panel_role']) {
+        const firstRef = sql.indexOf(column + '`');
+        const guard = sql.indexOf("COLUMN_NAME = '" + column + "'");
+        assert.ok(guard > 0, `${column} needs a column guard`);
+        assert.ok(guard < firstRef || sql.indexOf('ADD COLUMN `' + column + '`') > 0,
+            `${column} guard must exist`);
+    }
+
+    // Every seed statement stays idempotent.
+    assert.match(sql, /INSERT IGNORE INTO `sokrat_federation_settings`/);
+});

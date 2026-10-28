@@ -478,6 +478,31 @@ CREATE TABLE IF NOT EXISTS `sokrat_federation_settings` (
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Existing installs created this table before these columns existed, and
+-- CREATE TABLE IF NOT EXISTS does not add them. Without this the seed below
+-- fails with ERROR 1054 and mysql aborts the rest of the batch.
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'sokrat_federation_settings'
+                      AND COLUMN_NAME = 'local_node_uuid'),
+    'DO 0',
+    'ALTER TABLE `asterisk`.`sokrat_federation_settings` ADD COLUMN `local_node_uuid` VARCHAR(36) DEFAULT NULL')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
+SET @sokrat_sql := (
+  SELECT IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'sokrat_federation_settings'
+                      AND COLUMN_NAME = 'panel_role'),
+    'DO 0',
+    'ALTER TABLE `asterisk`.`sokrat_federation_settings` ADD COLUMN `panel_role` ENUM(''local'', ''central'') NOT NULL DEFAULT ''local''')
+);
+PREPARE sokrat_stmt FROM @sokrat_sql;
+EXECUTE sokrat_stmt;
+DEALLOCATE PREPARE sokrat_stmt;
+
 INSERT IGNORE INTO `sokrat_federation_settings` (`id`, `local_site_code`, `local_node_name`, `panel_role`, `local_node_uuid`)
 VALUES (1, '10', 'Main PBX', 'local', UUID());
 
