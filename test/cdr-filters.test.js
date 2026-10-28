@@ -84,6 +84,10 @@ test('Call History renders visible Row 1 and expandable drawer with rows 2-3 and
     // Action Bar toggle button
     assert.ok(html.includes('id="cdrToggleMoreBtn"'), 'Must contain cdrToggleMoreBtn');
     assert.ok(html.includes('More Filters'), 'Must display More Filters label when collapsed');
+    assert.ok(html.includes('id="cdrDurationUnit"'), 'Must render cdrDurationUnit select');
+    assert.ok(html.includes('value="s"'), 'Contains seconds option');
+    assert.ok(html.includes('value="m"'), 'Contains minutes option');
+    assert.ok(html.includes('value="h"'), 'Contains hours option');
 });
 
 test('Call History renders filter panel in Arabic with localized labels and duration from-to', async () => {
@@ -94,7 +98,10 @@ test('Call History renders filter panel in Arabic with localized labels and dura
     assert.ok(html.includes('قائمة الموظفين'), 'Must render Arabic roster label');
     assert.ok(html.includes('حالة المكالمة'), 'Must render Arabic status label');
     assert.ok(html.includes('خط الربط / الشريحة'), 'Must render Arabic trunk label');
-    assert.ok(html.includes('مدة المكالمة (ثانية)'), 'Must render Arabic duration with seconds unit');
+    assert.ok(html.includes('مدة المكالمة'), 'Must render Arabic duration label');
+    assert.ok(html.includes('ثانية'), 'Must render Arabic seconds unit option');
+    assert.ok(html.includes('دقيقة'), 'Must render Arabic minutes unit option');
+    assert.ok(html.includes('ساعة'), 'Must render Arabic hours unit option');
     assert.ok(html.includes('placeholder="من"'), 'Arabic placeholder for duration from');
     assert.ok(html.includes('placeholder="إلى"'), 'Arabic placeholder for duration to');
     assert.ok(html.includes('المزيد من الفلاتر'), 'Must render Arabic More Filters label');

@@ -86,6 +86,10 @@ test('Dashboard renders visible Row 1 and expandable drawer with rows 2-3 and du
     assert.ok(html.includes('id="dashTrunkFilter"'), 'dashTrunkFilter exists');
     assert.ok(html.includes('id="dashDurationMin"'), 'dashDurationMin exists');
     assert.ok(html.includes('id="dashDurationMax"'), 'dashDurationMax exists');
+    assert.ok(html.includes('id="dashDurationUnit"'), 'dashDurationUnit exists');
+    assert.ok(html.includes('value="s"'), 'Contains seconds option');
+    assert.ok(html.includes('value="m"'), 'Contains minutes option');
+    assert.ok(html.includes('value="h"'), 'Contains hours option');
     assert.ok(html.includes('placeholder="From"'), 'Duration min input has From placeholder');
     assert.ok(html.includes('placeholder="To"'), 'Duration max input has To placeholder');
 
@@ -121,7 +125,10 @@ test('Dashboard renders in Arabic (ar) with localized filter labels and duration
     assert.ok(html.includes('الوجهة'), 'Arabic dst label rendered');
     assert.ok(html.includes('رقم DID'), 'Arabic did label rendered');
     assert.ok(html.includes('المعرف الفريد'), 'Arabic uid label rendered');
-    assert.ok(html.includes('مدة المكالمة (ثانية)'), 'Arabic duration label rendered with seconds');
+    assert.ok(html.includes('مدة المكالمة'), 'Arabic duration label rendered');
+    assert.ok(html.includes('ثانية'), 'Arabic seconds option rendered');
+    assert.ok(html.includes('دقيقة'), 'Arabic minutes option rendered');
+    assert.ok(html.includes('ساعة'), 'Arabic hours option rendered');
     assert.ok(html.includes('placeholder="من"'), 'Arabic duration from placeholder');
     assert.ok(html.includes('placeholder="إلى"'), 'Arabic duration to placeholder');
     assert.ok(html.includes('المزيد من الفلاتر'), 'Arabic More Filters rendered');

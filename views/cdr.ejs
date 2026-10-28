@@ -7,7 +7,7 @@ const words = {
         scope: "Call Scope", allScope: "All Scopes", scopeInternal: "Internal Only", scopeExternal: "External Only", scopeFailover: "Failover Only",
         src: "Source", dst: "Destination", did: "DID Number", uid: "Unique ID",
         trunk: "Trunk / Line", allTrunks: "All Trunks", trunkInternal: "Internal Only (No Trunk)",
-        duration: "Duration", seconds: "sec", durFrom: "From", durTo: "To",
+        duration: "Duration", unitSec: "sec", unitMin: "min", unitHour: "hrs", durFrom: "From", durTo: "To",
         moreFilters: "More Filters", lessFilters: "Fewer Filters", reset: "Reset Filters",
         btn: "Apply Filters", thTime: "Timestamp", thId: "UniqueID", thSrc: "Source", thDst: "Destination", thDid: "DID",
         thName: "Name", thAir: "Airtime", thState: "State", thDir: "Dir", thScope: "Scope", thRec: "Recording", thActions: "Actions", noData: "No matching call records.",
@@ -22,7 +22,7 @@ const words = {
         scope: "نطاق المكالمة", allScope: "جميع النطاقات", scopeInternal: "داخلي فقط", scopeExternal: "خارجي فقط", scopeFailover: "تحويل خارجي فقط",
         src: "المصدر", dst: "الوجهة", did: "رقم DID", uid: "المعرف الفريد",
         trunk: "خط الربط / الشريحة", allTrunks: "جميع خطوط الربط", trunkInternal: "داخلي فقط (بدون خط)",
-        duration: "مدة المكالمة", seconds: "ثانية", durFrom: "من", durTo: "إلى",
+        duration: "مدة المكالمة", unitSec: "ثانية", unitMin: "دقيقة", unitHour: "ساعة", durFrom: "من", durTo: "إلى",
         moreFilters: "المزيد من الفلاتر", lessFilters: "إخفاء الفلاتر", reset: "إعادة ضبط",
         btn: "تطبيق فلاتر البحث", thTime: "التوقيت", thId: "المعرف", thSrc: "المصدر", thDst: "الوجهة", thDid: "DID",
         thName: "الاسم", thAir: "مدة المكالمة", thState: "الحالة", thDir: "اتجاه", thScope: "النطاق", thRec: "التسجيل", thActions: "الإجراءات", noData: "لم يتم العثور على سجلات مكالمات مطابقة.",
@@ -361,11 +361,13 @@ function fmtDur(s) {
         select[name="cdr_speed"]::-ms-expand {
             display: none !important;
         }
-            @media (min-width: 1024px) {
-            .filter-grid-row2 {
-                display: grid !important;
-                grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-            }
+        .duration-range-input::-webkit-inner-spin-button,
+        .duration-range-input::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .duration-range-input {
+            -moz-appearance: textfield;
         }
 </style>
 </head>
@@ -604,11 +606,17 @@ function fmtDur(s) {
                             </div>
                         </div>
                         <div>
-                            <label for="cdrDurationMin" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.duration %> (<%= t.seconds %>)</label>
-                            <div class="flex items-center gap-1.5">
-                                <input type="number" id="cdrDurationMin" name="durationMin" min="0" step="1" placeholder="<%= t.durFrom %>" value="<%= filters.durationMin || '' %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
-                                <span class="text-zinc-500 text-xs shrink-0">-</span>
-                                <input type="number" id="cdrDurationMax" name="durationMax" min="0" step="1" placeholder="<%= t.durTo %>" value="<%= filters.durationMax || '' %>" class="w-full bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)]">
+                            <label for="cdrDurationMin" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.duration %></label>
+                            <div class="flex items-center w-full min-w-0 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2 py-1.5 focus-within:border-[var(--accent-color)] transition-colors h-[34px]">
+                                <input type="number" id="cdrDurationMin" name="durationMin" min="0" step="any" placeholder="<%= t.durFrom %>" value="<%= filters.durationMin || '' %>" class="duration-range-input w-full min-w-0 flex-1 bg-transparent border-0 p-0 text-xs text-center text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none">
+                                <span class="text-zinc-500 text-xs shrink-0 select-none px-1">-</span>
+                                <input type="number" id="cdrDurationMax" name="durationMax" min="0" step="any" placeholder="<%= t.durTo %>" value="<%= filters.durationMax || '' %>" class="duration-range-input w-full min-w-0 flex-1 bg-transparent border-0 p-0 text-xs text-center text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none">
+                                <div class="h-4 w-px bg-[var(--border-primary)] mx-1.5 shrink-0"></div>
+                                <select id="cdrDurationUnit" name="durationUnit" aria-label="<%= isRtl ? 'وحدة المدة' : 'Duration unit' %>" class="no-enhance bg-transparent text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus:text-[var(--text-primary)] focus:outline-none cursor-pointer shrink-0 border-0 p-0 pe-1">
+                                    <option value="s" <%= (filters.durationUnit || 's') === 's' ? 'selected' : '' %> class="bg-[var(--bg-card)] text-[var(--text-primary)]"><%= t.unitSec %></option>
+                                    <option value="m" <%= filters.durationUnit === 'm' ? 'selected' : '' %> class="bg-[var(--bg-card)] text-[var(--text-primary)]"><%= t.unitMin %></option>
+                                    <option value="h" <%= filters.durationUnit === 'h' ? 'selected' : '' %> class="bg-[var(--bg-card)] text-[var(--text-primary)]"><%= t.unitHour %></option>
+                                </select>
                             </div>
                         </div>
                     </div>

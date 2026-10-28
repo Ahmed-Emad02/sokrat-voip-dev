@@ -321,23 +321,47 @@ const CDR_DISPOSITION_SQL = `
 `;
 
 // Call-duration range filtering shared by Call History and Dashboard.
-// Filtering on CDR `duration` (ring + talk in seconds), which matches reports.
-function buildDurationRangeFilterSql(minVal, maxVal, column = 'c.duration') {
-    const rawMin = minVal !== undefined && minVal !== null ? String(minVal).trim() : '';
-    const rawMax = maxVal !== undefined && maxVal !== null ? String(maxVal).trim() : '';
-    const minSec = rawMin !== '' ? parseInt(rawMin, 10) : NaN;
-    const maxSec = rawMax !== '' ? parseInt(rawMax, 10) : NaN;
+// Filtering on CDR `duration` (stored as integer seconds in database).
+// Supports units: 's' (seconds, default), 'm' (minutes), 'h' (hours).
+function convertDurationToSeconds(val, unit = 's') {
+    if (val === undefined || val === null) return NaN;
+    const str = String(val).trim();
+    if (str === '') return NaN;
+    const num = parseFloat(str);
+    if (isNaN(num) || num < 0) return NaN;
+
+    const u = String(unit || 's').toLowerCase().trim();
+    if (u === 'h' || u === 'hour' || u === 'hours') {
+        return Math.round(num * 3600);
+    }
+    if (u === 'm' || u === 'min' || u === 'minute' || u === 'minutes') {
+        return Math.round(num * 60);
+    }
+    return Math.round(num);
+}
+
+function buildDurationRangeFilterSql(minVal, maxVal, unit = 's', column = 'c.duration') {
+    // If unit is passed as column string (backwards compatibility with 3-arg call (min, max, column))
+    let actualUnit = unit;
+    let actualCol = column;
+    if (typeof unit === 'string' && (unit.includes('.') || unit === 'duration')) {
+        actualCol = unit;
+        actualUnit = 's';
+    }
+
+    const minSec = convertDurationToSeconds(minVal, actualUnit);
+    const maxSec = convertDurationToSeconds(maxVal, actualUnit);
     const hasMin = !isNaN(minSec) && minSec >= 0;
     const hasMax = !isNaN(maxSec) && maxSec >= 0;
 
     if (hasMin && hasMax) {
         const fromSec = Math.min(minSec, maxSec);
         const toSec = Math.max(minSec, maxSec);
-        return { clause: ` AND (${column} >= ? AND ${column} <= ?)`, params: [fromSec, toSec] };
+        return { clause: ` AND (${actualCol} >= ? AND ${actualCol} <= ?)`, params: [fromSec, toSec] };
     } else if (hasMin) {
-        return { clause: ` AND (${column} >= ?)`, params: [minSec] };
+        return { clause: ` AND (${actualCol} >= ?)`, params: [minSec] };
     } else if (hasMax) {
-        return { clause: ` AND (${column} <= ?)`, params: [maxSec] };
+        return { clause: ` AND (${actualCol} <= ?)`, params: [maxSec] };
     }
     return { clause: '', params: [] };
 }
@@ -6133,6 +6157,7 @@ app.get('/', async (req, res) => {
         const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (dashDefaults?.callScopeFilter || 'ALL');
         const durationMin = (req.query.durationMin !== undefined ? req.query.durationMin : (req.query.durationFrom || '')).toString().trim();
         const durationMax = (req.query.durationMax !== undefined ? req.query.durationMax : (req.query.durationTo || '')).toString().trim();
+        const durationUnit = ['s', 'm', 'h'].includes(String(req.query.durationUnit || '').toLowerCase()) ? String(req.query.durationUnit).toLowerCase() : 's';
         
         let selectedTrunks = hasExplicitFilters ? req.query.trunkFilter : (dashDefaults?.trunkFilter || req.query.trunkFilter);
         if (!selectedTrunks) selectedTrunks = ['ALL'];
@@ -6208,7 +6233,7 @@ app.get('/', async (req, res) => {
             }
         }
         {
-            const df = buildDurationRangeFilterSql(durationMin, durationMax);
+            const df = buildDurationRangeFilterSql(durationMin, durationMax, durationUnit);
             if (df.clause) {
                 query += df.clause;
                 queryParams.push(...df.params);
@@ -6368,6 +6393,7 @@ app.get('/', async (req, res) => {
                 callScopeFilter,
                 durationMin,
                 durationMax,
+                durationUnit,
                 trunkFilter: trunkFilterList
             },
             moment,
@@ -6615,6 +6641,7 @@ app.get('/cdr', async (req, res) => {
         const callScopeFilter = hasExplicitFilters ? (req.query.callScopeFilter || 'ALL') : (cdrDefaults?.callScopeFilter || 'ALL');
         const durationMin = (req.query.durationMin !== undefined ? req.query.durationMin : (req.query.durationFrom || '')).toString().trim();
         const durationMax = (req.query.durationMax !== undefined ? req.query.durationMax : (req.query.durationTo || '')).toString().trim();
+        const durationUnit = ['s', 'm', 'h'].includes(String(req.query.durationUnit || '').toLowerCase()) ? String(req.query.durationUnit).toLowerCase() : 's';
         
         let selectedTrunks = hasExplicitFilters ? req.query.trunkFilter : (cdrDefaults?.trunkFilter || req.query.trunkFilter);
         if (!selectedTrunks) selectedTrunks = ['ALL'];
@@ -6735,7 +6762,7 @@ app.get('/cdr', async (req, res) => {
             }
         }
         {
-            const df = buildDurationRangeFilterSql(durationMin, durationMax);
+            const df = buildDurationRangeFilterSql(durationMin, durationMax, durationUnit);
             if (df.clause) {
                 query += df.clause; countQuery += df.clause;
                 queryParams.push(...df.params);
@@ -6799,7 +6826,7 @@ app.get('/cdr', async (req, res) => {
         res.render('cdr', {
             calls: formattedRows,
             availableTrunks,
-            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, durationMin, durationMax, trunkFilter: trunkFilterList, page, perPage },
+            filters: { startDate, endDate, targetExtension: targetExtensionFilter, statusFilter: statusFilterList, searchSrc, searchDst, searchDid, searchUniqueId, searchTranscript, directionFilter, callScopeFilter, durationMin, durationMax, durationUnit, trunkFilter: trunkFilterList, page, perPage },
             pagination: { total, totalPages, page, perPage },
             statusPalette: STATUS_PALETTE,
             statusOrder: STATUS_ORDER,
@@ -6852,6 +6879,7 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         const callScopeFilter = req.query.callScopeFilter || 'ALL';
         const durationMin = (req.query.durationMin !== undefined ? req.query.durationMin : (req.query.durationFrom || '')).toString().trim();
         const durationMax = (req.query.durationMax !== undefined ? req.query.durationMax : (req.query.durationTo || '')).toString().trim();
+        const durationUnit = ['s', 'm', 'h'].includes(String(req.query.durationUnit || '').toLowerCase()) ? String(req.query.durationUnit).toLowerCase() : 's';
         
         let selectedTrunks = req.query.trunkFilter;
         if (!selectedTrunks) selectedTrunks = ['ALL'];
@@ -6932,7 +6960,7 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
             }
         }
         {
-            const df = buildDurationRangeFilterSql(durationMin, durationMax);
+            const df = buildDurationRangeFilterSql(durationMin, durationMax, durationUnit);
             if (df.clause) {
                 query += df.clause;
                 queryParams.push(...df.params);
