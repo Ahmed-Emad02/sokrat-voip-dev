@@ -133,7 +133,7 @@ test('Call History table columns render strictly in canonical order', async () =
     const tbodyCols = [...html.matchAll(/<td data-col="([^"]+)"/g)].map(m => m[1]);
 
     const expectedOrder = [
-        'time', 'src', 'dst', 'name', 'trunk',
+        'time', 'src', 'dst', 'trunk',
         'airtime', 'state', 'dir', 'scope', 'rec',
         'did', 'uniqueid', 'actions'
     ];

@@ -6532,7 +6532,26 @@ function buildTrunkFilterSql(trunkFilter, donglesList = [], trunksList = []) {
     };
 }
 
-function formatDestination(row, ringGroupSet = new Set(), forExport = false) {
+function formatSource(row, extMap = new Map()) {
+    const src = String(row.src || '').trim();
+    if (!src) return '';
+    let srcName = (row.src_name && row.src_name !== 'No Name') ? String(row.src_name).trim() : '';
+    if (!srcName && extMap && typeof extMap.get === 'function') {
+        const mapped = extMap.get(src);
+        if (mapped && mapped !== 'No Name') srcName = String(mapped).trim();
+    }
+    if (srcName && srcName !== 'No Name' && srcName !== src) {
+        return `${src} (${srcName})`;
+    }
+    return src;
+}
+
+function formatDestination(row, ringGroupSet = new Set(), forExport = false, extMap = new Map()) {
+    if (forExport && typeof forExport === 'object' && typeof forExport.get === 'function') {
+        extMap = forExport;
+        forExport = false;
+    }
+
     let dst = String(row.dst || '').trim();
     if (dst === 's' || dst.toLowerCase() === 'ussd') {
         if (row.channel && row.channel.toLowerCase().startsWith('dongle/')) {
@@ -6561,7 +6580,7 @@ function formatDestination(row, ringGroupSet = new Set(), forExport = false) {
         return via ? `${dst} (Failover via ${via})` : `${dst} (Failover to Mobile)`;
     }
 
-    const isHuntOrGroup = (ringGroupSet && ringGroupSet.has(dst))
+    const isHuntOrGroup = (ringGroupSet && (ringGroupSet.has ? ringGroupSet.has(dst) : false))
                        || (row.dcontext && (row.dcontext.startsWith('ext-group') || row.dcontext.startsWith('ext-queues')))
                        || (row.lastdata && (row.lastdata.includes('auto-blkvm') || row.lastdata.includes('from-queue')));
 
@@ -6575,8 +6594,25 @@ function formatDestination(row, ringGroupSet = new Set(), forExport = false) {
             if (m) pickedUpExt = m[1];
         }
         if (pickedUpExt && pickedUpExt !== dst) {
+            let extName = '';
+            if (extMap && typeof extMap.get === 'function') {
+                const mapped = extMap.get(pickedUpExt);
+                if (mapped && mapped !== 'No Name') extName = String(mapped).trim();
+            }
+            if (extName && extName !== 'No Name' && extName !== pickedUpExt) {
+                return `${dst} (${pickedUpExt} - ${extName})`;
+            }
             return `${dst} (${pickedUpExt})`;
         }
+    }
+
+    let dstName = (row.dst_name && row.dst_name !== 'No Name') ? String(row.dst_name).trim() : '';
+    if (!dstName && extMap && typeof extMap.get === 'function') {
+        const mapped = extMap.get(dst);
+        if (mapped && mapped !== 'No Name') dstName = String(mapped).trim();
+    }
+    if (dstName && dstName !== 'No Name' && dstName !== dst) {
+        return `${dst} (${dstName})`;
     }
 
     return dst;
@@ -6680,12 +6716,15 @@ app.get('/cdr', async (req, res) => {
         let countParams = [startDate, endDate, ...cdrSource.nodeFilterParams];
 
         let query = `
-            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield, COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name${nodeColumns},
+            SELECT c.calldate, c.src, c.dst, c.dcontext, c.lastdata, c.duration, c.billsec, ${CDR_DISPOSITION_SQL} as disposition, c.uniqueid, c.recordingfile, c.channel, c.dstchannel, c.did, c.userfield,
+            COALESCE(u.name, NULLIF(TRIM(c.cnam), ''), 'No Name') as src_name,
+            COALESCE(u_dst.name, 'No Name') as dst_name${nodeColumns},
             stt.transcript, stt.status as stt_status, stt.duration_sec as stt_duration, stt.language as stt_lang,
             ${directionCase} as direction,
             ${callScopeCase} as call_scope
             FROM ${cdrSource.table} c
             LEFT JOIN ${tables.users} u ON c.src = u.extension
+            LEFT JOIN ${tables.users} u_dst ON c.dst = u_dst.extension
             LEFT JOIN \`asteriskcdrdb\`.\`cdr_transcriptions\` stt ON stt.uniqueid = c.uniqueid
             WHERE c.calldate BETWEEN ? AND ?
             ${cdrSource.filtersSql}
@@ -6816,10 +6855,19 @@ app.get('/cdr', async (req, res) => {
             } catch (_) {}
         }
 
+        let extMap = new Map();
+        try {
+            const [uRows] = await pool.query('SELECT extension, name FROM `asterisk`.`users`');
+            uRows.forEach(u => extMap.set(String(u.extension), String(u.name || '')));
+        } catch (_) {}
+
         const formattedRows = rows.map(row => {
             return {
                 ...row,
-                dst: formatDestination(row, ringGroupSet),
+                src_raw: row.src,
+                dst_raw: row.dst,
+                src: formatSource(row, extMap),
+                dst: formatDestination(row, ringGroupSet, false, extMap),
                 trunk: resolveTrunkForCdr(row, cdrTrunksList, cdrDonglesList)
             };
         });
@@ -6977,16 +7025,22 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
             rgRows.forEach(r => ringGroupSet.add(String(r.grpnum)));
         } catch (_) {}
 
+        let extMap = new Map();
+        try {
+            const [uRows] = await pool.query('SELECT extension, name FROM `asterisk`.`users`');
+            uRows.forEach(u => extMap.set(String(u.extension), String(u.name || '')));
+        } catch (_) {}
+
         if (XLSX) {
-            const headers = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID", ...(cdrSource.isUnion ? ["PBX"] : [])];
+            const headers = ["Date/Time", "Source", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID", ...(cdrSource.isUnion ? ["PBX"] : [])];
             const dataRows = [headers];
             for (const row of rows) {
-                const formattedDst = formatDestination(row, ringGroupSet, true);
+                const formattedSrc = formatSource(row, extMap);
+                const formattedDst = formatDestination(row, ringGroupSet, true, extMap);
                 const trk = resolveTrunkForCdr(row, expTrunksList, expDonglesList);
                 dataRows.push([
                     moment(row.calldate).format('YYYY-MM-DD HH:mm:ss'),
-                    String(row.src || '').trim(),
-                    String(row.src_name || '').trim(),
+                    formattedSrc,
                     formattedDst,
                     String(row.did || '').trim(),
                     String(trk.name || '-'),
@@ -7012,16 +7066,16 @@ app.get('/cdr/export', requireAuth, requireActionPermission('cdr-export'), async
         }
 
         // Fallback to CSV if XLSX is unavailable
-        const csvHeaders = ["Date/Time", "Source", "Source Name", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID", ...(cdrSource.isUnion ? ["PBX"] : [])];
+        const csvHeaders = ["Date/Time", "Source", "Destination", "DID", "Trunk / Line", "Duration (Sec)", "Billsec (Sec)", "Disposition", "Direction", "Call Scope", "Channel", "Destination Channel", "Unique ID", ...(cdrSource.isUnion ? ["PBX"] : [])];
         let csvContent = "\ufeff";
         csvContent += csvHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n";
         for (const row of rows) {
-            const formattedDst = formatDestination(row, ringGroupSet);
+            const formattedSrc = formatSource(row, extMap);
+            const formattedDst = formatDestination(row, ringGroupSet, true, extMap);
             const trk = resolveTrunkForCdr(row, expTrunksList, expDonglesList);
             const rowData = [
                 `"${moment(row.calldate).format('YYYY-MM-DD HH:mm:ss')}"`,
-                /^\+?\d+$/.test(String(row.src || '')) ? `="` + String(row.src || '').trim() + `"` : `"${String(row.src || '').replace(/"/g, '""')}"`,
-                `"${String(row.src_name || '').replace(/"/g, '""')}"`,
+                /^\+?\d+$/.test(String(row.src || '')) ? `="` + formattedSrc.replace(/"/g, '""') + `"` : `"${formattedSrc.replace(/"/g, '""')}"`,
                 `"${formattedDst.replace(/"/g, '""')}"`,
                 /^\+?\d+$/.test(String(row.did || '')) ? `="` + String(row.did || '').trim() + `"` : `"${String(row.did || '').replace(/"/g, '""')}"`,
                 row.duration || 0,

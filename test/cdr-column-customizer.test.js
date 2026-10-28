@@ -12,7 +12,7 @@ test('CDR Column Customizer: views/cdr.ejs tags all 13 columns in thead and tbod
 
     const expectedCols = [
         'time', 'uniqueid', 'src', 'dst', 'did', 'trunk',
-        'name', 'airtime', 'state', 'dir', 'scope',
+        'airtime', 'state', 'dir', 'scope',
         'rec', 'actions'
     ];
 
