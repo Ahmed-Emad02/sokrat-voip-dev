@@ -3838,7 +3838,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     const selectedRow = document.getElementById('row-' + deviceKey);
                     if (selectedRow) {
                         selectedRow.classList.add('selected-row');
-                        if (!options || !options.noScroll) {
+                        if (options && options.scrollIntoView) {
                             try { selectedRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) {}
                         }
                     }
@@ -4111,7 +4111,7 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                     const toastNode = smsMessageNode(sms);
                     const toastDevKey = `${toastNode}:${String(sms.dongleId || '')}`;
                     if (devByKey(toastDevKey)) {
-                        selectDevice(toastDevKey);
+                        selectDevice(toastDevKey, { scrollIntoView: true });
                     }
                     if (typeof selectSmsThread === 'function') {
                         selectSmsThread(smsThreadKey(toastNode, sms.dongleId, sms.endpoint || sms.sender), true);
@@ -6387,12 +6387,23 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
                             populateTargetDropdown(ussdTarget, nextSelected, 'Unknown');
                         }
                         populateSmsReplyDongle(selectedDongleId || nextSelected);
+
+                        // Capture scroll position before DOM re-render
+                        const scrollContainer = document.querySelector('body > .flex-1') || document.documentElement;
+                        const prevScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+
                         renderDongleCards();
+
+                        // Restore scroll position so dynamic updates don't yank the page
+                        if (scrollContainer && scrollContainer.scrollTop !== prevScrollTop) {
+                            scrollContainer.scrollTop = prevScrollTop;
+                        }
+
                         if (typeof updateReportDropdowns === 'function') {
                             updateReportDropdowns();
                         }
                         if (nextSelected) {
-                            selectDevice(nextSelected, { skipSms: (previousSelected === nextSelected) });
+                            selectDevice(nextSelected, { skipSms: (previousSelected === nextSelected), noScroll: true });
                         } else {
                             selectedDongleId = null;
                             selectedDongleSite = FED_LOCAL_SITE;
@@ -7508,6 +7519,17 @@ const initialSelectedDongleId = devices && devices.length > 0 ? deviceKey(device
             // Background Laya badge poll every 10s
             fetchLayaStatus();
             setInterval(fetchLayaStatus, 10000);
+
+            if (window.location.hash) {
+                try {
+                    const target = document.querySelector(window.location.hash);
+                    if (target) {
+                        setTimeout(() => {
+                            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 200);
+                    }
+                } catch (_) {}
+            }
         }
 
         if (document.readyState === 'loading') {
