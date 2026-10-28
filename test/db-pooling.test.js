@@ -93,3 +93,20 @@ test('dashboard/CDR indexes ship in both deployment paths', () => {
     assert.match(upgrader, /idx_keyword/);
     assert.match(upgrader, /idx_voicemail/);
 });
+
+test('the upgrader re-executes itself when the pull replaces its own file', () => {
+    const script = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'safe-upgrade.sh'), 'utf8');
+
+    // Bash reads scripts incrementally: pulling a new version mid-run used to
+    // leave the remaining steps executing the old body.
+    assert.match(script, /SELF_PATH=\$\(readlink -f "\$0"/);
+    assert.match(script, /SELF_HASH_BEFORE=\$\(sha256sum "\$SELF_PATH"/);
+    assert.match(script, /SELF_HASH_AFTER=\$\(sha256sum "\$SELF_PATH"/);
+    assert.match(script, /SOKRAT_UPGRADE_REEXEC/);
+    assert.match(script, /exec env SOKRAT_UPGRADE_REEXEC=1 bash "\$SELF_PATH" "\$@"/);
+
+    // The guard must be checked after the codebase update, not before.
+    const pull = script.indexOf('git merge --ff-only origin/main');
+    const reexec = script.indexOf('exec env SOKRAT_UPGRADE_REEXEC=1');
+    assert.ok(pull > 0 && reexec > pull, 're-exec must happen after the pull');
+});

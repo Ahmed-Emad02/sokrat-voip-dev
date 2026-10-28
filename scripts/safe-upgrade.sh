@@ -34,6 +34,13 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# This script updates the very repository it lives in. Bash reads a script
+# incrementally, so without a re-exec the second half of the run would execute
+# the OLD file (new migrations/patches silently skipped). Remember our identity
+# and restart ourselves once if the pull replaced us.
+SELF_PATH=$(readlink -f "$0" 2>/dev/null || echo "$0")
+SELF_HASH_BEFORE=$(sha256sum "$SELF_PATH" 2>/dev/null | cut -d' ' -f1 || echo "")
+
 # Determine MySQL / MariaDB connection parameters safely
 detect_mysql_auth() {
     local pwd
@@ -91,6 +98,12 @@ elif [ -d "$INSTALL_DIR/.git" ]; then
         echo "  Notice: Remote fetch timed out or offline, proceeding with current codebase."
     fi
     echo "  Codebase at commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'current')"
+
+    SELF_HASH_AFTER=$(sha256sum "$SELF_PATH" 2>/dev/null | cut -d' ' -f1 || echo "")
+    if [ "${SOKRAT_UPGRADE_REEXEC:-0}" != "1" ] && [ -n "$SELF_HASH_BEFORE" ] && [ "$SELF_HASH_BEFORE" != "$SELF_HASH_AFTER" ]; then
+        echo "  The upgrader itself was updated by this pull - restarting it so the new steps run."
+        exec env SOKRAT_UPGRADE_REEXEC=1 bash "$SELF_PATH" "$@"
+    fi
 fi
 
 # 3. Database Schema Migrations (Preserving PBX Data)
