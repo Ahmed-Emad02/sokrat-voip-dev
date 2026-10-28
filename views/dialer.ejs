@@ -230,7 +230,7 @@ const isRtl = activeLang === 'ar';
     <div id="toastContainer" class="fixed bottom-5 end-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
 
     <!-- MODAL 1: CREATE / EDIT CAMPAIGN -->
-    <div id="createCampaignModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-3 sm:p-5">
+    <div id="createCampaignModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden p-3 sm:p-5">
         <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-5xl xl:max-w-6xl w-full p-5 sm:p-6 text-[var(--text-primary)] max-h-[92vh] flex flex-col shadow-2xl">
             <!-- Modal Header -->
             <div class="flex items-center justify-between pb-3.5 mb-4 border-b border-[var(--border-primary)] shrink-0">
@@ -430,7 +430,7 @@ const isRtl = activeLang === 'ar';
     </div>
 
     <!-- MODAL: CAMPAIGN FOLLOW-UPS -->
-    <div id="followupsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div id="followupsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden p-4">
         <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-5xl w-full p-6 text-[var(--text-primary)] max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between gap-3 mb-4">
                 <div>
@@ -446,7 +446,7 @@ const isRtl = activeLang === 'ar';
     </div>
 
     <!-- MODAL 2: IMPORT LEADS (CSV / XLSX) -->
-    <div id="importLeadsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div id="importLeadsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden p-4">
         <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-md w-full p-6 text-[var(--text-primary)]">
             <h3 class="text-base font-extrabold mb-1"><%= t.importLeads %></h3>
             <p class="text-xs text-[var(--text-muted)] mb-3"><%= t.addressBookNote %></p>
@@ -470,7 +470,7 @@ const isRtl = activeLang === 'ar';
         </div>
     </div>
     <!-- MODAL 3: MANUAL LEAD -->
-    <div id="manualLeadModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div id="manualLeadModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden p-4">
         <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-lg w-full p-6 text-[var(--text-primary)] max-h-[90vh] overflow-y-auto">
             <h3 id="manualLeadTitle" class="text-base font-extrabold mb-1"><%= t.manualLead %></h3>
             <p id="manualLeadCampaignName" class="text-xs text-[var(--text-muted)] mb-4"></p>
@@ -499,7 +499,7 @@ const isRtl = activeLang === 'ar';
 
 
     <!-- MODAL 3: VIEW LEADS INVENTORY -->
-    <div id="viewLeadsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div id="viewLeadsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden p-4">
         <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-3xl w-full p-6 text-[var(--text-primary)] max-h-[85vh] flex flex-col">
             <div class="flex items-center justify-between pb-3 border-b border-[var(--border-primary)] mb-3">
                 <div>
@@ -554,7 +554,7 @@ const isRtl = activeLang === 'ar';
     </div>
 
     <!-- MODAL 4: ADD DNC -->
-    <div id="addDncModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div id="addDncModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden p-4">
         <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl max-w-sm w-full p-5 text-[var(--text-primary)]">
             <h3 class="text-sm font-extrabold mb-3"><%= t.addDnc %></h3>
             <form onsubmit="addDncNumber(event)" class="space-y-3">

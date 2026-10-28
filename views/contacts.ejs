@@ -509,7 +509,7 @@ const isRtl = currentLang === 'ar';
 
     <% if (isSuperAdmin) { %>
     <!-- Edit Contact Modal -->
-    <div id="editContactModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
+    <div id="editContactModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
         <div id="editContactModalContainer" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 scale-95 transition-all duration-300 transform">
             <div class="flex justify-between items-center mb-5">
                 <h3 class="text-sm font-black text-white uppercase tracking-wider"><%= t.editTitle %></h3>
@@ -545,7 +545,7 @@ const isRtl = currentLang === 'ar';
     </div>
 
     <!-- Add Contact Modal (Address Book Version) -->
-    <div id="addContactModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
+    <div id="addContactModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
         <div id="addContactModalContainer" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 scale-95 transition-all duration-300 transform">
             <div class="flex justify-between items-center mb-5">
                 <h3 class="text-sm font-black text-white uppercase tracking-wider"><%= isRtl ? 'إضافة جهة اتصال جديدة' : 'Add New Contact' %></h3>
@@ -580,7 +580,7 @@ const isRtl = currentLang === 'ar';
     </div>
 
     <!-- Import CSV Modal -->
-    <div id="importCsvModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
+    <div id="importCsvModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
         <div id="importCsvModalContainer" class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-md p-6 scale-95 transition-all duration-300 transform">
             <div class="flex justify-between items-center mb-5">
                 <h3 class="text-sm font-black text-white uppercase tracking-wider"><%= isRtl ? 'استيراد جهات اتصال CSV' : 'Import CSV Contacts' %></h3>
@@ -1041,7 +1041,7 @@ const isRtl = currentLang === 'ar';
         <% } %>
     </script>
     <!-- INBOUND BLACKLIST MANAGEMENT MODAL -->
-    <div id="blacklistModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300">
+    <div id="blacklistModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300">
         <div id="blacklistModalContainer" class="bg-[#121212] border border-[#27272a] rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col scale-95 transition-all duration-300 overflow-hidden">
             <!-- Modal Header -->
             <div class="px-6 py-4 border-b border-[#27272a] bg-[#18181b] flex items-center justify-between">
@@ -1118,7 +1118,7 @@ const isRtl = currentLang === 'ar';
     </div>
 
     <!-- ADD / EDIT BLACKLIST ENTRY MODAL -->
-    <div id="addBlacklistModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300">
+    <div id="addBlacklistModal" class="fixed inset-0 z-[210] flex items-center justify-center bg-black/80 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300">
         <div id="addBlacklistModalContainer" class="bg-[#121212] border border-[#27272a] rounded-2xl w-full max-w-md p-6 scale-95 transition-all duration-300">
             <div class="flex items-center justify-between mb-5">
                 <h3 id="blacklistModalTitle" class="text-base font-black text-white"><%= isRtl ? 'إضافة رقم للقائمة السوداء' : 'Add Blocked Number' %></h3>
