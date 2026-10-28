@@ -288,6 +288,26 @@ test('Pre-Session Sanitizer & Intelligent Auth: server.js cleans foreign cookies
     assert.match(serverCode, /isProxyBrowserRequest/, 'requireAuth must distinguish HTML browser navigations to proxy routes from JSON APIs');
 });
 
+test('Scan Completion Toast: Guarded against repeated toasts and orphaned polls', () => {
+    const configScript = fs.readFileSync(path.join(rootDir, 'views', 'scripts', 'config-page.ejs'), 'utf8');
+    const sidebarScript = fs.readFileSync(path.join(rootDir, 'views', 'sidebar.ejs'), 'utf8');
+
+    // 1. Actively scanning state tracking
+    assert.match(configScript, /let ipscanIsActivelyScanning\s*=\s*false;/, 'Must define ipscanIsActivelyScanning flag');
+    assert.match(configScript, /let ipscanFetchingStatus\s*=\s*false;/, 'Must define in-flight fetch guard');
+
+    // 2. Completion toast must be guarded by ipscanIsActivelyScanning
+    assert.match(
+        configScript,
+        /if\s*\(\s*ipscanIsActivelyScanning\s*\)\s*\{[\s\S]*?ipscanIsActivelyScanning\s*=\s*false;[\s\S]*?Scan complete:/,
+        'Completion toast must ONLY fire if ipscanIsActivelyScanning was true and immediately reset'
+    );
+
+    // 3. sokratPoll must cleanly unsubscribe visibilitychange on stop()
+    assert.match(sidebarScript, /let isStopped\s*=\s*false;/, 'sokratPoll must maintain isStopped state');
+    assert.match(sidebarScript, /document\.removeEventListener\('visibilitychange',\s*onVisibilityChange\)/, 'sokratPoll.stop() must remove visibilitychange listener');
+});
+
 function makeGetRequest(endpoint) {
     return new Promise((resolve) => {
         http.get({

@@ -11550,6 +11550,8 @@
         let ipscanPollInterval = null;
         let ipscanSecondsElapsed = 0;
         let ipscanTimerInterval = null;
+        let ipscanIsActivelyScanning = false;
+        let ipscanFetchingStatus = false;
 
         async function fetchIpscanInterfaces() {
             try {
@@ -11622,6 +11624,8 @@
 
             showToast(isRtl ? 'بدء فحص الشبكة المحلية...' : `Starting ${profile} scan on ${target}...`, 'info');
 
+            ipscanIsActivelyScanning = true;
+
             try {
                 const res = await fetch('/api/config/ipscan/scan', {
                     method: 'POST',
@@ -11630,6 +11634,7 @@
                 });
                 const data = await res.json();
                 if (!data.success) {
+                    ipscanIsActivelyScanning = false;
                     showToast(data.error || 'Failed to start scan', 'error');
                     resetIpscanUiState();
                     return;
@@ -11648,20 +11653,32 @@
 
                 startIpscanPolling();
             } catch (err) {
+                ipscanIsActivelyScanning = false;
                 showToast(err.message || 'Network error starting scan', 'error');
                 resetIpscanUiState();
             }
         }
 
-        function startIpscanPolling() {
+        function stopIpscanPolling() {
             if (ipscanPollInterval) {
                 if (typeof ipscanPollInterval.stop === 'function') ipscanPollInterval.stop();
                 else clearInterval(ipscanPollInterval);
+                ipscanPollInterval = null;
             }
+            if (ipscanTimerInterval) {
+                clearInterval(ipscanTimerInterval);
+                ipscanTimerInterval = null;
+            }
+        }
+
+        function startIpscanPolling() {
+            stopIpscanPolling();
             ipscanPollInterval = window.sokratPoll(fetchIpscanStatus, 1500);
         }
 
         async function fetchIpscanStatus() {
+            if (ipscanFetchingStatus) return;
+            ipscanFetchingStatus = true;
             try {
                 const res = await fetch('/api/config/ipscan/status');
                 const data = await res.json();
@@ -11671,24 +11688,27 @@
                 const timerBadge = document.getElementById('ipscan-timer-badge');
 
                 if (st.scanning) {
+                    ipscanIsActivelyScanning = true;
                     const dur = st.durationSec || ipscanSecondsElapsed;
                     if (timerBadge) timerBadge.textContent = `Scanning: ${dur}s`;
                     const durKpi = document.getElementById('ipscan-kpi-duration');
                     if (durKpi) durKpi.textContent = `${dur}s`;
+
+                    const btnStart = document.getElementById('btn-ipscan-start');
+                    const btnStop = document.getElementById('btn-ipscan-stop');
+                    const radarIcon = document.getElementById('icon-ipscan-radar');
+                    if (btnStart) btnStart.disabled = true;
+                    if (btnStop) btnStop.classList.remove('hidden');
+                    if (radarIcon) radarIcon.classList.add('animate-spin');
+
+                    if (!ipscanPollInterval) {
+                        startIpscanPolling();
+                    }
                     return;
                 }
 
                 // Scan is complete or stopped
-                if (ipscanPollInterval) {
-                    if (ipscanPollInterval && typeof ipscanPollInterval.stop === 'function') ipscanPollInterval.stop();
-                    else clearInterval(ipscanPollInterval);
-                    ipscanPollInterval = null;
-                }
-                if (ipscanTimerInterval) {
-                    clearInterval(ipscanTimerInterval);
-                    ipscanTimerInterval = null;
-                }
-
+                stopIpscanPolling();
                 resetIpscanUiState();
 
                 if (timerBadge) {
@@ -11697,20 +11717,28 @@
                 const durKpi = document.getElementById('ipscan-kpi-duration');
                 if (durKpi) durKpi.textContent = `${st.durationSec}s`;
 
-                if (st.error) {
-                    showToast(st.error, 'warning');
-                } else if (Array.isArray(st.results)) {
-                    showToast(isRtl ? `اكتمل الفحص: تم العثور على ${st.results.length} جهاز متصل` : `Scan complete: Found ${st.results.length} live host(s)`, 'success');
+                // Only show completion or error toast if this client initiated/observed an active scan
+                if (ipscanIsActivelyScanning) {
+                    ipscanIsActivelyScanning = false;
+                    if (st.error) {
+                        showToast(st.error, 'warning');
+                    } else if (Array.isArray(st.results)) {
+                        showToast(isRtl ? `اكتمل الفحص: تم العثور على ${st.results.length} جهاز متصل` : `Scan complete: Found ${st.results.length} live host(s)`, 'success');
+                    }
                 }
 
                 ipscanCachedResults = st.results || [];
                 renderIpscanResults();
             } catch (err) {
                 console.error('Error polling ipscan status:', err);
+            } finally {
+                ipscanFetchingStatus = false;
             }
         }
 
         async function stopIpScan() {
+            ipscanIsActivelyScanning = false;
+            stopIpscanPolling();
             const btnStop = document.getElementById('btn-ipscan-stop');
             if (btnStop) btnStop.disabled = true;
             try {
