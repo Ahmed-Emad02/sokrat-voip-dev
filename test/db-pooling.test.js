@@ -129,3 +129,13 @@ test('schema seeds are idempotent so a re-run cannot abort mid-batch', () => {
     assert.deepEqual(offenders, [], 'seeds must use INSERT IGNORE or ON DUPLICATE KEY UPDATE');
     assert.match(sql, /INSERT IGNORE INTO `sokrat_call_codes`/);
 });
+
+test('the schema import retries once instead of skipping later migrations', () => {
+    const script = read('scripts/safe-upgrade.sh');
+    assert.ok(script.includes('SOKRAT_SCHEMA_LOG=$(mktemp'), 'schema import must capture its log');
+    assert.ok(script.includes('retrying once so a transient lock cannot skip later migrations'),
+        'a failed import must retry');
+    assert.ok(script.includes('Applied database schema definitions on retry'),
+        'a successful retry must be reported');
+    assert.ok(script.includes('still failing after retry'), 'a second failure must stay visible');
+});

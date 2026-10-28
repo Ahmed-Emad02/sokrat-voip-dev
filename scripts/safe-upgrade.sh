@@ -109,12 +109,23 @@ fi
 # 3. Database Schema Migrations (Preserving PBX Data)
 echo "[3/7] Provisioning new database tables and schema migrations..."
 if [ -f "$INSTALL_DIR/backend/install_db.sql" ]; then
-    # mysql stops at the first SQL error in batch mode, so keep the failure
-    # visible instead of silently skipping later migrations (the inline CREATE
-    # TABLE block below remains the safety net for the critical tables).
-    mysql "${MYSQL_AUTH[@]}" asterisk < "$INSTALL_DIR/backend/install_db.sql" \
-        || echo "  WARNING: backend/install_db.sql reported an error; continuing with the inline migrations" >&2
-    echo "  Applied database schema definitions (CREATE TABLE IF NOT EXISTS)"
+    # mysql aborts a batch at the first error, so one transient failure (lock
+    # wait timeout while the PBX is writing, deadlock on an ALTER) would silently
+    # skip every later migration. Every statement in the file is idempotent, so a
+    # single retry is safe and fixes the common case.
+    SOKRAT_SCHEMA_LOG=$(mktemp 2>/dev/null || echo /tmp/sokrat-schema.log)
+    if mysql "${MYSQL_AUTH[@]}" asterisk < "$INSTALL_DIR/backend/install_db.sql" 2>"$SOKRAT_SCHEMA_LOG"; then
+        echo "  Applied database schema definitions (CREATE TABLE IF NOT EXISTS)"
+    else
+        echo "  WARNING: install_db.sql reported an error; retrying once so a transient lock cannot skip later migrations"
+        head -3 "$SOKRAT_SCHEMA_LOG" | sed 's/^/    /' >&2 || true
+        if mysql "${MYSQL_AUTH[@]}" asterisk < "$INSTALL_DIR/backend/install_db.sql" 2>>"$SOKRAT_SCHEMA_LOG"; then
+            echo "  Applied database schema definitions on retry"
+        else
+            echo "  WARNING: install_db.sql still failing after retry (details: $SOKRAT_SCHEMA_LOG)" >&2
+        fi
+    fi
+    rm -f "$SOKRAT_SCHEMA_LOG" 2>/dev/null || true
 fi
 
 ensure_db_column() {
