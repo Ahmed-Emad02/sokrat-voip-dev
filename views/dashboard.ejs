@@ -659,16 +659,19 @@ const isRtl = currentLang === 'ar';
                         </div>
                         <div>
                             <label for="dashDurationMin" class="block text-[11px] font-bold uppercase text-[var(--text-secondary)] mb-1 tracking-wider"><%= t.duration %></label>
-                            <div class="flex items-center w-full min-w-0 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2 py-1.5 focus-within:border-[var(--accent-color)] transition-colors h-[34px]">
-                                <input type="number" id="dashDurationMin" name="durationMin" min="0" step="any" placeholder="<%= t.durFrom %>" value="<%= filters.durationMin || '' %>" class="duration-range-input w-full min-w-0 flex-1 bg-transparent border-0 p-0 text-xs text-center text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none">
-                                <span class="text-zinc-500 text-xs shrink-0 select-none px-1">-</span>
-                                <input type="number" id="dashDurationMax" name="durationMax" min="0" step="any" placeholder="<%= t.durTo %>" value="<%= filters.durationMax || '' %>" class="duration-range-input w-full min-w-0 flex-1 bg-transparent border-0 p-0 text-xs text-center text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none">
-                                <div class="h-4 w-px bg-[var(--border-primary)] mx-1.5 shrink-0"></div>
-                                <select id="dashDurationUnit" name="durationUnit" aria-label="<%= isRtl ? 'وحدة المدة' : 'Duration unit' %>" class="no-enhance bg-transparent text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus:text-[var(--text-primary)] focus:outline-none cursor-pointer shrink-0 border-0 p-0 pe-1">
-                                    <option value="s" <%= (filters.durationUnit || 's') === 's' ? 'selected' : '' %> class="bg-[var(--bg-card)] text-[var(--text-primary)]"><%= t.unitSec %></option>
-                                    <option value="m" <%= filters.durationUnit === 'm' ? 'selected' : '' %> class="bg-[var(--bg-card)] text-[var(--text-primary)]"><%= t.unitMin %></option>
-                                    <option value="h" <%= filters.durationUnit === 'h' ? 'selected' : '' %> class="bg-[var(--bg-card)] text-[var(--text-primary)]"><%= t.unitHour %></option>
-                                </select>
+                            <div class="flex items-center gap-2 w-full min-w-0">
+                                <div class="flex items-center flex-1 min-w-0 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-2.5 focus-within:border-[var(--accent-color)] transition-colors h-[34px]" style="height: 34px;">
+                                    <input type="number" id="dashDurationMin" name="durationMin" min="0" step="any" placeholder="<%= t.durFrom %>" value="<%= filters.durationMin || '' %>" class="duration-range-input w-full min-w-0 flex-1 bg-transparent border-0 p-0 text-xs text-center text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none">
+                                    <span class="text-zinc-500 text-xs shrink-0 select-none px-1.5">-</span>
+                                    <input type="number" id="dashDurationMax" name="durationMax" min="0" step="any" placeholder="<%= t.durTo %>" value="<%= filters.durationMax || '' %>" class="duration-range-input w-full min-w-0 flex-1 bg-transparent border-0 p-0 text-xs text-center text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none">
+                                </div>
+                                <div class="w-[92px] shrink-0">
+                                    <select id="dashDurationUnit" name="durationUnit" data-dropdown-width="92" aria-label="<%= isRtl ? 'وحدة المدة' : 'Duration unit' %>" class="w-full">
+                                        <option value="s" <%= (filters.durationUnit || 's') === 's' ? 'selected' : '' %>><%= t.unitSec %></option>
+                                        <option value="m" <%= filters.durationUnit === 'm' ? 'selected' : '' %>><%= t.unitMin %></option>
+                                        <option value="h" <%= filters.durationUnit === 'h' ? 'selected' : '' %>><%= t.unitHour %></option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>

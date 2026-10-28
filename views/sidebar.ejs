@@ -6522,7 +6522,8 @@ function positionConfigDropdown(trigger, menu, preferredHeight = 320) {
     const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
     const rect = trigger.getBoundingClientRect();
     const availableWidth = Math.max(0, viewportWidth - (margin * 2));
-    const width = Math.min(Math.max(rect.width, 280), availableWidth);
+    const minWidth = (menu._select && menu._select.dataset.dropdownWidth) ? parseInt(menu._select.dataset.dropdownWidth, 10) : 280;
+    const width = Math.min(Math.max(rect.width, minWidth), availableWidth);
     const isRtlPage = document.documentElement.dir === 'rtl';
 
     let left = isRtlPage ? rect.right - width : rect.left;
