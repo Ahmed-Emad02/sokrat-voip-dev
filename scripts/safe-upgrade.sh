@@ -1006,6 +1006,14 @@ PYEOF
         echo "  Warning: missing $INSTALL_DIR/lib/feature-code-hand-off.js; feature codes may be shadowed"
     fi
 
+
+    # Tenant gateway readiness: shared push context, installation id and
+    # endpoint manifest. The dialplan is reloaded by the block below.
+    if [ -x "$INSTALL_DIR/scripts/sokrat-gateway-readiness.sh" ]; then
+        "$INSTALL_DIR/scripts/sokrat-gateway-readiness.sh" --apply --no-reload || echo "  Warning: gateway readiness reported problems; see the output above."
+    else
+        echo "  Warning: missing $INSTALL_DIR/scripts/sokrat-gateway-readiness.sh; gateway readiness was not refreshed."
+    fi
     asterisk -rx "dialplan reload" >/dev/null 2>&1 || true
 fi
 

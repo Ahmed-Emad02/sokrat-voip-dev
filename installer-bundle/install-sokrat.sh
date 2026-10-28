@@ -1363,6 +1363,20 @@ echo "  Sokrat push hooks updated and dialplan reloaded"
 echo "  Sokrat Push Gateway installed"
 
 # ──────────────────────────────────────────────
+# Step 6c — Tenant gateway readiness
+# ──────────────────────────────────────────────
+# The tenant gateway admits a device only when this PBX can be reached and can
+# wake it. This prepares the shared push context, a stable installation id and
+# a readiness manifest, and verifies the endpoints the gateway dials. It never
+# changes routing, extension registrations or desktop SIP behaviour.
+echo "[6c/14] Preparing tenant gateway readiness..."
+if [ -x "$INSTALL_DIR/scripts/sokrat-gateway-readiness.sh" ]; then
+    "$INSTALL_DIR/scripts/sokrat-gateway-readiness.sh" --apply || echo "  Warning: gateway readiness reported problems; see the output above."
+else
+    echo "  Warning: missing $INSTALL_DIR/scripts/sokrat-gateway-readiness.sh; gateway readiness was not prepared."
+fi
+
+# ──────────────────────────────────────────────
 # Step 7 — Configure Asterisk AMI
 # ──────────────────────────────────────────────
 echo "[7/14] Configuring Asterisk AMI..."
