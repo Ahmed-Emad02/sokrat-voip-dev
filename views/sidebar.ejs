@@ -6953,6 +6953,7 @@ window.addEventListener('resize', () => {
 });
 
 // ── Sokrat Gateway Tunnel Modal & Handlers ───────────────────────────────────
+let gwTunnelPollTimer = null;
 function openGatewayTunnelModal() {
     const menu = document.getElementById('settingsMenu');
     if (menu) {
@@ -6967,10 +6968,24 @@ function openGatewayTunnelModal() {
         modal.style.pointerEvents = 'auto';
     }
     loadGatewayTunnelStatus();
+    if (gwTunnelPollTimer) clearInterval(gwTunnelPollTimer);
+    gwTunnelPollTimer = setInterval(() => {
+        const m = document.getElementById('gatewayTunnelModal');
+        if (m && !m.classList.contains('invisible') && !m.classList.contains('hidden')) {
+            loadGatewayTunnelStatus();
+        } else if (gwTunnelPollTimer) {
+            clearInterval(gwTunnelPollTimer);
+            gwTunnelPollTimer = null;
+        }
+    }, 2500);
 }
 window.openGatewayTunnelModal = openGatewayTunnelModal;
 
 function closeGatewayTunnelModal() {
+    if (gwTunnelPollTimer) {
+        clearInterval(gwTunnelPollTimer);
+        gwTunnelPollTimer = null;
+    }
     const modal = document.getElementById('gatewayTunnelModal');
     if (modal) {
         modal.classList.add('opacity-0', 'invisible', 'hidden');

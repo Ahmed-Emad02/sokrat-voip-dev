@@ -6013,6 +6013,21 @@ app.post('/api/settings/gateway-tunnel', requireAuth, async (req, res) => {
             if (regRes.body.remoteApiPort) assignedApiPort = regRes.body.remoteApiPort;
             if (regRes.body.tunnelPort) assignedTunnelPort = regRes.body.tunnelPort;
             console.log(`[gateway-tunnel] Auto-registered on gateway! Assigned WS:${assignedWsPort}, API:${assignedApiPort}`);
+            if (regRes.body.hookToken && regRes.body.pbxId) {
+                try {
+                    fs.mkdirSync('/etc/sokrat', { recursive: true, mode: 0o755 });
+                    const hookCfg = {
+                        gatewayUrl: `http://${serverAddr}`,
+                        pbxId: regRes.body.pbxId,
+                        token: regRes.body.hookToken
+                    };
+                    fs.writeFileSync('/etc/sokrat/gateway-hook.json', JSON.stringify(hookCfg, null, 2), { mode: 0o640 });
+                    execSync('chown root:asterisk /etc/sokrat/gateway-hook.json 2>/dev/null || true');
+                    console.log('[gateway-tunnel] Auto-configured Asterisk push hook in /etc/sokrat/gateway-hook.json');
+                } catch (hookErr) {
+                    console.warn('[gateway-tunnel] Could not write gateway-hook.json:', hookErr.message);
+                }
+            }
         } else if (regRes && regRes.body && regRes.body.error === 'Invalid tunnel token') {
             return res.status(401).json({ success: false, error: 'Invalid tunnel token: Gateway rejected the authentication token' });
         }
