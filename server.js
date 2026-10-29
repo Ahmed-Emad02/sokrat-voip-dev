@@ -5953,11 +5953,78 @@ app.post('/api/settings/gateway-tunnel', requireAuth, async (req, res) => {
         if (m) effectiveToken = m[1];
     }
 
+    // Auto-register this PBX with the Gateway to allocate ports and approve automatically
+    let assignedWsPort = remoteWsPort;
+    let assignedApiPort = remoteApiPort;
+    let assignedTunnelPort = serverPort;
+
+    try {
+        const http = require('http');
+        const https = require('https');
+        const regData = JSON.stringify({
+            token: effectiveToken,
+            name: hostname,
+            hostname: hostname,
+            customer: hostname
+        });
+
+        const tryRegister = (targetPort, pathPrefix) => new Promise((resolve, reject) => {
+            const cleanHost = serverAddr.replace(/^https?:\/\//, '').split(':')[0];
+            const client = serverAddr.startsWith('https') ? https : http;
+            const r = client.request({
+                hostname: cleanHost,
+                port: targetPort,
+                path: pathPrefix,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(regData)
+                },
+                timeout: 5000
+            }, (res) => {
+                let data = '';
+                res.on('data', chunk => { data += chunk; });
+                res.on('end', () => {
+                    try {
+                        const json = JSON.parse(data);
+                        resolve({ status: res.statusCode, body: json });
+                    } catch (e) {
+                        reject(new Error('Invalid JSON: ' + data.slice(0, 100)));
+                    }
+                });
+            });
+            r.on('error', reject);
+            r.on('timeout', () => { r.destroy(); reject(new Error('Timeout')); });
+            r.write(regData);
+            r.end();
+        });
+
+        let regRes = null;
+        try {
+            regRes = await tryRegister(8002, '/control/api/tunnel/register');
+        } catch (_) {
+            try {
+                regRes = await tryRegister(8080, '/api/gateway/tunnel/register');
+            } catch (_) {}
+        }
+
+        if (regRes && regRes.body && regRes.body.success) {
+            if (regRes.body.remoteWsPort) assignedWsPort = regRes.body.remoteWsPort;
+            if (regRes.body.remoteApiPort) assignedApiPort = regRes.body.remoteApiPort;
+            if (regRes.body.tunnelPort) assignedTunnelPort = regRes.body.tunnelPort;
+            console.log(`[gateway-tunnel] Auto-registered on gateway! Assigned WS:${assignedWsPort}, API:${assignedApiPort}`);
+        } else if (regRes && regRes.body && regRes.body.error === 'Invalid tunnel token') {
+            return res.status(401).json({ success: false, error: 'Invalid tunnel token: Gateway rejected the authentication token' });
+        }
+    } catch (regErr) {
+        console.warn('[gateway-tunnel] Auto-registration notice:', regErr.message);
+    }
+
     if (!fs.existsSync('/etc/frp')) {
         fs.mkdirSync('/etc/frp', { recursive: true, mode: 0o700 });
     }
 
-    const toml = `serverAddr = "${serverAddr}"\nserverPort = ${serverPort}\nauth.method = "token"\nauth.token = "${effectiveToken}"\ntransport.tls.enable = true\n\n[[proxies]]\nname = "${hostname}-ws"\ntype = "tcp"\nlocalIP = "127.0.0.1"\nlocalPort = 8088\nremotePort = ${remoteWsPort}\n\n[[proxies]]\nname = "${hostname}-api"\ntype = "tcp"\nlocalIP = "127.0.0.1"\nlocalPort = 8080\nremotePort = ${remoteApiPort}\n`;
+    const toml = `serverAddr = "${serverAddr}"\nserverPort = ${assignedTunnelPort}\nauth.method = "token"\nauth.token = "${effectiveToken}"\ntransport.tls.enable = true\n\n[[proxies]]\nname = "${hostname}-ws"\ntype = "tcp"\nlocalIP = "127.0.0.1"\nlocalPort = 8088\nremotePort = ${assignedWsPort}\n\n[[proxies]]\nname = "${hostname}-api"\ntype = "tcp"\nlocalIP = "127.0.0.1"\nlocalPort = 8080\nremotePort = ${assignedApiPort}\n`;
     fs.writeFileSync(FRP_CONFIG_PATH, toml, { mode: 0o600 });
 
     if (!fs.existsSync(FRP_SERVICE_PATH)) {
