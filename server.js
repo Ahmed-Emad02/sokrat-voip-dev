@@ -5891,7 +5891,7 @@ function getFrpTunnelStatus() {
 }
 
 app.get('/api/settings/gateway-tunnel', requireAuth, (req, res) => {
-    if (!hasRootAccess(req)) {
+    if (!hasRootAccess(req) && !isSuperAdmin(req)) {
         return res.status(403).json({ success: false, error: 'Forbidden: Root access required' });
     }
     const status = getFrpTunnelStatus();
@@ -5899,7 +5899,7 @@ app.get('/api/settings/gateway-tunnel', requireAuth, (req, res) => {
 });
 
 app.post('/api/settings/gateway-tunnel', requireAuth, async (req, res) => {
-    if (!hasRootAccess(req)) {
+    if (!hasRootAccess(req) && !isSuperAdmin(req)) {
         return res.status(403).json({ success: false, error: 'Forbidden: Root access required' });
     }
     const fs = require('fs');

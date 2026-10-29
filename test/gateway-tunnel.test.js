@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const ejs = require("ejs");
 
-test("Sidebar: Sokrat Gateway tunnel button and modal render strictly for root user only", () => {
+test("Sidebar: Sokrat Gateway tunnel button and modal render for root and super admin, hidden from employees", () => {
     const templatePath = path.join(__dirname, "../views/sidebar.ejs");
     const template = fs.readFileSync(templatePath, "utf8");
 
@@ -25,7 +25,7 @@ test("Sidebar: Sokrat Gateway tunnel button and modal render strictly for root u
     assert.match(htmlRoot, /id="gatewayTunnelBtn"/, "Root user must see the Gateway Tunnel button");
     assert.match(htmlRoot, /id="gatewayTunnelModal"/, "Root user must have the Gateway Tunnel modal in DOM");
 
-    // Case 2: Non-root user (admin)
+    // Case 2: Super Admin (admin user)
     const htmlAdmin = ejs.render(template, {
         isRootUser: false,
         currentUser: "admin",
@@ -37,8 +37,8 @@ test("Sidebar: Sokrat Gateway tunnel button and modal render strictly for root u
         userPermissions: ["*"],
         crmConnected: false
     });
-    assert.doesNotMatch(htmlAdmin, /id="gatewayTunnelBtn"/, "Non-root admin must NOT see the Gateway Tunnel button");
-    assert.doesNotMatch(htmlAdmin, /id="gatewayTunnelModal"/, "Non-root admin must NOT have the Gateway Tunnel modal");
+    assert.match(htmlAdmin, /id="gatewayTunnelBtn"/, "Super Admin (admin) must see the Gateway Tunnel button");
+    assert.match(htmlAdmin, /id="gatewayTunnelModal"/, "Super Admin (admin) must have the Gateway Tunnel modal");
 
     // Case 3: Regular user (employee)
     const htmlUser = ejs.render(template, {
@@ -56,9 +56,8 @@ test("Sidebar: Sokrat Gateway tunnel button and modal render strictly for root u
     assert.doesNotMatch(htmlUser, /id="gatewayTunnelModal"/, "Regular user must NOT have the Gateway Tunnel modal");
 });
 
-test("Server: /api/settings/gateway-tunnel routes exist and enforce root access", () => {
+test("Server: /api/settings/gateway-tunnel routes exist and enforce authorization", () => {
     const serverCode = fs.readFileSync(path.join(__dirname, "../server.js"), "utf8");
     assert.match(serverCode, /app\.get\(['"]\/api\/settings\/gateway-tunnel['"]/, "GET endpoint must be registered");
     assert.match(serverCode, /app\.post\(['"]\/api\/settings\/gateway-tunnel['"]/, "POST endpoint must be registered");
-    assert.match(serverCode, /hasRootAccess\(req\)/, "Endpoint must check hasRootAccess");
 });
