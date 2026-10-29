@@ -33,7 +33,6 @@
 #include "asterisk/format_cache.h"
 
 #define RNNOISE_FRAME_SIZE 480 /* 10ms @ 48kHz */
-#define RNNOISE_WARMUP_FRAMES 300 /* 300 frames @ 10ms = 3000ms (3.0s) smooth warm-up crossfade */
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -55,7 +54,6 @@ struct rnnoise_direction_state {
 	float in_buf[RNNOISE_FRAME_SIZE];
 	float out_buf[RNNOISE_FRAME_SIZE];
 	int enabled;
-	int warmup_frames;       /*!< Warm-up frame counter (0 to RNNOISE_WARMUP_FRAMES) */
 	struct rnnoise_vad_state vad;
 };
 
@@ -72,10 +70,10 @@ static void init_vad_defaults(struct rnnoise_vad_state *vad)
 	vad->threshold = 0.20f;
 	vad->min_dbfs = -90.0f;
 	vad->hangover_frames = 25; /* 250ms at 10ms/frame */
-	vad->hangover_count = 25;  /* Start open so initial greeting is never cut off */
+	vad->hangover_count = 0;
 	vad->release_frames = 6;   /* 60ms at 10ms/frame */
 	vad->release_count = 0;
-	vad->current_gain = 1.0f;  /* Starts fully open (100% gain) for clean initial audio */
+	vad->current_gain = 0.0f;  /* Starts closed until speech is detected */
 }
 
 static void destroy_rnnoise_direction(struct rnnoise_direction_state *dir)
@@ -85,7 +83,6 @@ static void destroy_rnnoise_direction(struct rnnoise_direction_state *dir)
 		dir->st = NULL;
 	}
 	dir->enabled = 0;
-	dir->warmup_frames = 0;
 	init_vad_defaults(&dir->vad);
 }
 
@@ -176,16 +173,9 @@ static void process_rnnoise_chunk(struct rnnoise_direction_state *dir, short *pc
 	float *in_buf = dir->in_buf;
 	float *out_buf = dir->out_buf;
 	float vad_prob = 0.0f;
-	short raw_pcm[RNNOISE_FRAME_SIZE];
-	int copy_len;
 
 	if (!st || !pcm || samples <= 0) {
 		return;
-	}
-
-	copy_len = (samples <= RNNOISE_FRAME_SIZE) ? samples : RNNOISE_FRAME_SIZE;
-	if (dir->warmup_frames < RNNOISE_WARMUP_FRAMES) {
-		memcpy(raw_pcm, pcm, copy_len * sizeof(short));
 	}
 
 	if (rate == 48000 && samples == RNNOISE_FRAME_SIZE) {
@@ -288,24 +278,6 @@ static void process_rnnoise_chunk(struct rnnoise_direction_state *dir, short *pc
 
 	/* Apply VAD Noise Gating */
 	apply_vad_envelope(&dir->vad, pcm, samples, vad_prob);
-
-	/* During the initial warm-up frames (first ~3000ms / 3 seconds), the RNNoise GRU neural network
-	 * has zero past history and its filter gains fluctuate while estimating the acoustic
-	 * noise floor, producing a metallic/robotic swirling distortion.
-	 * We smoothly crossfade from 100% clean raw input audio at frame 0 to 100% RNNoise filtered
-	 * audio at frame RNNOISE_WARMUP_FRAMES (3000ms), giving the GRU time to adapt silently
-	 * in the background while the caller hears perfectly natural, undistorted speech. */
-	if (dir->warmup_frames < RNNOISE_WARMUP_FRAMES) {
-		float filter_weight = (float)dir->warmup_frames / (float)RNNOISE_WARMUP_FRAMES;
-		float raw_weight = 1.0f - filter_weight;
-		for (int i = 0; i < copy_len; i++) {
-			float blended = (raw_weight * (float)raw_pcm[i]) + (filter_weight * (float)pcm[i]);
-			if (blended > 32767.0f) blended = 32767.0f;
-			else if (blended < -32768.0f) blended = -32768.0f;
-			pcm[i] = (short)blended;
-		}
-		dir->warmup_frames++;
-	}
 }
 
 /*! \brief Asterisk Audiohook Callback for frame manipulation */
@@ -499,7 +471,6 @@ static int rnnoise_write(struct ast_channel *chan, const char *cmd, char *data, 
 	if (is_rx) {
 		if (turn_on && !info->rx.st) {
 			info->rx.st = rnnoise_create(NULL);
-			info->rx.warmup_frames = 0;
 		} else if (!turn_on && info->rx.st) {
 			destroy_rnnoise_direction(&info->rx);
 		}
@@ -512,7 +483,6 @@ static int rnnoise_write(struct ast_channel *chan, const char *cmd, char *data, 
 	if (is_tx) {
 		if (turn_on && !info->tx.st) {
 			info->tx.st = rnnoise_create(NULL);
-			info->tx.warmup_frames = 0;
 		} else if (!turn_on && info->tx.st) {
 			destroy_rnnoise_direction(&info->tx);
 		}
