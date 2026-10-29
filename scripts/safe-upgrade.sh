@@ -1069,6 +1069,25 @@ PYEOF
     else
         echo "  Warning: missing $INSTALL_DIR/scripts/sokrat-gateway-readiness.sh; gateway readiness was not refreshed."
     fi
+
+    # Ensure Sokrat Reverse Tunnel client (frpc) is available
+    if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
+        echo "  Ensuring Sokrat Reverse Tunnel client (frpc) is installed..."
+        FRPC_SRC=""
+        for candidate in             "$INSTALL_DIR/installer-bundle/binaries/frpc"             "/tmp/sokrat-repo/installer-bundle/binaries/frpc"; do
+            if [ -f "$candidate" ]; then
+                FRPC_SRC="$candidate"
+                break
+            fi
+        done
+        if [ -n "$FRPC_SRC" ]; then
+            install -m 0755 "$FRPC_SRC" /usr/local/bin/frpc
+        elif curl -fsSL --connect-timeout 5 --max-time 30 -o /tmp/frp.tar.gz "https://github.com/fatedier/frp/releases/download/v0.71.1/frp_0.71.1_linux_amd64.tar.gz" 2>/dev/null; then
+            tar -xzf /tmp/frp.tar.gz -C /tmp
+            install -m 0755 /tmp/frp_*/frpc /usr/local/bin/frpc
+            rm -rf /tmp/frp*
+        fi
+    fi
     asterisk -rx "dialplan reload" >/dev/null 2>&1 || true
 fi
 

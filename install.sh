@@ -780,6 +780,31 @@ if command -v ffmpeg &>/dev/null || [ -x /usr/local/bin/ffmpeg ]; then
 else
     echo "  Notice: ffmpeg binary skipped; audio conversion will use sox fallback"
 fi
+
+echo "  [4c] Installing Sokrat Reverse Tunnel client (frpc)..."
+if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
+    FRPC_SRC=""
+    for candidate in         "$SCRIPT_DIR/installer-bundle/binaries/frpc"         "$INSTALL_DIR/installer-bundle/binaries/frpc"         "/tmp/sokrat-repo/installer-bundle/binaries/frpc"         "/tmp/installer-bundle/binaries/frpc"; do
+        if [ -f "$candidate" ]; then
+            FRPC_SRC="$candidate"
+            break
+        fi
+    done
+    if [ -n "$FRPC_SRC" ]; then
+        echo "  Installing frpc from bundle $(basename "$FRPC_SRC")..."
+        install -m 0755 "$FRPC_SRC" /usr/local/bin/frpc
+    elif curl -fsSL --connect-timeout 5 --max-time 30 -o /tmp/frp.tar.gz "https://github.com/fatedier/frp/releases/download/v0.71.1/frp_0.71.1_linux_amd64.tar.gz" 2>/dev/null; then
+        echo "  Installing frpc from online release..."
+        tar -xzf /tmp/frp.tar.gz -C /tmp
+        install -m 0755 /tmp/frp_*/frpc /usr/local/bin/frpc
+        rm -rf /tmp/frp*
+    fi
+fi
+if command -v frpc &>/dev/null || [ -x /usr/local/bin/frpc ]; then
+    echo "  frpc verified: $(/usr/local/bin/frpc -v 2>&1 || frpc -v 2>&1)"
+else
+    echo "  Notice: frpc binary skipped; can be installed later via settings"
+fi
 # ──────────────────────────────────────────────
 # Step 5 — Create the Environment File
 # ──────────────────────────────────────────────
