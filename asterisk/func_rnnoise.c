@@ -33,7 +33,7 @@
 #include "asterisk/format_cache.h"
 
 #define RNNOISE_FRAME_SIZE 480 /* 10ms @ 48kHz */
-#define RNNOISE_WARMUP_FRAMES 100 /* 100 frames @ 10ms = 1000ms smooth warm-up crossfade */
+#define RNNOISE_WARMUP_FRAMES 300 /* 300 frames @ 10ms = 3000ms (3.0s) smooth warm-up crossfade */
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -289,11 +289,11 @@ static void process_rnnoise_chunk(struct rnnoise_direction_state *dir, short *pc
 	/* Apply VAD Noise Gating */
 	apply_vad_envelope(&dir->vad, pcm, samples, vad_prob);
 
-	/* During the initial warm-up frames (first ~1000ms), the RNNoise GRU neural network
+	/* During the initial warm-up frames (first ~3000ms / 3 seconds), the RNNoise GRU neural network
 	 * has zero past history and its filter gains fluctuate while estimating the acoustic
 	 * noise floor, producing a metallic/robotic swirling distortion.
 	 * We smoothly crossfade from 100% clean raw input audio at frame 0 to 100% RNNoise filtered
-	 * audio at frame RNNOISE_WARMUP_FRAMES (1000ms), giving the GRU time to adapt silently
+	 * audio at frame RNNOISE_WARMUP_FRAMES (3000ms), giving the GRU time to adapt silently
 	 * in the background while the caller hears perfectly natural, undistorted speech. */
 	if (dir->warmup_frames < RNNOISE_WARMUP_FRAMES) {
 		float filter_weight = (float)dir->warmup_frames / (float)RNNOISE_WARMUP_FRAMES;
