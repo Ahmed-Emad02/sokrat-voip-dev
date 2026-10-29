@@ -2383,12 +2383,26 @@ if [ -f /usr/lib64/librnnoise.so ]; then
 else
     echo "  librnnoise optional; proceeding without hardware noise cancellation"
 fi
-if [ ! -f /usr/lib64/asterisk/modules/func_rnnoise.so ] && [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise.so ] && [ -f /usr/include/rnnoise.h ]; then
-    gcc -shared -fPIC -O3 -mavx2 -mfma -I/usr/include -o /usr/lib64/asterisk/modules/func_rnnoise.so \
+if [ -f "$SCRIPT_DIR/binaries/func_rnnoise.so" ]; then
+    mkdir -p /usr/lib64/asterisk/modules
+    if [ ! -f /usr/lib64/asterisk/modules/func_rnnoise.so ] || ! cmp -s "$SCRIPT_DIR/binaries/func_rnnoise.so" /usr/lib64/asterisk/modules/func_rnnoise.so; then
+        cp "$SCRIPT_DIR/binaries/func_rnnoise.so" /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
+        chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
+        mv -f /usr/lib64/asterisk/modules/func_rnnoise.so.tmp /usr/lib64/asterisk/modules/func_rnnoise.so
+        echo "  func_rnnoise.so installed from bundle"
+    else
+        echo "  func_rnnoise.so already matches bundle binary"
+    fi
+elif [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise.so ] && [ -f /usr/include/rnnoise.h ]; then
+    gcc -shared -fPIC -O3 -I/usr/include -o /usr/lib64/asterisk/modules/func_rnnoise.so.tmp \
         "$INSTALL_DIR/asterisk/func_rnnoise.c" -lrnnoise -lm -lpthread 2>/dev/null || true
-    chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so 2>/dev/null || true
-    asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
-    echo "  func_rnnoise.so compiled and loaded into Asterisk"
+    if [ -f /usr/lib64/asterisk/modules/func_rnnoise.so.tmp ]; then
+        strip /usr/lib64/asterisk/modules/func_rnnoise.so.tmp 2>/dev/null || true
+        chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
+        mv -f /usr/lib64/asterisk/modules/func_rnnoise.so.tmp /usr/lib64/asterisk/modules/func_rnnoise.so
+        asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
+        echo "  func_rnnoise.so compiled and loaded into Asterisk"
+    fi
 fi
 # 10c — Compile and Install chan_dongle (with Sokrat decline detection, Call Waiting rejection, CRING ring detection, and SMS ME storage patches)
 echo "  [10c] Installing chan_dongle..."

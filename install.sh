@@ -2449,9 +2449,11 @@ else
 fi
 
 if [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ]; then
-    gcc -shared -fPIC -O3 -mavx2 -mfma -I/usr/include -o /usr/lib64/asterisk/modules/func_rnnoise.so \
+    gcc -shared -fPIC -O3 -I/usr/include -o /usr/lib64/asterisk/modules/func_rnnoise.so.tmp \
         "$INSTALL_DIR/asterisk/func_rnnoise.c" -lrnnoise -lm -lpthread
-    chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so
+    strip /usr/lib64/asterisk/modules/func_rnnoise.so.tmp 2>/dev/null || true
+    chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
+    mv -f /usr/lib64/asterisk/modules/func_rnnoise.so.tmp /usr/lib64/asterisk/modules/func_rnnoise.so
     asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
     echo "  func_rnnoise.so compiled and loaded into Asterisk"
 fi

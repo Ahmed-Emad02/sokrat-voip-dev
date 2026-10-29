@@ -506,6 +506,27 @@ elif [ -d "$SRC_CHAN_DONGLE" ] && [ -f "$INSTALL_DIR/asterisk/chan_dongle.patch"
     fi
 fi
 
+if [ -f "$INSTALL_DIR/installer-bundle/binaries/func_rnnoise.so" ]; then
+    mkdir -p "$MODULES_DIR"
+    if [ ! -f "$MODULES_DIR/func_rnnoise.so" ] || ! cmp -s "$INSTALL_DIR/installer-bundle/binaries/func_rnnoise.so" "$MODULES_DIR/func_rnnoise.so"; then
+        cp "$INSTALL_DIR/installer-bundle/binaries/func_rnnoise.so" "$MODULES_DIR/func_rnnoise.so.tmp"
+        chmod 755 "$MODULES_DIR/func_rnnoise.so.tmp"
+        mv -f "$MODULES_DIR/func_rnnoise.so.tmp" "$MODULES_DIR/func_rnnoise.so"
+        echo "  Optimized func_rnnoise.so installed from bundle binary into $MODULES_DIR (atomic update)"
+    else
+        echo "  Optimized func_rnnoise.so already matches bundle binary in $MODULES_DIR (preserved live inode)"
+    fi
+elif [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise.so ] && [ -f /usr/include/rnnoise.h ]; then
+    gcc -shared -fPIC -O3 -I/usr/include -o "$MODULES_DIR/func_rnnoise.so.tmp" \
+        "$INSTALL_DIR/asterisk/func_rnnoise.c" -lrnnoise -lm -lpthread 2>/dev/null || true
+    if [ -f "$MODULES_DIR/func_rnnoise.so.tmp" ]; then
+        strip "$MODULES_DIR/func_rnnoise.so.tmp" 2>/dev/null || true
+        chmod 755 "$MODULES_DIR/func_rnnoise.so.tmp"
+        mv -f "$MODULES_DIR/func_rnnoise.so.tmp" "$MODULES_DIR/func_rnnoise.so"
+        echo "  Compiled func_rnnoise.so built and installed into $MODULES_DIR (atomic update)"
+    fi
+fi
+
 # 5. Sanitize Dialplans & Protect Call Transfers
 # 5.0 Ensure Jitter Buffer is disabled by default unless explicitly activated
     # Disable legacy hardcoded JITTERBUFFER calls in extensions_custom.conf
