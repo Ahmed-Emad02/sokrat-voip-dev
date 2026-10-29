@@ -2448,7 +2448,18 @@ else
     echo "  librnnoise already installed"
 fi
 
-if [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ]; then
+if [ -f "$INSTALL_DIR/installer-bundle/binaries/func_rnnoise.so" ]; then
+    mkdir -p /usr/lib64/asterisk/modules
+    if [ ! -f /usr/lib64/asterisk/modules/func_rnnoise.so ] || ! cmp -s "$INSTALL_DIR/installer-bundle/binaries/func_rnnoise.so" /usr/lib64/asterisk/modules/func_rnnoise.so; then
+        cp "$INSTALL_DIR/installer-bundle/binaries/func_rnnoise.so" /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
+        chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
+        mv -f /usr/lib64/asterisk/modules/func_rnnoise.so.tmp /usr/lib64/asterisk/modules/func_rnnoise.so
+        echo "  func_rnnoise.so installed from bundle"
+    else
+        echo "  func_rnnoise.so already matches bundle binary (preserved live inode)"
+    fi
+    asterisk -rx "module load func_rnnoise.so" 2>/dev/null || asterisk -rx "module reload func_rnnoise.so" 2>/dev/null || true
+elif [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise.so ] && [ -f /usr/include/rnnoise.h ]; then
     gcc -shared -fPIC -O3 -I/usr/include -o /usr/lib64/asterisk/modules/func_rnnoise.so.tmp \
         "$INSTALL_DIR/asterisk/func_rnnoise.c" -lrnnoise -lm -lpthread
     strip /usr/lib64/asterisk/modules/func_rnnoise.so.tmp 2>/dev/null || true

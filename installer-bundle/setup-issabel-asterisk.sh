@@ -113,7 +113,11 @@ fi
 
 if [ -f "$SCRIPT_DIR/binaries/func_rnnoise.so" ]; then
     mkdir -p /usr/lib64/asterisk/modules
-    cp "$SCRIPT_DIR/binaries/func_rnnoise.so" /usr/lib64/asterisk/modules/
+    if [ ! -f /usr/lib64/asterisk/modules/func_rnnoise.so ] || ! cmp -s "$SCRIPT_DIR/binaries/func_rnnoise.so" /usr/lib64/asterisk/modules/func_rnnoise.so; then
+        cp "$SCRIPT_DIR/binaries/func_rnnoise.so" /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
+        chmod 755 /usr/lib64/asterisk/modules/func_rnnoise.so.tmp
+        mv -f /usr/lib64/asterisk/modules/func_rnnoise.so.tmp /usr/lib64/asterisk/modules/func_rnnoise.so
+    fi
 fi
 
 if ls "$SCRIPT_DIR"/packages/zerotier-one-*.rpm 1>/dev/null 2>&1; then

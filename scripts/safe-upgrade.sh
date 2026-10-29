@@ -1218,8 +1218,10 @@ if command -v systemctl &>/dev/null && systemctl is-active asterisk >/dev/null 2
     sleep 2
 elif command -v asterisk &>/dev/null && pgrep -x asterisk >/dev/null 2>&1; then
     asterisk -rx "module unload chan_dongle.so" >/dev/null 2>&1 || true
+    asterisk -rx "module unload func_rnnoise.so" >/dev/null 2>&1 || true
     sleep 1
     asterisk -rx "module load chan_dongle.so" >/dev/null 2>&1 || true
+    asterisk -rx "module load func_rnnoise.so" >/dev/null 2>&1 || true
 fi
 
 # Decommission obsolete local whisper service and files
