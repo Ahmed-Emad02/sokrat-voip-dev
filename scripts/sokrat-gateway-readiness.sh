@@ -6,19 +6,20 @@
 # can be reached and can wake a device. This script prepares the PBX side of
 # that contract on a fresh install and on every upgrade:
 #
-#   1. exactly one shared push context  [sub-sokrat-push-send]
-#      in /etc/asterisk/extensions_sokrat.conf, carrying the variables the
+#   1. complete push wake dialplan in /etc/asterisk/extensions_sokrat.conf,
+#      including macro-dial-one hook, sokrat-wake-dial, group wake, and the
+#      shared push context [sub-sokrat-push-send] carrying the variables the
 #      gateway's tenant hook expects (TARGET_EXT, SOKRAT_LINKEDID,
-#      SOKRAT_CALL_ID, SOKRAT_CALLER_NUM, SOKRAT_CALLER_NAME). The gateway
-#      appends its own tenant hook line to that context; the legacy local
-#      push dispatch stays, so both paths coexist.
-#   2. a stable installation id and a readiness manifest in /etc/sokrat,
+#      SOKRAT_CALL_ID, SOKRAT_CALLER_NUM, SOKRAT_CALLER_NAME).
+#   2. automatic wiring of #include extensions_sokrat.conf into the override
+#      dialplan so priority 1 of macro-dial-one executes cleanly.
+#   3. a stable installation id and a readiness manifest in /etc/sokrat,
 #      so the dashboard/operator can verify what the gateway will see.
-#   3. a check of the endpoints the gateway dials: the Asterisk SIP
+#   4. a check of the endpoints the gateway dials: the Asterisk SIP
 #      WebSocket (8088 plain / 8089 TLS) and the Sokrat API (8080).
 #
-# It never touches [from-internal-custom], trunk macros, extension
-# registrations or any desktop SIP behaviour, and it never restarts Asterisk.
+# It never touches trunk macros, extension registrations or any desktop SIP
+# behaviour, and it never restarts Asterisk.
 #
 # Usage: sokrat-gateway-readiness.sh [--check|--apply] [--no-reload]
 #   --check     verify only, change nothing, exit 1 when not ready
@@ -95,17 +96,21 @@ ws_tls="no"; listening_port "$SIP_WS_TLS_PORT" && ws_tls="yes"
 api="no"; listening_port "$API_PORT" && api="yes"
 
 if [ -z "$ts_ip" ]; then
-    problem "No Tailscale IPv4 (100.64.0.0/10) found. The gateway dashboard needs one address for this PBX."
+    problem "No Tailscale IPv4 (100.64.0.0/10) found. The gateway dials the PBX over Tailscale."
 fi
+
 if [ "$ws_plain" != "yes" ] && [ "$ws_tls" != "yes" ]; then
-    problem "No Asterisk SIP WebSocket listener on :$SIP_WS_PLAIN_PORT or :$SIP_WS_TLS_PORT."
+    problem "Asterisk SIP WebSocket is not listening on $SIP_WS_PLAIN_PORT (plain) or $SIP_WS_TLS_PORT (TLS)."
 fi
+
 if [ "$api" != "yes" ]; then
-    problem "No Sokrat API listener on :$API_PORT."
+    problem "Sokrat API is not listening on port $API_PORT."
 fi
+
 if [ "$(push_context_count)" -eq 0 ] && [ "$MODE" = "check" ]; then
     problem "Missing [sub-sokrat-push-send] context in $DIALPLAN_FILE."
 fi
+
 if [ "$(push_context_count)" -gt 1 ]; then
     problem "More than one [sub-sokrat-push-send] context in $DIALPLAN_FILE."
 fi
@@ -137,30 +142,83 @@ changed=0
 if [ "$(push_context_count)" -eq 0 ]; then
     echo "  Creating the shared tenant push context in $DIALPLAN_FILE..."
     touch "$DIALPLAN_FILE"
-    if [ ! -s "$DIALPLAN_FILE" ]; then
-        printf '%s\n' "; Sokrat VOIP - shared tenant push context" > "$DIALPLAN_FILE"
-    else
-        printf '\n' >> "$DIALPLAN_FILE"
-    fi
-    cat >> "$DIALPLAN_FILE" <<EOF
-$MARKER
+    cat >> "$DIALPLAN_FILE" <<'EOF'
+; Sokrat VOIP - mobile push wake dialplan
+; sokrat-gateway-readiness v1
+[macro-dial-one]
+exten => s,1,Gosub(sokrat-wake-dial,s,1(${ARG3}))
+
+[sokrat-wake-dial]
+exten => s,1,Set(DEXTEN=${ARG1})
+ same => n,GotoIf($["${ARG1}"=""]?done)
+ same => n,Gosub(sub-sokrat-push-hook,s,1(${ARG1}))
+ same => n(done),Return()
+
+[macro-dial]
+exten => s,1,Gosub(sokrat-wake-group,s,1(${ARG3}))
+
+[sokrat-wake-group]
+exten => s,1,Set(SOKRAT_GROUP=${ARG1})
+ same => n,GotoIf($["${SOKRAT_GROUP}"=""]?done)
+ same => n,Set(SOKRAT_IDX=1)
+ same => n(loop),Set(SOKRAT_MEMBER=${CUT(SOKRAT_GROUP,-,${SOKRAT_IDX})})
+ same => n,GotoIf($["${SOKRAT_MEMBER}"=""]?done)
+ same => n,Gosub(sub-sokrat-push-send,s,1(${SOKRAT_MEMBER}))
+ same => n,GotoIf($["${DB(DEVICE/${SOKRAT_MEMBER}/tech)}"!="pjsip"]?next)
+ same => n,GotoIf($["${SOKRAT_GROUP_WAITED}"="1"]?next)
+ same => n,GotoIf($["${PJSIP_DIAL_CONTACTS(${SOKRAT_MEMBER})}"!=""]?next)
+ same => n,Set(SOKRAT_GROUP_WAITED=1)
+ same => n,Set(SOKRAT_WAIT_COUNT=0)
+ same => n(wait1),GotoIf($["${PJSIP_DIAL_CONTACTS(${SOKRAT_MEMBER})}"!=""]?next)
+ same => n,Wait(0.2)
+ same => n,Set(SOKRAT_WAIT_COUNT=$[${SOKRAT_WAIT_COUNT}+1])
+ same => n,GotoIf($[${SOKRAT_WAIT_COUNT}<25]?wait1)
+ same => n(next),Set(SOKRAT_IDX=$[${SOKRAT_IDX}+1])
+ same => n,Goto(loop)
+ same => n(done),Return()
+
+[sub-sokrat-push-hook]
+exten => s,1,NoOp(=== Sokrat mobile push wake-up hook ===)
+same => n,Set(TARGET_EXT=${ARG1})
+same => n,GotoIf($["${TARGET_EXT}"=""]?done)
+same => n,GotoIf($["${SOKRAT_PUSH_SENT}"="1"]?done)
+same => n,Set(__SOKRAT_PUSH_SENT=1)
+same => n,Gosub(sub-sokrat-push-send,s,1(${TARGET_EXT}))
+same => n,GotoIf($["${DB(DEVICE/${TARGET_EXT}/tech)}"!="pjsip"]?done)
+same => n,Ringing()
+same => n,Set(SOKRAT_WAIT_COUNT=0)
+same => n(wait_contact),Set(SOKRAT_CONTACTS=${PJSIP_DIAL_CONTACTS(${TARGET_EXT})})
+same => n,GotoIf($["${SOKRAT_CONTACTS}"!=""]?ready)
+same => n,Wait(0.2)
+same => n,Set(SOKRAT_WAIT_COUNT=$[${SOKRAT_WAIT_COUNT}+1])
+same => n,GotoIf($[${SOKRAT_WAIT_COUNT}<25]?wait_contact)
+same => n(ready),NoOp([callId=${SOKRAT_CALL_ID}] contact wait iterations=${SOKRAT_WAIT_COUNT} contacts=${SOKRAT_CONTACTS})
+same => n(done),Return()
+
 [sub-sokrat-push-send]
-exten => s,1,Set(TARGET_EXT=\${ARG1})
- same => n,GotoIf(\$["\${TARGET_EXT}"=""]?done)
- same => n,Set(SOKRAT_LINKEDID=\${FILTER(0-9A-Za-z.-,\${CHANNEL(linkedid)})})
- same => n,Set(__SOKRAT_CALL_ID=\${FILTER(0-9a-f-,\${SHELL(/usr/bin/uuidgen --sha1 --namespace b32a7f28-4bcc-5a56-a51f-2ad6f65f746b --name \${SOKRAT_LINKEDID})})})
- same => n,Set(SOKRAT_CALLER_NUM=\${IF(\$["\${CALLERID(num)}" = ""]?0:\${CALLERID(num)})})
- same => n,Set(SOKRAT_CALLER_NAME=\${IF(\$["\${CALLERID(name)}" = ""]?\${SOKRAT_CALLER_NUM}:\${CALLERID(name)})})
- same => n,Set(SOKRAT_ENC_CALLER=\${URIENCODE(\${SOKRAT_CALLER_NUM})})
- same => n,Set(SOKRAT_ENC_NAME=\${URIENCODE(\${SOKRAT_CALLER_NAME})})
- same => n,NoOp([callId=\${SOKRAT_CALL_ID}] sending wake callee=\${TARGET_EXT} linkedid=\${SOKRAT_LINKEDID})
- same => n,System(nohup /usr/bin/curl -s --max-time 2 "$PUSH_GATEWAY_URL/api/push/incoming-call?callee=\${TARGET_EXT}&caller=\${SOKRAT_ENC_CALLER}&callerName=\${SOKRAT_ENC_NAME}&callId=\${SOKRAT_CALL_ID}" >/dev/null 2>&1 &)
+exten => s,1,Set(TARGET_EXT=${ARG1})
+ same => n,GotoIf($["${TARGET_EXT}"=""]?done)
+ same => n,Set(SOKRAT_LINKEDID=${FILTER(0-9A-Za-z.-,${CHANNEL(linkedid)})})
+ same => n,Set(__SOKRAT_CALL_ID=${FILTER(0-9a-f-,${SHELL(/usr/bin/uuidgen --sha1 --namespace b32a7f28-4bcc-5a56-a51f-2ad6f65f746b --name ${SOKRAT_LINKEDID})})})
+ same => n,Set(HASH(__SIPHEADERS,X-Sokrat-Call-ID)=${SOKRAT_CALL_ID})
+ same => n,Set(SOKRAT_CALLER_NUM=${IF($["${CALLERID(num)}" = ""]?0:${CALLERID(num)})})
+ same => n,Set(SOKRAT_CALLER_NAME=${IF($["${CALLERID(name)}" = ""]?${SOKRAT_CALLER_NUM}:${CALLERID(name)})})
+ same => n,Set(SOKRAT_ENC_CALLER=${URIENCODE(${SOKRAT_CALLER_NUM})})
+ same => n,Set(SOKRAT_ENC_NAME=${URIENCODE(${SOKRAT_CALLER_NAME})})
+ same => n,NoOp([callId=${SOKRAT_CALL_ID}] sending wake callee=${TARGET_EXT} linkedid=${SOKRAT_LINKEDID})
+ same => n,System(nohup /usr/bin/curl -s --max-time 2 "$PUSH_GATEWAY_URL/api/push/incoming-call?callee=${TARGET_EXT}&caller=${SOKRAT_ENC_CALLER}&callerName=${SOKRAT_ENC_NAME}&callId=${SOKRAT_CALL_ID}" >/dev/null 2>&1 &)
+ same => n,System(nohup env SOKRAT_HOOK_CONFIG="/etc/sokrat/gateway-hook.json" /usr/bin/python3 "/usr/local/bin/sokrat-tenant-push-hook.py" "${URIENCODE(${TARGET_EXT})}" "${URIENCODE(${SOKRAT_CALLER_NUM})}" "${URIENCODE(${SOKRAT_CALLER_NAME})}" "${SOKRAT_CALL_ID}" >/dev/null 2>&1 &)
  same => n(done),Return()
 EOF
     chown asterisk:asterisk "$DIALPLAN_FILE" 2>/dev/null || true
     chmod 0640 "$DIALPLAN_FILE" 2>/dev/null || true
+    for ov in "/etc/asterisk/extensions_override_issabelpbx.conf" "/etc/asterisk/extensions_override_freepbx.conf"; do
+        if [ -f "$ov" ] && ! grep -q "extensions_sokrat.conf" "$ov" 2>/dev/null; then
+            echo "#include extensions_sokrat.conf" >> "$ov"
+        fi
+    done
     changed=1
-    echo "  Shared tenant push context created (legacy local push dispatch preserved)."
+    echo "  Shared tenant push context and wake hooks created."
 fi
 
 # Readiness manifest: no secrets, only what the gateway/operator needs to see.

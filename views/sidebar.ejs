@@ -18,7 +18,7 @@ const sidebarWords = {
         vmGreetingResetConfirm: "Reset to default Asterisk voicemail prompts?",
         vmGreetingChangeMode: "Changing mode will save a new greeting. Continue?",
         vmSelectAll: "Select All",
-        dashLink: "Overview", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Auto-Dial", contactsLink: "Contacts", usersLink: "Users", apiKeysLink: "API Keys", storageLink: "SysMon", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Server SMTP", alertsSettings: "System Alerts", alertsModalTitle: "System Alerts & Monitoring", cpanelLink: "Webmin", userLabel: "User", versionLabel: "Version", issabelGuiLink: "Issabel",
+        dashLink: "Overview", cdrLink: "Call History", vmLink: "Voicemails", empLink: "Employee Metrics", extLink: "Employees", opLink: "Live Panel", dongleLink: "GSM Dongles", softphoneLink: "Sokrat VOICE", configLink: "Configuration", dialerLink: "Auto-Dial", contactsLink: "Contacts", usersLink: "Users", apiKeysLink: "API Keys", storageLink: "SysMon", liveClock: "System Clock", themeLabel: "Theme", langLabel: "Language", settingsTitle: "Settings", rowsLabel: "Rows per page", addRec: "Add a Recording", smtpSettings: "Server SMTP", alertsSettings: "System Alerts", alertsModalTitle: "System Alerts & Monitoring", cpanelLink: "Webmin", userLabel: "User", versionLabel: "Version", issabelGuiLink: "Issabel", gatewayTunnelTitle: "Sokrat Gateway", gatewayTunnelModalTitle: "Sokrat Gateway Connection",
         logoutLabel: "Sign Out", updateSokrat: "Update Sokrat", restoreBackup: "Restore Backup", gitHistory: "Git History", aiSttSettings: "STT", aiSttModalTitle: "Speech-to-Text Engine", netInfo: "Networks", settingsSubtitle: "Preferences and system controls", preferencesLabel: "Preferences", systemLabel: "System", coreToolsLabel: "Core Tools", systemAdminLabel: "Administration & Tools", appearanceLabel: "Appearance", darkModeLabel: "Dark mode", lightModeLabel: "Light mode",
         recTitle: "Add a Recording", recName: "Recording Name", recPlaceholder: "e.g. welcome_greeting", recFile: "Audio File", recNote: "Accepted: MP3, M4A, WAV, OGG, FLAC, AAC, MPEG (max 50MB)", recUploadStatus: "Uploading...", recCancel: "Cancel", recUpload: "Upload", recComplete: "Complete!", recFailed: "Failed", recSelectFileErr: "Please select a file", recNameErr: "Please enter a recording name",
         timeSettings: "Time Settings", timeModalTitle: "Time & Timezone", currentTime: "Current Time", timezone: "Timezone", searchTimezone: "Search timezone...", ntpSync: "NTP Synchronization", setManually: "Set Manually", dateLabel: "Date", timeLabel: "Time", saveSettings: "Save Settings", saving: "Saving...", savedSuccess: "Time settings saved successfully", saveFailed: "Failed to save time settings", timezoneChanged: "Timezone changed", ntpToggled: "NTP toggled", timeSetManually: "Time set manually", loadingTimezone: "Loading...",
@@ -3643,6 +3643,12 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                         <span class="settings-action-label"><%= sbT.netInfo || (currentLang === 'ar' ? 'بطاقات الشبكة' : 'Network') %></span>
                         <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
                     </button>
+                    <button type="button" onclick="openGatewayTunnelModal()" id="gatewayTunnelBtn" class="settings-action cursor-pointer">
+                        <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v8"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h2"/><path d="M20 18h2"/><path d="m19.07 10.93-1.41 1.41"/><path d="M22 22H2"/><path d="m8 6 4-4 4 4"/><path d="M16 18a4 4 0 0 0-8 0"/></svg></span>
+                        <span class="settings-action-label"><%= sbT.gatewayTunnelTitle || (currentLang === 'ar' ? 'بوابة سوكرات (Gateway)' : 'Sokrat Gateway') %></span>
+                        <span id="gatewayTunnelBadge" class="ms-auto px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-gray-500/15 text-gray-400 border border-gray-500/30">...</span>
+                        <svg class="settings-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
                         <button type="button" onclick="openOverlayVpnModal()" id="overlayVpnBtn" class="settings-action cursor-pointer">
                         <span class="settings-action-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a15 15 0 010 18 15 15 0 010-18"></path></svg></span>
                         <span class="settings-action-label"><%= sbT.overlayVpn || 'VPN' %></span>
@@ -3828,6 +3834,99 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
         </form>
     </div>
 </div>
+
+<% if (isRoot || isSuper) { %>
+<!-- Sokrat Gateway Tunnel Modal -->
+<div id="gatewayTunnelModal" onclick="if(event.target===this) closeGatewayTunnelModal()" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 invisible transition-all duration-200 p-4" style="pointer-events:none">
+    <div class="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl w-full max-w-lg mx-4 overflow-hidden shadow-2xl">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-primary)]">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-[var(--accent-color)]/10 text-[var(--accent-color)] flex items-center justify-center">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v8"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h2"/><path d="M20 18h2"/><path d="m19.07 10.93-1.41 1.41"/><path d="M22 22H2"/><path d="m8 6 4-4 4 4"/><path d="M16 18a4 4 0 0 0-8 0"/></svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-black uppercase tracking-wider text-[var(--text-primary)]"><%= sbT.gatewayTunnelModalTitle || (isRtl ? 'ربط بوابة سوكرات' : 'Sokrat Gateway Connection') %></h3>
+                    <p class="text-[11px] text-[var(--text-muted)]"><%= isRtl ? 'نفق TLS عكسي آمن لبوابة سوكرات دون الحاجة لـ IP عام أو فتح منافذ' : 'Secure Reverse TLS tunnel to Sokrat Gateway without public IP or port forwarding' %></p>
+                </div>
+            </div>
+            <button type="button" onclick="closeGatewayTunnelModal()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition p-1 cursor-pointer">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+
+        <form id="gatewayTunnelForm" onsubmit="return saveGatewayTunnel(event)" class="p-5 space-y-4">
+            <!-- Status Pill -->
+            <div class="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                <div class="flex items-center gap-2">
+                    <span id="gwStatusDot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                    <span id="gwStatusText" class="text-xs font-bold text-[var(--text-primary)]"><%= isRtl ? 'جارٍ التحقق...' : 'Checking status...' %></span>
+                </div>
+                <button type="button" onclick="loadGatewayTunnelStatus()" class="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    <span><%= isRtl ? 'تحديث' : 'Refresh' %></span>
+                </button>
+            </div>
+
+            <!-- Gateway Address & Port -->
+            <div class="grid grid-cols-3 gap-3">
+                <div class="col-span-2">
+                    <label for="gwServerAddr" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= isRtl ? 'عنوان البوابة (Gateway Host)' : 'Gateway Host / IP' %></label>
+                    <input type="text" id="gwServerAddr" name="serverAddr" required placeholder="89.117.54.235" autocomplete="off" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">
+                </div>
+                <div>
+                    <label for="gwServerPort" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= isRtl ? 'المنفذ' : 'Port' %></label>
+                    <input type="number" id="gwServerPort" name="serverPort" value="7000" min="1" max="65535" required autocomplete="off" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] focus:outline-none focus:border-[var(--accent-color)] transition">
+                </div>
+            </div>
+
+            <!-- Token -->
+            <div>
+                <label for="gwToken" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= isRtl ? 'مفتاح مصادقة النفق (Auth Token)' : 'Tunnel Auth Token' %></label>
+                <div class="relative">
+                    <input type="password" id="gwToken" name="token" autocomplete="off" placeholder="<%= isRtl ? 'أدخل المفتاح أو اتركه فارغاً للاحتفاظ بالحالي' : 'Enter token or leave blank to keep existing' %>" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition pr-10">
+                    <button type="button" onclick="toggleGwTokenVisibility()" class="absolute inset-y-0 end-0 px-3 flex items-center text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                        <svg id="gwTokenEyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Remote Ports (Advanced Collapsible / Details) -->
+            <details class="group border border-[var(--border-primary)] rounded-xl bg-[var(--bg-card)] p-3 text-xs">
+                <summary class="font-bold text-[var(--text-secondary)] cursor-pointer flex items-center justify-between">
+                    <span><%= isRtl ? 'منافذ التوجيه البعيدة (متقدم)' : 'Remote Forwarded Ports (Advanced)' %></span>
+                    <span class="text-[10px] text-[var(--text-muted)] group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div class="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-[var(--border-primary)]">
+                    <div>
+                        <label for="gwRemoteWsPort" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1">Asterisk WS (18088)</label>
+                        <input type="number" id="gwRemoteWsPort" name="remoteWsPort" value="18088" min="1024" max="65535" autocomplete="off" class="w-full px-2.5 py-1.5 rounded-lg text-xs bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border-primary)]">
+                    </div>
+                    <div>
+                        <label for="gwRemoteApiPort" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1">Sokrat API (18080)</label>
+                        <input type="number" id="gwRemoteApiPort" name="remoteApiPort" value="18080" min="1024" max="65535" autocomplete="off" class="w-full px-2.5 py-1.5 rounded-lg text-xs bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border-primary)]">
+                    </div>
+                </div>
+            </details>
+
+            <div id="gwStatusMsg" class="text-xs p-2.5 rounded-lg hidden"></div>
+
+            <div class="flex items-center justify-between pt-2">
+                <button type="button" id="gwDisconnectBtn" onclick="disconnectGatewayTunnel()" class="px-3.5 py-2 rounded-lg text-xs font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition cursor-pointer hidden">
+                    <%= isRtl ? 'قطع الاتصال' : 'Disconnect' %>
+                </button>
+                <div class="flex items-center gap-2 ms-auto">
+                    <button type="button" onclick="closeGatewayTunnelModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-[var(--text-secondary)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] transition cursor-pointer">
+                        <%= isRtl ? 'إغلاق' : 'Close' %>
+                    </button>
+                    <button type="submit" id="gwConnectBtn" class="px-4 py-2 rounded-lg text-xs font-bold text-white bg-[var(--accent-color)] hover:bg-[#e0352b] transition cursor-pointer flex items-center gap-1.5">
+                        <span id="gwConnectBtnText"><%= isRtl ? 'اتصال بالبوابة' : 'Connect Gateway' %></span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+<% } %>
 
 <!-- SMTP Settings Modal -->
 <div id="smtpModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm opacity-0 invisible transition-all duration-200" style="pointer-events:none">
@@ -6852,4 +6951,169 @@ window.addEventListener('resize', () => {
         if (typeof menu._reposition === 'function') menu._reposition();
     });
 });
+
+// ── Sokrat Gateway Tunnel Modal & Handlers ───────────────────────────────────
+function openGatewayTunnelModal() {
+    const menu = document.getElementById('settingsMenu');
+    if (menu) {
+        menu.classList.remove('visible', 'opacity-100', 'scale-100');
+        menu.classList.add('invisible', 'opacity-0', 'scale-95');
+        menu.style.pointerEvents = 'none';
+    }
+    const modal = document.getElementById('gatewayTunnelModal');
+    if (modal) {
+        modal.classList.remove('opacity-0', 'invisible', 'hidden');
+        modal.style.setProperty('display', 'flex', 'important');
+        modal.style.pointerEvents = 'auto';
+    }
+    loadGatewayTunnelStatus();
+}
+window.openGatewayTunnelModal = openGatewayTunnelModal;
+
+function closeGatewayTunnelModal() {
+    const modal = document.getElementById('gatewayTunnelModal');
+    if (modal) {
+        modal.classList.add('opacity-0', 'invisible', 'hidden');
+        modal.style.setProperty('display', 'none', 'important');
+        modal.style.pointerEvents = 'none';
+    }
+}
+window.closeGatewayTunnelModal = closeGatewayTunnelModal;
+
+function toggleGwTokenVisibility() {
+    const input = document.getElementById('gwToken');
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+window.toggleGwTokenVisibility = toggleGwTokenVisibility;
+
+async function loadGatewayTunnelStatus() {
+    const dot = document.getElementById('gwStatusDot');
+    const text = document.getElementById('gwStatusText');
+    const disBtn = document.getElementById('gwDisconnectBtn');
+    const badge = document.getElementById('gatewayTunnelBadge');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse';
+    if (text) text.textContent = 'Checking...';
+
+    try {
+        const resp = await fetch('/api/settings/gateway-tunnel');
+        if (!resp.ok) {
+            if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
+            if (text) text.textContent = 'Unavailable';
+            return;
+        }
+        const data = await resp.json();
+        const serverInput = document.getElementById('gwServerAddr');
+        const portInput = document.getElementById('gwServerPort');
+        const wsInput = document.getElementById('gwRemoteWsPort');
+        const apiInput = document.getElementById('gwRemoteApiPort');
+
+        if (serverInput && data.serverAddr) serverInput.value = data.serverAddr;
+        if (portInput && data.serverPort) portInput.value = data.serverPort;
+        if (wsInput && data.remoteWsPort) wsInput.value = data.remoteWsPort;
+        if (apiInput && data.remoteApiPort) apiInput.value = data.remoteApiPort;
+
+        if (data.active) {
+            if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]';
+            if (text) text.textContent = 'Connected & Active';
+            if (disBtn) disBtn.classList.remove('hidden');
+            if (badge) {
+                badge.className = 'ms-auto px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+                badge.textContent = 'CONNECTED';
+            }
+        } else {
+            if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+            if (text) text.textContent = data.configured ? 'Disconnected' : 'Not Configured';
+            if (disBtn) disBtn.classList.add('hidden');
+            if (badge) {
+                badge.className = 'ms-auto px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-gray-500/15 text-gray-400 border border-gray-500/30';
+                badge.textContent = data.configured ? 'OFFLINE' : 'OFF';
+            }
+        }
+    } catch (e) {
+        if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+        if (text) text.textContent = 'Connection Error';
+    }
+}
+window.loadGatewayTunnelStatus = loadGatewayTunnelStatus;
+
+if (document.getElementById('gatewayTunnelBadge')) {
+    setTimeout(loadGatewayTunnelStatus, 1000);
+}
+
+async function saveGatewayTunnel(event) {
+    if (event && event.preventDefault) event.preventDefault();
+    const btn = document.getElementById('gwConnectBtn');
+    const msg = document.getElementById('gwStatusMsg');
+    const btnText = document.getElementById('gwConnectBtnText');
+    const origText = btnText ? btnText.textContent : 'Connect Gateway';
+
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.textContent = 'Connecting...';
+    if (msg) msg.className = 'text-xs p-2.5 rounded-lg hidden';
+
+    const payload = {
+        action: 'connect',
+        serverAddr: document.getElementById('gwServerAddr').value.trim(),
+        serverPort: parseInt(document.getElementById('gwServerPort').value, 10),
+        token: document.getElementById('gwToken').value.trim(),
+        remoteWsPort: parseInt(document.getElementById('gwRemoteWsPort').value, 10),
+        remoteApiPort: parseInt(document.getElementById('gwRemoteApiPort').value, 10)
+    };
+
+    try {
+        const resp = await fetch('/api/settings/gateway-tunnel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            if (msg) {
+                msg.className = 'text-xs p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 block';
+                msg.textContent = data.message || 'Connected successfully!';
+            }
+            loadGatewayTunnelStatus();
+        } else {
+            if (msg) {
+                msg.className = 'text-xs p-2.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 block';
+                msg.textContent = data.error || 'Failed to connect';
+            }
+        }
+    } catch (err) {
+        if (msg) {
+            msg.className = 'text-xs p-2.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 block';
+            msg.textContent = 'Network error: ' + err.message;
+        }
+    } finally {
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.textContent = origText;
+    }
+    return false;
+}
+window.saveGatewayTunnel = saveGatewayTunnel;
+
+async function disconnectGatewayTunnel() {
+    if (!confirm('Are you sure you want to disconnect from the Sokrat Gateway?')) return;
+    const msg = document.getElementById('gwStatusMsg');
+    try {
+        const resp = await fetch('/api/settings/gateway-tunnel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'disconnect' })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            if (msg) {
+                msg.className = 'text-xs p-2.5 rounded-lg bg-gray-500/10 text-gray-400 border border-gray-500/20 block';
+                msg.textContent = 'Tunnel disconnected.';
+            }
+            loadGatewayTunnelStatus();
+        }
+    } catch (e) {
+        alert('Disconnect failed: ' + e.message);
+    }
+}
+window.disconnectGatewayTunnel = disconnectGatewayTunnel;
+
 </script>
