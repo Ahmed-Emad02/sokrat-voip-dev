@@ -6951,4 +6951,169 @@ window.addEventListener('resize', () => {
         if (typeof menu._reposition === 'function') menu._reposition();
     });
 });
+
+// ── Sokrat Gateway Tunnel Modal & Handlers ───────────────────────────────────
+function openGatewayTunnelModal() {
+    const menu = document.getElementById('settingsMenu');
+    if (menu) {
+        menu.classList.remove('visible', 'opacity-100', 'scale-100');
+        menu.classList.add('invisible', 'opacity-0', 'scale-95');
+        menu.style.pointerEvents = 'none';
+    }
+    const modal = document.getElementById('gatewayTunnelModal');
+    if (modal) {
+        modal.classList.remove('opacity-0', 'invisible', 'hidden');
+        modal.style.setProperty('display', 'flex', 'important');
+        modal.style.pointerEvents = 'auto';
+    }
+    loadGatewayTunnelStatus();
+}
+window.openGatewayTunnelModal = openGatewayTunnelModal;
+
+function closeGatewayTunnelModal() {
+    const modal = document.getElementById('gatewayTunnelModal');
+    if (modal) {
+        modal.classList.add('opacity-0', 'invisible', 'hidden');
+        modal.style.setProperty('display', 'none', 'important');
+        modal.style.pointerEvents = 'none';
+    }
+}
+window.closeGatewayTunnelModal = closeGatewayTunnelModal;
+
+function toggleGwTokenVisibility() {
+    const input = document.getElementById('gwToken');
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+window.toggleGwTokenVisibility = toggleGwTokenVisibility;
+
+async function loadGatewayTunnelStatus() {
+    const dot = document.getElementById('gwStatusDot');
+    const text = document.getElementById('gwStatusText');
+    const disBtn = document.getElementById('gwDisconnectBtn');
+    const badge = document.getElementById('gatewayTunnelBadge');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse';
+    if (text) text.textContent = 'Checking...';
+
+    try {
+        const resp = await fetch('/api/settings/gateway-tunnel');
+        if (!resp.ok) {
+            if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
+            if (text) text.textContent = 'Unavailable';
+            return;
+        }
+        const data = await resp.json();
+        const serverInput = document.getElementById('gwServerAddr');
+        const portInput = document.getElementById('gwServerPort');
+        const wsInput = document.getElementById('gwRemoteWsPort');
+        const apiInput = document.getElementById('gwRemoteApiPort');
+
+        if (serverInput && data.serverAddr) serverInput.value = data.serverAddr;
+        if (portInput && data.serverPort) portInput.value = data.serverPort;
+        if (wsInput && data.remoteWsPort) wsInput.value = data.remoteWsPort;
+        if (apiInput && data.remoteApiPort) apiInput.value = data.remoteApiPort;
+
+        if (data.active) {
+            if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]';
+            if (text) text.textContent = 'Connected & Active';
+            if (disBtn) disBtn.classList.remove('hidden');
+            if (badge) {
+                badge.className = 'ms-auto px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+                badge.textContent = 'CONNECTED';
+            }
+        } else {
+            if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+            if (text) text.textContent = data.configured ? 'Disconnected' : 'Not Configured';
+            if (disBtn) disBtn.classList.add('hidden');
+            if (badge) {
+                badge.className = 'ms-auto px-1.5 py-0.5 text-[9px] font-mono font-bold rounded bg-gray-500/15 text-gray-400 border border-gray-500/30';
+                badge.textContent = data.configured ? 'OFFLINE' : 'OFF';
+            }
+        }
+    } catch (e) {
+        if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+        if (text) text.textContent = 'Connection Error';
+    }
+}
+window.loadGatewayTunnelStatus = loadGatewayTunnelStatus;
+
+if (document.getElementById('gatewayTunnelBadge')) {
+    setTimeout(loadGatewayTunnelStatus, 1000);
+}
+
+async function saveGatewayTunnel(event) {
+    if (event && event.preventDefault) event.preventDefault();
+    const btn = document.getElementById('gwConnectBtn');
+    const msg = document.getElementById('gwStatusMsg');
+    const btnText = document.getElementById('gwConnectBtnText');
+    const origText = btnText ? btnText.textContent : 'Connect Gateway';
+
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.textContent = 'Connecting...';
+    if (msg) msg.className = 'text-xs p-2.5 rounded-lg hidden';
+
+    const payload = {
+        action: 'connect',
+        serverAddr: document.getElementById('gwServerAddr').value.trim(),
+        serverPort: parseInt(document.getElementById('gwServerPort').value, 10),
+        token: document.getElementById('gwToken').value.trim(),
+        remoteWsPort: parseInt(document.getElementById('gwRemoteWsPort').value, 10),
+        remoteApiPort: parseInt(document.getElementById('gwRemoteApiPort').value, 10)
+    };
+
+    try {
+        const resp = await fetch('/api/settings/gateway-tunnel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            if (msg) {
+                msg.className = 'text-xs p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 block';
+                msg.textContent = data.message || 'Connected successfully!';
+            }
+            loadGatewayTunnelStatus();
+        } else {
+            if (msg) {
+                msg.className = 'text-xs p-2.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 block';
+                msg.textContent = data.error || 'Failed to connect';
+            }
+        }
+    } catch (err) {
+        if (msg) {
+            msg.className = 'text-xs p-2.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 block';
+            msg.textContent = 'Network error: ' + err.message;
+        }
+    } finally {
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.textContent = origText;
+    }
+    return false;
+}
+window.saveGatewayTunnel = saveGatewayTunnel;
+
+async function disconnectGatewayTunnel() {
+    if (!confirm('Are you sure you want to disconnect from the Sokrat Gateway?')) return;
+    const msg = document.getElementById('gwStatusMsg');
+    try {
+        const resp = await fetch('/api/settings/gateway-tunnel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'disconnect' })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            if (msg) {
+                msg.className = 'text-xs p-2.5 rounded-lg bg-gray-500/10 text-gray-400 border border-gray-500/20 block';
+                msg.textContent = 'Tunnel disconnected.';
+            }
+            loadGatewayTunnelStatus();
+        }
+    } catch (e) {
+        alert('Disconnect failed: ' + e.message);
+    }
+}
+window.disconnectGatewayTunnel = disconnectGatewayTunnel;
+
 </script>
