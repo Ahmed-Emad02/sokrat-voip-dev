@@ -9,7 +9,7 @@ const net = require('net');
 const http = require('http');
 const https = require('https');
 const { Server } = require('socket.io');
-const { exec, execFile, execSync } = require('child_process');
+const { exec, execFile, execSync, execFileSync } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 const execFileAsync = (file, args, options) => new Promise((resolve, reject) => {
@@ -1511,6 +1511,11 @@ async function initAuthDb() {
     await conn.end();
     await syncAllExtensionsAstdb();
     ensurePjsipWebRtcTransports();
+    try {
+        if (syncWebrtcWakeRoutes()) await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
+    } catch (error) {
+        console.error('WebRTC-only wake route sync refused:', error.code || error.name);
+    }
     try {
         await initCampOnCallbacks();
     } catch (campErr) {
@@ -14174,7 +14179,26 @@ app.get('/dialer', requireAuth, (req, res) => {
 });
 
 // Helper function to reload PBX config via retrieve_conf & core reload
+function syncWebrtcWakeRoutes() {
+    const result = execFileSync('python3', [path.join(__dirname, 'scripts/install-webrtc-wake.py'), '--apply', '--no-reload'],
+        { timeout: 10000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return JSON.parse(result).changed === true;
+}
+
 function reloadPbxConfig(callback) {
+    const finish = async (fallback = false) => {
+        try {
+            // Recompile after retrieve_conf: copy only exact WebRTC targets;
+            // never replace shared FreePBX macros or generated source files.
+            if (syncWebrtcWakeRoutes()) await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
+            console.log(fallback ? 'PBX Reload success (fallback)' : 'PBX Reload success');
+            pool.query("UPDATE `asterisk`.`admin` SET `value` = 'false' WHERE `variable` = 'need_reload'").catch(() => {});
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('WebRTC-only wake route sync refused:', error.code || error.name);
+            if (callback) callback({ success: false, error: 'WebRTC wake route configuration requires operator review' });
+        }
+    };
     const cmd = '/var/lib/asterisk/bin/retrieve_conf && asterisk -rx "core reload" && asterisk -rx "queue reload all"';
     exec(cmd, (error) => {
         if (error) {
@@ -14183,15 +14207,11 @@ function reloadPbxConfig(callback) {
                     console.error('PBX Reload error:', fallbackError.message);
                     return callback ? callback({ success: false, error: fallbackError.message }) : null;
                 }
-                console.log('PBX Reload success (fallback)');
-                pool.query("UPDATE `asterisk`.`admin` SET `value` = 'false' WHERE `variable` = 'need_reload'").catch(() => {});
-                return callback ? callback({ success: true }) : null;
+                void finish(true);
             });
             return;
         }
-        console.log('PBX Reload success');
-        pool.query("UPDATE `asterisk`.`admin` SET `value` = 'false' WHERE `variable` = 'need_reload'").catch(() => {});
-        return callback ? callback({ success: true }) : null;
+        void finish();
     });
 }
 

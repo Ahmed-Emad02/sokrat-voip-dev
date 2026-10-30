@@ -33,7 +33,13 @@ function sandbox() {
     // be able to touch the real Asterisk configuration.
     const text = fs.readFileSync(SCRIPT, 'utf8')
         .replace(/^DIALPLAN_FILE=.*$/m, `DIALPLAN_FILE=${dialplan}`)
-        .replace(/^STATE_DIR=.*$/m, `STATE_DIR=${state}`);
+        .replace(/^STATE_DIR=.*$/m, `STATE_DIR=${state}`)
+        // Endpoint availability belongs to the integration preflight. This
+        // filesystem test must not depend on a real PBX or VPN on the runner.
+        .replace(/^ts_ip=.*$/m, 'ts_ip="100.64.0.1"')
+        .replace(/^ws_plain=.*$/m, 'ws_plain="yes"')
+        .replace(/^ws_tls=.*$/m, 'ws_tls="yes"')
+        .replace(/^api=.*$/m, 'api="yes"');
     const script = path.join(dir, 'readiness.sh');
     fs.writeFileSync(script, text, { mode: 0o755 });
     return { dir, dialplan, state, script };
@@ -58,6 +64,7 @@ test('the shared tenant push context is created once and stays idempotent', () =
     assert.equal(run(box, ['--apply']).status, 0);
     const first = fs.readFileSync(box.dialplan, 'utf8');
     assert.match(first, /^\[sub-sokrat-push-send\]$/m);
+    assert.doesNotMatch(first, /^\[macro-dial(?:-one)?\]$/m);
     assert.match(first, /exten => s,1,Set\(TARGET_EXT=/);
     assert.match(first, /SOKRAT_CALLER_NUM=/);
     assert.match(first, /SOKRAT_CALLER_NAME=/);

@@ -687,6 +687,9 @@ echo "  [4c] Installing Sokrat Reverse Tunnel client (frpc)..."
 if [ -f "$INSTALL_DIR/scripts/install-gateway-media-deps.sh" ]; then
     bash "$INSTALL_DIR/scripts/install-gateway-media-deps.sh" || echo "  Warning: reverse TLS media dependencies require attention before pairing"
 fi
+if [ -f "$INSTALL_DIR/scripts/install-webrtc-wake.py" ]; then
+    python3 "$INSTALL_DIR/scripts/install-webrtc-wake.py" --apply --no-reload || echo "  Warning: WebRTC-only wake routes require operator review"
+fi
 if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
     FRPC_SRC=""
     for candidate in         "$SCRIPT_DIR/binaries/frpc"         "$INSTALL_DIR/installer-bundle/binaries/frpc"         "/tmp/sokrat-repo/installer-bundle/binaries/frpc"         "/tmp/installer-bundle/binaries/frpc"; do

@@ -1098,6 +1098,9 @@ PYEOF
     if [ -f "$INSTALL_DIR/scripts/install-gateway-media-deps.sh" ]; then
         bash "$INSTALL_DIR/scripts/install-gateway-media-deps.sh" || echo "  Warning: reverse TLS media dependencies require attention before pairing"
     fi
+    if [ -f "$INSTALL_DIR/scripts/install-webrtc-wake.py" ]; then
+        python3 "$INSTALL_DIR/scripts/install-webrtc-wake.py" --apply --no-reload || echo "  Warning: WebRTC-only wake routes require operator review"
+    fi
     if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
         echo "  Ensuring Sokrat Reverse Tunnel client (frpc) is installed..."
         FRPC_SRC=""

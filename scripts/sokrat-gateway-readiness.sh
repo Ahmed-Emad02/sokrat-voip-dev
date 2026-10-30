@@ -6,13 +6,13 @@
 # can be reached and can wake a device. This script prepares the PBX side of
 # that contract on a fresh install and on every upgrade:
 #
-#   1. complete push wake dialplan in /etc/asterisk/extensions_sokrat.conf,
-#      including macro-dial-one hook, sokrat-wake-dial, group wake, and the
-#      shared push context [sub-sokrat-push-send] carrying the variables the
+#   1. an additive shared push context in /etc/asterisk/extensions_sokrat.conf,
+#      carrying the variables the
 #      gateway's tenant hook expects (TARGET_EXT, SOKRAT_LINKEDID,
 #      SOKRAT_CALL_ID, SOKRAT_CALLER_NUM, SOKRAT_CALLER_NAME).
-#   2. automatic wiring of #include extensions_sokrat.conf into the override
-#      dialplan so priority 1 of macro-dial-one executes cleanly.
+#   2. inclusion of that context without replacing any shared dialing macro.
+#      Actual incoming wake is separately compiled by install-webrtc-wake.py
+#      for exact provisioned WebRTC targets only.
 #   3. a stable installation id and a readiness manifest in /etc/sokrat,
 #      so the dashboard/operator can verify what the gateway will see.
 #   4. a check of the endpoints the gateway dials: the Asterisk SIP
@@ -145,56 +145,6 @@ if [ "$(push_context_count)" -eq 0 ]; then
     cat >> "$DIALPLAN_FILE" <<'EOF'
 ; Sokrat VOIP - mobile push wake dialplan
 ; sokrat-gateway-readiness v1
-[macro-dial-one]
-exten => s,1,Gosub(sokrat-wake-dial,s,1(${ARG3}))
-
-[sokrat-wake-dial]
-exten => s,1,Set(DEXTEN=${ARG1})
- same => n,GotoIf($["${ARG1}"=""]?done)
- same => n,Gosub(sub-sokrat-push-hook,s,1(${ARG1}))
- same => n(done),Return()
-
-[macro-dial]
-exten => s,1,Gosub(sokrat-wake-group,s,1(${ARG3}))
-
-[sokrat-wake-group]
-exten => s,1,Set(SOKRAT_GROUP=${ARG1})
- same => n,GotoIf($["${SOKRAT_GROUP}"=""]?done)
- same => n,Set(SOKRAT_IDX=1)
- same => n(loop),Set(SOKRAT_MEMBER=${CUT(SOKRAT_GROUP,-,${SOKRAT_IDX})})
- same => n,GotoIf($["${SOKRAT_MEMBER}"=""]?done)
- same => n,Gosub(sub-sokrat-push-send,s,1(${SOKRAT_MEMBER}))
- same => n,GotoIf($["${DB(DEVICE/${SOKRAT_MEMBER}/tech)}"!="pjsip"]?next)
- same => n,GotoIf($["${SOKRAT_GROUP_WAITED}"="1"]?next)
- same => n,GotoIf($["${PJSIP_DIAL_CONTACTS(${SOKRAT_MEMBER})}"!=""]?next)
- same => n,Set(SOKRAT_GROUP_WAITED=1)
- same => n,Set(SOKRAT_WAIT_COUNT=0)
- same => n(wait1),GotoIf($["${PJSIP_DIAL_CONTACTS(${SOKRAT_MEMBER})}"!=""]?next)
- same => n,Wait(0.2)
- same => n,Set(SOKRAT_WAIT_COUNT=$[${SOKRAT_WAIT_COUNT}+1])
- same => n,GotoIf($[${SOKRAT_WAIT_COUNT}<25]?wait1)
- same => n(next),Set(SOKRAT_IDX=$[${SOKRAT_IDX}+1])
- same => n,Goto(loop)
- same => n(done),Return()
-
-[sub-sokrat-push-hook]
-exten => s,1,NoOp(=== Sokrat mobile push wake-up hook ===)
-same => n,Set(TARGET_EXT=${ARG1})
-same => n,GotoIf($["${TARGET_EXT}"=""]?done)
-same => n,GotoIf($["${SOKRAT_PUSH_SENT}"="1"]?done)
-same => n,Set(__SOKRAT_PUSH_SENT=1)
-same => n,Gosub(sub-sokrat-push-send,s,1(${TARGET_EXT}))
-same => n,GotoIf($["${DB(DEVICE/${TARGET_EXT}/tech)}"!="pjsip"]?done)
-same => n,Ringing()
-same => n,Set(SOKRAT_WAIT_COUNT=0)
-same => n(wait_contact),Set(SOKRAT_CONTACTS=${PJSIP_DIAL_CONTACTS(${TARGET_EXT})})
-same => n,GotoIf($["${SOKRAT_CONTACTS}"!=""]?ready)
-same => n,Wait(0.2)
-same => n,Set(SOKRAT_WAIT_COUNT=$[${SOKRAT_WAIT_COUNT}+1])
-same => n,GotoIf($[${SOKRAT_WAIT_COUNT}<25]?wait_contact)
-same => n(ready),NoOp([callId=${SOKRAT_CALL_ID}] contact wait iterations=${SOKRAT_WAIT_COUNT} contacts=${SOKRAT_CONTACTS})
-same => n(done),Return()
-
 [sub-sokrat-push-send]
 exten => s,1,Set(TARGET_EXT=${ARG1})
  same => n,GotoIf($["${TARGET_EXT}"=""]?done)
@@ -218,7 +168,7 @@ EOF
         fi
     done
     changed=1
-    echo "  Shared tenant push context and wake hooks created."
+    echo "  Shared tenant push context created; no shared dialing macros changed."
 fi
 
 # Readiness manifest: no secrets, only what the gateway/operator needs to see.
