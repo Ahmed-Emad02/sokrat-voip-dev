@@ -162,11 +162,13 @@ exten => s,1,Set(TARGET_EXT=${ARG1})
 EOF
     chown asterisk:asterisk "$DIALPLAN_FILE" 2>/dev/null || true
     chmod 0640 "$DIALPLAN_FILE" 2>/dev/null || true
-    for ov in "/etc/asterisk/extensions_override_issabelpbx.conf" "/etc/asterisk/extensions_override_freepbx.conf"; do
-        if [ -f "$ov" ] && ! grep -q "extensions_sokrat.conf" "$ov" 2>/dev/null; then
-            echo "#include extensions_sokrat.conf" >> "$ov"
-        fi
-    done
+    if [ "$DIALPLAN_FILE" = "/etc/asterisk/extensions_sokrat.conf" ]; then
+        for ov in "/etc/asterisk/extensions_override_issabelpbx.conf" "/etc/asterisk/extensions_override_freepbx.conf"; do
+            if [ -f "$ov" ] && ! grep -q "extensions_sokrat.conf" "$ov" 2>/dev/null; then
+                echo "#include extensions_sokrat.conf" >> "$ov"
+            fi
+        done
+    fi
     changed=1
     echo "  Shared tenant push context created; no shared dialing macros changed."
 fi
