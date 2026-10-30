@@ -9,7 +9,7 @@ export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:${PATH
 
 INSTALL_DIR=/opt/sokrat-voip
 REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voip-dev.git
-REPO_BRANCH=main
+REPO_BRANCH=${SOKRAT_PBX_BRANCH:-main}
 SOFTPHONE_DIR=/opt/sokrat-softphone
 SOFTPHONE_REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voice.git
 SOFTPHONE_REPO_BRANCH=main
@@ -782,6 +782,9 @@ else
 fi
 
 echo "  [4c] Installing Sokrat Reverse Tunnel client (frpc)..."
+if [ -f "$INSTALL_DIR/scripts/install-gateway-media-deps.sh" ]; then
+    bash "$INSTALL_DIR/scripts/install-gateway-media-deps.sh" || echo "  Warning: reverse TLS media dependencies require attention before pairing"
+fi
 if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
     FRPC_SRC=""
     for candidate in         "$SCRIPT_DIR/installer-bundle/binaries/frpc"         "$INSTALL_DIR/installer-bundle/binaries/frpc"         "/tmp/sokrat-repo/installer-bundle/binaries/frpc"         "/tmp/installer-bundle/binaries/frpc"; do

@@ -563,6 +563,12 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: true }));
 
+// --- GATEWAY INSTALLATION READINESS (NOT A SESSION/API-KEY BYPASS) ---
+// Only this POST is authenticated by the per-installation readiness key. Mount
+// before browser sessions and operational auth; never exempt a path prefix.
+const gatewayTunnelV2 = require('./lib/gateway-tunnel');
+app.post('/api/gateway-tunnel/readiness', gatewayTunnelV2.readiness);
+
 // --- PRE-SESSION COOKIE SANITIZER ---
 // Protects Sokrat VoIP session from foreign/duplicate connect.sid cookies sent by proxied devices
 const cookieSignature = require('cookie-signature');
@@ -5853,7 +5859,6 @@ app.post('/api/settings/webhook/test', requireAuth, async (req, res) => {
 const FRP_CONFIG_PATH = '/etc/frp/frpc.toml';
 const FRP_SERVICE_PATH = '/etc/systemd/system/frpc.service';
 const FRP_BINARY_PATH = '/usr/local/bin/frpc';
-
 function getFrpTunnelStatus() {
     const fs = require('fs');
     const { execSync } = require('child_process');
@@ -5894,7 +5899,8 @@ app.get('/api/settings/gateway-tunnel', requireAuth, (req, res) => {
     if (!hasRootAccess(req) && !isSuperAdmin(req)) {
         return res.status(403).json({ success: false, error: 'Forbidden: Root access required' });
     }
-    const status = getFrpTunnelStatus();
+    const secureStatus = gatewayTunnelV2.status();
+    const status = secureStatus.configured ? secureStatus : getFrpTunnelStatus();
     res.json({ success: true, ...status });
 });
 
@@ -5902,177 +5908,21 @@ app.post('/api/settings/gateway-tunnel', requireAuth, async (req, res) => {
     if (!hasRootAccess(req) && !isSuperAdmin(req)) {
         return res.status(403).json({ success: false, error: 'Forbidden: Root access required' });
     }
-    const fs = require('fs');
-    const path = require('path');
-    const { execSync } = require('child_process');
-
-    const action = String(req.body.action || 'connect').trim().toLowerCase();
-
-    if (action === 'disconnect') {
-        try {
-            execSync('systemctl stop frpc 2>/dev/null; systemctl disable frpc 2>/dev/null', { timeout: 10000 });
-            return res.json({ success: true, active: false, message: 'Tunnel disconnected' });
-        } catch (err) {
-            return res.status(500).json({ success: false, error: 'Failed to stop tunnel service: ' + err.message });
-        }
-    }
-
-    const serverAddr = String(req.body.serverAddr || '').trim();
-    const serverPort = parseInt(req.body.serverPort || 7000, 10);
-    const token = String(req.body.token || '').trim();
-    const remoteWsPort = parseInt(req.body.remoteWsPort || 18088, 10);
-    const remoteApiPort = parseInt(req.body.remoteApiPort || 18080, 10);
-    const os = require('os');
-    const hostname = os.hostname().replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 32) || 'pbx';
-
-    if (!serverAddr) {
-        return res.status(400).json({ success: false, error: 'Gateway address is required' });
-    }
-    if (!token && !fs.existsSync(FRP_CONFIG_PATH)) {
-        return res.status(400).json({ success: false, error: 'Gateway auth token is required' });
-    }
-
-    if (!fs.existsSync(FRP_BINARY_PATH)) {
-        const bundleFrpc = path.join(__dirname, 'installer-bundle/binaries/frpc');
-        if (fs.existsSync(bundleFrpc)) {
-            try {
-                fs.copyFileSync(bundleFrpc, FRP_BINARY_PATH);
-                fs.chmodSync(FRP_BINARY_PATH, 0o755);
-            } catch (copyErr) {
-                return res.status(500).json({ success: false, error: 'Failed to install frpc: ' + copyErr.message });
-            }
-        } else {
-            return res.status(500).json({ success: false, error: 'frpc binary not found. Please install frpc first.' });
-        }
-    }
-
-    let effectiveToken = token;
-    if (!effectiveToken && fs.existsSync(FRP_CONFIG_PATH)) {
-        const prev = fs.readFileSync(FRP_CONFIG_PATH, 'utf8');
-        const m = prev.match(/auth\.token\s*=\s*["']([^"']+)["']/i);
-        if (m) effectiveToken = m[1];
-    }
-
-    // Auto-register this PBX with the Gateway to allocate ports and approve automatically
-    let assignedWsPort = remoteWsPort;
-    let assignedApiPort = remoteApiPort;
-    let assignedTunnelPort = serverPort;
-
     try {
-        const http = require('http');
-        const https = require('https');
-        const regData = JSON.stringify({
-            token: effectiveToken,
-            name: hostname,
-            hostname: hostname,
-            customer: hostname
-        });
-
-        const tryRegister = (targetPort, pathPrefix) => new Promise((resolve, reject) => {
-            const cleanHost = serverAddr.replace(/^https?:\/\//, '').split(':')[0];
-            const client = serverAddr.startsWith('https') ? https : http;
-            const r = client.request({
-                hostname: cleanHost,
-                port: targetPort,
-                path: pathPrefix,
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(regData)
-                },
-                timeout: 5000
-            }, (res) => {
-                let data = '';
-                res.on('data', chunk => { data += chunk; });
-                res.on('end', () => {
-                    try {
-                        const json = JSON.parse(data);
-                        resolve({ status: res.statusCode, body: json });
-                    } catch (e) {
-                        reject(new Error('Invalid JSON: ' + data.slice(0, 100)));
-                    }
-                });
-            });
-            r.on('error', reject);
-            r.on('timeout', () => { r.destroy(); reject(new Error('Timeout')); });
-            r.write(regData);
-            r.end();
-        });
-
-        let regRes = null;
-        try {
-            regRes = await tryRegister(8002, '/control/api/tunnel/register');
-        } catch (_) {
-            try {
-                regRes = await tryRegister(8080, '/api/gateway/tunnel/register');
-            } catch (_) {}
+        if (req.body.action === 'disconnect' && gatewayTunnelV2.status().configured) {
+            return res.json(gatewayTunnelV2.disconnect());
         }
-
-        if (regRes && regRes.body && regRes.body.success) {
-            if (regRes.body.remoteWsPort) assignedWsPort = regRes.body.remoteWsPort;
-            if (regRes.body.remoteApiPort) assignedApiPort = regRes.body.remoteApiPort;
-            if (regRes.body.tunnelPort) assignedTunnelPort = regRes.body.tunnelPort;
-            console.log(`[gateway-tunnel] Auto-registered on gateway! Assigned WS:${assignedWsPort}, API:${assignedApiPort}`);
-            if (regRes.body.hookToken && regRes.body.pbxId) {
-                try {
-                    fs.mkdirSync('/etc/sokrat', { recursive: true, mode: 0o755 });
-                    const hookCfg = {
-                        gatewayUrl: `http://${serverAddr}`,
-                        pbxId: regRes.body.pbxId,
-                        token: regRes.body.hookToken
-                    };
-                    fs.writeFileSync('/etc/sokrat/gateway-hook.json', JSON.stringify(hookCfg, null, 2), { mode: 0o640 });
-                    execSync('chown root:asterisk /etc/sokrat/gateway-hook.json 2>/dev/null || true');
-                    console.log('[gateway-tunnel] Auto-configured Asterisk push hook in /etc/sokrat/gateway-hook.json');
-                } catch (hookErr) {
-                    console.warn('[gateway-tunnel] Could not write gateway-hook.json:', hookErr.message);
-                }
-            }
-        } else if (regRes && regRes.body && regRes.body.error === 'Invalid tunnel token') {
-            return res.status(401).json({ success: false, error: 'Invalid tunnel token: Gateway rejected the authentication token' });
+        if (String(req.body.token || '').trim().startsWith('sk_pair_v2_')) {
+            return res.json(await gatewayTunnelV2.connect(req.body));
         }
-    } catch (regErr) {
-        console.warn('[gateway-tunnel] Auto-registration notice:', regErr.message);
+        return res.status(400).json({ success: false,
+            error: 'Use the secure pairing code from the gateway dashboard; legacy unverified enrollment is disabled' });
+    } catch (error) {
+        console.warn('[gateway-tunnel] Secure enrollment failed:', error.code || error.name);
+        return res.status(503).json({ success: false,
+            error: error.message?.startsWith('Command failed') ? 'Tunnel provisioning failed; check packages and service logs' : error.message });
     }
 
-    if (!fs.existsSync('/etc/frp')) {
-        fs.mkdirSync('/etc/frp', { recursive: true, mode: 0o700 });
-    }
-
-    const toml = `serverAddr = "${serverAddr}"\nserverPort = ${assignedTunnelPort}\nauth.method = "token"\nauth.token = "${effectiveToken}"\ntransport.tls.enable = true\n\n[[proxies]]\nname = "${hostname}-ws"\ntype = "tcp"\nlocalIP = "127.0.0.1"\nlocalPort = 8088\nremotePort = ${assignedWsPort}\n\n[[proxies]]\nname = "${hostname}-api"\ntype = "tcp"\nlocalIP = "127.0.0.1"\nlocalPort = 8080\nremotePort = ${assignedApiPort}\n`;
-    fs.writeFileSync(FRP_CONFIG_PATH, toml, { mode: 0o600 });
-
-    if (!fs.existsSync(FRP_SERVICE_PATH)) {
-        const unit = `[Unit]\nDescription=Sokrat Reverse Tunnel Client (frpc)\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=${FRP_BINARY_PATH} -c ${FRP_CONFIG_PATH}\nRestart=always\nRestartSec=5s\nLimitNOFILE=65536\n\n[Install]\nWantedBy=multi-user.target\n`;
-        fs.writeFileSync(FRP_SERVICE_PATH, unit, { mode: 0o644 });
-    }
-
-    try {
-        execSync('systemctl daemon-reload && systemctl enable frpc && systemctl restart frpc', { timeout: 15000 });
-    } catch (svcErr) {
-        return res.status(500).json({ success: false, error: 'Failed to start frpc service: ' + svcErr.message });
-    }
-
-    const dialplanPath = '/etc/asterisk/extensions_sokrat.conf';
-    if (fs.existsSync(dialplanPath)) {
-        try {
-            let dp = fs.readFileSync(dialplanPath, 'utf8');
-            const targetUrl = `http://${serverAddr}:8080`;
-            if (dp.includes('http://127.0.0.1:8095')) {
-                dp = dp.replace(/http:\/\/127\.0\.0\.1:8095/g, targetUrl);
-                fs.writeFileSync(dialplanPath, dp, { mode: 0o640 });
-                execSync('asterisk -rx "dialplan reload" 2>/dev/null || true');
-            }
-        } catch (_) {}
-    }
-
-    await new Promise(r => setTimeout(r, 1500));
-    const status = getFrpTunnelStatus();
-    res.json({
-        success: true,
-        active: status.active,
-        message: status.active ? 'Connected to Sokrat Gateway successfully' : 'Tunnel configured, service is starting...'
-    });
 });
 
 // POST /api/auth/forgot-password and POST /forgot-password
