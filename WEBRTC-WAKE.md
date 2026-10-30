@@ -82,10 +82,16 @@ global dialing-macro overrides. Releases before this one wrote blanket
 `[sokrat-wake-group]` and `[sub-sokrat-push-hook]` into
 `/etc/asterisk/extensions_sokrat.conf`, which fired a wake for **every** dialed
 extension and shadowed the shared FreePBX dialing macros. `--apply` now removes
-exactly those five blocks once, after writing a private `0600` snapshot to
-`/var/backups/sokrat-voip/extensions_sokrat.conf.wake-v1-<utc>`, and only when
-`[sub-sokrat-push-send]` already exists so routing is never deleted without its
-replacement. Operator-authored contexts in the same file are preserved verbatim.
+only the complete, exact historical five-block template from `d7b0592`, with
+its preceding Sokrat ownership marker and one retained `[sub-sokrat-push-send]`
+context. Shared context names alone never establish ownership. A private `0600`
+snapshot is written to
+`/var/backups/sokrat-voip/extensions_sokrat.conf.wake-v1-<utc>-<nonce>` before the
+atomic replacement. Customized, incomplete or duplicate marked v1 blocks refuse
+without rewriting the dialplan and require operator review. All retained bytes
+(including header options, comments, CRLF and missing final newlines) and file
+ownership/mode are preserved. A successful migration requests the ordinary
+dialplan reload unless `--no-reload` is supplied; an unchanged run does not.
 
 Reviewed wake state is the scoped artifact: the gateway readiness probe requires
 `extensions_sokrat_webrtc_wake.conf`, the root-owned dispatcher and the pinned CA,

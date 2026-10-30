@@ -136,7 +136,9 @@ test('all installers, enrollment and post-retrieve_conf lifecycle include the sc
         assert.match(fs.readFileSync(path.join(root, name), 'utf8'), /install-webrtc-wake\.py/);
     }
     const readiness = fs.readFileSync(path.join(root, 'scripts/sokrat-gateway-readiness.sh'), 'utf8');
-    assert.doesNotMatch(readiness, /^\[macro-dial(?:-one)?\]$/m);
+    // The migration compares the historical template; it does not install it.
+    const emitted = readiness.split('cat >> "$DIALPLAN_FILE" <<\'EOF\'\n')[1].split('\nEOF')[0];
+    assert.doesNotMatch(emitted, /^\[macro-dial(?:-one)?\]$/m);
 });
 
 test('online, offline and upgrade entry points all require service-user wake access verification', () => {

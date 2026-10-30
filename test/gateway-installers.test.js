@@ -2,6 +2,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
@@ -57,17 +58,114 @@ test('the dashboard pairs with a secure pairing code instead of the legacy token
     assert.match(tunnel, /if \(requested && requested !== code\.host\)/);
 });
 
-test('legacy blanket wake overrides are migrated away on upgrade, once, with a backup', () => {
+test('legacy migration is guarded and refuses ambiguity before readiness continues', () => {
     const text = fs.readFileSync(path.join(root, 'scripts/sokrat-gateway-readiness.sh'), 'utf8');
     assert.match(text, /migrate_legacy_wake_contexts\(\)/);
     for (const context of ['macro-dial-one', 'sokrat-wake-dial', 'macro-dial', 'sokrat-wake-group', 'sub-sokrat-push-hook']) {
-        assert.ok(text.includes("'" + context + "'"), context + ' must be stripped');
+        assert.ok(text.includes("'" + context + "'"), context + ' must be recognized');
     }
     // Never delete routing without the replacement context to migrate towards.
-    assert.match(text, /if '\[sub-sokrat-push-send\]' not in original:/);
+    assert.match(text, /names\.count\('sub-sokrat-push-send'\) != 1/);
+    assert.match(text, /if ! migrate_legacy_wake_contexts; then[\s\S]*?exit 1/);
     // Private, immutable backup before rewriting the dialplan.
     assert.match(text, /wake-v1-/);
     assert.match(text, /os\.O_EXCL \| os\.O_NOFOLLOW, 0o600/);
+});
+
+const legacyWake = fs.readFileSync(path.join(root, 'test/fixtures/legacy-wake-v1.conf'), 'utf8');
+const legacyStart = legacyWake.indexOf('[macro-dial-one]');
+const legacyEnd = legacyWake.indexOf('[sub-sokrat-push-send]');
+const legacyBody = legacyWake.slice(legacyStart, legacyEnd);
+
+// Execute only the real migration function: never run a PBX installer or touch
+// /etc, service state, network listeners or Asterisk from these regressions.
+function withMigration(original, run) {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sokrat-wake-migration-'));
+    const file = path.join(directory, 'extensions_sokrat.conf');
+    const backups = path.join(directory, 'backups');
+    fs.writeFileSync(file, original, { mode: 0o640 });
+    const source = fs.readFileSync(path.join(root, 'scripts/sokrat-gateway-readiness.sh'), 'utf8');
+    const start = source.indexOf('migrate_legacy_wake_contexts() {');
+    const end = source.indexOf('\n}\n', start) + 2;
+    assert.ok(start > 0 && end > start);
+    const script = 'set -e\nchanged=0\nDIALPLAN_FILE="$1"\nBACKUP_DIR="$2"\n' + source.slice(start, end) + '\nmigrate_legacy_wake_contexts\nprintf "changed=%s\\n" "$changed"\n';
+    const migrate = () => spawnSync('bash', ['-c', script, 'migration-test', file, backups], { encoding: 'utf8' });
+    const backupFiles = () => fs.existsSync(backups) ? fs.readdirSync(backups) : [];
+    try { run({ migrate, backupFiles, file, backups }); }
+    finally { fs.rmSync(directory, { recursive: true, force: true }); }
+}
+
+for (const newline of ['\n', '\r\n']) {
+    test('exact historical v1 migration preserves all retained bytes and is idempotent (' + JSON.stringify(newline) + ')', () => {
+        const prefix = '; operator preamble\n[operator-template](!) ; template\nexten => s,1,Return()\n';
+        const suffix = '[operator-feature](+) ; add priorities\nexten => s,1,NoOp(KEEP)\n[inherited](operator-template) ; inherit\nexten => s,1,Return()';
+        const original = (prefix + legacyWake + suffix).replace(/\n/g, newline);
+        const expected = (prefix + legacyWake.replace(legacyBody, '') + suffix).replace(/\n/g, newline);
+        withMigration(original, ({ migrate, backupFiles, file, backups }) => {
+            const before = fs.statSync(file);
+            const first = migrate();
+            assert.equal(first.status, 0, first.stderr);
+            assert.match(first.stdout, /Removed legacy blanket wake overrides/);
+            assert.match(first.stdout, /changed=1/);
+            assert.equal(fs.readFileSync(file, 'utf8'), expected);
+            const after = fs.statSync(file);
+            assert.equal(after.mode & 0o777, before.mode & 0o777);
+            assert.equal(after.uid, before.uid);
+            assert.equal(after.gid, before.gid);
+            assert.equal(backupFiles().length, 1);
+            const backup = path.join(backups, backupFiles()[0]);
+            assert.equal(fs.readFileSync(backup, 'utf8'), original);
+            assert.equal(fs.statSync(backup).mode & 0o777, 0o600);
+            assert.equal(fs.statSync(backups).mode & 0o777, 0o700);
+            const second = migrate();
+            assert.equal(second.status, 0);
+            assert.match(second.stdout, /changed=0/);
+            assert.equal(fs.readFileSync(file, 'utf8'), expected);
+            assert.equal(fs.statSync(file).ino, after.ino, 'idempotent run must not rewrite');
+            assert.equal(backupFiles().length, 1);
+        });
+    });
+}
+
+test('operator-owned macro names and header options are not proof of legacy ownership', () => {
+    const original = '; Operator fixture\n[macro-dial-one]\nexten => s,1,NoOp(OPERATOR_OWNED_ROUTE)\n[sub-sokrat-push-send]\nexten => s,1,Return()\n[operator-feature](+) ; keep\nexten => s,1,Return()';
+    withMigration(original, ({ migrate, backupFiles, file }) => {
+        assert.equal(migrate().status, 0);
+        assert.equal(fs.readFileSync(file, 'utf8'), original);
+        assert.deepEqual(backupFiles(), []);
+    });
+});
+
+for (const [name, original] of [
+    ['custom macro body', legacyWake.replace('exten => s,1,Gosub(sokrat-wake-dial,s,1(${ARG3}))', 'exten => s,1,NoOp(OPERATOR_OWNED_ROUTE)')],
+    ['custom header suffix', legacyWake.replace('[macro-dial]', '[macro-dial](+) ; operator')],
+    ['missing helper', legacyWake.replace('[sokrat-wake-dial]', '[operator-helper]')],
+    ['missing sender', legacyWake.slice(0, legacyEnd)],
+    ['comment mentioning sender is not a context', legacyWake.slice(0, legacyEnd) + '; [sub-sokrat-push-send]\n'],
+    ['duplicate macro', legacyWake + '[macro-dial-one]\nexten => s,1,Return()\n'],
+    ['duplicate macro with header whitespace', legacyWake + '[macro-dial-one ]\nexten => s,1,Return()\n'],
+    ['template sender is not a replacement context', legacyWake.replace('[sub-sokrat-push-send]', '[sub-sokrat-push-send](!)')],
+    ['duplicate sender', legacyWake + '[sub-sokrat-push-send](+)\nexten => s,1,Return()\n'],
+    ['unrelated context inserted', legacyWake.replace('[sokrat-wake-group]', '[operator-feature](+)\nexten => s,1,Return()\n[sokrat-wake-group]')],
+]) {
+    test('ambiguous v1 migration refuses without modification or backup: ' + name, () => {
+        withMigration(original, ({ migrate, backupFiles, file }) => {
+            const result = migrate();
+            assert.notEqual(result.status, 0);
+            assert.match(result.stderr, /Legacy wake migration refused/);
+            assert.equal(fs.readFileSync(file, 'utf8'), original);
+            assert.deepEqual(backupFiles(), []);
+        });
+    });
+}
+
+test('exact-looking contexts without the historical ownership marker are left alone', () => {
+    const original = legacyWake.slice(legacyStart);
+    withMigration(original, ({ migrate, backupFiles, file }) => {
+        assert.equal(migrate().status, 0);
+        assert.equal(fs.readFileSync(file, 'utf8'), original);
+        assert.deepEqual(backupFiles(), []);
+    });
 });
 
 test('apply-config is not blocked by an optional wake-compiler refusal', () => {

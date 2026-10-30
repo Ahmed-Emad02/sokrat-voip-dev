@@ -151,60 +151,122 @@ changed=0
 # [sub-sokrat-push-hook] into this same file. Those overrides fire a wake for
 # every dialed extension and shadow the shared FreePBX dialing macros, which is
 # exactly what the scoped per-extension compiler replaced. Appending alone would
-# leave an upgraded PBX running both pipelines, so strip the legacy blocks once,
-# keeping a private backup.
+# leave an upgraded PBX running both pipelines. Remove only the complete, exact
+# Sokrat v1 template; never infer ownership from a shared macro name.
 migrate_legacy_wake_contexts() {
     [ -f "$DIALPLAN_FILE" ] || return 0
-    python3 - "$DIALPLAN_FILE" "$BACKUP_DIR" <<'PY'
-import os, sys, time
+    local migration_result
+    migration_result="$(python3 - "$DIALPLAN_FILE" "$BACKUP_DIR" <<'PY'
+import os, re, sys, time
 path, backup_dir = sys.argv[1], sys.argv[2]
 LEGACY = {'macro-dial-one', 'sokrat-wake-dial', 'macro-dial', 'sokrat-wake-group', 'sub-sokrat-push-hook'}
-try:
-    with open(path, 'r', encoding='utf-8') as stream:
-        original = stream.read()
-except OSError:
+# Historical template from d7b0592. Matching is deliberately strict: changed
+# priorities, comments, context options or partial blocks require operator review.
+expected = rb'''[macro-dial-one]
+exten => s,1,Gosub(sokrat-wake-dial,s,1(${ARG3}))
+
+[sokrat-wake-dial]
+exten => s,1,Set(DEXTEN=${ARG1})
+ same => n,GotoIf($["${ARG1}"=""]?done)
+ same => n,Gosub(sub-sokrat-push-hook,s,1(${ARG1}))
+ same => n(done),Return()
+
+[macro-dial]
+exten => s,1,Gosub(sokrat-wake-group,s,1(${ARG3}))
+
+[sokrat-wake-group]
+exten => s,1,Set(SOKRAT_GROUP=${ARG1})
+ same => n,GotoIf($["${SOKRAT_GROUP}"=""]?done)
+ same => n,Set(SOKRAT_IDX=1)
+ same => n(loop),Set(SOKRAT_MEMBER=${CUT(SOKRAT_GROUP,-,${SOKRAT_IDX})})
+ same => n,GotoIf($["${SOKRAT_MEMBER}"=""]?done)
+ same => n,Gosub(sub-sokrat-push-send,s,1(${SOKRAT_MEMBER}))
+ same => n,GotoIf($["${DB(DEVICE/${SOKRAT_MEMBER}/tech)}"!="pjsip"]?next)
+ same => n,GotoIf($["${SOKRAT_GROUP_WAITED}"="1"]?next)
+ same => n,GotoIf($["${PJSIP_DIAL_CONTACTS(${SOKRAT_MEMBER})}"!=""]?next)
+ same => n,Set(SOKRAT_GROUP_WAITED=1)
+ same => n,Set(SOKRAT_WAIT_COUNT=0)
+ same => n(wait1),GotoIf($["${PJSIP_DIAL_CONTACTS(${SOKRAT_MEMBER})}"!=""]?next)
+ same => n,Wait(0.2)
+ same => n,Set(SOKRAT_WAIT_COUNT=$[${SOKRAT_WAIT_COUNT}+1])
+ same => n,GotoIf($[${SOKRAT_WAIT_COUNT}<25]?wait1)
+ same => n(next),Set(SOKRAT_IDX=$[${SOKRAT_IDX}+1])
+ same => n,Goto(loop)
+ same => n(done),Return()
+
+[sub-sokrat-push-hook]
+exten => s,1,NoOp(=== Sokrat mobile push wake-up hook ===)
+same => n,Set(TARGET_EXT=${ARG1})
+same => n,GotoIf($["${TARGET_EXT}"=""]?done)
+same => n,GotoIf($["${SOKRAT_PUSH_SENT}"="1"]?done)
+same => n,Set(__SOKRAT_PUSH_SENT=1)
+same => n,Gosub(sub-sokrat-push-send,s,1(${TARGET_EXT}))
+same => n,GotoIf($["${DB(DEVICE/${TARGET_EXT}/tech)}"!="pjsip"]?done)
+same => n,Ringing()
+same => n,Set(SOKRAT_WAIT_COUNT=0)
+same => n(wait_contact),Set(SOKRAT_CONTACTS=${PJSIP_DIAL_CONTACTS(${TARGET_EXT})})
+same => n,GotoIf($["${SOKRAT_CONTACTS}"!=""]?ready)
+same => n,Wait(0.2)
+same => n,Set(SOKRAT_WAIT_COUNT=$[${SOKRAT_WAIT_COUNT}+1])
+same => n,GotoIf($[${SOKRAT_WAIT_COUNT}<25]?wait_contact)
+same => n(ready),NoOp([callId=${SOKRAT_CALL_ID}] contact wait iterations=${SOKRAT_WAIT_COUNT} contacts=${SOKRAT_CONTACTS})
+same => n(done),Return()
+
+'''
+with open(path, 'rb') as stream:
+    original = stream.read()
+headers = list(re.finditer(rb'(?m)^[ \t]*\[([^\]\r\n]+)\][^\r\n]*(?:\r?\n|$)', original))
+names = [header.group(1).decode('utf-8', 'surrogateescape').strip() for header in headers]
+if not any(name in LEGACY for name in names):
     sys.exit(0)
-blocks, current, kept = [], None, []
-for line in original.splitlines(keepends=True):
-    header = line.strip()
-    if header.startswith('[') and ']' in header:
-        current = header[1:header.index(']')].split('(')[0].strip()
-        blocks.append([current, []])
-    elif blocks:
-        blocks[-1][1].append(line)
-    else:
-        kept.append(line)
-if not any(name in LEGACY for name, _ in blocks):
+marker = b'; Sokrat VOIP - mobile push wake dialplan\n; sokrat-gateway-readiness v1\n'
+starts = [header for header in headers if header.group(1) == b'macro-dial-one'
+          and original[:header.start()].replace(b'\r\n', b'\n').endswith(marker)]
+if not starts:
+    # Shared names alone are not evidence of Sokrat ownership.
     sys.exit(0)
-if '[sub-sokrat-push-send]' not in original:
-    # Nothing to migrate towards; never delete routing without the replacement.
-    sys.exit(0)
+def refuse():
+    sys.exit('Legacy wake migration refused: customized or ambiguous v1 contexts; dialplan unchanged. Review with an operator.')
+if len(starts) != 1 or any(names.count(name) != 1 for name in LEGACY) or names.count('sub-sokrat-push-send') != 1:
+    refuse()
+start = starts[0].start()
+sender = headers[names.index('sub-sokrat-push-send')]
+end = sender.start()
+if (sender.group(0).replace(b'\r\n', b'\n') != b'[sub-sokrat-push-send]\n'
+        or end <= start or original[start:end].replace(b'\r\n', b'\n') != expected):
+    refuse()
+# Splice original bytes, not reconstructed context headers. This preserves (+),
+# inheritance/templates, comments, line endings and even a missing final newline.
+merged = original[:start] + original[end:]
 os.makedirs(backup_dir, mode=0o700, exist_ok=True)
 stamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
-backup = os.path.join(backup_dir, 'extensions_sokrat.conf.wake-v1-' + stamp)
+backup = os.path.join(backup_dir, 'extensions_sokrat.conf.wake-v1-' + stamp + '-' + os.urandom(6).hex())
 fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+with os.fdopen(fd, 'wb') as stream:
     stream.write(original)
-out = list(kept)
-for name, body in blocks:
-    if name in LEGACY:
-        continue
-    out.append('[' + name + ']\n')
-    out.extend(body)
-merged = ''.join(out).rstrip('\n') + '\n'
 info = os.stat(path)
 temporary = path + '.tmp-' + os.urandom(6).hex()
 descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, info.st_mode & 0o777)
-with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
+with os.fdopen(descriptor, 'wb') as stream:
     stream.write(merged)
 os.chown(temporary, info.st_uid, info.st_gid)
+os.chmod(temporary, info.st_mode & 0o777)
 os.replace(temporary, path)
 print('  Removed legacy blanket wake overrides from ' + os.path.basename(path))
 print('  Backup: ' + backup)
 PY
+)" || return $?
+    if [ -n "$migration_result" ]; then
+        echo "$migration_result"
+        changed=1
+    fi
+    return 0
 }
 
-if migrate_legacy_wake_contexts; then :; fi
+if ! migrate_legacy_wake_contexts; then
+    echo "  ERROR: legacy wake migration needs operator review; no dialplan rewrite performed." >&2
+    exit 1
+fi
 
 if [ "$(push_context_count)" -eq 0 ]; then
     echo "  Creating the shared tenant push context in $DIALPLAN_FILE..."
