@@ -149,3 +149,22 @@ print('PASS')
     const result = spawnSync('python3', ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
     assert.equal(result.status, 0, result.stderr);
 });
+
+test('dispatcher stdout is exactly one decision byte for Asterisk SHELL comparisons', () => {
+    const script = `import contextlib,importlib.util,io,stat,types,unittest.mock as mock
+spec=importlib.util.spec_from_file_location('wake',${JSON.stringify(path.join(root, 'scripts/webrtc-wake-dispatch.py'))})
+wake=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake)
+info=types.SimpleNamespace(st_mode=stat.S_IFREG|0o640,st_uid=0,st_size=2)
+with mock.patch.object(wake.Path,'lstat',return_value=info), mock.patch.object(wake.Path,'read_text',return_value='{}'):
+ for decision,expected in [(True,'1'),(False,'0')]:
+  output=io.StringIO()
+  with mock.patch.object(wake,'dispatch',return_value=decision),contextlib.redirect_stdout(output):wake.main()
+  assert output.getvalue()==expected,repr(output.getvalue())
+ output=io.StringIO()
+ with mock.patch.object(wake,'dispatch',side_effect=RuntimeError('private error')),contextlib.redirect_stdout(output):wake.main()
+ assert output.getvalue()=='0',repr(output.getvalue())
+print('PASS')
+`;
+    const result = spawnSync('python3', ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
+    assert.equal(result.status, 0, result.stderr);
+});

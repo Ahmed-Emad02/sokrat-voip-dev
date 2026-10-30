@@ -62,7 +62,9 @@ def main():
         should_wait = dispatch(json.loads(file.read_text()), sys.argv[1:])
     except Exception:
         should_wait = False
-    print('1' if should_wait else '0')
+    # SHELL() preserves stdout, including newlines: the dialplan compares this
+    # decision with the exact string "1". Emit one byte, not a printed line.
+    sys.stdout.write('1' if should_wait else '0')
 
 
 if __name__ == '__main__':
