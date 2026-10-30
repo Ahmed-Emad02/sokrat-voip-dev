@@ -46,7 +46,7 @@ duplicate historical Sokrat wake hooks on that same leg, without editing them.
 # Read-only plan first:
 python3 scripts/install-webrtc-wake.py
 # Apply, leaving reload to the enclosing maintenance operation:
-python3 scripts/install-webrtc-wake.py --apply --no-reload
+python3 scripts/install-webrtc-wake.py --apply --no-reload --verify-access
 ```
 
 Managed output is `/etc/asterisk/extensions_sokrat_webrtc_wake.conf`, root-owned
@@ -55,6 +55,21 @@ preserved. Changes are privately backed up under `/var/backups/sokrat-voip/`.
 The dispatcher is installed root-owned at
 `/usr/local/bin/sokrat-webrtc-wake-dispatch.py`. Apply is serialized; unsafe paths,
 ambiguous includes, unmanaged output and mismatched enrollment refuse safely.
+
+The root-owned dispatcher is installed with mode **0755** (no credentials are
+embedded); hook credentials remain private. Apply repairs dispatcher permission
+drift even when its contents already match. Do not manually copy it with
+root:root0750: that prevents Asterisk from reading the script and produces an
+empty SHELL result instead of sending a wake push.
+
+All three installer/upgrader paths request `--verify-access`. For a paired PBX
+with eligible extensions this reads the dispatcher, private hook, pinned CA and
+managed dialplan as the actual `asterisk` user and runs a no-arguments dispatcher
+probe. It must return exactly one byte (`0`), with exit0 and no stderr. No push,
+call or account mutation occurs. Failure exits nonzero and the installer warns
+that mobile incoming wake is **NOT verified**, without changing desktop routing.
+Unpaired/no-eligible-extension installations skip this check. For a read-only
+post-install check, run `python3 scripts/install-webrtc-wake.py --verify-access`.
 
 The compiler runs during secure pairing, dashboard startup and after the existing
 `retrieve_conf` reload lifecycle, as well as all three installer/upgrader paths.

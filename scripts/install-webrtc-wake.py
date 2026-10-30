@@ -236,10 +236,44 @@ def plan(root):
               (path == output_path and path.stat().st_gid != group)))], extensions
 
 
+def verify_access(root, extensions, runner=subprocess.run):
+    """Exercise real service-user access without sending a push or placing a call."""
+    if not extensions:
+        return 'not-required'
+    if root != Path('/'):
+        raise ValueError('Service-user verification requires the real PBX root')
+    # Credential contents and child stderr must never be emitted to installer
+    # logs. Merely running the dispatcher with no arguments is insufficient:
+    # it intentionally returns 0 even if its private hook config is unreadable.
+    probe = '''import subprocess,sys
+from pathlib import Path
+for name in ('/usr/local/bin/sokrat-webrtc-wake-dispatch.py',
+             '/etc/sokrat/gateway-hook.json', '/etc/frp/gateway-ca.crt',
+             '/etc/asterisk/extensions_sokrat_webrtc_wake.conf'):
+    with open(name, 'rb') as stream:
+        stream.read(1)
+result = subprocess.run(['/usr/bin/python3', '/usr/local/bin/sokrat-webrtc-wake-dispatch.py'],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+if result.returncode != 0 or result.stdout != b'0' or result.stderr:
+    sys.exit(1)
+sys.stdout.write('0')
+'''
+    try:
+        result = runner(['runuser', '-u', 'asterisk', '--', '/usr/bin/python3', '-c', probe],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError('Asterisk-user wake access check could not run; check runuser/Python availability')
+    if result.returncode != 0 or result.stdout != b'0' or result.stderr:
+        raise ValueError('Asterisk-user wake access check failed; verify dispatcher, hook, CA and managed dialplan permissions')
+    return 'passed'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--no-reload', action='store_true')
+    parser.add_argument('--verify-access', action='store_true',
+                        help='verify dispatcher/config access as Asterisk without sending a push')
     parser.add_argument('--root', default='/', help='isolated fixture root; production uses /')
     args = parser.parse_args()
     root = Path(args.root).absolute()
@@ -247,7 +281,10 @@ def main():
         raise ValueError('Root required')
     changes, extensions = plan(root)
     if not args.apply:
-        print(json.dumps({'mode': 'dry-run', 'extensions': extensions, 'changedFiles': [p.name for p, _, _ in changes]}))
+        result = {'mode': 'dry-run', 'extensions': extensions, 'changedFiles': [p.name for p, _, _ in changes]}
+        if args.verify_access:
+            result['accessVerification'] = verify_access(root, extensions)
+        print(json.dumps(result))
         return
     lock_path = root / 'run/sokrat-webrtc-wake.lock'
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -271,10 +308,14 @@ def main():
                 if path.name == NAME:
                     group = grp.getgrnam('asterisk').gr_gid if root == Path('/') else path.parent.stat().st_gid
                 atomic(path, text, mode, group)
-            if not args.no_reload and root == Path('/'):
-                subprocess.run(['asterisk', '-rx', 'dialplan reload'], check=True, timeout=15, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print(json.dumps({'mode': 'apply', 'changed': bool(changes), 'extensions': extensions,
-                          'sourceDigest': hashlib.sha256(read(root / 'etc/asterisk/extensions_additional.conf').encode()).hexdigest()}))
+        verification = verify_access(root, extensions) if args.verify_access else None
+        if changes and not args.no_reload and root == Path('/'):
+            subprocess.run(['asterisk', '-rx', 'dialplan reload'], check=True, timeout=15, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = {'mode': 'apply', 'changed': bool(changes), 'extensions': extensions,
+                  'sourceDigest': hashlib.sha256(read(root / 'etc/asterisk/extensions_additional.conf').encode()).hexdigest()}
+        if args.verify_access:
+            result['accessVerification'] = verification
+        print(json.dumps(result))
 
 
 if __name__ == '__main__':

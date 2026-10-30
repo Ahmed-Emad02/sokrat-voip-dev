@@ -139,6 +139,47 @@ test('all installers, enrollment and post-retrieve_conf lifecycle include the sc
     assert.doesNotMatch(readiness, /^\[macro-dial(?:-one)?\]$/m);
 });
 
+test('online, offline and upgrade entry points all require service-user wake access verification', () => {
+    for (const name of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        const source = fs.readFileSync(path.join(root, name), 'utf8');
+        assert.match(source, /python3 "\$INSTALL_DIR\/scripts\/install-webrtc-wake\.py" --apply --no-reload --verify-access/);
+        assert.match(source, /mobile incoming wake is NOT verified/);
+    }
+});
+
+test('service-user access verification is no-push, fail-closed and never logs private child errors', () => {
+    const script = `import importlib.util,subprocess,types
+from pathlib import Path
+spec=importlib.util.spec_from_file_location('installer',${JSON.stringify(installer)})
+module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+calls=[]
+def runner(args,**kwargs):
+ calls.append((args,kwargs));return types.SimpleNamespace(returncode=0,stdout=b'0',stderr=b'')
+assert module.verify_access(Path('/'),[],runner)=='not-required'
+assert calls==[]
+assert module.verify_access(Path('/'),['404'],runner)=='passed'
+args,kwargs=calls[0]
+assert args[:6]==['runuser','-u','asterisk','--','/usr/bin/python3','-c']
+for path in ('/etc/sokrat/gateway-hook.json','/etc/frp/gateway-ca.crt','/etc/asterisk/extensions_sokrat_webrtc_wake.conf'):
+ assert path in args[6]
+assert "'/usr/local/bin/sokrat-webrtc-wake-dispatch.py']" in args[6]
+assert kwargs==dict(stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15)
+for reply in (types.SimpleNamespace(returncode=2,stdout=b'',stderr=b'private credential'),
+              types.SimpleNamespace(returncode=0,stdout=b'0\\n',stderr=b''),
+              types.SimpleNamespace(returncode=0,stdout=b'0',stderr=b'private credential')):
+ try: module.verify_access(Path('/'),['404'],lambda *a,**kw:reply)
+ except ValueError as error: assert 'private credential' not in str(error)
+ else: raise AssertionError('bad access probe was accepted')
+def unavailable(*args,**kwargs):raise FileNotFoundError('private path')
+try: module.verify_access(Path('/'),['404'],unavailable)
+except ValueError as error: assert 'private path' not in str(error)
+else: raise AssertionError('missing runuser was accepted')
+print('PASS')
+`;
+    const result = spawnSync('python3', ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
+    assert.equal(result.status, 0, result.stderr);
+});
+
 test('dispatcher uses pinned authenticated HTTPS, a short deadline, and only waits for delivered mobile push', () => {
     const script = `import importlib.util,json,ssl,unittest.mock as mock
 spec=importlib.util.spec_from_file_location('wake',${JSON.stringify(path.join(root, 'scripts/webrtc-wake-dispatch.py'))})

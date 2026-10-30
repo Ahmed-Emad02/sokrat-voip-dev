@@ -786,7 +786,9 @@ if [ -f "$INSTALL_DIR/scripts/install-gateway-media-deps.sh" ]; then
     bash "$INSTALL_DIR/scripts/install-gateway-media-deps.sh" || echo "  Warning: reverse TLS media dependencies require attention before pairing"
 fi
 if [ -f "$INSTALL_DIR/scripts/install-webrtc-wake.py" ]; then
-    python3 "$INSTALL_DIR/scripts/install-webrtc-wake.py" --apply --no-reload || echo "  Warning: WebRTC-only wake routes require operator review"
+    # Repair managed metadata even when content is unchanged, then test access
+    # as Asterisk. Never chmod the root-owned dispatcher to root-only 0750.
+    python3 "$INSTALL_DIR/scripts/install-webrtc-wake.py" --apply --no-reload --verify-access || echo "  Warning: mobile incoming wake is NOT verified; review dispatcher/config permissions and compiler output"
 fi
 if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
     FRPC_SRC=""
