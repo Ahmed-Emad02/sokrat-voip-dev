@@ -33,7 +33,14 @@ function sandbox() {
     // be able to touch the real Asterisk configuration.
     const text = fs.readFileSync(SCRIPT, 'utf8')
         .replace(/^DIALPLAN_FILE=.*$/m, `DIALPLAN_FILE=${dialplan}`)
-        .replace(/^STATE_DIR=.*$/m, `STATE_DIR=${state}`);
+        .replace(/^STATE_DIR=.*$/m, `STATE_DIR=${state}`)
+        .replace(/^BACKUP_DIR=.*$/m, `BACKUP_DIR=${path.join(dir, 'backups')}`)
+        // Endpoint availability belongs to the integration preflight. This
+        // filesystem test must not depend on a real PBX or VPN on the runner.
+        .replace(/^ts_ip=.*$/m, 'ts_ip="100.64.0.1"')
+        .replace(/^ws_plain=.*$/m, 'ws_plain="yes"')
+        .replace(/^ws_tls=.*$/m, 'ws_tls="yes"')
+        .replace(/^api=.*$/m, 'api="yes"');
     const script = path.join(dir, 'readiness.sh');
     fs.writeFileSync(script, text, { mode: 0o755 });
     return { dir, dialplan, state, script };
@@ -58,6 +65,7 @@ test('the shared tenant push context is created once and stays idempotent', () =
     assert.equal(run(box, ['--apply']).status, 0);
     const first = fs.readFileSync(box.dialplan, 'utf8');
     assert.match(first, /^\[sub-sokrat-push-send\]$/m);
+    assert.doesNotMatch(first, /^\[macro-dial(?:-one)?\]$/m);
     assert.match(first, /exten => s,1,Set\(TARGET_EXT=/);
     assert.match(first, /SOKRAT_CALLER_NUM=/);
     assert.match(first, /SOKRAT_CALLER_NAME=/);
@@ -83,6 +91,38 @@ test('an existing context is preserved instead of being rewritten', () => {
     const before = fs.readFileSync(box.dialplan, 'utf8');
     assert.equal(run(box, ['--apply']).status, 0);
     assert.equal(fs.readFileSync(box.dialplan, 'utf8'), before);
+});
+
+test('full readiness migrates only the known v1 block and remains idempotent', () => {
+    const box = sandbox();
+    try {
+        const original = fs.readFileSync(path.join(__dirname, 'fixtures/legacy-wake-v1.conf'), 'utf8');
+        fs.writeFileSync(box.dialplan, original);
+        const result = run(box, ['--apply']);
+        assert.equal(result.status, 0, result.stderr);
+        const migrated = fs.readFileSync(box.dialplan, 'utf8');
+        assert.doesNotMatch(migrated, /^\[macro-dial(?:-one)?\]$/m);
+        assert.match(migrated, /^\[sub-sokrat-push-send\]$/m);
+        assert.equal(fs.readdirSync(path.join(box.dir, 'backups')).length, 1);
+        assert.equal(run(box, ['--apply']).status, 0);
+        assert.equal(fs.readFileSync(box.dialplan, 'utf8'), migrated);
+        assert.equal(fs.readdirSync(path.join(box.dir, 'backups')).length, 1);
+    } finally { fs.rmSync(box.dir, { recursive: true, force: true }); }
+});
+
+test('full readiness stops before manifest publication on customized legacy routing', () => {
+    const box = sandbox();
+    try {
+        const original = fs.readFileSync(path.join(__dirname, 'fixtures/legacy-wake-v1.conf'), 'utf8')
+            .replace('[macro-dial]', '[macro-dial](+) ; operator');
+        fs.writeFileSync(box.dialplan, original);
+        const result = run(box, ['--apply']);
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /legacy wake migration needs operator review/);
+        assert.equal(fs.readFileSync(box.dialplan, 'utf8'), original);
+        assert.equal(fs.existsSync(path.join(box.state, 'pbx-gateway.json')), false);
+        assert.equal(fs.existsSync(path.join(box.dir, 'backups')), false);
+    } finally { fs.rmSync(box.dir, { recursive: true, force: true }); }
 });
 
 test('the readiness manifest is valid JSON and carries no secrets', () => {

@@ -41,6 +41,16 @@ fi
 SELF_PATH=$(readlink -f "$0" 2>/dev/null || echo "$0")
 SELF_HASH_BEFORE=$(sha256sum "$SELF_PATH" 2>/dev/null | cut -d' ' -f1 || echo "")
 
+# Preserve the selected feature/release branch instead of silently merging main
+# into a reverse-TLS installation. Never overwrite an operator's working tree.
+REPO_BRANCH=${SOKRAT_PBX_BRANCH:-$(git -C "$INSTALL_DIR" symbolic-ref --short HEAD 2>/dev/null || printf '%s' main)}
+git check-ref-format --branch "$REPO_BRANCH" >/dev/null || { echo 'Invalid PBX release branch' >&2; exit 1; }
+if [ -d "$INSTALL_DIR/.git" ] &&
+   { ! git -C "$INSTALL_DIR" diff --quiet || ! git -C "$INSTALL_DIR" diff --cached --quiet; }; then
+    echo 'Upgrade refused: preserve/review existing tracked PBX changes before upgrading.' >&2
+    exit 1
+fi
+
 # Determine MySQL / MariaDB connection parameters safely
 detect_mysql_auth() {
     local pwd
@@ -68,6 +78,16 @@ read -r -a MYSQL_AUTH <<< "$MYSQL_AUTH_STR"
 echo "[1/7] Backing up Asterisk configurations and database schemas..."
 mkdir -p "$INSTALL_DIR/backups"
 
+# Reverse-TLS identity, approvals and media credentials must survive upgrades.
+# These archives contain private keys: keep them root-only, outside Git.
+GATEWAY_BACKUP="/var/backups/sokrat-voip/gateway-${BACKUP_TIMESTAMP}"
+install -d -m 0700 "$GATEWAY_BACKUP"
+for directory in /etc/sokrat /etc/frp; do
+    if [ -d "$directory" ]; then
+        (umask 077; tar -C / -czf "$GATEWAY_BACKUP/$(basename "$directory").tar.gz" "${directory#/}")
+    fi
+done
+
 if [ -f /etc/asterisk/extensions_custom.conf ]; then
     cp -a /etc/asterisk/extensions_custom.conf "$INSTALL_DIR/backups/extensions_custom.conf.bak_${BACKUP_TIMESTAMP}"
     echo "  Backed up extensions_custom.conf"
@@ -88,14 +108,33 @@ echo "${BACKUP_TIMESTAMP}" > "$INSTALL_DIR/backups/.last_preupgrade_backup"
 echo "[2/7] Updating Sokrat VoIP codebase..."
 if [ ! -d "$INSTALL_DIR" ]; then
     echo "  Cloning repository into $INSTALL_DIR..."
-    timeout 60 git clone "$REPO_URL" "$INSTALL_DIR" || echo "  Warning: Git clone timed out or failed."
+    timeout 60 git clone --branch "$REPO_BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR" || { echo 'PBX clone failed; upgrade stopped' >&2; exit 1; }
 elif [ -d "$INSTALL_DIR/.git" ]; then
     cd "$INSTALL_DIR"
     echo "  Checking for remote repository updates..."
-    if timeout 60 git fetch origin main >/dev/null 2>&1; then
-        git merge --ff-only origin/main 2>/dev/null || git pull --ff-only origin main 2>/dev/null || true
+    # An air-gapped PBX (offline bundle install) has no upstream. Keep applying
+    # the schema, driver and dialplan steps from the on-disk codebase instead of
+    # aborting the whole upgrade, but say so loudly. A reachable remote that
+    # refuses the fast-forward is still fatal, so nothing is silently discarded.
+    CODE_UPDATED=1
+    if timeout 60 git fetch origin "$REPO_BRANCH" >/dev/null 2>&1; then
+        if [ "$(git symbolic-ref --short HEAD 2>/dev/null || echo '')" != "$REPO_BRANCH" ]; then
+            if git show-ref --verify --quiet "refs/heads/$REPO_BRANCH"; then
+                git checkout "$REPO_BRANCH" || { echo 'PBX branch checkout refused; upgrade stopped' >&2; exit 1; }
+            else
+                git checkout -b "$REPO_BRANCH" --track "origin/$REPO_BRANCH" || { echo 'PBX branch checkout refused; upgrade stopped' >&2; exit 1; }
+            fi
+        fi
+        git merge --ff-only "origin/$REPO_BRANCH" || { echo 'PBX fast-forward refused; no working changes discarded' >&2; exit 1; }
     else
-        echo "  Notice: Remote fetch timed out or offline, proceeding with current codebase."
+        CODE_UPDATED=0
+        BRANCH_COUNT=$(git rev-list --count "origin/$REPO_BRANCH..HEAD" 2>/dev/null || echo 0)
+        if [ "${BRANCH_COUNT:-0}" != "0" ]; then
+            echo '  WARNING: remote is unreachable and this PBX has unpushed commits; continuing with the on-disk codebase.' >&2
+        else
+            echo '  WARNING: remote is unreachable (offline/air-gapped); continuing with the on-disk codebase.' >&2
+        fi
+        echo '  WARNING: code was NOT updated - schema, driver and dialplan steps still run.' >&2
     fi
     echo "  Codebase at commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'current')"
 
@@ -1083,6 +1122,14 @@ PYEOF
     fi
 
     # Ensure Sokrat Reverse Tunnel client (frpc) is available
+    if [ -f "$INSTALL_DIR/scripts/install-gateway-media-deps.sh" ]; then
+        bash "$INSTALL_DIR/scripts/install-gateway-media-deps.sh" || echo "  Warning: reverse TLS media dependencies require attention before pairing"
+    fi
+    if [ -f "$INSTALL_DIR/scripts/install-webrtc-wake.py" ]; then
+        # Repair managed metadata even when content is unchanged, then test access
+        # as Asterisk. Never chmod the root-owned dispatcher to root-only 0750.
+        python3 "$INSTALL_DIR/scripts/install-webrtc-wake.py" --apply --no-reload --verify-access || echo "  Warning: mobile incoming wake is NOT verified; review dispatcher/config permissions and compiler output"
+    fi
     if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
         echo "  Ensuring Sokrat Reverse Tunnel client (frpc) is installed..."
         FRPC_SRC=""

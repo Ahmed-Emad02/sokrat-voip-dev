@@ -6,13 +6,17 @@
 # can be reached and can wake a device. This script prepares the PBX side of
 # that contract on a fresh install and on every upgrade:
 #
-#   1. complete push wake dialplan in /etc/asterisk/extensions_sokrat.conf,
-#      including macro-dial-one hook, sokrat-wake-dial, group wake, and the
-#      shared push context [sub-sokrat-push-send] carrying the variables the
+#   1. an additive shared push context in /etc/asterisk/extensions_sokrat.conf,
+#      carrying the variables the
 #      gateway's tenant hook expects (TARGET_EXT, SOKRAT_LINKEDID,
 #      SOKRAT_CALL_ID, SOKRAT_CALLER_NUM, SOKRAT_CALLER_NAME).
-#   2. automatic wiring of #include extensions_sokrat.conf into the override
-#      dialplan so priority 1 of macro-dial-one executes cleanly.
+#   2. inclusion of that context without replacing any shared dialing macro.
+#      Actual incoming wake is separately compiled by install-webrtc-wake.py
+#      for exact provisioned WebRTC targets only. Legacy blanket overrides
+#      ([macro-dial-one], [macro-dial], [sokrat-wake-dial],
+#      [sokrat-wake-group], [sub-sokrat-push-hook]) written by older releases
+#      are removed once, after a private backup, so an upgrade cannot leave two
+#      wake pipelines running at the same time.
 #   3. a stable installation id and a readiness manifest in /etc/sokrat,
 #      so the dashboard/operator can verify what the gateway will see.
 #   4. a check of the endpoints the gateway dials: the Asterisk SIP
@@ -43,6 +47,7 @@ DIALPLAN_FILE="/etc/asterisk/extensions_sokrat.conf"
 STATE_DIR="/etc/sokrat"
 MANIFEST="$STATE_DIR/pbx-gateway.json"
 INSTALL_ID_FILE="$STATE_DIR/pbx-installation-id"
+BACKUP_DIR="/var/backups/sokrat-voip"
 MARKER="; sokrat-gateway-readiness v1"
 PUSH_GATEWAY_URL="${SOKRAT_PUSH_GATEWAY_URL:-http://127.0.0.1:8095}"
 SIP_WS_PLAIN_PORT=8088
@@ -139,13 +144,25 @@ fi
 install_id="$(tr -d '[:space:]' < "$INSTALL_ID_FILE")"
 
 changed=0
-if [ "$(push_context_count)" -eq 0 ]; then
-    echo "  Creating the shared tenant push context in $DIALPLAN_FILE..."
-    touch "$DIALPLAN_FILE"
-    cat >> "$DIALPLAN_FILE" <<'EOF'
-; Sokrat VOIP - mobile push wake dialplan
-; sokrat-gateway-readiness v1
-[macro-dial-one]
+
+# ── legacy wake-hook migration ───────────────────────────────────────────────
+# Releases before this one wrote blanket [macro-dial-one] / [macro-dial]
+# overrides plus [sokrat-wake-dial], [sokrat-wake-group] and
+# [sub-sokrat-push-hook] into this same file. Those overrides fire a wake for
+# every dialed extension and shadow the shared FreePBX dialing macros, which is
+# exactly what the scoped per-extension compiler replaced. Appending alone would
+# leave an upgraded PBX running both pipelines. Remove only the complete, exact
+# Sokrat v1 template; never infer ownership from a shared macro name.
+migrate_legacy_wake_contexts() {
+    [ -f "$DIALPLAN_FILE" ] || return 0
+    local migration_result
+    migration_result="$(python3 - "$DIALPLAN_FILE" "$BACKUP_DIR" <<'PY'
+import os, re, sys, time
+path, backup_dir = sys.argv[1], sys.argv[2]
+LEGACY = {'macro-dial-one', 'sokrat-wake-dial', 'macro-dial', 'sokrat-wake-group', 'sub-sokrat-push-hook'}
+# Historical template from d7b0592. Matching is deliberately strict: changed
+# priorities, comments, context options or partial blocks require operator review.
+expected = rb'''[macro-dial-one]
 exten => s,1,Gosub(sokrat-wake-dial,s,1(${ARG3}))
 
 [sokrat-wake-dial]
@@ -195,6 +212,68 @@ same => n,GotoIf($[${SOKRAT_WAIT_COUNT}<25]?wait_contact)
 same => n(ready),NoOp([callId=${SOKRAT_CALL_ID}] contact wait iterations=${SOKRAT_WAIT_COUNT} contacts=${SOKRAT_CONTACTS})
 same => n(done),Return()
 
+'''
+with open(path, 'rb') as stream:
+    original = stream.read()
+headers = list(re.finditer(rb'(?m)^[ \t]*\[([^\]\r\n]+)\][^\r\n]*(?:\r?\n|$)', original))
+names = [header.group(1).decode('utf-8', 'surrogateescape').strip() for header in headers]
+if not any(name in LEGACY for name in names):
+    sys.exit(0)
+marker = b'; Sokrat VOIP - mobile push wake dialplan\n; sokrat-gateway-readiness v1\n'
+starts = [header for header in headers if header.group(1) == b'macro-dial-one'
+          and original[:header.start()].replace(b'\r\n', b'\n').endswith(marker)]
+if not starts:
+    # Shared names alone are not evidence of Sokrat ownership.
+    sys.exit(0)
+def refuse():
+    sys.exit('Legacy wake migration refused: customized or ambiguous v1 contexts; dialplan unchanged. Review with an operator.')
+if len(starts) != 1 or any(names.count(name) != 1 for name in LEGACY) or names.count('sub-sokrat-push-send') != 1:
+    refuse()
+start = starts[0].start()
+sender = headers[names.index('sub-sokrat-push-send')]
+end = sender.start()
+if (sender.group(0).replace(b'\r\n', b'\n') != b'[sub-sokrat-push-send]\n'
+        or end <= start or original[start:end].replace(b'\r\n', b'\n') != expected):
+    refuse()
+# Splice original bytes, not reconstructed context headers. This preserves (+),
+# inheritance/templates, comments, line endings and even a missing final newline.
+merged = original[:start] + original[end:]
+os.makedirs(backup_dir, mode=0o700, exist_ok=True)
+stamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
+backup = os.path.join(backup_dir, 'extensions_sokrat.conf.wake-v1-' + stamp + '-' + os.urandom(6).hex())
+fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+with os.fdopen(fd, 'wb') as stream:
+    stream.write(original)
+info = os.stat(path)
+temporary = path + '.tmp-' + os.urandom(6).hex()
+descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, info.st_mode & 0o777)
+with os.fdopen(descriptor, 'wb') as stream:
+    stream.write(merged)
+os.chown(temporary, info.st_uid, info.st_gid)
+os.chmod(temporary, info.st_mode & 0o777)
+os.replace(temporary, path)
+print('  Removed legacy blanket wake overrides from ' + os.path.basename(path))
+print('  Backup: ' + backup)
+PY
+)" || return $?
+    if [ -n "$migration_result" ]; then
+        echo "$migration_result"
+        changed=1
+    fi
+    return 0
+}
+
+if ! migrate_legacy_wake_contexts; then
+    echo "  ERROR: legacy wake migration needs operator review; no dialplan rewrite performed." >&2
+    exit 1
+fi
+
+if [ "$(push_context_count)" -eq 0 ]; then
+    echo "  Creating the shared tenant push context in $DIALPLAN_FILE..."
+    touch "$DIALPLAN_FILE"
+    cat >> "$DIALPLAN_FILE" <<'EOF'
+; Sokrat VOIP - mobile push wake dialplan
+; sokrat-gateway-readiness v1
 [sub-sokrat-push-send]
 exten => s,1,Set(TARGET_EXT=${ARG1})
  same => n,GotoIf($["${TARGET_EXT}"=""]?done)
@@ -212,13 +291,15 @@ exten => s,1,Set(TARGET_EXT=${ARG1})
 EOF
     chown asterisk:asterisk "$DIALPLAN_FILE" 2>/dev/null || true
     chmod 0640 "$DIALPLAN_FILE" 2>/dev/null || true
-    for ov in "/etc/asterisk/extensions_override_issabelpbx.conf" "/etc/asterisk/extensions_override_freepbx.conf"; do
-        if [ -f "$ov" ] && ! grep -q "extensions_sokrat.conf" "$ov" 2>/dev/null; then
-            echo "#include extensions_sokrat.conf" >> "$ov"
-        fi
-    done
+    if [ "$DIALPLAN_FILE" = "/etc/asterisk/extensions_sokrat.conf" ]; then
+        for ov in "/etc/asterisk/extensions_override_issabelpbx.conf" "/etc/asterisk/extensions_override_freepbx.conf"; do
+            if [ -f "$ov" ] && ! grep -q "extensions_sokrat.conf" "$ov" 2>/dev/null; then
+                echo "#include extensions_sokrat.conf" >> "$ov"
+            fi
+        done
+    fi
     changed=1
-    echo "  Shared tenant push context and wake hooks created."
+    echo "  Shared tenant push context created; no shared dialing macros changed."
 fi
 
 # Readiness manifest: no secrets, only what the gateway/operator needs to see.
