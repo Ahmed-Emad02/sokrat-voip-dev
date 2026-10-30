@@ -33,4 +33,7 @@ test('chan_dongle Patch: Enforces callwaiting=no, rejects waiting calls with UDU
     assert.ok(fs.existsSync(binPath), 'installer-bundle/binaries/chan_dongle.so must exist');
     const binStat = fs.statSync(binPath);
     assert.ok(binStat.size > 200000 && binStat.size < 400000, `chan_dongle.so binary must be stripped and sane size (current: ${binStat.size} bytes)`);
+
+    // 7. Non-fatal U2DIAG initialization (DYNI) for modern 21.x firmwares
+    assert.match(patch, /ATQ_CMD_DECLARE_DYNI\(CMD_AT_U2DIAG\)/, 'CMD_AT_U2DIAG must be declared with DYNI (ignore flag) for 21.x firmware compatibility');
 });
