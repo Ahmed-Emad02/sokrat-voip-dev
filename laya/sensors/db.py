@@ -85,16 +85,22 @@ def upsert_dongle_health(health_data):
         "last_heal_at": health_data.get("last_heal_at"),
         "consecutive_errors": health_data.get("consecutive_errors", 0),
     }
+    conn = None
     try:
         conn = get_connection()
         with conn.cursor() as cursor:
             cursor.execute(query, clean_params)
-        conn.close()
         return True
     except Exception as e:
         # Avoid crashing daemon on transient DB errors
         print(f"[LAYA-DB-WARN] upsert_dongle_health error: {e}")
         return False
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def record_maintenance_event(dongle_name, trigger_reason, recovery_level, action_taken, result="in_progress", details=""):
     """
@@ -106,17 +112,23 @@ def record_maintenance_event(dongle_name, trigger_reason, recovery_level, action
         `dongle_name`, `trigger_reason`, `recovery_level`, `action_taken`, `result`, `details`, `created_at`
     ) VALUES (%s, %s, %s, %s, %s, %s, NOW())
     """
+    conn = None
     try:
         conn = get_connection()
         event_id = None
         with conn.cursor() as cursor:
             cursor.execute(query, (dongle_name, trigger_reason, recovery_level, action_taken, result, details))
             event_id = cursor.lastrowid
-        conn.close()
         return event_id
     except Exception as e:
         print(f"[LAYA-DB-WARN] record_maintenance_event error: {e}")
         return None
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def update_maintenance_event_result(event_id, result, details=""):
     """
@@ -133,50 +145,68 @@ def update_maintenance_event_result(event_id, result, details=""):
         END
     WHERE `id` = %s
     """
+    conn = None
     try:
         conn = get_connection()
         clean_det = str(details).strip() if details else ""
         with conn.cursor() as cursor:
             cursor.execute(query, (result, clean_det, clean_det, event_id))
-        conn.close()
         return True
     except Exception as e:
         print(f"[LAYA-DB-WARN] update_event_result error: {e}")
         return False
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def get_all_dongle_health():
     """
     Fetches all dongle health rows.
     """
     query = "SELECT * FROM `laya_dongle_health` ORDER BY `dongle_name` ASC"
+    conn = None
     try:
         conn = get_connection()
         rows = []
         with conn.cursor() as cursor:
             cursor.execute(query)
             rows = cursor.fetchall()
-        conn.close()
         return rows
     except Exception as e:
         print(f"[LAYA-DB-WARN] get_all_dongle_health error: {e}")
         return []
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def get_recent_maintenance_events(limit=50):
     """
     Fetches recent maintenance events.
     """
     query = "SELECT * FROM `laya_maintenance_events` ORDER BY `id` DESC LIMIT %s"
+    conn = None
     try:
         conn = get_connection()
         rows = []
         with conn.cursor() as cursor:
             cursor.execute(query, (limit,))
             rows = cursor.fetchall()
-        conn.close()
         return rows
     except Exception as e:
         print(f"[LAYA-DB-WARN] get_recent_maintenance_events error: {e}")
         return []
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def get_alert_settings():
     """
@@ -189,6 +219,7 @@ def get_alert_settings():
         "client_name": ""
     }
     query = "SELECT setting_key, setting_value FROM `dashboard_settings` WHERE setting_key LIKE 'alert_telegram%' OR setting_key = 'client_name'"
+    conn = None
     try:
         conn = get_connection()
         with conn.cursor() as cursor:
@@ -205,9 +236,14 @@ def get_alert_settings():
                     settings["telegram_chat_id"] = str(v).strip()
                 elif k == "client_name" and v:
                     settings["client_name"] = str(v).strip()
-        conn.close()
     except Exception as e:
         print(f"[LAYA-DB-WARN] get_alert_settings error: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
     return settings
 
 def get_scheduled_restart_settings():
@@ -222,6 +258,7 @@ def get_scheduled_restart_settings():
         "last_run": ""
     }
     query = "SELECT setting_key, setting_value FROM `dashboard_settings` WHERE setting_key LIKE 'laya_scheduled_restart%'"
+    conn = None
     try:
         conn = get_connection()
         with conn.cursor() as cursor:
@@ -243,9 +280,14 @@ def get_scheduled_restart_settings():
                         pass
                 elif k == "laya_scheduled_restart_last_run" and v:
                     settings["last_run"] = str(v).strip()
-        conn.close()
     except Exception as e:
         print(f"[LAYA-DB-WARN] get_scheduled_restart_settings error: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
     return settings
 
 def is_kill_switch_active():
@@ -253,19 +295,26 @@ def is_kill_switch_active():
     Checks if Laya Agent kill switch is active (default is True / disabled unless switched on).
     """
     query = "SELECT setting_value FROM `dashboard_settings` WHERE setting_key = 'laya_kill_switch_active' LIMIT 1"
+    conn = None
     try:
         conn = get_connection()
+        row = None
         with conn.cursor() as cursor:
             cursor.execute(query)
             row = cursor.fetchone()
-            if row:
-                v = str(row.get("setting_value", "")).lower().strip()
-                conn.close()
-                return v in ("true", "1", "yes")
-        conn.close()
+        if row:
+            v = str(row.get("setting_value", "")).lower().strip()
+            return v in ("true", "1", "yes")
+        return True
     except Exception as e:
         print(f"[LAYA-DB-WARN] is_kill_switch_active error: {e}")
-    return True
+        return True
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def set_scheduled_restart_setting(key, value):
     """
@@ -276,16 +325,22 @@ def set_scheduled_restart_setting(key, value):
     VALUES (%s, %s)
     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
     """
+    conn = None
     try:
         conn = get_connection()
         with conn.cursor() as cursor:
             cursor.execute(query, (key, str(value)))
         conn.commit()
-        conn.close()
         return True
     except Exception as e:
         print(f"[LAYA-DB-WARN] set_scheduled_restart_setting error: {e}")
         return False
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def prune_stale_dongle_health(valid_dongles, conf_path="/etc/asterisk/dongle.conf"):
@@ -323,17 +378,23 @@ def prune_stale_dongle_health(valid_dongles, conf_path="/etc/asterisk/dongle.con
 
     placeholders = ", ".join(["%s"] * len(valid))
     query = f"DELETE FROM `laya_dongle_health` WHERE LOWER(`dongle_name`) NOT IN ({placeholders})"
+    conn = None
     try:
         conn = get_connection()
         with conn.cursor() as cursor:
             cursor.execute(query, tuple(valid))
             deleted = cursor.rowcount
         conn.commit()
-        conn.close()
         return {"pruned": deleted, "kept": sorted(valid), "error": None}
     except Exception as e:
         print(f"[LAYA-DB-WARN] prune_stale_dongle_health error: {e}")
         return {"pruned": 0, "kept": sorted(valid), "error": str(e)}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def get_baseband_hygiene_settings():
     """
@@ -356,6 +417,7 @@ def get_baseband_hygiene_settings():
         "recovery_timeout_sec": 60,
     }
     query = "SELECT setting_key, setting_value FROM `dashboard_settings` WHERE setting_key LIKE 'laya_baseband%' OR setting_key LIKE 'laya_cfun%'"
+    conn = None
     try:
         conn = get_connection()
         with conn.cursor() as cursor:
@@ -382,7 +444,12 @@ def get_baseband_hygiene_settings():
                     settings["recovery_timeout_sec"] = max(15, int(v))
                 except ValueError:
                     pass
-        conn.close()
     except Exception as e:
         print(f"[LAYA-DB-WARN] get_baseband_hygiene_settings error: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
     return settings
