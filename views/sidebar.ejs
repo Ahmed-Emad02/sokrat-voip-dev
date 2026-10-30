@@ -3867,46 +3867,44 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                 </button>
             </div>
 
-            <!-- Gateway Address & Port -->
-            <div class="grid grid-cols-3 gap-3">
-                <div class="col-span-2">
-                    <label for="gwServerAddr" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= isRtl ? 'عنوان البوابة (Gateway Host)' : 'Gateway Host / IP' %></label>
-                    <input type="text" id="gwServerAddr" name="serverAddr" required placeholder="89.117.54.235" autocomplete="off" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition">
-                </div>
-                <div>
-                    <label for="gwServerPort" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= isRtl ? 'المنفذ' : 'Port' %></label>
-                    <input type="number" id="gwServerPort" name="serverPort" value="7000" min="1" max="65535" required autocomplete="off" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] focus:outline-none focus:border-[var(--accent-color)] transition">
-                </div>
+            <!-- Secure pairing code (not configured) -->
+            <div id="gwPairingSection">
+                <label for="gwPairingCode" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= isRtl ? 'رمز الاقتران الآمن (Secure Pairing Code)' : 'Secure Pairing Code' %></label>
+                <textarea id="gwPairingCode" name="token" rows="3" autocomplete="off" spellcheck="false" dir="ltr" placeholder="sk_pair_v2_..." class="w-full px-3 py-2 rounded-lg text-xs font-mono bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition resize-none break-all"></textarea>
+                <p class="mt-1.5 text-[11px] text-[var(--text-muted)] leading-relaxed">
+                    <%= isRtl
+                        ? 'الصق رمز الاقتران من لوحة تحكم البوابة. يحمل الرمز عنوان البوابة ومنفذها وشهادة CA المثبتة، لذلك لا حاجة لإدخالها يدوياً.'
+                        : 'Paste the one-time pairing code from the Gateway dashboard. It already carries the gateway host, port and pinned CA certificate, so no manual host or port entry is needed.' %>
+                </p>
+                <div id="gwPairingPreview" class="mt-2 hidden p-2.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)] text-[11px] font-mono text-[var(--text-secondary)]"></div>
             </div>
 
-            <!-- Token -->
-            <div>
-                <label for="gwToken" class="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5"><%= isRtl ? 'مفتاح مصادقة النفق (Auth Token)' : 'Tunnel Auth Token' %></label>
-                <div class="relative">
-                    <input type="password" id="gwToken" name="token" autocomplete="off" placeholder="<%= isRtl ? 'أدخل المفتاح أو اتركه فارغاً للاحتفاظ بالحالي' : 'Enter token or leave blank to keep existing' %>" class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-color)] transition pr-10">
-                    <button type="button" onclick="toggleGwTokenVisibility()" class="absolute inset-y-0 end-0 px-3 flex items-center text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                        <svg id="gwTokenEyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    </button>
+            <!-- Active enrollment summary (configured) -->
+            <div id="gwEnrollmentSection" class="hidden space-y-2">
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="p-2.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                        <div class="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-bold"><%= isRtl ? 'البوابة' : 'Gateway' %></div>
+                        <div id="gwEnrolledHost" class="font-mono text-[var(--text-primary)] truncate">-</div>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                        <div class="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-bold"><%= isRtl ? 'معرّف السنترال' : 'PBX ID' %></div>
+                        <div id="gwEnrolledPbx" class="font-mono text-[var(--text-primary)] truncate">-</div>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                        <div class="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-bold"><%= isRtl ? 'نفق TLS' : 'Reverse TLS Tunnel' %></div>
+                        <div id="gwEnrolledTunnel" class="font-mono text-[var(--text-primary)] truncate">-</div>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-primary)]">
+                        <div class="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-bold"><%= isRtl ? 'الوسائط المعزولة' : 'Isolated Media' %></div>
+                        <div id="gwEnrolledMedia" class="font-mono text-[var(--text-primary)] truncate">-</div>
+                    </div>
                 </div>
+                <p class="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                    <%= isRtl
+                        ? 'هذا الربط مثبت بشهادة CA. لإعادة الربط ببوابة أخرى، افصل الاتصال أولاً ثم الصق رمز اقتران جديد.'
+                        : 'This enrollment is pinned to a CA. To pair a different gateway, disconnect first and then paste a new pairing code.' %>
+                </p>
             </div>
-
-            <!-- Remote Ports (Advanced Collapsible / Details) -->
-            <details class="group border border-[var(--border-primary)] rounded-xl bg-[var(--bg-card)] p-3 text-xs">
-                <summary class="font-bold text-[var(--text-secondary)] cursor-pointer flex items-center justify-between">
-                    <span><%= isRtl ? 'منافذ التوجيه البعيدة (متقدم)' : 'Remote Forwarded Ports (Advanced)' %></span>
-                    <span class="text-[10px] text-[var(--text-muted)] group-open:rotate-180 transition-transform">▼</span>
-                </summary>
-                <div class="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-[var(--border-primary)]">
-                    <div>
-                        <label for="gwRemoteWsPort" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1">Asterisk WS (18088)</label>
-                        <input type="number" id="gwRemoteWsPort" name="remoteWsPort" value="18088" min="1024" max="65535" autocomplete="off" class="w-full px-2.5 py-1.5 rounded-lg text-xs bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border-primary)]">
-                    </div>
-                    <div>
-                        <label for="gwRemoteApiPort" class="block text-[11px] font-bold text-[var(--text-secondary)] mb-1">Sokrat API (18080)</label>
-                        <input type="number" id="gwRemoteApiPort" name="remoteApiPort" value="18080" min="1024" max="65535" autocomplete="off" class="w-full px-2.5 py-1.5 rounded-lg text-xs bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border-primary)]">
-                    </div>
-                </div>
-            </details>
 
             <div id="gwStatusMsg" class="text-xs p-2.5 rounded-lg hidden"></div>
 
@@ -3919,7 +3917,7 @@ document.addEventListener('DOMContentLoaded', function() { updateClock(); setInt
                         <%= isRtl ? 'إغلاق' : 'Close' %>
                     </button>
                     <button type="submit" id="gwConnectBtn" class="px-4 py-2 rounded-lg text-xs font-bold text-white bg-[var(--accent-color)] hover:bg-[#e0352b] transition cursor-pointer flex items-center gap-1.5">
-                        <span id="gwConnectBtnText"><%= isRtl ? 'اتصال بالبوابة' : 'Connect Gateway' %></span>
+                        <span id="gwConnectBtnText"><%= isRtl ? 'اقتران آمن' : 'Pair Securely' %></span>
                     </button>
                 </div>
             </div>
@@ -7002,6 +7000,41 @@ function toggleGwTokenVisibility() {
 }
 window.toggleGwTokenVisibility = toggleGwTokenVisibility;
 
+// The pairing code is base64url(JSON{v,host,port,ca,secret}). Decode only the
+// non-secret routing fields for an operator-visible confirmation - the secret is
+// never displayed and the code is never stored client-side.
+function gatewayPairingPreview(code) {
+    if (!code || !code.startsWith('sk_pair_v2_')) return null;
+    try {
+        const b64 = code.slice(11).replace(/-/g, '+').replace(/_/g, '/');
+        const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+        const bytes = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+        const decoded = JSON.parse(new TextDecoder().decode(bytes));
+        if (decoded.v !== 2 || typeof decoded.host !== 'string' || !Number.isInteger(decoded.port)) return null;
+        return { host: decoded.host, port: decoded.port };
+    } catch (_) {
+        return null;
+    }
+}
+
+function renderGatewayPairingPreview() {
+    const field = document.getElementById('gwPairingCode');
+    const preview = document.getElementById('gwPairingPreview');
+    if (!field || !preview) return;
+    const code = field.value.trim();
+    if (!code) {
+        preview.classList.add('hidden');
+        preview.textContent = '';
+        return;
+    }
+    const info = gatewayPairingPreview(code);
+    preview.classList.remove('hidden');
+    preview.textContent = info
+        ? 'Gateway: ' + info.host + ':' + info.port
+        : 'Pairing code not recognised yet (expects sk_pair_v2_...).';
+}
+window.renderGatewayPairingPreview = renderGatewayPairingPreview;
+
 async function loadGatewayTunnelStatus() {
     const dot = document.getElementById('gwStatusDot');
     const text = document.getElementById('gwStatusText');
@@ -7018,15 +7051,24 @@ async function loadGatewayTunnelStatus() {
             return;
         }
         const data = await resp.json();
-        const serverInput = document.getElementById('gwServerAddr');
-        const portInput = document.getElementById('gwServerPort');
-        const wsInput = document.getElementById('gwRemoteWsPort');
-        const apiInput = document.getElementById('gwRemoteApiPort');
+        const pairingSection = document.getElementById('gwPairingSection');
+        const enrollmentSection = document.getElementById('gwEnrollmentSection');
+        const hostEl = document.getElementById('gwEnrolledHost');
+        const pbxEl = document.getElementById('gwEnrolledPbx');
+        const tunnelEl = document.getElementById('gwEnrolledTunnel');
+        const mediaEl = document.getElementById('gwEnrolledMedia');
 
-        if (serverInput && data.serverAddr) serverInput.value = data.serverAddr;
-        if (portInput && data.serverPort) portInput.value = data.serverPort;
-        if (wsInput && data.remoteWsPort) wsInput.value = data.remoteWsPort;
-        if (apiInput && data.remoteApiPort) apiInput.value = data.remoteApiPort;
+        // An enrollment is authoritative: hide the one-shot pairing form once a
+        // pinned identity exists so an operator cannot silently re-pair.
+        const configured = Boolean(data.configured);
+        if (pairingSection) pairingSection.classList.toggle('hidden', configured);
+        if (enrollmentSection) enrollmentSection.classList.toggle('hidden', !configured);
+        const connectBtn = document.getElementById('gwConnectBtn');
+        if (connectBtn) connectBtn.classList.toggle('hidden', configured);
+        if (hostEl) hostEl.textContent = data.serverAddr ? (data.serverAddr + ':' + (data.serverPort || '')) : '-';
+        if (pbxEl) pbxEl.textContent = data.pbxId || '-';
+        if (tunnelEl) tunnelEl.textContent = data.active ? 'active' : (configured ? 'stopped' : '-');
+        if (mediaEl) mediaEl.textContent = data.mediaActive ? 'active' : (configured ? 'stopped' : '-');
 
         if (data.active) {
             if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]';
@@ -7056,6 +7098,9 @@ if (document.getElementById('gatewayTunnelBadge')) {
     setTimeout(loadGatewayTunnelStatus, 1000);
 }
 
+const gwPairingField = document.getElementById('gwPairingCode');
+if (gwPairingField) gwPairingField.addEventListener('input', renderGatewayPairingPreview);
+
 async function saveGatewayTunnel(event) {
     if (event && event.preventDefault) event.preventDefault();
     const btn = document.getElementById('gwConnectBtn');
@@ -7063,18 +7108,25 @@ async function saveGatewayTunnel(event) {
     const btnText = document.getElementById('gwConnectBtnText');
     const origText = btnText ? btnText.textContent : 'Connect Gateway';
 
-    if (btn) btn.disabled = true;
+    const connectBtn = document.getElementById('gwConnectBtn');
+    const pairingField = document.getElementById('gwPairingCode');
+    const pairingCode = pairingField ? pairingField.value.trim() : '';
+    if (!pairingCode) {
+        if (msg) {
+            msg.className = 'text-xs p-2.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 block';
+            msg.textContent = 'Paste the secure pairing code from the gateway dashboard first.';
+        }
+        if (pairingField) pairingField.focus();
+        return false;
+    }
+
+    if (connectBtn) connectBtn.disabled = true;
     if (btnText) btnText.textContent = 'Connecting...';
     if (msg) msg.className = 'text-xs p-2.5 rounded-lg hidden';
 
-    const payload = {
-        action: 'connect',
-        serverAddr: document.getElementById('gwServerAddr').value.trim(),
-        serverPort: parseInt(document.getElementById('gwServerPort').value, 10),
-        token: document.getElementById('gwToken').value.trim(),
-        remoteWsPort: parseInt(document.getElementById('gwRemoteWsPort').value, 10),
-        remoteApiPort: parseInt(document.getElementById('gwRemoteApiPort').value, 10)
-    };
+    // Only the pairing code is sent: the gateway host, port and pinned CA are
+    // taken from the signed-in-code payload and validated server-side.
+    const payload = { action: 'connect', token: pairingCode };
 
     try {
         const resp = await fetch('/api/settings/gateway-tunnel', {
@@ -7101,7 +7153,7 @@ async function saveGatewayTunnel(event) {
             msg.textContent = 'Network error: ' + err.message;
         }
     } finally {
-        if (btn) btn.disabled = false;
+        if (connectBtn) connectBtn.disabled = false;
         if (btnText) btnText.textContent = origText;
     }
     return false;

@@ -42,7 +42,11 @@ test('exact readiness POST authenticates independently; all other operational re
         return originalRead.call(this, file, ...args);
     };
     fs.existsSync = function(file) {
-        return file === '/usr/local/bin/sokrat-tenant-push-hook.py' || originalExists.call(this, file);
+        return file === '/usr/local/bin/sokrat-tenant-push-hook.py'
+            || file === '/usr/local/bin/sokrat-webrtc-wake-dispatch.py'
+            || file === '/etc/asterisk/extensions_sokrat_webrtc_wake.conf'
+            || file === '/etc/frp/gateway-ca.crt'
+            || originalExists.call(this, file);
     };
     dgram.createSocket = () => {
         opened++;
@@ -69,6 +73,33 @@ test('exact readiness POST authenticates independently; all other operational re
         assert.equal((await response.json()).pbxId, pbxId);
         assert.equal(opened, 1);
         socket.close();
+
+        // A missing scoped wake artifact must fail closed, not report ready.
+        for (const missing of ['/usr/local/bin/sokrat-webrtc-wake-dispatch.py',
+            '/etc/asterisk/extensions_sokrat_webrtc_wake.conf', '/etc/frp/gateway-ca.crt']) {
+            const saved = fs.existsSync;
+            fs.existsSync = function(file) {
+                return file === missing ? false : saved.call(this, file);
+            };
+            try {
+                const denied = await request('/api/gateway-tunnel/readiness', 'POST', key);
+                assert.equal(denied.status, 403, missing + ' must fail closed');
+                assert.deepEqual(await denied.json(), { ready: false });
+            } finally {
+                fs.existsSync = saved;
+            }
+        }
+
+        // Without the legacy tenant hook the shared context is not required.
+        const savedExists = fs.existsSync;
+        fs.existsSync = function(file) {
+            return file === '/usr/local/bin/sokrat-tenant-push-hook.py' ? false : savedExists.call(this, file);
+        };
+        try {
+            assert.equal((await request('/api/gateway-tunnel/readiness', 'POST', key)).status, 200);
+        } finally {
+            fs.existsSync = savedExists;
+        }
         for (const [url, method] of [['/api/settings/gateway-tunnel', 'POST'],
             ['/api/gateway-tunnel/readiness/other', 'POST'], ['/api/gateway-tunnel/readiness', 'GET']]) {
             assert.equal((await request(url, method, key)).status, 401);

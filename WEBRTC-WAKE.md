@@ -74,9 +74,30 @@ post-install check, run `python3 scripts/install-webrtc-wake.py --verify-access`
 The compiler runs during secure pairing, dashboard startup and after the existing
 `retrieve_conf` reload lifecycle, as well as all three installer/upgrader paths.
 Creating/removing/converting an extension therefore re-derives eligible entries.
-An unpaired fresh PBX gets no wake route. The generic readiness installer now
-creates only the shared sender context, never global dialing-macro overrides;
-pre-existing custom macros are not silently rewritten or removed.
+An unpaired fresh PBX gets no wake route.
+
+The generic readiness installer creates only the shared sender context, never
+global dialing-macro overrides. Releases before this one wrote blanket
+`[macro-dial-one]` / `[macro-dial]` overrides plus `[sokrat-wake-dial]`,
+`[sokrat-wake-group]` and `[sub-sokrat-push-hook]` into
+`/etc/asterisk/extensions_sokrat.conf`, which fired a wake for **every** dialed
+extension and shadowed the shared FreePBX dialing macros. `--apply` now removes
+exactly those five blocks once, after writing a private `0600` snapshot to
+`/var/backups/sokrat-voip/extensions_sokrat.conf.wake-v1-<utc>`, and only when
+`[sub-sokrat-push-send]` already exists so routing is never deleted without its
+replacement. Operator-authored contexts in the same file are preserved verbatim.
+
+Reviewed wake state is the scoped artifact: the gateway readiness probe requires
+`extensions_sokrat_webrtc_wake.conf`, the root-owned dispatcher and the pinned CA,
+and only additionally requires `[sub-sokrat-push-send]` + the tenant hook when
+`/usr/local/bin/sokrat-tenant-push-hook.py` is actually installed. A wake-compiler
+refusal is reported as a warning on Apply Config (`success: true` plus `warning`)
+and never blocks the reload or leaves the dashboard stuck on *needs reload*.
+
+Dashboard pairing accepts only the `sk_pair_v2_...` enrollment code; the legacy
+host/port/token form and the manual remote-port fields were removed. The code is
+authoritative for the gateway host, port and pinned CA, so a blank host field is
+not treated as a mismatch.
 
 ## Acceptance and limitations
 

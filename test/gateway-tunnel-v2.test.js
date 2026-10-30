@@ -23,7 +23,8 @@ const installation = { installationId: 'a'.repeat(32), installationSecret: 'b'.r
 const result = { pbxId: 'pbx_0123456789abcdef', installationId: installation.installationId,
     serverHost: code.host, serverName: code.host, serverCa: certificate, tunnelPort: 7000,
     frpToken: 'c'.repeat(43), hookToken: 'd'.repeat(43), readinessKey: 'e'.repeat(43),
-    ports: { ws: 23006, api: 23007, media: 22003 }, plan: { slot: 3, pbxId: 'pbx_0123456789abcdef' },
+    ports: { ws: 23006, api: 23007, media: 22003 },
+    plan: { slot: 3, pbxId: 'pbx_0123456789abcdef', gatewayIp: '100.64.0.7', pbxIp: '100.64.0.19' },
     gatewayUrl: 'https://gateway.example.test:7443' };
 
 test('secure pairing validates the pinned certificate and refuses legacy or malformed codes', () => {
@@ -41,6 +42,18 @@ test('response cannot downgrade push TLS, change its pinned identity or mix tena
         {gatewayUrl:'http://gateway.example.test'}, {gatewayUrl:'https://gateway.example.test:443'},
         {ports:{...result.ports,ws:23008}}, {plan:{...result.plan,slot:true}}]) {
         assert.throws(() => tunnel.validateResponse({...result,...patch},code,installation));
+    }
+});
+
+test('response must carry usable gateway and PBX addressing for the readiness echo', () => {
+    // readiness() compares the echo peer against plan.gatewayIp and binds on
+    // plan.pbxIp; an absent or malformed value would fail forever with no
+    // actionable error, so enrollment rejects it up front.
+    assert.doesNotThrow(() => tunnel.validateResponse(result,code,installation));
+    for (const addressing of [{gatewayIp:undefined}, {pbxIp:''}, {gatewayIp:'gateway.example.test'},
+        {pbxIp:'100.64.0.19; rm -rf /'}, {gatewayIp:'999.1.1.1'}]) {
+        assert.throws(() => tunnel.validateResponse({...result,plan:{...result.plan,...addressing}},code,installation),
+            /Invalid gateway plan addressing/);
     }
 });
 

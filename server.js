@@ -14187,17 +14187,22 @@ function syncWebrtcWakeRoutes() {
 
 function reloadPbxConfig(callback) {
     const finish = async (fallback = false) => {
+        // Mobile wake is an optional capability: a compiler refusal (unmanaged
+        // dialplan, conflicting custom route, missing enrollment) must never
+        // make the operator's Apply Config look like a failure, and must not
+        // leave the dashboard stuck on "needs reload".
+        let wakeWarning = null;
         try {
             // Recompile after retrieve_conf: copy only exact WebRTC targets;
             // never replace shared FreePBX macros or generated source files.
             if (syncWebrtcWakeRoutes()) await execFileAsync(ASTERISK_BIN, ['-rx', 'dialplan reload']);
-            console.log(fallback ? 'PBX Reload success (fallback)' : 'PBX Reload success');
-            pool.query("UPDATE `asterisk`.`admin` SET `value` = 'false' WHERE `variable` = 'need_reload'").catch(() => {});
-            if (callback) callback({ success: true });
         } catch (error) {
+            wakeWarning = 'WebRTC wake routes were not recompiled; normal routing is unchanged.';
             console.error('WebRTC-only wake route sync refused:', error.code || error.name);
-            if (callback) callback({ success: false, error: 'WebRTC wake route configuration requires operator review' });
         }
+        console.log(fallback ? 'PBX Reload success (fallback)' : 'PBX Reload success');
+        pool.query("UPDATE `asterisk`.`admin` SET `value` = 'false' WHERE `variable` = 'need_reload'").catch(() => {});
+        if (callback) callback(wakeWarning ? { success: true, warning: wakeWarning } : { success: true });
     };
     const cmd = '/var/lib/asterisk/bin/retrieve_conf && asterisk -rx "core reload" && asterisk -rx "queue reload all"';
     exec(cmd, (error) => {

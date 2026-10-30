@@ -112,15 +112,30 @@ if [ ! -d "$INSTALL_DIR" ]; then
 elif [ -d "$INSTALL_DIR/.git" ]; then
     cd "$INSTALL_DIR"
     echo "  Checking for remote repository updates..."
-    timeout 60 git fetch origin "$REPO_BRANCH" >/dev/null 2>&1 || { echo 'PBX fetch failed; upgrade stopped before migrations' >&2; exit 1; }
-    if [ "$(git symbolic-ref --short HEAD)" != "$REPO_BRANCH" ]; then
-        if git show-ref --verify --quiet "refs/heads/$REPO_BRANCH"; then
-            git checkout "$REPO_BRANCH"
-        else
-            git checkout -b "$REPO_BRANCH" --track "origin/$REPO_BRANCH"
+    # An air-gapped PBX (offline bundle install) has no upstream. Keep applying
+    # the schema, driver and dialplan steps from the on-disk codebase instead of
+    # aborting the whole upgrade, but say so loudly. A reachable remote that
+    # refuses the fast-forward is still fatal, so nothing is silently discarded.
+    CODE_UPDATED=1
+    if timeout 60 git fetch origin "$REPO_BRANCH" >/dev/null 2>&1; then
+        if [ "$(git symbolic-ref --short HEAD 2>/dev/null || echo '')" != "$REPO_BRANCH" ]; then
+            if git show-ref --verify --quiet "refs/heads/$REPO_BRANCH"; then
+                git checkout "$REPO_BRANCH" || { echo 'PBX branch checkout refused; upgrade stopped' >&2; exit 1; }
+            else
+                git checkout -b "$REPO_BRANCH" --track "origin/$REPO_BRANCH" || { echo 'PBX branch checkout refused; upgrade stopped' >&2; exit 1; }
+            fi
         fi
+        git merge --ff-only "origin/$REPO_BRANCH" || { echo 'PBX fast-forward refused; no working changes discarded' >&2; exit 1; }
+    else
+        CODE_UPDATED=0
+        BRANCH_COUNT=$(git rev-list --count "origin/$REPO_BRANCH..HEAD" 2>/dev/null || echo 0)
+        if [ "${BRANCH_COUNT:-0}" != "0" ]; then
+            echo '  WARNING: remote is unreachable and this PBX has unpushed commits; continuing with the on-disk codebase.' >&2
+        else
+            echo '  WARNING: remote is unreachable (offline/air-gapped); continuing with the on-disk codebase.' >&2
+        fi
+        echo '  WARNING: code was NOT updated - schema, driver and dialplan steps still run.' >&2
     fi
-    git merge --ff-only "origin/$REPO_BRANCH" || { echo 'PBX fast-forward refused; no working changes discarded' >&2; exit 1; }
     echo "  Codebase at commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'current')"
 
     SELF_HASH_AFTER=$(sha256sum "$SELF_PATH" 2>/dev/null | cut -d' ' -f1 || echo "")

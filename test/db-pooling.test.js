@@ -105,8 +105,12 @@ test('the upgrader re-executes itself when the pull replaces its own file', () =
     assert.match(script, /SOKRAT_UPGRADE_REEXEC/);
     assert.match(script, /exec env SOKRAT_UPGRADE_REEXEC=1 bash "\$SELF_PATH" "\$@"/);
 
-    // The guard must be checked after the codebase update, not before.
-    const pull = script.indexOf('git merge --ff-only origin/main');
+    // The guard must be checked after the codebase update, not before. The pull
+    // is branch-aware (`origin/$REPO_BRANCH`) so a reverse-TLS installation is
+    // never silently fast-forwarded from `main`.
+    const pullMatch = /git merge --ff-only "origin\/\$REPO_BRANCH"/.exec(script);
+    assert.ok(pullMatch, 'the upgrader must fast-forward the tracked release branch');
+    const pull = pullMatch.index;
     const reexec = script.indexOf('exec env SOKRAT_UPGRADE_REEXEC=1');
     assert.ok(pull > 0 && reexec > pull, 're-exec must happen after the pull');
 });

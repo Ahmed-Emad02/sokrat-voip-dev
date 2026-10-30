@@ -30,3 +30,53 @@ test('safe upgrade preserves the selected branch, credentials and dirty operator
     assert.match(text, /install -d -m 0700 "\$GATEWAY_BACKUP"/);
     assert.match(text, /umask 077; tar/);
 });
+
+test('an unreachable remote keeps the local upgrade going; a refused fast-forward stays fatal', () => {
+    const text = fs.readFileSync(path.join(root, 'scripts/safe-upgrade.sh'), 'utf8');
+    // Air-gapped / offline-bundle PBXs must still get schema, driver and
+    // dialplan work done instead of aborting at the fetch.
+    assert.match(text, /else\n\s*CODE_UPDATED=0/);
+    assert.match(text, /continuing with the on-disk codebase/);
+    assert.match(text, /code was NOT updated - schema, driver and dialplan steps still run/);
+    // A reachable remote that refuses the fast-forward is still a hard stop.
+    assert.match(text, /git merge --ff-only "origin\/\$REPO_BRANCH" \|\| \{ echo 'PBX fast-forward refused; no working changes discarded' >&2; exit 1; \}/);
+    assert.doesNotMatch(text, /git fetch origin "\$REPO_BRANCH" >\/dev\/null 2>&1 \|\| \{ echo 'PBX fetch failed; upgrade stopped before migrations' >&2; exit 1; \}/);
+});
+
+test('the dashboard pairs with a secure pairing code instead of the legacy token form', () => {
+    const sidebar = fs.readFileSync(path.join(root, 'views/sidebar.ejs'), 'utf8');
+    // The one-shot pairing field must exist and the dead legacy inputs must not.
+    assert.match(sidebar, /id="gwPairingCode"/);
+    assert.match(sidebar, /sk_pair_v2_/);
+    for (const legacy of ['gwServerAddr', 'gwServerPort', 'gwRemoteWsPort', 'gwRemoteApiPort', 'gwToken']) {
+        assert.doesNotMatch(sidebar, new RegExp('id="' + legacy + '"'), legacy + ' must be gone');
+    }
+    // Only the signed pairing code is posted; the server validates the identity.
+    assert.match(sidebar, /const payload = \{ action: 'connect', token: pairingCode \}/);
+    const tunnel = fs.readFileSync(path.join(root, 'lib/gateway-tunnel.js'), 'utf8');
+    assert.match(tunnel, /if \(requested && requested !== code\.host\)/);
+});
+
+test('legacy blanket wake overrides are migrated away on upgrade, once, with a backup', () => {
+    const text = fs.readFileSync(path.join(root, 'scripts/sokrat-gateway-readiness.sh'), 'utf8');
+    assert.match(text, /migrate_legacy_wake_contexts\(\)/);
+    for (const context of ['macro-dial-one', 'sokrat-wake-dial', 'macro-dial', 'sokrat-wake-group', 'sub-sokrat-push-hook']) {
+        assert.ok(text.includes("'" + context + "'"), context + ' must be stripped');
+    }
+    // Never delete routing without the replacement context to migrate towards.
+    assert.match(text, /if '\[sub-sokrat-push-send\]' not in original:/);
+    // Private, immutable backup before rewriting the dialplan.
+    assert.match(text, /wake-v1-/);
+    assert.match(text, /os\.O_EXCL \| os\.O_NOFOLLOW, 0o600/);
+});
+
+test('apply-config is not blocked by an optional wake-compiler refusal', () => {
+    const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+    const start = server.indexOf('function reloadPbxConfig(callback)');
+    assert.ok(start > 0);
+    const body = server.slice(start, server.indexOf('function reloadPbxConfigPromise', start));
+    // The wake compiler is attempted, but its failure is a warning only.
+    assert.match(body, /wakeWarning = 'WebRTC wake routes were not recompiled/);
+    assert.match(body, /callback\(wakeWarning \? \{ success: true, warning: wakeWarning \} : \{ success: true \}\)/);
+    assert.doesNotMatch(body, /success: false, error: 'WebRTC wake route configuration requires operator review'/);
+});
