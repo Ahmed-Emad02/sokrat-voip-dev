@@ -42,7 +42,7 @@ def dispatch(config, args, opener=urllib.request.urlopen):
                  'X-Sokrat-Pbx': config['pbxId'], 'X-Sokrat-Timestamp': str(int(time.time() * 1000)),
                  'X-Sokrat-Nonce': secrets.token_hex(16)}, method='POST')
     context = ssl.create_default_context(cafile=config['caFile'])
-    with opener(request, timeout=3, context=context) as response:
+    with opener(request, timeout=6, context=context) as response:
         if response.status != 200:
             return False
         data = response.read(4097)
@@ -53,18 +53,55 @@ def dispatch(config, args, opener=urllib.request.urlopen):
                 and type(result.get('count')) is int and result['count'] > 0)
 
 
+def cancel(config, args, opener=urllib.request.urlopen):
+    try:
+        if len(args) != 2:
+            return False
+        callee, call_id = args
+        if (not re.fullmatch(r'[0-9]{1,12}', callee)
+                or not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', call_id, re.I)):
+            return False
+        url = urllib.parse.urlsplit(config['gatewayUrl'])
+        if (url.scheme != 'https' or url.username or url.password or not url.hostname
+                or url.path not in ('', '/') or url.query or url.fragment
+                or config.get('caFile') != '/etc/frp/gateway-ca.crt'):
+            return False
+        if not re.fullmatch(r'pbx_[a-f0-9]{16}', config.get('pbxId', '')):
+            return False
+        token = config.get('token', '')
+        if not re.fullmatch(r'[A-Za-z0-9_-]{32,200}', token):
+            return False
+        body = json.dumps({'callee': callee, 'callId': call_id}).encode()
+        request = urllib.request.Request(config['gatewayUrl'].rstrip('/') + '/api/gateway/cancel-call', data=body,
+            headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token,
+                     'X-Sokrat-Pbx': config['pbxId'], 'X-Sokrat-Timestamp': str(int(time.time() * 1000)),
+                     'X-Sokrat-Nonce': secrets.token_hex(16)}, method='POST')
+        context = ssl.create_default_context(cafile=config['caFile'])
+        with opener(request, timeout=3, context=context) as response:
+            return response.status == 200
+    except Exception:
+        return False
+
+
 def main():
     try:
         file = Path('/etc/sokrat/gateway-hook.json')
         info = file.lstat()
         if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o007 or info.st_size > 16384:
             raise ValueError('Untrusted hook config')
-        should_wait = dispatch(json.loads(file.read_text()), sys.argv[1:])
+        config = json.loads(file.read_text())
+        argv = sys.argv[1:]
+        if len(argv) == 4:
+            result = dispatch(config, argv)
+        elif len(argv) == 2:
+            result = cancel(config, argv)
+        else:
+            result = False
     except Exception:
-        should_wait = False
+        result = False
     # SHELL() preserves stdout, including newlines: the dialplan compares this
     # decision with the exact string "1". Emit one byte, not a printed line.
-    sys.stdout.write('1' if should_wait else '0')
+    sys.stdout.write('1' if result else '0')
 
 
 if __name__ == '__main__':

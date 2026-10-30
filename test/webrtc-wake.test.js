@@ -137,7 +137,7 @@ with mock.patch.object(ssl,'create_default_context',return_value='pinned-context
  for result,expected in [({'status':'dispatched','count':1},True),({'status':'partial','count':1},True),({'status':'dispatched','count':0},False),({'status':'dispatched','count':True},False)]:
   assert wake.dispatch(config,args,opener)==expected
  request,options=calls[0]
- assert options=={'timeout':3,'context':'pinned-context'}
+ assert options=={'timeout':6,'context':'pinned-context'}
  assert request.headers['Authorization'].startswith('Bearer ')
  assert json.loads(request.data)['caller']=='+442012345678'
  assert 'token' not in request.full_url
@@ -151,18 +151,98 @@ print('PASS')
 });
 
 test('dispatcher stdout is exactly one decision byte for Asterisk SHELL comparisons', () => {
-    const script = `import contextlib,importlib.util,io,stat,types,unittest.mock as mock
+    const script = `import contextlib,importlib.util,io,stat,sys,types,unittest.mock as mock
 spec=importlib.util.spec_from_file_location('wake',${JSON.stringify(path.join(root, 'scripts/webrtc-wake-dispatch.py'))})
 wake=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake)
 info=types.SimpleNamespace(st_mode=stat.S_IFREG|0o640,st_uid=0,st_size=2)
+dispatch_argv=['script','404','caller','name','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']
 with mock.patch.object(wake.Path,'lstat',return_value=info), mock.patch.object(wake.Path,'read_text',return_value='{}'):
  for decision,expected in [(True,'1'),(False,'0')]:
   output=io.StringIO()
-  with mock.patch.object(wake,'dispatch',return_value=decision),contextlib.redirect_stdout(output):wake.main()
+  with mock.patch.object(wake,'dispatch',return_value=decision),mock.patch.object(sys,'argv',dispatch_argv),contextlib.redirect_stdout(output):wake.main()
   assert output.getvalue()==expected,repr(output.getvalue())
  output=io.StringIO()
- with mock.patch.object(wake,'dispatch',side_effect=RuntimeError('private error')),contextlib.redirect_stdout(output):wake.main()
+ with mock.patch.object(wake,'dispatch',side_effect=RuntimeError('private error')),mock.patch.object(sys,'argv',dispatch_argv),contextlib.redirect_stdout(output):wake.main()
  assert output.getvalue()=='0',repr(output.getvalue())
+print('PASS')
+`;
+    const result = spawnSync('python3', ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
+    assert.equal(result.status, 0, result.stderr);
+});
+
+test('cancel dispatcher posts to cancel-call endpoint with 3s timeout and returns True on 200', () => {
+    const script = `import importlib.util,json,ssl,unittest.mock as mock
+spec=importlib.util.spec_from_file_location('wake',${JSON.stringify(path.join(root, 'scripts/webrtc-wake-dispatch.py'))})
+wake=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake)
+config={'gatewayUrl':'https://gateway.example:7443','caFile':'/etc/frp/gateway-ca.crt','pbxId':'pbx_'+'a'*16,'token':${JSON.stringify(crypto.randomBytes(32).toString('base64url'))}}
+call_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+callee='223'
+calls=[]
+class Reply:
+ status=200
+ def __enter__(self):return self
+ def __exit__(self,*args):pass
+def opener(request,**kwargs):
+ calls.append((request,kwargs));return Reply()
+with mock.patch.object(ssl,'create_default_context',return_value='pinned-context') as tls:
+ assert wake.cancel(config,['223',call_id],opener)==True
+ request,options=calls[0]
+ assert options=={'timeout':3,'context':'pinned-context'}
+ assert '/api/gateway/cancel-call' in request.full_url
+ assert request.headers['Authorization'].startswith('Bearer ')
+ assert request.headers['X-sokrat-pbx']==config['pbxId']
+ assert 'X-sokrat-timestamp' in request.headers
+ assert 'X-sokrat-nonce' in request.headers
+ assert json.loads(request.data)=={'callee':'223','callId':call_id}
+ assert 'token' not in request.full_url
+ tls.assert_called_with(cafile='/etc/frp/gateway-ca.crt')
+print('PASS')
+`;
+    const result = spawnSync('python3', ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
+    assert.equal(result.status, 0, result.stderr);
+});
+
+test('cancel returns False on non-200, network error, and invalid call_id', () => {
+    const script = `import importlib.util,json,ssl,unittest.mock as mock
+spec=importlib.util.spec_from_file_location('wake',${JSON.stringify(path.join(root, 'scripts/webrtc-wake-dispatch.py'))})
+wake=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake)
+config={'gatewayUrl':'https://gateway.example:7443','caFile':'/etc/frp/gateway-ca.crt','pbxId':'pbx_'+'a'*16,'token':${JSON.stringify(crypto.randomBytes(32).toString('base64url'))}}
+valid_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+class Reply500:
+ status=500
+ def __enter__(self):return self
+ def __exit__(self,*args):pass
+def opener_500(request,**kwargs):return Reply500()
+def opener_err(request,**kwargs):raise ConnectionError('network down')
+with mock.patch.object(ssl,'create_default_context',return_value='ctx'):
+ assert wake.cancel(config,['223',valid_id],opener_500)==False
+ assert wake.cancel(config,['223',valid_id],opener_err)==False
+ assert wake.cancel(config,['223','not-a-uuid'])==False
+ assert wake.cancel(config,['223','gggggggg-gggg-4ggg-8ggg-gggggggggggg'])==False
+ assert wake.cancel(config,['223',''])==False
+ assert wake.cancel(dict(config,gatewayUrl='http://gateway.example'),['223',valid_id])==False
+ assert wake.cancel(config,[])==False
+ assert wake.cancel(config,['only-one'])==False
+print('PASS')
+`;
+    const result = spawnSync('python3', ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
+    assert.equal(result.status, 0, result.stderr);
+});
+
+test('main routes two-arg cancel and emits correct stdout decision byte', () => {
+    const script = `import contextlib,importlib.util,io,stat,sys,types,unittest.mock as mock
+spec=importlib.util.spec_from_file_location('wake',${JSON.stringify(path.join(root, 'scripts/webrtc-wake-dispatch.py'))})
+wake=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake)
+info=types.SimpleNamespace(st_mode=stat.S_IFREG|0o640,st_uid=0,st_size=2)
+cancel_argv=['script','223','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']
+with mock.patch.object(wake.Path,'lstat',return_value=info), mock.patch.object(wake.Path,'read_text',return_value='{}'):
+ for decision,expected in [(True,'1'),(False,'0')]:
+  output=io.StringIO()
+  with mock.patch.object(wake,'cancel',return_value=decision),mock.patch.object(sys,'argv',cancel_argv),contextlib.redirect_stdout(output):wake.main()
+  assert output.getvalue()==expected,repr(output.getvalue())
+ output=io.StringIO()
+ with mock.patch.object(sys,'argv',['script','a','b','c']),contextlib.redirect_stdout(output):wake.main()
+ assert output.getvalue()=='0','wrong arg count should emit 0'
 print('PASS')
 `;
     const result = spawnSync('python3', ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });

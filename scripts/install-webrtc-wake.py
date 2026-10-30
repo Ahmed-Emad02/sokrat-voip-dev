@@ -35,6 +35,8 @@ exten => s,1,GotoIf($["${DB(DEVICE/${ARG1}/tech)}"!="pjsip"]?done)
  same => n,Set(__SOKRAT_CALL_ID=${FILTER(0-9a-f-,${SHELL(/usr/bin/uuidgen)})})
  same => n(identified),Set(HASH(__SIPHEADERS,X-Sokrat-Call-ID)=${SOKRAT_CALL_ID})
  same => n,Set(__SOKRAT_PUSH_SENT=1)
+ same => n,Set(__SOKRAT_WAKE_CALLEE=${ARG1})
+ same => n,Set(CHANNEL(hangup_handler_push)=sub-sokrat-webrtc-wake-cancel,s,1)
  same => n,Set(SOKRAT_BEFORE_DIAL=${PJSIP_DIAL_CONTACTS(${ARG1})})
  same => n,Set(SOKRAT_BEFORE_COUNT=${FIELDQTY(SOKRAT_BEFORE_DIAL,&)})
  same => n,Set(SOKRAT_WAKE_WAIT=${SHELL(/usr/bin/python3 /usr/local/bin/sokrat-webrtc-wake-dispatch.py "${URIENCODE(${ARG1})}" "${URIENCODE(${CALLERID(num)})}" "${URIENCODE(${CALLERID(name)})}" "${SOKRAT_CALL_ID}")})
@@ -46,6 +48,12 @@ exten => s,1,GotoIf($["${DB(DEVICE/${ARG1}/tech)}"!="pjsip"]?done)
  same => n,Wait(0.2)
  same => n,Set(SOKRAT_WAKE_ITER=$[${SOKRAT_WAKE_ITER}+1])
  same => n,GotoIf($[${SOKRAT_WAKE_ITER}<25]?wait)
+ same => n(done),Return()
+
+[sub-sokrat-webrtc-wake-cancel]
+exten => s,1,GotoIf($["${SOKRAT_PUSH_SENT}"!="1"]?done)
+ same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)
+ same => n,System(/usr/bin/python3 /usr/local/bin/sokrat-webrtc-wake-dispatch.py "${SOKRAT_WAKE_CALLEE}" "${SOKRAT_CALL_ID}" &)
  same => n(done),Return()
 '''
 
