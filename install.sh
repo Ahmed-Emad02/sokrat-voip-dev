@@ -2553,6 +2553,9 @@ if [ -f /etc/asterisk/dongle.conf ] && grep -q '^\[dongle0\]' /etc/asterisk/dong
     elif ! grep -q '^callwaiting=' /etc/asterisk/dongle.conf; then
         sed -i '/^\[defaults\]/a callwaiting=no' /etc/asterisk/dongle.conf
     fi
+    if grep -q '^u2diag=0' /etc/asterisk/dongle.conf; then
+        sed -i 's/^u2diag=0.*/u2diag=-1                      ; -1 = do not send ^U2DIAG (21.x firmwares reject it); 0 = set ^U2DIAG=0 on older modems/' /etc/asterisk/dongle.conf
+    fi
 else
     echo "  Configuring $NUM_DONGLES dongle(s)..."
     TEMP_CONF="/tmp/dongle.conf.tmp"

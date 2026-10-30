@@ -50,6 +50,23 @@ test('API Security: POST /api/laya/kill-switch rejects unauthenticated and non-r
     assert.match(serverCode, /laya_kill_switch_active/, 'Must persist kill switch state in DB');
 });
 
+test('Laya Sensors DB Driver: is_kill_switch_active safely exits cursor context before closing connection', () => {
+    const dbCode = fs.readFileSync(path.join(rootDir, 'laya', 'sensors', 'db.py'), 'utf8');
+    assert.match(dbCode, /def is_kill_switch_active\(\):/, 'db.py must define is_kill_switch_active');
+
+    const fnMatch = dbCode.match(/def is_kill_switch_active\(\):[\s\S]*?(?=\ndef |\Z)/);
+    assert.ok(fnMatch, 'must match is_kill_switch_active function body');
+    const fnBody = fnMatch[0];
+
+    // Ensure conn.close() is in finally block, not inside with block
+    assert.match(fnBody, /finally:\s*[\s\S]*?conn\.close\(\)/, 'Connection must be closed in finally block');
+    assert.doesNotMatch(
+        fnBody,
+        /cursor\.fetchone\(\)[\s\S]*?conn\.close\(\)[\s\S]*?return/,
+        'conn.close() must not be called before cursor context exits'
+    );
+});
+
 function makePostRequest(endpoint, body, headers = {}) {
     return new Promise((resolve) => {
         const postData = JSON.stringify(body);

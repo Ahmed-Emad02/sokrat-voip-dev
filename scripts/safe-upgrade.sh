@@ -364,6 +364,18 @@ unmanaged-devices=interface-name:ww*
 EOF
 nmcli general reload 2>/dev/null || systemctl reload NetworkManager 2>/dev/null || true
 
+# Ensure callwaiting=no and u2diag=-1 in /etc/asterisk/dongle.conf if present
+if [ -f /etc/asterisk/dongle.conf ]; then
+    if grep -q '^;callwaiting=' /etc/asterisk/dongle.conf; then
+        sed -i 's/^;callwaiting=.*/callwaiting=no/' /etc/asterisk/dongle.conf
+    elif ! grep -q '^callwaiting=' /etc/asterisk/dongle.conf; then
+        sed -i '/^\[defaults\]/a callwaiting=no' /etc/asterisk/dongle.conf
+    fi
+    if grep -q '^u2diag=0' /etc/asterisk/dongle.conf; then
+        sed -i 's/^u2diag=0.*/u2diag=-1                      ; -1 = do not send ^U2DIAG (21.x firmwares reject it); 0 = set ^U2DIAG=0 on older modems/' /etc/asterisk/dongle.conf
+    fi
+fi
+
 # Fix udev autosuspend rule to prevent permission denied on USB interfaces
 if [ -f /etc/udev/rules.d/99-disable-usb-autosuspend.rules ]; then
     echo 'ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{power/control}="on"' > /etc/udev/rules.d/99-disable-usb-autosuspend.rules
