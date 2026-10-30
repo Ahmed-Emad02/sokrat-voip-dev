@@ -3,13 +3,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const installer = path.join(root, 'scripts/install-webrtc-wake.py');
 
 function fixture(t) {
-    const dir = fs.mkdtempSync('/tmp/opencode/webrtc-wake-');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'webrtc-wake-'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const put = (name, text) => {
         const p = path.join(dir, name); fs.mkdirSync(path.dirname(p), { recursive: true });
