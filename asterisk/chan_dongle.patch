@@ -11,18 +11,21 @@ index 1ad407a..dec019b 100644
 +#define DEBUG_ATLEAST(level) (option_debug >= (level))
 +#endif
 diff --git a/at_command.c b/at_command.c
-index 5f0137e..28b7e90 100644
+index 5f0137e..1a09ce1 100644
 --- a/at_command.c
 +++ b/at_command.c
-@@ -118,6 +118,8 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
+@@ -118,8 +118,10 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
  		ATQ_CMD_DECLARE_ST(CMD_AT_Z, "ATZ\r"),
  		/* disable echo */
  		ATQ_CMD_DECLARE_ST(CMD_AT_E, "ATE0\r"),
 +		/* disable cellular result codes (use standard RING) */
 +		ATQ_CMD_DECLARE_STI(CMD_AT_CRC, "AT+CRC=0\r"),
  		/* optional, Enable or disable some devices */
- 		ATQ_CMD_DECLARE_DYN(CMD_AT_U2DIAG),
+-		ATQ_CMD_DECLARE_DYN(CMD_AT_U2DIAG),
++		ATQ_CMD_DECLARE_DYNI(CMD_AT_U2DIAG),
  		/* Get manufacturer info */
+ 		ATQ_CMD_DECLARE_ST(CMD_AT_CGMI, "AT+CGMI\r"),
+ 
 @@ -160,7 +162,7 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
  		ATQ_CMD_DECLARE_ST(CMD_AT_CMGF, "AT+CMGF=0\r"),
  
