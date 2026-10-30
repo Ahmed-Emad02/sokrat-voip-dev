@@ -231,8 +231,9 @@ def plan(root):
         trusted_parent(path, root, executable=(path == target))
     group = grp.getgrnam('asterisk').gr_gid if root == Path('/') else etc.stat().st_gid
     return [(path, text, mode) for path, text, mode in changes if read(path) != text or
-            (path == output_path and path.exists() and
-             (path.stat().st_gid != group or path.stat().st_mode & 0o777 != mode))], extensions
+            (path in (target, output_path) and path.exists() and
+             (path.stat().st_mode & 0o777 != mode or
+              (path == output_path and path.stat().st_gid != group)))], extensions
 
 
 def main():

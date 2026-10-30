@@ -60,6 +60,26 @@ test('dry-run is read-only; apply compiles only exact WebRTC entries and preserv
     assert.equal(fs.statSync(path.join(f.dir, 'usr/local/bin/sokrat-webrtc-wake-dispatch.py')).mode & 0o777, 0o755);
 });
 
+test('unchanged dispatcher content still repairs permission drift that blocks the Asterisk user', t => {
+    const f = fixture(t);
+    assert.equal(f.run().status, 0);
+    const dispatcher = path.join(f.dir, 'usr/local/bin/sokrat-webrtc-wake-dispatch.py');
+    const source = fs.readFileSync(dispatcher, 'utf8');
+    const routing = fs.readFileSync(f.output, 'utf8');
+    fs.chmodSync(dispatcher, 0o750);
+    const dry = f.run(false);
+    assert.equal(dry.status, 0, dry.stderr);
+    assert.deepEqual(JSON.parse(dry.stdout).changedFiles, ['sokrat-webrtc-wake-dispatch.py']);
+    assert.equal(fs.statSync(dispatcher).mode & 0o777, 0o750, 'dry-run stays read-only');
+    const applied = f.run();
+    assert.equal(applied.status, 0, applied.stderr);
+    assert.equal(JSON.parse(applied.stdout).changed, true);
+    assert.equal(fs.statSync(dispatcher).mode & 0o777, 0o755, 'root-owned dispatcher must be readable by Asterisk');
+    assert.equal(fs.readFileSync(dispatcher, 'utf8'), source);
+    assert.equal(fs.readFileSync(f.output, 'utf8'), routing, 'permission repair does not alter routing');
+    assert.equal(JSON.parse(f.run().stdout).changed, false, 'repair is idempotent');
+});
+
 test('wake preparation preserves DND/forwarding and bounds a CRM-safe new-contact wait', t => {
     const f = fixture(t); assert.equal(f.run().status, 0);
     const text = fs.readFileSync(f.output, 'utf8');
