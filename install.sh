@@ -7,6 +7,9 @@ set -euo pipefail
 
 export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:${PATH:-}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
+PARENT_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
+
 INSTALL_DIR=/opt/sokrat-voip
 REPO_URL=https://github.com/Ahmed-Emad02/sokrat-voip-dev.git
 REPO_BRANCH=${SOKRAT_PBX_BRANCH:-main}
