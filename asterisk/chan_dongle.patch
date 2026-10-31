@@ -11,7 +11,7 @@ index 1ad407a..dec019b 100644
 +#define DEBUG_ATLEAST(level) (option_debug >= (level))
 +#endif
 diff --git a/at_command.c b/at_command.c
-index 5f0137e..364e3e1 100644
+index 5f0137e..759ab5e 100644
 --- a/at_command.c
 +++ b/at_command.c
 @@ -118,8 +118,16 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
@@ -95,7 +95,74 @@ index 5f0137e..364e3e1 100644
  	return err;
  }
  
-@@ -912,6 +935,22 @@ EXPORT_DEF int at_enqueue_hangup(struct cpvt *cpvt, int call_idx)
+@@ -286,7 +309,7 @@ EXPORT_DEF int at_enqueue_sms(struct cpvt *cpvt, const char *destination, const
+ 
+ 	int msg_len = strlen(msg);
+ 	uint16_t msg_ucs2[msg_len * 2];
+-	res = utf8_to_ucs2(msg, msg_len, msg_ucs2, sizeof(msg_ucs2));
++	res = utf8_to_ucs2(msg, msg_len, msg_ucs2, sizeof(msg_ucs2) / 2);
+ 	if (res < 0) {
+ 		chan_dongle_err = E_PARSE_UTF8;
+ 		return -1;
+@@ -294,29 +317,38 @@ EXPORT_DEF int at_enqueue_sms(struct cpvt *cpvt, const char *destination, const
+ 
+ 	char hexbuf[PDU_LENGTH * 2 + 1];
+ 
+-	pdu_part_t pdus[255];
++	pdu_part_t *pdus = ast_calloc(255, sizeof(pdu_part_t));
++	if (!pdus) {
++		chan_dongle_err = E_UNKNOWN;
++		return -1;
++	}
+ 	int csmsref = smsdb_get_refid(pvt->imsi, destination);
+ 	if (csmsref < 0) {
+ 		chan_dongle_err = E_SMSDB;
++		ast_free(pdus);
+ 		return -1;
+ 	}
+ 	res = pdu_build_mult(pdus, "" /* pvt->sms_scenter */, destination, msg_ucs2, res, validity_minutes, !!report_req, csmsref);
+ 	if (res < 0) {
+ 		/* pdu_build_mult sets chan_dongle_err */
++		ast_free(pdus);
+ 		return -1;
+ 	}
+ 	int uid = smsdb_outgoing_add(pvt->imsi, destination, res, validity_minutes * 60, report_req, payload, payload_len);
+ 	if (uid < 0) {
+ 		chan_dongle_err = E_SMSDB;
++		ast_free(pdus);
+ 		return -1;
+ 	}
+ 	for (int i = 0; i < res; ++i) {
+ 		hexify(pdus[i].buffer, pdus[i].length, hexbuf);
+ 		if (at_enqueue_pdu(cpvt, hexbuf, pdus[i].length * 2, pdus[i].tpdu_length, uid) < 0) {
++			ast_free(pdus);
+ 			return -1;
+ 		}
+ 	}
+ 
++	ast_free(pdus);
+ 	return 0;
+ }
+ 
+@@ -342,7 +374,7 @@ EXPORT_DEF int at_enqueue_ussd(struct cpvt *cpvt, const char *code)
+ 	// use 7 bit encoding. 15 is 00001111 in binary and means 'Language using the GSM 7 bit default alphabet; Language unspecified' accodring to GSM 23.038
+ 	uint16_t code16[code_len * 2];
+ 	uint8_t code_packed[4069];
+-	res = utf8_to_ucs2(code, code_len, code16, sizeof(code16));
++	res = utf8_to_ucs2(code, code_len, code16, sizeof(code16) / 2);
+ 	if (res < 0) {
+ 		chan_dongle_err = E_PARSE_UTF8;
+ 		return -1;
+@@ -890,7 +922,7 @@ EXPORT_DEF int at_enqueue_hangup(struct cpvt *cpvt, int call_idx)
+ 	if(cpvt == &pvt->sys_chan || cpvt->dir == CALL_DIR_INCOMING || (cpvt->state != CALL_STATE_INIT && cpvt->state != CALL_STATE_DIALING))
+ 	{
+ 		/* FIXME: other channels may be in RELEASED or INIT state */
+-		if(PVT_STATE(pvt, chansno) > 1)
++		if(PVT_STATE(pvt, chansno) > 1 && call_idx > 0)
+ 		{
+ 			cmds[0].cmd = CMD_AT_CHLD_1x;
+ 			err = at_fill_generic_cmd(&cmds[0], cmd_chld1x, call_idx);
+@@ -912,6 +944,22 @@ EXPORT_DEF int at_enqueue_hangup(struct cpvt *cpvt, int call_idx)
  	return 0;
  }
  
@@ -146,8 +213,106 @@ index 0aeb441..73a6c76 100644
  EXPORT_DECL int at_enqueue_volsync(struct cpvt *cpvt);
  EXPORT_DECL int at_enqueue_clcc(struct cpvt *cpvt);
  EXPORT_DECL int at_enqueue_activate(struct cpvt *cpvt);
+diff --git a/at_parse.c b/at_parse.c
+index 3f0b4af..11ad2fe 100644
+--- a/at_parse.c
++++ b/at_parse.c
+@@ -355,7 +355,7 @@ EXPORT_DEF int at_parse_cmgr(char *str, size_t len, int *tpdu_type, char *sca, s
+ 	char *marks[STRLEN(delimiters)];
+ 	char *end;
+ 	ssize_t tpdu_length;
+-	uint16_t msg16_tmp[256];
++	uint16_t msg16_tmp[1024];
+ 
+ 	if (mark_line(str, delimiters, marks) != ITEMS_OF(marks)) {
+ 		chan_dongle_err = E_PARSE_CMGR_LINE;
+@@ -367,11 +367,12 @@ EXPORT_DEF int at_parse_cmgr(char *str, size_t len, int *tpdu_type, char *sca, s
+ 	}
+ 	str = marks[2] + 1;
+ 
+-	int pdu_length = (unhex(str, (uint8_t*)str) + 1) / 2;
+-	if (pdu_length < 0) {
++	int unhex_res = unhex(str, (uint8_t*)str);
++	if (unhex_res < 0) {
+ 		chan_dongle_err = E_MALFORMED_HEXSTR;
+ 		return -1;
+ 	}
++	int pdu_length = (unhex_res + 1) / 2;
+ 	int res, i = 0;
+ 	res = pdu_parse_sca((const uint8_t*)str + i, pdu_length - i, sca, sca_len);
+ 	if (res < 0) {
+diff --git a/at_queue.c b/at_queue.c
+index 32460d1..b021b68 100644
+--- a/at_queue.c
++++ b/at_queue.c
+@@ -100,7 +100,6 @@ static at_queue_task_t * at_queue_add (struct cpvt * cpvt, const at_queue_cmd_t
+ 		if(e)
+ 		{
+ 			pvt_t * pvt = cpvt->pvt;
+-			at_queue_task_t * first;
+ 
+ 			e->entry.next = 0;
+ 			e->cmdsno = cmdsno;
+@@ -110,8 +109,20 @@ static at_queue_task_t * at_queue_add (struct cpvt * cpvt, const at_queue_cmd_t
+ 			memcpy(&e->cmds[0], cmds, cmdsno * sizeof(*cmds));
+ 
+ 
+-			if(prio && (first = AST_LIST_FIRST (&pvt->at_queue)))
+-				AST_LIST_INSERT_AFTER (&pvt->at_queue, first, e, entry);
++			if(prio)
++			{
++				at_queue_task_t * prev = AST_LIST_FIRST (&pvt->at_queue);
++				while (prev && AST_LIST_NEXT(prev, entry) &&
++				       (AST_LIST_NEXT(prev, entry)->cmds[0].cmd == CMD_AT_DTMF ||
++				        AST_LIST_NEXT(prev, entry)->cpvt == cpvt))
++				{
++					prev = AST_LIST_NEXT(prev, entry);
++				}
++				if (prev)
++					AST_LIST_INSERT_AFTER (&pvt->at_queue, prev, e, entry);
++				else
++					AST_LIST_INSERT_HEAD (&pvt->at_queue, e, entry);
++			}
+ 			else
+ 				AST_LIST_INSERT_TAIL (&pvt->at_queue, e, entry);
+ 
+@@ -293,7 +304,6 @@ EXPORT_DEF int at_queue_insert_uid(struct cpvt * cpvt, at_queue_cmd_t * cmds, un
+ {
+ 	unsigned idx;
+ 	at_queue_task_t *task = at_queue_add(cpvt, cmds, cmdsno, athead);
+-	task->uid = uid;
+ 
+ 	if(!task)
+ 	{
+@@ -301,8 +311,11 @@ EXPORT_DEF int at_queue_insert_uid(struct cpvt * cpvt, at_queue_cmd_t * cmds, un
+ 		{
+ 			at_queue_free_data(&cmds[idx]);
+ 		}
++		return -1;
+ 	}
+ 
++	task->uid = uid;
++
+ 	if (at_queue_run(cpvt->pvt))
+ 		task = NULL;
+ 
+diff --git a/at_read.c b/at_read.c
+index 29cb890..bf50136 100644
+--- a/at_read.c
++++ b/at_read.c
+@@ -171,6 +171,10 @@ EXPORT_DEF int at_read_result_iov (const char * dev, int * read_result, struct r
+ 			else if (rb_memcmp (rb, "+CMGR:", 6) == 0 || rb_memcmp (rb, "+CNUM:", 6) == 0 || rb_memcmp (rb, "ERROR+CNUM:", 11) == 0 || rb_memcmp (rb, "+CLCC:", 6) == 0)
+ 			{
+ 				iovcnt = rb_read_until_mem_iov (rb, iov, "\n\r\nOK\r\n", 7);
++				if (iovcnt <= 0)
++				{
++					iovcnt = rb_read_until_mem_iov (rb, iov, "\r\nOK\r\n", 6);
++				}
+ 				if (iovcnt > 0)
+ 				{
+ 					*read_result = 0;
 diff --git a/at_response.c b/at_response.c
-index 1832dae..759fd2a 100644
+index 1832dae..8b56df5 100644
 --- a/at_response.c
 +++ b/at_response.c
 @@ -43,6 +43,7 @@ static const at_response_t at_responses_list[] = {
@@ -224,7 +389,17 @@ index 1832dae..759fd2a 100644
  			case CMD_AT_CHLD_2:
  				if (!CPVT_TEST_FLAG(task->cpvt, CALL_FLAG_HOLD_OTHER) ||
  						task->cpvt->state != CALL_STATE_INIT) {
-@@ -445,6 +468,16 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -440,11 +463,26 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+ 
+ 			case CMD_AT_DDSETEX:
+ 				log_cmd_response_error(pvt, ecmd, "[%s] %s (setup voice) failed\n", PVT_ID(pvt), at_cmd2str(ecmd->cmd));
++				if (task->cpvt)
++				{
++					queue_control_channel (task->cpvt, AST_CONTROL_CONGESTION);
++					change_channel_state(task->cpvt, CALL_STATE_RELEASED, 0);
++				}
+ 				break;
+ 
  			case CMD_AT_CHUP:
  			case CMD_AT_CHLD_1x:
  				log_cmd_response_error(pvt, ecmd, "[%s] Error sending hangup for call idx %d\n", PVT_ID(pvt), task->cpvt->call_idx);
@@ -241,7 +416,7 @@ index 1832dae..759fd2a 100644
  				break;
  
  			case CMD_AT_CMGR:
-@@ -523,7 +556,7 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -523,7 +561,7 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  	}
  	else
  	{
@@ -250,7 +425,58 @@ index 1832dae..759fd2a 100644
  	}
  
  	return 0;
-@@ -945,6 +978,12 @@ static int at_response_clcc (struct pvt* pvt, char* str)
+@@ -805,6 +843,31 @@ static int at_response_conn (struct pvt* pvt, const char* str)
+ 	if (call_type == CLCC_CALL_TYPE_VOICE)
+ 	{
+ 		cpvt = pvt_find_cpvt(pvt, call_index);
++		if (!cpvt)
++		{
++			/* Fallback: if ^ORIG was suppressed by firmware, bind to last dialed cpvt or unindexed dialing call */
++			if (pvt->last_dialed_cpvt && pvt->last_dialed_cpvt->call_idx == 0)
++			{
++				cpvt = pvt->last_dialed_cpvt;
++				cpvt->call_idx = call_index;
++				ast_log (LOG_NOTICE, "[%s] Bound ^ORIG-suppressed outbound call to idx %d\n", PVT_ID(pvt), call_index);
++			}
++			else
++			{
++				struct cpvt * c;
++				AST_LIST_TRAVERSE(&pvt->chans, c, entry)
++				{
++					if (c->dir == CALL_DIR_OUTGOING && c->call_idx == 0)
++					{
++						cpvt = c;
++						cpvt->call_idx = call_index;
++						ast_log (LOG_NOTICE, "[%s] Bound unindexed dialing call to idx %d from ^CONN\n", PVT_ID(pvt), call_index);
++						break;
++					}
++				}
++			}
++		}
++
+ 		if(cpvt)
+ 		{
+ /* FIXME: delay until CLCC handle?
+@@ -863,8 +926,10 @@ static int start_pbx(struct pvt* pvt, const char * number, int call_idx, call_st
+ 	 * set too low, try drop buffer cache
+ 	 * sync && echo 3 >/proc/sys/vm/drop_caches
+ 	 */
++	ast_mutex_unlock (&pvt->lock);
+ 	if (ast_pbx_start (channel))
+ 	{
++		ast_mutex_lock (&pvt->lock);
+ 		ast_channel_tech_pvt_set(channel, NULL);
+ 		cpvt_free(cpvt);
+ 
+@@ -873,6 +938,7 @@ static int start_pbx(struct pvt* pvt, const char * number, int call_idx, call_st
+ 		// TODO: count fails and reset incoming when count reach limit ?
+ 		return -1;
+ 	}
++	ast_mutex_lock (&pvt->lock);
+ 
+ 	return 0;
+ }
+@@ -945,6 +1011,12 @@ static int at_response_clcc (struct pvt* pvt, char* str)
  					}
  					else if(dir == CALL_DIR_INCOMING && (state == CALL_STATE_INCOMING || state == CALL_STATE_WAITING))
  					{
@@ -263,7 +489,33 @@ index 1832dae..759fd2a 100644
  						if(state == CALL_STATE_INCOMING)
  							PVT_STAT(pvt, in_calls) ++;
  						else
-@@ -1080,9 +1119,14 @@ static int at_response_ccwa(struct pvt* pvt, char* str)
+@@ -1027,7 +1099,24 @@ static int at_response_clcc (struct pvt* pvt, char* str)
+ 		AST_LIST_TRAVERSE(&pvt->chans, cpvt, entry)
+ 		{
+ 			if(!CPVT_TEST_FLAG(cpvt, CALL_FLAG_ALIVE))
+-				change_channel_state(cpvt, CALL_STATE_RELEASED, 0);
++			{
++				if (cpvt->channel && cpvt->state != CALL_STATE_INIT)
++				{
++					if (++cpvt->zombie_ticks >= 3)
++					{
++						ast_log(LOG_NOTICE, "[%s] Dropping unresponsive zombie call idx %d\n", PVT_ID(pvt), cpvt->call_idx);
++						change_channel_state(cpvt, CALL_STATE_RELEASED, 0);
++					}
++				}
++				else
++				{
++					change_channel_state(cpvt, CALL_STATE_RELEASED, 0);
++				}
++			}
++			else
++			{
++				cpvt->zombie_ticks = 0;
++			}
+ 		}
+ 	}
+ 	return 0;
+@@ -1080,9 +1169,14 @@ static int at_response_ccwa(struct pvt* pvt, char* str)
  //		if (sscanf (str, "+CCWA: \"%*[+0-9*#ABCabc]\",%*d,%d", &class) == 1)
  		if (at_parse_ccwa(str, &class) == 0)
  		{
@@ -279,7 +531,56 @@ index 1832dae..759fd2a 100644
  				pvt->rings++;
  				pvt->cwaiting = 1;
  				request_clcc(pvt);
-@@ -1630,9 +1674,12 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
+@@ -1113,16 +1207,7 @@ static int at_response_ring (struct pvt* pvt)
+ 
+ 		request_clcc(pvt);
+ 
+-		/* We only want to syncronize volume on the first ring and if no channels yes */
+-		if (pvt->volume_sync_step == VOLUME_SYNC_BEGIN && PVT_NO_CHANS(pvt))
+-		{
+-			if (at_enqueue_volsync(&pvt->sys_chan))
+-			{
+-				ast_log (LOG_ERROR, "[%s] Error synchronize audio level\n", PVT_ID(pvt));
+-			}
+-			else
+-				pvt->volume_sync_step++;
+-		}
++		/* Volume sync deferred to active call state to eliminate extension ringing latency */
+ 	}
+ 
+ 	return 0;
+@@ -1256,13 +1341,19 @@ static int at_response_cmgr(struct pvt* pvt, char * str, size_t len)
+ 	int mr, st;
+ 	char		msg[4096];
+ 	int		res;
+-	char		text_base64[40800];
++	char		*text_base64 = ast_calloc(1, 40800);
++	char		*fullmsg = ast_calloc(1, 160 * 255);
+ 	size_t msg_len = sizeof(msg);
+ 	int tpdu_type;
+ 	pdu_udh_t	udh;
+ 	pdu_udh_init(&udh);
+-	char fullmsg[160 * 255];
+ 	int fullmsg_len;
++
++	if (!text_base64 || !fullmsg) {
++		ast_free(text_base64);
++		ast_free(fullmsg);
++		return -1;
++	}
+ 	int csms_cnt;
+ 	char buf[512];
+ 	char payload[SMSDB_PAYLOAD_MAX_LEN];
+@@ -1370,6 +1461,8 @@ receive_next_no_delete:
+ 		ast_log (LOG_WARNING, "[%s] Received unexpected '+CMGR'\n", PVT_ID(pvt));
+ 	}
+ 
++	ast_free(text_base64);
++	ast_free(fullmsg);
+ 	return 0;
+ }
+ 
+@@ -1630,9 +1723,12 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
  	char*	lac;
  	char*	ci;
  
@@ -294,7 +595,7 @@ index 1832dae..759fd2a 100644
  	}
  
  	if (at_parse_creg (str, len, &d, &pvt->gsm_reg_status, &lac, &ci))
-@@ -1643,11 +1690,9 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
+@@ -1643,11 +1739,9 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
  
  	if (d)
  	{
@@ -306,7 +607,7 @@ index 1832dae..759fd2a 100644
  		pvt->gsm_registered = 1;
  		manager_event_device_status(PVT_ID(pvt), "Register");
  	}
-@@ -1754,16 +1799,21 @@ static int at_response_cimi (struct pvt* pvt, const char* str)
+@@ -1754,16 +1848,21 @@ static int at_response_cimi (struct pvt* pvt, const char* str)
  static void at_response_busy(struct pvt* pvt, enum ast_control_frame_type control)
  {
  	const struct at_queue_task * task = at_queue_head_task (pvt);
@@ -330,7 +631,15 @@ index 1832dae..759fd2a 100644
  }
  
  /*!
-@@ -1917,15 +1967,18 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
+@@ -1880,6 +1979,7 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
+ 				at_response_csq (pvt, str);
+ 				break;
+ 
++			case RES_CME_ERROR:
+ 			case RES_CMS_ERROR:
+ 			case RES_ERROR:
+ 				return at_response_error (pvt, at_res);
+@@ -1917,15 +2017,18 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
  			case RES_BUSY:
  				ast_log (LOG_ERROR, "[%s] Receive BUSY\n", PVT_ID(pvt));
  				at_response_busy(pvt, AST_CONTROL_BUSY);
@@ -349,11 +658,51 @@ index 1832dae..759fd2a 100644
  				break;
  			case RES_CPIN:
  				/* fatal */
+diff --git a/at_response.h b/at_response.h
+index b234d73..e25a26e 100644
+--- a/at_response.h
++++ b/at_response.h
+@@ -22,6 +22,7 @@ struct iovec;
+ 	_( CEND,        "^CEND",        "^CEND:") \
+ \
+ 	_( CMGR,        "+CMGR",        "+CMGR:") \
++	_( CME_ERROR,   "+CME ERROR",   "+CME ERROR:") \
+ 	_( CMS_ERROR,   "+CMS ERROR",   "+CMS ERROR:") \
+ 	_( CMTI,        "+CMTI",        "+CMTI:") \
+ 	_( CDSI,        "+CDSI",        "+CDSI:") \
 diff --git a/chan_dongle.c b/chan_dongle.c
-index 06886d8..1d7c313 100644
+index 06886d8..430d81c 100644
 --- a/chan_dongle.c
 +++ b/chan_dongle.c
-@@ -518,6 +518,20 @@ static void* do_monitor_phone (void* data)
+@@ -413,7 +413,7 @@ EXPORT_DEF void clean_read_data(const char * devname, int fd)
+ 		ast_debug (4, "[%s] drop %u bytes of pending data before initialization\n", devname, (unsigned)rb_used(&rb));
+ 		/* drop read */
+ 		rb_init (&rb, buf, sizeof (buf));
+-		if (iovcnt == 0)
++		if (iovcnt <= 0)
+ 			break;
+ 	}
+ }
+@@ -488,11 +488,17 @@ static void* do_monitor_phone (void* data)
+ 	ast_mutex_unlock (&pvt->lock);
+ 
+ 
++	time_t last_expired_check = 0;
+ 	while (1)
+ 	{
++		time_t now = time(NULL);
+ 		ast_mutex_lock (&pvt->lock);
+ 
+-		handle_expired_reports(pvt);
++		if (now - last_expired_check >= 15)
++		{
++			handle_expired_reports(pvt);
++			last_expired_check = now;
++		}
+ 
+ 		if (port_status (pvt->data_fd) || port_status (pvt->audio_fd))
+ 		{
+@@ -518,6 +524,20 @@ static void* do_monitor_phone (void* data)
  			ecmd = at_queue_head_cmd (pvt);
  			if(ecmd)
  			{
@@ -374,7 +723,15 @@ index 06886d8..1d7c313 100644
  				ast_log (LOG_ERROR, "[%s] timedout while waiting '%s' in response to '%s'\n", dev, at_res2str (ecmd->res), at_cmd2str (ecmd->cmd));
  				goto e_cleanup;
  			}
-@@ -1564,7 +1578,8 @@ static int pvt_reconfigure(struct pvt * pvt, const pvt_config_t * settings, rest
+@@ -727,6 +747,7 @@ static void pvt_free(struct pvt * pvt)
+ 		ast_dsp_free(pvt->dsp);
+ 
+ 	ast_mutex_unlock(&pvt->lock);
++	ast_mutex_destroy(&pvt->lock);
+ 
+ 	ast_free(pvt);
+ }
+@@ -1564,7 +1585,8 @@ static int pvt_reconfigure(struct pvt * pvt, const pvt_config_t * settings, rest
  			|| strcmp(UCONFIG(settings, imsi), CONF_UNIQ(pvt, imsi))
  			|| SCONFIG(settings, u2diag) != CONF_SHARED(pvt, u2diag)
  			|| SCONFIG(settings, resetdongle) != CONF_SHARED(pvt, resetdongle)
@@ -384,8 +741,23 @@ index 06886d8..1d7c313 100644
  		{
  			/* TODO: schedule restart */
  			pvt->desired_state = DEV_STATE_RESTARTED;
+@@ -1605,12 +1627,12 @@ static int reload_config(public_state_t * state, int recofigure, restate_time_t
+ 	dc_sconfig_fill_defaults(&config_defaults);
+ 	dc_sconfig_fill(cfg, "defaults", &config_defaults);
+ 
+-	/* FIXME: deadlock avoid ? */
++	/* Initialize must_remove = 0 to prevent syntax errors from destroying live devices */
+ 	AST_RWLIST_RDLOCK(&state->devices);
+ 	AST_RWLIST_TRAVERSE(&state->devices, pvt, entry)
+ 	{
+ 		ast_mutex_lock(&pvt->lock);
+-		pvt->must_remove = 1;
++		pvt->must_remove = 0;
+ 		ast_mutex_unlock(&pvt->lock);
+ 	}
+ 	AST_RWLIST_UNLOCK(&state->devices);
 diff --git a/chan_dongle.h b/chan_dongle.h
-index 72e9b51..40e4b0d 100644
+index 72e9b51..8b9c55e 100644
 --- a/chan_dongle.h
 +++ b/chan_dongle.h
 @@ -130,7 +130,7 @@ typedef struct pvt
@@ -393,12 +765,20 @@ index 72e9b51..40e4b0d 100644
  	struct ast_timer*	a_timer;			/*!< audio write timer */
  
 -	char			a_write_buf[FRAME_SIZE * 35];	/*!< audio write buffer */
-+	char			a_write_buf[FRAME_SIZE * 12];	/*!< audio write buffer (240ms) */
++	char			a_write_buf[FRAME_SIZE * 24];	/*!< audio write buffer (480ms) */
  	struct mixbuffer	a_write_mixb;			/*!< audio mix buffer */
  //	struct ringbuffer	a_write_rb;			/*!< audio ring buffer */
  
+@@ -141,6 +141,7 @@ typedef struct pvt
+ 	char			dtmf_digit;			/*!< last DTMF digit */
+ 	struct timeval		dtmf_begin_time;		/*!< time of begin of last DTMF digit */
+ 	struct timeval		dtmf_end_time;			/*!< time of end of last DTMF digit */
++	struct timeval		last_hangup_time;		/*!< time of last call hangup / teardown */
+ 
+ 	int			timeout;			/*!< used to set the timeout for data */
+ #define DATA_READ_TIMEOUT	10000				/* 10 seconds */
 diff --git a/channel.c b/channel.c
-index 3cb2815..e0f9f6d 100644
+index 3cb2815..821f573 100644
 --- a/channel.c
 +++ b/channel.c
 @@ -17,6 +17,8 @@
@@ -410,7 +790,22 @@ index 3cb2815..e0f9f6d 100644
  
  #include "ast_compat.h"
  #if ASTERISK_VERSION_NUM >= 130000 /* 13+ */
-@@ -338,7 +340,7 @@ static void activate_call(struct cpvt* cpvt)
+@@ -260,6 +262,14 @@ static int channel_call(struct ast_channel* channel, char* dest, attribute_unuse
+ 		ast_log (LOG_ERROR, "[%s] Error device already in use or uninitialized\n", PVT_ID(pvt));
+ 		return -1;
+ 	}
++
++	/* Enforce minimum 250ms hardware settling time after previous call teardown */
++	{
++		int64_t diff = ast_tvdiff_ms(ast_tvnow(), pvt->last_hangup_time);
++		if (diff >= 0 && diff < 250) {
++			usleep((250 - diff) * 1000);
++		}
++	}
+ 	CPVT_SET_FLAGS(cpvt, opts);
+ 
+ 	ast_debug (1, "[%s] Calling %s on %s\n", PVT_ID(pvt), dest, ast_channel_name(channel));
+@@ -338,7 +348,7 @@ static void activate_call(struct cpvt* cpvt)
  			if(cpvt2->channel)
  			{
  				ast_channel_set_fd (cpvt2->channel, 1, -1);
@@ -419,7 +814,7 @@ index 3cb2815..e0f9f6d 100644
  				{
  					ast_channel_set_fd (cpvt2->channel, 0, cpvt2->rd_pipe[PIPE_READ]);
  					ast_debug (6, "[%s] call idx %d still active fd %d\n", PVT_ID(pvt), cpvt2->call_idx, cpvt2->rd_pipe[PIPE_READ]);
-@@ -359,6 +361,8 @@ static void activate_call(struct cpvt* cpvt)
+@@ -359,6 +369,8 @@ static void activate_call(struct cpvt* cpvt)
  
  	if (pvt->audio_fd >= 0)
  	{
@@ -428,7 +823,7 @@ index 3cb2815..e0f9f6d 100644
  		CPVT_SET_FLAGS(cpvt, CALL_FLAG_ACTIVATED | CALL_FLAG_MASTER);
  		if(cpvt->channel)
  		{
-@@ -404,6 +408,32 @@ static int channel_hangup (struct ast_channel* channel)
+@@ -404,8 +416,35 @@ static int channel_hangup (struct ast_channel* channel)
  
  		disactivate_call (cpvt);
  
@@ -460,8 +855,45 @@ index 3cb2815..e0f9f6d 100644
 +
  		/* drop cpvt->channel reference */
  		cpvt->channel = NULL;
++		pvt->last_hangup_time = ast_tvnow();
  		ast_mutex_unlock (&pvt->lock);
-@@ -463,6 +493,14 @@ static int channel_digit_begin (struct ast_channel* channel, char digit)
+ 	}
+ 
+@@ -423,11 +462,12 @@ static int channel_answer (struct ast_channel* channel)
+ {
+ 	struct cpvt* cpvt = ast_channel_tech_pvt(channel);
+ 	struct pvt* pvt;
++	int res = 0;
+ 
+ 	if(!cpvt || cpvt->channel != channel || !cpvt->pvt)
+ 	{
+ 		ast_log (LOG_WARNING, "call on unreferenced %s\n", ast_channel_name(channel));
+-		return 0;
++		return -1;
+ 	}
+ 	pvt = cpvt->pvt;
+ 
+@@ -435,7 +475,8 @@ static int channel_answer (struct ast_channel* channel)
+ 
+ 	if (cpvt->dir == CALL_DIR_INCOMING)
+ 	{
+-		if (at_enqueue_answer(cpvt))
++		res = at_enqueue_answer(cpvt);
++		if (res)
+ 		{
+ 			ast_log (LOG_ERROR, "[%s] Error sending answer commands\n", PVT_ID(pvt));
+ 		}
+@@ -443,8 +484,7 @@ static int channel_answer (struct ast_channel* channel)
+ 
+ 	ast_mutex_unlock (&pvt->lock);
+ 
+-	return 0;
+-
++	return res;
+ }
+ 
+ #/* */
+@@ -463,6 +503,14 @@ static int channel_digit_begin (struct ast_channel* channel, char digit)
  
  	ast_mutex_lock (&pvt->lock);
  
@@ -476,7 +908,7 @@ index 3cb2815..e0f9f6d 100644
  	rv = at_enqueue_dtmf(cpvt, digit);
  	if (rv)
  	{
-@@ -505,6 +543,9 @@ again:
+@@ -505,6 +553,9 @@ again:
  			{
  				--count;
  				if(count != 0) {
@@ -486,7 +918,7 @@ index 3cb2815..e0f9f6d 100644
  					goto again;
  				}
  				ast_debug (1, "[%s] Deadlock avoided for write!\n", PVT_ID(pvt));
-@@ -525,7 +566,9 @@ again:
+@@ -525,7 +576,9 @@ again:
  				}
  				else
  				{
@@ -496,7 +928,7 @@ index 3cb2815..e0f9f6d 100644
  					goto again;
  				}
  			} while(written > 0);
-@@ -574,7 +617,6 @@ static void timing_write(struct pvt* pvt)
+@@ -574,7 +627,6 @@ static void timing_write(struct pvt* pvt)
  		if (used >= FRAME_SIZE)
  		{
  			iovcnt = mixb_read_n_iov (&pvt->a_write_mixb, iov, FRAME_SIZE);
@@ -504,7 +936,7 @@ index 3cb2815..e0f9f6d 100644
  			mixb_read_upd (&pvt->a_write_mixb, FRAME_SIZE);
  			change_audio_endianness_to_le(iov, iovcnt);
  		}
-@@ -584,7 +626,6 @@ static void timing_write(struct pvt* pvt)
+@@ -584,7 +636,6 @@ static void timing_write(struct pvt* pvt)
  			msg = "[%s] write truncated frame\n";
  
  			iovcnt = mixb_read_all_iov (&pvt->a_write_mixb, iov);
@@ -512,7 +944,7 @@ index 3cb2815..e0f9f6d 100644
  			mixb_read_upd (&pvt->a_write_mixb, used);
  
  			iov[iovcnt].iov_base	= silence_frame;
-@@ -668,6 +709,12 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -668,6 +719,12 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  		CHANNEL_DEADLOCK_AVOIDANCE (channel);
  	}
  
@@ -525,7 +957,7 @@ index 3cb2815..e0f9f6d 100644
  	ast_debug (7, "[%s] read call idx %d state %d audio_fd %d\n", PVT_ID(pvt), cpvt->call_idx, cpvt->state, pvt->audio_fd);
  
  	/* FIXME: move down for enable timing_write() to device ? */
-@@ -685,6 +732,9 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -685,6 +742,9 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  
  	else
  	{
@@ -535,7 +967,7 @@ index 3cb2815..e0f9f6d 100644
  		memset (&cpvt->a_read_frame, 0, sizeof (cpvt->a_read_frame));
  
  		cpvt->a_read_frame.frametype = AST_FRAME_VOICE;
-@@ -695,24 +745,52 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
+@@ -695,24 +755,50 @@ static struct ast_frame* channel_read (struct ast_channel* channel)
  #else /* 10- */
  		cpvt->a_read_frame.subclass_codec = AST_FORMAT_SLINEAR;
  #endif /* ^10- */
@@ -549,11 +981,16 @@ index 3cb2815..e0f9f6d 100644
 +		if (cpvt->odd_byte >= 0)
  		{
 -			if (errno != EAGAIN && errno != EINTR)
-+			buf[0] = (char)cpvt->odd_byte;
-+			res = read (fd, buf + 1, FRAME_SIZE - 1);
++			buf[cpvt->a_read_buf_used] = (char)cpvt->odd_byte;
++			cpvt->a_read_buf_used++;
++			cpvt->odd_byte = -1;
++		}
++
++		if (cpvt->a_read_buf_used < FRAME_SIZE)
++		{
++			res = read (fd, buf + cpvt->a_read_buf_used, FRAME_SIZE - cpvt->a_read_buf_used);
 +			if (res < 0)
- 			{
--				ast_debug (1, "[%s] Read error %d, going to wait for new connection\n", PVT_ID(pvt), errno);
++			{
 +				if (errno != EAGAIN && errno != EINTR)
 +				{
 +					ast_debug (1, "[%s] Read error %d, going to wait for new connection\n", PVT_ID(pvt), errno);
@@ -561,44 +998,62 @@ index 3cb2815..e0f9f6d 100644
 +				goto e_return;
 +			}
 +			else if (res == 0)
-+			{
-+				goto e_return;
-+			}
-+			res += 1;
-+			cpvt->odd_byte = -1;
-+		}
-+		else
-+		{
-+			res = read (fd, buf, FRAME_SIZE);
-+			if (res <= 0)
-+			{
-+				if (errno != EAGAIN && errno != EINTR)
-+				{
-+					ast_debug (1, "[%s] Read error %d, going to wait for new connection\n", PVT_ID(pvt), errno);
-+				}
+ 			{
+-				ast_debug (1, "[%s] Read error %d, going to wait for new connection\n", PVT_ID(pvt), errno);
 +				goto e_return;
  			}
--
--			goto e_return;
++			cpvt->a_read_buf_used += res;
++		}
++
++		/* If odd number of accumulated bytes, preserve trailing byte to keep 16-bit PCM word alignment */
++		if (cpvt->a_read_buf_used % 2 != 0)
++		{
++			cpvt->odd_byte = (unsigned char)buf[cpvt->a_read_buf_used - 1];
++			cpvt->a_read_buf_used--;
++		}
+ 
++		/* Accumulate until full 20ms (320 bytes) frame is ready for WebRTC/Opus */
++		if (cpvt->a_read_buf_used < FRAME_SIZE)
++		{
+ 			goto e_return;
  		}
  
 -/*		ast_debug (7, "[%s] call idx %d read %u\n", PVT_ID(pvt), cpvt->call_idx, (unsigned)res);
 -		ast_debug (6, "[%s] read | call idx %d fd %d read %d bytes\n", PVT_ID(pvt), cpvt->call_idx, pvt->audio_fd, res);
 -*/
-+		/* If odd number of bytes received, preserve trailing byte to keep 16-bit PCM word alignment */
-+		if (res % 2 != 0)
-+		{
-+			cpvt->odd_byte = (unsigned char)buf[res - 1];
-+			res -= 1;
-+			if (res == 0)
-+			{
-+				goto e_return;
-+			}
-+		}
++		res = FRAME_SIZE;
++		cpvt->a_read_buf_used = 0;
  
  		if(CPVT_IS_MASTER(cpvt))
  		{
-@@ -843,6 +921,12 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
+@@ -829,10 +915,24 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
+ 	}
+ 
+ 	/* TODO: write silence better ? */
+-	/* TODO: check end of bridge loop condition */
+ 	/* never write to same device from other channel its possible for call hold or conference */
+ 	if(CPVT_TEST_FLAG(cpvt, CALL_FLAG_BRIDGE_LOOP))
+-		return 0;
++	{
++#if ASTERISK_VERSION_NUM >= 120000 /* 12+ */
++		RAII_VAR(struct ast_channel *, bridged, ast_channel_bridge_peer(channel), ast_channel_cleanup);
++#else /* 12- */
++		struct ast_channel *bridged = ast_bridged_channel(channel);
++#endif /* ^12- */
++		struct cpvt *tmp_cpvt;
++		if (!bridged || ast_channel_tech(bridged) != &channel_tech || !(tmp_cpvt = ast_channel_tech_pvt(bridged)) || tmp_cpvt->pvt != cpvt->pvt)
++		{
++			CPVT_RESET_FLAGS(cpvt, CALL_FLAG_BRIDGE_LOOP | CALL_FLAG_BRIDGE_CHECK);
++		}
++		else
++		{
++			return 0;
++		}
++	}
+ 
+ 	pvt = cpvt->pvt;
+ 
+@@ -843,6 +943,12 @@ static int channel_write (struct ast_channel* channel, struct ast_frame* f)
  		CHANNEL_DEADLOCK_AVOIDANCE (channel);
  	}
  
@@ -611,7 +1066,35 @@ index 3cb2815..e0f9f6d 100644
  	if(!CPVT_IS_ACTIVE(cpvt))
  		goto e_return;
  
-@@ -1065,6 +1149,15 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
+@@ -998,6 +1104,18 @@ static int channel_fixup (struct ast_channel* oldchannel, struct ast_channel* ne
+ 	if (cpvt->channel == oldchannel)
+ 	{
+ 		cpvt->channel = newchannel;
++		if (CPVT_TEST_FLAG(cpvt, CALL_FLAG_MASTER) && pvt->audio_fd >= 0)
++		{
++			ast_channel_set_fd (newchannel, 0, pvt->audio_fd);
++			if (pvt->a_timer)
++			{
++				ast_channel_set_fd (newchannel, 1, ast_timer_fd (pvt->a_timer));
++			}
++		}
++		else if (CPVT_TEST_FLAG(cpvt, CALL_FLAG_ACTIVATED))
++		{
++			ast_channel_set_fd (newchannel, 0, cpvt->rd_pipe[PIPE_READ]);
++		}
+ 	}
+ 	ast_mutex_unlock (&pvt->lock);
+ 
+@@ -1042,6 +1160,8 @@ static int channel_devicestate (void* data)
+ #/* */
+ static int channel_indicate (struct ast_channel* channel, int condition, const void* data, attribute_unused size_t datalen)
+ {
++	struct cpvt* cpvt = ast_channel_tech_pvt(channel);
++	struct pvt* pvt = cpvt ? cpvt->pvt : NULL;
+ 	int res = 0;
+ 
+ 	ast_debug (1, "[%s] Requested indication %d\n", ast_channel_name(channel), condition);
+@@ -1065,10 +1185,23 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
  #if ASTERISK_VERSION_NUM >= 110000 /* 11+ */
  		case AST_CONTROL_PVT_CAUSE_CODE:
  #endif /* ^11+ */
@@ -627,7 +1110,15 @@ index 3cb2815..e0f9f6d 100644
  			break;
  
  		case AST_CONTROL_HOLD:
-@@ -1076,8 +1169,8 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
+ 			ast_moh_start (channel, data, NULL);
++			if (pvt && pvt->a_timer) {
++				ast_timer_set_rate(pvt->a_timer, 50);
++				timing_write(pvt);
++			}
+ 			break;
+ 
+ 		case AST_CONTROL_UNHOLD:
+@@ -1076,8 +1209,8 @@ static int channel_indicate (struct ast_channel* channel, int condition, const v
  			break;
  
  		default:
@@ -638,7 +1129,7 @@ index 3cb2815..e0f9f6d 100644
  			break;
  	}
  
-@@ -1186,6 +1279,19 @@ EXPORT_DEF void change_channel_state(struct cpvt * cpvt, unsigned newstate, int
+@@ -1186,6 +1319,19 @@ EXPORT_DEF void change_channel_state(struct cpvt * cpvt, unsigned newstate, int
  					disactivate_call(cpvt);
  					/* from +CEND, restart or disconnect */
  
@@ -658,8 +1149,69 @@ index 3cb2815..e0f9f6d 100644
  
  					/* drop channel -> cpvt reference */
  					ast_channel_tech_pvt_set(channel, NULL);
+@@ -1449,6 +1595,11 @@ static int channel_func_read(struct ast_channel* channel, attribute_unused const
+ 		{
+ 			CHANNEL_DEADLOCK_AVOIDANCE (channel);
+ 		}
++		if (ast_channel_tech_pvt(channel) != cpvt || cpvt->channel != channel)
++		{
++			ast_mutex_unlock(&pvt->lock);
++			return -1;
++		}
+ 		call_state_t state = cpvt->state;
+ 		ast_mutex_unlock(&pvt->lock);
+ 
+@@ -1491,7 +1642,7 @@ static int channel_func_read(struct ast_channel* channel, attribute_unused const
+ static int channel_func_write(struct ast_channel* channel, const char* function, char* data, const char* value)
+ {
+ 	struct cpvt* cpvt = ast_channel_tech_pvt(channel);
+-	struct pvt* pvt = cpvt->pvt;
++	struct pvt* pvt;
+ 	call_state_t newstate, oldstate;
+ 	int ret = 0;
+ 
+@@ -1500,6 +1651,7 @@ static int channel_func_write(struct ast_channel* channel, const char* function,
+ 		ast_log (LOG_WARNING, "call on unreferenced %s\n", ast_channel_name(channel));
+ 		return -1;
+ 	}
++	pvt = cpvt->pvt;
+ 
+ 	if (!strcasecmp(data, "callstate"))
+ 	{
+diff --git a/char_conv.c b/char_conv.c
+index 403e109..0782f27 100644
+--- a/char_conv.c
++++ b/char_conv.c
+@@ -154,8 +154,8 @@ EXPORT_DEF ssize_t gsm7_pack(const uint16_t *in, size_t in_length, char *out, si
+ 	size_t i, x;
+ 	unsigned value = 0;
+ 
+-	/* compute number of bytes we need for the final string, rounded up */
+-	x = ((out_padding + (7 * in_length) + 7) / 8) + 1;
++	/* compute number of bytes we need for standard GSM-7 string, rounded up */
++	x = ((out_padding + (7 * in_length) + 7) / 8);
+ 
+ 	/* check that the buffer is not too small */
+ 	if (x > out_size)
+@@ -170,12 +170,16 @@ EXPORT_DEF ssize_t gsm7_pack(const uint16_t *in, size_t in_length, char *out, si
+ 			if (out_padding < 8)
+ 				continue;
+ 			/* output one byte */
++			if (x >= out_size)
++				return -1;
+ 			out[x++] = value & 0xff;
+ 			value >>= 8;
+ 			out_padding -= 8;
+ 		}
+ 	}
+ 	if (out_padding != 0) {
++		if (x >= out_size)
++			return -1;
+ 		out[x++] = value & 0xff;
+ 	}
+ 
 diff --git a/cli.c b/cli.c
-index a19ef90..fe9b440 100644
+index a19ef90..cd4817f 100644
 --- a/cli.c
 +++ b/cli.c
 @@ -140,6 +140,8 @@ static char* cli_show_device_settings (struct ast_cli_entry* e, int cmd, struct
@@ -671,23 +1223,35 @@ index a19ef90..fe9b440 100644
  		ast_cli (a->fd, "  Use CallingPres         : %s\n", CONF_SHARED(pvt, usecallingpres) ? "Yes" : "No");
  		ast_cli (a->fd, "  Default CallingPres     : %s\n", CONF_SHARED(pvt, callingpres) < 0 ? "<Not set>" : ast_describe_caller_presentation (CONF_SHARED(pvt, callingpres)));
  		ast_cli (a->fd, "  Auto delete SMS         : %s\n", CONF_SHARED(pvt, autodeletesms) ? "Yes" : "No");
+@@ -795,6 +797,9 @@ static char * cli_discovery(struct ast_cli_entry * e, int cmd, struct ast_cli_ar
+ 
+ 	AST_RWLIST_RDLOCK(&gpublic->devices);
+ 	for(res = pdiscovery_list_begin(&item); res; res = pdiscovery_list_next(&item)) {
++		if(!res->ports.ports[INTERFACE_TYPE_DATA]) {
++			continue;
++		}
+ 		AST_RWLIST_TRAVERSE (&gpublic->devices, pvt, entry) {
+ 			if(strcmp(PVT_STATE(pvt, data_tty), res->ports.ports[INTERFACE_TYPE_DATA]) == 0) {
+ 				break;
 diff --git a/cpvt.c b/cpvt.c
-index babe428..fc59006 100644
+index babe428..539ce7d 100644
 --- a/cpvt.c
 +++ b/cpvt.c
-@@ -54,6 +54,7 @@ EXPORT_DEF struct cpvt * cpvt_alloc(struct pvt * pvt, int call_idx, unsigned dir
+@@ -54,6 +54,9 @@ EXPORT_DEF struct cpvt * cpvt_alloc(struct pvt * pvt, int call_idx, unsigned dir
  			cpvt->dir = dir;
  			cpvt->rd_pipe[0] = filedes[0];
  			cpvt->rd_pipe[1] = filedes[1];
 +			cpvt->odd_byte = -1;
++			cpvt->a_read_buf_used = 0;
++			cpvt->zombie_ticks = 0;
  
  //			rb_init (&cpvt->a_write_rb, cpvt->a_write_buf, sizeof (cpvt->a_write_buf));
  
 diff --git a/cpvt.h b/cpvt.h
-index 1ceefbb..c54180d 100644
+index 1ceefbb..5171c20 100644
 --- a/cpvt.h
 +++ b/cpvt.h
-@@ -70,8 +70,9 @@ typedef struct cpvt {
+@@ -70,8 +70,11 @@ typedef struct cpvt {
  #define PIPE_WRITE		1
  
  	struct mixstream	mixstream;			/*!< mix stream */
@@ -695,11 +1259,13 @@ index 1ceefbb..c54180d 100644
 +	char			a_read_buf[FRAME_SIZE + AST_FRIENDLY_OFFSET + 4];/*!< audio read buffer */
  	struct ast_frame	a_read_frame;			/*!< read frame buffer */
 +	int			odd_byte;			/*!< leftover byte from odd read, -1 if none */
++	size_t			a_read_buf_used;		/*!< accumulated bytes in a_read_buf */
++	unsigned int		zombie_ticks;			/*!< consecutive unconfirmed CLCC ticks */
  
  //	size_t			write;				/*!< write position in pvt->a_write_buf */
  //	size_t			used;				/*!< bytes used in pvt->a_write_buf */
 diff --git a/dc_config.c b/dc_config.c
-index b1482f7..bcbac77 100644
+index b1482f7..d3bc261 100644
 --- a/dc_config.c
 +++ b/dc_config.c
 @@ -95,6 +95,7 @@ EXPORT_DEF void dc_sconfig_fill_defaults(struct dc_sconfig * config)
@@ -710,8 +1276,12 @@ index b1482f7..bcbac77 100644
  }
  
  #/* */
-@@ -222,6 +223,10 @@ EXPORT_DEF void dc_sconfig_fill(struct ast_config * cfg, const char * cat, struc
- 				config->mindtmfduration = DEFAULT_MINDTMFINTERVAL;
+@@ -219,9 +220,13 @@ EXPORT_DEF void dc_sconfig_fill(struct ast_config * cfg, const char * cat, struc
+ 			if ((config->mindtmfinterval == 0 && errno == EINVAL) || config->mindtmfinterval < 0)
+ 			{
+ 				ast_log(LOG_ERROR, "Invalid value for 'mindtmfinterval' '%s', setting default %d\n", v->value, DEFAULT_MINDTMFINTERVAL);
+-				config->mindtmfduration = DEFAULT_MINDTMFINTERVAL;
++				config->mindtmfinterval = DEFAULT_MINDTMFINTERVAL;
  			}
  		}
 +		else if (!strcasecmp (v->name, "syscfg"))
@@ -757,6 +1327,116 @@ index 789dcb2..645b5ab 100644
  	ast_free(unescaped_msg);
  	snprintf(buf, sizeof (buf), "[%s] %s", device, res < 0 ? error2str(chan_dongle_err) : "SMS queued for send");
  	(res == 0 ? astman_send_ack : astman_send_error)(s, m, buf);
+diff --git a/pdiscovery.c b/pdiscovery.c
+index 6dd3f9f..063452d 100644
+--- a/pdiscovery.c
++++ b/pdiscovery.c
+@@ -385,7 +385,7 @@ static int pdiscovery_interfaces(const char * devname, const char * name, int le
+ 									break;
+ 							} else {
+ 								ast_debug(4, "[%s discovery] port %s for bInterfaceNumber %02x already exists new is %s\n", devname, ports->ports[idx], interface, port);
+-								// FIXME
++								ast_free(port);
+ 							}
+ 						}
+ 					}
+diff --git a/pdu.c b/pdu.c
+index ab2e203..251466b 100644
+--- a/pdu.c
++++ b/pdu.c
+@@ -4,7 +4,8 @@
+ */
+ #include "ast_config.h"
+ 
+-#include <errno.h>			/* EINVAL ENOMEM E2BIG */
++#include <errno.h>
++#include <stdlib.h>			/* EINVAL ENOMEM E2BIG */
+ 
+ #include "pdu.h"
+ #include "helpers.h"			/* dial_digit_code() */
+@@ -409,7 +410,7 @@ static int pdu_parse_number(const uint8_t *pdu, size_t pdu_length,
+ 	int i = 0, res;
+ 	toa = pdu[i++];
+ 	unsigned syms = ROUND_UP2(digits);
+-	if (syms > pdu_length - i) {
++	if ((syms / 2) > (size_t)(pdu_length - i)) {
+ 		return -EINVAL;
+ 	}
+ 
+@@ -460,7 +461,15 @@ static int pdu_parse_timestamp(const uint8_t *pdu, size_t length, char *out)
+ 
+ EXPORT_DEF int pdu_build_mult(pdu_part_t *pdus, const char *sca, const char *dst, const uint16_t* msg, size_t msg_len, unsigned valid_minutes, int srr, uint8_t csmsref)
+ {
+-	uint16_t msg_gsm7[msg_len];
++	if (msg_len == 0 || msg_len > 4096) {
++		chan_dongle_err = E_2BIG;
++		return -1;
++	}
++	uint16_t *msg_gsm7 = ast_malloc(msg_len * sizeof(uint16_t));
++	if (!msg_gsm7) {
++		chan_dongle_err = E_UNKNOWN;
++		return -1;
++	}
+ 	int gsm7_len = gsm7_encode(msg, msg_len, msg_gsm7);
+ 
+ 	unsigned split = 0;
+@@ -485,6 +494,7 @@ EXPORT_DEF int pdu_build_mult(pdu_part_t *pdus, const char *sca, const char *dst
+ 		}
+ 		if (cnt > 255) {
+ 			chan_dongle_err = E_2BIG;
++			ast_free(msg_gsm7);
+ 			return -1;
+ 		}
+ 		off = 0;
+@@ -504,13 +514,16 @@ EXPORT_DEF int pdu_build_mult(pdu_part_t *pdus, const char *sca, const char *dst
+ 			ssize_t curlen = pdu_build(pdus[i].buffer, PDU_LENGTH, &pdus[i].tpdu_length, sca, dst, PDU_DCS_ALPHABET_7BIT, msg_gsm7 + off, n, septets, valid_minutes, srr, &udh);
+ 			if (curlen < 0) {
+ 				/* pdu_build sets chan_dongle_err */
++				ast_free(msg_gsm7);
+ 				return -1;
+ 			}
+ 			pdus[i].length = curlen;
+ 			off += n;
+ 			++i;
+ 		}
++		ast_free(msg_gsm7);
+ 	} else {
++		ast_free(msg_gsm7);
+ 		if (msg_len > SMS_UCS2_MAX_LEN) {
+ 			split = CSMS_UCS2_MAX_LEN;
+ 		} else {
+@@ -852,6 +865,10 @@ EXPORT_DEF int tpdu_parse_deliver(const uint8_t *pdu, size_t pdu_length, int tpd
+ 		if (alphabet == PDU_DCS_ALPHABET_7BIT) {
+ 			msg_padding = 6 - (udhl % 7);
+ 			udl_nibbles -= (udhl + 1) * 2;
++			if (udl_nibbles < 0) {
++				chan_dongle_err = E_DECODE_GSM7;
++				return -1;
++			}
+ 		}
+ 
+ 		/* NOTE: UDHL count octets no need calculation */
+@@ -928,6 +945,10 @@ EXPORT_DEF int tpdu_parse_deliver(const uint8_t *pdu, size_t pdu_length, int tpd
+ 
+ 	int msg_len = pdu_length - i, out_len;
+ 	if (alphabet == PDU_DCS_ALPHABET_7BIT) {
++		if (udl_nibbles < 0) {
++			chan_dongle_err = E_DECODE_GSM7;
++			return -1;
++		}
+ 		out_len = gsm7_unpack_decode(
+ 			(const char*)pdu + i, udl_nibbles, msg,
+ 			1024 /* assume enough memory, as SMS messages are limited in size */,
+@@ -937,6 +958,9 @@ EXPORT_DEF int tpdu_parse_deliver(const uint8_t *pdu, size_t pdu_length, int tpd
+ 			return -1;
+ 		}
+ 	} else {
++		if (msg_len > 1024) {
++			msg_len = 1024;
++		}
+ 		out_len = msg_len / 2;
+ 		memcpy((char*)msg, pdu + i, msg_len);
+ 		msg[out_len] = '\0';
 diff --git a/smsdb.c b/smsdb.c
 index a6d8a82..1ac0b2d 100644
 --- a/smsdb.c
@@ -799,3 +1479,47 @@ index a6d8a82..1ac0b2d 100644
  		sqlite3_reset(get_full_message_stmt);
  
  		if (res >= 0) {
+diff --git a/test/gen.c b/test/gen.c
+index a552db0..930665d 100644
+--- a/test/gen.c
++++ b/test/gen.c
+@@ -8,6 +8,17 @@ int ok = 0;
+ int faults = 0;
+ 
+ /* We call ast_log from pdu.c, so we'll fake an implementation here. */
++void *__ast_malloc(size_t size, const char *file, int lineno, const char *func)
++{
++	(void)file; (void)lineno; (void)func;
++	return malloc(size);
++}
++void __ast_free(void *ptr, const char *file, int lineno, const char *func)
++{
++	(void)file; (void)lineno; (void)func;
++	free(ptr);
++}
++
+ void ast_log(int level, const char* fmt, ...)
+ {
+     /* Silence compiler warnings */
+diff --git a/test/parse.c b/test/parse.c
+index 8d336d1..2de1e05 100644
+--- a/test/parse.c
++++ b/test/parse.c
+@@ -10,6 +10,17 @@ int ok = 0;
+ int faults = 0;
+ 
+ /* We call ast_log from pdu.c, so we'll fake an implementation here. */
++void *__ast_malloc(size_t size, const char *file, int lineno, const char *func)
++{
++	(void)file; (void)lineno; (void)func;
++	return malloc(size);
++}
++void __ast_free(void *ptr, const char *file, int lineno, const char *func)
++{
++	(void)file; (void)lineno; (void)func;
++	free(ptr);
++}
++
+ void ast_log(int level, const char* fmt, ...)
+ {
+ 	/* Silence compiler warnings */

@@ -61,7 +61,15 @@ def evaluate_dongle_anomalies(health_data, detail=None):
     if detail:
         tasks = detail.get("tasks_in_queue", 0)
         commands = detail.get("commands_in_queue", 0)
-        if (tasks > 8 or commands > 8) and state != "Active":
+        # Avoid false-positive during device boot/init when 27+ commands are legitimately queued
+        if state in ("Not initialized", "Initializing", "Not connected"):
+            if (tasks > 8 or commands > 8) and stuck_duration >= STUCK_STATE_THRESHOLD_SEC:
+                return (
+                    ANOMALY_MODEM_DEADLOCK,
+                    f"Modem initialization stuck ({commands} commands, {tasks} tasks in queue for {stuck_duration}s)",
+                    3  # Level 3: Targeted Dongle Restart
+                )
+        elif (tasks > 8 or commands > 8) and state != "Active":
             return (
                 ANOMALY_MODEM_DEADLOCK,
                 f"Modem AT queue deadlock ({commands} commands, {tasks} tasks in queue)",

@@ -46,8 +46,8 @@ log_step "1. Detecting Active GSM Dongles"
 DEVICES_OUTPUT=$(asterisk -rx "dongle show devices")
 echo "$DEVICES_OUTPUT"
 
-D0_STATUS=$(echo "$DEVICES_OUTPUT" | grep '^dongle0' || true)
-D1_STATUS=$(echo "$DEVICES_OUTPUT" | grep '^dongle1' || true)
+D0_STATUS=$(echo "$DEVICES_OUTPUT" | grep -E '^dongle0[[:space:]]' || true)
+D1_STATUS=$(echo "$DEVICES_OUTPUT" | grep -E '^dongle1[[:space:]]' || true)
 
 if [ -z "$D0_STATUS" ] || [ -z "$D1_STATUS" ]; then
     log_fail "Both dongle0 and dongle1 must be configured in dongle.conf"
@@ -70,8 +70,8 @@ if [ "$D0_STATE" != "Free" ] || [ "$D1_STATE" != "Free" ]; then
     log_info "Waiting up to 10s for both dongles to reach Free state..."
     for i in {1..10}; do
         sleep 1
-        D0_STATE=$(asterisk -rx "dongle show devices" | grep '^dongle0' | awk '{print $3}')
-        D1_STATE=$(asterisk -rx "dongle show devices" | grep '^dongle1' | awk '{print $3}')
+        D0_STATE=$(asterisk -rx "dongle show devices" | grep -E '^dongle0[[:space:]]' | awk '{print $3}')
+        D1_STATE=$(asterisk -rx "dongle show devices" | grep -E '^dongle1[[:space:]]' | awk '{print $3}')
         if [ "$D0_STATE" = "Free" ] && [ "$D1_STATE" = "Free" ]; then
             break
         fi
@@ -88,8 +88,8 @@ fi
 wait_for_free() {
     local max_wait=${1:-15}
     for ((i=1; i<=max_wait; i++)); do
-        local s0=$(asterisk -rx "dongle show devices" | grep '^dongle0' | awk '{print $3}')
-        local s1=$(asterisk -rx "dongle show devices" | grep '^dongle1' | awk '{print $3}')
+        local s0=$(asterisk -rx "dongle show devices" | grep -E '^dongle0[[:space:]]' | awk '{print $3}')
+        local s1=$(asterisk -rx "dongle show devices" | grep -E '^dongle1[[:space:]]' | awk '{print $3}')
         if [ "$s0" = "Free" ] && [ "$s1" = "Free" ]; then
             return 0
         fi
@@ -105,7 +105,7 @@ asterisk -rx "channel originate Dongle/dongle0/$D1_DIAL_NUM application Wait 6" 
 RING_DETECTED=0
 for i in {1..15}; do
     sleep 1
-    D1_CURR=$(asterisk -rx "dongle show devices" | grep '^dongle1' | awk '{print $3}')
+    D1_CURR=$(asterisk -rx "dongle show devices" | grep -E '^dongle1[[:space:]]' | awk '{print $3}')
     if [ "$D1_CURR" = "Ring" ] || [ "$D1_CURR" = "Incoming" ]; then
         RING_DETECTED=1
         log_info "dongle1 successfully transitioned to: $D1_CURR"
@@ -136,7 +136,7 @@ asterisk -rx "channel originate Dongle/dongle1/$D0_DIAL_NUM application Wait 6" 
 RING_DETECTED=0
 for i in {1..15}; do
     sleep 1
-    D0_CURR=$(asterisk -rx "dongle show devices" | grep '^dongle0' | awk '{print $3}')
+    D0_CURR=$(asterisk -rx "dongle show devices" | grep -E '^dongle0[[:space:]]' | awk '{print $3}')
     if [ "$D0_CURR" = "Ring" ] || [ "$D0_CURR" = "Incoming" ]; then
         RING_DETECTED=1
         log_info "dongle0 successfully transitioned to: $D0_CURR"
@@ -166,7 +166,7 @@ asterisk -rx "channel originate Dongle/dongle0/$D1_DIAL_NUM application Wait 30"
 ABORTED=0
 for i in {1..10}; do
     sleep 1
-    D1_CURR=$(asterisk -rx "dongle show devices" | grep '^dongle1' | awk '{print $3}')
+    D1_CURR=$(asterisk -rx "dongle show devices" | grep -E '^dongle1[[:space:]]' | awk '{print $3}')
     if [ "$D1_CURR" = "Ring" ] || [ "$D1_CURR" = "Incoming" ]; then
         OUT_CHAN=$(asterisk -rx "core show channels concise" | grep 'Dongle/dongle0' | cut -d'!' -f1 || true)
         if [ -n "$OUT_CHAN" ]; then

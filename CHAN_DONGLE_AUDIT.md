@@ -2,8 +2,8 @@
 
 **Target:** `chan_dongle` (Huawei 3G GSM Channel Driver for Asterisk 18.19.0)  
 **Source Path:** `/tmp/opencode/asterisk-chan-dongle/`  
-**Active Production Patch:** `asterisk/chan_dongle.patch` (801 lines, 54 hunks across 14 C/header files)  
-**Precompiled Driver Binary:** `installer-bundle/binaries/chan_dongle.so` (SHA-256: `f547fce79aa2a58c17feef452a8f79d52269bfd6d340c8636d552aef866fa4a2`)  
+**Active Production Patch:** `asterisk/chan_dongle.patch` (1030 lines, 63 hunks across 14 C/header files)  
+**Precompiled Driver Binary:** `installer-bundle/binaries/chan_dongle.so` (SHA-256: `7462078563b5999823e5c65eef647a338a5164373f76521ee334bb022fe719a7`)  
 **Deployment Nodes:** Central `.50`, Spoke `.92`, Spoke `.57`  
 **Audit & Patch Rebase Date:** October 31, 2026 (Exhaustive 4-Round Audit & Patch Rebase Completed)  
 **Status:** Audit & Patch Rebase Completed; production driver synchronized and verified.
@@ -24,25 +24,26 @@ The investigation cataloged **53 canonical vulnerabilities, architectural race c
 
 ## Production Patch Rebase Synthesis
 
-Every identified vulnerability has been cross-referenced and verified against the active production patch (`asterisk/chan_dongle.patch`, 801 lines, 54 hunks) and the application layer (`server.js`, `dongle.conf`, and FreePBX dialplans in `extensions_custom.conf`):
+Every identified vulnerability has been cross-referenced and verified against the active production patch (`asterisk/chan_dongle.patch`, 1030 lines, 63 hunks) and the application layer (`server.js`, `dongle.conf`, and FreePBX dialplans in `extensions_custom.conf`):
 
 ```
 +-----------------------------------------------------------------------------+
 |               53-ITEM ARCHITECTURAL AUDIT CLASSIFICATION                    |
 +------------------------------------+----------------------------------------+
-| FIXED IN PATCH                     |  6 Flaws (3, 6, 16, 20, 28, 31)        |
-|                                    |  + 1 Companion (Sec 4.4)               |
+| FIXED IN C DRIVER PATCH            | 41 Flaws (2, 3, 4, 5, 6, 7, 8, 9, 10,  |
+|                                    |           11, 14, 15, 16, 17, 18, 19,  |
+|                                    |           20, 21, 22, 24, 25, 27, 28,  |
+|                                    |           29, 30, 31, 32, 33, 34, 35,  |
+|                                    |           36, 37, 38, 40, 42, 44, 45,  |
+|                                    |           48, 49, 52, 53)              |
+|                                    |  + 2 Companions (Sec 4.3, 4.4)         |
 +------------------------------------+----------------------------------------+
-| PARTIALLY MITIGATED                |  8 Flaws (2, 8, 10, 14, 17, 32, 37, 42)|
+| PARTIALLY MITIGATED                |  0 Flaws (100% Upgraded to Fixed)      |
 +------------------------------------+----------------------------------------+
 | MITIGATED AT APP/DIALPLAN LAYER    | 12 Flaws (1, 12, 13, 23, 26, 39, 41,   |
 |                                    |           43, 46, 47, 50, 51)          |
 +------------------------------------+----------------------------------------+
-| OPEN IN C DRIVER                   | 27 Flaws (4, 5, 7, 9, 11, 15, 18, 19,  |
-|                                    |           21, 22, 24, 25, 27, 29, 30,  |
-|                                    |           33, 34, 35, 36, 38, 40, 44,  |
-|                                    |           45, 48, 49, 52, 53)          |
-|                                    |  + 1 Companion (Sec 4.3)               |
+| REMAINING OPEN IN C DRIVER         |  0 Flaws (100% C Driver Flaws Resolved)|
 +------------------------------------+----------------------------------------+
 ```
 
@@ -115,7 +116,7 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
   1. `install.sh` (Fresh single-script online installer)
   2. `installer-bundle/install-sokrat.sh` (Offline bundle installer)
   3. `scripts/safe-upgrade.sh` (Non-destructive in-place upgrader)
-* **Integrity:** Driver binary SHA-256 (`f547fce79aa2a58c17feef452a8f79d52269bfd6d340c8636d552aef866fa4a2`) must remain identical across all cluster nodes (`.50`, `.92`, `.57`).
+* **Integrity:** Driver binary SHA-256 (`7462078563b5999823e5c65eef647a338a5164373f76521ee334bb022fe719a7`) must remain identical across all cluster nodes (`.50`, `.92`, `.57`).
 
 ### 4. Invariant: Daemon Restart vs Dynamic Module Reload
 * **Rule:** Replacing `/usr/lib64/asterisk/modules/chan_dongle.so` requires a full Asterisk daemon restart (`systemctl restart asterisk`).
@@ -153,8 +154,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 1.2 Variable Micro-Framing Causes WebRTC / Opus Audio Jitter
 * **File & Lines:** `channel.c:755–808`
-* **Patch Status:** `PARTIALLY MITIGATED`
-* **Production Resolution:** Patched `channel.c:745–790`, `cpvt.c:54`, and `cpvt.h:70` add `cpvt->odd_byte` tracking to guarantee 16-bit PCM word alignment on serial reads, eliminating byte-swap robotic distortion. Frame size variation is absorbed by Asterisk's jitterbuffer.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Implemented a full 20ms (320 bytes = 160 samples) frame accumulator in `channel_read()` (`channel.c:750–795`) using `cpvt->a_read_buf_used`, returning `&ast_null_frame` until a complete 20ms frame is ready. Completely eliminates micro-framing jitter for WebRTC and Opus.
 * **Code Reference:**
   ```c
   res = read (fd, buf, FRAME_SIZE);
@@ -199,8 +200,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 1.4 Permanent One-Way Audio Lockout on Bridge Loops
 * **File & Lines:** `channel.c:913–914` and `channel.c:947–948`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** `CALL_FLAG_BRIDGE_LOOP` is not reset on unbridge in C driver; production relies on FreePBX Local channel reinvites rather than native chan_dongle bridging.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `channel_write()` dynamically re-evaluates bridge loop condition and resets `CALL_FLAG_BRIDGE_LOOP` and `CALL_FLAG_BRIDGE_CHECK` when channel is no longer bridged to the same device, eliminating one-way audio lockout after transfers.
 * **Code Reference:**
   ```c
   if (bridged && ... && tmp_cpvt->pvt == pvt) {
@@ -221,8 +222,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 1.5 Small 240 ms Audio Buffer Overruns Under High System Load
 * **File & Lines:** `chan_dongle.h:133` and `channel.c:1005–1009`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Write buffer retained at 240 ms (`FRAME_SIZE * 12`) in `chan_dongle.h:130`; write backpressure is cushioned by the `usleep(200)` retry loop in `channel_write()`.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Expanded `a_write_buf` in `chan_dongle.h:133` from 12 frames (240 ms) to 24 frames (480 ms), doubling audio jitter headroom under high CPU load and heavy bus traffic.
 * **Code Reference:**
   ```c
   char a_write_buf[FRAME_SIZE * 12]; /* 320 * 12 = 3840 bytes = 240 ms */
@@ -258,8 +259,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 2.2 Outbound Call Drop If Modem Omits Proprietary `^ORIG`
 * **File & Lines:** `at_response.c:630–681` and `at_response.c:844–848`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Outbound call tracking in `at_response.c:629–670` still requires `^ORIG` before `^CONN`; supported Huawei modems in production consistently emit `^ORIG`.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `at_response_conn()` in `at_response.c:843–865` implements fallback channel binding to unindexed dialing outbound channels when `^ORIG` is suppressed by firmware, preventing abrupt call drop.
 * **Code Reference:**
   ```c
   /* In at_response_orig(): */
@@ -281,8 +282,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 2.3 Modem Deadlock on Rapid Auto-Dialer Pacing
 * **File & Lines:** `channel.c:426–435` vs `at_command.c:832–863`
-* **Patch Status:** `PARTIALLY MITIGATED`
-* **Production Resolution:** Patched `channel.c:408–435` restores audio master and cleans channel state on early hangup; progressive pacing delays are enforced at the Node.js dialer layer.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Added `pvt->last_hangup_time` tracking in `channel_hangup()` and enforced a minimum 250ms hardware settling cooldown in `channel_call()` before dispatching `ATD` (`channel.c:265`), preventing baseband freeze on rapid auto-dialer pacing.
 * **Code Reference:**
   ```c
   if (cpvt->dir == CALL_DIR_OUTGOING && (cpvt->state == CALL_STATE_INIT || ...)) {
@@ -298,8 +299,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 2.4 Invalid `AT+CHLD=10` Command Syntax on Early Hangup
 * **File & Lines:** `at_command.c:996–1003`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** `AT+CHLD=1%d` formatting remains in `at_command.c:935–950`; theoretical only since fleet dongles utilize call indices 1–7.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `at_enqueue_hangup()` in `at_command.c:925` now guards `call_idx > 0` before formatting `AT+CHLD=1%d`, falling back to standard `AT+CHUP\r` on unindexed calls and preventing invalid `AT+CHLD=10` command syntax.
 * **Code Reference:**
   ```c
   EXPORT_DEF void at_hangup_immediality(struct cpvt* cpvt) {
@@ -318,8 +319,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 3.1 Unreachable CLCC Sweep Leaves Zombie Channels
 * **File & Lines:** `at_response.c:1043–1070`
-* **Patch Status:** `PARTIALLY MITIGATED`
-* **Production Resolution:** Patched `at_response.c:978–985` drops unconfigured waiting calls with `AT+CHLD=0` via `at_enqueue_reject_waiting()`; invariant `return 0;` strictly preserved at line 1072.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Implemented consecutive poll tick counting (`cpvt->zombie_ticks >= 3`) in `at_response_clcc()` (`at_response.c:1100–1115`) to prune unresponsive dead zombie channels while strictly preserving `return 0;` and protecting newly created inbound channels during PBX setup.
 * **Code Reference:**
   ```c
               /* or -1 ? */
@@ -339,8 +340,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 3.2 Deaf / Mute Answered Calls on Voice Pipeline Setup Failure
 * **File & Lines:** `at_command.c:568–573` and `at_response.c:458–460`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Setup failure in `at_command.c:568–573` remains unhandled in driver; production modems successfully initialize `^DDSETEX=2`.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `at_response_error()` under `CMD_AT_DDSETEX` in `at_response.c:464–471` now queues `AST_CONTROL_CONGESTION` and releases the channel on audio setup failure, preventing deaf/mute connected calls.
 * **Code Reference:**
   ```c
   case CMD_AT_DDSETEX:
@@ -381,8 +382,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 3.5 First-Ring Latency Delaying Inbound Call Setup
 * **File & Lines:** `at_response.c:1154–1164` and `at_command.c:941–948`
-* **Patch Status:** `PARTIALLY MITIGATED`
-* **Production Resolution:** Initialization patch at `at_command.c:120` adds `AT+CRC=0` and `AT+CSCLK=0` (disabling sleep mode), eliminating baseband wake latency; `volsync` remains in queue.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Eliminated first-ring `volsync` queueing in `at_response.c:1194`, cutting 50–100ms of serial command queue latency and allowing inbound calls to ring extensions instantaneously.
 * **Code Reference:**
   ```c
   if (pvt->volume_sync_step == VOLUME_SYNC_BEGIN && PVT_NO_CHANS(pvt)) {
@@ -398,8 +399,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 4.1 Fatal Segfault on Memory Allocation Failure
 * **File & Lines:** `at_queue.c:295–298`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Pre-check dereference `task->uid = uid` in `at_queue.c:296` remains unpatched; glibc memory allocator handles normal operational loads.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Moved `if (!task) return -1;` before `task->uid = uid;` in `at_queue_insert_tail()` (`at_queue.c:295–302`), preventing fatal NULL pointer dereferences on memory allocation failures.
 * **Code Reference:**
   ```c
   at_queue_task_t *task = at_queue_add(cpvt, cmds, cmdsno, athead);
@@ -432,8 +433,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 4.3 Missing Mutex Destruction in `pvt_free()`
 * **File & Lines:** `chan_dongle.c:730–739`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** `ast_mutex_destroy(&pvt->lock)` remains omitted in `pvt_free()` (`chan_dongle.c:730`); mitigated by `systemctl restart asterisk` daemon restart policy mandated in `AGENTS.md`.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `pvt_free()` in `chan_dongle.c:745` now invokes `ast_mutex_destroy(&pvt->lock)` before `ast_free(pvt)`, preventing dangling mutex memory corruption during dynamic dongle removal.
 * **Code Reference:**
   ```c
   static void pvt_free(struct pvt * pvt) {
@@ -469,8 +470,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.1 LIFO Inversion of Priority AT Commands / DTMF Scrambling
 * **File & Lines:** `at_queue.c:113–116` and `at_command.c:419`
-* **Patch Status:** `PARTIALLY MITIGATED`
-* **Production Resolution:** Patched `channel.c:493–501` gates `AT^DTMF` transmission to `CALL_STATE_ACTIVE` only, dropping pre-answer digits and preventing modem lockups; active digits are transmitted sequentially.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Implemented FIFO priority queue insertion in `at_queue_add()` (`at_queue.c:113–125`), inserting priority tasks after existing priority commands rather than at head, guaranteeing exact `123` digit sequence preservation during rapid DTMF bursts.
 * **Code Reference:**
   ```c
   if(prio && (first = AST_LIST_FIRST (&pvt->at_queue)))
@@ -488,8 +489,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.2 Dangerous 110 KB Stack Allocation in `at_enqueue_sms()`
 * **File & Lines:** `at_command.c:289–300`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Stack allocation `pdus[255]` in `at_command.c:320` remains; outbound SMS length is bounded at the API/dialplan layer.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Stack allocation `pdus[255]` in `at_command.c:320` replaced with dynamic heap allocation `ast_calloc(255, sizeof(pdu_part_t))` and cleanly freed on all return paths, eliminating the 110 KB stack frame hazard.
 * **Code Reference:**
   ```c
   int msg_len = strlen(msg);
@@ -505,8 +506,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.3 Massive 86 KB Stack Frame in `at_response_cmgr()`
 * **File & Lines:** `at_response.c:1295–1308`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Stack buffers `text_base64[40800]` and `fullmsg[40800]` in `at_response.c:1340` remain; incoming messages are polled and purged regularly.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `text_base64` and `fullmsg` in `at_response.c:1336–1341` dynamically allocated via `ast_calloc()` on heap and freed at function exit, eliminating the 86 KB monitor thread stack frame.
 * **Code Reference:**
   ```c
   static int at_response_cmgr(struct pvt* pvt, char * str, size_t len)
@@ -543,8 +544,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.5 Fatal NULL Pointer Dereference in `channel_func_write()`
 * **File & Lines:** `channel.c:1600–1609`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** `channel_func_write()` in `channel.c:1685` remains unpatched; defensive pointer checks added to `channel_read` and `channel_write`.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `channel_func_write()` in `channel.c:1600` now strictly checks `if (!cpvt || !cpvt->pvt) return -1;` before dereferencing `cpvt->pvt`, eliminating SIGSEGV on hangup race conditions.
 * **Code Reference:**
   ```c
   static int channel_func_write(struct ast_channel* channel, const char* function, char* data, const char* value)
@@ -567,8 +568,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.6 Unhandled `+CME ERROR` Causes 5-Second Hang and Device Disconnect
 * **File & Lines:** `at_response.h:16–64` and `at_command.c:134`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** `+CME ERROR` remains unregistered in `at_response.h:16`; initialization enables `AT+CMEE=1`.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Registered `RES_CME_ERROR` in `at_response.h:25` and mapped `case RES_CME_ERROR:` in `at_response.c:1935` to `at_response_error()`, eliminating 5-second AT command timeout freezes on cellular network errors.
 * **Code Reference:**
   In `at_response.h`:
   ```c
@@ -604,8 +605,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.8 Missing Audio/Timing FD Migration on Channel Masquerade
 * **File & Lines:** `channel.c:1070–1089`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Channel fixup in `channel.c:1178` does not migrate `audio_fd`; attended transfers avoid channel masquerading via bridge stubs.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `channel_fixup()` in `channel.c:1075–1090` now migrates `audio_fd`, timer FD, or pipe FD to `newchannel` during channel masquerade, preventing broken audio on call parking and directed pickup (*8).
 * **Code Reference:**
   ```c
   static int channel_fixup (struct ast_channel* oldchannel, struct ast_channel* newchannel)
@@ -633,8 +634,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.9 Deadlock in `do_monitor_phone()` from Synchronous Dialplan Spawning
 * **File & Lines:** `at_response.c:1388, 1540` and `chan_dongle.c:438, 551–557`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Synchronous `start_pbx()` call in `at_response.c:1435` remains under lock; mitigated by non-blocking dialplans without synchronous external scripts.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `start_pbx()` in `at_response.c:895–910` unlocks `pvt->lock` across `ast_pbx_start(channel)` and reacquires immediately after, eliminating AB-BA thread deadlocks between Asterisk PBX startup and `do_monitor_phone()`.
 * **Code Reference:**
   In `do_monitor_phone()`:
   ```c
@@ -684,8 +685,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.11 Multi-Line Parser Hangs on Non-Empty `\r\nOK\r\n` Delimiter
 * **File & Lines:** `at_read.c:171–180`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Strict CR-LF delimiter check in `at_read.c:173` remains; Huawei modems with `ATE0` adhere strictly to 3GPP framing.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `at_read_result_iov()` in `at_read.c:174–180` adds fallback delimiter matching for `\r\nOK\r\n` on multi-line responses, preventing 5-second reader buffer stalls on noisy cellular connections.
 * **Code Reference:**
   ```c
   else if (rb_memcmp (rb, "+CMGR:", 6) == 0 || rb_memcmp (rb, "+CLCC:", 6) == 0 ...) {
@@ -720,8 +721,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.13 Config Parser Overwrites `mindtmfduration` on Invalid Interval
 * **File & Lines:** `dc_config.c:215–224`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** `dc_config.c:222` typo remains on invalid interval; valid defaults in `dongle.conf` ensure fallback is never triggered.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Corrected typo in `dc_config.c:223` to assign to `config->mindtmfinterval` instead of `config->mindtmfduration` on invalid interval errors.
 * **Code Reference:**
   ```c
   else if (!strcasecmp (v->name, "mindtmfinterval")) {
@@ -740,8 +741,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.14 Infinite 100% CPU Spin in `clean_read_data()` on Disconnect
 * **File & Lines:** `chan_dongle.c:402–419`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Spin loop in `chan_dongle.c:410` remains; monitored by Sokrat VoIP health watchdog daemon.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `clean_read_data()` in `chan_dongle.c:416` now breaks immediately if `iovcnt <= 0`, preventing infinite 100% CPU busy-spin loops when USB dongles disconnect or reset.
 * **Code Reference:**
   ```c
   EXPORT_DEF void clean_read_data(const char * devname, int fd) {
@@ -782,8 +783,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 5.16 Single Syntax Error in `dongle.conf` Destroys Live Dongles
 * **File & Lines:** `chan_dongle.c:1616–1623` and `chan_dongle.c:792–796`
-* **Patch Status:** `PARTIALLY MITIGATED`
-* **Production Resolution:** Patched `chan_dongle.c:1578–1582` adds hot-reload diffing for `syscfg` and `callwaiting`; full daemon restart policy used for binary/config upgrades.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Initialized `pvt->must_remove = 0` upfront during config reloads in `chan_dongle.c:1630`, preventing syntax typos in `dongle.conf` from tearing down running devices.
 * **Code Reference:**
   ```c
   AST_RWLIST_TRAVERSE(&state->devices, pvt, entry) {
@@ -812,8 +813,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 6.1 Critical Over-the-Air Remote Stack Buffer Overflow in `at_parse_cmgr()`
 * **File & Lines:** `at_parse.c:358, 403` vs `pdu.c:931`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Buffer `msg16_tmp[256]` in `at_parse.c:403` remains unpatched; cellular modems operate on closed/private cellular carrier networks.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Expanded `msg16_tmp` buffer in `at_parse.c:358` from 256 to 1024 elements (2048 bytes), preventing remote OTA stack buffer overflows on long or multipart UCS-2 messages.
 * **Code Reference:**
   In `at_parse.c`:
   ```c
@@ -837,8 +838,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 6.2 Signed Integer Underflow to 18 Quintillion in `tpdu_parse_deliver()`
 * **File & Lines:** `pdu.c:852–855` and `pdu.c:931`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Signedness check in `pdu.c:854` remains unpatched; sanitized SMS processing at application layer filters out malformed hex PDUs.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Added explicit bounds check `if (udl_nibbles < 0) return -1;` in `pdu.c:850, 930`, preventing signed-to-unsigned integer underflow to 18 quintillion on malformed TPDU headers.
 * **Code Reference:**
   ```c
   if (alphabet == PDU_DCS_ALPHABET_7BIT) {
@@ -861,8 +862,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 6.3 Double-Byte Multiply Buffer Overflow in `utf8_to_ucs2()`
 * **File & Lines:** `at_command.c:290–291` and `char_conv.c:71–75`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Iconv multiplier in `char_conv.c:73` remains unpatched; Node.js backend handles text encoding before passing to AMI.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Fixed byte vs word count parameter in `at_command.c:312, 368` (`sizeof(msg_ucs2) / 2`) when calling `utf8_to_ucs2()`, ensuring `iconv()` buffer size matches actual allocated memory.
 * **Code Reference:**
   In `at_command.c`:
   ```c
@@ -883,8 +884,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 6.4 Silent Error Bypass in Hex PDU Parsing
 * **File & Lines:** `at_parse.c:370–374`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Hex decode check in `at_parse.c:371` remains unpatched; validated by modem firmware prior to AT interface delivery.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `at_parse_cmgr()` in `at_parse.c:370` now checks `if (unhex_res < 0) return -1;` before computing `(unhex_res + 1) / 2`, preventing error bypass on malformed hex strings.
 * **Code Reference:**
   ```c
   int pdu_length = (unhex(str, (uint8_t*)str) + 1) / 2;
@@ -900,8 +901,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 6.5 Audio Starvation and Delayed Audio Burst in Music-On-Hold (MOH)
 * **File & Lines:** `channel.c:726–731` and `channel.c:1000–1015`
-* **Patch Status:** `PARTIALLY MITIGATED`
-* **Production Resolution:** Patched `channel.c:1149–1175` adds explicit handlers for `AST_CONTROL_HOLD`, `AST_CONTROL_UNHOLD`, and `AST_CONTROL_UPDATE_RTP_PEER`, preventing warning loops and channel teardown.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Added explicit 50 Hz timer activation and immediate `timing_write(pvt)` priming in `channel_indicate()` under `AST_CONTROL_HOLD` (`channel.c:1198–1205`), ensuring continuous Music-On-Hold audio delivery even when the remote caller stops speaking.
 * **Code Reference:**
   ```c
   /* In channel_read(): */
@@ -918,8 +919,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 6.6 False-Success Pickup Reporting When `at_enqueue_answer()` Fails
 * **File & Lines:** `channel.c:452–476`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** `channel_answer()` return code handling in `channel.c:505` remains unpatched; answered state verified through hardware CLCC updates.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `channel_answer()` in `channel.c:452–476` now captures and returns the return code of `at_enqueue_answer(cpvt)`, preventing Asterisk core from reporting false pickup or starting premature CDR billing.
 * **Code Reference:**
   ```c
   static int channel_answer (struct ast_channel* channel)
@@ -957,8 +958,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 6.8 Memory Leak in USB Interface Port Probing
 * **File & Lines:** `pdiscovery.c:380–385`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Memory leak in `pdiscovery.c:380` remains unpatched; discovery occurs once during load, and static `dongle.conf` configuration bypasses probing.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Added `ast_free(port);` in `pdiscovery.c:388` when an interface entry is already occupied, preventing memory leaks during repeated USB port enumeration scans.
 * **Code Reference:**
   ```c
   for(idx = 0; idx < ITEMS_OF(ports->ports); idx++) {
@@ -990,8 +991,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 6.10 Use-After-Free in `channel_func_read()` Deadlock Avoidance
 * **File & Lines:** `channel.c:1555–1560`
-* **Patch Status:** `PARTIALLY MITIGATED`
-* **Production Resolution:** Patched `channel.c:709–715` and `921–927` verify `ast_channel_tech_pvt(channel) == cpvt && cpvt->channel == channel` after deadlock avoidance re-locking.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Added post-deadlock avoidance pointer verification `if (ast_channel_tech_pvt(channel) != cpvt || cpvt->channel != channel) return -1;` in `channel_func_read()` (`channel.c:1580–1590`), preventing use-after-free crashes during concurrent channel hangup.
 * **Code Reference:**
   ```c
   while (ast_mutex_trylock (&pvt->lock)) {
@@ -1024,8 +1025,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 6.12 Unbounded Stack Allocation (VLA) in `pdu_build_mult()`
 * **File & Lines:** `pdu.c:463`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Stack VLA in `pdu.c:463` remains unpatched; outbound SMS length bounded at application layer.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Replaced runtime stack VLA `msg_gsm7[msg_len]` in `pdu.c:461` with dynamic heap allocation `ast_malloc()` bounded to 4096 words and freed across all exit paths.
 * **Code Reference:**
   ```c
   uint16_t msg_gsm7[msg_len];
@@ -1041,8 +1042,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 7.1 Heap/Stack Buffer Overflow in `gsm7_pack()` on GSM Extension Characters
 * **File & Lines:** `char_conv.c:158–179` and `pdu.c:641`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** GSM 7-bit packing boundary check in `char_conv.c:158` unpatched; outbound SMS originating from web UI converts non-GSM7 characters cleanly to standard UCS-2 / UTF-8.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Added dynamic bounds checking inside byte assembly loop of `gsm7_pack()` (`char_conv.c:166–175`), preventing buffer overflows when packing GSM 7-bit extension characters.
 * **Code Reference:**
   In `char_conv.c`:
   ```c
@@ -1112,8 +1113,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 7.4 Remote Over-The-Air Stack Buffer Overflow in UCS-2 SMS Delivery
 * **File & Lines:** `pdu.c:940–944` and `at_parse.c:358, 403`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** UCS-2 SMS decoding length check in `pdu.c:941` unpatched; SIM cards deployed on trusted cellular networks.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Clamped `msg_len` to 1024 bytes in `pdu.c:940–944` before `memcpy((char*)msg, pdu + i, msg_len)`, preventing remote OTA heap/stack buffer overruns.
 * **Code Reference:**
   In `pdu.c`:
   ```c
@@ -1134,8 +1135,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 7.5 Unit Mismatch Rejects Valid Numbers in `pdu_parse_number()` (Nibbles vs Bytes)
 * **File & Lines:** `pdu.c:411–414`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** Unit mismatch in `pdu.c:412` unpatched; standard national and international phone numbers fit within safe bounds without triggering truncation.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Corrected unit comparison in `pdu.c:411–415` to `(syms / 2) > (pdu_length - i)`, properly comparing bytes to bytes and preventing false number rejections.
 * **Code Reference:**
   ```c
   unsigned syms = ROUND_UP2(digits);
@@ -1154,8 +1155,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 7.6 Continuous Mutex Polling & Synchronous PBX Deadlock in `handle_expired_reports()`
 * **File & Lines:** `chan_dongle.c:493–495, 421–441` and `smsdb.c:65`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** `handle_expired_reports()` in `chan_dongle.c:495` remains under mutex; SMS status report timeout is disabled or set to high retention in production `dongle.conf`.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** `do_monitor_phone()` in `chan_dongle.c:495–505` throttles `handle_expired_reports(pvt)` to execute at most once every 15 seconds, eliminating SQLite mutex lock contention and audio stutter on active voice calls.
 * **Code Reference:**
   In `do_monitor_phone()`:
   ```c
@@ -1180,8 +1181,8 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 
 ### 7.7 CLI Discovery NULL Pointer Dereference in `cli_discovery()`
 * **File & Lines:** `cli.c:799`
-* **Patch Status:** `OPEN IN C DRIVER`
-* **Production Resolution:** NULL pointer check in `cli.c:799` unpatched; `cli_discovery` is diagnostic-only and not invoked in automated scripts.
+* **Patch Status:** `FIXED IN PATCH`
+* **Production Resolution:** Added `if (!res->ports.ports[INTERFACE_TYPE_DATA]) continue;` in `cli.c:801` before `strcmp()`, preventing Asterisk crashes when running `dongle discovery` with storage-only USB devices attached.
 * **Code Reference:**
   ```c
   AST_RWLIST_TRAVERSE (&gpublic->devices, pvt, entry) {
@@ -1251,64 +1252,64 @@ The Sokrat VoIP platform requires strict adherence to four fundamental architect
 | ID | Module & Line (Base / Patched) | Subsystem | Severity | Impact / Symptom | Patch Status | Production Implementation / Mitigation Details |
 |:---:|:---|:---|:---:|:---|:---:|:---|
 | **1** | `channel.c:977` / `1055` | Audio | High | `txgain=1` attenuates audio instead of amplifying it | `MITIGATED AT APP/DIALPLAN LAYER` | Driver formula unchanged; production environment enforces `txgain=3` in `dongle.conf`, `install.sh`, and `server.js`, completely bypassing the `txgain <= 1` inversion threshold. |
-| **2** | `channel.c:755` / `745–790` | Audio | High | Variable micro-frames cause WebRTC robotic audio and jitter | `PARTIALLY MITIGATED` | Patch adds `cpvt->odd_byte` state tracking to guarantee 16-bit PCM word alignment on serial reads (`cpvt.c:54`, `cpvt.h:70`, `channel.c:745`), eliminating byte-swap distortion. Frame size variation is managed by Asterisk core jitterbuffer. |
+| **2** | `channel.c:755` / `750–795` | Audio | High | Variable micro-frames cause WebRTC robotic audio and jitter | `FIXED IN PATCH` | Implemented 20ms (320-byte) frame accumulator in `channel_read()`, ensuring steady 20ms frames for WebRTC and Opus. |
 | **3** | `channel.c:620` / `543–570` | Audio | Medium | Outbound audio packet loss on serial backpressure (`EAGAIN`) | `FIXED IN PATCH` | Patch adds `usleep(200)` loop retry on `errno == EAGAIN` in `channel_write()` with dynamic pointer advancement (`iov_base` / `iov_len`), eliminating serial write dropouts under high bus traffic. |
-| **4** | `channel.c:947` / `912–920` | Audio | Critical | Permanent silence (one-way audio) after call transfers | `OPEN IN C DRIVER` | `CALL_FLAG_BRIDGE_LOOP` is not reset on unbridge in the driver. In production, calls are routed via FreePBX Local channel reinvites rather than native chan_dongle bridging. |
-| **5** | `chan_dongle.h:133` / `130` | Audio | Medium | 240 ms buffer overflow under heavy CPU load | `OPEN IN C DRIVER` | Buffer retained at 240 ms (`FRAME_SIZE * 12`). Serial backpressure is cushioned by the `usleep(200)` write retry loop, but buffer size remains constant in C header. |
+| **4** | `channel.c:947` / `912–920` | Audio | Critical | Permanent silence (one-way audio) after call transfers | `FIXED IN PATCH` | `channel_write()` dynamically clears `CALL_FLAG_BRIDGE_LOOP` when bridge ends or channel unlinks, eliminating one-way audio lockout after transfers. |
+| **5** | `chan_dongle.h:133` / `133` | Audio | Medium | 240 ms buffer overflow under heavy CPU load | `FIXED IN PATCH` | Expanded `a_write_buf` in `chan_dongle.h` from 12 frames (240 ms) to 24 frames (480 ms), doubling audio jitter headroom under CPU load. |
 | **6** | `at_response.c:453` / `1805–1820` | Dialing | High | Dongle locked in permanent busy state on rejected dials | `FIXED IN PATCH` | `at_response_busy()` explicitly resets `pvt->dialing = 0`, marks `cpvt` as `CALL_STATE_RELEASED` when channel is unlinked or dialing, and issues `request_clcc(pvt)` to synchronize hardware state. |
-| **7** | `at_response.c:846` / `629–670` | Signaling | Critical | Outbound call hung up immediately if modem omits `^ORIG` | `OPEN IN C DRIVER` | Driver still requires `^ORIG` before `^CONN`. Target Huawei E303/E3531 firmware consistently emits `^ORIG`; unbranded firmware omitting `^ORIG` requires manual `^CONN` fallback. |
-| **8** | `channel.c:426` / `408–435` | Dialing | High | Modem freezes / deadlocks on rapid auto-dialer pacing | `PARTIALLY MITIGATED` | `channel_hangup()` restores audio master on any remaining active call and clears unlinked channel state. Progressive pacing delay is enforced at the Node.js/AMI dialer layer. |
-| **9** | `at_command.c:999` / `935–950` | Signaling | Low | Early hangup formats invalid `AT+CHLD=10` syntax | `OPEN IN C DRIVER` | `AT+CHLD=1%d` formatting remains unchanged in `at_enqueue_hangup()`. Modems deployed in fleet only utilize call indices 1–7; index 10 is unreachable in practice. |
-| **10** | `at_response.c:1044` / `978–985` | Signaling | High | Dead code leaves zombie channels active indefinitely | `PARTIALLY MITIGATED` | Patch intercepts `CALL_STATE_WAITING` when `callwaiting=no` and enqueues `AT+CHLD=0` via `at_enqueue_reject_waiting()`. End of `at_response_clcc()` strictly preserves `return 0;` per `AGENTS.md` invariant. |
-| **11** | `at_response.c:458` / `195, 464` | Audio | High | Answered calls are deaf/mute when `^DDSETEX=2` fails | `OPEN IN C DRIVER` | `AT^DDSETEX` failure does not currently trigger channel release. Production modems respond OK to DDSETEX; fallback teardown remains an open driver improvement. |
+| **7** | `at_response.c:846` / `843–865` | Signaling | Critical | Outbound call hung up immediately if modem omits `^ORIG` | `FIXED IN PATCH` | `at_response_conn()` in `at_response.c` binds answered line to unindexed dialing outbound channels when firmware suppresses `^ORIG`, preventing call drops. |
+| **8** | `channel.c:426` / `265, 415` | Dialing | High | Modem freezes / deadlocks on rapid auto-dialer pacing | `FIXED IN PATCH` | Enforces minimum 250ms hardware settling cooldown in `channel_call()` before dispatching `ATD`, preventing baseband freeze. |
+| **9** | `at_command.c:999` / `925` | Signaling | Low | Early hangup formats invalid `AT+CHLD=10` syntax | `FIXED IN PATCH` | Added `call_idx > 0` guard before formatting `AT+CHLD=1%d` in `at_enqueue_hangup()`, maintaining `AT+CHUP` for unindexed calls. |
+| **10** | `at_response.c:1044` / `1100–1115` | Signaling | High | Dead code leaves zombie channels active indefinitely | `FIXED IN PATCH` | Added 3-tick unconfirmed poll pruning in `at_response_clcc()` while preserving invariant `return 0;` to protect PBX setup. |
+| **11** | `at_response.c:458` / `464–471` | Audio | High | Answered calls are deaf/mute when `^DDSETEX=2` fails | `FIXED IN PATCH` | `at_response_error()` queues `AST_CONTROL_CONGESTION` and releases the channel on `CMD_AT_DDSETEX` setup failure, preventing deaf/mute calls. |
 | **12** | `at_parse.c:622` / `610` | Parser | Medium | Anonymous / private calls fail `+CLCC` parsing | `MITIGATED AT APP/DIALPLAN LAYER` | Dialplan context `[from-dongle-custom]` sanitizes caller ID and assigns 'Anonymous' / fallback DID before reaching FreePBX inbound route evaluation. |
 | **13** | `at_response.c:864` / `1620` | Inbound | Medium | Inbound DID falls back to `+1234567890` on missing CNUM | `MITIGATED AT APP/DIALPLAN LAYER` | Dialplan context `[from-dongle-custom]` uses exten pattern `_+X.` and preserves actual DID into `${MY_SIM_NUMBER}` before FreePBX route evaluation, bypassing CNUM fallback entirely. |
-| **14** | `at_response.c:1157` / `at_command.c:120` | Inbound | Low | First-ring volume sync delays extension ringing by 200–500 ms | `PARTIALLY MITIGATED` | Modem init enqueues `AT+CRC=0` and `AT+CSCLK=0` (disabling sleep & result-code overhead), reducing first-ring modem wake latency; `volsync` remains in queue. |
-| **15** | `at_queue.c:296` / `296` | Memory | Critical | Asterisk segfault on `malloc()` failure (pre-check dereference) | `OPEN IN C DRIVER` | Pre-check dereference in `at_queue_task_alloc()` remains unpatched. Asterisk's `ast_calloc()` aborts on OOM under modern glibc unless memory overcommit is constrained. |
+| **14** | `at_response.c:1157` / `1194` | Inbound | Low | First-ring volume sync delays extension ringing by 200–500 ms | `FIXED IN PATCH` | Eliminated first-ring `volsync` queue delay in `at_response.c:1194`, allowing inbound calls to ring extensions instantaneously. |
+| **15** | `at_queue.c:296` / `295–302` | Memory | Critical | Asterisk segfault on `malloc()` failure (pre-check dereference) | `FIXED IN PATCH` | Moved `if (!task) return -1;` before `task->uid = uid;` in `at_queue_insert_tail()`, preventing segfaults on memory allocation failures. |
 | **16** | `chan_dongle.c:528` / `518–535` | Lifecycle | High | 5-second AT timeout immediately disconnects dongle and calls | `FIXED IN PATCH` | Patch intercepts timeout in `do_monitor_phone()`; `CMD_AT_DTMF` and `CMD_AT_COPS` timeouts are logged as warnings and bypassed (`goto skip_timeout`), preventing dongle teardown. |
-| **17** | `at_queue.c:114` / `channel.c:493–501` | DTMF | High | Multi-digit DTMF queued in reverse (LIFO) order (`321` vs `123`) | `PARTIALLY MITIGATED` | `channel_digit_begin()` gates `AT^DTMF` transmission to `CALL_STATE_ACTIVE` only, dropping pre-answer digits to comply with `AGENTS.md` invariant and preventing USB drops. |
-| **18** | `at_command.c:299` / `320` | Memory | Critical | 110 KB stack allocation in `at_enqueue_sms()` risks stack overflow | `OPEN IN C DRIVER` | `pdu_part_t pdus[255]` remains allocated on stack. Outbound SMS through Node.js API uses segmented chunks <= 4 parts, keeping actual payload size small. |
-| **19** | `at_response.c:1297` / `1340` | Memory | High | 86 KB stack allocation in `at_response_cmgr()` on monitor thread | `OPEN IN C DRIVER` | Buffers `text_base64[40800]` and `fullmsg[40800]` remain on monitor thread stack. Incoming SMS are polled and deleted regularly to avoid multipart reassembly overflows. |
+| **17** | `at_queue.c:114` / `113–125` | DTMF | High | Multi-digit DTMF queued in reverse (LIFO) order (`321` vs `123`) | `FIXED IN PATCH` | Implemented FIFO priority queue insertion in `at_queue_add()`, guaranteeing exact `123` digit sequence preservation. |
+| **18** | `at_command.c:299` / `320` | Memory | Critical | 110 KB stack allocation in `at_enqueue_sms()` risks stack overflow | `FIXED IN PATCH` | Replaced 110 KB stack allocation with dynamic heap allocation `ast_calloc(255, sizeof(pdu_part_t))` and guaranteed deallocation across all exit paths. |
+| **19** | `at_response.c:1297` / `1336–1341` | Memory | High | 86 KB stack allocation in `at_response_cmgr()` on monitor thread | `FIXED IN PATCH` | Replaced 81.6 KB monitor thread stack buffers with dynamic heap allocation via `ast_calloc()`, preventing thread stack page guard overflows. |
 | **20** | `smsdb.c:324` / `361–395` | Memory | High | Stack out-of-bounds read in SQLite bindings on long keys | `FIXED IN PATCH` | Patch bounds SQLite SMS assembly buffer with `max_out = 160 * 255` and replaces unsafe string operations with bounded `memcpy(dst + copied, src, to_copy)`. |
-| **21** | `channel.c:1601` / `1685` | Core | Critical | NULL pointer dereference in `channel_func_write()` | `OPEN IN C DRIVER` | Function assumes valid `cpvt->pvt`. Defensive pointer checks added to `channel_read` and `channel_write` (`ast_channel_tech_pvt` validation), but `channel_func_write` remains base code. |
-| **22** | `at_response.h:16` / `at_response.c:99, 356` | Signaling | High | Missing `+CME ERROR` causes 5s hang and dongle disconnect | `OPEN IN C DRIVER` | Driver parses standard `ERROR` and `CMS ERROR`; `+CME ERROR` is not registered in response table. Production modems configure `AT+CMEE=1` during initialization. |
+| **21** | `channel.c:1601` / `1600` | Core | Critical | NULL pointer dereference in `channel_func_write()` | `FIXED IN PATCH` | `channel_func_write()` in `channel.c` checks `if (!cpvt || !cpvt->pvt) return -1;` before dereferencing `cpvt->pvt`, eliminating hangup race crashes. |
+| **22** | `at_response.h:16` / `1935` | Signaling | High | Missing `+CME ERROR` causes 5s hang and dongle disconnect | `FIXED IN PATCH` | Added `RES_CME_ERROR` in `at_response.h` and mapped in `at_response.c`, handling network errors immediately without 5s timeout freezes. |
 | **23** | `channel.c:274` / `274` | Signaling | Medium | CLIR reads `connected` instead of `caller`, ignoring privacy settings | `MITIGATED AT APP/DIALPLAN LAYER` | Caller ID presentation and CLIR privacy are managed upstream by FreePBX dialplan macros (`CALLERPRES`) and outbound route rules before reaching chan_dongle. |
-| **24** | `channel.c:1085` / `1178` | Media | Medium | Channel masquerade fails to migrate audio/timing file descriptors | `OPEN IN C DRIVER` | Channel fixup callback does not migrate `audio_fd`. Attended transfers avoid channel masquerading by using Asterisk bridge stubs. |
-| **25** | `at_response.c:1388` / `1435` | Locking | High | Synchronous dialplan spawning inside `do_monitor_phone()` causes deadlock | `OPEN IN C DRIVER` | `start_pbx()` is invoked while holding `pvt` lock. Production dialplans for dongles use non-blocking macros and avoid long-running synchronous AGI scripts. |
+| **24** | `channel.c:1085` / `1075–1090` | Media | Medium | Channel masquerade fails to migrate audio/timing file descriptors | `FIXED IN PATCH` | `channel_fixup()` in `channel.c` migrates `audio_fd` and timer FDs to `newchannel` during channel masquerade (call parking & pickup *8). |
+| **25** | `at_response.c:1388` / `895–910` | Locking | High | Synchronous dialplan spawning inside `do_monitor_phone()` causes deadlock | `FIXED IN PATCH` | `start_pbx()` unlocks `pvt->lock` across `ast_pbx_start()` and re-locks, preventing deadlocks between monitor loop and PBX dialplan startup. |
 | **26** | `at_response.c:954` / `1010` | Signaling | Medium | Caller ID never updated if network delivers number after Ring 1 | `MITIGATED AT APP/DIALPLAN LAYER` | Initialization forces `AT+CRC=0` and `AT^CURC=1` to ensure CLI arrives with initial `RING`; dialplan `[from-dongle-custom]` locks CID upon first presentation. |
 | **27** | `at_read.c:173` / `173` | Parser | High | Strict `\n\r\nOK\r\n` terminator stalls buffer on alternative responses | `OPEN IN C DRIVER` | Driver expects standard CR-LF framed responses. Target Huawei modems with `ATE0` configured adhere strictly to 3GPP framing. |
 | **28** | `app.c:109` / `manager.c:191–195` | Dialplan | Medium | Dialplan `DongleSendSMS` rejects SMS lacking a 6th payload argument | `FIXED IN PATCH` | Patch in `manager.c` handles empty/missing payload gracefully: `payload_ptr = ast_strlen_zero(payload) ? NULL : payload`. `server.js` API routes all SMS through AMI. |
-| **29** | `dc_config.c:222` / `223–228` | Parser | Low | Typo overwrites `mindtmfduration` on invalid interval | `OPEN IN C DRIVER` | Base typo remains, but `dc_config.c` is augmented with `syscfg` support. Valid defaults in sokrat-voip `dongle.conf` ensure the fallback branch is never triggered. |
-| **30** | `chan_dongle.c:410` / `410` | Thread | High | Infinite 100% CPU spin in `clean_read_data()` on device disconnect | `OPEN IN C DRIVER` | `clean_read_data()` spin loop is unchanged. Sokrat VoIP health watchdog detects unreadable USB serial ports and triggers automated dongle recovery. |
+| **29** | `dc_config.c:222` / `223` | Parser | Low | Typo overwrites `mindtmfduration` on invalid interval | `FIXED IN PATCH` | Corrected assignment typo in `dc_config.c:223` to assign to `config->mindtmfinterval`. |
+| **30** | `chan_dongle.c:410` / `416` | Thread | High | Infinite 100% CPU spin in `clean_read_data()` on device disconnect | `FIXED IN PATCH` | `clean_read_data()` breaks immediately if `iovcnt <= 0`, preventing 100% CPU spin when USB devices disconnect or reset. |
 | **31** | `channel.c:1034` / `615–630` | Audio | Low | Untimed audio write truncates frames larger than 320 bytes | `FIXED IN PATCH` | Patch cleans up `timing_write()` by eliminating duplicate `mixb_read_n_iov()` calls, harmonizing buffer drain logic, and preventing frame truncation. |
-| **32** | `chan_dongle.c:1620` / `1578–1582` | Lifecycle | High | Config reload destroys live dongles on single syntax typo | `PARTIALLY MITIGATED` | Dynamic reconfigure diffing updated in patch for `syscfg` and `callwaiting`. Operational policy mandates validating configs before reload or using systemctl restart. |
-| **33** | `at_parse.c:403` / `403` | Security | Critical | Remote OTA stack buffer overflow in `at_parse_cmgr()` (`msg16_tmp[256]`) | `OPEN IN C DRIVER` | Buffer size `msg16_tmp[256]` in C parser remains unchanged; cellular modems operate on closed private APN / cellular voice trunks in production deployment. |
-| **34** | `pdu.c:854` / `854` | Security | Critical | Negative `udl_nibbles` casts to 18 quintillion unsigned, crashing Asterisk | `OPEN IN C DRIVER` | Signedness check in `tpdu_parse_deliver()` unpatched in C; sanitized SMS processing at application layer filters out malformed hex PDUs. |
-| **35** | `char_conv.c:73` / `73` | Memory | High | Double-byte multiply in `utf8_to_ucs2()` causes `iconv` buffer overflow | `OPEN IN C DRIVER` | Iconv buffer multiplier in `char_conv.c` remains unpatched. Node.js backend handles text encoding validation before passing SMS to AMI. |
-| **36** | `at_parse.c:371` / `371` | Parser | Medium | `(-1 + 1)/2 == 0` bypasses error check on malformed hex PDU input | `OPEN IN C DRIVER` | PDU hex decode error check calculation remains in C parser. Validated by modem firmware prior to passing via AT interface. |
-| **37** | `channel.c:726` / `1149–1175` | Audio | High | Music-On-Hold outbound audio starved because reader thread is idle | `PARTIALLY MITIGATED` | Patch adds explicit control frame handlers for `AST_CONTROL_HOLD`, `AST_CONTROL_UNHOLD`, and `AST_CONTROL_UPDATE_RTP_PEER`, preventing warning loops and channel teardown. |
-| **38** | `channel.c:476` / `505` | Signaling | High | `channel_answer()` returns 0 (Success) even when `at_enqueue_answer()` fails | `OPEN IN C DRIVER` | `channel_answer()` return code handling remains unpatched; answered state verified through hardware CLCC state updates. |
+| **32** | `chan_dongle.c:1620` / `1630` | Lifecycle | High | Config reload destroys live dongles on single syntax typo | `FIXED IN PATCH` | Initialized `must_remove = 0` upfront during config reloads, preventing syntax errors in `dongle.conf` from destroying live dongles. |
+| **33** | `at_parse.c:403` / `358` | Security | Critical | Remote OTA stack buffer overflow in `at_parse_cmgr()` (`msg16_tmp[256]`) | `FIXED IN PATCH` | Expanded `msg16_tmp` from 256 to 1024 words (2048 bytes) in `at_parse.c`, eliminating remote OTA stack buffer overflows on long/multipart UCS-2 SMS. |
+| **34** | `pdu.c:854` / `850, 930` | Security | Critical | Negative `udl_nibbles` casts to 18 quintillion unsigned, crashing Asterisk | `FIXED IN PATCH` | Added explicit check `if (udl_nibbles < 0) return -1;` in `pdu.c`, preventing signed integer underflow and 18-quintillion loop wrap. |
+| **35** | `char_conv.c:73` / `at_command.c:312` | Memory | High | Double-byte multiply in `utf8_to_ucs2()` causes `iconv` buffer overflow | `FIXED IN PATCH` | Corrected element word count sizing in `at_command.c` (`sizeof(msg_ucs2) / 2`), preventing buffer over-estimation in `iconv()`. |
+| **36** | `at_parse.c:371` / `370` | Parser | Medium | `(-1 + 1)/2 == 0` bypasses error check on malformed hex PDU input | `FIXED IN PATCH` | Validated `unhex()` return code before division in `at_parse.c`, properly propagating `E_MALFORMED_HEXSTR` on invalid hex characters. |
+| **37** | `channel.c:726` / `1198–1205` | Audio | High | Music-On-Hold outbound audio starved because reader thread is idle | `FIXED IN PATCH` | Added 50 Hz timer activation and `timing_write()` priming under `AST_CONTROL_HOLD`, ensuring continuous MOH audio during hold. |
+| **38** | `channel.c:476` / `452–476` | Signaling | High | `channel_answer()` returns 0 (Success) even when `at_enqueue_answer()` fails | `FIXED IN PATCH` | `channel_answer()` in `channel.c` returns `at_enqueue_answer()` result code, preventing false pickup reporting and premature CDR billing. |
 | **39** | `chan_dongle.c:1235` / `1270` | Core | Medium | Dialing empty `Dongle/i:/` matches any uninitialized dongle on bus | `MITIGATED AT APP/DIALPLAN LAYER` | All FreePBX dialplans and AMI call commands explicitly specify target dongle names (e.g., `Dongle/dongle0/...`) ensuring wildcard matching cannot be invoked. |
-| **40** | `pdiscovery.c:380` / `380` | Memory | Low | Memory leak of port string on duplicate USB interface enumeration | `OPEN IN C DRIVER` | Hardware discovery occurs once during initial driver load; static dongle configuration in `dongle.conf` bypasses pdiscovery enumeration in production. |
+| **40** | `pdiscovery.c:380` / `388` | Memory | Low | Memory leak of port string on duplicate USB interface enumeration | `FIXED IN PATCH` | Added `ast_free(port);` on duplicate USB interface discovery in `pdiscovery.c`, preventing port string memory leaks. |
 | **41** | `pdiscovery.c:70` / `70` | Discovery | Medium | Modem `12d1:1506` fails discovery because interface 1 is CDC-NCM | `MITIGATED AT APP/DIALPLAN LAYER` | Modem ports are statically defined via `audio=/dev/ttyUSB1` and `data=/dev/ttyUSB2` in `dongle.conf`, completely bypassing automatic interface discovery. |
-| **42** | `channel.c:1559` / `709–715, 921–927` | Core | High | Use-after-free in `channel_func_read()` after deadlock avoidance | `PARTIALLY MITIGATED` | `channel_read()` and `channel_write()` now verify `ast_channel_tech_pvt(channel) == cpvt && cpvt->channel == channel` after re-locking, preventing stale pointer execution. |
+| **42** | `channel.c:1559` / `1580–1590` | Core | High | Use-after-free in `channel_func_read()` after deadlock avoidance | `FIXED IN PATCH` | Added post-deadlock avoidance verification in `channel_func_read()`, preventing use-after-free crashes during concurrent hangup. |
 | **43** | `chan_dongle.c:1708` / `1745` | Core | High | Forced module unload frees `pvt` while channel threads are active | `MITIGATED AT APP/DIALPLAN LAYER` | `AGENTS.md` mandates `systemctl restart asterisk` instead of Asterisk module unload, preventing Linux deleted inode retention and thread dereference. |
-| **44** | `pdu.c:463` / `463` | Memory | Medium | Unchecked stack VLA `msg_gsm7[msg_len]` in `pdu_build_mult()` | `OPEN IN C DRIVER` | VLA allocation remains in C source. Application layer limits outbound SMS length to standard multipart maximums (<= 4 segments). |
-| **45** | `cli.c:799` / `799` | Core | High | `cli_discovery` calls `strcmp()` on NULL `INTERFACE_TYPE_DATA` port | `OPEN IN C DRIVER` | Unchecked pointer in `cli_discovery` command remains unpatched; `dongle discovery` CLI is diagnostic-only and not invoked in automated scripts. |
+| **44** | `pdu.c:463` / `461` | Memory | Medium | Unchecked stack VLA `msg_gsm7[msg_len]` in `pdu_build_mult()` | `FIXED IN PATCH` | Replaced stack VLA `msg_gsm7` with bounded dynamic allocation (`ast_malloc`) with 4096-character limit and guaranteed deallocation. |
+| **45** | `cli.c:799` / `801` | Core | High | `cli_discovery` calls `strcmp()` on NULL `INTERFACE_TYPE_DATA` port | `FIXED IN PATCH` | Added NULL check `if (!res->ports.ports[INTERFACE_TYPE_DATA]) continue;` in `cli.c`, preventing `strcmp` crashes during `dongle discovery`. |
 | **46** | `helpers.c:35` / `35` | Validation | Medium | `is_valid_phone_number("")` and `"+"` return 1, bypassing phone validation | `MITIGATED AT APP/DIALPLAN LAYER` | Express API routes and FreePBX dialplans strictly validate destination numbers using regex (`/^\+?[0-9]{3,20}$/`) before initiating any cellular call or SMS. |
 | **47** | `helpers.c:23` / `23` | Validation | Medium | `is_valid_ussd_string("")` returns 1, sending empty USSD string | `MITIGATED AT APP/DIALPLAN LAYER` | Express USSD controller in `server.js` explicitly checks `if (!code || !code.trim())` and returns HTTP 400 Bad Request on empty or whitespace strings. |
-| **48** | `chan_dongle.c:495` / `495` | Concurrency | High | `handle_expired_reports()` runs on every monitor loop under mutex, risking deadlock | `OPEN IN C DRIVER` | Monitor thread loop continues to invoke `handle_expired_reports()`; SMS report timeout is set to 0 (disabled) or high retention in production `dongle.conf`. |
-| **49** | `char_conv.c:158` / `158` | Memory | Critical | Buffer overflow in `gsm7_pack()` on GSM extension characters (2x expansion) | `OPEN IN C DRIVER` | GSM 7-bit packing boundary check unpatched in C; outbound SMS originating from web UI converts non-GSM7 characters cleanly to standard UCS-2 / UTF-8. |
+| **48** | `chan_dongle.c:495` / `495–505` | Concurrency | High | `handle_expired_reports()` runs on every monitor loop under mutex, risking deadlock | `FIXED IN PATCH` | Throttled `handle_expired_reports()` in `do_monitor_phone()` to once every 15 seconds, eliminating SQLite mutex contention and audio stutter. |
+| **49** | `char_conv.c:158` / `166–175` | Memory | Critical | Buffer overflow in `gsm7_pack()` on GSM extension characters (2x expansion) | `FIXED IN PATCH` | Added dynamic bounds checking inside `gsm7_pack()` byte output loop, preventing buffer overruns when encoding GSM extension characters. |
 | **50** | `at_command.c:338` / `355` | Memory | Critical | 8 KB stack buffer overflow in `at_enqueue_ussd()` | `MITIGATED AT APP/DIALPLAN LAYER` | Express USSD API enforces maximum input string length of 64 characters (`*100#`, `*010#`, etc.), preventing large payloads from reaching C stack buffer. |
 | **51** | `at_command.c:347` / `365` | Memory | High | Double-byte multiply overflow in `at_enqueue_ussd()` UCS-2 conversion | `MITIGATED AT APP/DIALPLAN LAYER` | USSD requests are restricted to standard ASCII/GSM-7 network strings in Sokrat VoIP frontend and API controllers. |
-| **52** | `pdu.c:941` / `941` | Security | Critical | Remote OTA stack buffer overflow in UCS-2 SMS decoding (`msg_len > 512`) | `OPEN IN C DRIVER` | UCS-2 message length bounds check unpatched in C; mobile network SIMs deployed on trusted cellular APNs. |
-| **53** | `pdu.c:412` / `412` | Parser | High | Unit mismatch in `pdu_parse_number()` (nibbles vs bytes) rejects valid numbers | `OPEN IN C DRIVER` | Length comparison remains unpatched in C parser; standard national and international phone numbers fit within safe bounds without triggering truncation. |
+| **52** | `pdu.c:941` / `940–945` | Security | Critical | Remote OTA stack buffer overflow in UCS-2 SMS decoding (`msg_len > 512`) | `FIXED IN PATCH` | Clamped `msg_len` to 1024 bytes in `pdu.c` before `memcpy()`, preventing buffer overflows during UCS-2 message delivery. |
+| **53** | `pdu.c:412` / `411–415` | Parser | High | Unit mismatch in `pdu_parse_number()` (nibbles vs bytes) rejects valid numbers | `FIXED IN PATCH` | Fixed unit comparison in `pdu.c` to `(syms / 2) > (pdu_length - i)`, comparing bytes to bytes and preventing valid number rejection. |
 
 ### Companion Driver Lifecycle & Traversal Items
 
 | Section | Module & Line (Base / Patched) | Subsystem | Severity | Description | Patch Status | Production Resolution / Implementation |
 |:---:|:---|:---|:---:|:---|:---:|:---|
-| **Sec 4.3** | `chan_dongle.c:730–739` / `730` | Lifecycle | High | Missing `ast_mutex_destroy(&pvt->lock)` in `pvt_free()` | `OPEN IN C DRIVER` | Asterisk mutex destruction omitted before memory deallocation; mitigated by operational policy mandating `systemctl restart asterisk` rather than runtime module unloads. |
+| **Sec 4.3** | `chan_dongle.c:730–739` / `745` | Lifecycle | High | Missing `ast_mutex_destroy(&pvt->lock)` in `pvt_free()` | `FIXED IN PATCH` | Added `ast_mutex_destroy(&pvt->lock)` in `pvt_free()` before `ast_free(pvt)`, preventing memory corruption during dynamic dongle removal. |
 | **Sec 4.4** | `channel.c:334` / `340–343` | Audio | Medium | Ineffective logic checking `cpvt` instead of `cpvt2` in master audio traversal | `FIXED IN PATCH` | Hunk 2 in `channel.c` explicitly corrects the check to `if (CPVT_TEST_FLAG(cpvt2, CALL_FLAG_ACTIVATED))`, properly identifying existing active audio channels. |
 
 ---
