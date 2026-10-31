@@ -528,7 +528,7 @@ ensure_db_column "synq_agent_status_definitions" "target_group" "VARCHAR(100) DE
 echo "  Database schema migrations complete. All PBX and CDR data preserved."
 
 # 4. Rebuild & Patch chan_dongle Module
-echo "[4/7] Applying Asterisk / chan_dongle stability patches (Call Waiting UDUB, CRING detection, and Master audio recovery)..."
+echo "[4/7] Applying Asterisk / chan_dongle stability patches (Call Waiting rejection, CRING detection, 20ms audio framing, modem pacing, and SMS/PDU memory safety)..."
 if [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
     mkdir -p "$MODULES_DIR"
     if [ ! -f "$MODULES_DIR/chan_dongle.so" ] || ! cmp -s "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" "$MODULES_DIR/chan_dongle.so"; then
