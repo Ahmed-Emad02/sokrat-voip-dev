@@ -92,6 +92,9 @@ def media_config(plan, role, directory, version=(2, 6)):
     else:
         lines += ["tls-server", "proto tcp-server", "local 127.0.0.1",
                   f"port {plan['localMediaPort']}", "dh none",
+                  # OpenVPN 2.4 p2p tls-server restarts on its default poll
+                  # timeout even while a peer is connected; 0 disables it.
+                  "server-poll-timeout 0",
                   "remote-cert-tls client", f"verify-x509-name {plan['pbxId']}-gateway name"]
     return "\n".join(lines) + "\n"
 
