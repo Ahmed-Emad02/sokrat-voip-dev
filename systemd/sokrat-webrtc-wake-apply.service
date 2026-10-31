@@ -1,0 +1,11 @@
+[Unit]
+Description=Sokrat WebRTC wake dialplan refresh
+After=asterisk.service
+ConditionPathExists=/etc/sokrat/gateway-hook.json
+ConditionPathExists=/opt/sokrat-voip/scripts/install-webrtc-wake.py
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/sokrat-voip/scripts/install-webrtc-wake.py --apply --no-reload
+ExecStartPost=-/usr/bin/asterisk -rx "dialplan reload"
+Nice=5

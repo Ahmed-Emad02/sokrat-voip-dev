@@ -789,6 +789,12 @@ if [ -f "$INSTALL_DIR/scripts/install-webrtc-wake.py" ]; then
     # Repair managed metadata even when content is unchanged, then test access
     # as Asterisk. Never chmod the root-owned dispatcher to root-only 0750.
     python3 "$INSTALL_DIR/scripts/install-webrtc-wake.py" --apply --no-reload --verify-access || echo "  Warning: mobile incoming wake is NOT verified; review dispatcher/config permissions and compiler output"
+    if [ -f "$INSTALL_DIR/systemd/sokrat-webrtc-wake-apply.path" ]; then
+        install -m 0644 "$INSTALL_DIR/systemd/sokrat-webrtc-wake-apply.service" /etc/systemd/system/sokrat-webrtc-wake-apply.service
+        install -m 0644 "$INSTALL_DIR/systemd/sokrat-webrtc-wake-apply.path" /etc/systemd/system/sokrat-webrtc-wake-apply.path
+        systemctl daemon-reload
+        systemctl enable --now sokrat-webrtc-wake-apply.path >/dev/null 2>&1 || echo "  Warning: could not enable the WebRTC wake refresh watcher"
+    fi
 fi
 if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
     FRPC_SRC=""

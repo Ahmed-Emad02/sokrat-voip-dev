@@ -354,3 +354,18 @@ test('quoted local override includes are inspected instead of refused', t => {
     assert.equal(result.status, 0, result.stderr);
     assert.match(fs.readFileSync(f.output, 'utf8'), /exten => 404,n,Gosub\(sub-sokrat-webrtc-wake/);
 });
+
+test('patches the FreePBX extensions.conf symlink target without replacing the link', t => {
+    const f = fixture(t);
+    const link = path.join(f.dir, 'etc/asterisk/extensions.conf');
+    const target = path.join(f.dir, 'etc/asterisk/extensions-module.conf');
+    const content = fs.readFileSync(link, 'utf8');
+    fs.unlinkSync(link);
+    fs.writeFileSync(target, content, { mode: 0o664 });
+    fs.symlinkSync(target, link);
+    const result = f.run();
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.lstatSync(link).isSymbolicLink(), true);
+    assert.match(fs.readFileSync(target, 'utf8'),
+        /exten => s,n,Gosub\(sub-sokrat-group-wake,s,1\(\$\{ARG3\}\)\)/);
+});

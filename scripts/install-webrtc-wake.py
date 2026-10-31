@@ -257,7 +257,13 @@ def plan(root):
     extensions = [ext for ext in extensions if any(re.match(r'\s*exten\s*=>\s*' + re.escape(ext)
                   + r'\s*,\s*hint\s*,\s*PJSIP/' + re.escape(ext) + r'(?:,|\s*$)', line) for line in local)]
     rendered = render(generated, extensions)
-    core_path = etc / 'extensions.conf'
+    # FreePBX ships extensions.conf as a symlink into its core module. Read and
+    # patch the target, not the link, so Apply Config can keep recreating the
+    # expected symlink while the managed hook survives in the module file.
+    core_link = etc / 'extensions.conf'
+    core_path = core_link.resolve() if core_link.is_symlink() else core_link
+    if not core_path.exists() or not stat.S_ISREG(core_path.lstat().st_mode):
+        raise ValueError('Expected regular extensions.conf target')
     core = read(core_path)
     core_patched = patch_macro_dial(core, bool(extensions))
     candidates = re.findall(r'^\s*#include\s+(extensions_override_(?:issabelpbx|freepbx)\.conf)\s*$', core, re.M)

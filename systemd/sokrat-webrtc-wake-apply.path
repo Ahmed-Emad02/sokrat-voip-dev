@@ -1,0 +1,13 @@
+[Unit]
+Description=Watch FreePBX dialplan for Sokrat WebRTC wake refresh
+
+[Path]
+PathChanged=/etc/asterisk/extensions.conf
+PathChanged=/var/www/html/admin/modules/core/etc/extensions.conf
+PathChanged=/etc/asterisk/extensions_additional.conf
+PathChanged=/etc/asterisk/pjsip_custom_post.conf
+PathChanged=/etc/asterisk/queues_additional.conf
+Unit=sokrat-webrtc-wake-apply.service
+
+[Install]
+WantedBy=paths.target

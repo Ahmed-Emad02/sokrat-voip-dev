@@ -58,8 +58,10 @@ python3 scripts/install-webrtc-wake.py --apply --no-reload --verify-access
 ```
 
 Managed output is `/etc/asterisk/extensions_sokrat_webrtc_wake.conf`, root-owned
-and readable by the Asterisk group. Existing include-file ownership and mode are
-preserved. Changes are privately backed up under `/var/backups/sokrat-voip/`.
+and readable by the Asterisk group. The managed `macro-dial` hook is written to
+the **target** of FreePBX's `extensions.conf` symlink, preserving the symlink
+itself. Existing file ownership and mode are preserved. Changes are privately
+backed up under `/var/backups/sokrat-voip/`.
 The dispatcher is installed root-owned at
 `/usr/local/bin/sokrat-webrtc-wake-dispatch.py`. Apply is serialized; unsafe paths,
 ambiguous includes, unmanaged output and mismatched enrollment refuse safely.
@@ -79,10 +81,16 @@ that mobile incoming wake is **NOT verified**, without changing desktop routing.
 Unpaired/no-eligible-extension installations skip this check. For a read-only
 post-install check, run `python3 scripts/install-webrtc-wake.py --verify-access`.
 
-The compiler runs during secure pairing, dashboard startup and after the existing
-`retrieve_conf` reload lifecycle, as well as all three installer/upgrader paths.
-Creating/removing/converting an extension therefore re-derives eligible entries.
-An unpaired fresh PBX gets no wake route.
+The compiler runs during secure pairing, dashboard startup and all three
+installer/upgrader paths. Creating/removing/converting an extension therefore
+re-derives eligible entries. An unpaired fresh PBX gets no wake route.
+
+Installers also enable `sokrat-webrtc-wake-apply.path`, which watches the target
+of `/etc/asterisk/extensions.conf`, `extensions_additional.conf`,
+`pjsip_custom_post.conf` and `queues_additional.conf`. FreePBX Apply Config
+regenerates `extensions.conf` and would otherwise remove the managed hook; the
+path unit re-applies it and reloads the dialplan. The service is idempotent and
+does nothing when no WebRTC extension is eligible.
 
 The generic readiness installer creates only the shared sender context, never
 global dialing-macro overrides. Releases before this one wrote blanket
@@ -117,11 +125,12 @@ not treated as a mismatch.
 
 Fixture tests cover exact scope, stale SIP conversion, idempotence, metadata,
 unmanaged conflicts, unsupported templates, private enrollment, bounded waits,
-credential handling and installer/lifecycle wiring. A live test-PBX probe checks
-actual override activation and ordinary no-device routing while comparing shared
-macro/config hashes and Asterisk PID before/after. This is not a phone cold-wake
-acceptance test; actual FCM delivery, answer, audio, decline and cancellation must
-be verified separately on the selected employee phone.
+credential handling, FreePBX symlink targeting and installer/lifecycle wiring. A
+live test-PBX probe checks actual override activation and ordinary no-device
+routing while comparing shared macro/config hashes and Asterisk PID before/after.
+This is not a phone cold-wake acceptance test; actual FCM delivery, answer, audio,
+decline and cancellation must be verified separately on the selected employee
+phone, including one inbound ring-group call after FreePBX Apply Config.
 
 Destinations that call `Dial(PJSIP/...)` directly and bypass both `macro-dial`
 and the normal FreePBX queue `Local/<ext>@from-queue/n` path remain outside this
