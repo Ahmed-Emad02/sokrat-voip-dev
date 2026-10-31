@@ -374,6 +374,9 @@ if [ -f /etc/asterisk/dongle.conf ]; then
     if grep -q '^u2diag=0' /etc/asterisk/dongle.conf; then
         sed -i 's/^u2diag=0.*/u2diag=-1                      ; -1 = do not send ^U2DIAG (21.x firmwares reject it); 0 = set ^U2DIAG=0 on older modems/' /etc/asterisk/dongle.conf
     fi
+    if ! grep -q '^syscfg=' /etc/asterisk/dongle.conf; then
+        sed -i '/^\[defaults\]/a syscfg=2,0,3fffffff,1,2         ; Huawei band/RAT configuration (2=Auto 2G/3G, 0=Auto order, 3fffffff=All bands, 1=Roam, 2=All domains)' /etc/asterisk/dongle.conf
+    fi
 fi
 
 # Fix udev autosuspend rule to prevent permission denied on USB interfaces

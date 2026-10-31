@@ -11,22 +11,39 @@ index 1ad407a..dec019b 100644
 +#define DEBUG_ATLEAST(level) (option_debug >= (level))
 +#endif
 diff --git a/at_command.c b/at_command.c
-index 5f0137e..1a09ce1 100644
+index 5f0137e..364e3e1 100644
 --- a/at_command.c
 +++ b/at_command.c
-@@ -118,8 +118,10 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
+@@ -118,8 +118,16 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
  		ATQ_CMD_DECLARE_ST(CMD_AT_Z, "ATZ\r"),
  		/* disable echo */
  		ATQ_CMD_DECLARE_ST(CMD_AT_E, "ATE0\r"),
 +		/* disable cellular result codes (use standard RING) */
 +		ATQ_CMD_DECLARE_STI(CMD_AT_CRC, "AT+CRC=0\r"),
++		/* disable baseband autonomous sleep mode (eliminate wake latency & audio clipping) */
++		ATQ_CMD_DECLARE_STI(CMD_AT_CSCLK, "AT+CSCLK=0\r"),
++		/* enable Huawei unsolicited result codes (^RSSI, ^MODE, etc.) */
++		ATQ_CMD_DECLARE_STI(CMD_AT_CURC, "AT^CURC=1\r"),
  		/* optional, Enable or disable some devices */
 -		ATQ_CMD_DECLARE_DYN(CMD_AT_U2DIAG),
 +		ATQ_CMD_DECLARE_DYNI(CMD_AT_U2DIAG),
++		/* optional, system configuration (band, RAT mode & voice domain lock) */
++		ATQ_CMD_DECLARE_DYNI(CMD_AT_SYSCFG),
  		/* Get manufacturer info */
  		ATQ_CMD_DECLARE_ST(CMD_AT_CGMI, "AT+CGMI\r"),
  
-@@ -160,7 +162,7 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
+@@ -138,8 +146,8 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
+ 		/* check is password authentication requirement and the
+ 		 * remainder validation times */
+ 		ATQ_CMD_DECLARE_ST(CMD_AT_CPIN, "AT+CPIN?\r"),
+-		/* Read operator name */
+-		ATQ_CMD_DECLARE_ST(CMD_AT_COPS_INIT, "AT+COPS=0,0\r"),
++		/* Read operator name with extended 45s timeout and ignore flag to prevent scan abort */
++		ATQ_CMD_DECLARE_STIT(CMD_AT_COPS_INIT, "AT+COPS=0,0\r", 45, 0),
+ 
+ 		/* GSM registration status setting */
+ 		ATQ_CMD_DECLARE_STI(CMD_AT_CREG_INIT, "AT+CREG=2\r"),
+@@ -160,7 +168,7 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
  		ATQ_CMD_DECLARE_ST(CMD_AT_CMGF, "AT+CMGF=0\r"),
  
  		/* SMS Storage Selection */
@@ -35,7 +52,50 @@ index 5f0137e..1a09ce1 100644
  		/* New SMS Notification Setting +CNMI=[<mode>[,<mt>[,<bm>[,<ds>[,<bfr>]]]]] */
  		/* pvt->initialized = 1 after successful of CMD_AT_CNMI */
  		ATQ_CMD_DECLARE_ST(CMD_AT_CNMI, "AT+CNMI=2,1,0,2,0\r"),
-@@ -912,6 +914,22 @@ EXPORT_DEF int at_enqueue_hangup(struct cpvt *cpvt, int call_idx)
+@@ -172,6 +180,7 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
+ 	int begin = -1;
+ 	int err;
+ 	char * ptmp1 = NULL;
++	char * ptmp2 = NULL;
+ 	pvt_t * pvt = cpvt->pvt;
+ 	at_queue_cmd_t cmds[ITEMS_OF(st_cmds)];
+ 
+@@ -190,6 +199,8 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
+ 			continue;
+ 		if(st_cmds[in].cmd == CMD_AT_U2DIAG && CONF_SHARED(pvt, u2diag) == -1)
+ 			continue;
++		if(st_cmds[in].cmd == CMD_AT_SYSCFG && ast_strlen_zero(CONF_SHARED(pvt, syscfg)))
++			continue;
+ 
+ 		memcpy(&cmds[out], &st_cmds[in], sizeof(st_cmds[in]));
+ 
+@@ -200,6 +211,16 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
+ 				goto failure;
+ 			ptmp1 = cmds[out].data;
+ 		}
++		else if(cmds[out].cmd == CMD_AT_SYSCFG)
++		{
++			if(CONF_SHARED(pvt, syscfg)[0] == '"')
++				err = at_fill_generic_cmd(&cmds[out], "AT^SYSCFGEX=%s\r", CONF_SHARED(pvt, syscfg));
++			else
++				err = at_fill_generic_cmd(&cmds[out], "AT^SYSCFG=%s\r", CONF_SHARED(pvt, syscfg));
++			if(err)
++				goto failure;
++			ptmp2 = cmds[out].data;
++		}
+ 		if(cmds[out].cmd == from_command)
+ 			begin = out;
+ 		out++;
+@@ -211,6 +232,8 @@ EXPORT_DEF int at_enqueue_initialization(struct cpvt *cpvt, at_cmd_t from_comman
+ failure:
+ 	if(ptmp1)
+ 		ast_free(ptmp1);
++	if(ptmp2)
++		ast_free(ptmp2);
+ 	return err;
+ }
+ 
+@@ -912,6 +935,22 @@ EXPORT_DEF int at_enqueue_hangup(struct cpvt *cpvt, int call_idx)
  	return 0;
  }
  
@@ -59,11 +119,16 @@ index 5f0137e..1a09ce1 100644
   * \brief Enqueue AT+CLVL commands for volume synchronization
   * \param cpvt -- cpvt structure
 diff --git a/at_command.h b/at_command.h
-index 0aeb441..0609513 100644
+index 0aeb441..73a6c76 100644
 --- a/at_command.h
 +++ b/at_command.h
-@@ -71,8 +71,10 @@
+@@ -69,10 +69,15 @@
+ 	_( AT_E,            "ATE") \
+ \
  	_( AT_U2DIAG,       "AT^U2DIAG") \
++	_( AT_SYSCFG,       "AT^SYSCFG") \
++	_( AT_CSCLK,        "AT+CSCLK") \
++	_( AT_CURC,         "AT^CURC") \
  	_( AT_Z,            "ATZ") \
  	_( AT_CMEE,         "AT+CMEE") \
 +	_( AT_CRC,          "AT+CRC") \
@@ -73,7 +138,7 @@ index 0aeb441..0609513 100644
  	_( AT_CHLD_1x,      "AT+CHLD=1x") \
  	_( AT_CHLD_2x,      "AT+CHLD=2x") \
  	_( AT_CHLD_2,       "AT+CHLD=2") \
-@@ -121,6 +123,7 @@ EXPORT_DECL void at_retrieve_next_sms(struct cpvt *cpvt, at_cmd_suppress_error_t
+@@ -121,6 +126,7 @@ EXPORT_DECL void at_retrieve_next_sms(struct cpvt *cpvt, at_cmd_suppress_error_t
  EXPORT_DECL int at_enqueue_retrieve_sms(struct cpvt *cpvt, int index, at_cmd_suppress_error_t suppress_error);
  EXPORT_DECL int at_enqueue_delete_sms(struct cpvt *cpvt, int index);
  EXPORT_DECL int at_enqueue_hangup(struct cpvt *cpvt, int call_idx);
@@ -82,7 +147,7 @@ index 0aeb441..0609513 100644
  EXPORT_DECL int at_enqueue_clcc(struct cpvt *cpvt);
  EXPORT_DECL int at_enqueue_activate(struct cpvt *cpvt);
 diff --git a/at_response.c b/at_response.c
-index 1832dae..309747d 100644
+index 1832dae..759fd2a 100644
 --- a/at_response.c
 +++ b/at_response.c
 @@ -43,6 +43,7 @@ static const at_response_t at_responses_list[] = {
@@ -93,15 +158,18 @@ index 1832dae..309747d 100644
  #undef DEF_STR
  	};
  
-@@ -87,6 +88,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+@@ -87,6 +88,10 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
  			case CMD_AT:
  			case CMD_AT_Z:
  			case CMD_AT_E:
 +			case CMD_AT_CRC:
++			case CMD_AT_CSCLK:
++			case CMD_AT_CURC:
++			case CMD_AT_SYSCFG:
  			case CMD_AT_U2DIAG:
  			case CMD_AT_CGMI:
  			case CMD_AT_CGMM:
-@@ -97,6 +99,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+@@ -97,6 +102,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
  			case CMD_AT_CPIN:
  			case CMD_AT_CCWA_SET:
  			case CMD_AT_CCWA_STATUS:
@@ -109,7 +177,7 @@ index 1832dae..309747d 100644
  			case CMD_AT_CHLD_2:
  			case CMD_AT_CHLD_3:
  			case CMD_AT_CSCA:
-@@ -200,6 +203,16 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+@@ -200,6 +206,16 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
  			case CMD_AT_CHLD_1x:
  				CPVT_RESET_FLAGS(task->cpvt, CALL_FLAG_NEED_HANGUP);
  				ast_debug (1, "[%s] Successful hangup for call idx %d\n", PVT_ID(pvt), task->cpvt->call_idx);
@@ -126,7 +194,7 @@ index 1832dae..309747d 100644
  				break;
  
  			case CMD_AT_CMGS:
-@@ -259,7 +272,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
+@@ -259,7 +275,7 @@ static int at_response_ok (struct pvt* pvt, at_res_t res)
  	}
  	else
  	{
@@ -135,7 +203,17 @@ index 1832dae..309747d 100644
  	}
  
  	return 0;
-@@ -427,6 +440,10 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -315,6 +331,9 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+ 
+ 			/* not critical errors */
+ 			case CMD_AT_U2DIAG:
++			case CMD_AT_CSCLK:
++			case CMD_AT_CURC:
++			case CMD_AT_SYSCFG:
+ 			case CMD_AT_CCWA_SET:
+ 			case CMD_AT_CCWA_STATUS:
+ 			case CMD_AT_CNUM:
+@@ -427,6 +446,10 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  				log_cmd_response_error(pvt, ecmd, "[%s] Setting CLIR failed\n", PVT_ID(pvt));
  				break;
  
@@ -146,7 +224,7 @@ index 1832dae..309747d 100644
  			case CMD_AT_CHLD_2:
  				if (!CPVT_TEST_FLAG(task->cpvt, CALL_FLAG_HOLD_OTHER) ||
  						task->cpvt->state != CALL_STATE_INIT) {
-@@ -445,6 +462,16 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -445,6 +468,16 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  			case CMD_AT_CHUP:
  			case CMD_AT_CHLD_1x:
  				log_cmd_response_error(pvt, ecmd, "[%s] Error sending hangup for call idx %d\n", PVT_ID(pvt), task->cpvt->call_idx);
@@ -163,7 +241,7 @@ index 1832dae..309747d 100644
  				break;
  
  			case CMD_AT_CMGR:
-@@ -523,7 +550,7 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
+@@ -523,7 +556,7 @@ static int at_response_error (struct pvt* pvt, at_res_t res)
  	}
  	else
  	{
@@ -172,7 +250,7 @@ index 1832dae..309747d 100644
  	}
  
  	return 0;
-@@ -945,6 +972,12 @@ static int at_response_clcc (struct pvt* pvt, char* str)
+@@ -945,6 +978,12 @@ static int at_response_clcc (struct pvt* pvt, char* str)
  					}
  					else if(dir == CALL_DIR_INCOMING && (state == CALL_STATE_INCOMING || state == CALL_STATE_WAITING))
  					{
@@ -185,7 +263,7 @@ index 1832dae..309747d 100644
  						if(state == CALL_STATE_INCOMING)
  							PVT_STAT(pvt, in_calls) ++;
  						else
-@@ -1080,9 +1113,14 @@ static int at_response_ccwa(struct pvt* pvt, char* str)
+@@ -1080,9 +1119,14 @@ static int at_response_ccwa(struct pvt* pvt, char* str)
  //		if (sscanf (str, "+CCWA: \"%*[+0-9*#ABCabc]\",%*d,%d", &class) == 1)
  		if (at_parse_ccwa(str, &class) == 0)
  		{
@@ -201,7 +279,22 @@ index 1832dae..309747d 100644
  				pvt->rings++;
  				pvt->cwaiting = 1;
  				request_clcc(pvt);
-@@ -1643,11 +1681,9 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
+@@ -1630,9 +1674,12 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
+ 	char*	lac;
+ 	char*	ci;
+ 
+-	if (at_enqueue_cops(&pvt->sys_chan))
++	if (ast_strlen_zero(pvt->provider_name) || !strcmp(pvt->provider_name, "NONE"))
+ 	{
+-		ast_log (LOG_ERROR, "[%s] Error sending query for provider name\n", PVT_ID(pvt));
++		if (at_enqueue_cops(&pvt->sys_chan))
++		{
++			ast_log (LOG_ERROR, "[%s] Error sending query for provider name\n", PVT_ID(pvt));
++		}
+ 	}
+ 
+ 	if (at_parse_creg (str, len, &d, &pvt->gsm_reg_status, &lac, &ci))
+@@ -1643,11 +1690,9 @@ static int at_response_creg (struct pvt* pvt, char* str, size_t len)
  
  	if (d)
  	{
@@ -213,7 +306,7 @@ index 1832dae..309747d 100644
  		pvt->gsm_registered = 1;
  		manager_event_device_status(PVT_ID(pvt), "Register");
  	}
-@@ -1754,16 +1790,21 @@ static int at_response_cimi (struct pvt* pvt, const char* str)
+@@ -1754,16 +1799,21 @@ static int at_response_cimi (struct pvt* pvt, const char* str)
  static void at_response_busy(struct pvt* pvt, enum ast_control_frame_type control)
  {
  	const struct at_queue_task * task = at_queue_head_task (pvt);
@@ -237,7 +330,7 @@ index 1832dae..309747d 100644
  }
  
  /*!
-@@ -1917,15 +1958,18 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
+@@ -1917,15 +1967,18 @@ int at_response (struct pvt* pvt, const struct iovec iov[2], int iovcnt, at_res_
  			case RES_BUSY:
  				ast_log (LOG_ERROR, "[%s] Receive BUSY\n", PVT_ID(pvt));
  				at_response_busy(pvt, AST_CONTROL_BUSY);
@@ -257,10 +350,10 @@ index 1832dae..309747d 100644
  			case RES_CPIN:
  				/* fatal */
 diff --git a/chan_dongle.c b/chan_dongle.c
-index 06886d8..2243b5b 100644
+index 06886d8..1d7c313 100644
 --- a/chan_dongle.c
 +++ b/chan_dongle.c
-@@ -518,6 +518,13 @@ static void* do_monitor_phone (void* data)
+@@ -518,6 +518,20 @@ static void* do_monitor_phone (void* data)
  			ecmd = at_queue_head_cmd (pvt);
  			if(ecmd)
  			{
@@ -271,9 +364,26 @@ index 06886d8..2243b5b 100644
 +					ast_mutex_unlock (&pvt->lock);
 +					continue;
 +				}
++				if (ecmd->cmd == CMD_AT_COPS_INIT || ecmd->cmd == CMD_AT_COPS)
++				{
++					ast_log (LOG_WARNING, "[%s] Timed out waiting response to %s, skipping command to prevent disconnect\n", dev, at_cmd2str(ecmd->cmd));
++					at_queue_handle_result (pvt, RES_PARSE_ERROR);
++					ast_mutex_unlock (&pvt->lock);
++					continue;
++				}
  				ast_log (LOG_ERROR, "[%s] timedout while waiting '%s' in response to '%s'\n", dev, at_res2str (ecmd->res), at_cmd2str (ecmd->cmd));
  				goto e_cleanup;
  			}
+@@ -1564,7 +1578,8 @@ static int pvt_reconfigure(struct pvt * pvt, const pvt_config_t * settings, rest
+ 			|| strcmp(UCONFIG(settings, imsi), CONF_UNIQ(pvt, imsi))
+ 			|| SCONFIG(settings, u2diag) != CONF_SHARED(pvt, u2diag)
+ 			|| SCONFIG(settings, resetdongle) != CONF_SHARED(pvt, resetdongle)
+-			|| SCONFIG(settings, callwaiting) != CONF_SHARED(pvt, callwaiting))
++			|| SCONFIG(settings, callwaiting) != CONF_SHARED(pvt, callwaiting)
++			|| strcmp(SCONFIG(settings, syscfg), CONF_SHARED(pvt, syscfg)))
+ 		{
+ 			/* TODO: schedule restart */
+ 			pvt->desired_state = DEV_STATE_RESTARTED;
 diff --git a/chan_dongle.h b/chan_dongle.h
 index 72e9b51..40e4b0d 100644
 --- a/chan_dongle.h
@@ -548,6 +658,19 @@ index 3cb2815..e0f9f6d 100644
  
  					/* drop channel -> cpvt reference */
  					ast_channel_tech_pvt_set(channel, NULL);
+diff --git a/cli.c b/cli.c
+index a19ef90..fe9b440 100644
+--- a/cli.c
++++ b/cli.c
+@@ -140,6 +140,8 @@ static char* cli_show_device_settings (struct ast_cli_entry* e, int cmd, struct
+ 		ast_cli (a->fd, "  RX gain                 : %d\n", CONF_SHARED(pvt, rxgain));
+ 		ast_cli (a->fd, "  TX gain                 : %d\n", CONF_SHARED(pvt, txgain));
+ 		ast_cli (a->fd, "  U2Diag                  : %d\n", CONF_SHARED(pvt, u2diag));
++		if (!ast_strlen_zero(CONF_SHARED(pvt, syscfg)))
++			ast_cli (a->fd, "  SYSCFG                  : %s\n", CONF_SHARED(pvt, syscfg));
+ 		ast_cli (a->fd, "  Use CallingPres         : %s\n", CONF_SHARED(pvt, usecallingpres) ? "Yes" : "No");
+ 		ast_cli (a->fd, "  Default CallingPres     : %s\n", CONF_SHARED(pvt, callingpres) < 0 ? "<Not set>" : ast_describe_caller_presentation (CONF_SHARED(pvt, callingpres)));
+ 		ast_cli (a->fd, "  Auto delete SMS         : %s\n", CONF_SHARED(pvt, autodeletesms) ? "Yes" : "No");
 diff --git a/cpvt.c b/cpvt.c
 index babe428..fc59006 100644
 --- a/cpvt.c
@@ -575,11 +698,55 @@ index 1ceefbb..c54180d 100644
  
  //	size_t			write;				/*!< write position in pvt->a_write_buf */
  //	size_t			used;				/*!< bytes used in pvt->a_write_buf */
+diff --git a/dc_config.c b/dc_config.c
+index b1482f7..bcbac77 100644
+--- a/dc_config.c
++++ b/dc_config.c
+@@ -95,6 +95,7 @@ EXPORT_DEF void dc_sconfig_fill_defaults(struct dc_sconfig * config)
+ 	config->mindtmfgap		= DEFAULT_MINDTMFGAP;
+ 	config->mindtmfduration		= DEFAULT_MINDTMFDURATION;
+ 	config->mindtmfinterval		= DEFAULT_MINDTMFINTERVAL;
++	config->syscfg[0]		= '\0';
+ }
+ 
+ #/* */
+@@ -222,6 +223,10 @@ EXPORT_DEF void dc_sconfig_fill(struct ast_config * cfg, const char * cat, struc
+ 				config->mindtmfduration = DEFAULT_MINDTMFINTERVAL;
+ 			}
+ 		}
++		else if (!strcasecmp (v->name, "syscfg"))
++		{
++			ast_copy_string (config->syscfg, v->value, sizeof (config->syscfg));
++		}
+ 	}
+ }
+ 
+diff --git a/dc_config.h b/dc_config.h
+index 278d492..99c4f3c 100644
+--- a/dc_config.h
++++ b/dc_config.h
+@@ -91,6 +91,7 @@ typedef struct dc_sconfig
+ 
+ 	int			mindtmfinterval;		/*!< minimal DTMF interval beetween ends in ms, applied only on same digit */
+ #define DEFAULT_MINDTMFINTERVAL	200
++	char			syscfg[64];			/*!< AT^SYSCFG / AT^SYSCFGEX configuration string */
+ } dc_sconfig_t;
+ 
+ /* Global settings */
 diff --git a/manager.c b/manager.c
-index 789dcb2..9af4c1b 100644
+index 789dcb2..645b5ab 100644
 --- a/manager.c
 +++ b/manager.c
-@@ -189,7 +189,9 @@ static int manager_send_sms (struct mansession* s, const struct message* m)
+@@ -59,6 +59,8 @@ static int manager_show_devices (struct mansession* s, const struct message* m)
+ 			astman_append (s, "RXGain: %d\r\n", CONF_SHARED(pvt, rxgain));
+ 			astman_append (s, "TXGain: %d\r\n", CONF_SHARED(pvt, txgain));
+ 			astman_append (s, "U2DIAG: %d\r\n", CONF_SHARED(pvt, u2diag));
++			if (!ast_strlen_zero(CONF_SHARED(pvt, syscfg)))
++				astman_append (s, "SYSCFG: %s\r\n", CONF_SHARED(pvt, syscfg));
+ 			astman_append (s, "UseCallingPres: %s\r\n", CONF_SHARED(pvt, usecallingpres) ? "Yes" : "No");
+ 			astman_append (s, "DefaultCallingPres: %s\r\n", CONF_SHARED(pvt, callingpres) < 0 ? "<Not set>" : ast_describe_caller_presentation (CONF_SHARED(pvt, callingpres)));
+ 			astman_append (s, "AutoDeleteSMS: %s\r\n", CONF_SHARED(pvt, autodeletesms) ? "Yes" : "No");
+@@ -189,7 +191,9 @@ static int manager_send_sms (struct mansession* s, const struct message* m)
  	}
  
  	ast_unescape_c(unescaped_msg);
