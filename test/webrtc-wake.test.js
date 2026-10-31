@@ -85,7 +85,7 @@ test('wake preparation preserves DND/forwarding and bounds a CRM-safe new-contac
     const text = fs.readFileSync(f.output, 'utf8');
     for (const term of ['DB(DND/${ARG1})', 'DB(CF/${ARG1})', 'DB(CFU/${ARG1})', 'HASH(__SIPHEADERS,X-Sokrat-Call-ID)',
         'URIENCODE(${CALLERID(num)})', 'SOKRAT_BEFORE_COUNT', '${FIELDQTY(SOKRAT_AFTER_DIAL,&)}>${SOKRAT_BEFORE_COUNT}',
-        'Wait(0.2)', '${SOKRAT_WAKE_ITER}<25']) assert.ok(text.includes(term), term);
+        'Wait(0.2)', '${SOKRAT_WAKE_ITER}<60']) assert.ok(text.includes(term), term);
     assert.ok(text.indexOf('DB(DND/') < text.indexOf('sokrat-webrtc-wake-dispatch.py'));
     assert.match(text, /SOKRAT_WAKE_WAIT.*!="1"/);
     assert.doesNotMatch(text, /Dial\(|Answer\(|Hangup\(/);

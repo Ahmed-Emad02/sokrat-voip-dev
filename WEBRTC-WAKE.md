@@ -27,7 +27,7 @@ mobile push enables the bounded registration wait. Credential errors, missing
 devices and gateway outages continue into normal FreePBX routing; credentials
 and provider payloads are never logged.
 
-The HTTP deadline is3 seconds; registration wait is at most5 seconds. Comparing
+The HTTP deadline is6 seconds; registration wait is at most12 seconds. Comparing
 the new contact count with the pre-push count prevents an existing CRM contact
 from immediately masking an asleep mobile. Existing contacts are never removed
 or singled out for dialing; FreePBX still builds its normal multi-contact dial

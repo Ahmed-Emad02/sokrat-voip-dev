@@ -47,7 +47,7 @@ exten => s,1,GotoIf($["${DB(DEVICE/${ARG1}/tech)}"!="pjsip"]?done)
  same => n,GotoIf($[${FIELDQTY(SOKRAT_AFTER_DIAL,&)}>${SOKRAT_BEFORE_COUNT}]?done)
  same => n,Wait(0.2)
  same => n,Set(SOKRAT_WAKE_ITER=$[${SOKRAT_WAKE_ITER}+1])
- same => n,GotoIf($[${SOKRAT_WAKE_ITER}<25]?wait)
+ same => n,GotoIf($[${SOKRAT_WAKE_ITER}<60]?wait)
  same => n(done),Return()
 
 [sub-sokrat-webrtc-wake-cancel]
