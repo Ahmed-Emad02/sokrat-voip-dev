@@ -311,3 +311,39 @@ print('PASS')
     const result = spawnSync('python3', ['-c', script], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
     assert.equal(result.status, 0, result.stderr);
 });
+
+test('wake compiler supports the exact FreePBX voicemail route variant', t => {
+    const f = fixture(t);
+    const extension = '406';
+    const route = [
+        `exten => ${extension},1,Set(__RINGTIMER=10)`,
+        `exten => ${extension},n,Macro(exten-vm,${extension},${extension},0,0,0)`,
+        `exten => ${extension},n(dest),Set(__PICKUPMARK=)`,
+        `exten => ${extension},n,Macro(vm,${extension},\${DIALSTATUS},\${IVR_RETVM})`,
+        `exten => ${extension},n,Goto(vmret,1)`,
+        `exten => ${extension},hint,PJSIP/${extension},CustomPresence:${extension}`
+    ].join('\n');
+    f.put('etc/asterisk/extensions_additional.conf',
+        '[ext-local]\n' + f.route('404') + '\n' + route + '\n');
+    f.put('etc/asterisk/pjsip_custom_post.conf',
+        '[404](+)\nwebrtc=yes\n[406](+)\nwebrtc=yes\n');
+    const result = f.run();
+    assert.equal(result.status, 0, result.stderr);
+    const text = fs.readFileSync(f.output, 'utf8');
+    assert.match(text, new RegExp(`exten => ${extension},n,Gosub\\(sub-sokrat-webrtc-wake,s,1\\(\\$\\{EXTEN\\}\\)\\)`));
+    assert.match(text, /Macro\(vm,406,\$\{DIALSTATUS\},\$\{IVR_RETVM\}\)/);
+    assert.match(text, /Goto\(vmret,1\)/);
+});
+
+test('quoted local override includes are inspected instead of refused', t => {
+    const f = fixture(t);
+    f.put('etc/asterisk/extensions_override_issabelpbx.conf',
+        '#include "extensions_override_issabel.conf"\n');
+    f.put('etc/asterisk/extensions_override_issabel.conf',
+        '#include "sokrat_federation.conf"\n[custom-context]\nexten => 9,1,NoOp(unchanged)\n');
+    f.put('etc/asterisk/sokrat_federation.conf',
+        '[federation-probe]\nexten => 42,1,NoOp(peer)\n');
+    const result = f.run();
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(fs.readFileSync(f.output, 'utf8'), /exten => 404,n,Gosub\(sub-sokrat-webrtc-wake/);
+});

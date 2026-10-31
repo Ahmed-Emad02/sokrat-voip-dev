@@ -101,13 +101,19 @@ def render(generated, extensions):
             match = re.match(r'\s*exten\s*=>\s*' + re.escape(extension) + r'\s*,\s*([^,]+),(.*)$', line)
             if match and match.group(1).strip() != 'hint':
                 rows.append((match.group(1).strip(), match.group(2).strip()))
-        # Recognize the exact observed FreePBX entry template. Do not approximate
-        # custom numeric jumps, extra applications or a customer's custom route.
-        if (len(rows) != 4 or rows[0][0] != '1' or not rows[0][1].startswith('Set(__RINGTIMER=')
+        # Recognize only the two exact FreePBX templates we have reviewed: the
+        # standard IVR return and the voicemail-enabled variant. Do not
+        # approximate custom numeric jumps, extra applications or custom routes.
+        if (len(rows) < 4 or rows[0][0] != '1' or not rows[0][1].startswith('Set(__RINGTIMER=')
                 or rows[1][0] != 'n' or not rows[1][1].startswith('Macro(exten-vm,')
                 or (',' + extension + ',') not in rows[1][1]
-                or rows[2] != ('n(dest)', 'Set(__PICKUPMARK=)')
-                or rows[3] != ('n', 'Goto(${IVR_CONTEXT},return,1)')):
+                or rows[2] != ('n(dest)', 'Set(__PICKUPMARK=)')):
+            raise ValueError('Unsupported generated WebRTC route template: ' + extension)
+        standard_tail = len(rows) == 4 and rows[3] == ('n', 'Goto(${IVR_CONTEXT},return,1)')
+        voicemail_tail = (len(rows) == 5
+                and rows[3] == ('n', 'Macro(vm,' + extension + ',${DIALSTATUS},${IVR_RETVM})')
+                and rows[4] == ('n', 'Goto(vmret,1)'))
+        if not (standard_tail or voicemail_tail):
             raise ValueError('Unsupported generated WebRTC route template: ' + extension)
         output.append('exten => ' + extension + ',1,' + rows[0][1])
         output.append('exten => ' + extension + ',n,Gosub(sub-sokrat-webrtc-wake,s,1(${EXTEN}))')
@@ -206,10 +212,13 @@ def plan(root):
                     if any(re.match(r'\s*exten\s*=>\s*' + re.escape(ext) + r'\s*,', line) for ext in extensions):
                         raise ValueError('Existing custom route owns a WebRTC extension')
         for line in text.splitlines():
-            match = re.match(r'^\s*#(?:try)?include\s+([^;\s]+)\s*$', line)
+            # Asterisk accepts both #include file.conf and #include "file.conf".
+            # Only plain local .conf names are inspected; globs, absolute paths
+            # and substitutions remain refused.
+            match = re.match(r'^\s*#(?:try)?include\s+(?:"([A-Za-z0-9_.-]+\.conf)"|([A-Za-z0-9_.-]+\.conf))\s*$', line)
             if match:
-                name = match.group(1)
-                if not re.fullmatch(r'[A-Za-z0-9_.-]+\.conf', name) or name == NAME:
+                name = match.group(1) or match.group(2)
+                if name == NAME:
                     raise ValueError('Unmanaged/complex override include refused')
                 inspect_override(etc / name)
     inspect_override(anchor)
