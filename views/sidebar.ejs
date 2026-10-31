@@ -7139,8 +7139,11 @@ async function saveGatewayTunnel(event) {
         const data = await resp.json();
         if (data.success) {
             if (msg) {
-                msg.className = 'text-xs p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 block';
-                msg.textContent = data.message || 'Connected successfully!';
+                msg.className = data.warning
+                    ? 'text-xs p-2.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 block'
+                    : 'text-xs p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 block';
+                const message = data.message || 'Connected successfully!';
+                msg.textContent = data.warning ? message + ' Warning: ' + data.warning : message;
             }
             loadGatewayTunnelStatus();
         } else {
