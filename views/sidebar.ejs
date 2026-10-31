@@ -7058,13 +7058,15 @@ async function loadGatewayTunnelStatus() {
         const tunnelEl = document.getElementById('gwEnrolledTunnel');
         const mediaEl = document.getElementById('gwEnrolledMedia');
 
-        // An enrollment is authoritative: hide the one-shot pairing form once a
-        // pinned identity exists so an operator cannot silently re-pair.
+        // An active enrollment is authoritative: hide the one-shot pairing form
+        // so an operator cannot silently re-pair. A disconnected enrollment must
+        // show it again, otherwise "disconnect then paste a new code" is impossible.
         const configured = Boolean(data.configured);
-        if (pairingSection) pairingSection.classList.toggle('hidden', configured);
+        const pairingAvailable = !data.active;
+        if (pairingSection) pairingSection.classList.toggle('hidden', !pairingAvailable);
         if (enrollmentSection) enrollmentSection.classList.toggle('hidden', !configured);
         const connectBtn = document.getElementById('gwConnectBtn');
-        if (connectBtn) connectBtn.classList.toggle('hidden', configured);
+        if (connectBtn) connectBtn.classList.toggle('hidden', !pairingAvailable);
         if (hostEl) hostEl.textContent = data.serverAddr ? (data.serverAddr + ':' + (data.serverPort || '')) : '-';
         if (pbxEl) pbxEl.textContent = data.pbxId || '-';
         if (tunnelEl) tunnelEl.textContent = data.active ? 'active' : (configured ? 'stopped' : '-');
