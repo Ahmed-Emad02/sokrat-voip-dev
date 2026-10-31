@@ -25,7 +25,11 @@ function fixture(t) {
     ].join('\n');
     put('etc/asterisk/extensions_additional.conf', '[ext-local]\n' + route('404') + '\n' + route('405') + '\n[macro-dial-one]\nexten => s,1,NoOp(desktop preserved)\n');
     put('etc/asterisk/pjsip_custom_post.conf', '[404](+)\nwebrtc=yes\n[405](+)\nwebrtc=no\n');
-    put('etc/asterisk/extensions.conf', '#include extensions_override_issabelpbx.conf\n#include extensions_additional.conf\n');
+    put('etc/asterisk/extensions.conf', '#include extensions_override_issabelpbx.conf\n#include extensions_additional.conf\n'
+        + '[macro-dial]\nexten => s,1,GotoIf($["${MOHCLASS}" = ""]?dial)\n'
+        + 'exten => s,n,AGI(dialparties.agi)\n'
+        + 'exten => s,n,NoOp(Returned from dialparties)\n'
+        + 'exten => s,n+2(normdial),Dial(${ds})\n');
     put('etc/asterisk/extensions_override_issabelpbx.conf', '; operator anchor\n#include extensions_override_issabel.conf\n');
     put('etc/asterisk/extensions_override_issabel.conf', '[custom-context]\nexten => 9,1,NoOp(unchanged)\n');
     put('etc/sokrat/gateway-hook.json', JSON.stringify({ pbxId: 'pbx_' + 'a'.repeat(16), gatewayUrl: 'https://gateway.example:7443', caFile: '/etc/frp/gateway-ca.crt' }));
@@ -50,6 +54,9 @@ test('dry-run is read-only; apply compiles only exact WebRTC entries and preserv
     assert.match(text, /exten => 404,n,Gosub\(sub-sokrat-webrtc-wake,s,1\(\$\{EXTEN\}\)\)/);
     assert.doesNotMatch(text, /exten => 405|\[macro-|\[from-internal-custom\]|exten => _|Progress\(|VOLUME\(/);
     assert.match(text, /Macro\(exten-vm,novm,404,0,0,0\)/);
+    assert.match(text, /\[sub-sokrat-group-wake\]/);
+    assert.match(f.read('etc/asterisk/extensions.conf'),
+        /exten => s,n,Gosub\(sub-sokrat-group-wake,s,1\(\$\{ARG3\}\)\)/);
     assert.equal(f.read('etc/asterisk/extensions_additional.conf'), generated);
     assert.equal(f.read('etc/asterisk/extensions_override_issabel.conf'), custom);
     assert.equal(fs.statSync(anchor).mode & 0o777, 0o664, 'existing anchor permissions preserved');

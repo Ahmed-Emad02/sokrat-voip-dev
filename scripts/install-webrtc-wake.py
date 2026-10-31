@@ -50,12 +50,83 @@ exten => s,1,GotoIf($["${DB(DEVICE/${ARG1}/tech)}"!="pjsip"]?done)
  same => n,GotoIf($[${SOKRAT_WAKE_ITER}<60]?wait)
  same => n(done),Return()
 
+[sub-sokrat-group-wake]
+exten => s,1,GotoIf($["${ARG1}"=""]?done)
+ same => n,GotoIf($["${SOKRAT_CALL_ID}"!=""]?identified)
+ same => n,Set(__SOKRAT_CALL_ID=${FILTER(0-9a-f-,${SHELL(/usr/bin/uuidgen)})})
+ same => n(identified),Set(SOKRAT_GROUP_LIST=${ARG1})
+ same => n,Set(SOKRAT_GROUP_IDX=1)
+ same => n,Set(SOKRAT_GROUP_TOTAL=0)
+ same => n(dispatch),Set(SOKRAT_GROUP_MEMBER=${CUT(SOKRAT_GROUP_LIST,-,${SOKRAT_GROUP_IDX})})
+ same => n,GotoIf($["${SOKRAT_GROUP_MEMBER}"=""]?wait)
+ same => n,GotoIf($["${DB(DEVICE/${SOKRAT_GROUP_MEMBER}/tech)}"!="pjsip"]?next)
+ same => n,GotoIf($["${PJSIP_ENDPOINT(${SOKRAT_GROUP_MEMBER},webrtc)}"!="yes"]?next)
+ same => n,Set(SOKRAT_GROUP_TOTAL=$[${SOKRAT_GROUP_TOTAL}+1])
+ same => n,GotoIf($["${SOKRAT_WAKE_SENT_${SOKRAT_GROUP_MEMBER}}"="1"]?next)
+ same => n,Set(__SOKRAT_WAKE_SENT_${SOKRAT_GROUP_MEMBER}=1)
+ same => n,System(/usr/bin/python3 /usr/local/bin/sokrat-webrtc-wake-dispatch.py "${URIENCODE(${SOKRAT_GROUP_MEMBER})}" "${URIENCODE(${CALLERID(num)})}" "${URIENCODE(${CALLERID(name)})}" "${SOKRAT_CALL_ID}" >/dev/null 2>&1 &)
+ same => n(next),Set(SOKRAT_GROUP_IDX=$[${SOKRAT_GROUP_IDX}+1])
+ same => n,Goto(dispatch)
+ same => n(wait),GotoIf($["${SOKRAT_GROUP_TOTAL}"="0"]?done)
+ same => n,Ringing()
+ same => n,Set(SOKRAT_GROUP_ITER=0)
+ same => n(waitloop),Set(SOKRAT_GROUP_READY=0)
+ same => n,Set(SOKRAT_GROUP_IDX=1)
+ same => n(check),Set(SOKRAT_GROUP_MEMBER=${CUT(SOKRAT_GROUP_LIST,-,${SOKRAT_GROUP_IDX})})
+ same => n,GotoIf($["${SOKRAT_GROUP_MEMBER}"=""]?waitstep)
+ same => n,GotoIf($["${DB(DEVICE/${SOKRAT_GROUP_MEMBER}/tech)}"!="pjsip"]?nextcheck)
+ same => n,GotoIf($["${PJSIP_ENDPOINT(${SOKRAT_GROUP_MEMBER},webrtc)}"!="yes"]?nextcheck)
+ same => n,GotoIf($["${PJSIP_DIAL_CONTACTS(${SOKRAT_GROUP_MEMBER})}"=""]?nextcheck)
+ same => n,Set(SOKRAT_GROUP_READY=$[${SOKRAT_GROUP_READY}+1])
+ same => n(nextcheck),Set(SOKRAT_GROUP_IDX=$[${SOKRAT_GROUP_IDX}+1])
+ same => n,Goto(check)
+ same => n(waitstep),GotoIf($[${SOKRAT_GROUP_READY}>=${SOKRAT_GROUP_TOTAL}]?done)
+ same => n,Wait(0.2)
+ same => n,Set(SOKRAT_GROUP_ITER=$[${SOKRAT_GROUP_ITER}+1])
+ same => n,GotoIf($[${SOKRAT_GROUP_ITER}<60]?waitloop)
+ same => n(done),Return()
+
 [sub-sokrat-webrtc-wake-cancel]
 exten => s,1,GotoIf($["${SOKRAT_PUSH_SENT}"!="1"]?done)
  same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)
  same => n,System(/usr/bin/python3 /usr/local/bin/sokrat-webrtc-wake-dispatch.py "${SOKRAT_WAKE_CALLEE}" "${SOKRAT_CALL_ID}" &)
  same => n(done),Return()
 '''
+
+
+MACRO_MARKER = 'Sokrat occupancy wake before dialparties.agi'
+GROUP_GOSUB = 'exten => s,n,Gosub(sub-sokrat-group-wake,s,1(${ARG3})) ; ' + MACRO_MARKER
+
+
+def patch_macro_dial(text, enabled):
+    """Install or remove the managed ring-group/queue wake hook.
+
+    The helper is invoked before dialparties.agi, so unavailable WebRTC
+    members are woken before FreePBX filters the dial string. dialparties
+    jumps to its own labels, so inserting before the AGI is priority-safe.
+    """
+    marker_line = GROUP_GOSUB
+    lines = text.splitlines(keepends=True)
+    present = any('Gosub(sub-sokrat-group-wake,s,1(${ARG3}))' in line for line in lines)
+    if not enabled:
+        if not present:
+            return text
+        return ''.join(line for line in lines if 'Gosub(sub-sokrat-group-wake,s,1(${ARG3}))' not in line)
+    if present:
+        return text
+    in_macro = False
+    for index, line in enumerate(lines):
+        if re.fullmatch(r'\s*\[macro-dial\]\s*(?:;.*)?\r?\n?', line):
+            in_macro = True
+            continue
+        if in_macro and re.match(r'\s*\[[^\]]+\]', line):
+            break
+        if in_macro and re.match(r'\s*exten\s*=>\s*s\s*,\s*n\s*,\s*AGI\s*\(\s*dialparties\.agi\s*\)', line, re.I):
+            newline = '\r\n' if line.endswith('\r\n') else '\n'
+            indent = line[:len(line) - len(line.lstrip())]
+            lines.insert(index, indent + GROUP_GOSUB + newline)
+            return ''.join(lines)
+    raise ValueError('Unsupported macro-dial layout; ring-group wake not installed')
 
 
 def read(path, missing=''):
@@ -186,7 +257,9 @@ def plan(root):
     extensions = [ext for ext in extensions if any(re.match(r'\s*exten\s*=>\s*' + re.escape(ext)
                   + r'\s*,\s*hint\s*,\s*PJSIP/' + re.escape(ext) + r'(?:,|\s*$)', line) for line in local)]
     rendered = render(generated, extensions)
-    core = read(etc / 'extensions.conf')
+    core_path = etc / 'extensions.conf'
+    core = read(core_path)
+    core_patched = patch_macro_dial(core, bool(extensions))
     candidates = re.findall(r'^\s*#include\s+(extensions_override_(?:issabelpbx|freepbx)\.conf)\s*$', core, re.M)
     if len(candidates) != 1:
         raise ValueError('Expected one active FreePBX/Issabel override include')
@@ -235,7 +308,8 @@ def plan(root):
     if previous and (target.stat().st_uid != os.geteuid() or target.stat().st_mode & 0o022):
         raise ValueError('Untrusted installed dispatcher')
     changes = [(target, dispatcher, 0o755), (output_path, rendered, 0o640),
-               (anchor, amended, anchor.stat().st_mode & 0o777)]
+               (anchor, amended, anchor.stat().st_mode & 0o777),
+               (core_path, core_patched, core_path.stat().st_mode & 0o777)]
     for path, _, _ in changes:
         trusted_parent(path, root, executable=(path == target))
     group = grp.getgrnam('asterisk').gr_gid if root == Path('/') else etc.stat().st_gid

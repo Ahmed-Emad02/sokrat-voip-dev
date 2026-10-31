@@ -15,10 +15,18 @@ For each eligible extension, the compiler preserves its four observed FreePBX
 `ext-local` applications and inserts a `Gosub` immediately before its existing
 `Macro(exten-vm,...)`. Hints and generated source stay untouched. Only exact
 WebRTC entries are loaded through an additive include in the existing active
-override file. No shared `macro-dial-one`, `macro-dial`, trunk macro, global
-outbound pattern, audio multiplier or early-media `Progress()` is introduced.
-Unknown/custom route templates and conflicting operator overrides refuse before
-writes rather than approximating the customer's call flow.
+override file. A single managed `Gosub(sub-sokrat-group-wake,...)` is inserted
+before `dialparties.agi` in the shared `macro-dial` context, so ring groups,
+follow-me and other destinations that build their dial string there wake their
+WebRTC members before FreePBX filters unavailable endpoints. The helper is a
+no-op when the list has no WebRTC members, preserves all existing macro labels
+(`dialparties.agi` jumps by label), and is removed again when no WebRTC
+extension remains. Queues whose members use FreePBX's normal
+`Local/<ext>@from-queue/n` path are covered by the existing `ext-local` wake
+entry that the Local channel reaches. Trunk macros, global outbound patterns,
+audio multipliers and early-media `Progress()` are not modified. Unknown/custom
+route templates and conflicting operator overrides refuse before writes rather
+than approximating the customer's call flow.
 
 Wake preparation respects extension DND, unconditional forwarding and configured
 unavailable forwarding. It sends a pinned authenticated HTTPS request with the
@@ -115,11 +123,12 @@ macro/config hashes and Asterisk PID before/after. This is not a phone cold-wake
 acceptance test; actual FCM delivery, answer, audio, decline and cancellation must
 be verified separately on the selected employee phone.
 
-Direct `Dial(PJSIP/...)` destinations (for example some queue-agent configurations)
-that bypass `ext-local` are not covered by this adapter. Do not claim queue/group
-coverage without exercising the actual configured call path. Caller cancellation
-before SIP INVITE and notification timeout behavior remain explicit acceptance
-gates; no independent push-cancel protocol is added here.
+Destinations that call `Dial(PJSIP/...)` directly and bypass both `macro-dial`
+and the normal FreePBX queue `Local/<ext>@from-queue/n` path remain outside this
+adapter. Do not claim coverage for a custom queue-agent dial string without
+exercising that configured path. Caller cancellation before SIP INVITE and
+notification timeout behavior remain explicit acceptance gates; no independent
+push-cancel protocol is added here.
 
 For rollback, remove only this managed include/output using the private snapshot
 and reload the dialplan. Do not restore an old whole PBX database or gateway
