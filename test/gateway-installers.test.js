@@ -21,6 +21,14 @@ test('all PBX installation paths ship additive reverse-TLS dependencies', () => 
         assert.equal(fs.existsSync(path.join(root, name)), true, name);
     }
 });
+test('top-level installer defines SCRIPT_DIR before any bundled asset lookup', () => {
+    const text = fs.readFileSync(path.join(root, 'install.sh'), 'utf8');
+    const definition = text.search(/^SCRIPT_DIR=.*$/m);
+    const firstUse = text.indexOf('$SCRIPT_DIR');
+    assert.ok(definition >= 0, 'SCRIPT_DIR must be defined');
+    assert.ok(firstUse > definition, 'SCRIPT_DIR must be defined before it is used');
+});
+
 test('safe upgrade preserves the selected branch, credentials and dirty operator work', () => {
     const text = fs.readFileSync(path.join(root, 'scripts/safe-upgrade.sh'), 'utf8');
     assert.match(text, /git fetch origin "\$REPO_BRANCH"/);
