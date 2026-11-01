@@ -130,6 +130,14 @@ create_live_snapshot() {
         log "  Backed up dongle.conf"
     fi
 
+    for mod_path in /usr/lib64/asterisk/modules/chan_dongle.so /usr/lib/asterisk/modules/chan_dongle.so; do
+        if [ -f "$mod_path" ]; then
+            cp -a "$mod_path" "${BACKUP_DIR}/chan_dongle.so.bak_${ts}"
+            log "  Backed up chan_dongle.so"
+            break
+        fi
+    done
+
     local auth_str
     auth_str=$(detect_mysql_auth)
     local auth_arr=()

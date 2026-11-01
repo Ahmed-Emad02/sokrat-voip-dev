@@ -96,6 +96,13 @@ if [ -f /etc/asterisk/dongle.conf ]; then
     cp -a /etc/asterisk/dongle.conf "$INSTALL_DIR/backups/dongle.conf.bak_${BACKUP_TIMESTAMP}"
     echo "  Backed up dongle.conf"
 fi
+for mod_path in "$MODULES_DIR/chan_dongle.so" "/usr/lib/asterisk/modules/chan_dongle.so"; do
+    if [ -f "$mod_path" ]; then
+        cp -a "$mod_path" "$INSTALL_DIR/backups/chan_dongle.so.bak_${BACKUP_TIMESTAMP}"
+        echo "  Backed up chan_dongle.so ($mod_path)"
+        break
+    fi
+done
 
 if command -v mysqldump &>/dev/null; then
     mysqldump "${MYSQL_AUTH[@]}" --single-transaction --routines --triggers asterisk > "$INSTALL_DIR/backups/asterisk_pbx.bak_${BACKUP_TIMESTAMP}.sql" 2>/dev/null || true

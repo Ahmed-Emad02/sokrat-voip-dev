@@ -120,6 +120,19 @@ else
     echo "  Notice: $DONGLE_BAK not found, keeping current dongle config."
 fi
 
+DONGLE_SO_BAK="$BACKUP_DIR/chan_dongle.so.bak_${TARGET_TIMESTAMP}"
+if [ -f "$DONGLE_SO_BAK" ]; then
+    for mod_dir in /usr/lib64/asterisk/modules /usr/lib/asterisk/modules; do
+        if [ -d "$mod_dir" ]; then
+            cp -a "$DONGLE_SO_BAK" "$mod_dir/chan_dongle.so"
+            echo "  Restored $mod_dir/chan_dongle.so"
+            break
+        fi
+    done
+else
+    echo "  Notice: $DONGLE_SO_BAK not found, keeping current chan_dongle module."
+fi
+
 # 3. Restore Databases
 echo "[3/5] Restoring PBX and CDR database schemas..."
 PBX_SQL="$BACKUP_DIR/asterisk_pbx.bak_${TARGET_TIMESTAMP}.sql"

@@ -162,7 +162,9 @@ test('4. Scripts: safe-upgrade.sh and restore-backup.sh syntax and executable pe
 
     const safeUpgradeContent = fs.readFileSync(safeUpgradePath, 'utf8');
     assert.match(safeUpgradeContent, /\.last_preupgrade_backup/, 'safe-upgrade.sh must track .last_preupgrade_backup');
+    assert.match(safeUpgradeContent, /chan_dongle\.so\.bak_/, 'safe-upgrade.sh must back up chan_dongle.so');
 
     const restoreBackupContent = fs.readFileSync(restoreBackupPath, 'utf8');
     assert.match(restoreBackupContent, /\.last_preupgrade_backup/, 'restore-backup.sh must read .last_preupgrade_backup');
+    assert.match(restoreBackupContent, /chan_dongle\.so\.bak_/, 'restore-backup.sh must restore chan_dongle.so');
 });
