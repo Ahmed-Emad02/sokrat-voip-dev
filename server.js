@@ -14290,17 +14290,17 @@ function applyVoicemailState(extNum, displayName, vmVal) {
 }
 
 // Helper function to sync extension astdb recording & user settings
-async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'both', vadGateVal = '1', vadDbVal = 'off', customDial = null, agcVal = '8000') {
+async function setExtensionAstdbDefaults(extNum, displayName, vmVal = 'novm', tech = 'sip', denoiseVal = 'off', vadGateVal = '0', vadDbVal = 'off', customDial = null, agcVal = 'off') {
     let techUpper = (tech || 'sip').toUpperCase();
     let techLower = (tech || 'sip').toLowerCase();
     let dialTarget = customDial && String(customDial).trim() ? String(customDial).trim() : `${techUpper}/${extNum}`;
     if (dialTarget.toUpperCase().startsWith('PJSIP/')) {
         techLower = 'pjsip';
     }
-    const validDenoise = ['both', 'rx', 'tx', 'off'].includes(denoiseVal) ? denoiseVal : 'both';
-    const validVadGate = (vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
+    const validDenoise = ['both', 'rx', 'tx', 'off'].includes(denoiseVal) ? denoiseVal : 'off';
+    const validVadGate = (vadGateVal === undefined || vadGateVal === null || vadGateVal === '' || vadGateVal === '0' || vadGateVal === 0 || vadGateVal === false) ? '0' : '1';
     const validVadDb = (vadDbVal !== undefined && vadDbVal !== null) ? String(vadDbVal).trim() : 'off';
-    const validAgc = (agcVal !== undefined && agcVal !== null) ? String(agcVal).trim() : '8000';
+    const validAgc = (agcVal !== undefined && agcVal !== null && String(agcVal).trim() !== '') ? String(agcVal).trim() : 'off';
     const commands = [
         `database put AMPUSER ${extNum}/answermode disabled`,
         `database put AMPUSER ${extNum}/cfringtimer 0`,
@@ -14706,10 +14706,10 @@ app.get('/api/config/extensions', async (req, res) => {
         const enriched = extensions.map(ext => ({
             ...ext,
             is_group_admin: Boolean(ext.is_group_admin === 1 || ext.is_group_admin === true || ext.is_group_admin === '1'),
-            denoise: denoiseMap[ext.extension] || 'both',
-            vad_gate: vadMap[ext.extension] !== undefined ? vadMap[ext.extension] : '1',
+            denoise: denoiseMap[ext.extension] || 'off',
+            vad_gate: vadMap[ext.extension] !== undefined ? vadMap[ext.extension] : '0',
             vad_db: vadDbMap[ext.extension] || 'off',
-            agc: agcMap[ext.extension] || '8000'
+            agc: agcMap[ext.extension] || 'off'
         }));
         res.json({ success: true, extensions: enriched });
     } catch (error) {
@@ -14981,10 +14981,10 @@ app.post('/api/config/extensions', async (req, res) => {
             updatePjsipCustomConfig(extNum, '', '', 'delete');
             reloadPjsip();
         }
-        const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
+        const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'off';
         const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
         const vadDbVal = (vad_db !== undefined ? vad_db : (vadDb || 'off'));
-        const agcVal = (agc !== undefined ? agc : '8000');
+        const agcVal = (agc !== undefined ? agc : 'off');
         await setExtensionAstdbDefaults(extNum, displayName, vmVal, devTech, denoiseVal, vadGateVal, vadDbVal, devDial, agcVal);
         let isGroupAdmin = 0;
         if (req.body.is_group_admin !== undefined || req.body.isGroupAdmin !== undefined) {
@@ -15136,7 +15136,7 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
         }
         reloadPjsip();
         if (denoise !== undefined) {
-            const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
+            const denoiseVal = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'off';
             await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/ai_denoise ${denoiseVal}"`);
         }
         const vadGateVal = (vad_gate !== undefined ? vad_gate : vadGate);
@@ -15150,7 +15150,7 @@ app.put('/api/config/extensions/:extension', async (req, res) => {
             await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/vad_db ${validVadDb}"`);
         }
         if (agc !== undefined) {
-            const validAgc = String(agc).trim() || '8000';
+            const validAgc = String(agc).trim() || 'off';
             await execPromise(`${ASTERISK_BIN} -rx "database put AMPUSER ${extNum}/agc ${validAgc}"`);
         }
 

@@ -582,9 +582,39 @@ elif [ -f "$INSTALL_DIR/asterisk/func_rnnoise.c" ] && [ -f /usr/lib64/librnnoise
 fi
 
 # 5. Sanitize Dialplans & Protect Call Transfers
-# 5.0 Ensure Jitter Buffer is disabled by default unless explicitly activated
-    # Disable legacy hardcoded JITTERBUFFER calls in extensions_custom.conf
-    sed -i 's/^\s*same\s*=>\s*n,Set(JITTERBUFFER(adaptive)=default)/; same => n,Set(JITTERBUFFER(adaptive)=default)/g' /etc/asterisk/extensions_custom.conf 2>/dev/null || true
+# 5.0 Ensure adaptive jitter buffer remains enabled
+    # Restore legacy hardcoded JITTERBUFFER calls in managed dialplan files
+    sed -i 's/^;\s*same => n,Set(JITTERBUFFER(adaptive)=default)/same => n,Set(JITTERBUFFER(adaptive)=default)/g' /etc/asterisk/extensions_custom.conf 2>/dev/null || true
+    for audio_conf in /etc/asterisk/extensions_custom.conf /etc/asterisk/extensions_override_issabel.conf; do
+        [ -f "$audio_conf" ] || continue
+        python3 - "$audio_conf" <<'PY_AUDIO'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+# Restore adaptive jitter buffer.
+text = text.replace('; same => n,Set(JITTERBUFFER(adaptive)=default)', 'same => n,Set(JITTERBUFFER(adaptive)=default)')
+text = text.replace('ExecIf($["${D_JB}" != ""]?Set(JITTERBUFFER(${D_JB})=default))', 'ExecIf($["${D_JB}" != "" & "${D_JB}" != "off"]?Set(JITTERBUFFER(${D_JB})=default))')
+# Add ringback to the trunk hook exactly once.
+marker = 'exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)'
+if marker in text and 'Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)' not in text:
+    text = text.replace(marker, marker + '\nsame => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)', 1)
+path.write_text(text)
+PY_AUDIO
+    done
+
+# Migrate only the legacy generated audio-default pair (both/1/8000) to safe
+# opt-in defaults. Explicit non-default values are left untouched.
+for ext in $(asterisk -rx "database show AMPUSER" 2>/dev/null | sed -n 's#^/AMPUSER/\([0-9][0-9]*\)/cidname.*#\1#p' | sort -u || true); do
+    ad=$(asterisk -rx "database get AMPUSER $ext/ai_denoise" 2>/dev/null | awk -F': ' '/Value:/{print $2}' || true)
+    vg=$(asterisk -rx "database get AMPUSER $ext/vad_gate" 2>/dev/null | awk -F': ' '/Value:/{print $2}' || true)
+    ag=$(asterisk -rx "database get AMPUSER $ext/agc" 2>/dev/null | awk -F': ' '/Value:/{print $2}' || true)
+    if [ "$ad" = "both" ] && [ "$vg" = "1" ] && [ "$ag" = "8000" ]; then
+        asterisk -rx "database put AMPUSER $ext/ai_denoise off" 2>/dev/null || true
+        asterisk -rx "database put AMPUSER $ext/vad_gate 0" 2>/dev/null || true
+        asterisk -rx "database put AMPUSER $ext/agc off" 2>/dev/null || true
+    fi
+done
 
 echo "[5/7] Sanitizing dialplan contexts and hangup handlers..."
 if [ -f /etc/asterisk/extensions_custom.conf ]; then
@@ -810,17 +840,16 @@ exten => exit,n,MacroExit()
                 f.write(ov_content)
 
         subrecord_override = """
-; === Sokrat VoIP: Recording Volume Balance Override (MixMonitor v(3)V(-1)) ===
-; Boosts the heard audio (remote customer) by ~+9 dB and gently tames the
-; spoken audio (local agent microphone) by ~-3 dB in the recorded audio file on disk,
-; ensuring clean, balanced call recordings without altering the live call audio.
+; === Sokrat VoIP: Recording Volume Balance Override (MixMonitor v(1)V(1)) ===
+; Uses neutral gain so the mono MixMonitor file does not clip. This does not alter
+; the live call audio.
 [sub-record-check]
 include => sub-record-check-custom
 exten => s,1,Set(REC_POLICY_MODE_SAVE=${REC_POLICY_MODE})
 exten => s,n,GotoIf($["${BLINDTRANSFER}" = ""]?check)
 exten => s,n,ResetCDR()
 exten => s,n,GotoIf($["${REC_STATUS}" != "RECORDING"]?check)
-exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
+exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
 exten => s,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},a${MIXMON_OPTS},${MIXMON_POST})
 exten => s,n(check),Set(__MON_FMT=${IF($["${MIXMON_FORMAT}"="wav49"]?WAV:${MIXMON_FORMAT})})
 exten => s,n,GotoIf($["${REC_STATUS}"!="RECORDING"]?next)
@@ -879,7 +908,7 @@ exten => conf,n,Return()
 exten => page,1,GosubIf($["${REC_POLICY_MODE}"="always"]?recconf,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => page,n,Return()
 
-exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
+exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
 exten => record,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => record,n,Set(__REC_STATUS=RECORDING)
 exten => record,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
@@ -890,7 +919,7 @@ exten => record,n,Return()
 ; while the monitored channel is bridged - on a queue the monitored leg is
 ; often never bridged, which produced 44-byte (header-only) recordings.
 exten => recq,1,Set(MONITOR_FILENAME=${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME})
-exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
+exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
 exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => recq,n,Set(__REC_STATUS=RECORDING)
 exten => recq,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
@@ -1042,7 +1071,7 @@ same => n(done),Hangup()
             '\nsame => n,Set(__CALLFILENAME=in-${DONGLENAME}-${FROMEXTEN}-${TIMESTR}-${UNIQUEID})'
             '\nsame => n,Set(__MON_FMT=wav)'
             '\nsame => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)'
-            '\nsame => n,Set(MIXMON_OPTS=v(3)V(-1))'
+            '\nsame => n,Set(MIXMON_OPTS=v(1)V(1))'
             '\nsame => n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MON_FMT},a${MIXMON_OPTS})'
             '\nsame => n,Set(__REC_STATUS=RECORDING)'
             '\nsame => n,Set(__REC_POLICY_MODE=always)'

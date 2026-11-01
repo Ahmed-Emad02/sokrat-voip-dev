@@ -1331,10 +1331,10 @@ for ext_num in range(101, 111):
         f"database put AMPUSER {ext}/recording/priority 10",
         f"database put AMPUSER {ext}/ringtimer 0",
         f"database put AMPUSER {ext}/voicemail novm",
-        f"database put AMPUSER {ext}/ai_denoise both",
-        f"database put AMPUSER {ext}/vad_gate 1",
+        f"database put AMPUSER {ext}/ai_denoise off",
+        f"database put AMPUSER {ext}/vad_gate 0",
         f"database put AMPUSER {ext}/vad_db off",
-        f"database put AMPUSER {ext}/agc 8000",
+        f"database put AMPUSER {ext}/agc off",
         f"database put DEVICE/{ext} default_user \"{ext}\"",
         f"database put DEVICE/{ext} dial \"SIP/{ext}\"",
         f"database put DEVICE/{ext} tech \"sip\"",
@@ -1894,7 +1894,7 @@ same => n,Set(__FROMEXTEN=${IF($[${LEN(${CALLERID(num)})}]?${CALLERID(num)}:unkn
 same => n,Set(__CALLFILENAME=in-${DONGLENAME}-${FROMEXTEN}-${TIMESTR}-${UNIQUEID})
 same => n,Set(__MON_FMT=wav)
 same => n,Set(__MIXMON_DIR=/var/spool/asterisk/monitor/)
-same => n,Set(MIXMON_OPTS=v(3)V(-1))
+same => n,Set(MIXMON_OPTS=v(1)V(1))
 same => n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MON_FMT},a${MIXMON_OPTS})
 same => n,Set(__REC_STATUS=RECORDING)
 same => n,Set(__REC_POLICY_MODE=always)
@@ -1931,9 +1931,10 @@ append_context '[macro-dialout-trunk-predial-hook]' '[macro-dialout-trunk-predia
 
 [macro-dialout-trunk-predial-hook]
 exten => s,1,NoOp(--- Outbound call via Dongle (CID auto-set by trunk outcid & Extension RNNoise Filter) ---)
+same => n,Set(DIAL_TRUNK_OPTIONS=${DIAL_TRUNK_OPTIONS}r)
 same => n,Set(CALLER_DENOISE=${DB(AMPUSER/${REALCALLERIDNUM}/ai_denoise)})
 same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=${DB(AMPUSER/${CALLERID(num)}/ai_denoise)}))
-same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=both))
+same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=off))
 same => n,Set(CALLER_VAD=${DB(AMPUSER/${REALCALLERIDNUM}/vad_gate)})
 same => n,ExecIf($["${CALLER_VAD}" = ""]?Set(CALLER_VAD=${DB(AMPUSER/${CALLERID(num)}/vad_gate)}))
 same => n,Set(CALLER_VAD_DB=${DB(AMPUSER/${REALCALLERIDNUM}/vad_db)})
@@ -1946,11 +1947,11 @@ same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
 same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
 same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLER_VAD_DB}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
-; Jitter buffer disabled by default on install
-; same => n,Set(JITTERBUFFER(adaptive)=default)
+; Enable adaptive jitter buffer for SIP audio
+same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,Set(CALLER_AGC=${DB(AMPUSER/${REALCALLERIDNUM}/agc)})
 same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=${DB(AMPUSER/${CALLERID(num)}/agc)}))
-same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=8000))
+same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=off))
 same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(rx)=${CALLER_AGC}))
 same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(tx)=${CALLER_AGC}))
 same => n,Set(RAW_TARGET=${CUT(OUT_${DIAL_TRUNK},/,2)})
@@ -1994,7 +1995,7 @@ append_context '[macro-dialout-one-predial-hook]' '[macro-dialout-one-predial-ho
 [macro-dialout-one-predial-hook]
 exten => s,1,NoOp(--- Dynamic Adaptive Jitter Buffer & RNNoise Filter for Outbound Extension Leg ---)
 same => n,Set(CALLER_DENOISE=${DB(AMPUSER/${CALLERID(num)}/ai_denoise)})
-same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=both))
+same => n,ExecIf($["${CALLER_DENOISE}" = ""]?Set(CALLER_DENOISE=off))
 same => n,Set(CALLER_VAD=${DB(AMPUSER/${CALLERID(num)}/vad_gate)})
 same => n,Set(CALLER_VAD_DB=${DB(AMPUSER/${CALLERID(num)}/vad_db)})
 same => n,ExecIf($["${CALLER_VAD_DB}" = "" | "${CALLER_VAD_DB}" = "off" | "${CALLER_VAD_DB}" = "0"]?Set(CALLER_VAD_DB=${DB(AUDIO_GLOBALS/vad_db_threshold)}))
@@ -2005,10 +2006,10 @@ same => n,Set(U_HANG=${DB(AUDIO_GLOBALS/vad_hangover)})
 same => n,ExecIf($["${U_HANG}" = ""]?Set(U_HANG=250))
 same => n,ExecIf($["${CALLER_VAD}" = "0"]?Set(VAD_OPT=gate=off):Set(VAD_OPT=gate=on,threshold=${U_THRESH},hangover=${U_HANG},mindb=${CALLER_VAD_DB}))
 same => n,ExecIf($["${CALLER_DENOISE}" != "off"]?Set(RNNOISE(${CALLER_DENOISE},${VAD_OPT})=on))
-; Jitter buffer disabled by default on install
-; same => n,Set(JITTERBUFFER(adaptive)=default)
+; Enable adaptive jitter buffer for SIP audio
+same => n,Set(JITTERBUFFER(adaptive)=default)
 same => n,Set(CALLER_AGC=${DB(AMPUSER/${CALLERID(num)}/agc)})
-same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=8000))
+same => n,ExecIf($["${CALLER_AGC}" = ""]?Set(CALLER_AGC=off))
 same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(rx)=${CALLER_AGC}))
 same => n,ExecIf($["${CALLER_AGC}" != "off" & "${CALLER_AGC}" != "0"]?Set(AGC(tx)=${CALLER_AGC}))
 same => n,ExecIf($["${EXTTOCALL}" != ""]?Set(DB(CAMP_ON_LAST_TARGET/${CALLERID(num)})=${EXTTOCALL}))
@@ -2137,17 +2138,16 @@ EXTENVM_OVERRIDE
     python3 -c "import re;f=open('$OVERRIDE_CONF').read();f=re.sub(r'\[sub-record-check\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);f=re.sub(r'\[sub-record-cancel\].*?(?=\n\[|\Z)', '', f, flags=re.DOTALL);open('$OVERRIDE_CONF','w').write(f.rstrip() + '\n\n')"
     cat >> "$OVERRIDE_CONF" << 'SUBRECORD_OVERRIDE'
 
-; === Sokrat VoIP: Recording Volume Balance Override (MixMonitor v(3)V(-1)) ===
-; Boosts the heard audio (remote customer) by ~+9 dB and gently tames the
-; spoken audio (local agent microphone) by ~-3 dB in the recorded audio file on disk,
-; ensuring clean, balanced call recordings without altering the live call audio.
+; === Sokrat VoIP: Recording Volume Balance Override (MixMonitor v(1)V(1)) ===
+; Uses neutral gain so the mono MixMonitor file does not clip. This does not alter
+; the live call audio.
 [sub-record-check]
 include => sub-record-check-custom
 exten => s,1,Set(REC_POLICY_MODE_SAVE=${REC_POLICY_MODE})
 exten => s,n,GotoIf($["${BLINDTRANSFER}" = ""]?check)
 exten => s,n,ResetCDR()
 exten => s,n,GotoIf($["${REC_STATUS}" != "RECORDING"]?check)
-exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
+exten => s,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
 exten => s,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},a${MIXMON_OPTS},${MIXMON_POST})
 exten => s,n(check),Set(__MON_FMT=${IF($["${MIXMON_FORMAT}"="wav49"]?WAV:${MIXMON_FORMAT})})
 exten => s,n,GotoIf($["${REC_STATUS}"!="RECORDING"]?next)
@@ -2206,7 +2206,7 @@ exten => conf,n,Return()
 exten => page,1,GosubIf($["${REC_POLICY_MODE}"="always"]?recconf,1(${EXTEN},${ARG2},${FROMEXTEN}))
 exten => page,n,Return()
 
-exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
+exten => record,1,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
 exten => record,n,MixMonitor(${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => record,n,Set(__REC_STATUS=RECORDING)
 exten => record,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
@@ -2217,7 +2217,7 @@ exten => record,n,Return()
 ; while the monitored channel is bridged - on a queue the monitored leg is
 ; often never bridged, which produced 44-byte (header-only) recordings.
 exten => recq,1,Set(MONITOR_FILENAME=${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME})
-exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(3)V(-1):${MIXMON_OPTS})})
+exten => recq,n,Set(MIXMON_OPTS=${IF($["${MIXMON_OPTS}"=""]?v(1)V(1):${MIXMON_OPTS})})
 exten => recq,n,MixMonitor(${MONITOR_FILENAME}.${MIXMON_FORMAT},${MIXMON_OPTS},${MIXMON_POST})
 exten => recq,n,Set(__REC_STATUS=RECORDING)
 exten => recq,n,Set(CDR(recordingfile)=${CALLFILENAME}.${MON_FMT})
@@ -2866,11 +2866,11 @@ asterisk -rx "database put AUDIO_GLOBALS vad_db_threshold -90" 2>/dev/null || tr
 for ext in $(asterisk -rx "database show AMPUSER" 2>/dev/null | grep "/cidname" | awk -F'/' '{print $2}' | sort -u || true); do
     curr_denoise=$(asterisk -rx "database get AMPUSER $ext/ai_denoise" 2>/dev/null | grep "Value:" | awk '{print $2}' || true)
     if [ -z "$curr_denoise" ]; then
-        asterisk -rx "database put AMPUSER $ext/ai_denoise both" 2>/dev/null || true
+        asterisk -rx "database put AMPUSER $ext/ai_denoise off" 2>/dev/null || true
     fi
     curr_vad=$(asterisk -rx "database get AMPUSER $ext/vad_gate" 2>/dev/null | grep "Value:" | awk '{print $2}' || true)
     if [ -z "$curr_vad" ]; then
-        asterisk -rx "database put AMPUSER $ext/vad_gate 1" 2>/dev/null || true
+        asterisk -rx "database put AMPUSER $ext/vad_gate 0" 2>/dev/null || true
     fi
     curr_vad_db=$(asterisk -rx "database get AMPUSER $ext/vad_db" 2>/dev/null | grep "Value:" | awk '{print $2}' || true)
     if [ -z "$curr_vad_db" ]; then
@@ -2878,7 +2878,7 @@ for ext in $(asterisk -rx "database show AMPUSER" 2>/dev/null | grep "/cidname" 
     fi
     curr_agc=$(asterisk -rx "database get AMPUSER $ext/agc" 2>/dev/null | grep "Value:" | awk '{print $2}' || true)
     if [ -z "$curr_agc" ]; then
-        asterisk -rx "database put AMPUSER $ext/agc 8000" 2>/dev/null || true
+        asterisk -rx "database put AMPUSER $ext/agc off" 2>/dev/null || true
     fi
 done
 echo "  AstDB Noise and Audio defaults initialized"

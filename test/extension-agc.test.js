@@ -76,7 +76,7 @@ test('server.js supports agc in extension endpoints and defaults', () => {
 
     // GET /api/config/extensions looks up agc
     assert.ok(serverJs.includes('line.match(/\\/AMPUSER\\/(\\d+)\\/agc'), 'GET /api/config/extensions must parse agc from AstDB');
-    assert.ok(serverJs.includes("agc: agcMap[ext.extension] || '8000'"), 'GET /api/config/extensions must enrich ext with agc');
+    assert.ok(serverJs.includes("agc: agcMap[ext.extension] || 'off'"), 'GET /api/config/extensions must default AGC off');
 
     // PUT /api/config/extensions/:extension updates agc in AstDB
     assert.ok(serverJs.includes('database put AMPUSER ${extNum}/agc ${validAgc}'), 'PUT /api/config/extensions must update agc in AstDB');
@@ -84,19 +84,20 @@ test('server.js supports agc in extension endpoints and defaults', () => {
 
 test('AstDB stores and updates agc per-extension', () => {
     try {
-        // Query extension 101's current agc
+        // Query extension 101's current agc and preserve it for cleanup.
         const initial = execSync('asterisk -rx "database get AMPUSER 101/agc"', { encoding: 'utf8' });
         assert.ok(initial.includes('Value:'), 'Extension 101 must have an agc entry in AstDB');
+        const initialValue = (initial.match(/Value:\s*(\S+)/) || [])[1] || 'off';
 
-        // Test updating to custom target
-        execSync('asterisk -rx "database put AMPUSER 101/agc 6000"');
-        const updated = execSync('asterisk -rx "database get AMPUSER 101/agc"', { encoding: 'utf8' });
-        assert.ok(updated.includes('6000'), 'Extension 101 agc must be updated to 6000');
-
-        // Restore to 8000
-        execSync('asterisk -rx "database put AMPUSER 101/agc 8000"');
+        try {
+            execSync('asterisk -rx "database put AMPUSER 101/agc 6000"');
+            const updated = execSync('asterisk -rx "database get AMPUSER 101/agc"', { encoding: 'utf8' });
+            assert.ok(updated.includes('6000'), 'Extension 101 agc must be updated to 6000');
+        } finally {
+            execSync(`asterisk -rx "database put AMPUSER 101/agc ${initialValue}"`);
+        }
         const restored = execSync('asterisk -rx "database get AMPUSER 101/agc"', { encoding: 'utf8' });
-        assert.ok(restored.includes('8000'), 'Extension 101 agc must be restored to 8000');
+        assert.ok(restored.includes(initialValue), 'Extension 101 agc must be restored to its prior value');
     } catch (e) {
         assert.fail('AstDB agc operation failed: ' + e.message);
     }

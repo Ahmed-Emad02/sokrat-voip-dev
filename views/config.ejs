@@ -3283,10 +3283,10 @@ function isTabAllowed(tabName) {
                                         <%= isRtl ? 'عزل الضوضاء (AI RNNoise)' : 'AI Noise Suppression (RNNoise)' %>
                                     </label>
                                     <select id="extDenoise" class="config-input w-full text-xs font-semibold h-[38px]">
-                                        <option value="both" selected><%= isRtl ? 'مفعل (إرسال واستقبال - Both RX & TX)' : 'Enabled (Both RX & TX)' %></option>
+                                        <option value="both"><%= isRtl ? 'مفعل (إرسال واستقبال - Both RX & TX)' : 'Enabled (Both RX & TX)' %></option>
+                                        <option value="off" selected><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
                                         <option value="rx"><%= isRtl ? 'مفعل للميكروفون فقط (RX Only)' : 'Microphone Only (RX Only)' %></option>
                                         <option value="tx"><%= isRtl ? 'مفعل للسماعة فقط (TX Only)' : 'Speaker Only (TX Only)' %></option>
-                                        <option value="off"><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
                                     </select>
                                 </div>
                                 <div>
@@ -3294,8 +3294,8 @@ function isTabAllowed(tabName) {
                                         <%= isRtl ? 'بوابة كتم الصمت (VAD Silence Gate)' : 'VAD Silence Gate (100% Silence on Pauses)' %>
                                     </label>
                                     <select id="extVadGate" class="config-input w-full text-xs font-semibold h-[38px]">
-                                        <option value="1" selected><%= isRtl ? 'مفعل (صمت 100% عند التوقف عن الكلام)' : 'Enabled (100% Silence on Pauses)' %></option>
-                                        <option value="0"><%= isRtl ? 'معطل (عزل مستمر دون كتم)' : 'Disabled (Continuous Filter)' %></option>
+                                        <option value="1"><%= isRtl ? 'مفعل (صمت 100% عند التوقف عن الكلام)' : 'Enabled (100% Silence on Pauses)' %></option>
+                                        <option value="0" selected><%= isRtl ? 'معطل (عزل مستمر دون كتم)' : 'Disabled (Continuous Filter)' %></option>
                                     </select>
                                 </div>
                                 <div>
@@ -3318,11 +3318,11 @@ function isTabAllowed(tabName) {
                                         <%= isRtl ? 'تطبيع الصوت التلقائي (Speex AGC)' : 'Auto Gain Control (Speex AGC)' %>
                                     </label>
                                     <select id="extAgc" class="config-input w-full text-xs font-semibold h-[38px]">
-                                        <option value="8000" selected><%= isRtl ? 'مفعل (8000 - متوازن / قياسي)' : 'Enabled (8000 - Balanced)' %></option>
+                                        <option value="8000"><%= isRtl ? 'مفعل (8000 - متوازن / قياسي)' : 'Enabled (8000 - Balanced)' %></option>
                                         <option value="6000"><%= isRtl ? 'مفعل (6000 - هادئ / خافت)' : 'Enabled (6000 - Gentle / Soft)' %></option>
                                         <option value="10000"><%= isRtl ? 'مفعل (10000 - مرتفع)' : 'Enabled (10000 - Loud)' %></option>
                                         <option value="12000"><%= isRtl ? 'مفعل (12000 - أقصى تضخيم)' : 'Enabled (12000 - Boosted)' %></option>
-                                        <option value="off"><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
+                                        <option value="off" selected><%= isRtl ? 'معطل (Disabled / Off)' : 'Disabled (Off)' %></option>
                                     </select>
                                 </div>
                             </div>

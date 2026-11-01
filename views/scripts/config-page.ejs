@@ -1791,7 +1791,7 @@
             document.getElementById('extensionForm').reset();
             document.getElementById('extVoicemail').value = 'disabled';
             document.getElementById('extTech').value = 'sip';
-            document.getElementById('extDenoise').value = 'both';
+            document.getElementById('extDenoise').value = 'off';
             if (document.getElementById('extAutoAnswer')) document.getElementById('extAutoAnswer').value = 'user_choice';
             if (document.getElementById('extDnd')) document.getElementById('extDnd').value = 'user_choice';
             if (document.getElementById('extCancel')) document.getElementById('extCancel').value = '0';
@@ -1801,11 +1801,11 @@
             if (document.getElementById('extAutoAnswer')) document.getElementById('extAutoAnswer').dispatchEvent(new Event('change', { bubbles: true }));
             if (document.getElementById('extDnd')) document.getElementById('extDnd').dispatchEvent(new Event('change', { bubbles: true }));
             if (document.getElementById('extCancel')) document.getElementById('extCancel').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('extVadGate').value = '1';
+            document.getElementById('extVadGate').value = '0';
             document.getElementById('extVadGate').dispatchEvent(new Event('change', { bubbles: true }));
             document.getElementById('extVadDb').value = 'off';
             document.getElementById('extVadDb').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('extAgc').value = '8000';
+            document.getElementById('extAgc').value = 'off';
             document.getElementById('extAgc').dispatchEvent(new Event('change', { bubbles: true }));
             resetEmployeeProfileFields();
             openModal('extensionModal');
@@ -1825,10 +1825,10 @@
             document.getElementById('extSecret').value = secret || '';
             document.getElementById('extVoicemail').value = (voicemail === 'default' || voicemail === 'enabled') ? 'enabled' : 'disabled';
             document.getElementById('extTech').value = (tech === 'pjsip' || tech === 'webrtc') ? 'webrtc' : 'sip';
-            document.getElementById('extDenoise').value = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'both';
-            document.getElementById('extVadGate').value = (vadGate === '0' || vadGate === 0 || vadGate === false) ? '0' : '1';
+            document.getElementById('extDenoise').value = ['both', 'rx', 'tx', 'off'].includes(denoise) ? denoise : 'off';
+            document.getElementById('extVadGate').value = (vadGate === '1' || vadGate === 1 || vadGate === true) ? '1' : '0';
             document.getElementById('extVadDb').value = (vadDb && vadDb !== 'undefined') ? String(vadDb).trim() : 'off';
-            document.getElementById('extAgc').value = (agc && agc !== 'undefined') ? String(agc).trim() : '8000';
+            document.getElementById('extAgc').value = (agc && agc !== 'undefined') ? String(agc).trim() : 'off';
             if (document.getElementById('extAutoAnswer')) document.getElementById('extAutoAnswer').value = ['user_choice', 'force_on', 'force_off'].includes(autoAnswer) ? autoAnswer : 'user_choice';
             if (document.getElementById('extDnd')) document.getElementById('extDnd').value = ['user_choice', 'force_on', 'force_off'].includes(dnd) ? dnd : 'user_choice';
             if (document.getElementById('extCancel')) document.getElementById('extCancel').value = (disableCancel === '1' || disableCancel === 1 || disableCancel === true) ? '1' : '0';
