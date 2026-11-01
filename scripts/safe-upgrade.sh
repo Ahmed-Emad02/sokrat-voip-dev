@@ -314,8 +314,10 @@ if [ "$RECQUEUES_TABLE" != "0" ]; then
 fi
 mysql "${MYSQL_AUTH[@]}" asterisk -e \
     "UPDATE \`asterisk\`.\`ringgroups\` SET \`recording\`='always' WHERE \`recording\` IS NULL OR \`recording\`='' OR \`recording\`='dontcare'" 2>/dev/null || true
+# Fill missing ring group destinations; preserve an explicit self-reference
+# (operators use it to re-ring the same group after the first timeout).
 mysql "${MYSQL_AUTH[@]}" asterisk -e \
-    "UPDATE \`asterisk\`.\`ringgroups\` SET \`postdest\`='app-blackhole,hangup,1' WHERE \`postdest\`=CONCAT('ext-group,', \`grpnum\`, ',1') OR \`postdest\`=CONCAT('from-did-direct,', \`grpnum\`, ',1') OR \`postdest\` IS NULL OR \`postdest\`=''" 2>/dev/null || true
+    "UPDATE \`asterisk\`.\`ringgroups\` SET \`postdest\`='app-blackhole,hangup,1' WHERE \`postdest\` IS NULL OR \`postdest\`=''" 2>/dev/null || true
 mysql "${MYSQL_AUTH[@]}" asterisk -e \
     "UPDATE \`asterisk\`.\`users\` SET \`recording\`='out=always|in=always' WHERE \`recording\` IS NULL OR \`recording\`='' OR \`recording\`='dontcare'" 2>/dev/null || true
 echo "  Extensions and ring groups: call recording enabled by default"

@@ -264,17 +264,18 @@ test('server.js resolves missing recordingfile from linked legs in CDR', () => {
     );
 });
 
-test('server.js guards ringgroups and queues against self-referential failover loops and empty queues', () => {
+test('server.js guards queues against self-referential failover loops and preserves ring group destinations', () => {
     const content = read('server.js');
 
-    // Ring group loop guard
+    // Ring groups may intentionally point back to themselves to re-ring after
+    // the initial timeout, so the backend must not rewrite that choice.
     assert.ok(
-        content.includes("postDest === `ext-group,${num},1`") || content.includes("postDest === `ext-group,${num},1`"),
-        'server.js must guard ringgroups against postDest self-loops'
+        !content.includes("postDest === `ext-group,${num},1`"),
+        'server.js must not rewrite an explicit ring group self-reference'
     );
     assert.ok(
-        content.includes("postDest = 'app-blackhole,hangup,1'"),
-        'server.js must default ring group postDest to app-blackhole,hangup,1'
+        content.includes("const postDest = (postdest && postdest.trim()) ? postdest.trim() : 'app-blackhole,hangup,1';"),
+        'server.js must default a missing ring group postDest to app-blackhole,hangup,1'
     );
 
     // Queue loop guard
@@ -306,7 +307,7 @@ test('server.js guards ringgroups and queues against self-referential failover l
     );
 });
 
-test('install_db.sql and safe-upgrade.sh break self-loops and keep queue members reachable', () => {
+test('install_db.sql and safe-upgrade.sh keep queue members reachable and preserve ring group self-references', () => {
     const sql = read('backend/install_db.sql');
     const upgrader = read('scripts/safe-upgrade.sh');
 
@@ -316,8 +317,8 @@ test('install_db.sql and safe-upgrade.sh break self-loops and keep queue members
         'install_db.sql must neutralize queue dest self-loops'
     );
     assert.ok(
-        sql.includes("UPDATE `asterisk`.`ringgroups` SET `postdest` = ''app-blackhole,hangup,1'' WHERE `postdest` = CONCAT(''ext-group,'', `grpnum`, '',1'')"),
-        'install_db.sql must neutralize ring group postdest self-loops'
+        !sql.includes("CONCAT(''ext-group,'', `grpnum`, '',1'')"),
+        'install_db.sql must preserve ring group postdest self-references'
     );
     // Asterisk defaults: a call must never be rejected because an agent looks
     // unavailable, otherwise it never reaches the assigned extensions.
@@ -345,8 +346,8 @@ test('install_db.sql and safe-upgrade.sh break self-loops and keep queue members
         'safe-upgrade.sh must neutralize queue dest self-loops'
     );
     assert.ok(
-        /UPDATE.*ringgroups.*SET.*postdest.*=.*app-blackhole,hangup,1.*WHERE.*postdest.*=.*CONCAT\('ext-group,'.*grpnum/.test(upgrader),
-        'safe-upgrade.sh must neutralize ring group postdest self-loops'
+        !/UPDATE.*ringgroups.*SET.*postdest.*=.*app-blackhole,hangup,1.*WHERE.*postdest.*=.*CONCAT\('ext-group,'.*grpnum/.test(upgrader),
+        'safe-upgrade.sh must preserve ring group postdest self-references'
     );
     assert.ok(
         /UPDATE.*queues_details.*SET.*data.*=.*'no'.*WHERE.*keyword.*=.*'leavewhenempty'/.test(upgrader),

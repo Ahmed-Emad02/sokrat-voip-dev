@@ -1033,11 +1033,13 @@ PREPARE sokrat_stmt FROM @sokrat_sql;
 EXECUTE sokrat_stmt;
 DEALLOCATE PREPARE sokrat_stmt;
 
--- Break self-referential ring group failover loops (postdest pointing to itself)
+-- Fill missing ring group failover destinations. Self-referential destinations
+-- are intentionally preserved: operators use them to re-ring the same group
+-- after the first timeout.
 SET @sokrat_sql := (
   SELECT IF(EXISTS(SELECT 1 FROM information_schema.TABLES
                     WHERE TABLE_SCHEMA = 'asterisk' AND TABLE_NAME = 'ringgroups'),
-    'UPDATE `asterisk`.`ringgroups` SET `postdest` = ''app-blackhole,hangup,1'' WHERE `postdest` = CONCAT(''ext-group,'', `grpnum`, '',1'') OR `postdest` = CONCAT(''from-did-direct,'', `grpnum`, '',1'') OR `postdest` IS NULL OR `postdest` = ''''',
+    'UPDATE `asterisk`.`ringgroups` SET `postdest` = ''app-blackhole,hangup,1'' WHERE `postdest` IS NULL OR `postdest` = ''''',
     'DO 0')
 );
 PREPARE sokrat_stmt FROM @sokrat_sql;

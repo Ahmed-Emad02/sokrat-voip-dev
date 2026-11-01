@@ -7,6 +7,9 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const view = fs.readFileSync(path.join(root, 'views/scripts/config-page.ejs'), 'utf8');
 const markup = fs.readFileSync(path.join(root, 'views/config.ejs'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+const installSql = fs.readFileSync(path.join(root, 'backend/install_db.sql'), 'utf8');
+const upgrader = fs.readFileSync(path.join(root, 'scripts/safe-upgrade.sh'), 'utf8');
 
 test('ring group create honors the selected no-answer destination', () => {
     const save = view.match(/function saveRingGroup\(e\)\s*\{[\s\S]*?\n        \}/);
@@ -46,4 +49,18 @@ test('async list refresh keeps the destination selected by the user', () => {
         assert.match(body, /setDialplan\(rgPostDestSelectInstance\.dialplanString \|\| destVal\)/,
             `${name} refresh must preserve the current DestinationSelect value`);
     }
+});
+
+test('server preserves an explicit ring group self-referential destination', () => {
+    assert.doesNotMatch(server, /postDest === `ext-group,\$\{num\},1`/,
+        'the POST/PUT handlers must not rewrite a ring group that points to itself');
+    assert.doesNotMatch(server, /postDest = 'app-blackhole,hangup,1';/,
+        'the POST/PUT handlers must not silently replace an explicit destination');
+});
+
+test('install and upgrade migrations preserve ring group self-references', () => {
+    assert.doesNotMatch(installSql, /CONCAT\(''ext-group,'', `grpnum`, '',1''\)/,
+        'install_db.sql must not neutralize ring group postdest self-references');
+    assert.doesNotMatch(upgrader, /UPDATE.*ringgroups.*SET.*postdest.*CONCAT\('ext-group,'.*grpnum/,
+        'safe-upgrade.sh must not neutralize ring group postdest self-references');
 });

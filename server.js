@@ -15819,10 +15819,9 @@ app.post('/api/config/ringgroups', async (req, res) => {
         const ringStrategy = strategy || 'ringall';
         const ringTime = parseInt(grptime, 10) || 20;
         const annMsgId = parseInt(annmsg_id, 10) || 0;
-        let postDest = (postdest && postdest.trim()) ? postdest.trim() : 'app-blackhole,hangup,1';
-        if (postDest === `ext-group,${num},1` || postDest === `from-did-direct,${num},1`) {
-            postDest = 'app-blackhole,hangup,1';
-        }
+        // Preserve the operator's explicit destination, including a ring group
+        // that intentionally points back to itself to re-ring after its timeout.
+        const postDest = (postdest && postdest.trim()) ? postdest.trim() : 'app-blackhole,hangup,1';
         const mohRinging = (ringing && String(ringing).trim()) ? String(ringing).trim() : 'Ring';
 
         const collisionError = await checkNumberCollision(num, 'ringgroup');
@@ -15883,12 +15882,11 @@ app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
         const annMsgId = (annmsg_id !== undefined && annmsg_id !== null && String(annmsg_id).trim() !== '')
             ? (parseInt(annmsg_id, 10) || 0)
             : (parseInt(current.annmsg_id, 10) || 0);
-        let postDest = (postdest !== undefined && String(postdest).trim())
+        // Preserve the operator's explicit destination, including a ring group
+        // that intentionally points back to itself to re-ring after its timeout.
+        const postDest = (postdest !== undefined && String(postdest).trim())
             ? String(postdest).trim()
             : String(current.postdest || 'app-blackhole,hangup,1');
-        if (postDest === `ext-group,${num},1` || postDest === `from-did-direct,${num},1`) {
-            postDest = 'app-blackhole,hangup,1';
-        }
         const mohRinging = (ringing !== undefined && String(ringing).trim()) ? String(ringing).trim() : (current.ringing || 'Ring');
 
         await pool.query(`
