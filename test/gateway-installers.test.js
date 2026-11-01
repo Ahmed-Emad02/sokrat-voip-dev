@@ -51,6 +51,29 @@ test('all PBX installation paths install the debounced dialplan reload watcher',
     }
 });
 
+test('dialplan reload helper reports Asterisk rejection as failure', () => {
+    const script = path.join(root, 'scripts/reload-dialplan.sh');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sokrat-dialplan-'));
+    const dialplan = path.join(dir, 'asterisk');
+    const bin = path.join(dir, 'bin');
+    fs.mkdirSync(dialplan);
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(dialplan, 'extensions_additional.conf'), 'same\n');
+    const fake = path.join(bin, 'asterisk');
+    fs.writeFileSync(fake, '#!/bin/bash\nprintf "Dialplan reloaded.\\n"\n', { mode: 0o755 });
+    const env = { ...process.env, DIALPLAN_DIR: dialplan, ASTERISK_BIN: fake, LOCK_FILE: path.join(dir, 'lock') };
+    try {
+        assert.equal(spawnSync('bash', [script], { env }).status, 0);
+        fs.writeFileSync(fake, '#!/bin/bash\necho boom >&2\nexit 1\n');
+        fs.chmodSync(fake, 0o755);
+        const failed = spawnSync('bash', [script], { env });
+        assert.notEqual(failed.status, 0);
+        assert.match(String(failed.stderr), /boom/);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
 test('top-level installer defines SCRIPT_DIR before any bundled asset lookup', () => {
     const text = fs.readFileSync(path.join(root, 'install.sh'), 'utf8');
     const definition = text.search(/^SCRIPT_DIR=.*$/m);

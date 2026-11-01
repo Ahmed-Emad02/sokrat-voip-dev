@@ -34,6 +34,16 @@ for _ in 1 2 3 4 5; do
     sleep 1
 done
 
-if [ -x "$ASTERISK_BIN" ]; then
-    "$ASTERISK_BIN" -rx 'dialplan reload' >/dev/null 2>&1 || true
+if [ ! -x "$ASTERISK_BIN" ]; then
+    echo "Asterisk binary is not executable: $ASTERISK_BIN" >&2
+    exit 1
+fi
+
+output=$("$ASTERISK_BIN" -rx 'dialplan reload' 2>&1) || {
+    echo "$output" >&2
+    exit 1
+}
+if ! grep -qi 'dialplan reloaded' <<<"$output"; then
+    echo "Asterisk did not confirm a dialplan reload: $output" >&2
+    exit 1
 fi
