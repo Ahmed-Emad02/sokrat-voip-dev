@@ -215,4 +215,24 @@ test('apply-config is not blocked by an optional wake-compiler refusal', () => {
     assert.match(body, /wakeWarning = 'WebRTC wake routes were not recompiled/);
     assert.match(body, /callback\(wakeWarning \? \{ success: true, warning: wakeWarning \} : \{ success: true \}\)/);
     assert.doesNotMatch(body, /success: false, error: 'WebRTC wake route configuration requires operator review'/);
+    // retrieve_conf only writes files; the dialplan must be reloaded too, via
+    // the debounced helper that waits for FreePBX to finish writing.
+    assert.match(body, /reload-dialplan\.sh/);
+    assert.match(server, /let pbxReloadQueue = Promise\.resolve\(\)/);
+});
+
+test('route and ring-group mutations wait for a real Asterisk apply', () => {
+    const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
+    const routeStart = server.indexOf("app.post('/api/config/routes/outbound'");
+    const routeEnd = server.indexOf("// --- VOICEMAIL CONFIGURATION APIs ---", routeStart);
+    const routeBody = server.slice(routeStart, routeEnd);
+    assert.match(routeBody, /const reloadRes = await reloadPbxConfigPromise\(\)/);
+    assert.match(routeBody, /applied: reloadRes\.success/);
+    assert.match(routeBody, /reloadError: reloadRes\.error/);
+    const groupStart = server.indexOf("app.post('/api/config/ringgroups'");
+    const groupEnd = server.indexOf('// --- 2.5 QUEUES MANAGEMENT APIs ---', groupStart);
+    const groupBody = server.slice(groupStart, groupEnd);
+    assert.match(groupBody, /const reloadRes = await reloadPbxConfigPromise\(\)/);
+    assert.match(groupBody, /applied: reloadRes\.success/);
+    assert.match(groupBody, /reloadError: reloadRes\.error/);
 });

@@ -14185,6 +14185,8 @@ function syncWebrtcWakeRoutes() {
     return JSON.parse(result).changed === true;
 }
 
+let pbxReloadQueue = Promise.resolve();
+
 function reloadPbxConfig(callback) {
     const finish = async (fallback = false) => {
         // Mobile wake is an optional capability: a compiler refusal (unmanaged
@@ -14204,10 +14206,19 @@ function reloadPbxConfig(callback) {
         pool.query("UPDATE `asterisk`.`admin` SET `value` = 'false' WHERE `variable` = 'need_reload'").catch(() => {});
         if (callback) callback(wakeWarning ? { success: true, warning: wakeWarning } : { success: true });
     };
-    const cmd = '/var/lib/asterisk/bin/retrieve_conf && asterisk -rx "core reload" && asterisk -rx "queue reload all"';
+    // retrieve_conf writes the generated dialplan; core reload alone does not
+    // reload it. Use the debounced helper so FreePBX has finished writing all
+    // files before Asterisk parses them. Fall back to a direct reload if an
+    // older install has not received the helper yet.
+    const dialplanReloadScript = path.join(__dirname, 'scripts/reload-dialplan.sh');
+    const dialplanReload = fs.existsSync(dialplanReloadScript)
+        ? `bash ${JSON.stringify(dialplanReloadScript)}`
+        : `${ASTERISK_BIN} -rx "dialplan reload"`;
+    const cmd = `/var/lib/asterisk/bin/retrieve_conf && ${dialplanReload} && ${ASTERISK_BIN} -rx "core reload" && ${ASTERISK_BIN} -rx "queue reload all"`;
     exec(cmd, (error) => {
         if (error) {
-            exec('sudo -u asterisk /var/lib/asterisk/bin/retrieve_conf && /usr/sbin/asterisk -rx "core reload" && /usr/sbin/asterisk -rx "queue reload all"', (fallbackError) => {
+            const fallbackCmd = `sudo -u asterisk /var/lib/asterisk/bin/retrieve_conf && ${dialplanReload} && ${ASTERISK_BIN} -rx "core reload" && ${ASTERISK_BIN} -rx "queue reload all"`;
+            exec(fallbackCmd, (fallbackError) => {
                 if (fallbackError) {
                     console.error('PBX Reload error:', fallbackError.message);
                     return callback ? callback({ success: false, error: fallbackError.message }) : null;
@@ -14221,19 +14232,22 @@ function reloadPbxConfig(callback) {
 }
 
 function reloadPbxConfigPromise() {
-    return new Promise((resolve) => {
+    // Serialize applies: two element edits must not run retrieve_conf or
+    // dialplan reload concurrently and race over the generated files.
+    const next = pbxReloadQueue.then(() => new Promise((resolve) => {
         reloadPbxConfig((result) => resolve(result));
-    });
+    }));
+    pbxReloadQueue = next.catch(() => {});
+    return next;
 }
 
 // POST /api/config/reload - Trigger retrieve_conf and core reload
-app.post('/api/config/reload', (req, res) => {
-    reloadPbxConfig((result) => {
-        if (!result.success) {
-            return res.status(500).json(result);
-        }
-        res.json(result);
-    });
+app.post('/api/config/reload', async (req, res) => {
+    const result = await reloadPbxConfigPromise();
+    if (!result.success) {
+        return res.status(500).json(result);
+    }
+    res.json(result);
 });
 
 // --- 1. EXTENSIONS MANAGEMENT APIs ---
@@ -15814,9 +15828,15 @@ app.post('/api/config/ringgroups', async (req, res) => {
             VALUES (?, ?, ?, '', ?, ?, ?, ?, '', 0, '', 0, ?, 'CHECKED', '', '', 'always')
         `, [num, ringStrategy, ringTime, extListFormatted, annMsgId, postDest, desc, mohRinging]);
 
-        await reloadPbxConfigPromise();
+        const reloadRes = await reloadPbxConfigPromise();
         cachedBaseRoster = null;
-        res.json({ success: true, message: `Ring Group ${num} created with Skip Busy=Yes & Record=Always successfully.` });
+        res.json({
+            success: true,
+            message: `Ring Group ${num} created with Skip Busy=Yes & Record=Always successfully.`,
+            applied: reloadRes.success,
+            ...(reloadRes.warning ? { warning: reloadRes.warning } : {}),
+            ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -15868,9 +15888,15 @@ app.put('/api/config/ringgroups/:grpnum', async (req, res) => {
             WHERE grpnum = ?
         `, [desc, extListFormatted, ringStrategy, ringTime, annMsgId, postDest, mohRinging, num]);
 
-        await reloadPbxConfigPromise();
+        const reloadRes = await reloadPbxConfigPromise();
         cachedBaseRoster = null;
-        res.json({ success: true, message: `Ring Group ${num} updated successfully.` });
+        res.json({
+            success: true,
+            message: `Ring Group ${num} updated successfully.`,
+            applied: reloadRes.success,
+            ...(reloadRes.warning ? { warning: reloadRes.warning } : {}),
+            ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -15881,9 +15907,15 @@ app.delete('/api/config/ringgroups/:grpnum', async (req, res) => {
     try {
         const num = String(req.params.grpnum).trim();
         await pool.query('DELETE FROM `asterisk`.`ringgroups` WHERE grpnum = ?', [num]);
-        await reloadPbxConfigPromise();
+        const reloadRes = await reloadPbxConfigPromise();
         cachedBaseRoster = null;
-        res.json({ success: true, message: `Ring Group ${num} deleted successfully.` });
+        res.json({
+            success: true,
+            message: `Ring Group ${num} deleted successfully.`,
+            applied: reloadRes.success,
+            ...(reloadRes.warning ? { warning: reloadRes.warning } : {}),
+            ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -18454,8 +18486,14 @@ app.post('/api/config/routes/outbound/reorder', async (req, res) => {
             conn.release();
         }
 
-        await reloadPbxConfigPromise();
-        res.json({ success: true, message: 'Outbound routes priority reordered successfully.' });
+        const reloadRes = await reloadPbxConfigPromise();
+        res.json({
+            success: true,
+            message: 'Outbound routes priority reordered successfully.',
+            applied: reloadRes.success,
+            ...(reloadRes.warning ? { warning: reloadRes.warning } : {}),
+            ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -18513,8 +18551,14 @@ app.post('/api/config/routes/outbound', async (req, res) => {
             VALUES (?, ?)
         `, [routeId, nextSeq]);
 
-        await reloadPbxConfigPromise();
-        res.json({ success: true, message: `Outbound Route '${routeName}' created successfully.` });
+        const reloadRes = await reloadPbxConfigPromise();
+        res.json({
+            success: true,
+            message: `Outbound Route '${routeName}' created successfully.`,
+            applied: reloadRes.success,
+            ...(reloadRes.warning ? { warning: reloadRes.warning } : {}),
+            ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -18577,8 +18621,14 @@ app.put('/api/config/routes/outbound/:route_id', async (req, res) => {
             conn.release();
         }
 
-        await reloadPbxConfigPromise();
-        res.json({ success: true, message: `Outbound Route '${routeName}' updated successfully.` });
+        const reloadRes = await reloadPbxConfigPromise();
+        res.json({
+            success: true,
+            message: `Outbound Route '${routeName}' updated successfully.`,
+            applied: reloadRes.success,
+            ...(reloadRes.warning ? { warning: reloadRes.warning } : {}),
+            ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -18593,8 +18643,14 @@ app.delete('/api/config/routes/outbound/:route_id', async (req, res) => {
         await pool.query('DELETE FROM `asterisk`.`outbound_route_trunks` WHERE route_id = ?', [routeId]);
         await pool.query('DELETE FROM `asterisk`.`outbound_route_sequence` WHERE route_id = ?', [routeId]);
 
-        await reloadPbxConfigPromise();
-        res.json({ success: true, message: 'Outbound Route deleted successfully.' });
+        const reloadRes = await reloadPbxConfigPromise();
+        res.json({
+            success: true,
+            message: 'Outbound Route deleted successfully.',
+            applied: reloadRes.success,
+            ...(reloadRes.warning ? { warning: reloadRes.warning } : {}),
+            ...(reloadRes.error ? { reloadError: reloadRes.error } : {})
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
