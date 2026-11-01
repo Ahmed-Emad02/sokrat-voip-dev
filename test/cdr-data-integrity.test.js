@@ -49,7 +49,9 @@ test('call history and dashboard collapse multi-segment rows and hide harness no
     assert.ok(serverJs.includes('cx.node_site_code = c.node_site_code'),
         'Federated dedupe must not merge identical uniqueids from different PBXs');
 
-    // Synthetic calls stay out of history
+    // Synthetic calls and internal pseudo-channels stay out of history
+    assert.ok(serverJs.includes("AND c.channel NOT LIKE 'Local/%'"), 'Local channel pseudo-legs filtered');
+    assert.ok(serverJs.includes("'hangup'"), 'Hangup destination filtered');
     assert.ok(serverJs.includes("AND c.dcontext NOT LIKE 'test-%'"), 'test-* contexts filtered');
     assert.ok(serverJs.includes("'*87','*88','*89'"), 'Echo-test feature codes filtered');
 });

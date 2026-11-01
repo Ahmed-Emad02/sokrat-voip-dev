@@ -87,7 +87,8 @@ const CDR_CALL_SCOPE_CASE = `
 `;
 
 const CDR_HISTORY_FILTERS_SQL = `
-    AND c.dst NOT IN ('ussd','sms','report','s','*87','*88','*89')
+    AND c.dst NOT IN ('ussd','sms','report','s','*87','*88','*89','hangup')
+    AND c.channel NOT LIKE 'Local/%'
     AND c.dcontext NOT LIKE 'test-%'
     AND c.dcontext NOT LIKE '%benchmark%'
     AND c.dcontext <> 'play_audio'

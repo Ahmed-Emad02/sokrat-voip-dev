@@ -387,7 +387,8 @@ function buildCdrHistoryFiltersSql(sourceTable, options = {}) {
     // duplicate-segment probe must stay inside one node.
     const nodeScope = options.isUnion ? ' AND cx.node_site_code = c.node_site_code' : '';
     return `
-    AND c.dst NOT IN ('ussd','sms','report','s','*87','*88','*89')
+    AND c.dst NOT IN ('ussd','sms','report','s','*87','*88','*89','hangup')
+    AND c.channel NOT LIKE 'Local/%'
     AND c.dcontext NOT LIKE 'test-%'
     AND c.dcontext NOT LIKE '%benchmark%'
     AND c.dcontext <> 'play_audio'
@@ -6398,11 +6399,24 @@ app.get('/', async (req, res) => {
                 stats.failedCalls++;
             }
 
-            [row.src, row.dst].forEach((ext, idx) => {
+            const extsInvolved = new Set();
+            if (row.src) extsInvolved.add(String(row.src).trim());
+            if (row.dst) extsInvolved.add(String(row.dst).trim());
+            if (row.dstchannel) {
+                const pickedUp = getExtensionFromChannel(row.dstchannel);
+                if (pickedUp) extsInvolved.add(pickedUp);
+            }
+            if (row.channel) {
+                const srcChanExt = getExtensionFromChannel(row.channel);
+                if (srcChanExt) extsInvolved.add(srcChanExt);
+            }
+
+            extsInvolved.forEach(ext => {
                 if (employeeMetrics[ext]) {
                     employeeMetrics[ext].totalCalls++;
                     employeeMetrics[ext].totalTalkSec += (row.disposition === 'ANSWERED' ? sec : 0);
-                    employeeMetrics[ext].uniqueNumbers.add(idx === 0 ? row.dst : row.src);
+                    const counterpart = (ext === row.src) ? row.dst : row.src;
+                    if (counterpart) employeeMetrics[ext].uniqueNumbers.add(counterpart);
                 }
             });
         });
@@ -6701,18 +6715,15 @@ function formatDestination(row, ringGroupSet = new Set(), forExport = false, ext
 
     let dst = String(row.dst || '').trim();
     if (dst === 's' || dst.toLowerCase() === 'ussd') {
+        if (row.did && row.did.trim()) {
+            return row.did.trim();
+        }
         if (row.channel && row.channel.toLowerCase().startsWith('dongle/')) {
             const match = row.channel.match(/dongle\/(dongle\d+)/i);
             if (match && match[1]) {
                 const dongleId = match[1].toLowerCase();
-                const mapping = {
-                    'dongle0': '+201027826232',
-                };
-                return mapping[dongleId] || dongleId;
+                return dongleId;
             }
-        }
-        if (row.did && row.did.trim()) {
-            return row.did.trim();
         }
         if (dst.toLowerCase() === 'ussd' || (row.channel && row.channel.toLowerCase().includes('ussd'))) {
             return 'USSD Service';
@@ -19675,10 +19686,17 @@ app.get('/api/config/modem/reports', async (req, res) => {
 
         // Fetch CDR statistics with Inbound and Outbound branching
         const [cdrRows] = await pool.query(`
-            SELECT channel, dstchannel, lastdata, billsec, duration, disposition, calldate, dst, src, did
-            FROM ${tables.cdr}
-            WHERE calldate BETWEEN ? AND ?
-              AND (channel LIKE 'Dongle/%' OR dstchannel LIKE 'Dongle/%' OR lastdata LIKE 'Dongle/%')
+            SELECT c.channel, c.dstchannel, c.lastdata, c.billsec, c.duration, c.disposition, c.calldate, c.dst, c.src, c.did
+            FROM ${tables.cdr} c
+            WHERE c.calldate BETWEEN ? AND ?
+              AND (c.channel LIKE 'Dongle/%' OR c.dstchannel LIKE 'Dongle/%' OR c.lastdata LIKE 'Dongle/%')
+              AND c.dst NOT IN ('ussd','sms','report','s','*87','*88','*89','hangup')
+              AND c.channel NOT LIKE 'Local/%'
+              AND NOT EXISTS (
+                  SELECT 1 FROM ${tables.cdr} cx
+                  WHERE cx.uniqueid = c.uniqueid
+                    AND (cx.duration > c.duration OR (cx.duration = c.duration AND cx.sequence > c.sequence))
+              )
         `, [startStr, endStr]);
 
         const initCdrStat = () => ({
