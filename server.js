@@ -15798,15 +15798,13 @@ app.post('/api/config/ringgroups', async (req, res) => {
         if (!description || !description.trim()) {
             return res.status(400).json({ success: false, error: 'Description is required.' });
         }
-        if (!grplist || !grplist.trim()) {
-            return res.status(400).json({ success: false, error: 'Extension List is required.' });
-        }
-
         const num = String(grpnum).trim();
         const desc = String(description).trim();
 
-        // Format extension list (e.g. "101-102-103")
-        const extListFormatted = String(grplist).replace(/[\r\n, ]+/g, '-').replace(/^-+|-+$/g, '');
+        // Members are optional: an empty group is valid while it is being
+        // prepared, and mixed SIP/WebRTC/desk-phone extensions are all just
+        // numeric members. Never inject or assume an extension here.
+        const extListFormatted = String(grplist || '').replace(/[\r\n, ]+/g, '-').replace(/^-+|-+$/g, '');
         const ringStrategy = strategy || 'ringall';
         const ringTime = parseInt(grptime, 10) || 20;
         const annMsgId = parseInt(annmsg_id, 10) || 0;
