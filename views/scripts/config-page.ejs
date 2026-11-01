@@ -2457,21 +2457,10 @@
         window.confirmResetAllConfigCallCodes = confirmResetAllConfigCallCodes;
 
         // --- 2. RING GROUPS ---
-        document.addEventListener('DOMContentLoaded', () => {
-            const rgNumEl = document.getElementById('rgNum');
-            if (rgNumEl) {
-                rgNumEl.addEventListener('input', () => {
-                    const isEdit = document.getElementById('rgEditMode').value === "true";
-                    if (!isEdit) {
-                        const num = rgNumEl.value.trim() || '600';
-                        const destVal = `ext-group,${num},1`;
-                        const noticeNumEl = document.getElementById('rgPostDestCreateNoticeNum');
-                        if (noticeNumEl) noticeNumEl.textContent = destVal;
-                        document.getElementById('rgPostDestination').value = destVal;
-                    }
-                });
-            }
-        });
+        // The no-answer destination is chosen explicitly in the DestinationSelect
+        // component below. Never derive it from the group number: doing so used to
+        // overwrite the user's choice with ext-group,<grpnum>,1, which the backend
+        // then converts to app-blackhole,hangup,1 (Terminate Call).
         function renderQuickPickPills() {
             const container = document.getElementById('rgQuickPickContainer');
             if (!container) return;
@@ -2659,10 +2648,8 @@
             syncRingGroupModalSelects();
             renderQuickPickPills();
 
-            const destVal = `ext-group,${num},1`;
+            const destVal = 'app-blackhole,hangup,1';
             document.getElementById('rgPostDestination').value = destVal;
-            const noticeNumEl = document.getElementById('rgPostDestCreateNoticeNum');
-            if (noticeNumEl) noticeNumEl.textContent = destVal;
 
             initDestinationSelectInstances();
             if (rgPostDestSelectInstance) rgPostDestSelectInstance.setDialplan(destVal);
@@ -2672,7 +2659,11 @@
                     populateMohRingGroupDropdown();
                     syncRingGroupModalSelects();
                     renderQuickPickPills();
-                    if (rgPostDestSelectInstance) rgPostDestSelectInstance.setDialplan(destVal);
+                    // Keep whatever the user has selected while the lists were
+                    // loading instead of snapping back to the create default.
+                    if (rgPostDestSelectInstance) {
+                        rgPostDestSelectInstance.setDialplan(rgPostDestSelectInstance.dialplanString || destVal);
+                    }
                 }).catch(() => {});
             }
         }
@@ -2701,7 +2692,7 @@
             syncRingGroupModalSelects();
             renderQuickPickPills();
 
-            const destVal = rg.postdest || `ext-group,${grpnum},1`;
+            const destVal = rg.postdest || 'app-blackhole,hangup,1';
             document.getElementById('rgPostDestination').value = destVal;
 
             initDestinationSelectInstances();
@@ -2712,7 +2703,11 @@
                     populateMohRingGroupDropdown();
                     syncRingGroupModalSelects();
                     renderQuickPickPills();
-                    if (rgPostDestSelectInstance) rgPostDestSelectInstance.setDialplan(destVal);
+                    // Preserve a destination the user picked while the lists
+                    // were still loading.
+                    if (rgPostDestSelectInstance) {
+                        rgPostDestSelectInstance.setDialplan(rgPostDestSelectInstance.dialplanString || destVal);
+                    }
                 }).catch(() => {});
             }
         }
@@ -2754,7 +2749,7 @@
                 }
             }
 
-            const postdest = isEdit ? document.getElementById('rgPostDestination').value.trim() : (`ext-group,${grpnum},1`);
+            const postdest = document.getElementById('rgPostDestination').value.trim() || 'app-blackhole,hangup,1';
 
             const url = isEdit ? '/api/config/ringgroups/' + grpnum : '/api/config/ringgroups';
             const method = isEdit ? 'PUT' : 'POST';

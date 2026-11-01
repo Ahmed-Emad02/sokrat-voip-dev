@@ -3599,14 +3599,7 @@ function isTabAllowed(tabName) {
                     <div class="panel-surface p-4 rounded-xl border border-[var(--border-primary)] space-y-3">
                         <span class="text-xs font-bold text-amber-400 uppercase tracking-wider block"><%= isRtl ? 'الوجهة عند عدم الرد *' : 'Destination if No Answer *' %></span>
 
-                        <!-- Create Mode Auto-Destination Banner -->
-                        <div id="rgPostDestCreateNotice" class="hidden p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-xs text-emerald-300 font-semibold flex items-center gap-2">
-                            <svg class="w-4 h-4 shrink-0 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span><%= isRtl ? 'الوجهة التلقائية عند إنشاء المجموعة: مجموعة الاتصال نفسها' : 'Default destination upon creation: Automatically set to this Ring Group itself' %> (<span id="rgPostDestCreateNoticeNum" class="font-mono text-white">ext-group,600,1</span>)</span>
-                        </div>
-
-                        <!-- Edit Mode Editable Selectors -->
-                        <!-- Edit Mode Editable DestinationSelect Component -->
+                        <!-- Editable destination selector (create and edit modes) -->
                         <div id="rgPostDestComponentContainer"></div>
                         <input type="hidden" id="rgPostDestination">
                     </div>
