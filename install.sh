@@ -2530,6 +2530,9 @@ fi
 echo "  [10c] Installing chan_dongle..."
 if [ -f "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" ]; then
     mkdir -p /usr/lib64/asterisk/modules
+    if [ -f /usr/lib64/asterisk/modules/chan_dongle.so ]; then
+        cp -a /usr/lib64/asterisk/modules/chan_dongle.so /usr/lib64/asterisk/modules/chan_dongle.so.bak-install 2>/dev/null || true
+    fi
     if [ ! -f /usr/lib64/asterisk/modules/chan_dongle.so ] || ! cmp -s "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so; then
         cp "$INSTALL_DIR/installer-bundle/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/chan_dongle.so.tmp
         chmod 644 /usr/lib64/asterisk/modules/chan_dongle.so.tmp

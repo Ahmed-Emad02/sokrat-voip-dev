@@ -101,6 +101,9 @@ fi
 
 if [ -f "$SCRIPT_DIR/binaries/chan_dongle.so" ]; then
     mkdir -p /usr/lib64/asterisk/modules
+    if [ -f /usr/lib64/asterisk/modules/chan_dongle.so ]; then
+        cp -a /usr/lib64/asterisk/modules/chan_dongle.so /usr/lib64/asterisk/modules/chan_dongle.so.bak-install 2>/dev/null || true
+    fi
     cp "$SCRIPT_DIR/binaries/chan_dongle.so" /usr/lib64/asterisk/modules/
 fi
 
