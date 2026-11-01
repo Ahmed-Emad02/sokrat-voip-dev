@@ -1505,6 +1505,15 @@ if [ ! -x "$WEBRTC_REPAIR_SCRIPT" ]; then
     exit 1
 fi
 MYSQL_ROOT_PWD="$MYSQL_ROOT_PWD" "$WEBRTC_REPAIR_SCRIPT"
+if [ -f "$INSTALL_DIR/scripts/sanitize-pjsip-transports.sh" ]; then
+    bash "$INSTALL_DIR/scripts/sanitize-pjsip-transports.sh" || echo "  Warning: PJSIP transport sanitizer reported an error"
+fi
+if [ -f "$INSTALL_DIR/systemd/sokrat-pjsip-transport-sanitize.path" ]; then
+    install -m 0644 "$INSTALL_DIR/systemd/sokrat-pjsip-transport-sanitize.service" /etc/systemd/system/sokrat-pjsip-transport-sanitize.service
+    install -m 0644 "$INSTALL_DIR/systemd/sokrat-pjsip-transport-sanitize.path" /etc/systemd/system/sokrat-pjsip-transport-sanitize.path
+    systemctl daemon-reload
+    systemctl enable --now sokrat-pjsip-transport-sanitize.path >/dev/null 2>&1 || echo "  Warning: could not enable the PJSIP transport sanitizer watcher"
+fi
 asterisk -rx "module load chan_sip.so" 2>/dev/null || true
 echo "  WebRTC/PJSIP infrastructure configured"
 # ──────────────────────────────────────────────

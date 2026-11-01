@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for regenerated PJSIP transport configuration
+
+[Path]
+PathChanged=/etc/asterisk/pjsip_transport_additional.conf
+Unit=sokrat-pjsip-transport-sanitize.service
+
+[Install]
+WantedBy=paths.target

@@ -1,0 +1,9 @@
+[Unit]
+Description=Clear conflicting FreePBX-generated PJSIP transport sections
+After=asterisk.service
+ConditionPathExists=/opt/sokrat-voip/scripts/sanitize-pjsip-transports.sh
+
+[Service]
+Type=oneshot
+ExecStart=/opt/sokrat-voip/scripts/sanitize-pjsip-transports.sh
+Nice=5

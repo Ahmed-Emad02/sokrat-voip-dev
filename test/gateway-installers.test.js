@@ -21,6 +21,21 @@ test('all PBX installation paths ship additive reverse-TLS dependencies', () => 
         assert.equal(fs.existsSync(path.join(root, name)), true, name);
     }
 });
+test('all PBX installation paths install the PJSIP transport sanitizer', () => {
+    const script = path.join(root, 'scripts/sanitize-pjsip-transports.sh');
+    assert.equal(fs.existsSync(script), true);
+    assert.equal(spawnSync('bash', ['-n', script]).status, 0);
+    const pathUnit = fs.readFileSync(path.join(root, 'systemd/sokrat-pjsip-transport-sanitize.path'), 'utf8');
+    assert.match(pathUnit, /Unit=sokrat-pjsip-transport-sanitize\.service/);
+    const serviceUnit = fs.readFileSync(path.join(root, 'systemd/sokrat-pjsip-transport-sanitize.service'), 'utf8');
+    assert.match(serviceUnit, /sanitize-pjsip-transports\.sh/);
+    for (const name of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        const text = fs.readFileSync(path.join(root, name), 'utf8');
+        assert.match(text, /sanitize-pjsip-transports\.sh/);
+        assert.match(text, /sokrat-pjsip-transport-sanitize\.path/);
+    }
+});
+
 test('top-level installer defines SCRIPT_DIR before any bundled asset lookup', () => {
     const text = fs.readFileSync(path.join(root, 'install.sh'), 'utf8');
     const definition = text.search(/^SCRIPT_DIR=.*$/m);
