@@ -2737,10 +2737,6 @@
                 showToast(isRtl ? 'يرجى إدخال وصف للمجموعة' : 'Please enter a Group Description.', 'error');
                 return;
             }
-            if (!grplist) {
-                showToast(isRtl ? 'يرجى تحديد أو كتابة رقم تحويلة واحد على الأقل' : 'Please enter or select at least one Extension.', 'error');
-                return;
-            }
             if (!isEdit) {
                 if (loadedRingGroupsList && (loadedRingGroupsList || []).some(rg => String(rg.grpnum) === String(grpnum))) {
                     showToast((isRtl ? 'رقم مجموعة الاتصال ' : 'Ring Group ') + grpnum + (isRtl ? ' موجود بالفعل. يرجى اختيار رقم آخر.' : ' already exists. Please choose a different number.'), 'error');

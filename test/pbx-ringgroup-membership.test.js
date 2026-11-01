@@ -14,4 +14,8 @@ test('ring groups accept empty and mixed extension lists without injecting defau
     assert.match(body, /String\(grplist \|\| ''\)/);
     assert.doesNotMatch(body, /grplist.*\|\|.*['"]101['"]/, 'must not inject a hardcoded member');
     assert.match(body, /reloadPbxConfigPromise\(\)/);
+    const ui = fs.readFileSync(path.join(root, 'views/scripts/config-page.ejs'), 'utf8');
+    assert.doesNotMatch(ui, /Please enter or select at least one Extension/);
+    const markup = fs.readFileSync(path.join(root, 'views/config.ejs'), 'utf8');
+    assert.match(markup, /Numbers \(comma-separated, optional\)/);
 });
