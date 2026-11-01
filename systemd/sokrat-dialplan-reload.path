@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch FreePBX dialplan for route and ring-group regeneration
+
+[Path]
+PathChanged=/etc/asterisk/extensions_additional.conf
+PathChanged=/etc/asterisk/extensions.conf
+PathChanged=/etc/asterisk/extensions_custom.conf
+PathChanged=/etc/asterisk/queues_additional.conf
+Unit=sokrat-dialplan-reload.service
+
+[Install]
+WantedBy=paths.target

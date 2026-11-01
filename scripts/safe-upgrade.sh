@@ -1139,6 +1139,12 @@ PYEOF
             systemctl enable --now sokrat-webrtc-wake-apply.path >/dev/null 2>&1 || echo "  Warning: could not enable the WebRTC wake refresh watcher"
         fi
     fi
+    if [ -f "$INSTALL_DIR/systemd/sokrat-dialplan-reload.path" ]; then
+        install -m 0644 "$INSTALL_DIR/systemd/sokrat-dialplan-reload.service" /etc/systemd/system/sokrat-dialplan-reload.service
+        install -m 0644 "$INSTALL_DIR/systemd/sokrat-dialplan-reload.path" /etc/systemd/system/sokrat-dialplan-reload.path
+        systemctl daemon-reload
+        systemctl enable --now sokrat-dialplan-reload.path >/dev/null 2>&1 || echo "  Warning: could not enable the dialplan reload watcher"
+    fi
     if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
         echo "  Ensuring Sokrat Reverse Tunnel client (frpc) is installed..."
         FRPC_SRC=""

@@ -36,6 +36,21 @@ test('all PBX installation paths install the PJSIP transport sanitizer', () => {
     }
 });
 
+test('all PBX installation paths install the debounced dialplan reload watcher', () => {
+    const script = path.join(root, 'scripts/reload-dialplan.sh');
+    assert.equal(fs.existsSync(script), true);
+    assert.equal(spawnSync('bash', ['-n', script]).status, 0);
+    const pathUnit = fs.readFileSync(path.join(root, 'systemd/sokrat-dialplan-reload.path'), 'utf8');
+    assert.match(pathUnit, /PathChanged=\/etc\/asterisk\/extensions_additional\.conf/);
+    assert.match(pathUnit, /Unit=sokrat-dialplan-reload\.service/);
+    const serviceUnit = fs.readFileSync(path.join(root, 'systemd/sokrat-dialplan-reload.service'), 'utf8');
+    assert.match(serviceUnit, /reload-dialplan\.sh/);
+    for (const name of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        const text = fs.readFileSync(path.join(root, name), 'utf8');
+        assert.match(text, /sokrat-dialplan-reload\.path/);
+    }
+});
+
 test('top-level installer defines SCRIPT_DIR before any bundled asset lookup', () => {
     const text = fs.readFileSync(path.join(root, 'install.sh'), 'utf8');
     const definition = text.search(/^SCRIPT_DIR=.*$/m);

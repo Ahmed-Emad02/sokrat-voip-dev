@@ -698,6 +698,12 @@ if [ -f "$INSTALL_DIR/scripts/install-webrtc-wake.py" ]; then
         systemctl enable --now sokrat-webrtc-wake-apply.path >/dev/null 2>&1 || echo "  Warning: could not enable the WebRTC wake refresh watcher"
     fi
 fi
+if [ -f "$INSTALL_DIR/systemd/sokrat-dialplan-reload.path" ]; then
+    install -m 0644 "$INSTALL_DIR/systemd/sokrat-dialplan-reload.service" /etc/systemd/system/sokrat-dialplan-reload.service
+    install -m 0644 "$INSTALL_DIR/systemd/sokrat-dialplan-reload.path" /etc/systemd/system/sokrat-dialplan-reload.path
+    systemctl daemon-reload
+    systemctl enable --now sokrat-dialplan-reload.path >/dev/null 2>&1 || echo "  Warning: could not enable the dialplan reload watcher"
+fi
 if ! command -v frpc &>/dev/null && [ ! -x /usr/local/bin/frpc ]; then
     FRPC_SRC=""
     for candidate in         "$SCRIPT_DIR/binaries/frpc"         "$INSTALL_DIR/installer-bundle/binaries/frpc"         "/tmp/sokrat-repo/installer-bundle/binaries/frpc"         "/tmp/installer-bundle/binaries/frpc"; do

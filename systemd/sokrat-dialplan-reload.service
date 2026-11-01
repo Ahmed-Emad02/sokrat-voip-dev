@@ -1,0 +1,10 @@
+[Unit]
+Description=Reload Asterisk after FreePBX regenerates the dialplan
+After=asterisk.service
+ConditionPathExists=/opt/sokrat-voip/scripts/reload-dialplan.sh
+
+[Service]
+Type=oneshot
+ExecStart=/opt/sokrat-voip/scripts/reload-dialplan.sh
+TimeoutStartSec=30
+Nice=5
