@@ -374,17 +374,15 @@ const isRtl = currentLang === 'ar';
             background-color: var(--bg-secondary); 
             border: 1px solid var(--border-primary); 
         }
+        #detailPanel .panel-surface {
+            cursor: default;
+        }
+        #detailPanel .panel-surface:hover {
+            transform: none !important;
+        }
         .accent-orange { color: var(--accent-color); }
         .font-vibrant-display { font-weight: 900; letter-spacing: -0.01em; }
         
-        .card-stat { 
-            transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
-                        border-color 150ms ease; 
-        }
-        .card-stat:hover { 
-            transform: translateY(-1px);
-            border-color: var(--border-accent); 
-        }
         .ext-card {
             transition: all 150ms ease;
             cursor: pointer;
@@ -1265,7 +1263,7 @@ const isRtl = currentLang === 'ar';
 
             // Live Status & Presence Telemetry Cards
             html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 shrink-0">';
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/40 flex items-center justify-between">
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/40 flex items-center justify-between">
                 <div>
                     <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.liveStatus %></p>
                     <div class="mt-1.5">${renderStatusBadge(data.liveStatus?.status)}</div>
@@ -1275,15 +1273,15 @@ const isRtl = currentLang === 'ar';
                     <span class="text-base font-black text-emerald-400">${data.availabilityRate || 0}%</span>
                 </div>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/40">
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/40">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.onlineDuration %></p>
                 <p class="text-2xl font-black text-emerald-400 mt-1 font-mono">${fmtHumanDur(data.totalOnlineSec)}</p>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/40">
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/40">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.idleDuration %></p>
                 <p class="text-2xl font-black text-amber-400 mt-1 font-mono">${fmtHumanDur(data.totalIdleSec)}</p>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/40">
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/40">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.incallDuration %></p>
                 <p class="text-2xl font-black text-white mt-1 font-mono">${fmtHumanDur(data.totalIncallSec)}</p>
             </div>`;
@@ -1291,23 +1289,23 @@ const isRtl = currentLang === 'ar';
 
             // Stat Cards Grid
             html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6 shrink-0">';
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/30">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.totalCalls %></p>
                 <p class="text-2xl font-black text-white mt-1">${data.totalCalls}</p>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/30">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.answered %></p>
                 <p class="text-2xl font-black text-white mt-1">${data.answeredCalls}</p>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/30">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.answerRate %></p>
                 <p class="text-2xl font-black text-[var(--accent-color)] mt-1">${data.answerRate}%</p>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/30">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.uniqueContacts %></p>
                 <p class="text-2xl font-black text-zinc-300 mt-1">${data.uniqueContactCount}</p>
             </div>`;
-            html += `<div class="panel-surface rounded-xl p-4 card-stat border border-[#27272a]/30">
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/30">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.avgTalk %></p>
                 <p class="text-2xl font-black text-zinc-400 mt-1">${data.avgTalkSec}<span class="text-xs text-[var(--accent-color)] ml-0.5">s</span></p>
             </div>`;
