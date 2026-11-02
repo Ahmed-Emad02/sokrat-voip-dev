@@ -258,6 +258,22 @@ test('offline installer packages and binaries are present in installer-bundle', 
     assert.ok(binFiles.includes('ffmpeg.tar.gz'), 'ffmpeg.tar.gz must be present in binaries');
 });
 
+test('all installers start the overlay VPN daemons and wait for ZeroTier readiness', () => {
+    const rootDir = path.join(__dirname, '..');
+    for (const rel of ['install.sh', 'installer-bundle/install-sokrat.sh', 'scripts/safe-upgrade.sh']) {
+        const script = fs.readFileSync(path.join(rootDir, rel), 'utf8');
+        assert.match(script, /start_overlay_service zerotier-one\.service "ZeroTier" \/var\/lib\/zerotier-one\/zerotier-one\.port/, `${rel} must start ZeroTier and wait for its port file`);
+        assert.match(script, /start_overlay_service tailscaled\.service "Tailscale"/, `${rel} must start Tailscale`);
+        assert.match(script, /systemctl start "\$unit"/, `${rel} must start the unit, not only enable it`);
+        assert.doesNotMatch(script, /systemctl enable zerotier-one\.service >\/dev\/null 2>&1 \|\| true\n    systemctl enable tailscaled\.service/, `${rel} must not only enable the daemons`);
+    }
+
+    const setup = fs.readFileSync(path.join(rootDir, 'installer-bundle/setup-issabel-asterisk.sh'), 'utf8');
+    assert.match(setup, /systemctl start zerotier-one\.service/, 'the offline bundle must start ZeroTier');
+    assert.match(setup, /systemctl start tailscaled\.service/, 'the offline bundle must start Tailscale');
+    assert.match(setup, /\[ -s \/var\/lib\/zerotier-one\/zerotier-one\.port \]/, 'the offline bundle must wait for the ZeroTier port file');
+});
+
 test('install.sh and uninstall.sh pass bash syntax validation', () => {
     const rootDir = path.join(__dirname, '..');
     assert.doesNotThrow(() => {

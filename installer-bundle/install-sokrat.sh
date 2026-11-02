@@ -2726,11 +2726,39 @@ REPOEOF
         fi
     fi
 
-    # Enable both services so they come up after a reboot. The networks
-    # themselves are joined from the Sokrat GUI (Settings -> Overlay VPN).
-    systemctl enable zerotier-one.service >/dev/null 2>&1 || true
-    systemctl enable tailscaled.service >/dev/null 2>&1 || true
-    echo "  overlay VPN services enabled - join the networks from Settings -> Overlay VPN"
+    # Enable *and start* both services. The bundled zero-touch RPMs carry no
+    # post-install scriptlet, so a fresh install that only ran `enable` left
+    # the daemons stopped. ZeroTier then had no zerotier-one.port file and
+    # every CLI call failed with "missing port and zerotier-one.port not found".
+    # Wait for ZeroTier's port file so the GUI can join a network immediately.
+    start_overlay_service() {
+        local unit="$1" label="$2" port_file="${3:-}"
+        local i
+        systemctl enable "$unit" >/dev/null 2>&1 || true
+        systemctl start "$unit" >/dev/null 2>&1 || true
+        for i in $(seq 1 30); do
+            if systemctl is-active --quiet "$unit"; then
+                if [ -z "$port_file" ] || [ -s "$port_file" ]; then
+                    echo "  $label service is running"
+                    return 0
+                fi
+            fi
+            sleep 0.5
+        done
+        echo "  WARNING: $label service is not ready (check: journalctl -u $unit -n 50)"
+        return 0
+    }
+    if command -v zerotier-cli >/dev/null 2>&1; then
+        start_overlay_service zerotier-one.service "ZeroTier" /var/lib/zerotier-one/zerotier-one.port
+    else
+        echo "  WARNING: zerotier-cli is not installed; ZeroTier was not started"
+    fi
+    if command -v tailscale >/dev/null 2>&1; then
+        start_overlay_service tailscaled.service "Tailscale"
+    else
+        echo "  WARNING: tailscale is not installed; tailscaled was not started"
+    fi
+    echo "  overlay VPN services running - join the networks from Settings -> Overlay VPN"
 }
 install_overlay_vpn_clients
 
