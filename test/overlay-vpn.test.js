@@ -14,6 +14,8 @@ const {
     parseTailscaleStatus,
     classifyTailscaleAuthKey,
     describeTailscaleJoinError,
+    describeOverlayCliError,
+    waitForService,
     joinNetwork
 } = require('../lib/overlay-vpn');
 
@@ -32,10 +34,11 @@ test('ZeroTier network list is parsed', () => {
     const output = [
         '200 listnetworks <nwid> <name> <mac> <status> <type> <dev> <ZT assigned ips>',
         '200 listnetworks 08752e18b1faa61e drm 1e:d4:bb:0b:8b:ce OK PRIVATE ztcdcnjpvp 10.252.63.47/24',
-        '200 listnetworks b103a835d2cd2996 kheerelsnas-upgrade 96:5b:8c:68:a6:48 OK PRIVATE ztqtiwkhce 10.200.227.47/24'
+        '200 listnetworks b103a835d2cd2996 kheerelsnas-upgrade 96:5b:8c:68:a6:48 OK PRIVATE ztqtiwkhce 10.200.227.47/24',
+        '200 listnetworks 2873fd00f2f85513 Higher travel 12:27:b9:48:93:1d OK PRIVATE ztfcaqkvpb 10.236.251.47/24'
     ].join('\n');
     const networks = parseZeroTierNetworks(output);
-    assert.equal(networks.length, 2);
+    assert.equal(networks.length, 3);
     assert.equal(networks[0].id, '08752e18b1faa61e');
     assert.equal(networks[0].name, 'drm');
     assert.equal(networks[0].status, 'OK');
@@ -43,6 +46,11 @@ test('ZeroTier network list is parsed', () => {
     assert.deepEqual(networks[0].ips, ['10.252.63.47/24']);
     assert.equal(networks[1].name, 'kheerelsnas-upgrade');
     assert.deepEqual(networks[1].ips, ['10.200.227.47/24']);
+    // Network names can contain spaces; the MAC/status/type/device/ip tail stays aligned.
+    assert.equal(networks[2].name, 'Higher travel');
+    assert.equal(networks[2].mac, '12:27:b9:48:93:1d');
+    assert.equal(networks[2].device, 'ztfcaqkvpb');
+    assert.deepEqual(networks[2].ips, ['10.236.251.47/24']);
 });
 
 test('ZeroTier parser ignores noise and empty output', () => {
@@ -140,6 +148,59 @@ test('Tailscale join errors are mapped to actionable messages', () => {
     assert.match(describeTailscaleJoinError({ stderr: 'authkey already used' }).message, /single-use/);
     assert.equal(describeTailscaleJoinError({ stderr: 'failed to connect to local tailscaled' }).statusCode, 503);
     assert.equal(describeTailscaleJoinError({ stderr: 'permission denied' }).statusCode, 403);
+});
+
+test('ZeroTier daemon errors are translated into an actionable message', () => {
+    const missingPort = describeOverlayCliError('zerotier', {
+        stderr: 'zerotier-cli: missing port and zerotier-one.port not found in /var/lib/zerotier-one'
+    });
+    assert.match(missingPort, /ZeroTier service/);
+    assert.match(missingPort, /not running/);
+    assert.match(missingPort, /zerotier-one/);
+    assert.doesNotMatch(missingPort, /missing port/);
+
+    const connection = describeOverlayCliError('zerotier', { stderr: 'connection failed' });
+    assert.match(connection, /not running/);
+});
+
+test('waitForService waits until systemctl reports active', async () => {
+    let calls = 0;
+    const fakeExec = async (file, args) => {
+        assert.equal(file, 'systemctl');
+        assert.deepEqual(args, ['is-active', 'zerotier-one.service']);
+        calls += 1;
+        if (calls < 2) {
+            const error = new Error('inactive');
+            error.stdout = 'inactive\n';
+            throw error;
+        }
+        return { stdout: 'active\n', stderr: '' };
+    };
+    const result = await waitForService('zerotier-one.service', 3000, fakeExec);
+    assert.equal(result.active, true);
+    assert.equal(calls, 2);
+});
+
+test('ZeroTier join refuses to run while the service is stopped', async () => {
+    const calls = [];
+    const fakeExec = async (file, args) => {
+        calls.push([file, ...args]);
+        const error = new Error('inactive');
+        error.stdout = 'inactive\n';
+        throw error;
+    };
+    await assert.rejects(
+        joinNetwork('zerotier', { network: '08752e18b1faa61e' }, fakeExec),
+        (error) => {
+            assert.equal(error.statusCode, 503);
+            assert.match(error.message, /not running/);
+            return true;
+        }
+    );
+    assert.ok(
+        !calls.some(call => call[0] === 'zerotier-cli'),
+        'zerotier-cli must not run while the service is stopped'
+    );
 });
 
 test('joinNetwork refuses an API token without running tailscale', async () => {
