@@ -78,7 +78,12 @@ const words = {
         department: "Department",
         allDepartments: "All Departments",
         ungrouped: "Ungrouped",
-        resetFilters: "Reset Filters"
+        resetFilters: "Reset Filters",
+        agentStatusReport: "WebRTC Agent Status & Presence",
+        agentStatusHistory: "Agent Presence Transition Logs",
+        agentStatusAllocation: "Agent Status Allocation",
+        totalTrackedTime: "Total Tracked Presence",
+        activeState: "Current State"
     },
     ar: {
         title: "الموظفين", subtitle: "",
@@ -158,7 +163,12 @@ const words = {
         department: "القسم / المجموعة",
         allDepartments: "جميع الأقسام",
         ungrouped: "بدون مجموعة",
-        resetFilters: "إعادة ضبط"
+        resetFilters: "إعادة ضبط",
+        agentStatusReport: "تقرير حالات وتواجد وكيل WebRTC",
+        agentStatusHistory: "سجل تغير حالات تواجد الوكيل",
+        agentStatusAllocation: "توزيع حالات الوكيل",
+        totalTrackedTime: "إجمالي وقت التواجد المسجل",
+        activeState: "الحالة الحالية"
     }
 };
 const t = words[currentLang];
@@ -491,7 +501,7 @@ const isRtl = currentLang === 'ar';
                 gap: 1.5rem !important;
             }
             /* Hide canvas during print and display static high-DPI chart images */
-            #dispositionChart canvas, #dailyChart canvas, #hourlyChart canvas, #durationChart canvas {
+            #agentStatusChart canvas, #statusChart canvas, #dispositionChart canvas, #dailyChart canvas, #hourlyChart canvas, #durationChart canvas {
                 display: none !important;
             }
             .print-chart-img {
@@ -504,7 +514,7 @@ const isRtl = currentLang === 'ar';
                 page-break-inside: avoid !important;
             margin: 0 auto !important;
             }
-            #dispositionChart, #dailyChart, #hourlyChart, #durationChart {
+            #agentStatusChart, #statusChart, #dispositionChart, #dailyChart, #hourlyChart, #durationChart {
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
                 height: auto !important;
@@ -697,9 +707,12 @@ const isRtl = currentLang === 'ar';
 
                 <div id="extList" class="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
                     <% roster.forEach(emp => { %>
-                        <div class="ext-card panel-surface rounded-xl px-3 py-2.5 text-sm flex items-center gap-3 <%= !emp.online ? 'opacity-40' : '' %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name ? emp.name.toLowerCase() : '' %>" data-group="<%= emp.emp_group || '' %>" onclick="selectExtension('<%= emp.extension %>')">
+                        <div class="ext-card panel-surface rounded-xl px-3 py-2.5 text-sm flex items-center gap-2.5 <%= !emp.online ? 'opacity-40' : '' %>" data-ext="<%= emp.extension %>" data-name="<%= emp.name ? emp.name.toLowerCase() : '' %>" data-group="<%= emp.emp_group || '' %>" onclick="selectExtension('<%= emp.extension %>')">
                             <span class="text-[var(--accent-color)] font-bold font-mono text-xs"><%= emp.extension %></span>
                             <span class="text-white font-mono font-bold truncate flex-1"><%= emp.name %></span>
+                            <% if (emp.isPjsip || emp.tech === 'pjsip' || emp.tech === 'webrtc') { %>
+                                <span class="px-1.5 py-0.2 rounded text-[8px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 uppercase shrink-0">WebRTC</span>
+                            <% } %>
                             <span class="w-2 h-2 rounded-full <%= emp.online ? 'bg-[var(--accent-color)]' : 'bg-zinc-700' %> shrink-0"></span>
                         </div>
                     <% }) %>
@@ -1100,6 +1113,64 @@ const isRtl = currentLang === 'ar';
             `).join('');
         }
 
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function renderAgentStatusBadge(statusKey, customColor, customLabel) {
+            statusKey = String(statusKey || 'offline').toLowerCase();
+            const stdColors = {
+                available: '#10b981',
+                offline: '#71717a',
+                meeting: '#8b5cf6',
+                training: '#3b82f6',
+                break: '#f59e0b',
+                lunch: '#ea580c',
+                busy: '#ef4444',
+                dnd: '#ef4444'
+            };
+            const color = customColor || stdColors[statusKey] || '#8b5cf6';
+            const label = customLabel || statusKey.toUpperCase();
+            return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-wider uppercase whitespace-nowrap" style="background: ${color}20; color: ${color}; border: 1px solid ${color}40;"><span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: ${color};"></span>${escapeHtml(label)}</span>`;
+        }
+
+        let currentAgentStatusLogs = [];
+        function filterAgentStatusLogs(statusKey) {
+            document.querySelectorAll('.agent-status-log-btn').forEach(btn => {
+                const st = btn.getAttribute('data-status');
+                if (st === statusKey) {
+                    btn.className = 'agent-status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-[var(--accent-color)] text-white cursor-pointer';
+                } else {
+                    btn.className = 'agent-status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-zinc-900 hover:bg-zinc-800 text-zinc-400 cursor-pointer';
+                }
+            });
+
+            const tbody = document.getElementById('agentStatusLogsBody');
+            if (!tbody) return;
+
+            const filtered = statusKey === 'all'
+                ? currentAgentStatusLogs
+                : currentAgentStatusLogs.filter(l => String(l.status || '').toLowerCase() === statusKey);
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(log => {
+                const label = <%= isRtl %> ? (log.label_ar || log.label_en || log.status) : (log.label_en || log.label_ar || log.status);
+                return `
+                    <tr class="hover:bg-zinc-900/30 transition">
+                        <td class="p-3 whitespace-nowrap">${renderAgentStatusBadge(log.status, log.color, label)}</td>
+                        <td class="p-3 text-zinc-300 font-mono whitespace-nowrap">${fmtDateTime(log.startTime)}</td>
+                        <td class="p-3 text-zinc-300 font-mono whitespace-nowrap">${log.endTime ? fmtDateTime(log.endTime) : '<span class="text-emerald-400 font-bold"><%= isRtl ? "مستمر الآن" : "Ongoing / Active" %></span>'}</td>
+                        <td class="p-3 font-bold text-[var(--accent-color)] font-mono whitespace-nowrap">${fmtHumanDur(log.durationSeconds)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
         function renderOverview() {
             const panel = document.getElementById('detailPanel');
             const lang = '<%= currentLang %>';
@@ -1145,6 +1216,7 @@ const isRtl = currentLang === 'ar';
                                     <th class="p-3.5 tracking-wider text-start cursor-pointer hover:text-white transition select-none" onclick="sortOverview('extension')"><%= t.extension %> ${sortIndicator('extension')}</th>
                                     <th class="p-3.5 tracking-wider text-start cursor-pointer hover:text-white transition select-none" onclick="sortOverview('name')"><%= t.employee %> ${sortIndicator('name')}</th>
                                     <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('liveStatus')"><%= t.liveStatus %> ${sortIndicator('liveStatus')}</th>
+                                    <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('agentStatus')"><%= t.agentStatus %> ${sortIndicator('agentStatus')}</th>
                                     <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('onlineSec')"><%= t.onlineDuration %> ${sortIndicator('onlineSec')}</th>
                                     <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('idleSec')"><%= t.idleDuration %> ${sortIndicator('idleSec')}</th>
                                     <th class="p-3.5 tracking-wider text-center cursor-pointer hover:text-white transition select-none" onclick="sortOverview('totalCalls')"><%= t.totalCalls %> ${sortIndicator('totalCalls')}</th>
@@ -1158,7 +1230,7 @@ const isRtl = currentLang === 'ar';
             `;
 
             if (sorted.length === 0) {
-                html += `<tr><td colspan="10" class="p-8 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>`;
+                html += `<tr><td colspan="11" class="p-8 text-center text-zinc-500 font-mono"><%= t.noData %></td></tr>`;
             } else {
                 pageData.forEach(row => {
                     const talkMin = Math.round(row.totalTalkSec / 60);
@@ -1166,8 +1238,14 @@ const isRtl = currentLang === 'ar';
                     html += `
                         <tr class="hover:bg-zinc-900/50 cursor-pointer transition" onclick="selectExtension('${row.extension}')">
                             <td class="p-3.5 text-[var(--accent-color)] font-black text-sm">${row.extension}</td>
-                            <td class="p-3.5 text-white font-mono font-bold text-sm">${row.name}</td>
+                            <td class="p-3.5 text-white font-mono font-bold text-sm">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span>${row.name}</span>
+                                    ${row.isWebRTC ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 shrink-0">WebRTC</span>' : ''}
+                                </div>
+                            </td>
                             <td class="p-3.5 text-center">${renderStatusBadge(row.liveStatus)}</td>
+                            <td class="p-3.5 text-center whitespace-nowrap">${row.isWebRTC ? renderAgentStatusBadge(row.agentStatus || 'available') : '<span class="text-zinc-600 text-xs font-mono">-</span>'}</td>
                             <td class="p-3.5 text-center text-emerald-400 font-bold text-xs font-mono">${fmtHumanDur(row.onlineSec)}</td>
                             <td class="p-3.5 text-center text-amber-400 font-bold text-xs font-mono">${fmtHumanDur(row.idleSec)}</td>
                             <td class="p-3.5 text-center text-white font-bold text-sm">${row.totalCalls}</td>
@@ -1238,12 +1316,20 @@ const isRtl = currentLang === 'ar';
             const startDateVal = document.getElementById('startDate')?.value || '';
             const endDateVal = document.getElementById('endDate')?.value || '';
 
+            const isWebRTC = Boolean(data.agentStatusReport && data.agentStatusReport.isWebRTC);
+            const currentAgentSt = isWebRTC && data.agentStatusReport.currentStatus ? data.agentStatusReport.currentStatus : null;
+            const currentAgentLabel = currentAgentSt ? (<%= isRtl %> ? (currentAgentSt.label_ar || currentAgentSt.label_en) : (currentAgentSt.label_en || currentAgentSt.label_ar)) : '';
+
             // Printable Header Banner with Employee Name & ID
             html += `<div class="print-header-banner flex items-center justify-between pb-4 mb-6 border-b border-[var(--border-primary)] flex-wrap gap-3">
                 <div class="flex items-center gap-3">
                     <span class="accent-orange font-mono bg-[var(--bg-primary)] border border-[var(--border-primary)] px-3 py-1.5 rounded-xl text-lg font-black">${data.extension}</span>
                     <div>
-                        <h3 class="text-2xl font-bold text-[var(--text-primary)] font-mono flex items-center gap-2">${data.name}</h3>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h3 class="text-2xl font-bold text-[var(--text-primary)] font-mono">${data.name}</h3>
+                            ${isWebRTC ? '<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 uppercase">WebRTC</span>' : ''}
+                            ${currentAgentSt ? renderAgentStatusBadge(currentAgentSt.key, currentAgentSt.color, currentAgentLabel) : ''}
+                        </div>
                         <p class="text-xs font-semibold text-[var(--text-muted)] tracking-wider uppercase mt-0.5"><%= isRtl ? 'تقرير تحليلات أداء الموظف' : 'Employee Performance Analytics Report' %></p>
                     </div>
                 </div>
@@ -1335,6 +1421,42 @@ const isRtl = currentLang === 'ar';
                 html += '</div>';
             }
 
+            // WebRTC Agent Custom Statuses Report (Presence, Meetings, Training, etc.)
+            if (isWebRTC && data.agentStatusReport && data.agentStatusReport.totals && data.agentStatusReport.totals.length) {
+                const rep = data.agentStatusReport;
+                html += `<div id="agentStatusKpiCard" class="panel-surface rounded-xl border border-[#27272a]/30 p-5 mb-6 flex flex-col gap-4 shrink-0">
+                    <div class="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-[#27272a]/40">
+                        <div class="flex items-center gap-2.5">
+                            <svg class="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            <h4 class="text-xs font-black uppercase text-zinc-300 tracking-wider"><%= t.agentStatusReport %></h4>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold text-zinc-400 font-mono"><%= t.totalTrackedTime %>: <b class="text-white">${fmtHumanDur(rep.totalTrackedSeconds)}</b></span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+                        ${rep.totals.map(st => {
+                            const lbl = <%= isRtl %> ? (st.label_ar || st.label_en || st.key) : (st.label_en || st.label_ar || st.key);
+                            return `
+                                <div class="panel-surface rounded-xl p-3 border border-[#27272a]/30">
+                                    <div class="flex items-center justify-between gap-1">
+                                        <span class="inline-flex items-center gap-1.5 text-[10px] font-bold font-mono uppercase truncate" style="color: ${st.color};">
+                                            <span class="w-2 h-2 rounded-full shrink-0" style="background: ${st.color};"></span>
+                                            ${lbl}
+                                        </span>
+                                        <span class="text-[10px] font-bold text-zinc-500 font-mono shrink-0">${st.percentage}%</span>
+                                    </div>
+                                    <p class="text-lg font-black text-white mt-1.5 font-mono">${fmtHumanDur(st.seconds)}</p>
+                                    <div class="w-full bg-zinc-800 rounded-full h-1 mt-2 overflow-hidden">
+                                        <div class="h-1 rounded-full" style="width: ${st.percentage}%; background: ${st.color};"></div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>`;
+            }
+
             // WebRTC Client & Contact Center Telemetry Row
             if (data.telemetry && data.telemetry.count > 0) {
                 const tel = data.telemetry;
@@ -1372,6 +1494,12 @@ const isRtl = currentLang === 'ar';
 
             // Charts Grid
             html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6 shrink-0">';
+            if (isWebRTC && data.agentStatusReport && data.agentStatusReport.totals && data.agentStatusReport.totals.length) {
+                html += `<div class="panel-surface rounded-xl p-5 border border-[#27272a]/30">
+                    <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider mb-4"><%= t.agentStatusAllocation %></h4>
+                    <div id="agentStatusChart" class="w-full h-72 min-h-[280px]"></div>
+                </div>`;
+            }
             html += `<div class="panel-surface rounded-xl p-5 border border-[#27272a]/30">
                 <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider mb-4"><%= t.statusAllocation %></h4>
                 <div id="statusChart" class="w-full h-72 min-h-[280px]"></div>
@@ -1444,8 +1572,45 @@ const isRtl = currentLang === 'ar';
                 });
                 html += '</tbody></table></div></div>';
             }
-            // Status Transition History Log Table
-            html += `<div class="panel-surface rounded-xl border border-[#27272a]/30 overflow-hidden flex flex-col min-h-0 mt-6">
+
+            // WebRTC Agent Status Transition History Log Table
+            if (isWebRTC && data.agentStatusReport && data.agentStatusReport.history && data.agentStatusReport.history.length) {
+                const rep = data.agentStatusReport;
+                const distinctKeys = [...new Set(rep.history.map(h => h.status))];
+                html += `<div id="agentStatusLogsCard" class="panel-surface rounded-xl border border-[#27272a]/30 overflow-hidden flex flex-col shrink-0 mt-6">
+                    <div class="px-4 py-3 border-b border-[#27272a] bg-black/25 shrink-0 flex items-center justify-between flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <h4 class="text-xs font-black uppercase text-zinc-400 tracking-wider"><%= t.agentStatusHistory %> (${rep.history.length})</h4>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <button type="button" onclick="filterAgentStatusLogs('all')" class="agent-status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-[var(--accent-color)] text-white cursor-pointer" data-status="all"><%= t.allStatuses %></button>
+                            ${distinctKeys.map(k => {
+                                const sample = rep.history.find(h => h.status === k);
+                                const lbl = sample ? (<%= isRtl %> ? (sample.label_ar || sample.label_en) : (sample.label_en || sample.label_ar)) : k;
+                                return `<button type="button" onclick="filterAgentStatusLogs('${k}')" class="agent-status-log-btn px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition bg-zinc-900 hover:bg-zinc-800 text-zinc-400 cursor-pointer" data-status="${k}">${lbl}</button>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                    <div class="overflow-y-auto max-h-72 min-h-[140px]">
+                        <table class="w-full text-start border-collapse">
+                            <thead>
+                                <tr class="bg-black/40 text-zinc-500 text-[9px] font-black uppercase border-b border-[#27272a]">
+                                    <th class="p-3 tracking-wider text-start"><%= t.status %></th>
+                                    <th class="p-3 tracking-wider text-start"><%= t.start %></th>
+                                    <th class="p-3 tracking-wider text-start"><%= t.end %></th>
+                                    <th class="p-3 tracking-wider text-start"><%= t.duration %></th>
+                                </tr>
+                            </thead>
+                            <tbody id="agentStatusLogsBody" class="divide-y divide-[#27272a]/10 text-xs font-mono">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+            }
+
+            // Status Transition History Log Table (Telephony Device State)
+            html += `<div class="panel-surface rounded-xl border border-[#27272a]/30 overflow-hidden flex flex-col shrink-0 mt-6">
                 <div class="px-4 py-3 border-b border-[#27272a] bg-black/25 shrink-0 flex items-center justify-between flex-wrap gap-2">
                     <div class="flex items-center gap-2">
                         <svg class="w-4 h-4 text-[var(--accent-color)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -1480,10 +1645,16 @@ const isRtl = currentLang === 'ar';
             panel.innerHTML = html;
             currentStatusLogs = data.statusLogs || [];
             filterStatusLogs('all');
-            
+            if (isWebRTC && data.agentStatusReport && data.agentStatusReport.history) {
+                currentAgentStatusLogs = data.agentStatusReport.history;
+                filterAgentStatusLogs('all');
+            }
 
             // Trigger ECharts rendering
             setTimeout(() => {
+                if (isWebRTC && data.agentStatusReport && data.agentStatusReport.totals && data.agentStatusReport.totals.length) {
+                    initAgentStatusChart(data.agentStatusReport.totals);
+                }
                 if (data.statusBreakdown && data.statusBreakdown.length) {
                     initStatusChart(data.statusBreakdown);
                 }
@@ -1500,6 +1671,7 @@ const isRtl = currentLang === 'ar';
                     initDurationChart(data.durationData);
                 }
                 requestAnimationFrame(() => {
+                    if (agentStatusChart) agentStatusChart.resize();
                     if (dispositionChart) dispositionChart.resize();
                     if (dailyChart) dailyChart.resize();
                     if (hourlyChart) hourlyChart.resize();
@@ -1511,6 +1683,7 @@ const isRtl = currentLang === 'ar';
         }
         function renderPrintChartImages() {
             const chartList = [
+                { id: 'agentStatusChart', chart: agentStatusChart },
                 { id: 'dispositionChart', chart: dispositionChart },
                 { id: 'dailyChart', chart: dailyChart },
                 { id: 'hourlyChart', chart: hourlyChart },
@@ -1538,8 +1711,72 @@ const isRtl = currentLang === 'ar';
                 }
             });
         }
+        let agentStatusChart = null;
         let statusChart = null;
         const _extChartFont = <%= isRtl %> ? "'Cairo', 'JetBrains Mono', sans-serif" : "'JetBrains Mono', 'Cairo', monospace";
+        function initAgentStatusChart(totals) {
+            const container = document.getElementById('agentStatusChart');
+            if (!container) return;
+            if (agentStatusChart) agentStatusChart.dispose();
+            const isLight = document.documentElement.classList.contains('light-theme');
+            agentStatusChart = echarts.init(container, isLight ? null : 'dark');
+
+            const totalSec = (totals || []).reduce((sum, item) => sum + (item.seconds || 0), 0);
+            const colorMap = {};
+            const chartData = (totals || []).map(t => {
+                const name = <%= isRtl %> ? (t.label_ar || t.label_en || t.key) : (t.label_en || t.label_ar || t.key);
+                colorMap[name] = t.color || '#10b981';
+                return {
+                    name: name,
+                    value: t.seconds || 0
+                };
+            }).filter(d => d.value > 0);
+
+            agentStatusChart.setOption({
+                textStyle: { fontFamily: _extChartFont },
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: isLight ? '#ffffff' : '#18181b',
+                    borderColor: isLight ? '#e4e4e7' : '#27272a',
+                    textStyle: { color: isLight ? '#09090b' : '#ffffff', fontSize: 11, fontFamily: _extChartFont },
+                    formatter: function(params) {
+                        const pct = totalSec > 0 ? Math.round((params.value / totalSec) * 100) : 0;
+                        return `<b>${params.name}</b>: ${fmtDur(params.value)} (${pct}%)`;
+                    }
+                },
+                legend: {
+                    bottom: '0%',
+                    textStyle: { color: isLight ? '#09090b' : '#a1a1aa', fontSize: 10, fontWeight: 700, fontFamily: _extChartFont }
+                },
+                series: [{
+                    name: '<%= t.agentStatus %>',
+                    type: 'pie',
+                    radius: ['40%', '68%'],
+                    center: ['50%', '45%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                        borderRadius: 6,
+                        borderColor: isLight ? '#ffffff' : '#18181b',
+                        borderWidth: 2,
+                        color: function(param) {
+                            return colorMap[param.name] || '#a1a1aa';
+                        }
+                    },
+                    label: { show: false },
+                    emphasis: {
+                        label: {
+                            show: true,
+                            fontSize: 12,
+                            fontWeight: 'bold',
+                            color: isLight ? '#09090b' : '#ffffff',
+                            formatter: '{b}\n{d}%'
+                        }
+                    },
+                    data: chartData
+                }]
+            });
+        }
         function initStatusChart(data) {
             const container = document.getElementById('statusChart');
             if (!container) return;

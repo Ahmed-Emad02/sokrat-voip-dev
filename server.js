@@ -8575,10 +8575,16 @@ app.get('/api/ext-overview', async (req, res) => {
 
         const employeeMetrics = {};
         res.locals.roster.forEach(emp => {
+            const isPjsip = Boolean(emp.isPjsip || (emp.tech === 'pjsip') || (emp.extension === '150'));
             employeeMetrics[emp.extension] = {
                 extension: emp.extension,
                 name: emp.name,
                 online: emp.online,
+                tech: emp.tech,
+                isPjsip: isPjsip,
+                isWebRTC: isPjsip,
+                agentStatus: emp.agentStatus || (isPjsip ? 'available' : null),
+                agentStatusTime: emp.agentStatusTime || null,
                 totalCalls: 0,
                 inboundCalls: 0,
                 outboundCalls: 0,
@@ -8724,6 +8730,11 @@ app.get('/api/ext-overview', async (req, res) => {
             emp.onlineSec = emp.idleSec + emp.incallSec + emp.ringingSec;
             const totalTrackedSec = emp.onlineSec + emp.offlineSec;
             emp.availabilityRate = totalTrackedSec > 0 ? Math.round((emp.onlineSec / totalTrackedSec) * 100) : (emp.online ? 100 : 0);
+
+            const isPjsip = Boolean(emp.isPjsip || (emp.tech === 'pjsip') || (emp.extension === '150'));
+            emp.isWebRTC = isPjsip;
+            emp.agentStatus = emp.agentStatus || (isPjsip ? 'available' : null);
+            emp.agentStatusTime = emp.agentStatusTime || null;
 
             return emp;
         });
@@ -9048,6 +9059,12 @@ app.get('/api/ext-stats/:extension', async (req, res) => {
             };
         } catch (_) {
             stats.telemetry = { count: 0, ahtSec: stats.avgTalkSec || 0 };
+        }
+
+        try {
+            stats.agentStatusReport = await agentStatusService.getAgentStatusReport(pool, extension, startDate, endDate);
+        } catch (_) {
+            stats.agentStatusReport = { isWebRTC: false, totals: [], history: [], currentStatus: null };
         }
 
         res.json(stats);

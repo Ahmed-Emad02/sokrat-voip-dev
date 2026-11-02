@@ -82,13 +82,14 @@ test('API: /api/ext-overview returns status telemetry and metrics', async () => 
             assert.ok('idleSec' in first, 'Overview item must include idleSec');
             assert.ok('incallSec' in first, 'Overview item must include incallSec');
             assert.ok('availabilityRate' in first, 'Overview item must include availabilityRate');
+            assert.ok('isWebRTC' in first, 'Overview item must include isWebRTC');
         }
     } finally {
         server.close();
     }
 });
 
-test('API: /api/ext-stats/:extension returns status breakdown and logs', async () => {
+test('API: /api/ext-stats/:extension returns status breakdown, logs, and agentStatusReport', async () => {
     const server = app.listen(0);
     const port = server.address().port;
     try {
@@ -105,6 +106,10 @@ test('API: /api/ext-stats/:extension returns status breakdown and logs', async (
         assert.ok('availabilityRate' in data, 'Stats response must include availabilityRate');
         assert.ok(Array.isArray(data.statusBreakdown), 'Stats response must include statusBreakdown array');
         assert.ok(Array.isArray(data.statusLogs), 'Stats response must include statusLogs array');
+        assert.ok('agentStatusReport' in data, 'Stats response must include agentStatusReport');
+        assert.ok(typeof data.agentStatusReport.isWebRTC === 'boolean', 'agentStatusReport must have isWebRTC');
+        assert.ok(Array.isArray(data.agentStatusReport.totals), 'agentStatusReport must have totals array');
+        assert.ok(Array.isArray(data.agentStatusReport.history), 'agentStatusReport must have history array');
     } finally {
         server.close();
     }
@@ -146,6 +151,9 @@ test('Views: ext-stats.ejs renders status badges, status cards, status allocatio
         }, { filename: templatePath });
 
         assert.ok(rendered.includes('renderStatusBadge'), 'Template must define renderStatusBadge helper');
+        assert.ok(rendered.includes('renderAgentStatusBadge'), 'Template must define renderAgentStatusBadge helper');
+        assert.ok(rendered.includes('filterAgentStatusLogs'), 'Template must define filterAgentStatusLogs handler');
+        assert.ok(rendered.includes('initAgentStatusChart'), 'Template must define initAgentStatusChart helper');
         assert.ok(rendered.includes('fmtHumanDur'), 'Template must define fmtHumanDur helper');
         assert.ok(rendered.includes('statusChart'), 'Template must include statusChart container');
         assert.ok(rendered.includes('statusLogsBody'), 'Template must include statusLogsBody table');
