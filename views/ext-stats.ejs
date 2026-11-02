@@ -1262,16 +1262,14 @@ const isRtl = currentLang === 'ar';
             </div>`;
 
             // Live Status & Presence Telemetry Cards
-            html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 shrink-0">';
-            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/40 flex items-center justify-between">
-                <div>
-                    <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.liveStatus %></p>
-                    <div class="mt-1.5">${renderStatusBadge(data.liveStatus?.status)}</div>
-                </div>
-                <div class="${rtl ? 'text-start' : 'text-end'}">
-                    <span class="text-[10px] font-bold text-zinc-500 block uppercase"><%= t.availability %></span>
-                    <span class="text-base font-black text-emerald-400">${data.availabilityRate || 0}%</span>
-                </div>
+            html += '<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4 shrink-0">';
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/40">
+                <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.liveStatus %></p>
+                <div class="mt-2.5">${renderStatusBadge(data.liveStatus?.status)}</div>
+            </div>`;
+            html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/40">
+                <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.availability %></p>
+                <p class="text-2xl font-black text-emerald-400 mt-1 font-mono">${data.availabilityRate || 0}%</p>
             </div>`;
             html += `<div class="panel-surface rounded-xl p-4 border border-[#27272a]/40">
                 <p class="text-[9px] font-black uppercase text-zinc-500 tracking-wider"><%= t.onlineDuration %></p>
