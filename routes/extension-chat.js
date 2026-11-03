@@ -16,11 +16,12 @@ const express = require('express');
 const multer = require('multer');
 const { requireExtensionSignature } = require('../lib/extension-auth');
 const chatStore = require('../lib/chat/store');
+const { notifyChatMessage } = require('../lib/chat/notify');
 const { issueChatToken } = require('../lib/chat/token');
 
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-const MAX_DOC_BYTES = 10 * 1024 * 1024;
-const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_DOC_BYTES = 50 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
 
 function sendError(res, err, fallback) {
     const status = Number(err && err.statusCode) || 500;
@@ -47,85 +48,91 @@ function detectAttachment(buffer, originalName, reportedMime) {
     const ext = safeExtension(originalName);
     const hex = buffer.subarray(0, 16).toString('hex');
     const ascii = buffer.subarray(0, 16).toString('ascii');
-    let mime = '';
-    let kind = '';
+    const allowed = {
+        '.jpg': { mime: 'image/jpeg', kind: 'image' },
+        '.jpeg': { mime: 'image/jpeg', kind: 'image' },
+        '.png': { mime: 'image/png', kind: 'image' },
+        '.gif': { mime: 'image/gif', kind: 'image' },
+        '.webp': { mime: 'image/webp', kind: 'image' },
+        '.pdf': { mime: 'application/pdf', kind: 'pdf' },
+        '.doc': { mime: 'application/msword', kind: 'file' },
+        '.docx': { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', kind: 'file' },
+        '.xls': { mime: 'application/vnd.ms-excel', kind: 'excel' },
+        '.xlsx': { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', kind: 'excel' },
+        '.ppt': { mime: 'application/vnd.ms-powerpoint', kind: 'file' },
+        '.pptx': { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', kind: 'file' },
+        '.csv': { mime: 'text/csv', kind: 'file' },
+        '.txt': { mime: 'text/plain', kind: 'file' },
+        '.zip': { mime: 'application/zip', kind: 'file' },
+        '.m4a': { mime: 'audio/mp4', kind: 'audio' },
+        '.mp4': { mime: 'audio/mp4', kind: 'audio' },
+        '.webm': { mime: 'audio/webm', kind: 'audio' },
+        '.weba': { mime: 'audio/webm', kind: 'audio' },
+        '.ogg': { mime: 'audio/ogg', kind: 'audio' },
+        '.oga': { mime: 'audio/ogg', kind: 'audio' },
+        '.mp3': { mime: 'audio/mpeg', kind: 'audio' },
+        '.wav': { mime: 'audio/wav', kind: 'audio' },
+    };
+    const expected = allowed[ext];
+    if (!expected) {
+        throw chatStore.httpError(400, 'Unsupported file type.', 'chat_attachment_type');
+    }
 
-    if (hex.startsWith('ffd8ff')) {
-        mime = 'image/jpeg';
-        kind = 'image';
-    } else if (hex.startsWith('89504e470d0a1a0a')) {
-        mime = 'image/png';
-        kind = 'image';
-    } else if (ascii.startsWith('GIF87a') || ascii.startsWith('GIF89a')) {
-        mime = 'image/gif';
-        kind = 'image';
-    } else if (ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WEBP') {
-        mime = 'image/webp';
-        kind = 'image';
-    } else if (ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WAVE') {
-        mime = 'audio/wav';
-        kind = 'audio';
-    } else if (hex.startsWith('1a45dfa3')) {
-        // Chromium's MediaRecorder produces WebM/Opus voice notes.
-        mime = 'audio/webm';
-        kind = 'audio';
-    } else if (ascii.startsWith('OggS')) {
-        mime = 'audio/ogg';
-        kind = 'audio';
-    } else if (ascii.startsWith('ID3') || hex.startsWith('fffb') || hex.startsWith('fff3') || hex.startsWith('fff2')) {
-        mime = 'audio/mpeg';
-        kind = 'audio';
-    } else if (ascii.slice(4, 8) === 'ftyp' && ['M4A ', 'M4B ', 'mp42', 'isom'].includes(ascii.slice(8, 12))) {
-        mime = 'audio/mp4';
-        kind = 'audio';
-    } else if (ascii.startsWith('%PDF')) {
-        mime = 'application/pdf';
-        kind = 'pdf';
-    } else if (hex.startsWith('d0cf11e0a1b11ae1')) {
-        mime = 'application/vnd.ms-excel';
-        kind = 'excel';
-    } else if (hex.startsWith('504b0304')) {
-        if (ext === '.xlsx') {
-            mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-            kind = 'excel';
+    let mime = expected.mime;
+    let kind = expected.kind;
+    if (['.jpg', '.jpeg'].includes(ext) && !hex.startsWith('ffd8ff')) {
+        throw chatStore.httpError(400, 'Image content does not match its extension.', 'chat_attachment_type');
+    }
+    if (ext === '.png' && !hex.startsWith('89504e470d0a1a0a')) {
+        throw chatStore.httpError(400, 'Image content does not match its extension.', 'chat_attachment_type');
+    }
+    if (ext === '.gif' && !(ascii.startsWith('GIF87a') || ascii.startsWith('GIF89a'))) {
+        throw chatStore.httpError(400, 'Image content does not match its extension.', 'chat_attachment_type');
+    }
+    if (ext === '.webp' && !(ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WEBP')) {
+        throw chatStore.httpError(400, 'Image content does not match its extension.', 'chat_attachment_type');
+    }
+    if (ext === '.pdf' && !ascii.startsWith('%PDF')) {
+        throw chatStore.httpError(400, 'PDF content does not match its extension.', 'chat_attachment_type');
+    }
+    if (ext === '.wav' && !(ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WAVE')) {
+        throw chatStore.httpError(400, 'Audio content does not match its extension.', 'chat_attachment_type');
+    }
+    if (ext === '.webm' || ext === '.weba') {
+        if (!hex.startsWith('1a45dfa3')) throw chatStore.httpError(400, 'Audio content does not match its extension.', 'chat_attachment_type');
+    }
+    if (ext === '.ogg' || ext === '.oga') {
+        if (!ascii.startsWith('OggS')) throw chatStore.httpError(400, 'Audio content does not match its extension.', 'chat_attachment_type');
+    }
+    if (ext === '.mp3') {
+        if (!(ascii.startsWith('ID3') || ['fffb', 'fff3', 'fff2'].some(prefix => hex.startsWith(prefix)))) {
+            throw chatStore.httpError(400, 'Audio content does not match its extension.', 'chat_attachment_type');
         }
     }
-
-    if (!kind) {
-        throw chatStore.httpError(400, 'Unsupported file type. Allowed: images, PDF, XLS, XLSX and audio notes.', 'chat_attachment_type');
+    if (ext === '.m4a' || ext === '.mp4') {
+        if (!(ascii.slice(4, 8) === 'ftyp' && ['M4A ', 'M4B ', 'mp42', 'isom'].includes(ascii.slice(8, 12)))) {
+            throw chatStore.httpError(400, 'Audio content does not match its extension.', 'chat_attachment_type');
+        }
     }
+    if (['.doc', '.xls', '.ppt'].includes(ext) && !hex.startsWith('d0cf11e0a1b11ae1')) {
+        throw chatStore.httpError(400, 'Document content does not match its extension.', 'chat_attachment_type');
+    }
+    if (['.docx', '.xlsx', '.pptx', '.zip'].includes(ext) && !hex.startsWith('504b0304')) {
+        throw chatStore.httpError(400, 'Archive content does not match its extension.', 'chat_attachment_type');
+    }
+    if (['.csv', '.txt'].includes(ext) && buffer.includes(0)) {
+        throw chatStore.httpError(400, 'Text file contains binary data.', 'chat_attachment_type');
+    }
+
     if (kind === 'image' && buffer.length > MAX_IMAGE_BYTES) {
-        throw chatStore.httpError(413, 'Images must be 2 MB or smaller.', 'chat_attachment_too_large');
+        throw chatStore.httpError(413, 'Images must be 10 MB or smaller.', 'chat_attachment_too_large');
     }
     if (kind === 'audio' && buffer.length > MAX_AUDIO_BYTES) {
-        throw chatStore.httpError(413, 'Audio notes must be 10 MB or smaller.', 'chat_attachment_too_large');
+        throw chatStore.httpError(413, 'Audio notes must be 50 MB or smaller.', 'chat_attachment_too_large');
     }
     if (kind !== 'image' && kind !== 'audio' && buffer.length > MAX_DOC_BYTES) {
-        throw chatStore.httpError(413, 'Documents must be 10 MB or smaller.', 'chat_attachment_too_large');
+        throw chatStore.httpError(413, 'Files must be 50 MB or smaller.', 'chat_attachment_too_large');
     }
-    if (kind === 'image' && ext && !['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
-        throw chatStore.httpError(400, 'Image extension does not match the file content.', 'chat_attachment_type');
-    }
-    if (kind === 'pdf' && ext !== '.pdf') {
-        throw chatStore.httpError(400, 'PDF extension does not match the file content.', 'chat_attachment_type');
-    }
-    if (kind === 'excel' && !['.xls', '.xlsx'].includes(ext)) {
-        throw chatStore.httpError(400, 'Excel extension does not match the file content.', 'chat_attachment_type');
-    }
-    if (kind === 'audio') {
-        const validAudioExtensions = {
-            'audio/webm': ['.webm', '.weba'],
-            'audio/ogg': ['.ogg', '.oga'],
-            'audio/mpeg': ['.mp3'],
-            'audio/wav': ['.wav'],
-            'audio/mp4': ['.m4a', '.mp4'],
-        };
-        if (!Object.prototype.hasOwnProperty.call(validAudioExtensions, mime)
-            || !validAudioExtensions[mime].includes(ext)) {
-            throw chatStore.httpError(400, 'Audio extension does not match the file content.', 'chat_attachment_type');
-        }
-    }
-    // Keep the reported MIME for diagnostics but serve the detected one.
     void reportedMime;
     return { mime, kind };
 }
@@ -154,7 +161,7 @@ module.exports = function createExtensionChatRouter(pool, options) {
         upload.single('file')(req, res, (err) => {
             if (!err) return next();
             if (err.code === 'LIMIT_FILE_SIZE') {
-                return sendError(res, chatStore.httpError(413, 'Documents must be 10 MB or smaller.', 'chat_attachment_too_large'));
+                return sendError(res, chatStore.httpError(413, 'Files must be 50 MB or smaller.', 'chat_attachment_too_large'));
             }
             return sendError(res, chatStore.httpError(400, err.message || 'Invalid upload.', 'chat_attachment_invalid'));
         });
@@ -243,6 +250,7 @@ module.exports = function createExtensionChatRouter(pool, options) {
                 req.body || {},
             );
             if (chat) void chat.notifyMessage(Number(req.params.id), message);
+            void notifyChatMessage(pool, Number(req.params.id), message);
             return res.status(201).json({ success: true, message });
         } catch (err) {
             return sendError(res, err, 'Failed to send the message.');
