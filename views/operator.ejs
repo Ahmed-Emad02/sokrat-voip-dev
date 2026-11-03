@@ -327,26 +327,6 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
             color: #ffffff !important;
         }
 
-        /* The IP address is plain reference text, not a status chip: drop the
-           pill background and border so only the address itself is shown.
-           The agent-status button next to it keeps its badge styling. */
-        #switchboardGrid .panel-surface.state-offline [id^="ipText-"].employee-ip-badge,
-        #switchboardGrid .panel-surface.state-idle [id^="ipText-"].employee-ip-badge,
-        #switchboardGrid .panel-surface.state-ringing [id^="ipText-"].employee-ip-badge,
-        #switchboardGrid .panel-surface.state-incall [id^="ipText-"].employee-ip-badge {
-            background-color: transparent !important;
-            border-width: 0 !important;
-            border-color: transparent !important;
-        }
-        .light-theme #switchboardGrid .panel-surface.state-offline [id^="ipText-"].employee-ip-badge,
-        .light-theme #switchboardGrid .panel-surface.state-idle [id^="ipText-"].employee-ip-badge,
-        .light-theme #switchboardGrid .panel-surface.state-ringing [id^="ipText-"].employee-ip-badge,
-        .light-theme #switchboardGrid .panel-surface.state-incall [id^="ipText-"].employee-ip-badge {
-            background-color: transparent !important;
-            border-width: 0 !important;
-            border-color: transparent !important;
-        }
-
         /* === STATE 2: ONLINE / IDLE (ORANGE) === */
         #switchboardGrid .panel-surface.state-idle {
             /* the same deep Sokrat crimson the panel's primary buttons render */
@@ -803,11 +783,6 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
     .agent-status-badge-btn [id^="agentStatusTimer-"] {
         color: inherit !important;
     }
-    /* The IP is plain text now: keep it flush left so a long address
-       ellipsises at the end instead of being clipped on both sides. */
-    #switchboardGrid [id^="ipText-"] {
-        justify-content: flex-start !important;
-    }
     /* The light theme forces black text on every button; the status chips
        sit on a coloured card, so they keep the white label. */
     html.light-theme #switchboardGrid .agent-status-badge-btn,
@@ -1205,8 +1180,7 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                                 </div>
                             </div>
 
-                            <div class="mt-2 flex items-end justify-between gap-3 min-w-0">
-                                <span id="ipText-<%= emp.cardId %>" class="employee-ip-badge font-mono font-bold text-[11px] px-1.5 py-0.5 rounded truncate max-w-[150px] select-all <%= emp.ip ? '' : 'hidden' %>" title="<%= emp.ip || '' %>"><%= emp.ip || '' %></span>
+                            <div class="mt-2 flex items-end justify-end gap-3 min-w-0">
                                 <div class="shrink-0">
                                     <% if (emp.isPjsip || emp.tech === 'pjsip') { %>
                                     <% 
@@ -1566,30 +1540,6 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 }
             });
 
-            let rafIPsScheduled = false;
-            let pendingIPs = {};
-            socket.on('peerIPs', (ipMap) => {
-                Object.assign(pendingIPs, ipMap);
-                if (!rafIPsScheduled) {
-                    rafIPsScheduled = true;
-                    requestAnimationFrame(() => {
-                        rafIPsScheduled = false;
-                        for (let ext in pendingIPs) {
-                            const ipText = document.getElementById('ipText-' + ext);
-                            const ipVal = pendingIPs[ext] || '';
-                            if (ipText) {
-                                ipText.textContent = ipVal;
-                                ipText.title = ipVal;
-                                if (ipVal) {
-                                    ipText.classList.remove('hidden');
-                                } else {
-                                    ipText.classList.add('hidden');
-                                }
-                            }
-                        }
-                    });
-                }
-            });
             let localTrunksData = {};
 
             let rafTrunksScheduled = false;
@@ -2166,6 +2116,52 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
 
             let draggedCard = null;
 
+            // FLIP animation: when a drop changes the order/group, the cards that
+            // shift out of the way glide to their new positions instead of snapping.
+            // The dragged card itself is left alone because the browser's drag ghost
+            // is already following the pointer.
+            const flipAnimations = new WeakMap();
+            const reduceMotionQuery = window.matchMedia
+                ? window.matchMedia('(prefers-reduced-motion: reduce)')
+                : null;
+
+            function animateCardReflow(mutate) {
+                if (reduceMotionQuery && reduceMotionQuery.matches) {
+                    mutate();
+                    return;
+                }
+                const cards = Array.from(gridRoot.querySelectorAll('article[id^="card-"]'));
+                const before = new Map();
+                cards.forEach(card => before.set(card, card.getBoundingClientRect()));
+
+                mutate();
+
+                cards.forEach(card => {
+                    if (card === draggedCard || typeof card.animate !== 'function') return;
+                    const first = before.get(card);
+                    const last = card.getBoundingClientRect();
+                    if (!first || !last) return;
+                    const dx = first.left - last.left;
+                    const dy = first.top - last.top;
+                    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+
+                    const previous = flipAnimations.get(card);
+                    if (previous) previous.cancel();
+
+                    const anim = card.animate(
+                        [
+                            { transform: `translate(${dx}px, ${dy}px)` },
+                            { transform: 'translate(0, 0)' }
+                        ],
+                        { duration: 220, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+                    );
+                    flipAnimations.set(card, anim);
+                    anim.onfinish = () => {
+                        if (flipAnimations.get(card) === anim) flipAnimations.delete(card);
+                    };
+                });
+            }
+
             const localSiteCode = (typeof FED_LOCAL_SITE !== 'undefined') ? FED_LOCAL_SITE : '<%= (typeof federationSettings !== "undefined" && federationSettings.local_site_code) ? federationSettings.local_site_code : "10" %>';
 
             function isSameServer(grid, card) {
@@ -2513,8 +2509,10 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                 }
                 lastAppliedSlot = { key, at: now, x: job.x, y: job.y };
 
-                if (boundary) job.grid.insertBefore(draggedCard, boundary);
-                else job.grid.appendChild(draggedCard);
+                animateCardReflow(() => {
+                    if (boundary) job.grid.insertBefore(draggedCard, boundary);
+                    else job.grid.appendChild(draggedCard);
+                });
             }
 
             gridRoot.querySelectorAll('.extension-group-grid').forEach(grid => {
@@ -2541,8 +2539,19 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
 
             gridRoot.addEventListener('dragend', () => {
                 if (!draggedCard) return;
-                draggedCard.classList.remove('dnd-dragging');
-                setDraggable(draggedCard, false);
+                const settlingCard = draggedCard;
+                settlingCard.classList.remove('dnd-dragging');
+                if ((!reduceMotionQuery || !reduceMotionQuery.matches) && typeof settlingCard.animate === 'function') {
+                    settlingCard.animate(
+                        [
+                            { transform: 'scale(0.97)', boxShadow: '0 0 0 2px rgba(245, 158, 11, 0.35)' },
+                            { transform: 'scale(1.015)', boxShadow: '0 0 0 5px rgba(245, 158, 11, 0.10)' },
+                            { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(245, 158, 11, 0)' }
+                        ],
+                        { duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+                    );
+                }
+                setDraggable(settlingCard, false);
                 draggedCard = null;
                 if (dropRafId) { cancelAnimationFrame(dropRafId); dropRafId = null; }
                 pendingDropJob = null;

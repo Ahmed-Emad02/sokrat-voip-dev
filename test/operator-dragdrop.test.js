@@ -67,6 +67,13 @@ test('views/operator.ejs wires native drag & drop with localStorage persistence'
     assert.ok(content.includes('requestAnimationFrame(applyDropJob)'), 'Should coalesce insertion jobs per animation frame');
     assert.ok(content.includes('FLIP_SUPPRESS_MS'), 'Should define a flip suppression window');
     assert.ok(content.includes('transition: none !important'), 'Should snap card transitions while dragging');
+
+    // Moving cards animate to their new positions instead of snapping.
+    assert.ok(content.includes('function animateCardReflow(mutate)'), 'Should define the card reflow animation');
+    assert.ok(content.includes('animateCardReflow(() =>'), 'Should wrap drop insertions in the reflow animation');
+    assert.ok(content.includes('card.animate('), 'Should use the Web Animations API for card movement');
+    assert.ok(content.includes('prefers-reduced-motion: reduce'), 'Should respect reduced-motion preferences');
+    assert.ok(content.includes('settlingCard.animate('), 'Should settle the dragged card after drop');
 });
 
 test('views/operator.ejs syncs cross-group drops to the server-side employee group', async () => {
