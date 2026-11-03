@@ -7,6 +7,19 @@ set -euo pipefail
 
 export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:${PATH:-}"
 
+# VPN-free PBX path: keep legacy overlay behavior for existing installs, but
+# never install or enable providers when the operator selected openvpn-frp.
+SOKRAT_TRANSPORT="${SOKRAT_TRANSPORT:-$(cat /etc/sokrat/pbx-transport 2>/dev/null || echo legacy)}"
+SOKRAT_INSTALL_VPN_CLIENTS="${SOKRAT_INSTALL_VPN_CLIENTS:-auto}"
+case "$SOKRAT_INSTALL_VPN_CLIENTS" in
+    auto|true|false) ;;
+    *) echo "Invalid SOKRAT_INSTALL_VPN_CLIENTS: $SOKRAT_INSTALL_VPN_CLIENTS" >&2; exit 2 ;;
+esac
+case "$SOKRAT_TRANSPORT" in
+    legacy|openvpn-frp) ;;
+    *) echo "Invalid SOKRAT_TRANSPORT: $SOKRAT_TRANSPORT" >&2; exit 2 ;;
+esac
+
 INSTALL_DIR=/opt/sokrat-voip
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 PARENT_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
@@ -2645,6 +2658,22 @@ echo "  Asterisk restarted"
 # 10x — Overlay VPN clients (ZeroTier / Tailscale) for remote management
 echo "  [10x] Installing overlay VPN clients (ZeroTier / Tailscale)..."
 install_overlay_vpn_clients() {
+    # Provider installation is independent from the gateway transport. `auto`
+    # preserves the historical default: install providers for legacy PBXs but
+    # not for openvpn-frp. `true` installs/starts them even with openvpn-frp;
+    # `false` never installs them. Existing providers are never removed.
+    case "$SOKRAT_INSTALL_VPN_CLIENTS" in
+        false)
+            echo "  Overlay VPN provider installation skipped: SOKRAT_INSTALL_VPN_CLIENTS=false"
+            return 0
+            ;;
+        auto)
+            if [ "$SOKRAT_TRANSPORT" = "openvpn-frp" ]; then
+                echo "  Overlay VPN skipped: SOKRAT_TRANSPORT=openvpn-frp (set SOKRAT_INSTALL_VPN_CLIENTS=true to install providers for other uses)"
+                return 0
+            fi
+            ;;
+    esac
     local pkg_mgr=""
     if command -v dnf >/dev/null 2>&1; then
         pkg_mgr="dnf"
