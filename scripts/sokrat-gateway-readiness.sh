@@ -53,6 +53,11 @@ PUSH_GATEWAY_URL="${SOKRAT_PUSH_GATEWAY_URL:-http://127.0.0.1:8095}"
 SIP_WS_PLAIN_PORT=8088
 SIP_WS_TLS_PORT=8089
 API_PORT=8080
+TRANSPORT="${SOKRAT_TRANSPORT:-$(cat /etc/sokrat/pbx-transport 2>/dev/null || echo legacy)}"
+case "$TRANSPORT" in
+    legacy|openvpn-frp) ;;
+    *) echo "Invalid SOKRAT_TRANSPORT: $TRANSPORT" >&2; exit 2 ;;
+esac
 
 problems=0
 note() { echo "  $*"; }
@@ -95,13 +100,23 @@ push_context_count() {
 }
 
 # ── detection ────────────────────────────────────────────────────────────────
-ts_ip="$(tailscale_ipv4)"
+if [ "$TRANSPORT" = "legacy" ]; then
+    ts_ip="$(tailscale_ipv4)"
+else
+    ts_ip=""
+fi
 ws_plain="no"; listening_port "$SIP_WS_PLAIN_PORT" && ws_plain="yes"
 ws_tls="no"; listening_port "$SIP_WS_TLS_PORT" && ws_tls="yes"
 api="no"; listening_port "$API_PORT" && api="yes"
 
-if [ -z "$ts_ip" ]; then
+if [ "$TRANSPORT" = "legacy" ] && [ -z "$ts_ip" ]; then
     problem "No Tailscale IPv4 (100.64.0.0/10) found. The gateway dials the PBX over Tailscale."
+fi
+if [ "$TRANSPORT" = "openvpn-frp" ]; then
+    systemctl is-active --quiet frpc || problem "FRP client is not active."
+    if ! systemctl list-units --type=service --no-legend 'sokrat-media-*' | grep -q 'sokrat-media-'; then
+        problem "No isolated Sokrat media link service is active."
+    fi
 fi
 
 if [ "$ws_plain" != "yes" ] && [ "$ws_tls" != "yes" ]; then
@@ -122,7 +137,10 @@ fi
 
 if [ "$MODE" = "check" ]; then
     echo "Sokrat gateway readiness: $([ "$problems" -eq 0 ] && echo READY || echo NOT READY)"
-    note "tailscale ipv4: ${ts_ip:-none}"
+    note "transport     : $TRANSPORT"
+    if [ "$TRANSPORT" = "legacy" ]; then
+        note "tailscale ipv4: ${ts_ip:-none}"
+    fi
     note "sip websocket : $SIP_WS_PLAIN_PORT=$ws_plain $SIP_WS_TLS_PORT=$ws_tls"
     note "sokrat api    : $API_PORT=$api"
     note "push context  : $DIALPLAN_FILE"
@@ -316,6 +334,7 @@ cat > "$MANIFEST" <<EOF
 {
   "schemaVersion": 1,
   "installationId": "$install_id",
+  "transport": "$TRANSPORT",
   "tailscaleIPv4": "$ts_ip",
   "wsURL": "$ws_url",
   "apiURL": "$api_url",
@@ -338,7 +357,10 @@ if [ "$changed" = "1" ] && [ "$RELOAD" = "yes" ]; then
 fi
 
 echo "Sokrat gateway readiness:"
-note "tailscale ipv4 : ${ts_ip:-none}"
+note "transport      : $TRANSPORT"
+if [ "$TRANSPORT" = "legacy" ]; then
+    note "tailscale ipv4 : ${ts_ip:-none}"
+fi
 note "sip websocket  : $ws_url (plain $ws_plain / tls $ws_tls)"
 note "sokrat api     : $api_url"
 note "manifest       : $MANIFEST"

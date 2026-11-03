@@ -10,6 +10,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MARIADB_PASS="admin"
 WEB_ADMIN_PASS="admin"
 SIP_DRIVER="chan_sip"
+SOKRAT_TRANSPORT="${SOKRAT_TRANSPORT:-$(cat /etc/sokrat/pbx-transport 2>/dev/null || echo legacy)}"
+SOKRAT_INSTALL_VPN_CLIENTS="${SOKRAT_INSTALL_VPN_CLIENTS:-auto}"
+case "$SOKRAT_TRANSPORT" in legacy|openvpn-frp) ;; *) echo "Invalid SOKRAT_TRANSPORT: $SOKRAT_TRANSPORT" >&2; exit 2 ;; esac
+case "$SOKRAT_INSTALL_VPN_CLIENTS" in auto|true|false) ;; *) echo "Invalid SOKRAT_INSTALL_VPN_CLIENTS: $SOKRAT_INSTALL_VPN_CLIENTS" >&2; exit 2 ;; esac
 
 echo "=================================================================="
 echo " Starting 100% Offline Issabel 5 & Asterisk 18 Setup"
@@ -123,24 +127,31 @@ if [ -f "$SCRIPT_DIR/binaries/func_rnnoise.so" ]; then
     fi
 fi
 
-if ls "$SCRIPT_DIR"/packages/zerotier-one-*.rpm 1>/dev/null 2>&1; then
-    echo "--> Installing ZeroTier from local packages..."
-    rpm -Uvh --replacepkgs --nodeps --oldpackage "$SCRIPT_DIR"/packages/zerotier-one-*.rpm 2>/dev/null || true
-    # The bundled RPM has no post-install scriptlet, so enabling alone leaves
-    # the daemon stopped and zerotier-cli fails with "missing port".
-    systemctl enable zerotier-one.service 2>/dev/null || true
-    systemctl start zerotier-one.service 2>/dev/null || true
-    for _ in $(seq 1 30); do
-        [ -s /var/lib/zerotier-one/zerotier-one.port ] && break
-        sleep 0.5
-    done
+install_vpn_providers="false"
+if [ "$SOKRAT_INSTALL_VPN_CLIENTS" = "true" ]; then
+    install_vpn_providers="true"
+elif [ "$SOKRAT_INSTALL_VPN_CLIENTS" = "auto" ] && [ "$SOKRAT_TRANSPORT" != "openvpn-frp" ]; then
+    install_vpn_providers="true"
 fi
-
-if ls "$SCRIPT_DIR"/packages/tailscale*.rpm 1>/dev/null 2>&1; then
-    echo "--> Installing Tailscale from local packages..."
-    rpm -Uvh --replacepkgs --nodeps --oldpackage "$SCRIPT_DIR"/packages/tailscale*.rpm 2>/dev/null || true
-    systemctl enable tailscaled.service 2>/dev/null || true
-    systemctl start tailscaled.service 2>/dev/null || true
+if [ "$install_vpn_providers" = "true" ]; then
+    if ls "$SCRIPT_DIR"/packages/zerotier-one-*.rpm 1>/dev/null 2>&1; then
+        echo "--> Installing ZeroTier from local packages..."
+        rpm -Uvh --replacepkgs --nodeps --oldpackage "$SCRIPT_DIR"/packages/zerotier-one-*.rpm 2>/dev/null || true
+        # The bundled RPM has no post-install scriptlet, so enabling alone leaves
+        # the daemon stopped and zerotier-cli fails with "missing port".
+        systemctl enable zerotier-one.service 2>/dev/null || true
+        systemctl start zerotier-one.service 2>/dev/null || true
+        for _ in $(seq 1 30); do
+            [ -s /var/lib/zerotier-one/zerotier-one.port ] && break
+            sleep 0.5
+        done
+    fi
+    if ls "$SCRIPT_DIR"/packages/tailscale*.rpm 1>/dev/null 2>&1; then
+        echo "--> Installing Tailscale from local packages..."
+        rpm -Uvh --replacepkgs --nodeps --oldpackage "$SCRIPT_DIR"/packages/tailscale*.rpm 2>/dev/null || true
+        systemctl enable tailscaled.service 2>/dev/null || true
+        systemctl start tailscaled.service 2>/dev/null || true
+    fi
 fi
 
 # 6. Start MariaDB and Asterisk
