@@ -32,7 +32,7 @@ test('Callgroup and pickupgroup synchronization logic maps Live Panel groups and
     ];
 
     const groupMap = new Map();
-    let nextGroupId = 2; // Reserve group 1 for default ungrouped
+    let nextGroupId = 2; // Reserve group 1 for the ungrouped pickup group
     mockEmployeeGroups.forEach(g => {
         if (g.name) {
             const key = g.name.trim().toLowerCase();
@@ -59,7 +59,7 @@ test('Callgroup and pickupgroup synchronization logic maps Live Panel groups and
         const groupKey = row.emp_group ? String(row.emp_group).trim().toLowerCase() : '__ungrouped__';
         const groupInfo = row.emp_group && groupMap.has(groupKey) ? groupMap.get(groupKey) : null;
         const groupId = groupInfo ? groupInfo.id : 1;
-        const namedGroup = groupInfo ? groupInfo.name.replace(/[^a-zA-Z0-9_]/g, '_') : 'default';
+        const namedGroup = groupInfo ? groupInfo.name.replace(/[^a-zA-Z0-9_]/g, '_') : 'ungrouped';
         const isGroupAdmin = Boolean(row.is_group_admin === 1 || row.is_group_admin === true || row.is_group_admin === '1');
 
         let pickupGroupId = groupId;
@@ -119,6 +119,8 @@ test('Callgroup and pickupgroup synchronization logic maps Live Panel groups and
     const ext403 = extensionGroupConfigs.find(e => e.extension === '403');
     assert.equal(ext401.callgroup, 1);
     assert.equal(ext401.pickupgroup, 1, 'Ungrouped Admin 401 has pickupgroup 1');
+    assert.equal(ext401.namedcallgroup, 'ungrouped', 'Ungrouped extensions use their own named call group');
+    assert.equal(ext401.namedpickupgroup, 'ungrouped', 'Ungrouped Admin 401 can pick up the ungrouped group');
     assert.equal(ext402.callgroup, 1, 'Ungrouped Member 402 has callgroup 1');
     assert.equal(ext402.pickupgroup, '', 'Ungrouped Member 402 has empty pickupgroup when an ungrouped admin exists');
     assert.notEqual(ext402.pickupgroup, ext401.callgroup, 'Ungrouped Member 402 cannot pick up 401');
@@ -184,6 +186,8 @@ test('server.js defines and hooks syncExtensionCallPickupGroups into all group a
 
     assert.ok(serverCode.includes('async function syncExtensionCallPickupGroups()'), 'server.js defines syncExtensionCallPickupGroups');
     assert.ok(serverCode.includes('await syncExtensionCallPickupGroups()'), 'server.js calls syncExtensionCallPickupGroups on boot');
+    assert.ok(serverCode.includes("const UNGROUPED_PICKUP_GROUP_ID = 1;"), 'ungrouped has a dedicated pickup group ID');
+    assert.ok(serverCode.includes("const UNGROUPED_PICKUP_GROUP_NAME = 'ungrouped';"), 'ungrouped has its own named pickup group');
     
     // Group and extension mutation hooks
     const syncCalls = serverCode.match(/syncExtensionCallPickupGroups\(\)/g) || [];

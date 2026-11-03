@@ -1845,6 +1845,10 @@ async function getAllServerDongles() {
     }
 }
 
+const UNGROUPED_PICKUP_GROUP_KEY = '__ungrouped__';
+const UNGROUPED_PICKUP_GROUP_ID = 1;
+const UNGROUPED_PICKUP_GROUP_NAME = 'ungrouped';
+
 async function syncExtensionCallPickupGroups() {
     try {
         const [groupRows] = await pool.query('SELECT id, name FROM `asterisk`.`employee_groups` ORDER BY id ASC');
@@ -1873,7 +1877,7 @@ async function syncExtensionCallPickupGroups() {
         // Determine which groups (including ungrouped) have at least one designated Group Admin
         const groupsWithAdmins = new Set();
         extRows.forEach(r => {
-            const g = r.emp_group ? String(r.emp_group).trim().toLowerCase() : '__ungrouped__';
+            const g = r.emp_group ? String(r.emp_group).trim().toLowerCase() : UNGROUPED_PICKUP_GROUP_KEY;
             const isAdmin = Boolean(r.is_group_admin === 1 || r.is_group_admin === true || r.is_group_admin === '1');
             if (isAdmin) {
                 groupsWithAdmins.add(g);
@@ -1895,10 +1899,10 @@ async function syncExtensionCallPickupGroups() {
             const ext = String(row.extension || '').trim();
             if (!/^\d+$/.test(ext)) continue;
 
-            const groupKey = row.emp_group ? String(row.emp_group).trim().toLowerCase() : '__ungrouped__';
+            const groupKey = row.emp_group ? String(row.emp_group).trim().toLowerCase() : UNGROUPED_PICKUP_GROUP_KEY;
             const groupInfo = row.emp_group && groupMap.has(groupKey) ? groupMap.get(groupKey) : null;
-            const groupId = groupInfo ? groupInfo.id : 1; // Default group 1 for ungrouped
-            const namedGroup = groupInfo ? groupInfo.name.replace(/[^a-zA-Z0-9_]/g, '_') : 'default';
+            const groupId = groupInfo ? groupInfo.id : UNGROUPED_PICKUP_GROUP_ID;
+            const namedGroup = groupInfo ? groupInfo.name.replace(/[^a-zA-Z0-9_]/g, '_') : UNGROUPED_PICKUP_GROUP_NAME;
             const isGroupAdmin = Boolean(row.is_group_admin === 1 || row.is_group_admin === true || row.is_group_admin === '1');
 
             let pickupGroupId = groupId;
@@ -1997,9 +2001,9 @@ async function syncExtensionCallPickupGroups() {
             const ext = String(row.extension || '').trim();
             if (!/^\d+$/.test(ext)) continue;
 
-            const groupKey = row.emp_group ? String(row.emp_group).trim().toLowerCase() : '__ungrouped__';
+            const groupKey = row.emp_group ? String(row.emp_group).trim().toLowerCase() : UNGROUPED_PICKUP_GROUP_KEY;
             const groupInfo = row.emp_group && groupMap.has(groupKey) ? groupMap.get(groupKey) : null;
-            const namedGroup = groupInfo ? groupInfo.name.replace(/[^a-zA-Z0-9_]/g, '_') : 'default';
+            const namedGroup = groupInfo ? groupInfo.name.replace(/[^a-zA-Z0-9_]/g, '_') : UNGROUPED_PICKUP_GROUP_NAME;
             const isGroupAdmin = Boolean(row.is_group_admin === 1 || row.is_group_admin === true || row.is_group_admin === '1');
             let namedPickupGroup = namedGroup;
             if (groupsWithAdmins.has(groupKey) && !isGroupAdmin) {
@@ -2032,7 +2036,10 @@ async function syncExtensionCallPickupGroups() {
         execFileCb(ASTERISK_BIN, ['-rx', 'sip reload'], () => {});
         execFileCb(ASTERISK_BIN, ['-rx', 'pjsip reload'], () => {});
 
-        console.log(`CALLPICKUP: Synchronized callgroups for ${extRows.length} extension(s) across ${groupRows.length} group(s)`);
+        const ungroupedCount = extRows.filter(r => !r.emp_group).length;
+        const effectiveGroupCount = groupRows.length + (ungroupedCount > 0 ? 1 : 0);
+        console.log(`CALLPICKUP: Synchronized callgroups for ${extRows.length} extension(s) across ${effectiveGroupCount} group(s)` +
+            (ungroupedCount > 0 ? ` (ungrouped: ${ungroupedCount} in group ${UNGROUPED_PICKUP_GROUP_ID}/${UNGROUPED_PICKUP_GROUP_NAME})` : ''));
     } catch (err) {
         console.error('CALLPICKUP: Failed to synchronize callgroups:', err.message);
     }
