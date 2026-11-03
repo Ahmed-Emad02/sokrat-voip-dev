@@ -1545,8 +1545,11 @@ async function initAuthDb() {
     // take an argument (*98<mailbox>, *72<ext>, ...) need the same treatment.
     try {
         const fcSync = await syncFeatureCodeHandOff(pool);
+        const fcOpenNote = fcSync.voicemailOpenActive
+            ? `, open voicemail ${fcSync.voicemailCode} (passcode skipped)`
+            : '';
         console.log(`Feature-code hand-off sync: ${fcSync.codes.length} Issabel codes, ` +
-            `${fcSync.argumentCodes.length} argument codes, ` +
+            `${fcSync.argumentCodes.length} argument codes${fcOpenNote}, ` +
             `${fcSync.changed ? 'dialplan updated' : 'dialplan already up to date'}`);
         if (fcSync.changed) {
             try {
@@ -9967,7 +9970,7 @@ app.get('/api/telephony/camp-on/pending', requireAuth, async (req, res) => {
 
 // --- SOKRAT CALL CONTROL CODES REST APIs (Configurable via Live Panel Guide) ---
 
-// GET /api/telephony/call-codes - Fetch all 36 telephony codes with custom status
+// GET /api/telephony/call-codes - Fetch all 37 telephony codes with custom status
 app.get('/api/telephony/call-codes', async (req, res) => {
     try {
         const codes = await getCallCodes(pool);
@@ -10025,6 +10028,14 @@ app.put('/api/telephony/call-codes/:id', requireAuth, async (req, res) => {
         // Apply FreePBX/Asterisk/dialplan changes
         await applyCallCodeBackendUpdate(pool, row, trimmedCode, isEnabled);
 
+        // Regenerate the Issabel feature-code hand-off so a changed *98 (open
+        // voicemail) or any other feature code takes effect immediately.
+        try {
+            await syncFeatureCodeHandOff(pool);
+        } catch (fcErr) {
+            console.error(`Call code ${id}: feature-code hand-off sync failed:`, fcErr.message);
+        }
+
         // Reload PBX config
         await reloadPbxConfigPromise();
 
@@ -10056,6 +10067,15 @@ app.post('/api/telephony/call-codes/reset-defaults', requireAuth, async (req, re
         }
 
         await resetCallCodesToDefaults(pool);
+
+        // Refresh the feature-code hand-off so reset codes (including *98
+        // open voicemail) are reflected in the dialplan immediately.
+        try {
+            await syncFeatureCodeHandOff(pool);
+        } catch (fcErr) {
+            console.error('Call codes reset: feature-code hand-off sync failed:', fcErr.message);
+        }
+
         await reloadPbxConfigPromise();
 
         if (typeof io !== 'undefined' && io) {

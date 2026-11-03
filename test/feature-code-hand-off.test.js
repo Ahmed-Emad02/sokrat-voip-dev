@@ -9,6 +9,8 @@ const {
     END_MARK,
     SOKRAT_OWNED_CODES,
     fetchIssabelFeatureCodes,
+    fetchVoicemailDialCode,
+    isVoicemailOpenAccessEnabled,
     selectArgumentCodes,
     buildFeatureCodeBlock,
     patchExtensionsCustomConf,
@@ -101,6 +103,119 @@ test('the block without argument forms stays exactly as before', () => {
     const block = buildFeatureCodeBlock(['*97'], []);
     assert.ok(!block.includes('sokrat-pickup-target'), 'no pickup fallback without argument codes');
     assert.ok(!block.includes('_*98.'), 'no argument pattern without argument codes');
+});
+
+test('open voicemail mode skips the passcode and the pickup check for *98', () => {
+    const block = buildFeatureCodeBlock(['*97', '*98'], ['98', '72'], {
+        openVoicemailAccess: true,
+        voicemailCode: '*98'
+    });
+
+    assert.ok(
+        block.includes('exten => *98,1,NoOp(--- Sokrat open voicemail: choose a mailbox (passcode skipped) ---)'),
+        '*98 is handled by the open voicemail block'
+    );
+    assert.ok(block.includes('Read(MAILBOX,vm-login,,,3,2)'), '*98 still asks for a mailbox');
+    assert.ok(block.includes('VoiceMailMain(${MAILBOX}@${VMCONTEXT},s)'), '*98 skips the mailbox passcode');
+    assert.ok(!block.includes('exten => *98,1,Goto(from-internal-additional'), '*98 is not handed back to Issabel');
+
+    const direct = block.slice(block.indexOf('exten => _*98.,1'), block.indexOf('exten => _*72.,1'));
+    assert.ok(
+        direct.includes('VoiceMailMain(${EXTEN:3}@${VMCONTEXT},s)'),
+        '*98<mailbox> opens the mailbox with the passcode skipped'
+    );
+    assert.ok(!direct.includes('sokrat-pickup-target'), '*98<mailbox> bypasses the directed-pickup check');
+    assert.ok(!direct.includes('from-internal-additional'), '*98<mailbox> is not handed back to Issabel');
+
+    const forward = block.slice(block.indexOf('exten => _*72.,1'));
+    assert.ok(forward.includes('sokrat-pickup-target'), 'other argument codes keep the directed pickup');
+    assert.ok(block.includes('exten => *97,1,Goto(from-internal-additional,${EXTEN},1)'), '*97 is unchanged');
+});
+
+test('open voicemail mode declares *98<mailbox> even without Issabel argument detection', () => {
+    const block = buildFeatureCodeBlock(['*98'], [], {
+        openVoicemailAccess: true,
+        voicemailCode: '*98'
+    });
+    assert.ok(block.includes('exten => _*98.,1,NoOp('), '*98<mailbox> is declared directly');
+    assert.ok(block.includes('VoiceMailMain(${EXTEN:3}@${VMCONTEXT},s)'), 'the passcode is skipped');
+    assert.ok(!block.includes('sokrat-pickup-target'), 'no pickup fallback is generated');
+});
+
+test('the open voicemail mode is opt-in through SOKRAT_VOICEMAIL_OPEN_ACCESS', async () => {
+    assert.equal(isVoicemailOpenAccessEnabled({}), false, 'disabled by default');
+    assert.equal(isVoicemailOpenAccessEnabled({ SOKRAT_VOICEMAIL_OPEN_ACCESS: 'false' }), false);
+    for (const value of ['1', 'true', 'TRUE', 'yes', 'on']) {
+        assert.equal(
+            isVoicemailOpenAccessEnabled({ SOKRAT_VOICEMAIL_OPEN_ACCESS: value }),
+            true,
+            `${value} enables open access`
+        );
+    }
+
+    let captured = '';
+    const pool = {
+        query: async (sql) => {
+            captured = sql;
+            return [[{ defaultcode: '*98', customcode: null }]];
+        }
+    };
+    assert.equal(await fetchVoicemailDialCode(pool), '*98');
+    assert.ok(captured.includes("featurename = 'dialvoicemail'"), 'queries the dialvoicemail feature');
+    assert.ok(captured.includes('enabled = 1'), 'only the enabled code is used');
+
+    const customPool = {
+        query: async () => [[{ defaultcode: '*98', customcode: '*199' }]]
+    };
+    assert.equal(await fetchVoicemailDialCode(customPool), '*199', 'a custom code wins over the default');
+});
+
+test('the sync applies open voicemail access when requested', async () => {
+    const pool = {
+        query: async (sql) => {
+            if (sql.includes('dialvoicemail')) return [[{ defaultcode: '*98', customcode: null }]];
+            return [[{ code: '*97' }, { code: '*98' }]];
+        }
+    };
+    const custom = tmpDialplan('[from-internal-custom]\n');
+    const res = await syncFeatureCodeHandOff(pool, {
+        filePath: custom,
+        openVoicemailAccess: true,
+        issabelDialplanFile: path.join(path.dirname(custom), 'missing.conf')
+    });
+    assert.equal(res.voicemailCode, '*98');
+    assert.equal(res.voicemailOpenActive, true);
+    const content = fs.readFileSync(custom, 'utf8');
+    assert.ok(content.includes('VoiceMailMain(${MAILBOX}@${VMCONTEXT},s)'), '*98 skips the passcode');
+    assert.ok(content.includes('VoiceMailMain(${EXTEN:3}@${VMCONTEXT},s)'), '*98<mailbox> skips the passcode');
+    fs.rmSync(path.dirname(custom), { recursive: true, force: true });
+});
+
+test('the sync reads SOKRAT_VOICEMAIL_OPEN_ACCESS from the environment', async () => {
+    const previous = process.env.SOKRAT_VOICEMAIL_OPEN_ACCESS;
+    process.env.SOKRAT_VOICEMAIL_OPEN_ACCESS = 'true';
+    try {
+        const pool = {
+            query: async (sql) => {
+                if (sql.includes('dialvoicemail')) return [[{ defaultcode: '*98', customcode: null }]];
+                return [[{ code: '*98' }]];
+            }
+        };
+        const custom = tmpDialplan('[from-internal-custom]\n');
+        const res = await syncFeatureCodeHandOff(pool, {
+            filePath: custom,
+            issabelDialplanFile: path.join(path.dirname(custom), 'missing.conf')
+        });
+        assert.equal(res.voicemailOpenActive, true, 'the env flag enables open access');
+        assert.ok(
+            fs.readFileSync(custom, 'utf8').includes('VoiceMailMain(${EXTEN:3}@${VMCONTEXT},s)'),
+            'the open voicemail handler is written'
+        );
+        fs.rmSync(path.dirname(custom), { recursive: true, force: true });
+    } finally {
+        if (previous === undefined) delete process.env.SOKRAT_VOICEMAIL_OPEN_ACCESS;
+        else process.env.SOKRAT_VOICEMAIL_OPEN_ACCESS = previous;
+    }
 });
 
 test('feature-code hand-off is written inside [from-internal-custom] and is idempotent', () => {
@@ -218,6 +333,17 @@ test('deployed dialplan hands Issabel feature codes back to Issabel', (t) => {
     assert.ok(ctx.includes('exten => _*X.,1,NoOp(--- Directed / Ring Group Pickup'), 'Sokrat pickup pattern still present');
     assert.ok(ctx.includes('exten => _*98.,1,NoOp('), '*98<mailbox> is declared so it wins over the pickup pattern');
     assert.ok(ctx.includes('sokrat-pickup-target'), 'the directed-pickup fallback for the argument forms is present');
+
+    if (ctx.includes('Sokrat open voicemail')) {
+        assert.ok(ctx.includes('VoiceMailMain(${MAILBOX}@${VMCONTEXT},s)'), 'open *98 skips the passcode');
+        assert.ok(ctx.includes('VoiceMailMain(${EXTEN:3}@${VMCONTEXT},s)'), 'open *98<mailbox> skips the passcode');
+        assert.ok(!ctx.includes('exten => *98,1,Goto(from-internal-additional'), 'open *98 is not handed to Issabel');
+    } else {
+        assert.ok(
+            ctx.includes('exten => *98,1,Goto(from-internal-additional,${EXTEN},1)'),
+            '*98 is handed to Issabel when open access is off'
+        );
+    }
 });
 
 test('installers and safe-upgrade keep the feature-code hand-off in sync', () => {

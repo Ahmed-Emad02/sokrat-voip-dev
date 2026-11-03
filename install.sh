@@ -1424,6 +1424,26 @@ if [ -f "$PUSH_GATEWAY_DIR/package.json" ]; then
     fi
 fi
 
+_BUNDLED_FCM_B64='ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAic29rcmF0LW1vYmlsZS0yYjkyOCIsCiAgInByaXZhdGVfa2V5X2lkIjogIjE1YWNkZTM2YWFiM2E3YzhlOWFiNWExYTU5Mzg5ZTFjMDg1N2Y4NmEiLAogICJwcml2YXRlX2tleSI6ICItLS0tLUJFR0lOIFBSSVZBVEUgS0VZLS0tLS1cbk1JSUV2UUlCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktjd2dnU2pBZ0VBQW9JQkFRRHAxNm4rU25RY0crNnhcbnU1RDUxeUwyN2dacjdWK1F1VmZtYlIvNjR3Mm5KQ3Y4b3Qvc1psbHo0a3J3RW5uV1N5dkFqcGhoeDR4LzQ1SnVcbks4SGM1UVAvUFMxTmRmN2xOcDlsRlREdkovZFZPYWtnVzZGS0drV3o2d2VwcGtXaUszbFkybUdnak54bDkzb2lcbld5bHJpMTd2SGx0NVJ2a1Ard2oxR0xzcmd5LzVNbERERnJVYlJRSTcxakJkb0dKWEZ2MFRHUWJBOVp4cGY5WElcbk1qaW1jblY2d0RBSDFuaGNEZGM3MDVTeU5DOFFQTDJOR001TUQwTTJpZitqelFDKzJtK0xxSlJjSGYwNVBEWnFcbmFPNnV3Tm9VNUVpWXRZVHNtVjE2bkJ5UWR6cnpVZUVoVERHQnhNWnp2dmpGQ01QN1F5dVBTcmUyMjFqejlQMTRcbmxwQzN4ek43QWdNQkFBRUNnZ0VBSUlWVlp6KysyQmlXWUp5L25ub1VxeGRuOHppUm5YOU9sekErbzFYOUZHMUxcbnVoaURZSGdpSVU0QkIvN2tkNFlBSEFramJoaDNhZzNNZm9xU3JTck54eXNna3NaQjRHb2IrWGlIVkFDbDZCeXdcbmNGeVltTVZWN2tpckh5VTRSKzV0M2pVNHkwQkJJbzZCVmlmV3pJQnNmOVY1VHBZdFFINEpaOTltOWJmZjdjZy9cbjN5ZDJ2dC8rNzAybkNWR3RSN1BFV1I1SmozeTBYRmNxTTZYOTFyTkcvZGRaYXgreVY3aTdJT01xNzhWNWxDTENcbnVmU3FXVU9uckRFWVdFUGN6dDNqUWZhQTh2elJiZE5LRTVuTTQ2aHU0REdSRDk1cWhlMndKWXhMd3NnWlYyM2hcbkVaRlN0elFTYnpvTFhQSXBOM0lXa0J4bktaSXdyazJ3L2VCenFjM3hzUUtCZ1FEMC9BOVE5NmRhZGRDLy9MY3dcbndGR2VOWGg1TUkrK1cyWkp4TURtSUFPSkRUYkZCRmVNaHc0U2UybGszVWNPSTdYZFlIQ0dRU0tPbkMzQlJISlZcblNDS1pRQ21Ya0VTRm5wSWFCRGtIaElsRWhhd2daM0FwbCs2N0tOeGNlOVZOWFpvdURlT1pjVis4R2ZWUDR3RUFcbjlYQ3h5S0V1K0hGaFFCc2k3ZTE2V0FoVFV3S0JnUUQwVzFtblBZVVg2Tjd3cFd5NGVVdmZGc2JwTmdFbVFmdEtcbmFsVGlUaE92VXhqRkhXWVJ2Uk5qSmdJL3MvVmxNQlBTd2F1QXdPbmpuZG1IQ005MHdiT3ZuUEtQcVh4eXNJRi9cbnZTUDRnRFplN2gxeXBsK2dYRVc0ODRwQTRRQ0dFNUp3KzRFZHErVE5jR0tEeFNRNmpsYVV0MENnNk1VQWV1Z3JcbmlpNE95dUlDT1FLQmdRQ2hYOUF2QTVPSHNRZmJEM3NVYi9yVGZtRm5ZeWVzdXNROFg1QzVoZWtPUkZnSm0zeVlcbkl2YVFFaDh3dzlua1pIMk4zOUwvZkxSb3dGUWJkUnpqTkdzbUMrL1oyTHhxVURQcFUxTEZzdlpBM3RTdFc3VzBcbmtGSS9rd0RsSXVVMDJ5Mk9uTE9LQmZhTUQ0VmFKQ3dyRjRJdWVmeEMxb0RKRU5OUFJPOGpvZzJKNVFLQmdBRFlcbnJDZlRJN25nZVowMXhYbWlHZXdzNVFWN3hXYy9oVUpOdWZ1S3I3REV4ZW93M3VDaTJnVlc1VjBaSDNsNVFDaFRcbnVXZFp3N1doSDFiRFpneU9lelBaaEZHUkViaEgranJhQ2R6YmZOUzVXR3JFUHNLTWIwVmp1by9jOTZaL1BOdWRcblUyWXA2VUg0Nks1eUtWejJqMEEybmtld1pyWkl0ck1uNkY3dXZ2ZXBBb0dBUGZyUGpzcitRUThSSUIxNWJ6d0NcbiswcjhiRnpZOUk3ZXVnQnd2bnlWUStYQ1ZsSzBNMUVFbjlWeGRNTklzMEtBby8zbmh3aDMyUVljblA3ZFNJS3BcbnIxcjBqU0piWG1ML2dTSGpNTFl5ZFdyc1A2cjhOR2MrL3o2NXIwREk2a0krTlcwWXZJWFYxcHVQYWoyeDd6Z0xcbnE0eUI5UWREQkQ2U1hEaTI3OUpaZDI4PVxuLS0tLS1FTkQgUFJJVkFURSBLRVktLS0tLVxuIiwKICAiY2xpZW50X2VtYWlsIjogImZpcmViYXNlLWFkbWluc2RrLWZic3ZjQHNva3JhdC1tb2JpbGUtMmI5MjguaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJjbGllbnRfaWQiOiAiMTEwMjU3Mjk2OTI0MTQ4MTE3OTczIiwKICAiYXV0aF91cmkiOiAiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tL28vb2F1dGgyL2F1dGgiLAogICJ0b2tlbl91cmkiOiAiaHR0cHM6Ly9vYXV0aDIuZ29vZ2xlYXBpcy5jb20vdG9rZW4iLAogICJhdXRoX3Byb3ZpZGVyX3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vb2F1dGgyL3YxL2NlcnRzIiwKICAiY2xpZW50X3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vcm9ib3QvdjEvbWV0YWRhdGEveDUwOS9maXJlYmFzZS1hZG1pbnNkay1mYnN2YyU0MHNva3JhdC1tb2JpbGUtMmI5MjguaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJ1bml2ZXJzZV9kb21haW4iOiAiZ29vZ2xlYXBpcy5jb20iCn0K'
+FCM_SOURCE="${FCM_CREDENTIALS_FILE:-$SCRIPT_DIR/installer-bundle/secrets/firebase-service-account.json}"
+[ -f "$FCM_SOURCE" ] || FCM_SOURCE=/etc/sokrat/firebase/service-account.json
+install -d -m 0755 /etc/sokrat /etc/sokrat/firebase
+if [ -f "$FCM_SOURCE" ] && [ "$FCM_SOURCE" != /etc/sokrat/firebase/service-account.json ]; then
+    install -m 0644 "$FCM_SOURCE" /etc/sokrat/firebase/service-account.json
+fi
+if [ ! -f /etc/sokrat/firebase/service-account.json ]; then
+    printf '%s' "$_BUNDLED_FCM_B64" | base64 -d > /etc/sokrat/firebase/service-account.json
+    chmod 0644 /etc/sokrat/firebase/service-account.json
+    echo "  FCM: using bundled service-account credential"
+fi
+if [ -f /etc/sokrat/firebase/service-account.json ]; then
+    FCM_ENABLED_VALUE=true
+    echo "  FCM credentials installed at /etc/sokrat/firebase/service-account.json"
+else
+    FCM_ENABLED_VALUE=false
+    echo "  WARNING: FCM credential installation failed"
+fi
+
 # Gateway .env (reuse the same MySQL root password and host settings)
 if [ ! -f "$PUSH_GATEWAY_DIR/.env" ]; then
     cat > "$PUSH_GATEWAY_DIR/.env" << PUSHENV
@@ -1433,9 +1453,25 @@ DB_USER=root
 DB_PASS=${MYSQL_ROOT_PWD}
 DB_NAME=asterisk
 APNS_ENABLED=false
-FCM_ENABLED=false
+FCM_ENABLED=$FCM_ENABLED_VALUE
+GOOGLE_APPLICATION_CREDENTIALS=/etc/sokrat/firebase/service-account.json
 PUSHENV
     echo "  push-gateway .env created (set APNS/FCM keys to enable real pushes)"
+fi
+
+# Bundled gateway archives can ship a pre-existing .env. Enforce the
+# credential settings there as well, so FCM is initialized on every install.
+if [ -f "$PUSH_GATEWAY_DIR/.env" ]; then
+    if grep -q '^FCM_ENABLED=' "$PUSH_GATEWAY_DIR/.env"; then
+        sed -i "s|^FCM_ENABLED=.*|FCM_ENABLED=${FCM_ENABLED_VALUE}|" "$PUSH_GATEWAY_DIR/.env"
+    else
+        printf 'FCM_ENABLED=%s\n' "$FCM_ENABLED_VALUE" >> "$PUSH_GATEWAY_DIR/.env"
+    fi
+    if grep -q '^GOOGLE_APPLICATION_CREDENTIALS=' "$PUSH_GATEWAY_DIR/.env"; then
+        sed -i 's|^GOOGLE_APPLICATION_CREDENTIALS=.*|GOOGLE_APPLICATION_CREDENTIALS=/etc/sokrat/firebase/service-account.json|' "$PUSH_GATEWAY_DIR/.env"
+    else
+        printf 'GOOGLE_APPLICATION_CREDENTIALS=/etc/sokrat/firebase/service-account.json\n' >> "$PUSH_GATEWAY_DIR/.env"
+    fi
 fi
 
 # Use a dedicated user for the gateway (mirrors the app service approach)
@@ -1451,6 +1487,31 @@ sed -i 's|^User=.*|User=sokrat-push|' /etc/systemd/system/sokrat-push-gateway.se
 sed -i 's|^Group=.*|Group=sokrat-push|' /etc/systemd/system/sokrat-push-gateway.service
 systemctl daemon-reload
 systemctl enable --now sokrat-push-gateway.service
+systemctl restart sokrat-push-gateway.service
+
+# Install the LAN fallback gateway, which is the Docker multi-tenant gateway
+# (control + tenant API + SIP WSS + push). It owns :8095, so the native
+# push-only service is disabled by the helper immediately before startup.
+if ! command -v docker >/dev/null 2>&1; then
+    echo "  Docker is required by the local fallback gateway; installing Docker..."
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL https://get.docker.com | sh || true
+    fi
+    systemctl enable --now docker 2>/dev/null || true
+fi
+LOCAL_GATEWAY_SCRIPT="$INSTALL_DIR/scripts/install-local-gateway.sh"
+# Always refresh from the running installer source so an older checked-out copy
+# cannot shadow the current helper.
+if [ -x "$SCRIPT_DIR/scripts/install-local-gateway.sh" ]; then
+    install -d -m 0755 "$INSTALL_DIR/scripts"
+    install -m 0755 "$SCRIPT_DIR/scripts/install-local-gateway.sh" "$LOCAL_GATEWAY_SCRIPT"
+fi
+if [ -x "$LOCAL_GATEWAY_SCRIPT" ]; then
+    SOKRAT_GATEWAY_SOURCE="$PUSH_GATEWAY_DIR"     SOKRAT_GATEWAY_HOST="${SOKRAT_GATEWAY_HOST:-}"     bash "$LOCAL_GATEWAY_SCRIPT"
+else
+    echo "  ERROR: local fallback gateway installer is missing: $LOCAL_GATEWAY_SCRIPT" >&2
+    exit 1
+fi
 echo "  push-gateway service enabled and started"
 
 # Install or update the Asterisk dialplan hooks. The linked ID deterministically
@@ -1782,14 +1843,22 @@ same => n,Hangup()
 ; Backward Compatibility Aliases (*1, *8, *1X., *8X.)
 exten => *1,1,Goto(*,1)
 exten => *8,1,Goto(*,1)
-exten => _*1X.,1,NoOp(--- Directed Pickup Alias to * ---)
-same => n,PickupChan(PJSIP/${EXTEN:2}&SIP/${EXTEN:2}&Local/${EXTEN:2}@ext-local,p)
-same => n,Pickup(${EXTEN:2}@ext-local&${EXTEN:2}@from-internal&${EXTEN:2}@from-did-direct&${EXTEN:2}@ext-group)
+exten => _*1X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))
 same => n,Hangup()
-exten => _*8X.,1,NoOp(--- Directed Pickup Alias to * ---)
-same => n,PickupChan(PJSIP/${EXTEN:2}&SIP/${EXTEN:2}&Local/${EXTEN:2}@ext-local,p)
-same => n,Pickup(${EXTEN:2}@ext-local&${EXTEN:2}@from-internal&${EXTEN:2}@from-did-direct&${EXTEN:2}@ext-group)
+exten => _*8X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))
 same => n,Hangup()
+
+; Shared handler for *1<ext> / *8<ext>: prefer the full number when it is a
+; configured extension (*107 -> 107); otherwise use the legacy alias target
+; (*1107 -> 107).
+exten => sokrat-directed-pickup,1,NoOp(--- Directed Pickup: target ${ARG1} (alias ${ARG2}) ---)
+same => n,GotoIf($["${DB(DEVICE/${ARG1}/dial)}" = ""]?alias)
+same => n,PickupChan(PJSIP/${ARG1}&SIP/${ARG1}&Local/${ARG1}@ext-local,p)
+same => n,Pickup(${ARG1}@ext-local&${ARG1}@from-internal&${ARG1}@from-did-direct&${ARG1}@ext-group)
+same => n,Return()
+same => n(alias),PickupChan(PJSIP/${ARG2}&SIP/${ARG2}&Local/${ARG2}@ext-local,p)
+same => n,Pickup(${ARG2}@ext-local&${ARG2}@from-internal&${ARG2}@from-did-direct&${ARG2}@ext-group)
+same => n,Return()
 CHANSPY
 
 # Append Intercom dialplan contexts

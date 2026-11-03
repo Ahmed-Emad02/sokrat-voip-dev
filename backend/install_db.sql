@@ -817,7 +817,7 @@ VALUES
   ('campon_activate', 'campon', '*82', '*82', 'Camp-On Activate (Post-Hangup)', 'طلب معاودة الاتصال التلقائي (*82)', 'Dial after hanging up on a busy extension to schedule automatic callback.', 'اطلب *82 بعد إغلاق الخط مع تحويلة مشغولة لحجز معاودة الاتصال التلقائي.', '*82', '*82', 'precall', 1, 1, 6, 'dialplan_campon_act', NULL, NULL, NULL),
   ('campon_cancel', 'campon', '*83', '*83', 'Camp-On Cancel', 'إلغاء حجز معاودة الاتصال (*83)', 'Cancels any pending automatic callbacks queued for your extension.', 'إلغاء كافة طلبات معاودة الاتصال التلقائي المحجوزة لتحويلتك.', '*83', '*83', 'precall', 1, 1, 7, 'dialplan_campon_cancel', NULL, NULL, NULL),
   ('campon_pickup_group', 'campon', '*', '*', 'Group Call Pickup (*)', 'التقاط مكالمة المجموعة (*)', 'Answers any incoming call currently ringing in your department/pickup group.', 'الرد على أي مكالمة ترن حالياً داخل قسمك أو مجموعة الرنين الخاصة بك.', '*', '*', 'precall', 1, 1, 8, 'featurecode', 'core', 'pickupexten', NULL),
-  ('campon_pickup_directed', 'campon', '*[Ext]', '*[Ext]', 'Directed Call Pickup', 'سحب مكالمة تحويلة محددة (* + الرقم)', 'Intercepts and answers a call currently ringing on a specific colleague\'s phone.', 'سحب مكالمة ترن على هاتف زميل معين والرد عليها من جهازك (مثال: 102* أو 102**).', '*102 / **102', '*102 / **102', 'precall', 0, 1, 9, 'featurecode', 'core', 'pickup', NULL),
+  ('campon_pickup_directed', 'campon', '*[Ext]', '*[Ext]', 'Directed Call Pickup', 'سحب مكالمة تحويلة محددة (* + الرقم)', 'Intercepts a call ringing on a specific extension. Use *<ext> or **<ext>; the legacy *1<ext> / *8<ext> aliases also work (*107 and *1107 both pick up 107).', 'سحب مكالمة ترن على تحويلة محددة والرد عليها من جهازك. استخدم *<الرقم> أو **<الرقم>، كما تعمل الأكواد القديمة *1<الرقم> و *8<الرقم> (كل من *107 و *1107 يسحب التحويلة 107).', '*107 / **107 / *1107', '*107 / **107 / *1107', 'precall', 0, 1, 9, 'featurecode', 'core', 'pickup', NULL),
   ('spy_listen', 'spy', '222[Ext]', '222[Ext]', 'Spy: Listen-Only Mode', 'تنصت صامت (استماع فقط)', 'Silently listens to an active call on target extension without either party hearing.', 'الاستماع لمكالمة الموظف الجارية بسرية تامة دون أن يعلم أي طرف بوجودك.', '222102', '222102', 'precall', 0, 1, 10, 'dialplan_spy', NULL, 'listen', NULL),
   ('spy_whisper', 'spy', '223[Ext]', '223[Ext]', 'Whisper: Coaching Mode', 'تدريب وتوجيه الموظف (همس)', 'Speaks only into agent\'s headset for live guidance without client hearing.', 'التحدث مع الموظف فقط لتوجيهه وتدريبه دون أن يسمع العميل صوتك.', '223102', '223102', 'precall', 0, 1, 11, 'dialplan_spy', NULL, 'whisper', NULL),
   ('spy_barge', 'spy', '224[Ext]', '224[Ext]', 'Barge: Conference In', 'اقتحام المكالمة (مكالمة ثلاثية)', 'Barges into active conversation as a 3rd party where all participants can speak.', 'الدخول في المكالمة كمشارك ثالث يتحدث مع الطرفين ويسمعه الجميع.', '224102', '224102', 'precall', 0, 1, 12, 'dialplan_spy', NULL, 'barge', NULL),
@@ -842,9 +842,10 @@ VALUES
   ('diag_rnnoise_cont', 'diagnostics', '*86', '*86', 'AI RNNoise Continuous Echo Test', 'فحص عزل الضوضاء المستمر (*86)', 'Live test of continuous neural noise cancellation without hard silence gate.', 'اختبار فلترة التشويش والضوضاء العصبية المستمرة دون كتم تام.', '*86', '*86', 'precall', 1, 1, 31, 'dialplan_rnnoise', NULL, 'cont', NULL),
   ('diag_rnnoise_raw', 'diagnostics', '*89', '*89', 'Raw Audio Baseline Test', 'اختبار الصوت الخام للمقارنة (*89)', 'Raw unfiltered microphone stream to benchmark noise cancellation performance.', 'سماع الصوت الطبيعي بدون فلترة لمقارنة فاعلية الذكاء الاصطناعي.', '*89', '*89', 'precall', 1, 1, 32, 'dialplan_rnnoise', NULL, 'raw', NULL),
   ('diag_my_voicemail', 'diagnostics', '*97', '*97', 'My Voicemail', 'صندوق البريد الصوتي الشخصي (*97)', 'Direct access to your extension\'s voicemail inbox.', 'الدخول إلى صندوق البريد الصوتي الخاص بتحويلتك لسماع الرسائل.', '*97', '*97', 'precall', 1, 1, 33, 'featurecode', 'voicemail', 'myvoicemail', NULL),
-  ('diag_blacklist', 'diagnostics', '*30 / *32', '*30 / *32', 'Blacklist Caller (*30 / *32)', 'إضافة رقم للقائمة السوداء (*30 / *32)', 'Blocks nuisance numbers from calling your PBX (*32 blocks the last caller immediately).', 'حظر الأرقام المزعجة من الاتصال بالمقسم (*32 لحظر آخر متصل فوراً).', '*30 / *32', '*30 / *32', 'precall', 1, 1, 34, 'featurecode_pair', 'blacklist', 'blacklist_add', 'blacklist_last'),
-  ('diag_speak_exten', 'diagnostics', '*65', '*65', 'Speak Extension Number', 'نطق رقم التحويلة (*65)', 'Speaks out the registered internal extension number of this phone.', 'ينطق النظام صوتياً رقم تحويلتك المسجلة للتأكد من هويتها.', '*65', '*65', 'precall', 1, 1, 35, 'featurecode', 'infoservices', 'speakextennum', NULL),
-  ('diag_speaking_clock', 'diagnostics', '*60', '*60', 'Speaking Server Clock', 'ساعة النظام الرسمية (*60)', 'Speaks current official server date and time.', 'سماع التوقيت الرسمي المسجل على سيرفر المقسم صوتياً.', '*60', '*60', 'precall', 1, 1, 36, 'featurecode', 'infoservices', 'speakingclock', NULL)
+  ('diag_open_voicemail', 'diagnostics', '*98', '*98', 'Open Voicemail (Any Mailbox)', 'البريد الصوتي المفتوح (أي صندوق)', 'Passcode-free access to any mailbox when open voicemail is enabled: *98 asks for a mailbox, *98<ext> opens it directly.', 'الوصول إلى أي صندوق بريد صوتي بدون رمز عند تفعيل الوضع المفتوح: اطلب *98 لاختيار الصندوق أو *98<الرقم> لفتحه مباشرة.', '*98 / *98107', '*98 / *98107', 'precall', 1, 1, 34, 'featurecode', 'voicemail', 'dialvoicemail', NULL),
+  ('diag_blacklist', 'diagnostics', '*30 / *32', '*30 / *32', 'Blacklist Caller (*30 / *32)', 'إضافة رقم للقائمة السوداء (*30 / *32)', 'Blocks nuisance numbers from calling your PBX (*32 blocks the last caller immediately).', 'حظر الأرقام المزعجة من الاتصال بالمقسم (*32 لحظر آخر متصل فوراً).', '*30 / *32', '*30 / *32', 'precall', 1, 1, 35, 'featurecode_pair', 'blacklist', 'blacklist_add', 'blacklist_last'),
+  ('diag_speak_exten', 'diagnostics', '*65', '*65', 'Speak Extension Number', 'نطق رقم التحويلة (*65)', 'Speaks out the registered internal extension number of this phone.', 'ينطق النظام صوتياً رقم تحويلتك المسجلة للتأكد من هويتها.', '*65', '*65', 'precall', 1, 1, 36, 'featurecode', 'infoservices', 'speakextennum', NULL),
+  ('diag_speaking_clock', 'diagnostics', '*60', '*60', 'Speaking Server Clock', 'ساعة النظام الرسمية (*60)', 'Speaks current official server date and time.', 'سماع التوقيت الرسمي المسجل على سيرفر المقسم صوتياً.', '*60', '*60', 'precall', 1, 1, 37, 'featurecode', 'infoservices', 'speakingclock', NULL)
 ON DUPLICATE KEY UPDATE
   default_code = VALUES(default_code),
   name_en = VALUES(name_en),
@@ -858,6 +859,16 @@ ON DUPLICATE KEY UPDATE
   backend_module = VALUES(backend_module),
   backend_feature = VALUES(backend_feature),
   backend_feature_secondary = VALUES(backend_feature_secondary);
+
+-- Directed pickup now documents the working *<ext> / **<ext> forms and the
+-- legacy *1<ext> / *8<ext> aliases. Refresh the example only while it still
+-- matches the old factory value, so operator edits are preserved.
+UPDATE `sokrat_call_codes`
+   SET `example_en` = '*107 / **107 / *1107',
+       `example_ar` = '*107 / **107 / *1107'
+ WHERE `id` = 'campon_pickup_directed'
+   AND `example_en` = '*102 / **102'
+   AND `example_ar` = '*102 / **102';
 
 -- The RNNoise continuous echo test moved from *87 (Issabel owns *87 as its
 -- conference-status feature code) to *86, which is free.

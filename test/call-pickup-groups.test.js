@@ -148,6 +148,37 @@ test('Asterisk dialplan extensions_custom.conf and install.sh contain Call Picku
     assert.ok(dialplan.includes('exten => _**X.,1,NoOp(--- Directed Call Pickup'), 'extensions_custom.conf has _**X. pickup');
     assert.ok(installer.includes('exten => _**X.,1,NoOp(--- Directed Call Pickup'), 'install.sh has _**X. pickup');
 });
+
+test('*1<ext> / *8<ext> alias pickup prefers the full extension and falls back to the legacy alias target', () => {
+    const dialplanPath = '/etc/asterisk/extensions_custom.conf';
+    const installerPaths = [
+        path.join(__dirname, '../install.sh'),
+        path.join(__dirname, '../installer-bundle/install-sokrat.sh')
+    ];
+
+    const aliasCalls = [
+        'exten => _*1X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))',
+        'exten => _*8X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))'
+    ];
+    const handlerNoOp = 'exten => sokrat-directed-pickup,1,NoOp(--- Directed Pickup: target ${ARG1} (alias ${ARG2}) ---)';
+    const fullNumberCheck = 'GotoIf($["${DB(DEVICE/${ARG1}/dial)}" = ""]?alias)';
+
+    const sources = [
+        { label: 'extensions_custom.conf', text: fs.readFileSync(dialplanPath, 'utf8') },
+        ...installerPaths.map(p => ({ label: path.relative(path.join(__dirname, '..'), p), text: fs.readFileSync(p, 'utf8') }))
+    ];
+
+    for (const { label, text } of sources) {
+        for (const call of aliasCalls) {
+            assert.ok(text.includes(call), `${label} routes legacy aliases through the shared Gosub handler (${call.split(',')[0]})`);
+        }
+        assert.ok(text.includes(handlerNoOp), `${label} defines the sokrat-directed-pickup handler`);
+        assert.ok(text.includes(fullNumberCheck), `${label} prefers the full number when DEVICE/<n>/dial exists`);
+        assert.ok(text.includes('same => n(alias),PickupChan('), `${label} keeps the legacy alias fallback label`);
+        assert.ok(!text.includes('?alias,1)'), `${label} must not jump to the alias label with a priority suffix`);
+        assert.ok(!text.includes('NoOp(--- Directed Pickup Alias to * ---)'), `${label} no longer uses the ambiguous alias-only handler`);
+    }
+});
 test('server.js defines and hooks syncExtensionCallPickupGroups into all group and extension mutations', () => {
     const serverCode = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
 

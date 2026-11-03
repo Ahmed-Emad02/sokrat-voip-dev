@@ -675,6 +675,48 @@ try:
         'exten => *87,1,NoOp(--- RNNoise AI Noise Suppression Continuous Echo Test ---)',
         'exten => *86,1,NoOp(--- RNNoise AI Noise Suppression Continuous Echo Test ---)')
 
+    # Fix the *1<ext> / *8<ext> pickup aliases. The old block always stripped
+    # the alias prefix, so *107 tried to pick up extension 07 instead of 107
+    # (and *1107 still worked as the legacy alias for 107). Route both codes
+    # through a shared Gosub handler that prefers the full number when it is a
+    # configured extension and falls back to the stripped alias target.
+    pickup_handler = (
+        '; Shared handler for *1<ext> / *8<ext>: prefer the full number when it is a\n'
+        '; configured extension (*107 -> 107); otherwise use the legacy alias target\n'
+        '; (*1107 -> 107).\n'
+        'exten => sokrat-directed-pickup,1,NoOp(--- Directed Pickup: target ${ARG1} (alias ${ARG2}) ---)\n'
+        'same => n,GotoIf($["${DB(DEVICE/${ARG1}/dial)}" = ""]?alias)\n'
+        'same => n,PickupChan(PJSIP/${ARG1}&SIP/${ARG1}&Local/${ARG1}@ext-local,p)\n'
+        'same => n,Pickup(${ARG1}@ext-local&${ARG1}@from-internal&${ARG1}@from-did-direct&${ARG1}@ext-group)\n'
+        'same => n,Return()\n'
+        'same => n(alias),PickupChan(PJSIP/${ARG2}&SIP/${ARG2}&Local/${ARG2}@ext-local,p)\n'
+        'same => n,Pickup(${ARG2}@ext-local&${ARG2}@from-internal&${ARG2}@from-did-direct&${ARG2}@ext-group)\n'
+        'same => n,Return()'
+    )
+    if 'exten => sokrat-directed-pickup,1,NoOp(--- Directed Pickup: target ${ARG1} (alias ${ARG2}) ---)' not in content:
+        pickup_alias_re = re.compile(
+            r'exten\s*=>\s*_\*1X\.,1,NoOp\(--- Directed Pickup Alias to \* ---\)\s*\r?\n'
+            r'\s*same\s*=>\s*n,PickupChan\(PJSIP/\$\{EXTEN:2\}&SIP/\$\{EXTEN:2\}&Local/\$\{EXTEN:2\}@ext-local,p\)\s*\r?\n'
+            r'\s*same\s*=>\s*n,Pickup\(\$\{EXTEN:2\}@ext-local&\$\{EXTEN:2\}@from-internal&\$\{EXTEN:2\}@from-did-direct&\$\{EXTEN:2\}@ext-group\)\s*\r?\n'
+            r'\s*same\s*=>\s*n,Hangup\(\)\s*\r?\n'
+            r'\s*exten\s*=>\s*_\*8X\.,1,NoOp\(--- Directed Pickup Alias to \* ---\)\s*\r?\n'
+            r'\s*same\s*=>\s*n,PickupChan\(PJSIP/\$\{EXTEN:2\}&SIP/\$\{EXTEN:2\}&Local/\$\{EXTEN:2\}@ext-local,p\)\s*\r?\n'
+            r'\s*same\s*=>\s*n,Pickup\(\$\{EXTEN:2\}@ext-local&\$\{EXTEN:2\}@from-internal&\$\{EXTEN:2\}@from-did-direct&\$\{EXTEN:2\}@ext-group\)\s*\r?\n'
+            r'\s*same\s*=>\s*n,Hangup\(\)'
+        )
+        new_alias_block = (
+            'exten => _*1X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))\n'
+            'same => n,Hangup()\n'
+            'exten => _*8X.,1,Gosub(from-internal-custom,sokrat-directed-pickup,1(${EXTEN:1},${EXTEN:2}))\n'
+            'same => n,Hangup()\n\n'
+            + pickup_handler
+        )
+        content, patched = pickup_alias_re.subn(new_alias_block, content)
+        if patched:
+            print("  Patched *1<ext> / *8<ext> pickup aliases to prefer the full extension")
+        else:
+            print("  Warning: legacy pickup alias block not found; *107 may still target 07")
+
     # Remove hangup handler pushes that trigger dongle cleanup
     content = re.sub(r'^\s*same\s*=>\s*n,Set\(CHANNEL\(hangup_handler_push\)=dongle-hangup-cleanup,s,1\)\r?\n', '', content, flags=re.MULTILINE)
 

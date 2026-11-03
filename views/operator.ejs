@@ -4008,11 +4008,11 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     dial: false,
                     enabled: true,
                     is_custom: false,
-                    example: '*102 / **102',
+                    example: '*107 / **107 / *1107',
                     nameEn: 'Directed Call Pickup',
                     nameAr: 'سحب مكالمة تحويلة محددة (* + الرقم)',
-                    descEn: 'Intercepts and answers a call currently ringing on a specific colleague\'s phone.',
-                    descAr: 'سحب مكالمة ترن على هاتف زميل معين والرد عليها من جهازك (مثال: 102* أو 102**).'
+                    descEn: 'Intercepts a call ringing on a specific extension. Use *<ext> or **<ext>; the legacy *1<ext> / *8<ext> aliases also work (*107 and *1107 both pick up 107).',
+                    descAr: 'سحب مكالمة ترن على تحويلة محددة والرد عليها من جهازك. استخدم *<الرقم> أو **<الرقم>، كما تعمل الأكواد القديمة *1<الرقم> و *8<الرقم> (كل من *107 و *1107 يسحب التحويلة 107).'
                 },
 
                 // 3. SPYING & COACHING
@@ -4383,6 +4383,21 @@ const canViewExtStats = isSuper || userAllowedTabs.includes('ext-stats') || user
                     nameAr: 'صندوق البريد الصوتي الشخصي (*97)',
                     descEn: 'Direct access to your extension\'s voicemail inbox.',
                     descAr: 'الدخول إلى صندوق البريد الصوتي الخاص بتحويلتك لسماع الرسائل.'
+                },
+                {
+                    id: 'diag_open_voicemail',
+                    code: '*98',
+                    default_code: '*98',
+                    cat: 'diagnostics',
+                    timing: 'precall',
+                    dial: true,
+                    enabled: true,
+                    is_custom: false,
+                    example: '*98 / *98107',
+                    nameEn: 'Open Voicemail (Any Mailbox)',
+                    nameAr: 'البريد الصوتي المفتوح (أي صندوق)',
+                    descEn: 'Passcode-free access to any mailbox when open voicemail is enabled: *98 asks for a mailbox, *98<ext> opens it directly.',
+                    descAr: 'الوصول إلى أي صندوق بريد صوتي بدون رمز عند تفعيل الوضع المفتوح: اطلب *98 لاختيار الصندوق أو *98<الرقم> لفتحه مباشرة.'
                 },
                 {
                     id: 'diag_blacklist',

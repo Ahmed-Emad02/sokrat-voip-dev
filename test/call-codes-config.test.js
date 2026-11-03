@@ -7,18 +7,36 @@ const mysql = require('mysql2/promise');
 const rootDir = path.join(__dirname, '..');
 const { DEFAULT_CALL_CODES, getCallCodes, applyCallCodeBackendUpdate, resetCallCodesToDefaults } = require('../lib/call-codes');
 
-test('Schema: backend/install_db.sql defines sokrat_call_codes table and seeds all 36 codes', () => {
+test('Schema: backend/install_db.sql defines sokrat_call_codes table and seeds all 37 codes', () => {
     const sql = fs.readFileSync(path.join(rootDir, 'backend', 'install_db.sql'), 'utf8');
 
     assert.match(sql, /CREATE TABLE IF NOT EXISTS `sokrat_call_codes`/, 'install_db.sql must create sokrat_call_codes table');
     assert.match(sql, /`default_code` VARCHAR\(32\) NOT NULL/, 'install_db.sql must define default_code');
     assert.match(sql, /`backend_type` VARCHAR\(32\) NOT NULL/, 'install_db.sql must define backend_type');
 
-    assert.equal(DEFAULT_CALL_CODES.length, 36, 'Must define exactly 36 default call codes');
+    assert.equal(DEFAULT_CALL_CODES.length, 37, 'Must define exactly 37 default call codes');
     for (const codeItem of DEFAULT_CALL_CODES) {
         assert.ok(sql.includes(`'${codeItem.id}'`), `install_db.sql must seed code ID ${codeItem.id}`);
         assert.ok(sql.includes(`'${codeItem.code}'`), `install_db.sql must seed code value ${codeItem.code}`);
     }
+});
+
+test('UI catalog exposes the fixed pickup aliases and the open voicemail entry', () => {
+    const pickup = DEFAULT_CALL_CODES.find(c => c.id === 'campon_pickup_directed');
+    assert.ok(pickup, 'Directed pickup entry must exist');
+    assert.equal(pickup.example_en, '*107 / **107 / *1107', 'Directed pickup example shows the working codes');
+    assert.match(pickup.desc_en, /\*1<ext> \/ \*8<ext>/, 'Directed pickup documents the legacy aliases');
+
+    const openVm = DEFAULT_CALL_CODES.find(c => c.id === 'diag_open_voicemail');
+    assert.ok(openVm, 'Open voicemail entry must exist');
+    assert.equal(openVm.code, '*98');
+    assert.equal(openVm.default_code, '*98');
+    assert.equal(openVm.backend_feature, 'dialvoicemail', 'Editing *98 must update Issabel dialvoicemail');
+
+    const operatorView = fs.readFileSync(path.join(rootDir, 'views', 'operator.ejs'), 'utf8');
+    assert.ok(operatorView.includes("id: 'diag_open_voicemail'"), 'Live Panel fallback must include open voicemail');
+    assert.ok(operatorView.includes("example: '*107 / **107 / *1107'"), 'Live Panel fallback must show the pickup aliases');
+    assert.ok(operatorView.includes("example: '*98 / *98107'"), 'Live Panel fallback must show the open voicemail forms');
 });
 
 test('Multi-Installer Parity: install.sh, install-sokrat.sh, and safe-upgrade.sh sync extensions_sokrat_callcodes.conf', () => {
@@ -55,7 +73,7 @@ test('Call Codes Engine: Database operations, dynamic updates, and factory defau
     try {
         // 1. Fetch all codes
         const codes = await getCallCodes(pool);
-        assert.equal(codes.length, 36, 'Must return exactly 36 call control codes');
+        assert.equal(codes.length, 37, 'Must return exactly 37 call control codes');
 
         // Verify categories
         const categories = new Set(codes.map(c => c.cat));
